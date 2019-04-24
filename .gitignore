@@ -102,3 +102,22 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# MacOS files
+.DS_Store
+
+# Compiled Python modules
+*.pyc
+*.so
+*.pyd
+
+# PyCharm project files
+.idea/*
+
+# Unit test files
+.coverage
+testing/*
+htmlcov/*
+
+# iPython files
+*.ipynb_*
