@@ -17,4 +17,5 @@ The project is developed by researchers from the following institutions:
 *   National Renewable Energy Laboratory
 *   Northeastern University
 *   Polytechnic University of Milan
+*   Technion - Israel Institute of Technology
 *   U.S. Army Research Laboratories
