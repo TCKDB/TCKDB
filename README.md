@@ -14,6 +14,7 @@ The project is developed by researchers from the following institutions:
 *   Georgia University
 *   Ghent University
 *   Massachusetts Institute of Technology
+*   Molecular Scientific Software Institute
 *   National Renewable Energy Laboratory
 *   Northeastern University
 *   Polytechnic University of Milan
