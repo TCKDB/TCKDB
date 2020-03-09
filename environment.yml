@@ -1,0 +1,17 @@
+name: tckdb_env
+channels:
+  - defaults
+  - anaconda
+  - conda-forge
+dependencies:
+  - jupyter
+  - nose
+  - numpy
+  - python >=3.7
+  - ipython
+  - sphinx
+  - qcelemental
+  - sqlalchemy
+  - fastapi
+  - uvicorn
+  - pyyaml

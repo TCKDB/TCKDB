@@ -1,0 +1,11 @@
+# Required python packages. You can install them all via something like:
+#    pip install -r requirements.txt
+
+fastapi
+uvicorn
+pyyaml
+qcelemental
+
+# For running the unit tests
+nose
+coverage
