@@ -16,10 +16,18 @@ class TestAuthorBaseSchema(unittest.TestCase):
 
     def test_author_model(self):
         """Test creating an instance of Author"""
-        author_1 = AuthorBase(name='Ed Joe', email='ed.joe@mit.edu', affiliation='MIT')
-        self.assertEqual(author_1.name, 'Ed Joe')
-        self.assertEqual(author_1.email, 'ed.joe@mit.edu')
-        self.assertEqual(author_1.affiliation, 'MIT')
+        author_1 = AuthorBase(name='I. B. Writing', email='email@dot.com', affiliation='Institution')
+        self.assertEqual(author_1.name, 'I. B. Writing')
+        self.assertEqual(author_1.email, 'email@dot.com')
+        self.assertEqual(author_1.affiliation, 'Institution')
 
         with self.assertRaises(ValidationError):
-            AuthorBase(name='Ed Joe', email='not a valid email', affiliation='MIT')
+            AuthorBase(name='I. B. Writing', email='not_a_valid.email', affiliation='Institution')
+        with self.assertRaises(ValidationError):
+            AuthorBase(name='I. B. Writing', email='not a.valid@email', affiliation='Institution')
+        with self.assertRaises(ValidationError):
+            AuthorBase(name='I. B. Writing', email='not.a@valid@email', affiliation='Institution')
+        with self.assertRaises(ValidationError):
+            AuthorBase(name='I. B. Writing', email='not_a_valid@email', affiliation='Institution')
+        with self.assertRaises(ValidationError):
+            AuthorBase(name='Writing', email='email@dot.com', affiliation='Institution')
