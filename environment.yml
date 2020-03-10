@@ -1,0 +1,19 @@
+name: tck_env
+channels:
+  - defaults
+  - anaconda
+  - conda-forge
+dependencies:
+  - coverage
+  - fastapi=0.46.0
+  - ipython
+  - jupyter
+  - nose
+  - numpy
+  - psycopg2
+  - pydantic
+  - python >=3.7
+  - qcelemental
+  - sqlalchemy
+  - starlette
+  - uvicorn
