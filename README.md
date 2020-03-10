@@ -1,6 +1,8 @@
 ## Theoretical Chemical Kinetics Database
 
 ![Release](https://img.shields.io/badge/version-0.1.0-blue.svg)
+[![Build Status](https://travis-ci.org/tckdb/TCKDB.svg?branch=master)](https://travis-ci.org/tckdb/TCKDB)
+[![codecov](https://codecov.io/gh/tckdb/TCKDB/branch/master/graph/badge.svg)](https://codecov.io/gh/tckdb/TCKDB)
 [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/182c36129b154bce945d26eb6fd4ede0)](https://www.codacy.com/app/TCKDB/TCKDB?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=tckdb/TCKDB&amp;utm_campaign=Badge_Grade)
 
