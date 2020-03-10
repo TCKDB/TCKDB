@@ -1,0 +1,14 @@
+# Required python packages
+
+fastapi==0.46.0
+numpy
+psycopg2
+pydantic
+qcelemental
+sqlalchemy
+starlette
+uvicorn
+
+# For running the unit tests
+nose
+coverage
