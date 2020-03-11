@@ -29,7 +29,7 @@ class AuthorBase(BaseModel):
             raise ValueError('email must contain only one "@"')
         if '.' not in value.split('@')[1]:
             raise ValueError('email invalid (expected a "." after the "@" sign)')
-        if ' ' in value.split('@')[1]:
+        if ' ' in value:
             raise ValueError('email invalid (no spaces allowed)')
         return value
 
@@ -51,8 +51,9 @@ class AuthorUpdate(AuthorBase):
 class AuthorInDBBase(AuthorBase):
     """Properties shared by models stored in DB"""
     id: int
-    title: str
-    owner_id: int
+    name: str
+    email: int
+    affiliation: int
 
     class Config:
         orm_mode = True
