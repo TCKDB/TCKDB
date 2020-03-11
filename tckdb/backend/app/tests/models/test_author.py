@@ -18,5 +18,5 @@ class TestAuthorModel(unittest.TestCase):
         self.assertEqual(author_1.name, 'I. B. Writing')
         self.assertEqual(author_1.email, 'email@dot.com')
         self.assertEqual(author_1.affiliation, 'Institution')
-        self.assertEqual((str(author_1)),
-                         '<Author(id="None", name="I. B. Writing", email="email@dot.com", affiliation="Institution")>')
+        self.assertEqual(str(author_1),
+                         "<Author(id=None, name='I. B. Writing', email='email@dot.com', affiliation='Institution')>")
