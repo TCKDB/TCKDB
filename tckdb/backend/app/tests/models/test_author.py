@@ -14,7 +14,9 @@ class TestAuthorModel(unittest.TestCase):
 
     def test_author_model(self):
         """Test creating an instance of Author"""
-        author_1 = Author(name='Ed Joe', email='ed.joe@mit.edu', affiliation='MIT')
-        self.assertEqual(author_1.name, 'Ed Joe')
-        self.assertEqual(author_1.email, 'ed.joe@mit.edu')
-        self.assertEqual(author_1.affiliation, 'MIT')
+        author_1 = Author(name='I. B. Writing', email='email@dot.com', affiliation='Institution')
+        self.assertEqual(author_1.name, 'I. B. Writing')
+        self.assertEqual(author_1.email, 'email@dot.com')
+        self.assertEqual(author_1.affiliation, 'Institution')
+        self.assertEqual((str(author_1)),
+                         '<Author(id="None", name="I. B. Writing", email="email@dot.com", affiliation="Institution")>')
