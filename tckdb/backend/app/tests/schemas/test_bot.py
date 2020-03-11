@@ -1,10 +1,10 @@
 """
-TCKDB backend app tests schema test_author module
+TCKDB backend app tests schemas test_author module
 """
 
 import unittest
 
-from pydantic.error_wrappers import ValidationError
+from pydantic import ValidationError
 
 from tckdb.backend.app.schemas.bot import BotBase
 

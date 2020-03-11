@@ -14,12 +14,12 @@ class BotBase(BaseModel):
     url: constr(max_length=255)
 
     @validator('url')
-    def validate_email(cls, value):
-        """Bot.email validator"""
+    def validate_url(cls, value):
+        """Bot.url validator"""
         if '.' not in value:
             raise ValueError('url invalid (expected a ".")')
         if ' ' in value:
-            raise ValueError('email invalid (no spaces allowed)')
+            raise ValueError('url invalid (no spaces allowed)')
         return value
 
 
