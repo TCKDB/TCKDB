@@ -17,4 +17,9 @@ class Author(Base):
     affiliation = Column(String(255), nullable=False)
 
     def __repr__(self):
-        return f'<{self.__name__}(name={self.name}, email={self.email}, affiliation={self.affiliation})>'
+        return f'<{self.__class__.__name__}(' \
+               f'id="{self.id}", ' \
+               f'name="{self.name}", ' \
+               f'email="{self.email}", ' \
+               f'affiliation="{self.affiliation}"' \
+               f')>'
