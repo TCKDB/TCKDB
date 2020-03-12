@@ -9,7 +9,7 @@ from tckdb.backend.app.db.base_class import Base
 
 class Literature(Base):
     """
-    A class for representing a TCKDB Literature reference
+    A class for representing a TCKDB Literature item
 
     Attributes:
         id (int): The primary key.
