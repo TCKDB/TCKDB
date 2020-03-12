@@ -35,14 +35,14 @@ class AuthorBase(BaseModel):
 
 
 class AuthorCreate(AuthorBase):
-    """Create an Author: Properties to receive on item creation"""
+    """Create an Author item: Properties to receive on item creation"""
     name: str
     email: str
     affiliation: str
 
 
 class AuthorUpdate(AuthorBase):
-    """Update an Author: Properties to receive on item update"""
+    """Update an Author item: Properties to receive on item update"""
     name: str
     email: str
     affiliation: str

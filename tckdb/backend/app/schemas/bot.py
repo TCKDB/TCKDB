@@ -7,7 +7,7 @@ from pydantic import BaseModel, constr, validator
 
 class BotBase(BaseModel):
     """
-    An BotBase class (shared properties)
+    A BotBase class (shared properties)
     """
     name: constr(max_length=100)
     version: constr(max_length=100) = None
@@ -24,14 +24,14 @@ class BotBase(BaseModel):
 
 
 class BotCreate(BotBase):
-    """Create a Bot: Properties to receive on item creation"""
+    """Create a Bot item: Properties to receive on item creation"""
     name: str
     version: str = None
     url: str
 
 
 class BotUpdate(BotBase):
-    """Update a Bot: Properties to receive on item update"""
+    """Update a Bot item: Properties to receive on item update"""
     name: str
     version: str
     url: str
