@@ -28,7 +28,7 @@ class TestLiteratureBaseSchema(unittest.TestCase):
     Contains unit tests for the LiteratureBase schema
     """
 
-    def test_literature_model(self):
+    def test_literature_schema(self):
         """Test creating an instance of Literature"""
         lit1 = LiteratureBase(type='article',
                               authors='M.I. It, D.C. Wash',
