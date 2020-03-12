@@ -37,19 +37,19 @@ class TestLiteratureModel(unittest.TestCase):
         self.assertEqual(lit1.page_end, 2229)
         self.assertEqual(lit1.doi, '10.67/doi')
         self.assertEqual(lit1.url, 'u.rl.com/article/abstract')
-        self.assertEqual((repr(lit1)),
-                         '<Literature(id="None", '
-                         'type="article", '
-                         'authors="M.I. It, D.C. Wash", '
-                         'title="Kinetics of the Reactions in a Model: Part II", '
-                         'year=2020, '
-                         'journal="Int. J. Chem. Kin.", '
-                         'volume=53, '
-                         'issue=2, '
-                         'page_start=2222, '
-                         'page_end=2229, '
-                         'doi="10.67/doi", '
-                         'url="u.rl.com/article/abstract")>')
+        self.assertEqual(repr(lit1),
+                         "<Literature(id=None, "
+                         "type='article', "
+                         "authors='M.I. It, D.C. Wash', "
+                         "title='Kinetics of the Reactions in a Model: Part II', "
+                         "year=2020, "
+                         "journal='Int. J. Chem. Kin.', "
+                         "volume=53, "
+                         "issue=2, "
+                         "page_start=2222, "
+                         "page_end=2229, "
+                         "doi='10.67/doi', "
+                         "url='u.rl.com/article/abstract')>")
         self.assertEqual(str(lit1), 'M.I. It, D.C. Wash, "Kinetics of the Reactions in a Model: Part II", '
                                     'Int. J. Chem. Kin. 2020, 53(2), 2222-2229. doi: 10.67/doi')
 
@@ -76,19 +76,19 @@ class TestLiteratureModel(unittest.TestCase):
         self.assertEqual(lit2.publication_place, "New York NY")
         self.assertEqual(lit2.isbn, '978-3-16-148410-0')
         self.assertEqual(lit2.url, 'u.rl.com/book/abstract')
-        self.assertEqual((repr(lit2)),
-                         '<Literature(id="None", '
-                         'type="book", '
-                         'authors="M.I. It, D.C. Wash", '
-                         'title="Principles of Kinetic Modeling", '
-                         'year=1982, '
-                         'publisher="Wee-Ly", '
-                         'editors="E.D. Torr", '
-                         'edition="2nd Edn.", '
-                         'chapter_title="These are Updated Rates", '
-                         'publication_place="New York NY", '
-                         'isbn="978-3-16-148410-0", '
-                         'url="u.rl.com/book/abstract")>')
+        self.assertEqual(repr(lit2),
+                         "<Literature(id=None, "
+                         "type='book', "
+                         "authors='M.I. It, D.C. Wash', "
+                         "title='Principles of Kinetic Modeling', "
+                         "year=1982, "
+                         "publisher='Wee-Ly', "
+                         "editors='E.D. Torr', "
+                         "edition='2nd Edn.', "
+                         "chapter_title='These are Updated Rates', "
+                         "publication_place='New York NY', "
+                         "isbn='978-3-16-148410-0', "
+                         "url='u.rl.com/book/abstract')>")
         self.assertEqual(str(lit2), 'M.I. It, D.C. Wash, "These are Updated Rates", '
                                     'in: E.D. Torr "Principles of Kinetic Modeling", 2nd Edn., Wee-Ly, '
                                     'New York NY 1982. ISBN: 978-3-16-148410-0')
@@ -108,15 +108,15 @@ class TestLiteratureModel(unittest.TestCase):
         self.assertEqual(lit3.publisher, 'MIT')
         self.assertEqual(lit3.advisor, 'P.R. Fessor')
         self.assertEqual(lit3.url, 'u.rl.com/dissertation/abstract')
-        self.assertEqual((repr(lit3)),
-                         '<Literature(id="None", '
-                         'type="thesis", '
-                         'authors="P.H. David", '
-                         'title="Kinetic Modeling Dissertation", '
-                         'year=2020, '
-                         'publisher="MIT", '
-                         'advisor="P.R. Fessor", '
-                         'url="u.rl.com/dissertation/abstract")>')
+        self.assertEqual(repr(lit3),
+                         "<Literature(id=None, "
+                         "type='thesis', "
+                         "authors='P.H. David', "
+                         "title='Kinetic Modeling Dissertation', "
+                         "year=2020, "
+                         "publisher='MIT', "
+                         "advisor='P.R. Fessor', "
+                         "url='u.rl.com/dissertation/abstract')>")
         self.assertEqual(str(lit3), 'P.H. David, Dissertation title: "Kinetic Modeling Dissertation", '
                                     '2020, MIT, Advisor: P.R. Fessor. URL: u.rl.com/dissertation/abstract')
 

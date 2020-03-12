@@ -14,7 +14,7 @@ class TestAuthorBaseSchema(unittest.TestCase):
     Contains unit tests for the AuthorBase schema
     """
 
-    def test_author_model(self):
+    def test_author_schema(self):
         """Test creating an instance of Author"""
         author_1 = AuthorBase(name='I. B. Writing', email='email@dot.com', affiliation='Institution')
         self.assertEqual(author_1.name, 'I. B. Writing')

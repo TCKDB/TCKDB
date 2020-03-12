@@ -18,6 +18,6 @@ class TestBotModel(unittest.TestCase):
         self.assertEqual(bot_1.name, 'ARC')
         self.assertEqual(bot_1.version, '1.1.0')
         self.assertEqual(bot_1.url, 'https://github.com/ReactionMechanismGenerator/ARC')
-        self.assertEqual((str(bot_1)),
-                         '<Bot(id="None", name="ARC", version="1.1.0", '
-                         'url="https://github.com/ReactionMechanismGenerator/ARC")>')
+        self.assertEqual(str(bot_1),
+                         "<Bot(id=None, name='ARC', version='1.1.0', "
+                         "url='https://github.com/ReactionMechanismGenerator/ARC')>")

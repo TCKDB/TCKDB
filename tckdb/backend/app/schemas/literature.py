@@ -18,7 +18,7 @@ class LiteratureTypeEnum(str, Enum):
 
 class LiteratureBase(BaseModel):
     """
-    An LiteratureBase class (shared properties)
+    A LiteratureBase class (shared properties)
     """
     type: LiteratureTypeEnum
     authors: constr(max_length=255)
@@ -45,7 +45,6 @@ class LiteratureBase(BaseModel):
         if 'type' in values and values['type'] == LiteratureTypeEnum.article and (value is None or not value):
             raise ValueError(f'The journal argument is missing for a literature type {values["type"]}')
         return value
-
 
     @validator('authors')
     def check_authors(cls, value, values):
@@ -140,7 +139,7 @@ class LiteratureBase(BaseModel):
 
 
 class LiteratureCreate(LiteratureBase):
-    """Create n Literature: Properties to receive on item creation"""
+    """Create a Literature item: Properties to receive on item creation"""
     type: str
     authors: str
     title: str
@@ -161,7 +160,7 @@ class LiteratureCreate(LiteratureBase):
 
 
 class LiteratureUpdate(LiteratureBase):
-    """Update a Literature: Properties to receive on item update"""
+    """Update a Literature item: Properties to receive on item update"""
     authors: str
     title: str
     year: int
