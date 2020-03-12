@@ -44,3 +44,17 @@ class TestFreqModel(unittest.TestCase):
                          "<Freq(level={'method': 'wB97xd', 'basis': 'def2TZVP', 'solvation': "
                          "{'method': 'PCM', 'solvent': 'water'}}, factor=0.98, "
                          "source='Calculated using the Truhlar method')>")
+
+        freq3 = Freq(level={'method': 'B3LYP', 'basis': '6-31G(d,p)', 'dispersion': 'gd3bj'},
+                     factor=0.98, source="Calculated using the Truhlar method")
+        self.assertEqual(str(freq3),
+                         "<Freq(level={'method': 'B3LYP', 'basis': '6-31G(d,p)', 'dispersion': 'gd3bj'}, factor=0.98, "
+                         "source='Calculated using the Truhlar method')>")
+
+        freq4 = Freq(level={'method': 'DLPNO-CCSD(T)-F12', 'basis': 'cc-pVTZ-F12',
+                            'auxiliary_basis': 'aug-cc-pVTZ/C cc-pVTZ-F12-CABS'},
+                     factor=0.98, source="Calculated using the Truhlar method")
+        self.assertEqual(str(freq4),
+                         "<Freq(level={'method': 'DLPNO-CCSD(T)-F12', 'basis': 'cc-pVTZ-F12', "
+                         "'auxiliary_basis': 'aug-cc-pVTZ/C cc-pVTZ-F12-CABS'}, factor=0.98, "
+                         "source='Calculated using the Truhlar method')>")

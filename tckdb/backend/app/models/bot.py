@@ -9,7 +9,7 @@ from tckdb.backend.app.db.base_class import Base
 
 class Bot(Base):
     """
-    A class for representing a TCKDB Bot
+    A class for representing a TCKDB Bot item
     (A bot is a software used to automatically generate data for TCKDB)
 
     Attributes:

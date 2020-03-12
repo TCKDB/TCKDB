@@ -9,7 +9,7 @@ from tckdb.backend.app.db.base_class import Base
 
 class Author(Base):
     """
-    A class for representing a TCKDB Author
+    A class for representing a TCKDB Author item
 
     Attributes:
         id (int): The primary key.

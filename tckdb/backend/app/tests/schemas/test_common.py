@@ -22,3 +22,5 @@ class TestCommon(unittest.TestCase):
         self.assertEqual(lowercase_dict(d_3), {5: 'z'})
         d_4 = {'D': {'A': 'Z', 'v': 'n', 'H': 54, 'f': 'L', 7: 0, 8: {'Q': 9}}}
         self.assertEqual(lowercase_dict(d_4), {'d': {'a': 'z', 'v': 'n', 'h': 54, 'f': 'l', 7: 0, 8: {'q': 9}}})
+        with self.assertRaises(TypeError):
+            lowercase_dict('D')

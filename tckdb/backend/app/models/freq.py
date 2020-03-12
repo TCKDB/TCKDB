@@ -10,7 +10,7 @@ from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
 
 class Freq(Base):
     """
-    A class for representing a TCKDB Freq (frequency scaling factor)
+    A class for representing a TCKDB Freq item (frequency scaling factor)
 
     Attributes:
         id (int): The primary key.
@@ -29,11 +29,10 @@ class Freq(Base):
                                     'auxiliary_basis': 'aug-cc-pVTZ/C cc-pVTZ-F12-CABS'}
         factor (float): The frequency scaling factor.
         source (str): The source for the determine frequency scaling factor.
-
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     level = Column(MutableDict.as_mutable(JSONEncodedDict), unique=True, nullable=False)
-    factor = Column(Float(), unique=True, nullable=False)
+    factor = Column(Float(), nullable=False)
     source = Column(String(255), nullable=False)
 
     def __repr__(self) -> str:
