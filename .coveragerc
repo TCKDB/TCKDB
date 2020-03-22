@@ -1,0 +1,34 @@
+# .coveragerc to control coverage.py
+[run]
+branch = True
+source = tckdb
+omit =
+    test_*.py
+    */scripts/*
+    */testing/*
+    */tests/*
+    */docs/*
+    */examples/*
+    */ipython/*
+    */grf/*
+    */devtools/*
+
+[report]
+show_missing = False
+exclude_lines =
+    if __name__ == .__main__.:
+include =
+    tckdb/*
+omit =
+    test_*.py
+    */scripts/*
+    */testing/*
+    */tests/*
+    */docs/*
+    */examples/*
+    */ipython/*
+    */grf/*
+    */devtools/*
+
+[html]
+directory = testing/coverage
