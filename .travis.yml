@@ -1,3 +1,6 @@
+# After changing this file, check it on:
+#   http://lint.travis-ci.org/
+
 language: python
 python:
   - "3.7"
@@ -6,15 +9,9 @@ stages:
   - test
 
 before_install:
-  - cd ..
-  # Install miniconda
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then wget http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then wget http://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh; fi
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH=$HOME/miniconda/bin:$PATH
-  # Update conda
-  - conda update -y -n base conda setuptools
-  - conda info -a
+  # Setup python environment
+  - source devtools/travis_ci_before_install.sh
+  - python -V
   # Set git info
   - git config --global user.name "Travis Deploy"
   - git config --global user.email "alongd@mit.edu"
@@ -25,12 +22,12 @@ jobs:
   include:
     - stage: test
       install:
-        - cd TCKDB
         - export PYTHONPATH=$PYTHONPATH:$(pwd)
-        - conda env create -q -f environment.yml
+        - conda env create -f environment.yml
         - source activate tck_env
         - conda install -y -c conda-forge codecov
         - conda list
       script:
-        - make test
-        - codecov --token=62d527a2-32da-49f4-ac7a-8c5d7b193e57
+        - coverage run -m pytest -ra
+        - coverage report
+        - codecov

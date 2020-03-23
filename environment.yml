@@ -8,10 +8,10 @@ dependencies:
   - fastapi=0.46.0
   - ipython
   - jupyter
-  - nose
   - numpy
   - psycopg2
   - pydantic
+  - pytest
   - python >=3.7
   - qcelemental
   - sqlalchemy
