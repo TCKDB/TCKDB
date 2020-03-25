@@ -20,10 +20,12 @@ class Trans(Base):
                            and values are tuples of values and units.
                            Example:
                                {'alpha0': (175, 'cm^-1'), 'T0': (300, 'K'), 'n': (0.52,)}
+        reviewer_flags (dict): Backend flags to assist the review process.
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     model = Column(String(100), nullable=False)
     parameters = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=False)
+    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}(" \

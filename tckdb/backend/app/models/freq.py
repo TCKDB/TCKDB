@@ -29,11 +29,13 @@ class Freq(Base):
                                     'auxiliary_basis': 'aug-cc-pVTZ/C cc-pVTZ-F12-CABS'}
         factor (float): The frequency scaling factor.
         source (str): The source for the determine frequency scaling factor.
+        reviewer_flags (dict): Backend flags to assist the review process.
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     level = Column(MutableDict.as_mutable(JSONEncodedDict), unique=True, nullable=False)
     factor = Column(Float(), nullable=False)
     source = Column(String(255), nullable=False)
+    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}(" \
