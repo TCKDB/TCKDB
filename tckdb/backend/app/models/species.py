@@ -4,7 +4,7 @@ TCKDB backend app models species module
 
 from typing import List, Tuple, Union
 
-from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import ARRAY
 
 from tckdb.backend.app.db.base_class import Base
@@ -23,7 +23,7 @@ class Species(Base):
                            - 'bot' (int): A Bot ID,
                            - 'timestamp' (str): The timestamp of uploading the data to TCKDB (automatically assigned).
         review (dict): Information related to the review process. Keys (values) are:
-                       - 'reviewer' (int): An Author ID,
+                       - 'reviewer' (Union[int, None]): An Author ID,
                        - 'reviewed' (bool): Whether this entry was reviewed,
                        - 'approved' (bool): If this entry was reviewed, whether it was approved.
         literature (int): A Literature id.
@@ -36,9 +36,9 @@ class Species(Base):
         charge (int): The net molecular charge.
         multiplicity (int): The spin multiplicity.
         coordinates (dict): Cartesian coordinates in standard orientation. Keys (values) are:
-                            - 'symbols' (list[str]): The chemical element symbols,
-                            - 'isotopes' (list[int]): The respective isotopes,
-                            - 'coords' (list[list[float]]): The respective coordinates.
+                            - 'symbols' (Tuple[str]): The chemical element symbols,
+                            - 'isotopes' (Tuple[int]): The respective isotopes,
+                            - 'coords' (Tuple[Tuple[float]]): The respective coordinates.
         graphs (list): A list of 2D graphs in an RMG adjacency list format.
                        Each graph represents a localized Lewis structure, while collectively the graphs represent all
                        significant (representative) resonance structures of the species.
@@ -47,10 +47,14 @@ class Species(Base):
         fragment_orientation (list): Relative orientation of fragments starting from the heaviest one.
                                      Both fragments must be in standard Cartesian orientation.
                                      Entries are dicts with keys (values):
-                                     - 'cm' (list[float]),
+                                     - 'cm' (List[float, float, float]),
                                      - 'x' (float),
                                      - 'y' (float),
                                      - 'z' (float).
+                                     Where 'cm' is a vector pointing from the center of mass of the previous fragment
+                                     to the center of mass of the present fragment, 'x', 'y', and 'z', are the angle
+                                     formed between the X, Y, and Z axes of the previous fragment and the X, Y, Z axes
+                                     of the present fragment, respectively.
         external_symmetry (int): The species external symmetry (excluding internal rotations).
         chirality (dict): The species chiral centers.
                           Keys (values) are: 'centers' (list[tuple[int]]), 'types' (list[str]).
@@ -224,12 +228,16 @@ class Species(Base):
                                  - 'comment' (str): A comment.
                                  - 'file' (str): The path to the relevant unconverged output file.
         reviewer_flags (dict): Backend flags to assist the review process.
+
+
+        Todo:
+            - replace MutableDict.as_mutable(JSONEncodedDict) with QCEl msgpacket_dumps, e.g. as done in QCFrac storage_sockets models sql_models.py
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     label = Column(String(255), nullable=True)
     provenance = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=False)
-    review = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
-    literature = Column(Integer, nullable=True)
+    review = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=False)
+    literature = Column(Integer, ForeignKey('literature.id'), nullable=True)
     retracted = Column(String(255), nullable=True)
     extras = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
     identifiers = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=False)
