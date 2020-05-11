@@ -170,11 +170,6 @@ def test_literature_schema():
                        publisher='Wee-Ly', editors='E.D. Torr', edition='2nd Edn.', chapter_title='Updated Rates',
                        publication_place='New York NY', url='u.rl.com/book/abstract')
     with pytest.raises(ValidationError):
-        # no url
-        LiteratureBase(type='book', authors='M.I. It, D.C. Wash', title='Principles of Kinetic Modeling', year=1982,
-                       publisher='Wee-Ly', editors='E.D. Torr', edition='2nd Edn.', chapter_title='Updated Rates',
-                       publication_place='New York NY', isbn='978-3-16-148410-0')
-    with pytest.raises(ValidationError):
         # wrong url
         LiteratureBase(type='book', authors='M.I. It, D.C. Wash', title='Principles of Kinetic Modeling', year=1982,
                        publisher='Wee-Ly', editors='E.D. Torr', edition='2nd Edn.', chapter_title='Updated Rates',
