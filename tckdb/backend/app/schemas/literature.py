@@ -3,6 +3,7 @@ TCKDB backend app schemas literature module
 """
 
 from enum import Enum
+from typing import Dict, Optional
 
 from pydantic import BaseModel, conint, constr, validator
 
@@ -24,20 +25,26 @@ class LiteratureBase(BaseModel):
     authors: constr(max_length=255)
     title: constr(max_length=255)
     year: conint(ge=1600, le=9999)
-    journal: constr(max_length=255) = None
-    publisher: constr(max_length=255) = None
-    volume: conint(gt=0) = None
-    issue: conint(gt=0) = None
-    page_start: conint(gt=0) = None
-    page_end: conint(gt=0) = None
-    editors: constr(max_length=255) = None
-    edition: constr(max_length=50) = None
-    chapter_title: constr(max_length=255) = None
-    publication_place: constr(max_length=255) = None
-    advisor: constr(max_length=255) = None
-    doi: constr(max_length=255) = None
-    isbn: constr(max_length=255) = None
-    url: constr(max_length=500)
+    journal: Optional[constr(max_length=255)] = None
+    publisher: Optional[constr(max_length=255)] = None
+    volume: Optional[conint(gt=0)] = None
+    issue: Optional[conint(gt=0)] = None
+    page_start: Optional[conint(gt=0)] = None
+    page_end: Optional[conint(gt=0)] = None
+    editors: Optional[constr(max_length=255)] = None
+    edition: Optional[constr(max_length=50)] = None
+    chapter_title: Optional[constr(max_length=255)] = None
+    publication_place: Optional[constr(max_length=255)] = None
+    advisor: Optional[constr(max_length=255)] = None
+    doi: Optional[constr(max_length=255)] = None
+    isbn: Optional[constr(max_length=255)] = None
+    url: Optional[constr(max_length=500)] = None
+    reviewer_flags: Optional[Dict[str, str]] = None
+
+    @validator('reviewer_flags', always=True)
+    def check_reviewer_flags(cls, value):
+        """Literature.reviewer_flags validator"""
+        return value or dict()
 
     @validator('journal', always=True)
     def check_journal(cls, value, values):
@@ -144,19 +151,20 @@ class LiteratureCreate(LiteratureBase):
     authors: str
     title: str
     year: int
-    journal: str = None
-    publisher: str = None
-    volume: int = None
-    issue: int = None
-    page_start: int = None
-    page_end: int = None
-    editors: str = None
-    edition: str = None
-    chapter_title: str = None
-    publication_place: str = None
-    doi: str = None
-    isbn: str = None
-    url: str
+    journal: Optional[str] = None
+    publisher: Optional[str] = None
+    volume: Optional[int] = None
+    issue: Optional[int] = None
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+    editors: Optional[str] = None
+    edition: Optional[str] = None
+    chapter_title: Optional[str] = None
+    publication_place: Optional[str] = None
+    doi: Optional[str] = None
+    isbn: Optional[str] = None
+    url: Optional[str] = None
+    reviewer_flags: Optional[Dict[str, str]] = None
 
 
 class LiteratureUpdate(LiteratureBase):
@@ -164,19 +172,20 @@ class LiteratureUpdate(LiteratureBase):
     authors: str
     title: str
     year: int
-    journal: str
-    publisher: str
-    volume: int
-    issue: int
-    page_start: int
-    page_end: int
-    editors: str
-    edition: str
-    chapter_title: str
-    publication_place: str
-    doi: str
-    isbn: str
-    url: str
+    journal: Optional[str] = None
+    publisher: Optional[str] = None
+    volume: Optional[int] = None
+    issue: Optional[int] = None
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+    editors: Optional[str] = None
+    edition: Optional[str] = None
+    chapter_title: Optional[str] = None
+    publication_place: Optional[str] = None
+    doi: Optional[str] = None
+    isbn: Optional[str] = None
+    url: Optional[str] = None
+    reviewer_flags: Optional[Dict[str, str]] = None
 
 
 class LiteratureInDBBase(LiteratureBase):
@@ -185,19 +194,20 @@ class LiteratureInDBBase(LiteratureBase):
     authors: str
     title: str
     year: int
-    journal: str
-    publisher: str
-    volume: int
-    issue: int
-    page_start: int
-    page_end: int
-    editors: str
-    edition: str
-    chapter_title: str
-    publication_place: str
-    doi: str
-    isbn: str
-    url: str
+    journal: Optional[str] = None
+    publisher: Optional[str] = None
+    volume: Optional[int] = None
+    issue: Optional[int] = None
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+    editors: Optional[str] = None
+    edition: Optional[str] = None
+    chapter_title: Optional[str] = None
+    publication_place: Optional[str] = None
+    doi: Optional[str] = None
+    isbn: Optional[str] = None
+    url: Optional[str] = None
+    reviewer_flags: Optional[Dict[str, str]] = None
 
     class Config:
         orm_mode = True
