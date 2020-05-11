@@ -2,7 +2,9 @@
 TCKDB backend app schemas author module
 """
 
-from pydantic import BaseModel, constr, validator
+from typing import Dict, Optional
+
+from pydantic import BaseModel, conint, constr, validator
 
 
 class AuthorBase(BaseModel):
@@ -12,6 +14,20 @@ class AuthorBase(BaseModel):
     name: constr(max_length=255)
     email: constr(max_length=255)
     affiliation: constr(max_length=255)
+    uploaded_species: Optional[conint(gt=0)] = None
+    uploaded_non_physical_species: Optional[conint(gt=0)] = None
+    uploaded_reactions: Optional[conint(gt=0)] = None
+    uploaded_networks: Optional[conint(gt=0)] = None
+    reviewed_species: Optional[conint(gt=0)] = None
+    reviewed_non_physical_species: Optional[conint(gt=0)] = None
+    reviewed_reactions: Optional[conint(gt=0)] = None
+    reviewed_networks: Optional[conint(gt=0)] = None
+    reviewer_flags: Optional[Dict[str, str]] = None
+
+    @validator('reviewer_flags', always=True)
+    def check_reviewer_flags(cls, value):
+        """Author.reviewer_flags validator"""
+        return value or dict()
 
     @validator('name')
     def name_must_contain_space(cls, value):
@@ -39,6 +55,15 @@ class AuthorCreate(AuthorBase):
     name: str
     email: str
     affiliation: str
+    uploaded_species: Optional[int] = None
+    uploaded_non_physical_species: Optional[int] = None
+    uploaded_reactions: Optional[int] = None
+    uploaded_networks: Optional[int] = None
+    reviewed_species: Optional[int] = None
+    reviewed_non_physical_species: Optional[int] = None
+    reviewed_reactions: Optional[int] = None
+    reviewed_networks: Optional[int] = None
+    reviewer_flags: Optional[Dict[str, str]] = None
 
 
 class AuthorUpdate(AuthorBase):
@@ -46,6 +71,15 @@ class AuthorUpdate(AuthorBase):
     name: str
     email: str
     affiliation: str
+    uploaded_species: Optional[int] = None
+    uploaded_non_physical_species: Optional[int] = None
+    uploaded_reactions: Optional[int] = None
+    uploaded_networks: Optional[int] = None
+    reviewed_species: Optional[int] = None
+    reviewed_non_physical_species: Optional[int] = None
+    reviewed_reactions: Optional[int] = None
+    reviewed_networks: Optional[int] = None
+    reviewer_flags: Optional[Dict[str, str]] = None
 
 
 class AuthorInDBBase(AuthorBase):
@@ -54,6 +88,15 @@ class AuthorInDBBase(AuthorBase):
     name: str
     email: int
     affiliation: int
+    uploaded_species: Optional[int] = None
+    uploaded_non_physical_species: Optional[int] = None
+    uploaded_reactions: Optional[int] = None
+    uploaded_networks: Optional[int] = None
+    reviewed_species: Optional[int] = None
+    reviewed_non_physical_species: Optional[int] = None
+    reviewed_reactions: Optional[int] = None
+    reviewed_networks: Optional[int] = None
+    reviewer_flags: Optional[Dict[str, str]] = None
 
     class Config:
         orm_mode = True
