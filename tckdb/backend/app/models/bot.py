@@ -5,7 +5,7 @@ TCKDB backend app models bot module
 from sqlalchemy import Column, Integer, String
 
 from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
+from tckdb.backend.app.models.common import MsgpackExt
 
 
 class Bot(Base):
@@ -28,7 +28,7 @@ class Bot(Base):
     url = Column(String(255), nullable=False)
     git_commit = Column(String(500), nullable=True)
     git_branch = Column(String(100), nullable=True)
-    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __str__(self) -> str:
         """

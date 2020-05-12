@@ -5,7 +5,7 @@ TCKDB backend app models literature module
 from sqlalchemy import Column, Integer, String
 
 from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
+from tckdb.backend.app.models.common import MsgpackExt
 
 
 class Literature(Base):
@@ -53,7 +53,7 @@ class Literature(Base):
     doi = Column(String(255))
     isbn = Column(String(255))
     url = Column(String(500), nullable=False)
-    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:
         """

@@ -2,6 +2,7 @@
 
 coverage
 fastapi==0.46.0
+msgpack-python
 numpy
 pint
 psycopg2

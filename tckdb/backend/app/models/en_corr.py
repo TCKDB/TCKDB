@@ -6,7 +6,7 @@ from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import ARRAY
 
 from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
+from tckdb.backend.app.models.common import MsgpackExt
 
 
 class EnCorr(Base):
@@ -39,11 +39,11 @@ class EnCorr(Base):
     level_id = Column(Integer, ForeignKey('level.id'), nullable=False, unique=False)
     supported_elements = Column(ARRAY(item_type=str, as_tuple=False, zero_indexes=True), nullable=False)
     energy_unit = Column(String(255), nullable=False)
-    aec = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
-    bac = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    aec = Column(MsgpackExt, nullable=True)
+    bac = Column(MsgpackExt, nullable=True)
     isodesmic_reactions = Column(ARRAY(item_type=dict, as_tuple=False, zero_indexes=True), nullable=True)
     isodesmic_high_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
-    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:
         """
