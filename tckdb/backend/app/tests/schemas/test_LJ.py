@@ -8,19 +8,19 @@ from pydantic import ValidationError
 from tckdb.backend.app.schemas.LJ import LJBase
 
 
-def test_LJ_schema():
+def test_lj_schema():
     """Test creating an instance of LJ"""
-    LJ_1 = LJBase(sigma=(4.467, 'angstroms'),
+    lj_1 = LJBase(sigma=(4.467, 'angstroms'),
                   epsilon=(387.557, 'K'),
                   )
-    assert LJ_1.sigma == (4.467, 'angstroms')
-    assert LJ_1.epsilon == (387.557, 'K')
+    assert lj_1.sigma == (4.467, 'angstroms')
+    assert lj_1.epsilon == (387.557, 'K')
 
-    LJ_2 = LJBase(sigma=('4.467', 'angstroms'),
+    lj_2 = LJBase(sigma=('4.467', 'angstroms'),
                   epsilon=('387.557', 'K'),
                   )
-    assert LJ_2.sigma == (4.467, 'angstroms')
-    assert LJ_2.epsilon == (387.557, 'K')
+    assert lj_2.sigma == (4.467, 'angstroms')
+    assert lj_2.epsilon == (387.557, 'K')
 
     with pytest.raises(ValidationError):
         # wrong length

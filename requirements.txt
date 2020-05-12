@@ -3,10 +3,12 @@
 coverage
 fastapi==0.46.0
 numpy
+pint
 psycopg2
 pydantic
 pytest
 qcelemental
+rdkit >=2019.09.2.0
 sqlalchemy
 starlette
 uvicorn

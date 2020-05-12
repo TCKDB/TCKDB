@@ -2,9 +2,9 @@
 TCKDB backend app schemas LJ module
 """
 
-from typing import Tuple
+from typing import Dict, Optional, Tuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 
 class LJBase(BaseModel):
@@ -13,28 +13,33 @@ class LJBase(BaseModel):
     """
     sigma: Tuple[float, str]
     epsilon: Tuple[float, str]
+    reviewer_flags: Optional[Dict[str, str]] = None
+
+    @validator('reviewer_flags', always=True)
+    def check_reviewer_flags(cls, value):
+        """LJ.reviewer_flags validator"""
+        return value or dict()
 
 
 class LJCreate(LJBase):
     """Create an LJ item: Properties to receive on item creation"""
-    name: str
-    version: str = None
-    url: str
+    sigma: Tuple[float, str]
+    epsilon: Tuple[float, str]
+    reviewer_flags: Optional[Dict[str, str]] = None
 
 
 class LJUpdate(LJBase):
     """Update an LJ item: Properties to receive on item update"""
-    name: str
-    version: str
-    url: str
+    sigma: Tuple[float, str]
+    epsilon: Tuple[float, str]
+    reviewer_flags: Optional[Dict[str, str]] = None
 
 
 class LJInDBBase(LJBase):
     """Properties shared by models stored in DB"""
-    id: int
-    name: str
-    version: str
-    url: int
+    sigma: Tuple[float, str]
+    epsilon: Tuple[float, str]
+    reviewer_flags: Optional[Dict[str, str]] = None
 
     class Config:
         orm_mode = True
