@@ -8,7 +8,7 @@ from sqlalchemy import Column, Integer
 from sqlalchemy.dialects.postgresql import ARRAY
 
 from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
+from tckdb.backend.app.models.common import MsgpackExt
 
 
 class LJ(Base):
@@ -24,7 +24,7 @@ class LJ(Base):
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     sigma = Column(ARRAY(item_type=Union[float, str], as_tuple=True, dimensions=2, zero_indexes=True), nullable=False)
     epsilon = Column(ARRAY(item_type=Union[float, str], as_tuple=True, dimensions=2, zero_indexes=True), nullable=False)
-    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:
         """

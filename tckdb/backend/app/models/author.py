@@ -5,7 +5,7 @@ TCKDB backend app models author module
 from sqlalchemy import Column, Integer, String
 
 from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
+from tckdb.backend.app.models.common import MsgpackExt
 
 
 class Author(Base):
@@ -39,7 +39,7 @@ class Author(Base):
     reviewed_non_physical_species = Column(Integer, nullable=True)
     reviewed_reactions = Column(Integer, nullable=True)
     reviewed_networks = Column(Integer, nullable=True)
-    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:
         """

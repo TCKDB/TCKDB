@@ -5,7 +5,7 @@ TCKDB backend app models ess module
 from sqlalchemy import Column, Integer, String
 
 from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
+from tckdb.backend.app.models.common import MsgpackExt
 
 
 class ESS(Base):
@@ -26,7 +26,7 @@ class ESS(Base):
     version = Column(String(100), nullable=False)
     revision = Column(String(100), nullable=False)
     url = Column(String(255), nullable=False)
-    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __str__(self) -> str:
         """

@@ -5,7 +5,7 @@ TCKDB backend app models freq module
 from sqlalchemy import Column, Float, ForeignKey, Integer, String
 
 from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
+from tckdb.backend.app.models.common import MsgpackExt
 
 
 class Freq(Base):
@@ -23,7 +23,7 @@ class Freq(Base):
     factor = Column(Float(), nullable=False)
     level_id = Column(Integer, ForeignKey('level.id'), nullable=False, unique=True)
     source = Column(String(255), nullable=False)
-    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:
         """

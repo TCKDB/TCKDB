@@ -5,7 +5,7 @@ TCKDB backend app models trans module
 from sqlalchemy import Column, Integer, String
 
 from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
+from tckdb.backend.app.models.common import MsgpackExt
 
 
 class Trans(Base):
@@ -25,8 +25,8 @@ class Trans(Base):
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     model = Column(String(100), nullable=False)
-    parameters = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=False)
-    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    parameters = Column(MsgpackExt, nullable=False)
+    reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:
         """

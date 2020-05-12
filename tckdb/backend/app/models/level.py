@@ -5,7 +5,7 @@ TCKDB backend app models level module
 from sqlalchemy import Column, Integer, String
 
 from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import JSONEncodedDict, MutableDict
+from tckdb.backend.app.models.common import MsgpackExt
 
 
 class Level(Base):
@@ -36,7 +36,7 @@ class Level(Base):
     solvation_method = Column(String(500), nullable=True)
     solvent = Column(String(500), nullable=True)
     solvation_description = Column(String(1000), nullable=True)
-    reviewer_flags = Column(MutableDict.as_mutable(JSONEncodedDict), nullable=True)
+    reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:
         """
