@@ -14,14 +14,14 @@ class AuthorBase(BaseModel):
     name: constr(max_length=255)
     email: constr(max_length=255)
     affiliation: constr(max_length=255)
-    uploaded_species: Optional[conint(gt=0)] = None
-    uploaded_non_physical_species: Optional[conint(gt=0)] = None
-    uploaded_reactions: Optional[conint(gt=0)] = None
-    uploaded_networks: Optional[conint(gt=0)] = None
-    reviewed_species: Optional[conint(gt=0)] = None
-    reviewed_non_physical_species: Optional[conint(gt=0)] = None
-    reviewed_reactions: Optional[conint(gt=0)] = None
-    reviewed_networks: Optional[conint(gt=0)] = None
+    uploaded_species: Optional[conint(ge=0)] = 0
+    uploaded_non_physical_species: Optional[conint(ge=0)] = 0
+    uploaded_reactions: Optional[conint(ge=0)] = 0
+    uploaded_networks: Optional[conint(ge=0)] = 0
+    reviewed_species: Optional[conint(ge=0)] = 0
+    reviewed_non_physical_species: Optional[conint(ge=0)] = 0
+    reviewed_reactions: Optional[conint(ge=0)] = 0
+    reviewed_networks: Optional[conint(ge=0)] = 0
     reviewer_flags: Optional[Dict[str, str]] = None
 
     @validator('reviewer_flags', always=True)
@@ -49,20 +49,68 @@ class AuthorBase(BaseModel):
             raise ValueError('email invalid (no spaces allowed)')
         return value
 
+    @validator('uploaded_species')
+    def uploaded_species_validator(cls, value):
+        """Author.uploaded_species validator"""
+        # force to be 0 upon initialization, regardless of the user input
+        return 0
+
+    @validator('uploaded_non_physical_species')
+    def uploaded_non_physical_species_validator(cls, value):
+        """Author.uploaded_non_physical_species validator"""
+        # force to be 0 upon initialization, regardless of the user input
+        return 0
+
+    @validator('uploaded_reactions')
+    def uploaded_reactions_validator(cls, value):
+        """Author.uploaded_reactions validator"""
+        # force to be 0 upon initialization, regardless of the user input
+        return 0
+
+    @validator('uploaded_networks')
+    def uploaded_networks_validator(cls, value):
+        """Author.uploaded_networks validator"""
+        # force to be 0 upon initialization, regardless of the user input
+        return 0
+
+    @validator('reviewed_species')
+    def reviewed_species_validator(cls, value):
+        """Author.reviewed_species validator"""
+        # force to be 0 upon initialization, regardless of the user input
+        return 0
+
+    @validator('reviewed_non_physical_species')
+    def reviewed_non_physical_species_validator(cls, value):
+        """Author.reviewed_non_physical_species validator"""
+        # force to be 0 upon initialization, regardless of the user input
+        return 0
+
+    @validator('reviewed_reactions')
+    def reviewed_reactions_validator(cls, value):
+        """Author.reviewed_reactions validator"""
+        # force to be 0 upon initialization, regardless of the user input
+        return 0
+
+    @validator('reviewed_networks')
+    def reviewed_networks_validator(cls, value):
+        """Author.reviewed_networks validator"""
+        # force to be 0 upon initialization, regardless of the user input
+        return 0
+
 
 class AuthorCreate(AuthorBase):
     """Create an Author item: Properties to receive on item creation"""
     name: str
     email: str
     affiliation: str
-    uploaded_species: Optional[int] = None
-    uploaded_non_physical_species: Optional[int] = None
-    uploaded_reactions: Optional[int] = None
-    uploaded_networks: Optional[int] = None
-    reviewed_species: Optional[int] = None
-    reviewed_non_physical_species: Optional[int] = None
-    reviewed_reactions: Optional[int] = None
-    reviewed_networks: Optional[int] = None
+    uploaded_species: Optional[int] = 0
+    uploaded_non_physical_species: Optional[int] = 0
+    uploaded_reactions: Optional[int] = 0
+    uploaded_networks: Optional[int] = 0
+    reviewed_species: Optional[int] = 0
+    reviewed_non_physical_species: Optional[int] = 0
+    reviewed_reactions: Optional[int] = 0
+    reviewed_networks: Optional[int] = 0
     reviewer_flags: Optional[Dict[str, str]] = None
 
 
@@ -108,5 +156,5 @@ class Author(AuthorInDBBase):
 
 
 class AuthorInDB(AuthorInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass
