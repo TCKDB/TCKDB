@@ -15,10 +15,10 @@ def test_author_schema():
     assert author_1.name == 'I. B. Writing'
     assert author_1.email == 'email@dot.com'
     assert author_1.affiliation == 'Institution'
-    assert author_1.uploaded_species == 300000
-    assert author_1.uploaded_reactions == 15000
-    assert author_1.uploaded_networks == 500
-    assert author_1.reviewed_species is None
+    assert author_1.uploaded_species == 0
+    assert author_1.uploaded_reactions == 0
+    assert author_1.uploaded_networks == 0
+    assert author_1.reviewed_species == 0
 
     with pytest.raises(ValidationError):
         # no @ in email
