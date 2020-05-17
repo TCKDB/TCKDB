@@ -31,16 +31,18 @@ class EnCorrBase(BaseModel):
     def elements_exist(cls, value):
         """EnCorr.supported_elements validator"""
         for symbol in value:
-            if not is_valid_element_symbol(symbol):
-                raise ValueError(f'The symbol {symbol} does not seem to correspond to a known chemical element.\n'
-                                 f'Got: {value}')
+            is_valid, err = is_valid_element_symbol(symbol)
+            if not is_valid:
+                raise ValueError(f'The symbol {symbol} in {value} does not seem to correspond to a known '
+                                 f'chemical element. Reason: {err}')
         return value
 
     @validator('energy_unit')
     def validate_energy_unit(cls, value):
         """EnCorr.energy_unit validator"""
-        if not is_valid_energy_unit(value):
-            raise ValueError(f'The energy unit "{value}" does not seem to be a valid energy unit.')
+        is_valid, err = is_valid_energy_unit(value)
+        if not is_valid:
+            raise ValueError(f'The energy unit "{value}" does not seem to be a valid energy unit. Reason:\n{err}')
         return value
 
     @validator('aec')
@@ -103,9 +105,11 @@ class EnCorrBase(BaseModel):
                             raise ValueError(f'The reactants and products in an isodesmic reaction must be lists, '
                                              f'got {val} which is a {type(val)} in:\n{isodesmic_reaction}')
                         for identifier in val:
-                            if not is_valid_inchi(identifier) and not is_valid_smiles(identifier):
+                            is_valid_inchi_, inchi_err = is_valid_inchi(identifier)
+                            is_valid_smiles_, smiles_err = is_valid_smiles(identifier)
+                            if not is_valid_inchi_ and not is_valid_smiles_:
                                 raise ValueError(f'Got an invalid species identifier {identifier} '
-                                                 f'in {isodesmic_reaction}.')
+                                                 f'in {isodesmic_reaction}. Reason: {inchi_err or smiles_err}')
                     elif key == 'stoichiometry':
                         if not isinstance(val, list):
                             raise ValueError(f'The stoichiometry argument of an isodesmic reaction must be a list, '
