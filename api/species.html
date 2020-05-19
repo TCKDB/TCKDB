@@ -1,0 +1,1308 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>species model &mdash; TCKDB 0.1.0 Documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="trans model" href="trans.html" />
+    <link rel="prev" title="LJ model" href="LJ.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> TCKDB
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">TCKDB’s API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="author.html">author model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bot.html">bot model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="en_corr.html">en_corr model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ess.html">ess model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="freq.html">freq model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="level.html">level model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="literature.html">literature model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LJ.html">LJ model</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">species model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="trans.html">trans model</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../contribute.html">Contribute</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../licence.html">Licence</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">TCKDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="index.html">TCKDB’s API</a> &raquo;</li>
+        
+      <li>species model</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/api/species.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-tckdb.backend.app.models.species">
+<span id="species-model"></span><span id="species"></span><h1>species model<a class="headerlink" href="#module-tckdb.backend.app.models.species" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app models species module</p>
+<dl class="class">
+<dt id="tckdb.backend.app.models.species.NonPhysicalSpecies">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.species.</code><code class="sig-name descname">NonPhysicalSpecies</code><span class="sig-paren">(</span><em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/species.html#NonPhysicalSpecies"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.species.NonPhysicalSpecies" title="Permalink to this definition">¶</a></dt>
+<dd><p>A class for representing a TCKDB NonPhysicalSpecies item.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="tckdb.backend.app.models.species.Species">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.species.</code><code class="sig-name descname">Species</code><span class="sig-paren">(</span><em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/species.html#Species"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.species.Species" title="Permalink to this definition">¶</a></dt>
+<dd><p>A class for representing a TCKDB Species item.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All atom indices in these arguments are 1-indexed unless explicitly stated otherwise.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Arguments use SI units as much as possible. Parameters must be provided in the requested units,
+necessary unit conversions must be done by the user prior to uploading data.
+The requested units are noted for each parameter where relevant.</p>
+</div>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Species</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;formaldehyde&#39;</span><span class="p">,</span>
+        <span class="n">statmech_software</span><span class="o">=</span><span class="s1">&#39;Arkane (RMG) v3.0.0&#39;</span><span class="p">,</span>
+        <span class="n">smiles</span><span class="o">=</span><span class="s1">&#39;C=O&#39;</span><span class="p">,</span>
+        <span class="n">charge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">multiplicity</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">electronic_state</span><span class="o">=</span><span class="s1">&#39;X&#39;</span><span class="p">,</span>
+        <span class="n">coordinates</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;symbols&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">),</span>
+                     <span class="s1">&#39;isotopes&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+                     <span class="s1">&#39;coords&#39;</span><span class="p">:</span> <span class="p">((</span><span class="o">-</span><span class="mf">0.0122240982</span><span class="p">,</span> <span class="mf">0.0001804054</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.00162116</span><span class="p">),</span>
+                                <span class="p">(</span><span class="mf">1.2016481968</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.0177341701</span><span class="p">,</span> <span class="mf">0.1593624097</span><span class="p">),</span>
+                                <span class="p">(</span><span class="o">-</span><span class="mf">0.5971643978</span><span class="p">,</span> <span class="mf">0.9327281670</span><span class="p">,</span> <span class="mf">0.0424401022</span><span class="p">),</span>
+                                <span class="p">(</span><span class="o">-</span><span class="mf">0.5922597008</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.9151744023</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.2001813507</span><span class="p">))},</span>
+        <span class="n">external_symmetry</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="n">point_group</span><span class="o">=</span><span class="s1">&#39;C2v&#39;</span><span class="p">,</span>
+        <span class="n">conformation_method</span><span class="o">=</span><span class="s1">&#39;ARC&#39;</span><span class="p">,</span>
+        <span class="n">is_well</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">is_global_min</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">is_ts</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">electronic_energy</span><span class="o">=-</span><span class="mf">325.6458956547</span><span class="p">,</span>
+        <span class="n">E0</span><span class="o">=</span><span class="mf">123.54842</span><span class="p">,</span>
+        <span class="n">frequencies</span><span class="o">=</span><span class="p">[</span><span class="mf">132.2</span><span class="p">,</span> <span class="mf">548.5</span><span class="p">,</span> <span class="mf">1032.5</span><span class="p">,</span> <span class="mf">2015.22</span><span class="p">,</span> <span class="mf">2018.12</span><span class="p">,</span> <span class="mf">3005.22</span><span class="p">],</span>
+        <span class="n">scaled_projected_frequencies</span><span class="o">=</span><span class="p">[</span><span class="mf">130.217</span><span class="p">,</span> <span class="mf">540.2725</span><span class="p">,</span> <span class="mf">1017.013</span><span class="p">,</span>
+                                      <span class="mf">1984.992</span><span class="p">,</span> <span class="mf">1987.848</span><span class="p">,</span> <span class="mf">2960.142</span><span class="p">],</span>
+        <span class="n">normal_displacement_modes</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.125</span><span class="p">,</span> <span class="mf">0.89</span><span class="p">,</span> <span class="mf">0.35</span><span class="p">],</span>
+                                   <span class="p">[</span><span class="o">-</span><span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.89</span><span class="p">],</span>
+                                   <span class="p">[</span><span class="mf">0.56</span><span class="p">,</span> <span class="mf">0.98</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.65</span><span class="p">],</span>
+                                   <span class="p">[</span><span class="mf">0.022</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.005</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">],</span>
+                                   <span class="p">[</span><span class="o">-</span><span class="mf">0.98</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.002</span><span class="p">,</span> <span class="mf">0.65</span><span class="p">],</span>
+                                   <span class="p">[</span><span class="mf">0.05</span><span class="p">,</span> <span class="mf">0.0025</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.722</span><span class="p">]],</span>
+        <span class="n">freq_id</span><span class="o">=</span><span class="mi">11</span><span class="p">,</span>
+        <span class="n">rigid_rotor</span><span class="o">=</span><span class="s1">&#39;asymmetric top&#39;</span><span class="p">,</span>
+        <span class="n">statmech_treatment</span><span class="o">=</span><span class="s1">&#39;RRHO&#39;</span><span class="p">,</span>
+        <span class="n">rotational_constants</span><span class="o">=</span><span class="p">[</span><span class="mf">1.25</span><span class="p">,</span> <span class="mf">8.56</span><span class="p">,</span> <span class="mf">9.55</span><span class="p">],</span>
+        <span class="n">H298</span><span class="o">=-</span><span class="mf">109.4534</span><span class="p">,</span>
+        <span class="n">S298</span><span class="o">=</span><span class="mf">218.237</span><span class="p">,</span>
+        <span class="n">Cp_values</span><span class="o">=</span><span class="p">[</span><span class="mf">35.313</span><span class="p">,</span> <span class="mf">39.037</span><span class="p">,</span> <span class="mf">43.4299</span><span class="p">,</span> <span class="mf">47.7813</span><span class="p">,</span> <span class="mf">55.438</span><span class="p">,</span> <span class="mf">61.463</span><span class="p">,</span> <span class="mf">70.71</span><span class="p">],</span>
+        <span class="n">Cp_T_list</span><span class="o">=</span><span class="p">[</span><span class="mi">300</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">500</span><span class="p">,</span> <span class="mi">600</span><span class="p">,</span> <span class="mi">800</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="mi">1500</span><span class="p">],</span>
+        <span class="n">heat_capacity_model</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="s1">&#39;NASA&#39;</span><span class="p">,</span>
+                             <span class="s1">&#39;T min&#39;</span><span class="p">:</span> <span class="mi">100</span><span class="p">,</span>
+                             <span class="s1">&#39;T max&#39;</span><span class="p">:</span> <span class="mi">5000</span><span class="p">,</span>
+                             <span class="s1">&#39;coefficients&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;low&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">4.13878818E+00</span><span class="p">,</span> <span class="o">-</span><span class="mf">4.69514383E-03</span><span class="p">,</span>
+                                                      <span class="mf">2.25730249E-05</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.09849937E-08</span><span class="p">,</span>
+                                                      <span class="mf">6.36123283E-12</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.43493283E+04</span><span class="p">,</span>
+                                                      <span class="mf">3.23827482E+00</span><span class="p">],</span>
+                                              <span class="s1">&#39;high&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">2.36095410E+00</span><span class="p">,</span> <span class="mf">7.66804276E-03</span><span class="p">,</span>
+                                                       <span class="o">-</span><span class="mf">3.19770442E-06</span><span class="p">,</span> <span class="mf">6.04724833E-10</span><span class="p">,</span>
+                                                       <span class="o">-</span><span class="mf">4.27517878E-14</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.42794809E+04</span><span class="p">,</span>
+                                                       <span class="mf">1.04457152E+01</span><span class="p">],</span>
+                                              <span class="s1">&#39;T int&#39;</span><span class="p">:</span> <span class="mf">1041.96</span><span class="p">}},</span>
+        <span class="n">en_corr_id</span><span class="o">=</span><span class="mi">33</span><span class="p">,</span>
+        <span class="n">opt_path</span><span class="o">=</span><span class="s1">&#39;path_opt&#39;</span><span class="p">,</span>
+        <span class="n">freq_path</span><span class="o">=</span><span class="s1">&#39;path_freq&#39;</span><span class="p">,</span>
+        <span class="n">sp_path</span><span class="o">=</span><span class="s1">&#39;path_sp&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.id">
+<code class="sig-name descname">id</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The primary key (not a user input).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.label">
+<code class="sig-name descname">label</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.label" title="Permalink to this definition">¶</a></dt>
+<dd><p>A free user label for the species (maximum 255 characters).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># provenance</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.statmech_software">
+<code class="sig-name descname">statmech_software</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.statmech_software" title="Permalink to this definition">¶</a></dt>
+<dd><p>The statistical mechanics software and version used for the statistical mechanics and thermodynamic
+property computations. Should include the version. Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="s1">&#39;Arkane (RMG) v3.0.0&#39;</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.timestamp">
+<code class="sig-name descname">timestamp</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.timestamp" title="Permalink to this definition">¶</a></dt>
+<dd><p>The UTC timestamp of uploading the data to TCKDB (not a user input).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.retracted">
+<code class="sig-name descname">retracted</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.retracted" title="Permalink to this definition">¶</a></dt>
+<dd><p>A reason for retracting this object. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code> (not a user input).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># review</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.reviewed">
+<code class="sig-name descname">reviewed</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.reviewed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Whether this entry was reviewed (not a user input).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.approved">
+<code class="sig-name descname">approved</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.approved" title="Permalink to this definition">¶</a></dt>
+<dd><p>If reviewed, whether it was approved (not a user input).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname">Dict[str, str]</code></dt>
+<dd><p>Backend flags to assist the review process (automatically determined, but users may add notes to flag
+items for the reviewer).</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;general&#39;</span><span class="p">:</span> <span class="s1">&#39;This species has a shallow (1.5 kJ/mol) well along the 4-8-7-10 torsional mode.&#39;</span><span class="p">}</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dict[str, str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># chemical identifiers</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.smiles">
+<code class="sig-name descname">smiles</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.smiles" title="Permalink to this definition">¶</a></dt>
+<dd><p>The canonical SMILES descriptor with chirality information.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Either <code class="docutils literal notranslate"><span class="pre">smiles</span></code>, <code class="docutils literal notranslate"><span class="pre">inchi</span></code>, or <code class="docutils literal notranslate"><span class="pre">graph</span></code> must be specified.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.inchi">
+<code class="sig-name descname">inchi</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.inchi" title="Permalink to this definition">¶</a></dt>
+<dd><p>The InChI descriptor with an explicit H layer and chirality information.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Either <code class="docutils literal notranslate"><span class="pre">smiles</span></code>, <code class="docutils literal notranslate"><span class="pre">inchi</span></code>, or <code class="docutils literal notranslate"><span class="pre">graph</span></code> must be specified.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.inchi_key">
+<code class="sig-name descname">inchi_key</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.inchi_key" title="Permalink to this definition">¶</a></dt>
+<dd><p>The InChI key descriptor. Automatically assigned if not given by the user.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.charge">
+<code class="sig-name descname">charge</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.charge" title="Permalink to this definition">¶</a></dt>
+<dd><p>The net molecular charge.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.multiplicity">
+<code class="sig-name descname">multiplicity</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.multiplicity" title="Permalink to this definition">¶</a></dt>
+<dd><p>The spin multiplicity.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.electronic_state">
+<code class="sig-name descname">electronic_state</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.electronic_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>The species electronic state at CIS level. Default: <code class="docutils literal notranslate"><span class="pre">'X'</span></code> (denoting ground state).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># geometry and connectivity</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.coordinates">
+<code class="sig-name descname">coordinates</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.coordinates" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cartesian coordinates in standard orientation. Keys (values) are:</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt>‘symbols’ (Tuple[str])</dt><dd><p>Chemical element symbols</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘isotopes’ (Tuple[int])</dt><dd><p>The respective isotopes</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘coords’ (Tuple[Tuple[float]])</dt><dd><p>The respective coordinates</p>
+</dd>
+</dl>
+</li>
+</ul>
+<p>Example for methane:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;symbols&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">),</span>
+ <span class="s1">&#39;isotopes&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+ <span class="s1">&#39;coords&#39;</span><span class="p">:</span> <span class="p">((</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+            <span class="p">(</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="mf">0.6300326</span><span class="p">,</span> <span class="mf">0.6300326</span><span class="p">),</span>
+            <span class="p">(</span><span class="o">-</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="mf">0.6300326</span><span class="p">),</span>
+            <span class="p">(</span><span class="o">-</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="mf">0.6300326</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6300326</span><span class="p">),</span>
+            <span class="p">(</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6300326</span><span class="p">))}</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dict[str, Union[Tuple[Tuple[float, float, float], ..], Tuple[int, ..], Tuple[str, ..]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.graph">
+<code class="sig-name descname">graph</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.graph" title="Permalink to this definition">¶</a></dt>
+<dd><p>A 2D connectivity graph in an RMG adjacency list format. Note that this graph represents a single
+Lewis structure (resonance structure). These graphs can be generated using RMG’s API or online at
+<a class="reference external" href="https://rmg.mit.edu/molecule_search">https://rmg.mit.edu/molecule_search</a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Either <code class="docutils literal notranslate"><span class="pre">smiles</span></code>, <code class="docutils literal notranslate"><span class="pre">inchi</span></code>, or <code class="docutils literal notranslate"><span class="pre">graph</span></code> must be specified.</p>
+</div>
+<p>Example for methane:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">multiplicity</span> <span class="mi">1</span>
+<span class="mi">1</span> <span class="n">C</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="n">S</span><span class="p">}</span> <span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="n">S</span><span class="p">}</span> <span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="n">S</span><span class="p">}</span> <span class="p">{</span><span class="mi">5</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
+<span class="mi">2</span> <span class="n">H</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
+<span class="mi">3</span> <span class="n">H</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
+<span class="mi">4</span> <span class="n">H</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
+<span class="mi">5</span> <span class="n">H</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.fragments">
+<code class="sig-name descname">fragments</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.fragments" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fragments represented by this species, e.g., VdW wells. Entries are atom index lists of all atoms in a
+fragment. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code> (denoting there’s only one fragment).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[List[int]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.fragment_orientation">
+<code class="sig-name descname">fragment_orientation</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.fragment_orientation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Relative orientation of fragments, starting from the heaviest one. All fragments must be in standard
+Cartesian orientation prior to determining the following parameters. Entries are dictionaries with the
+following keys (values):</p>
+<blockquote>
+<div><ul>
+<li><dl>
+<dt>‘cm’ (List[float])</dt><dd><p>A vector pointing from a fragment’s center to the center of mass of the next fragment.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>Angstrom</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘x’ (float)</dt><dd><p>The X axis rotational angle in degrees.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘y’ (float)</dt><dd><p>The Y axis rotational angle in degrees.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘z’ (float)</dt><dd><p>The Z axis rotational angle in degrees.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[Dict[str, Union[float, List[float]]]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.external_symmetry">
+<code class="sig-name descname">external_symmetry</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.external_symmetry" title="Permalink to this definition">¶</a></dt>
+<dd><p>The species external symmetry (excluding internal torsions)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.point_group">
+<code class="sig-name descname">point_group</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.point_group" title="Permalink to this definition">¶</a></dt>
+<dd><p>The symmetry point group (use “inf” for infinity, don’t add spaces or underscores). Examples: <code class="docutils literal notranslate"><span class="pre">'C1'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'Cinfv'</span></code>, <code class="docutils literal notranslate"><span class="pre">'C2h'</span></code>, <code class="docutils literal notranslate"><span class="pre">'D4'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Dinfh'</span></code>, <code class="docutils literal notranslate"><span class="pre">'S4'</span></code>, <code class="docutils literal notranslate"><span class="pre">'T'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Th'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Td'</span></code>, <code class="docutils literal notranslate"><span class="pre">'O'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Oh'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'I'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Ih'</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.chirality">
+<code class="sig-name descname">chirality</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.chirality" title="Permalink to this definition">¶</a></dt>
+<dd><p>The species’ chiral centers, following the Cahn–Ingold–Prelog (CIP) notation (<code class="docutils literal notranslate"><span class="pre">'R'</span></code> or <code class="docutils literal notranslate"><span class="pre">'S'</span></code> for atom
+centers, <code class="docutils literal notranslate"><span class="pre">'E'</span></code> or <code class="docutils literal notranslate"><span class="pre">'Z'</span></code> for double bond centers). Keys are tuples of atom indices of a chiral center,
+values are string representations of the respective chiral center.</p>
+<p>Note: Non-radical valance 3 nitrogen atoms are also considered chiral if connected to three different groups
+(considering the lone pair to always be a unique fourth group). In such cases, use a <code class="docutils literal notranslate"><span class="pre">'NR'</span></code> or <code class="docutils literal notranslate"><span class="pre">'NS'</span></code>
+notation.</p>
+<p class="rubric">Example</p>
+<p>A double bond with chirality <code class="docutils literal notranslate"><span class="pre">'E'</span></code> between atoms 1-2, an <code class="docutils literal notranslate"><span class="pre">'S'</span></code> chiral center on atom 3,
+and an <code class="docutils literal notranslate"><span class="pre">'S'</span></code> chiral center on atom 6 which is a nitrogen are represented as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span> <span class="s1">&#39;E&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,):</span> <span class="s1">&#39;S&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">6</span><span class="p">,):</span> <span class="s1">&#39;NS&#39;</span><span class="p">})</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[Dict[Tuple[int], str]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.conformation_method">
+<code class="sig-name descname">conformation_method</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.conformation_method" title="Permalink to this definition">¶</a></dt>
+<dd><p>The method used to determine the lowest energy conformer. Required if the species has 4 or more atoms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.is_well">
+<code class="sig-name descname">is_well</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.is_well" title="Permalink to this definition">¶</a></dt>
+<dd><p>Whether this conformer represents a local well (at the opt level used).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.is_global_min">
+<code class="sig-name descname">is_global_min</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.is_global_min" title="Permalink to this definition">¶</a></dt>
+<dd><p>If this conformer is a well, whether it is meant to represents the <strong>global</strong> minimum energy well.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.global_min_geometry">
+<code class="sig-name descname">global_min_geometry</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.global_min_geometry" title="Permalink to this definition">¶</a></dt>
+<dd><p>If this species does not represent the global minimum well, this argument must contain the coordinates of
+the global minimum energy conformer at the same opt level.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[Dict[str, tuple]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># TS</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.is_ts">
+<code class="sig-name descname">is_ts</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.is_ts" title="Permalink to this definition">¶</a></dt>
+<dd><p>Whether this species represents a transition state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.irc_trajectories">
+<code class="sig-name descname">irc_trajectories</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.irc_trajectories" title="Permalink to this definition">¶</a></dt>
+<dd><p>The two IRC trajectories. Each trajectory is a list of coordinates dictionaries.
+Required if the species is a transition state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[List[Dict[str, tuple]]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># energy</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.electronic_energy">
+<code class="sig-name descname">electronic_energy</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.electronic_energy" title="Permalink to this definition">¶</a></dt>
+<dd><p>The species single point electronic energy as calculated by the electronic structure software
+(without zero-point energy correction).</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>Hartree.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.E0">
+<code class="sig-name descname">E0</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.E0" title="Permalink to this definition">¶</a></dt>
+<dd><p>The zero kelvin enthalpy (electronic energy + zero-point energy correction) after applying
+energy corrections.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>kJ/mol</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.active_space">
+<code class="sig-name descname">active_space</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.active_space" title="Permalink to this definition">¶</a></dt>
+<dd><p>The active space used for a multireference calculation. Keys (values) are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><dl class="simple">
+<dt>‘electrons’ (int)</dt><dd><p>The number of electrons in the active space,</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘orbitals’ (int)</dt><dd><p>The number of orbitals in the active space.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[Dict[str, int]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># Hessian</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.hessian">
+<code class="sig-name descname">hessian</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.hessian" title="Permalink to this definition">¶</a></dt>
+<dd><p>The computed Hessian matrix (lower triangle). Required for non-monoatomic species.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>Hartree / Bohr <sup>2</sup></p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[List[float]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># vibrational modes</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.frequencies">
+<code class="sig-name descname">frequencies</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.frequencies" title="Permalink to this definition">¶</a></dt>
+<dd><p>Unscaled, unprojected frequencies. Complex roots are represented by a negative number.
+Required for non-monoatomic species.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>cm <sup>-1</sup></p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[float]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.scaled_projected_frequencies">
+<code class="sig-name descname">scaled_projected_frequencies</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.scaled_projected_frequencies" title="Permalink to this definition">¶</a></dt>
+<dd><p>Scaled, projected frequencies (user input). Complex roots are represented by a negative number.
+Required for non-monoatomic species.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>cm <sup>-1</sup></p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[float]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.normal_displacement_modes">
+<code class="sig-name descname">normal_displacement_modes</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.normal_displacement_modes" title="Permalink to this definition">¶</a></dt>
+<dd><p>The normal displacement modes. Required for non-monoatomic species.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>Angstrom</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[List[float]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.freq_id">
+<code class="sig-name descname">freq_id</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.freq_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The frequency scaling factor key for the <a class="reference internal" href="freq.html#freq"><span class="std std-ref">freq table</span></a>. Required for non-monoatomic species.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This argument will be facilitated by TCKDB by querying the <a class="reference internal" href="freq.html#freq"><span class="std std-ref">freq table</span></a>.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[int]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># rotational modes</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.rigid_rotor">
+<code class="sig-name descname">rigid_rotor</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.rigid_rotor" title="Permalink to this definition">¶</a></dt>
+<dd><p>The rigid rotor treatment type.
+Allowed values: <code class="docutils literal notranslate"><span class="pre">'atom'</span></code>, <code class="docutils literal notranslate"><span class="pre">'linear'</span></code>, <code class="docutils literal notranslate"><span class="pre">'spherical</span> <span class="pre">top'</span></code>, <code class="docutils literal notranslate"><span class="pre">'symmetric</span> <span class="pre">top'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'asymmetric</span> <span class="pre">top'</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.statmech_treatment">
+<code class="sig-name descname">statmech_treatment</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.statmech_treatment" title="Permalink to this definition">¶</a></dt>
+<dd><p>The statistical mechanics treatment of the species. Required for non-monoatomic species.</p>
+<p>Examples:</p>
+<ul class="simple">
+<li><p>‘RRHO’ (rigid rotor harmonic oscillator)</p></li>
+<li><p>‘RRHO-1D’ (rigid rotor harmonic oscillator with 1D torsions)</p></li>
+<li><p>‘RRHO-1D-ND’ (rigid rotor harmonic oscillator with mixed 1D torsions and ND torsions)</p></li>
+<li><p>‘RRHO-ND’ (rigid rotor harmonic oscillator with ND torsions)</p></li>
+<li><p>‘RRHO-AD’ (rigid rotor harmonic oscillator with ND torsions, D is the overall number of torsions, D &gt; 1)</p></li>
+<li><p>‘RRAO’ (rigid rotor anharmonic oscillator)</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.rotational_constants">
+<code class="sig-name descname">rotational_constants</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.rotational_constants" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rotational constants. <code class="docutils literal notranslate"><span class="pre">None</span></code> for monoatomic species.
+Computed from the geometry if not provided by the user.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>amu * Angstrom <sup>2</sup></p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[float]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># torsional modes</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.torsions">
+<code class="sig-name descname">torsions</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.torsions" title="Permalink to this definition">¶</a></dt>
+<dd><p>The torsional modes. Entries are dictionaries with keys (values):</p>
+<ul>
+<li><dl class="simple">
+<dt>‘computation type’ (str)</dt><dd><p>The torsional mode computation type. Allowed values: <code class="docutils literal notranslate"><span class="pre">'single</span> <span class="pre">point'</span></code>, <code class="docutils literal notranslate"><span class="pre">'constrained</span> <span class="pre">optimization'</span></code>,
+or <code class="docutils literal notranslate"><span class="pre">'continuous</span> <span class="pre">constrained</span> <span class="pre">optimization'</span></code></p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘dimension’ (int)</dt><dd><p>The torsional dimension treated by this mode</p>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt>‘constraints’ (Dict[Tuple[int], float])</dt><dd><p>Any constraints (bond distances, angles, and dihedral angles)
+used in the optimization other than the primary torsion modes. Keys (values) are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><dl class="simple">
+<dt>Tuple[int] (float)</dt><dd><p>A key is a tuple of atom indices representing an internal geometrical
+parameter (bond, angle, or dihedral angle). This parameter type is identified by the length
+of the tuple key (two, three, and four atom indices represent bond, angle and dihedral
+angle, respectively. Values are corresponding parameters in either degrees or Angstrom.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</div></blockquote>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘symmetry’ (int)</dt><dd><p>The internal rotation symmetry</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘treatment’ (str)</dt><dd><p>The torsion treatment method. Allowed values are <code class="docutils literal notranslate"><span class="pre">'hindered</span> <span class="pre">rotor'</span></code>, <code class="docutils literal notranslate"><span class="pre">'free</span> <span class="pre">rotor'</span></code>
+<code class="docutils literal notranslate"><span class="pre">'rigid</span> <span class="pre">top'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'hindered</span> <span class="pre">rotor</span> <span class="pre">density</span> <span class="pre">of</span> <span class="pre">states'</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘torsions’ (List[List[int]])</dt><dd><p>The atom indices describing the torsional mode. Entries are 4-length lists of atom
+indices, the number of entries is the torsion dimension.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘top’ (List[int])</dt><dd><p>Atom indices of all atoms on one side of the internal rotor, starting from its center. For a 1D rotor
+(“R1-A-B-C-D-R2”), this means listing all atoms starting from one of the pivotal atoms (“C-D-R2”).
+For an adjacent 2D rotor (“R1-A-B-C-D-E-R2”), this means starting from the middle atom which is a
+pivotal atom in both modes (“C-D-E-R2”).</p>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt>‘energies’ (list)</dt><dd><p>The scan energies. This is an ND array, axes order corresponds to the order
+in which the torsions are defined under <code class="docutils literal notranslate"><span class="pre">torsions</span></code>.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>kJ / mol</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt>‘resolution’ (List[float])</dt><dd><p>The dihedral angle increment resolutions.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>degrees</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘trajectory’ (list)</dt><dd><p>Entries are Cartesian coordinates of respective points in the scan. THis is an ND array.
+Axes order corresponds to the order in which the torsions are defined under <code class="docutils literal notranslate"><span class="pre">torsions</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘invalidated’ (str)</dt><dd><p>An invalidation reason, if this mode was invalidated. Useful for TSs where a torsion breaks the
+connectivity near the reactive site, and for high-barrier torsions not considered in the statmech
+treatment. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd>
+</dl>
+</li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[Dict[str, Union[int, Dict[Tuple[int], list, float], str]]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># conformers</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.conformers">
+<code class="sig-name descname">conformers</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.conformers" title="Permalink to this definition">¶</a></dt>
+<dd><p>The species conformers used for Boltzmann averaging of accessible wells. <code class="docutils literal notranslate"><span class="pre">None</span></code> if <code class="docutils literal notranslate"><span class="pre">torsions</span></code> are used,
+and vice versa. Entries are dictionaries containing the same keys as the <code class="docutils literal notranslate"><span class="pre">coordinates</span></code> attribute, with an
+additional <code class="docutils literal notranslate"><span class="pre">'energy'</span></code> key with the energy of each conformer relative to the lowest energy well given
+in kJ/mol at the sp level.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[Dict[str, Union[float, Tuple[Tuple[float]], Tuple[int], Tuple[str]]]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># thermochemical properties</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.H298">
+<code class="sig-name descname">H298</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.H298" title="Permalink to this definition">¶</a></dt>
+<dd><p>The standard (298.15 K, 1 bar) enthalpy change of formation.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>kJ/mol</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.S298">
+<code class="sig-name descname">S298</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.S298" title="Permalink to this definition">¶</a></dt>
+<dd><p>The standard (298.15 K, 1 bar) entropy change of formation.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>J / (mol * K)</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.Cp_values">
+<code class="sig-name descname">Cp_values</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.Cp_values" title="Permalink to this definition">¶</a></dt>
+<dd><p>The constant pressure heat capacity values.</p>
+<dl class="simple">
+<dt>Units:</dt><dd><p>J / (mol * K).</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>List[float]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.Cp_T_list">
+<code class="sig-name descname">Cp_T_list</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.Cp_T_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>The temperatures in K corresponding to the discrete Cp values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>List[float]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.heat_capacity_model">
+<code class="sig-name descname">heat_capacity_model</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.heat_capacity_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>The heat capacity extrapolation model and coefficients. Keys (values) are:</p>
+<ul>
+<li><dl class="simple">
+<dt>‘model’ (str)</dt><dd><p>The heat capacity model. For example: <code class="docutils literal notranslate"><span class="pre">'NASA'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Wilhoit'</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘T min’ (float)</dt><dd><p>The minimum temperature range in K.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘T max’ (float)</dt><dd><p>The maximum temperature range in K.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘P min’ (float)</dt><dd><p>The minimum temperature range in K (irrelevant for NASA/Wilhoit).</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘P max’ (float)</dt><dd><p>The maximum temperature range in K (irrelevant for NASA/Wilhoit).</p>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt>‘coefficients’ (dict)</dt><dd><p>The heat capacity coefficients. For a <code class="docutils literal notranslate"><span class="pre">'NASA'</span></code> model the keys (values) are:</p>
+<blockquote>
+<div><blockquote>
+<div><ul class="simple">
+<li><p>‘low’ (List[float]): Low T range coefficients</p></li>
+<li><p>‘high’ (List[float]): High T range coefficients</p></li>
+<li><p>‘T int’ (float): Intermediate range temperature in K</p></li>
+</ul>
+</div></blockquote>
+<p>For a ‘Wilhoit’ model the keys (values) are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>‘a0’ (float): The Wilhoit a0 coefficient</p></li>
+<li><p>‘a1’ (float): The Wilhoit a1 coefficient</p></li>
+<li><p>‘a2’ (float): The Wilhoit a2 coefficient</p></li>
+<li><p>‘a3’ (float): The Wilhoit a3 coefficient</p></li>
+<li><p>‘B’ (float): The Wilhoit B coefficient</p></li>
+<li><p>‘H0’ (float): The Wilhoit H0 coefficient</p></li>
+<li><p>‘S0’ (float): The Wilhoit S0 coefficient</p></li>
+</ul>
+</div></blockquote>
+</div></blockquote>
+</dd>
+</dl>
+</li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dict[str, Union[float, Dict[str, Union[float, List[float]]], str]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># energy corrections</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.en_corr_id">
+<code class="sig-name descname">en_corr_id</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.en_corr_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The energy correction key for the <a class="reference internal" href="en_corr.html#en-corr"><span class="std std-ref">en_corr table</span></a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This argument will be facilitated by TCKDB by querying the <a class="reference internal" href="en_corr.html#en-corr"><span class="std std-ref">en_corr table</span></a>.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># paths</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.opt_path">
+<code class="sig-name descname">opt_path</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.opt_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>The path to the optimization output file. Required for non-monoatomic species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.freq_path">
+<code class="sig-name descname">freq_path</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.freq_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>The path to the frequencies calculation output file. Required for non-monoatomic species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.scan_paths">
+<code class="sig-name descname">scan_paths</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.scan_paths" title="Permalink to this definition">¶</a></dt>
+<dd><p>Paths to the torsion scan calculation output files.
+Keys are tuples of tuples. The number of inner-level tuples corresponds to the torsion dimension. Entries of
+the inner-level tuple are torsion atom indices. Values are paths to the respective scan calculation log file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[Dict[Tuple[Tuple[int]], str]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.irc_paths">
+<code class="sig-name descname">irc_paths</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.irc_paths" title="Permalink to this definition">¶</a></dt>
+<dd><p>A length two list. Entries are paths to the IRC calculation output files. Required for transition states.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[str]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.sp_path">
+<code class="sig-name descname">sp_path</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.sp_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>The path to the single point energy output file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># unconverged jobs</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.unconverged_jobs">
+<code class="sig-name descname">unconverged_jobs</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.unconverged_jobs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Any relevant unconverged jobs that were troubleshooted while calculating this Species.
+Entries are dictionaries, keys (values) are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>‘job_type’ (str): <code class="docutils literal notranslate"><span class="pre">'opt'</span></code>, <code class="docutils literal notranslate"><span class="pre">'freq'</span></code>, <code class="docutils literal notranslate"><span class="pre">'scan'</span></code>, <code class="docutils literal notranslate"><span class="pre">'irc'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'sp'</span></code></p></li>
+<li><p>‘issue’ (str): The identified issue</p></li>
+<li><p>‘troubleshooting’ (str): Description of the troubleshooting method(s) that solved the issue</p></li>
+<li><p>‘comment’ (str): An optional comment explaining the troubleshooting approach</p></li>
+<li><p>‘file’ (str): The path to the relevant unconverged ESS log file</p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[List[Dict[str, str]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt>
+<code class="sig-name descname"># misc</code></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.species.Species.extras">
+<code class="sig-name descname">extras</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.extras" title="Permalink to this definition">¶</a></dt>
+<dd><p>Any additional information in the form of a dictionary</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Optional[Dict[str, Any]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="tckdb.backend.app.models.species.species_as_str">
+<code class="sig-prename descclassname">tckdb.backend.app.models.species.</code><code class="sig-name descname">species_as_str</code><span class="sig-paren">(</span><em class="sig-param">class_name</em>, <em class="sig-param">id</em>, <em class="sig-param">label</em>, <em class="sig-param">smiles</em>, <em class="sig-param">inchi</em>, <em class="sig-param">inchi_key</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/species.html#species_as_str"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.species.species_as_str" title="Permalink to this definition">¶</a></dt>
+<dd><p>A helper function for generating a user-friendly string representation of a Species or NonPhysicalSpecies object.</p>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="trans.html" class="btn btn-neutral float-right" title="trans model" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="LJ.html" class="btn btn-neutral float-left" title="LJ model" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019-2020, Alon Grinberg Dana
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

@@ -1,0 +1,307 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>ess model &mdash; TCKDB 0.1.0 Documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="freq model" href="freq.html" />
+    <link rel="prev" title="en_corr model" href="en_corr.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> TCKDB
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">TCKDB’s API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="author.html">author model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bot.html">bot model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="en_corr.html">en_corr model</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ess model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="freq.html">freq model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="level.html">level model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="literature.html">literature model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LJ.html">LJ model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="species.html">species model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="trans.html">trans model</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../contribute.html">Contribute</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../licence.html">Licence</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">TCKDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="index.html">TCKDB’s API</a> &raquo;</li>
+        
+      <li>ess model</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/api/ess.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-tckdb.backend.app.models.ess">
+<span id="ess-model"></span><span id="ess"></span><h1>ess model<a class="headerlink" href="#module-tckdb.backend.app.models.ess" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app models ess module</p>
+<dl class="class">
+<dt id="tckdb.backend.app.models.ess.ESS">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.ess.</code><code class="sig-name descname">ESS</code><span class="sig-paren">(</span><em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/ess.html#ESS"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS" title="Permalink to this definition">¶</a></dt>
+<dd><p>A class for representing a TCKDB ESS item</p>
+<p>(ESS = electronic structure software)</p>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ESS</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;Psi4&#39;</span><span class="p">,</span>
+    <span class="n">version</span><span class="o">=</span><span class="s1">&#39;1.1&#39;</span><span class="p">,</span>
+    <span class="n">url</span><span class="o">=</span><span class="s1">&#39;http://www.psicode.org/&#39;</span><span class="p">)</span>
+
+<span class="n">ESS</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;Gaussian&#39;</span><span class="p">,</span>
+    <span class="n">version</span><span class="o">=</span><span class="s1">&#39;16&#39;</span><span class="p">,</span>
+    <span class="n">revision</span><span class="o">=</span><span class="s1">&#39;C.01&#39;</span><span class="p">,</span>
+    <span class="n">url</span><span class="o">=</span><span class="s1">&#39;https://gaussian.com/&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.id">
+<code class="sig-name descname">id</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The primary key (not a user input).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.name">
+<code class="sig-name descname">name</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.name" title="Permalink to this definition">¶</a></dt>
+<dd><p>The software name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.version">
+<code class="sig-name descname">version</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.version" title="Permalink to this definition">¶</a></dt>
+<dd><p>The software version.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str, optional</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.revision">
+<code class="sig-name descname">revision</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.revision" title="Permalink to this definition">¶</a></dt>
+<dd><p>The software revision.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str, optional</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.url">
+<code class="sig-name descname">url</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.url" title="Permalink to this definition">¶</a></dt>
+<dd><p>The official software web address.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.reviewer_flags">
+<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backend flags to assist the review process (not a user input).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dict[str, str]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="freq.html" class="btn btn-neutral float-right" title="freq model" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="en_corr.html" class="btn btn-neutral float-left" title="en_corr model" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019-2020, Alon Grinberg Dana
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

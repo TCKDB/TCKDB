@@ -1,0 +1,299 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>tckdb.backend.app.models.en_corr &mdash; TCKDB 0.1.0 Documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../../../../../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../../../" src="../../../../../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+        <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+        <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+        <script type="text/javascript" src="../../../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../../../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../../../index.html" class="icon icon-home"> TCKDB
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/index.html">TCKDB’s API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../contribute.html">Contribute</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../licence.html">Licence</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">TCKDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../../../index.html">Module code</a> &raquo;</li>
+        
+      <li>tckdb.backend.app.models.en_corr</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for tckdb.backend.app.models.en_corr</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">TCKDB backend app models en_corr module</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="k">import</span> <span class="n">Column</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">String</span>
+<span class="kn">from</span> <span class="nn">sqlalchemy.dialects.postgresql</span> <span class="k">import</span> <span class="n">ARRAY</span>
+
+<span class="kn">from</span> <span class="nn">tckdb.backend.app.db.base_class</span> <span class="k">import</span> <span class="n">Base</span>
+<span class="kn">from</span> <span class="nn">tckdb.backend.app.models.common</span> <span class="k">import</span> <span class="n">MsgpackExt</span>
+
+
+<div class="viewcode-block" id="EnCorr"><a class="viewcode-back" href="../../../../../api/en_corr.html#tckdb.backend.app.models.en_corr.EnCorr">[docs]</a><span class="k">class</span> <span class="nc">EnCorr</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A class for representing a TCKDB EnCorr item</span>
+
+<span class="sd">    **AEC and BAC** Example::</span>
+
+<span class="sd">        EnCorr(level_id=1, supported_elements=[&#39;H&#39;, &#39;C&#39;, &#39;N&#39;, &#39;O&#39;, &#39;S&#39;], energy_unit=&#39;Hartree&#39;,</span>
+<span class="sd">               aec={&#39;H&#39;: -0.499459, &#39;C&#39;: -37.786694, &#39;N&#39;: -54.524279,</span>
+<span class="sd">                    &#39;O&#39;: -74.992097, &#39;S&#39;: -397.648733},</span>
+<span class="sd">               bac={&#39;C-H&#39;: -0.46, &#39;C-C&#39;: -0.68, &#39;C=C&#39;: -1.9, &#39;C#C&#39;: -3.13, &#39;O-H&#39;: -0.51,</span>
+<span class="sd">                    &#39;C-O&#39;: -0.23, &#39;C=O&#39;: -0.69, &#39;O-O&#39;: -0.02, &#39;C-N&#39;: -0.67, &#39;C=N&#39;: -1.46,</span>
+<span class="sd">                    &#39;C#N&#39;: -2.79, &#39;N-O&#39;: 0.74, &#39;N_O&#39;: -0.23, &#39;N=O&#39;: -0.51, &#39;N-H&#39;: -0.69,</span>
+<span class="sd">                    &#39;N-N&#39;: -0.47, &#39;N=N&#39;: -1.54, &#39;N#N&#39;: -2.05, &#39;S-H&#39;: 0.87, &#39;C-S&#39;: 0.42,</span>
+<span class="sd">                    &#39;C=S&#39;: 0.51, &#39;S-S&#39;: 0.86, &#39;O-S&#39;: 0.23, &#39;O=S&#39;: -0.53})</span>
+
+<span class="sd">    **Isodesmic reactions** Example::</span>
+
+<span class="sd">        EnCorr(level_id=1, supported_elements=[&#39;H&#39;, &#39;C&#39;, &#39;N&#39;, &#39;O&#39;, &#39;S&#39;], energy_unit=&#39;kcal/mol&#39;,</span>
+<span class="sd">               isodesmic_reactions=([{&#39;reactants&#39;: [&#39;[CH2]CCCC&#39;, &#39;[CH]&#39;],</span>
+<span class="sd">                                      &#39;products&#39;: [&#39;[C]C&#39;, &#39;C[CH]CC&#39;],</span>
+<span class="sd">                                      &#39;stoichiometry&#39;: [1, 1, 1, 1], &#39;DHrxn298&#39;: 17.076},</span>
+<span class="sd">                                     {&#39;reactants&#39;: [&#39;[CH2]CCCC&#39;, &#39;[CH3]&#39;],</span>
+<span class="sd">                                      &#39;products&#39;: [&#39;C[CH2]&#39;, &#39;[CH2]C(C)C&#39;],</span>
+<span class="sd">                                      &#39;stoichiometry&#39;: [1, 1, 1, 1], &#39;DHrxn298&#39;: 14.507}]),</span>
+<span class="sd">               isodesmic_high_level_id=2)</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        id (int)</span>
+<span class="sd">            The primary key (not a user input)</span>
+<span class="sd">        level_id (int)</span>
+<span class="sd">            The level of theory key for the :ref:`level table &lt;level&gt;`.</span>
+
+<span class="sd">            Note:</span>
+<span class="sd">                This argument will be facilitated by TCKDB by querying the :ref:`level table &lt;level&gt;`.</span>
+<span class="sd">        supported_elements (List[str])</span>
+<span class="sd">            Entries are atomic symbols of elements supported by this energy correction instance.</span>
+<span class="sd">        energy_unit (str)</span>
+<span class="sd">            The energy units, default: &#39;Hartree&#39;</span>
+<span class="sd">        aec (Dict[str, float])</span>
+<span class="sd">            Atomic energy corrections (including SOC). Keys are element symbols, values are energy</span>
+<span class="sd">            corrections in the specified ``energy_unit``.</span>
+<span class="sd">        bac (Dict[str, float])</span>
+<span class="sd">            Bond additivity corrections. Keys are strings representing two elements and the bond between them</span>
+<span class="sd">            (e.g., `&#39;C=O&#39;`). Values are energy corrections in the specified ``energy_unit``.</span>
+<span class="sd">            Allowed bond descriptors are ``&#39;-&#39;``, ``&#39;=&#39;``, ``&#39;#&#39;``, ``&#39;--&#39;``, and ``&#39;&amp;&#39;`` for single, double, triple,</span>
+<span class="sd">            hydrogen, and aromatic bonds, respectively.</span>
+<span class="sd">        isodesmic_reactions (List[Dict[str, Union[List[Union[int, str]], float]]])</span>
+<span class="sd">            The isodesmic reactions used for the energy correction. If specified, &#39;AEC&#39; and &#39;BAC&#39; must be ``None``,</span>
+<span class="sd">            and vice versa. Entries are dictionaries representing reactions. Each reaction dict has &#39;reactants&#39;,</span>
+<span class="sd">            &#39;products&#39;, &#39;stoichiometry&#39;, and &#39;DHrxn298&#39; keys. The values of the &#39;reactants&#39; and &#39;products&#39; are lists</span>
+<span class="sd">            of string species identifier (SMILES or InChI). The value of &#39;stoichiometry&#39; is a list with stoichiometric</span>
+<span class="sd">            coefficients of the reactants and products (in that order). The value of &#39;DHrxn298&#39; is the enthalpy change</span>
+<span class="sd">            of reaction at the &quot;low level&quot; in the specified ``energy_unit``. See example above.</span>
+<span class="sd">        isodesmic_high_level_id (int)</span>
+<span class="sd">            The high level of theory used for all other species. A level of theory key for the</span>
+<span class="sd">            :ref:`level table &lt;level&gt;`. Required if ``isodesmic_reactions`` is specified, ``None`` otherwise.</span>
+<span class="sd">        reviewer_flags (Dict[str, str])</span>
+<span class="sd">            Backend flags to assist the review process (not a user input).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">supported_elements</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">energy_unit</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">aec</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">bac</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">isodesmic_reactions</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">isodesmic_high_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">reviewer_flags</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        A string representation from which the object can be reconstructed.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">str_</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;&lt;</span><span class="si">{self.__class__.__name__}</span><span class="s2">(&quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;id=</span><span class="si">{self.id}</span><span class="s2">, &quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;level_id=</span><span class="si">{self.level_id}</span><span class="s2">, &quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;supported_elements=</span><span class="si">{self.supported_elements}</span><span class="s2">, &quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;energy_unit=&#39;</span><span class="si">{self.energy_unit}</span><span class="s2">&#39;&quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;, aec=</span><span class="si">{self.aec}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">aec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;, bac=</span><span class="si">{self.bac}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bac</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;, isodesmic_reactions=</span><span class="si">{self.isodesmic_reactions}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isodesmic_reactions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;, isodesmic_high_level_id=</span><span class="si">{self.isodesmic_high_level_id}</span><span class="s2">&quot;</span> \
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">isodesmic_high_level_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;)&gt;&quot;</span>
+        <span class="k">return</span> <span class="n">str_</span>
+
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        A user-friendly string representation of the object.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">str_</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;&lt;</span><span class="si">{self.__class__.__name__}</span><span class="s2">(&quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;level_id=&#39;</span><span class="si">{self.level_id}</span><span class="s2">&#39;, &quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;supported_elements=</span><span class="si">{self.supported_elements}</span><span class="s2">&quot;</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="n">f</span><span class="s2">&quot;)&gt;&quot;</span>
+        <span class="k">return</span> <span class="n">str_</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019-2020, Alon Grinberg Dana
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
