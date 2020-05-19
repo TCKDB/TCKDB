@@ -52,7 +52,7 @@ class EnCorr(Base):
         str_ = f"<{self.__class__.__name__}("
         str_ += f"id={self.id}, "
         str_ += f"level_id={self.level_id}, "
-        str_ += f"supported_elements='{self.supported_elements}', "
+        str_ += f"supported_elements={self.supported_elements}, "
         str_ += f"energy_unit='{self.energy_unit}'"
         str_ += f", aec={self.aec}" if self.aec is not None else ""
         str_ += f", bac={self.bac}" if self.bac is not None else ""
@@ -68,6 +68,6 @@ class EnCorr(Base):
         """
         str_ = f"<{self.__class__.__name__}("
         str_ += f"level_id='{self.level_id}', "
-        str_ += f"supported_elements='{self.supported_elements}'"
+        str_ += f"supported_elements={self.supported_elements}"
         str_ += f")>"
         return str_

@@ -22,8 +22,8 @@ def test_en_corr_model():
     assert en_corr_1.energy_unit == 'Hartree'
     assert en_corr_1.aec == aec
     assert en_corr_1.bac == bac
-    assert str(en_corr_1) == "<EnCorr(level_id='1', supported_elements='['H', 'C', 'N', 'O', 'S']')>"
-    assert repr(en_corr_1) == "<EnCorr(id=None, level_id=1, supported_elements='['H', 'C', 'N', 'O', 'S']', " \
+    assert str(en_corr_1) == "<EnCorr(level_id='1', supported_elements=['H', 'C', 'N', 'O', 'S'])>"
+    assert repr(en_corr_1) == "<EnCorr(id=None, level_id=1, supported_elements=['H', 'C', 'N', 'O', 'S'], " \
                               "energy_unit='Hartree', aec={'H': -0.499459, 'C': -37.786694, 'N': -54.524279, " \
                               "'O': -74.992097, 'S': -397.648733}, bac={'C-H': -0.46, 'C-C': -0.68, 'C=C': -1.9, " \
                               "'C#C': -3.13, 'O-H': -0.51, 'C-O': -0.23, 'C=O': -0.69, 'O-O': -0.02, 'C-N': -0.67, " \
@@ -51,8 +51,8 @@ def test_en_corr_model():
     assert en_corr_2.bac is None
     assert en_corr_2.isodesmic_reactions == isodesmic_reactions
     assert en_corr_2.isodesmic_high_level_id == 2
-    assert str(en_corr_2) == "<EnCorr(level_id='1', supported_elements='['H', 'C', 'N', 'O', 'S']')>"
-    assert repr(en_corr_2) == "<EnCorr(id=None, level_id=1, supported_elements='['H', 'C', 'N', 'O', 'S']', " \
+    assert str(en_corr_2) == "<EnCorr(level_id='1', supported_elements=['H', 'C', 'N', 'O', 'S'])>"
+    assert repr(en_corr_2) == "<EnCorr(id=None, level_id=1, supported_elements=['H', 'C', 'N', 'O', 'S'], " \
                               "energy_unit='kcal/mol', isodesmic_reactions=([{'reactants': ['[CH2]CCCC', '[CH]'], " \
                               "'products': ['[C]C', 'C[CH]CC'], 'stoichiometry': [1, 1, 1, 1], 'DHrxn298': 17.076}, " \
                               "{'reactants': ['[CH2]CCCC', '[CH3]'], 'products': ['C[CH2]', '[CH2]C(C)C'], " \
