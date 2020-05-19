@@ -11,20 +11,53 @@ from tckdb.backend.app.models.common import MsgpackExt
 class Level(Base):
     """
     A class for representing a TCKDB Level item
+
     Describing a level of theory
 
+    Examples::
+
+        Level(method='cbs-qb3')
+
+        Level(method='B3LYP',
+              basis='6-31G(d,p)',
+              dispersion='gd3bj')
+
+        Level(method='wB97xd',
+              basis='def2TZVP',
+              solvation_method='PCM',
+              solvent='water',
+              grid='UltraFine')
+
+        Level(method='DLPNO-CCSD(T)-F12',
+              basis='cc-pVTZ-F12',
+              auxiliary_basis='aug-cc-pVTZ/C cc-pVTZ-F12-CABS',
+              level_arguments='tight-PNO',
+              solvation_description='APFD/6-311+G(2d,p) SMD water '
+                                    'e_elect = e_DLPNO + sp_e_APFD_sol - sp_e_APFD_gas')
+
     Attributes:
-        id (int): The primary key.
-        method (str): The method part of the level of theory.
-        basis (str): The basis set part of the level of theory.
-        auxiliary_basis (str): The auxiliary basis set part of the level of theory.
-        dispersion (str): The dispersion part of the level of theory, where relevant and if not included in the method.
-        grid (str): A description of the DFT grid, if applicable.
-        level_arguments (str): Additional arguments for defining a level, e.g., 'normal-PNO'.
-        solvation_method (str): The solvation method used, e.g., 'SMD'.
-        solvent (str): The considered solvent, e.g., 'water'.
-        solvation_description (str): An optional description of the solvation method used if not standard.
-        reviewer_flags (dict): Backend flags to assist the review process.
+        id (int)
+            The primary key (not a user input)
+        method (str)
+            The method part of the level of theory
+        basis (str)
+            The basis set part of the level of theory
+        auxiliary_basis (str)
+            The auxiliary basis set part of the level of theory
+        dispersion (str)
+            The dispersion part of the level of theory, where relevant and if not included in the method
+        grid (str)
+            A description of the DFT grid, if applicable
+        level_arguments (str)
+            Additional arguments for defining a level, e.g., 'normal-PNO'
+        solvation_method (str)
+            The solvation method used, e.g., 'SMD'
+        solvent (str)
+            The considered solvent, e.g., 'water'
+        solvation_description (str)
+            An optional description of the solvation method used if not standard
+        reviewer_flags (Dict[str, str])
+            Backend flags to assist the review process (not a user input)
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     method = Column(String(500), nullable=False)

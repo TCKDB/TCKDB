@@ -69,5 +69,5 @@ class ESS(ESSBase):
 
 
 class ESSInDB(ESSInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

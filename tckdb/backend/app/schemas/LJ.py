@@ -37,6 +37,7 @@ class LJUpdate(LJBase):
 
 class LJInDBBase(LJBase):
     """Properties shared by models stored in DB"""
+    id: int
     sigma: Tuple[float, str]
     epsilon: Tuple[float, str]
     reviewer_flags: Optional[Dict[str, str]] = None
@@ -51,5 +52,5 @@ class LJ(LJInDBBase):
 
 
 class LJInDB(LJInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

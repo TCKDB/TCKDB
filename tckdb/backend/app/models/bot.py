@@ -11,16 +11,32 @@ from tckdb.backend.app.models.common import MsgpackExt
 class Bot(Base):
     """
     A class for representing a TCKDB Bot item
+
     (A bot is a software used to automatically generate data for TCKDB)
 
+    Example::
+
+        Bot(name='ARC',
+            version='1.1.0',
+            url='https://github.com/ReactionMechanismGenerator/ARC',
+            git_commit='7ba4d74c73198c76c70742de8c254e075200a582',
+            git_branch='master')
+
     Attributes:
-        id (int): The primary key.
-        name (str): The software name.
-        version (str): The software version.
-        url (str): The official software web address.
-        git_commit (str): The git commit hash used for this run.
-        git_branch (str): The git branch used for this run.
-        reviewer_flags (dict): Backend flags to assist the review process.
+        id (int)
+            The primary key (not a user input)
+        name (str)
+            The software name
+        version (str, optional)
+            The software version
+        url (str)
+            The official software web address
+        git_commit (str, optional)
+            The git commit hash used for this run
+        git_branch (str, optional)
+            The git branch used for this run
+        reviewer_flags (Dict[str, str])
+            Backend flags to assist the review process (not a user input)
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     name = Column(String(100), unique=True, nullable=False)

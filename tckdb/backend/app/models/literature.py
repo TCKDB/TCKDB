@@ -12,27 +12,81 @@ class Literature(Base):
     """
     A class for representing a TCKDB Literature item
 
+    Examples::
+
+        Literature(type='article',
+                   authors='M.I. It, D.C. Wash',
+                   title='Kinetics of the Reactions in a Model: Part II',
+                   year=2020,
+                   journal='Int. J. Chem. Kin.',
+                   volume=53,
+                   issue=2,
+                   page_start=2222,
+                   page_end=2229,
+                   doi='10.67/doi',
+                   url='url.com/article/abstract')
+
+        Literature(type='book',
+                   authors='M.I. It, D.C. Wash',
+                   title='Principles of Kinetic Modeling',
+                   year=1982,
+                   publisher='WeeLy',
+                   editors='E.D. Torr',
+                   edition='2nd Edn.',
+                   chapter_title='These are Updated Rates',
+                   publication_place='New York NY',
+                   isbn='978-3-16-148410-0',
+                   url='url.com/book/abstract')
+
+        Literature(type='thesis',
+                   authors='P.H. David',
+                   title='Kinetic Modeling Dissertation',
+                   year=2020,
+                   publisher='MIT',
+                   advisor='P.R. Ofessor',
+                   url='url.com/dissertation/abstract')
+
     Attributes:
-        id (int): The primary key.
-        type (str): The Literature type. Allowed values are 'article', 'book', or 'thesis'.
-        authors (str): The names of all authors (limited to 255 characters, use "et al." if needed).
-        title (str): The article, thesis, or book title.
-        year (int): The publication year.
-        journal (str): The article journal.
-        publisher (str): The book's publisher.
-        volume (int): The journal volume.
-        issue (int): The journal issue.
-        page_start (int): The article starting page.
-        page_end (int): The article ending page.
-        editors (str): The book editors.
-        edition (str): The book edition.
-        chapter_title (str): The book's chapter title.
-        publication_place (str): The book's publication place.
-        advisor (str): The thesis advisor.
-        doi (str): The article DOI.
-        isbn (str): The book ISBN.
-        url (str): The web address of the Literature source.
-        reviewer_flags (dict): Backend flags to assist the review process.
+        id (int)
+            The primary key (not a user input)
+        type (str)
+            The Literature type. Allowed values are ``'article'``, ``'book'``, or ``'thesis'``
+        authors (str)
+            The names of all authors (limited to 255 characters, use "et al." if needed)
+        title (str)
+            The article, thesis, or book title
+        year (int)
+            The publication year
+        journal (str, optional)
+            The article journal, required for articles
+        volume (int, optional)
+            The journal volume, required for articles
+        issue (int, optional)
+            The journal issue
+        page_start (int, optional)
+            The article starting page, required for articles
+        page_end (int, optional)
+            The article ending page, required for articles
+        publisher (str, optional)
+            The book's publisher, required for books
+        editors (str, optional)
+            The book editors, required for books
+        edition (str, optional)
+            The book edition
+        chapter_title (str, optional)
+            The book's chapter title
+        publication_place (str, optional)
+            The book's publication place, required for books
+        advisor (str, optional)
+            The thesis advisor, required for theses
+        doi (str, optional)
+            The article DOI, required for articles
+        isbn (str, optional)
+            The book ISBN, required for books
+        url (str, optional)
+            The web address of the Literature source
+        reviewer_flags (Dict[str, str])
+            Backend flags to assist the review process (not a user input)
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     type = Column(String(10), nullable=False)

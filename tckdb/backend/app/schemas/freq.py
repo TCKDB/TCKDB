@@ -40,6 +40,7 @@ class FreqUpdate(FreqBase):
 
 class FreqInDBBase(FreqBase):
     """Properties shared by models stored in DB"""
+    id: int
     factor: float
     level_id: int
     source: str
@@ -55,5 +56,5 @@ class Freq(FreqInDBBase):
 
 
 class FreqInDB(FreqInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

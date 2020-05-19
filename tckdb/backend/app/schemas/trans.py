@@ -73,6 +73,7 @@ class TransUpdate(TransBase):
 
 class TransInDBBase(TransBase):
     """Properties shared by models stored in DB"""
+    id: int
     model: str
     parameters: Dict[str, Union[Tuple[Union[float, int], str], Union[float, int]]]
     reviewer_flags: Optional[Dict[str, str]] = None
@@ -87,5 +88,5 @@ class Trans(TransInDBBase):
 
 
 class TransInDB(TransInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

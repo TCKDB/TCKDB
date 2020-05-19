@@ -15,11 +15,19 @@ class LJ(Base):
     """
     A class for representing a TCKDB LJ (Lennard-Jones coefficients)
 
+    Example::
+
+        LJ(sigma=(4.467, 'angstroms'), epsilon=(387.557, 'K'))
+
     Attributes:
-        id (int): The primary key.
-        sigma (tuple): The L-J sigma parameter.
-        epsilon (tuple): The L-J epsilon parameter.
-        reviewer_flags (dict): Backend flags to assist the review process.
+        id (int)
+            The primary key (not a user input)
+        sigma (Tuple[float, str])
+            The L-J sigma parameter
+        epsilon (Tuple[float, str])
+            The L-J epsilon parameter
+        reviewer_flags (Dict[str, str])
+            Backend flags to assist the review process (not a user input)
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     sigma = Column(ARRAY(item_type=Union[float, str], as_tuple=True, dimensions=2, zero_indexes=True), nullable=False)

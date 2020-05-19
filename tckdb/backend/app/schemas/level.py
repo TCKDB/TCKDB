@@ -104,6 +104,7 @@ class LevelUpdate(LevelBase):
 
 class LevelInDBBase(LevelBase):
     """Properties shared by models stored in DB"""
+    id: int
     method: str
     basis: Optional[str] = None
     auxiliary_basis: Optional[str] = None
@@ -125,5 +126,5 @@ class Level(LevelInDBBase):
 
 
 class LevelInDB(LevelInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

@@ -80,5 +80,5 @@ class Bot(BotInDBBase):
 
 
 class BotInDB(BotInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass
