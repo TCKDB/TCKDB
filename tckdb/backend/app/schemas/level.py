@@ -22,6 +22,9 @@ class LevelBase(BaseModel):
     solvation_description: Optional[constr(max_length=1000)] = None
     reviewer_flags: Optional[Dict[str, str]] = None
 
+    class Config:
+        extra = "forbid"
+
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
         """Level.reviewer_flags validator"""

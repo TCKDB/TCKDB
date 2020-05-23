@@ -23,6 +23,9 @@ class TransBase(BaseModel):
     parameters: Dict[str, Union[Tuple[Union[float], str], Union[float]]]
     reviewer_flags: Optional[Dict[str, str]] = None
 
+    class Config:
+        extra = "forbid"
+
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
         """Trans.reviewer_flags validator"""

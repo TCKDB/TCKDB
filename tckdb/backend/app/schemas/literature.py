@@ -16,6 +16,9 @@ class LiteratureTypeEnum(str, Enum):
     book = 'book'
     thesis = 'thesis'
 
+    class Config:
+        extra = "forbid"
+
 
 class LiteratureBase(BaseModel):
     """

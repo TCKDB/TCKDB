@@ -24,6 +24,9 @@ class AuthorBase(BaseModel):
     reviewed_networks: Optional[conint(ge=0)] = 0
     reviewer_flags: Optional[Dict[str, str]] = None
 
+    class Config:
+        extra = "forbid"
+
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
         """Author.reviewer_flags validator"""

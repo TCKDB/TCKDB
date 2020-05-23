@@ -18,6 +18,9 @@ class BotBase(BaseModel):
     git_branch: Optional[constr(max_length=100)] = None
     reviewer_flags: Optional[Dict[str, str]] = None
 
+    class Config:
+        extra = "forbid"
+
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
         """Bot.reviewer_flags validator"""
