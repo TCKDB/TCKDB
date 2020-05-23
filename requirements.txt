@@ -1,5 +1,6 @@
 # Required python packages
 
+chembl_webresource_client
 coverage
 fastapi==0.46.0
 msgpack-python
@@ -9,7 +10,8 @@ psycopg2
 pydantic
 pytest
 qcelemental
-rdkit >=2019.09.2.0
+rdkit>=2019.09.2.0
+rmg>=3.0.0
 sqlalchemy
 starlette
 uvicorn
