@@ -15,6 +15,9 @@ class LJBase(BaseModel):
     epsilon: Tuple[float, str]
     reviewer_flags: Optional[Dict[str, str]] = None
 
+    class Config:
+        extra = "forbid"
+
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
         """LJ.reviewer_flags validator"""

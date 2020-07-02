@@ -41,6 +41,9 @@ class LiteratureBase(BaseModel):
     url: Optional[constr(max_length=500)] = None
     reviewer_flags: Optional[Dict[str, str]] = None
 
+    class Config:
+        extra = "forbid"
+
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
         """Literature.reviewer_flags validator"""

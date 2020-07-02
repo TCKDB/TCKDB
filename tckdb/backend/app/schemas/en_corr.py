@@ -22,6 +22,9 @@ class EnCorrBase(BaseModel):
     isodesmic_high_level_id: Optional[conint(ge=0)] = None
     reviewer_flags: Optional[Dict[str, str]] = None
 
+    class Config:
+        extra = "forbid"
+
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
         """EnCorr.reviewer_flags validator"""

@@ -16,6 +16,9 @@ class FreqBase(BaseModel):
     source: constr(max_length=1600)
     reviewer_flags: Optional[Dict[str, str]] = None
 
+    class Config:
+        extra = "forbid"
+
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
         """Freq.reviewer_flags validator"""
