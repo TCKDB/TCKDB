@@ -16,9 +16,6 @@ class LiteratureTypeEnum(str, Enum):
     book = 'book'
     thesis = 'thesis'
 
-    class Config:
-        extra = "forbid"
-
 
 class LiteratureBase(BaseModel):
     """
@@ -43,6 +40,9 @@ class LiteratureBase(BaseModel):
     isbn: Optional[constr(max_length=255)] = None
     url: Optional[constr(max_length=500)] = None
     reviewer_flags: Optional[Dict[str, str]] = None
+
+    class Config:
+        extra = "forbid"
 
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
