@@ -4,7 +4,7 @@ TCKDB backend app schemas bot module
 
 from typing import Dict, Optional
 
-from pydantic import BaseModel, constr, validator
+from pydantic import BaseModel, Field, constr, validator
 
 
 class BotBase(BaseModel):
