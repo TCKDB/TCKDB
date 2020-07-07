@@ -238,6 +238,7 @@ def check_colliding_atoms(xyz: dict,
 def is_valid_coordinates(xyz: Dict[str, Union[Tuple[Tuple[float, float, float], ...],
                                               Tuple[int, ...], Tuple[str, ...]]],
                          collision_threshold: Optional[float] = 0.55,
+                         allowed_keys: Optional[List[str]] = None
                          ) -> Tuple[bool, str]:
     """
     Check whether a coordinates dictionary is valid.
@@ -245,6 +246,7 @@ def is_valid_coordinates(xyz: Dict[str, Union[Tuple[Tuple[float, float, float], 
     Args:
         xyz (dict): The string to be checked.
         collision_threshold (float, optional): The atoms collision threshold to use. Pass ``None`` to skip this check.
+        allowed_keys (list, optional): Entries are additional keys that are allowed to be in the dictionary.
 
     Returns:
         Tuple[bool, str]:
@@ -252,12 +254,13 @@ def is_valid_coordinates(xyz: Dict[str, Union[Tuple[Tuple[float, float, float], 
             - A reason for invalidating the argument.
     """
     valid_keys = ['symbols', 'isotopes', 'coords']
+    allowed_keys = allowed_keys or list()
     for valid_key in valid_keys:
         if valid_key not in xyz:
             return False, f'The "{valid_key}" key is missing from the coordinates dictionary.'
-    invalid_keys = [key for key in xyz.keys() if key not in valid_keys]
+    invalid_keys = [key for key in xyz.keys() if key not in valid_keys + allowed_keys]
     if len(invalid_keys):
-        return False, f'The coordinates dictionay has the following invalid key(s): {invalid_keys}.'
+        return False, f'The coordinates dictionary has the following invalid key(s): {invalid_keys}.'
     if len(xyz['coords']) != len(xyz['symbols']) \
             or len(xyz['coords']) != len(xyz['isotopes']):
         return False, f'Got {len(xyz["symbols"])} symbols, {len(xyz["isotopes"])} isotopes, ' \
