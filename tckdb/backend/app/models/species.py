@@ -360,9 +360,9 @@ class Species(Base):
         # conformers
         conformers (Optional[List[Dict[str, Union[float, Tuple[Tuple[float]], Tuple[int], Tuple[str]]]]])
             The species conformers used for Boltzmann averaging of accessible wells. ``None`` if ``torsions`` are used,
-            and vice versa. Entries are dictionaries containing the same keys as the ``coordinates`` attribute, with an
-            additional ``'energy'`` key with the energy of each conformer relative to the lowest energy well given
-            in kJ/mol at the sp level.
+            and vice versa. Entries are dictionaries containing the same keys as the ``coordinates`` attribute,
+            with two additional keys: ``'energy'`` with the relative conformer energy in kJ/mol at the sp level,
+            and ``'degeneracy'`` with the number of repetitions per conformer (defaults to 1).
 
         # thermochemical properties
         H298 (Optional[float])

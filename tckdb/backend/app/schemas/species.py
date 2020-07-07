@@ -199,10 +199,10 @@ class SpeciesBase(BaseModel):
     rigid_rotor: constr(max_length=50)
     statmech_treatment: Optional[constr(max_length=50)] = None
     rotational_constants: Optional[List[float]] = None
-    # torsions: Optional[List[Dict[str, Union[Dict[Tuple[int], float], int, List[int], List[List[int]], str]]]] = None
     torsions: Optional[List[TorsionsBase]] = None
     conformers: Optional[List[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
-                                              Tuple[conint(ge=1), ...], Tuple[constr(max_length=10), ...]]]]] = None
+                                              Tuple[conint(ge=1), ...], Tuple[constr(max_length=10), ...],
+                                              float]]]] = None
     H298: Optional[float] = None
     S298: Optional[confloat(gt=0)] = None
     Cp_values: Optional[List[confloat(gt=0)]] = None
@@ -515,8 +515,17 @@ class SpeciesBase(BaseModel):
     def hessian_validator(cls, value, values):
         """Species.hessian validator"""
         label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
-        if value is None and common.get_number_of_atoms(values) > 1:
-            raise ValueError(f'The Hessian was not given{label}. It must be given for polyatomic species.')
+        num_atoms = common.get_number_of_atoms(values)
+        if num_atoms > 1:
+            if value is None:
+                raise ValueError(f'The Hessian was not given{label}. It must be given for polyatomic species.')
+            if len(value) != num_atoms * 3:
+                raise ValueError(f'The number of rows in the Hessian matrix ({len(value)}){label} is invalid, '
+                                 f'expected {num_atoms * 3} rows for {num_atoms} atoms.')
+            for i, row in enumerate(value):
+                if len(row) < i + 1:
+                    raise ValueError(f'Row {i} of the Hesian matrix{label} has only {len(row)} elements, '
+                                     f'expected {i + 1} elements.')
         return value
 
     @validator('frequencies', always=True)
@@ -653,10 +662,21 @@ class SpeciesBase(BaseModel):
         if 'torsions' in values and values['torsions']:
             raise ValueError(f'Either torsions or conformers must be given, got both{label}.')
         for conformer in value:
-            is_valid, err = common.is_valid_coordinates(conformer)
+            is_valid, err = common.is_valid_coordinates(conformer, allowed_keys=['energy', 'degeneracy'])
             if not is_valid:
                 raise ValueError(f"Not all conformers{label} are valid. Reason:\n{err}\n"
                                  f"Got:\n{conformer}\nin:\n{value}.")
+            if 'energy' not in conformer:
+                raise ValueError(f'A conformer entry in the conformers argument{label} must have an "energy" key.')
+            if not isinstance(conformer['energy'], float):
+                raise ValueError(f"A conformer energy must be a float, got {conformer['energy']} which is a "
+                                 f"{type(conformer['energy'])}{label}.")
+            if 'degeneracy' not in conformer:
+                conformer['degeneracy'] = 1
+            if conformer['degeneracy'] % 1:
+                # The degeneracy is converted to float, cannot check isinstance for int
+                raise ValueError(f"A conformer degeneracy must be a float, got {conformer['degeneracy']} which is a "
+                                 f"{type(conformer['degeneracy'])}{label}.")
         return value
 
     @validator('H298', always=True)
