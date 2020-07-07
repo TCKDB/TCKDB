@@ -1,5 +1,5 @@
 """
-TCKDB backend app models en_corr module
+TCKDB backend app models encorr module
 """
 
 from sqlalchemy import Column, ForeignKey, Integer, String

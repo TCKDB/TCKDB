@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas en_corr module
+TCKDB backend app schemas encorr module
 """
 
 from typing import Dict, List, Optional, Union

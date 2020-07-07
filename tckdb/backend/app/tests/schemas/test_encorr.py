@@ -1,14 +1,14 @@
 """
-TCKDB backend app tests schemas test_en_corr module
+TCKDB backend app tests schemas test_encorr module
 """
 
 import pytest
 from pydantic import ValidationError
 
-from tckdb.backend.app.schemas.en_corr import EnCorrBase
+from tckdb.backend.app.schemas.encorr import EnCorrBase
 
 
-def test_en_corr_schema():
+def test_encorr_schema():
     """Test creating an instance of EnCorr"""
     supported_elements = ['H', 'C', 'N', 'O', 'S', 'P']
     aec = {'H': -0.502155915123, 'C': -37.8574709934, 'N': -54.6007233609,
@@ -16,19 +16,19 @@ def test_en_corr_schema():
     bac = {'C-H': 0.25, 'C-C': -1.89, 'C=C': -0.40, 'C#C': -1.50, 'O-H': -1.09, 'C-O': -1.18, 'C=O': -0.01,
            'N-H': 1.36, 'C-N': -0.44, 'C#N': 0.22, 'C-S': -2.35, 'O=S': -5.19, 'S-H': -0.52}
 
-    en_corr_1 = EnCorrBase(level_id=1,
-                           supported_elements=supported_elements,
-                           energy_unit='hartree',
-                           aec=aec,
-                           bac=bac)
-    assert en_corr_1.level_id == 1
-    assert en_corr_1.supported_elements == supported_elements
-    assert en_corr_1.energy_unit == 'hartree'
-    assert en_corr_1.aec == aec
-    assert en_corr_1.bac == bac
-    assert en_corr_1.isodesmic_reactions is None
-    assert en_corr_1.isodesmic_high_level_id is None
-    assert en_corr_1.reviewer_flags == dict()
+    encorr_1 = EnCorrBase(level_id=1,
+                          supported_elements=supported_elements,
+                          energy_unit='hartree',
+                          aec=aec,
+                          bac=bac)
+    assert encorr_1.level_id == 1
+    assert encorr_1.supported_elements == supported_elements
+    assert encorr_1.energy_unit == 'hartree'
+    assert encorr_1.aec == aec
+    assert encorr_1.bac == bac
+    assert encorr_1.isodesmic_reactions is None
+    assert encorr_1.isodesmic_high_level_id is None
+    assert encorr_1.reviewer_flags == dict()
 
     isodesmic_reactions = [{'reactants': ['[CH2]CCCC', '[CH]'],
                             'products': ['[C]C', '[CH2]C(C)C'],
@@ -40,18 +40,18 @@ def test_en_corr_schema():
                             'DHrxn298': 15.409},
                            ]
 
-    en_corr_2 = EnCorrBase(level_id=1,
-                           supported_elements=supported_elements,
-                           energy_unit='kcal/mol',
-                           isodesmic_reactions=isodesmic_reactions,
-                           isodesmic_high_level_id=3)
-    assert en_corr_2.level_id == 1
-    assert en_corr_2.supported_elements == supported_elements
-    assert en_corr_2.energy_unit == 'kcal/mol'
-    assert en_corr_2.aec is None
-    assert en_corr_2.bac is None
-    assert en_corr_2.isodesmic_reactions == isodesmic_reactions
-    assert en_corr_2.isodesmic_high_level_id == 3
+    encorr_2 = EnCorrBase(level_id=1,
+                          supported_elements=supported_elements,
+                          energy_unit='kcal/mol',
+                          isodesmic_reactions=isodesmic_reactions,
+                          isodesmic_high_level_id=3)
+    assert encorr_2.level_id == 1
+    assert encorr_2.supported_elements == supported_elements
+    assert encorr_2.energy_unit == 'kcal/mol'
+    assert encorr_2.aec is None
+    assert encorr_2.bac is None
+    assert encorr_2.isodesmic_reactions == isodesmic_reactions
+    assert encorr_2.isodesmic_high_level_id == 3
 
     with pytest.raises(ValidationError):
         # invalid element in supported_elements
