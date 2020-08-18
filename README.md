@@ -8,13 +8,20 @@
 ![python](https://img.shields.io/badge/Python-3.7+-blue.svg)
 
 
+<p align="center">
+  <a href="https://tckdb.github.io/TCKDB/"><img src="https://github.com/TCKDB/TCKDB/blob/master/tckdb/frontend/public/grf/TCKDB-small.gif" alt="TCKDB" width="40%" height="40%"></a>
+</p>
 
 
-This project intends to establish a standardized open infrastructure for
-conveniently storing and attaining theoretical chemical information of relevance for
+The **TCKDB – Theoretical Chemical Kinetics Database** project is intended to support the international chemical kinetics community by addressing a necessity to standardize data and make it conveniently available for all.
+As such, the goal of the TCKDB projects is to establish a standardized open infrastructure
+for conveniently storing and attaining theoretical chemical information of relevance for
 kinetics computations.
 
-The project is developed by researchers from the following institutions:
+TCKDB is developed at the [Dana Research Group](https://dana.net.technion.ac.il/)
+at the Technion - Israel Institute of Technology.
+
+International collaborators include researchers from the following institutions:
 
 *   Argonne National Laboratories
 *   Georgia University
