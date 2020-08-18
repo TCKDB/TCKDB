@@ -36,9 +36,7 @@ jobs:
       - name: Install dependencies
         run: python3 -m pip install -r ./requirements.txt
 
-      - run:
-        - cd docs
-        - make html
+      - run: cd docs; make html
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
