@@ -18,7 +18,7 @@ class EnCorrBase(BaseModel):
     energy_unit: constr(max_length=255)
     aec: Optional[Dict[str, float]] = None
     bac: Optional[Dict[str, float]] = None
-    isodesmic_reactions: Optional[List[Dict[str, Union[List[Union[int, str]], float]]]] = None
+    isodesmic_reactions: Optional[List[Dict[str, Union[list, float]]]] = None
     isodesmic_high_level_id: Optional[conint(ge=0)] = None
     reviewer_flags: Optional[Dict[str, str]] = None
 
@@ -112,9 +112,13 @@ class EnCorrBase(BaseModel):
                                              f'got {val} which is a {type(val)} in:\n{isodesmic_reaction}')
                         for coefficient in val:
                             if not isinstance(coefficient, int):
-                                raise ValueError(f'The stoichiometry coefficients must be integers, '
-                                                 f'got {coefficient} which is a {type(coefficient)} in:'
-                                                 f'\n{isodesmic_reaction}')
+                                try:
+                                    value['stoichiometry'] = [int(v) for v in value['stoichiometry']]
+                                except ValueError:
+                                    raise ValueError(f'The stoichiometry coefficients must be integers, '
+                                                     f'got {coefficient} which is a {type(coefficient)} in:'
+                                                     f'\n{isodesmic_reaction}')
+                                break
                     elif key == 'DHrxn298':
                         if not isinstance(val, float):
                             raise ValueError(f'The DHrxn298 argument of an isodesmic reaction must be a float, '
