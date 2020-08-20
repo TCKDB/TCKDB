@@ -181,8 +181,235 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="literature-model">
-<span id="id1"></span><h1>literature model<a class="headerlink" href="#literature-model" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-tckdb.backend.app.models.literature">
+<span id="id1"></span><span id="literature-model"></span><h1>literature model<a class="headerlink" href="#module-tckdb.backend.app.models.literature" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app models literature module</p>
+<dl class="py class">
+<dt id="tckdb.backend.app.models.literature.Literature">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.literature.</code><code class="sig-name descname">Literature</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/literature.html#Literature"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature" title="Permalink to this definition">¶</a></dt>
+<dd><p>A class for representing a TCKDB Literature item</p>
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.id">
+<code class="sig-name descname">id</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The primary key.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.type">
+<code class="sig-name descname">type</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.type" title="Permalink to this definition">¶</a></dt>
+<dd><p>The Literature type. Allowed values are ‘article’, ‘book’, or ‘thesis’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.authors">
+<code class="sig-name descname">authors</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.authors" title="Permalink to this definition">¶</a></dt>
+<dd><p>The names of all authors (limited to 255 characters, use “et al.” if needed).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.title">
+<code class="sig-name descname">title</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.title" title="Permalink to this definition">¶</a></dt>
+<dd><p>The article, thesis, or book title.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.year">
+<code class="sig-name descname">year</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.year" title="Permalink to this definition">¶</a></dt>
+<dd><p>The publication year.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.journal">
+<code class="sig-name descname">journal</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.journal" title="Permalink to this definition">¶</a></dt>
+<dd><p>The article journal.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.publisher">
+<code class="sig-name descname">publisher</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.publisher" title="Permalink to this definition">¶</a></dt>
+<dd><p>The book’s publisher.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.volume">
+<code class="sig-name descname">volume</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>The journal volume.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.issue">
+<code class="sig-name descname">issue</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.issue" title="Permalink to this definition">¶</a></dt>
+<dd><p>The journal issue.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.page_start">
+<code class="sig-name descname">page_start</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.page_start" title="Permalink to this definition">¶</a></dt>
+<dd><p>The article starting page.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.page_end">
+<code class="sig-name descname">page_end</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.page_end" title="Permalink to this definition">¶</a></dt>
+<dd><p>The article ending page.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.editors">
+<code class="sig-name descname">editors</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.editors" title="Permalink to this definition">¶</a></dt>
+<dd><p>The book editors.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.edition">
+<code class="sig-name descname">edition</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.edition" title="Permalink to this definition">¶</a></dt>
+<dd><p>The book edition.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.chapter_title">
+<code class="sig-name descname">chapter_title</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.chapter_title" title="Permalink to this definition">¶</a></dt>
+<dd><p>The book’s chapter title.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.publication_place">
+<code class="sig-name descname">publication_place</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.publication_place" title="Permalink to this definition">¶</a></dt>
+<dd><p>The book’s publication place.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.advisor">
+<code class="sig-name descname">advisor</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.advisor" title="Permalink to this definition">¶</a></dt>
+<dd><p>The thesis advisor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.doi">
+<code class="sig-name descname">doi</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.doi" title="Permalink to this definition">¶</a></dt>
+<dd><p>The article DOI.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.isbn">
+<code class="sig-name descname">isbn</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.isbn" title="Permalink to this definition">¶</a></dt>
+<dd><p>The book ISBN.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.url">
+<code class="sig-name descname">url</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.url" title="Permalink to this definition">¶</a></dt>
+<dd><p>The web address of the Literature source.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.reviewer_flags">
+<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backend flags to assist the review process.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </div>
 
 

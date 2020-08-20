@@ -181,8 +181,158 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="author-model">
-<span id="id1"></span><h1>author model<a class="headerlink" href="#author-model" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-tckdb.backend.app.models.author">
+<span id="id1"></span><span id="author-model"></span><h1>author model<a class="headerlink" href="#module-tckdb.backend.app.models.author" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app models author module</p>
+<dl class="py class">
+<dt id="tckdb.backend.app.models.author.Author">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.author.</code><code class="sig-name descname">Author</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/author.html#Author"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.author.Author" title="Permalink to this definition">¶</a></dt>
+<dd><p>A class for representing a TCKDB Author item</p>
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.id">
+<code class="sig-name descname">id</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The primary key.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.name">
+<code class="sig-name descname">name</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.name" title="Permalink to this definition">¶</a></dt>
+<dd><p>The Author’s full name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.email">
+<code class="sig-name descname">email</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.email" title="Permalink to this definition">¶</a></dt>
+<dd><p>The Author’s email address.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.affiliation">
+<code class="sig-name descname">affiliation</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.affiliation" title="Permalink to this definition">¶</a></dt>
+<dd><p>The Author’s academic affiliation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.uploaded_species">
+<code class="sig-name descname">uploaded_species</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.uploaded_species" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of Species entries uploaded.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.uploaded_non_physical_species">
+<code class="sig-name descname">uploaded_non_physical_species</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.uploaded_non_physical_species" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of NonPhysicalSpecies entries uploaded.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.uploaded_reactions">
+<code class="sig-name descname">uploaded_reactions</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.uploaded_reactions" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of Reaction entries uploaded.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.uploaded_networks">
+<code class="sig-name descname">uploaded_networks</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.uploaded_networks" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of Network entries uploaded.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.reviewed_species">
+<code class="sig-name descname">reviewed_species</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.reviewed_species" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of Species entries reviewed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.reviewed_non_physical_species">
+<code class="sig-name descname">reviewed_non_physical_species</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.reviewed_non_physical_species" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of NonPhysicalSpecies entries reviewed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.reviewed_reactions">
+<code class="sig-name descname">reviewed_reactions</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.reviewed_reactions" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of Reaction entries reviewed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.reviewed_networks">
+<code class="sig-name descname">reviewed_networks</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.reviewed_networks" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of Network entries reviewed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.author.Author.reviewer_flags">
+<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.author.Author.reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backend flags to assist the review process.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </div>
 
 

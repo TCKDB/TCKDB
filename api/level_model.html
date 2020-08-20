@@ -181,8 +181,137 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="level-of-theory-level-model">
-<span id="level-model"></span><h1>level of theory (level) model<a class="headerlink" href="#level-of-theory-level-model" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-tckdb.backend.app.models.level">
+<span id="level-of-theory-level-model"></span><span id="level-model"></span><h1>level of theory (level) model<a class="headerlink" href="#module-tckdb.backend.app.models.level" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app models level module</p>
+<dl class="py class">
+<dt id="tckdb.backend.app.models.level.Level">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.level.</code><code class="sig-name descname">Level</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/level.html#Level"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.level.Level" title="Permalink to this definition">¶</a></dt>
+<dd><p>A class for representing a TCKDB Level item
+Describing a level of theory</p>
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.id">
+<code class="sig-name descname">id</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The primary key.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.method">
+<code class="sig-name descname">method</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.method" title="Permalink to this definition">¶</a></dt>
+<dd><p>The method part of the level of theory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.basis">
+<code class="sig-name descname">basis</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.basis" title="Permalink to this definition">¶</a></dt>
+<dd><p>The basis set part of the level of theory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.auxiliary_basis">
+<code class="sig-name descname">auxiliary_basis</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.auxiliary_basis" title="Permalink to this definition">¶</a></dt>
+<dd><p>The auxiliary basis set part of the level of theory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.dispersion">
+<code class="sig-name descname">dispersion</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.dispersion" title="Permalink to this definition">¶</a></dt>
+<dd><p>The dispersion part of the level of theory, where relevant and if not included in the method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.grid">
+<code class="sig-name descname">grid</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.grid" title="Permalink to this definition">¶</a></dt>
+<dd><p>A description of the DFT grid, if applicable.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.level_arguments">
+<code class="sig-name descname">level_arguments</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.level_arguments" title="Permalink to this definition">¶</a></dt>
+<dd><p>Additional arguments for defining a level, e.g., ‘normal-PNO’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.solvation_method">
+<code class="sig-name descname">solvation_method</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.solvation_method" title="Permalink to this definition">¶</a></dt>
+<dd><p>The solvation method used, e.g., ‘SMD’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.solvent">
+<code class="sig-name descname">solvent</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.solvent" title="Permalink to this definition">¶</a></dt>
+<dd><p>The considered solvent, e.g., ‘water’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.solvation_description">
+<code class="sig-name descname">solvation_description</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.solvation_description" title="Permalink to this definition">¶</a></dt>
+<dd><p>An optional description of the solvation method used if not standard.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.reviewer_flags">
+<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backend flags to assist the review process.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </div>
 
 

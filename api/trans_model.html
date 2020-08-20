@@ -181,8 +181,64 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="energy-transfer-model-trans-model">
-<span id="trans-model"></span><h1>energy transfer model (trans) model<a class="headerlink" href="#energy-transfer-model-trans-model" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-tckdb.backend.app.models.trans">
+<span id="energy-transfer-model-trans-model"></span><span id="trans-model"></span><h1>energy transfer model (trans) model<a class="headerlink" href="#module-tckdb.backend.app.models.trans" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app models trans module</p>
+<dl class="py class">
+<dt id="tckdb.backend.app.models.trans.Trans">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.trans.</code><code class="sig-name descname">Trans</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/trans.html#Trans"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.trans.Trans" title="Permalink to this definition">¶</a></dt>
+<dd><p>A class for representing a TCKDB Trans item (energy transfer model)</p>
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.trans.Trans.id">
+<code class="sig-name descname">id</code><a class="headerlink" href="#tckdb.backend.app.models.trans.Trans.id" title="Permalink to this definition">¶</a></dt>
+<dd><p>The primary key.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.trans.Trans.model">
+<code class="sig-name descname">model</code><a class="headerlink" href="#tckdb.backend.app.models.trans.Trans.model" title="Permalink to this definition">¶</a></dt>
+<dd><p>The energy transfer model, e.g., ‘Single Exponential Down’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.trans.Trans.parameters">
+<code class="sig-name descname">parameters</code><a class="headerlink" href="#tckdb.backend.app.models.trans.Trans.parameters" title="Permalink to this definition">¶</a></dt>
+<dd><p>The energy transfer model parameters.
+Keys are parameter names (‘alpha0’,  ‘T0’, and ‘n’ for the ‘Single Exponential Down’ model)
+and values are either Tuple[float, str] with the  value and unit,
+or just a float for a dimensionless parameter.
+.. rubric:: Example</p>
+<p>{‘alpha0’: (175, ‘cm^-1’), ‘T0’: (300, ‘K’), ‘n’: 0.52}</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dict[str, Union[Tuple[float, str], float]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.trans.Trans.reviewer_flags">
+<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.trans.Trans.reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backend flags to assist the review process.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </div>
 
 
