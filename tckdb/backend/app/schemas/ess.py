@@ -4,18 +4,18 @@ TCKDB backend app schemas ess module
 
 from typing import Dict, Optional
 
-from pydantic import BaseModel, constr, validator
+from pydantic import BaseModel, Field, validator
 
 
 class ESSBase(BaseModel):
     """
     An ESSBase class (shared properties)
     """
-    name: constr(max_length=100)
-    version: Optional[constr(max_length=100)] = None
-    revision: Optional[constr(max_length=100)] = None
-    url: constr(max_length=255)
-    reviewer_flags: Optional[Dict[str, str]] = None
+    name: str = Field(..., max_length=100, title='The ESS name')
+    version: Optional[str] = Field(None, max_length=100, title='The ESS version')
+    revision: Optional[str] = Field(None, max_length=100, title='The ESS revision')
+    url: str = Field(None, max_length=255, title='The ESS official website')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None)
 
     class Config:
         extra = "forbid"

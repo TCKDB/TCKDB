@@ -5,7 +5,7 @@ TCKDB backend app schemas trans module
 from enum import Enum
 from typing import Dict, Optional, Tuple, Union
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, validator
 
 
 class TransModelEnum(str, Enum):
@@ -19,9 +19,11 @@ class TransBase(BaseModel):
     """
     A TransBase class (shared properties)
     """
-    model: TransModelEnum
-    parameters: Dict[str, Union[Tuple[Union[float], str], Union[float]]]
-    reviewer_flags: Optional[Dict[str, str]] = None
+    model: TransModelEnum = Field(..., title='The energy transfer model, '
+                                             'currently only "Single Exponential Down" is supported')
+    parameters: Dict[str, Union[Tuple[Union[float], str], Union[float]]] = \
+        Field(..., title='The energy transfer model parameters')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None)
 
     class Config:
         extra = "forbid"

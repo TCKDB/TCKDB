@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-from pydantic import BaseModel, confloat, conint, constr, validator
+from pydantic import BaseModel, Field, validator, constr, conint, confloat
 
 from arkane.statmech import is_linear
 from rmgpy.molecule.adjlist import from_adjacency_list
@@ -40,13 +40,18 @@ class TorsionsBase(BaseModel):
     """
     A class for validating SpeciesBase.torsions arguments
     """
-    computation_type: TorsionComputationTypeEnum = TorsionComputationTypeEnum.continuous_constrained_optimization
-    dimension: conint(gt=0) = 1
-    constraints: Optional[Dict[Tuple[int, ...], float]] = None
-    symmetry: Optional[conint(gt=0)] = None
-    treatment: TorsionTreatmentEnum
-    torsions: Union[List[List[int]], List[int]]
-    top: List[int]
+    computation_type: TorsionComputationTypeEnum = Field(TorsionComputationTypeEnum.continuous_constrained_optimization,
+                                                         title="The computation type used for torsion scans, either "
+                                                               "'single point', 'constrained optimization', "
+                                                               "or 'continuous constrained optimization' (default)")
+    dimension: int = Field(1, ge=1, title='The scan dimension')
+    constraints: Optional[Dict[Tuple[int, ...], float]] = \
+        Field(None, title='Any non-trivial constraints (i.e., other than the scanned mode) used during optimization')
+    symmetry: Optional[int] = Field(None, gt=0, title='The internal symmetry number of the scanned mode')
+    treatment: TorsionTreatmentEnum = Field(..., title="The torsion treatment, either 'hindered rotor', 'free rotor', "
+                                                       "'rigid top', or 'hindered rotor density of states'")
+    torsions: Union[List[List[int]], List[int]] = Field(..., title='The torsions list described by this mode')
+    top: List[int] = Field(..., title='The lost of atoms at one of the tops')
     energies: list
     resolution: Union[float, List[float]]
     trajectory: list

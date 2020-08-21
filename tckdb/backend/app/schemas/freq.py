@@ -4,17 +4,17 @@ TCKDB backend app schemas freq module
 
 from typing import Dict, Optional
 
-from pydantic import BaseModel, confloat, conint, constr, validator
+from pydantic import BaseModel, Field, validator
 
 
 class FreqBase(BaseModel):
     """
     A FreqBase class (shared properties)
     """
-    factor: confloat(gt=0, lt=2)
-    level_id: conint(gt=0)
-    source: constr(max_length=1600)
-    reviewer_flags: Optional[Dict[str, str]] = None
+    factor: float = Field(..., gt=0, lt=2, title='The frequency scaling factor')
+    level_id: int = Field(..., ge=0, title='The level of theory id from the Level table')
+    source: str = Field(..., max_length=1600, title='The source of method used to derive this frequency scaling factor')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None)
 
     class Config:
         extra = "forbid"

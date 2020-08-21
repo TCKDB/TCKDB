@@ -4,23 +4,24 @@ TCKDB backend app schemas freq module
 
 from typing import Dict, Optional
 
-from pydantic import BaseModel, constr, validator
+from pydantic import BaseModel, Field, validator
 
 
 class LevelBase(BaseModel):
     """
     A LevelBase class (shared properties)
     """
-    method: constr(max_length=500)
-    basis: Optional[constr(max_length=500)] = None
-    auxiliary_basis: Optional[constr(max_length=500)] = None
-    dispersion: Optional[constr(max_length=500)] = None
-    grid: Optional[constr(max_length=500)] = None
-    level_arguments: Optional[constr(max_length=500)] = None
-    solvent: Optional[constr(max_length=500)] = None
-    solvation_method: Optional[constr(max_length=500)] = None
-    solvation_description: Optional[constr(max_length=1000)] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
+    method: str = Field(..., max_length=500, title='The computation method (e.g., CCSD(T) or B3LYP')
+    basis: Optional[str] = Field(None, max_length=500, title='The computation basis set')
+    auxiliary_basis: Optional[str] = Field(None, max_length=500, title='An auxiliary basis set')
+    dispersion: Optional[str] = Field(None, max_length=500, title='The dispersion type used if the method is DFT '
+                                                                  'and does not include built-in dispersion')
+    grid: Optional[str] = Field(None, max_length=500, title='The DFT grid used, if applicable')
+    level_arguments: Optional[str] = Field(None, max_length=500, title='Additional arguments provided to the ESS')
+    solvent: Optional[str] = Field(None, max_length=100, title='The solvent used if a solvation correction was applied')
+    solvation_method: Optional[str] = Field(None, max_length=500, title='The solvation method (e.g., SMD or COSMO-RS)')
+    solvation_description: Optional[str] = Field(None, max_length=1000, title='Additional solvation scheme description')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None)
 
     class Config:
         extra = "forbid"

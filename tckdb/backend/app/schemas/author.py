@@ -4,16 +4,16 @@ TCKDB backend app schemas author module
 
 from typing import Dict, Optional
 
-from pydantic import BaseModel, conint, constr, validator
+from pydantic import BaseModel, Field, conint, constr, validator
 
 
 class AuthorBase(BaseModel):
     """
     An AuthorBase class (shared properties)
     """
-    name: constr(max_length=255)
-    email: constr(max_length=255)
-    affiliation: constr(max_length=255)
+    name: constr(max_length=255) = Field(..., title="Full name")
+    email: constr(max_length=255) = Field(..., title="Email address")
+    affiliation: constr(max_length=255) = Field(..., title="Institutional affiliation")
     uploaded_species: Optional[conint(ge=0)] = 0
     uploaded_non_physical_species: Optional[conint(ge=0)] = 0
     uploaded_reactions: Optional[conint(ge=0)] = 0
