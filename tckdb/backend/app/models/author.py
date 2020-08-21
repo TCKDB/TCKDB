@@ -12,20 +12,39 @@ class Author(Base):
     """
     A class for representing a TCKDB Author item
 
+    Example::
+
+        Author(name='I. B. Writing',
+               email='email@dot.com',
+               affiliation='Institution of Technology')
+
     Attributes:
-        id (int): The primary key.
-        name (str): The Author's full name.
-        email (str): The Author's email address.
-        affiliation (str): The Author's academic affiliation.
-        uploaded_species (int): The number of Species entries uploaded.
-        uploaded_non_physical_species (int): The number of NonPhysicalSpecies entries uploaded.
-        uploaded_reactions (int): The number of Reaction entries uploaded.
-        uploaded_networks (int): The number of Network entries uploaded.
-        reviewed_species (int): The number of Species entries reviewed.
-        reviewed_non_physical_species (int): The number of NonPhysicalSpecies entries reviewed.
-        reviewed_reactions (int): The number of Reaction entries reviewed.
-        reviewed_networks (int): The number of Network entries reviewed.
-        reviewer_flags (dict): Backend flags to assist the review process.
+        id (int)
+            The primary key (not a user input)
+        name (str)
+            The Author's full name
+        email (str)
+            The Author's email address
+        affiliation (str)
+            The Author's academic affiliation
+        uploaded_species (int)
+            The number of Species entries uploaded (not a user input)
+        uploaded_non_physical_species (int)
+            The number of NonPhysicalSpecies entries uploaded (not a user input)
+        uploaded_reactions (int)
+            The number of Reaction entries uploaded (not a user input)
+        uploaded_networks (int)
+            The number of Network entries uploaded (not a user input)
+        reviewed_species (int)
+            The number of Species entries reviewed (not a user input)
+        reviewed_non_physical_species (int)
+            The number of NonPhysicalSpecies entries reviewed (not a user input)
+        reviewed_reactions (int)
+            The number of Reaction entries reviewed (not a user input)
+        reviewed_networks (int)
+            The number of Network entries reviewed (not a user input)
+        reviewer_flags (Dict[str, str])
+            Backend flags to assist the review process (not a user input)
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     name = Column(String(255), unique=True, nullable=False)

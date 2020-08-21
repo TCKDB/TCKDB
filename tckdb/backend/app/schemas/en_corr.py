@@ -170,6 +170,7 @@ class EnCorrUpdate(EnCorrBase):
 
 class EnCorrInDBBase(EnCorrBase):
     """Properties shared by models stored in DB"""
+    id: int
     level_id: int
     supported_elements: List[str]
     energy_unit: str
@@ -189,5 +190,5 @@ class EnCorr(EnCorrInDBBase):
 
 
 class EnCorrInDB(EnCorrInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

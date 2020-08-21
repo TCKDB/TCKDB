@@ -219,5 +219,5 @@ class Literature(LiteratureInDBBase):
 
 
 class LiteratureInDB(LiteratureInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

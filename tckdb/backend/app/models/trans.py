@@ -12,16 +12,22 @@ class Trans(Base):
     """
     A class for representing a TCKDB Trans item (energy transfer model)
 
+    Example::
+
+        Trans(model='Single Exponential Down',
+              parameters={'alpha0': (175, 'cm^-1'), 'T0': (300, 'K'), 'n': 0.52})
+
     Attributes:
-        id (int): The primary key.
-        model (str): The energy transfer model, e.g., 'Single Exponential Down'.
-        parameters (Dict[str, Union[Tuple[float, str], float]]): The energy transfer model parameters.
-                           Keys are parameter names ('alpha0',  'T0', and 'n' for the 'Single Exponential Down' model)
-                           and values are either Tuple[float, str] with the  value and unit,
-                           or just a float for a dimensionless parameter.
-                           Example:
-                               {'alpha0': (175, 'cm^-1'), 'T0': (300, 'K'), 'n': 0.52}
-        reviewer_flags (dict): Backend flags to assist the review process.
+        id (int)
+            The primary key (not a user input)
+        model (str)
+            The energy transfer model, currently only ``'Single Exponential Down'`` is supported
+        parameters (Dict[str, Union[Tuple[float, str], float]])
+            The energy transfer model parameters. Keys are parameter names
+            (e.g., ``'alpha0'``, ``'T0'``, and ``'n'`` for the common 'Single Exponential Down' model)
+            and values are either Tuple[float, str] with the  value and unit,
+            or just a float for a dimensionless parameter (such as ``'n'`` in the 'Single Exponential Down' model).
+        reviewer_flags (Dict[str, str]): Backend flags to assist the review process (not a user input)
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     model = Column(String(100), nullable=False)
