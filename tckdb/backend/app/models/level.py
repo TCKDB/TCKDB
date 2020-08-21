@@ -56,6 +56,29 @@ class Level(Base):
             The considered solvent, e.g., 'water'
         solvation_description (str)
             An optional description of the solvation method used if not standard
+
+        species_opt (relationship)
+            A One to Many relationship between Level and Species.
+        species_freq (relationship)
+            A One to Many relationship between Level and Species.
+        species_scan (relationship)
+            A One to Many relationship between Level and Species.
+        species_irc (relationship)
+            A One to Many relationship between Level and Species.
+        species_sp (relationship)
+            A One to Many relationship between Level and Species.
+
+        np_species_opt (relationship)
+            A One to Many relationship between Level and NonPhysicalSpecies.
+        np_species_freq (relationship)
+            A One to Many relationship between Level and NonPhysicalSpecies.
+        np_species_scan (relationship)
+            A One to Many relationship between Level and NonPhysicalSpecies.
+        np_species_irc (relationship)
+            A One to Many relationship between Level and NonPhysicalSpecies.
+        np_species_sp (relationship)
+            A One to Many relationship between Level and NonPhysicalSpecies.
+
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input)
     """

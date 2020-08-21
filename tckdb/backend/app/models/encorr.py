@@ -4,6 +4,7 @@ TCKDB backend app models encorr module
 
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.orm import relationship
 
 from tckdb.backend.app.db.base_class import Base
 from tckdb.backend.app.models.common import MsgpackExt
@@ -65,6 +66,10 @@ class EnCorr(Base):
         isodesmic_high_level_id (int)
             The high level of theory used for all other species. A level of theory key for the
             :ref:`level table <level>`. Required if ``isodesmic_reactions`` is specified, ``None`` otherwise.
+
+        species (relationship)
+            A One to Many relationship between EnCorr and Species.
+
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input).
     """
@@ -76,6 +81,9 @@ class EnCorr(Base):
     bac = Column(MsgpackExt, nullable=True)
     isodesmic_reactions = Column(ARRAY(item_type=dict, as_tuple=False, zero_indexes=True), nullable=True)
     isodesmic_high_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
+
+    species = relationship('Species', back_populates='encorr')
+
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:

@@ -31,6 +31,29 @@ class ESS(Base):
         version (str, optional): The software version.
         revision (str, optional): The software revision.
         url (str): The official software web address.
+
+        species_opt (relationship)
+            A One to Many relationship between ESS and Species.
+        species_freq (relationship)
+            A One to Many relationship between ESS and Species.
+        species_scan (relationship)
+            A One to Many relationship between ESS and Species.
+        species_irc (relationship)
+            A One to Many relationship between ESS and Species.
+        species_sp (relationship)
+            A One to Many relationship between ESS and Species.
+
+        np_species_opt (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+        np_species_freq (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+        np_species_scan (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+        np_species_irc (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+        np_species_sp (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+
         reviewer_flags (Dict[str, str]): Backend flags to assist the review process (not a user input).
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
