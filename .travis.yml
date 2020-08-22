@@ -25,6 +25,15 @@ jobs:
         - export PYTHONPATH=$PYTHONPATH:$(pwd)
         - conda env create -f environment.yml
         - source activate tck_env
+        - cd ..
+        - git clone https://github.com/ReactionMechanismGenerator/RMG-Py
+        - cd RMG-Py
+        - export PYTHONPATH=$PYTHONPATH:$(pwd)
+        - make
+        - cd ..
+        - git clone https://github.com/ReactionMechanismGenerator/RMG-database
+        - cd RMG-database
+        - cd ..
         - conda install -y -c conda-forge codecov
         - conda list
       script:

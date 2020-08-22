@@ -21,7 +21,6 @@ dependencies:
   - python >= 3.7
   - qcelemental
   - rdkit >= 2019.09.1.0
-  - rmg >= 3.0.0
   - sqlalchemy
   - starlette
   - sphinx
