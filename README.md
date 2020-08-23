@@ -18,7 +18,7 @@ As such, the goal of the TCKDB projects is to establish a standardized open infr
 for conveniently storing and attaining theoretical chemical information of relevance for
 kinetics computations.
 
-The frst stage of developing TCKDB was supported by an NSF grant (grant number OAC-1547580).
+The first stage of developing TCKDB was supported by an NSF grant (grant number OAC-1547580).
 
 TCKDB is currently developed and maintained by the [Dana Research Group](https://dana.net.technion.ac.il/)
 at the Technion - Israel Institute of Technology.
