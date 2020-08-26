@@ -1,47 +1,47 @@
 """
-TCKDB backend app schemas author module
+TCKDB backend app schemas person module
 """
 
 from typing import Dict, Optional
 
-from pydantic import BaseModel, Field, conint, constr, validator
+from pydantic import BaseModel, Field, validator
 
 
-class AuthorBase(BaseModel):
+class PersonBase(BaseModel):
     """
-    An AuthorBase class (shared properties)
+    A PersonBase class (shared properties)
     """
-    name: constr(max_length=255) = Field(..., title="Full name")
-    email: constr(max_length=255) = Field(..., title="Email address")
-    affiliation: constr(max_length=255) = Field(..., title="Institutional affiliation")
-    uploaded_species: Optional[conint(ge=0)] = 0
-    uploaded_non_physical_species: Optional[conint(ge=0)] = 0
-    uploaded_reactions: Optional[conint(ge=0)] = 0
-    uploaded_networks: Optional[conint(ge=0)] = 0
-    reviewed_species: Optional[conint(ge=0)] = 0
-    reviewed_non_physical_species: Optional[conint(ge=0)] = 0
-    reviewed_reactions: Optional[conint(ge=0)] = 0
-    reviewed_networks: Optional[conint(ge=0)] = 0
-    reviewer_flags: Optional[Dict[str, str]] = None
+    name: str = Field(..., max_length=255, title="Full name")
+    email: str = Field(..., max_length=255, title="Email address")
+    affiliation: str = Field(..., max_length=255, title="Institutional affiliation")
+    uploaded_species: Optional[int] = Field(0, ge=0)
+    uploaded_non_physical_species: Optional[int] = Field(0, ge=0)
+    uploaded_reactions: Optional[int] = Field(0, ge=0)
+    uploaded_networks: Optional[int] = Field(0, ge=0)
+    reviewed_species: Optional[int] = Field(0, ge=0)
+    reviewed_non_physical_species: Optional[int] = Field(0, ge=0)
+    reviewed_reactions: Optional[int] = Field(0, ge=0)
+    reviewed_networks: Optional[int] = Field(0, ge=0)
+    reviewer_flags: Optional[Dict[str, str]] = Field(None)
 
     class Config:
         extra = "forbid"
 
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
-        """Author.reviewer_flags validator"""
+        """Person.reviewer_flags validator"""
         return value or dict()
 
     @validator('name')
     def name_must_contain_space(cls, value):
-        """Author.name validator"""
+        """Person.name validator"""
         if ' ' not in value:
             raise ValueError('provide a full name')
         return value.title()
 
     @validator('email')
     def validate_email(cls, value):
-        """Author.email validator"""
+        """Person.email validator"""
         if '@' not in value:
             raise ValueError('email must contain a "@"')
         if value.count('@') > 1:
@@ -54,55 +54,55 @@ class AuthorBase(BaseModel):
 
     @validator('uploaded_species')
     def uploaded_species_validator(cls, value):
-        """Author.uploaded_species validator"""
+        """Person.uploaded_species validator"""
         # force to be 0 upon initialization, regardless of the user input
         return 0
 
     @validator('uploaded_non_physical_species')
     def uploaded_non_physical_species_validator(cls, value):
-        """Author.uploaded_non_physical_species validator"""
+        """Person.uploaded_non_physical_species validator"""
         # force to be 0 upon initialization, regardless of the user input
         return 0
 
     @validator('uploaded_reactions')
     def uploaded_reactions_validator(cls, value):
-        """Author.uploaded_reactions validator"""
+        """Person.uploaded_reactions validator"""
         # force to be 0 upon initialization, regardless of the user input
         return 0
 
     @validator('uploaded_networks')
     def uploaded_networks_validator(cls, value):
-        """Author.uploaded_networks validator"""
+        """Person.uploaded_networks validator"""
         # force to be 0 upon initialization, regardless of the user input
         return 0
 
     @validator('reviewed_species')
     def reviewed_species_validator(cls, value):
-        """Author.reviewed_species validator"""
+        """Person.reviewed_species validator"""
         # force to be 0 upon initialization, regardless of the user input
         return 0
 
     @validator('reviewed_non_physical_species')
     def reviewed_non_physical_species_validator(cls, value):
-        """Author.reviewed_non_physical_species validator"""
+        """Person.reviewed_non_physical_species validator"""
         # force to be 0 upon initialization, regardless of the user input
         return 0
 
     @validator('reviewed_reactions')
     def reviewed_reactions_validator(cls, value):
-        """Author.reviewed_reactions validator"""
+        """Person.reviewed_reactions validator"""
         # force to be 0 upon initialization, regardless of the user input
         return 0
 
     @validator('reviewed_networks')
     def reviewed_networks_validator(cls, value):
-        """Author.reviewed_networks validator"""
+        """Person.reviewed_networks validator"""
         # force to be 0 upon initialization, regardless of the user input
         return 0
 
 
-class AuthorCreate(AuthorBase):
-    """Create an Author item: Properties to receive on item creation"""
+class PersonCreate(PersonBase):
+    """Create a Person item: Properties to receive on item creation"""
     name: str
     email: str
     affiliation: str
@@ -117,8 +117,8 @@ class AuthorCreate(AuthorBase):
     reviewer_flags: Optional[Dict[str, str]] = None
 
 
-class AuthorUpdate(AuthorBase):
-    """Update an Author item: Properties to receive on item update"""
+class PersonUpdate(PersonBase):
+    """Update an Person item: Properties to receive on item update"""
     name: str
     email: str
     affiliation: str
@@ -133,7 +133,7 @@ class AuthorUpdate(AuthorBase):
     reviewer_flags: Optional[Dict[str, str]] = None
 
 
-class AuthorInDBBase(AuthorBase):
+class PersonInDBBase(PersonBase):
     """Properties shared by models stored in DB"""
     id: int
     name: str
@@ -153,11 +153,11 @@ class AuthorInDBBase(AuthorBase):
         orm_mode = True
 
 
-class Author(AuthorInDBBase):
+class Person(PersonInDBBase):
     """Properties to return to client"""
     pass
 
 
-class AuthorInDB(AuthorInDBBase):
+class PersonInDB(PersonInDBBase):
     """Properties stored in DB"""
     pass

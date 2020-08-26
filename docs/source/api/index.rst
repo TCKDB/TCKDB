@@ -7,8 +7,6 @@ TCKDB's API
 .. toctree::
    :maxdepth: 2
 
-   author_model
-   author_schema
    bot_model
    bot_schema
    encorr_model
@@ -23,6 +21,8 @@ TCKDB's API
    literature_schema
    LJ_model
    LJ_schema
+   person_model
+   person_schema
    species_model
    species_schema
    trans_model

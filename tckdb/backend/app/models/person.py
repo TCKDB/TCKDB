@@ -1,5 +1,5 @@
 """
-TCKDB backend app models author module
+TCKDB backend app models person module
 """
 
 from sqlalchemy import Column, Integer, String
@@ -8,13 +8,13 @@ from tckdb.backend.app.db.base_class import Base
 from tckdb.backend.app.models.common import MsgpackExt
 
 
-class Author(Base):
+class Person(Base):
     """
-    A class for representing a TCKDB Author item
+    A class for representing a TCKDB Person item
 
     Example::
 
-        Author(name='I. B. Writing',
+        Person(name='I. B. Writing',
                email='email@dot.com',
                affiliation='Institution of Technology')
 
@@ -22,11 +22,29 @@ class Author(Base):
         id (int)
             The primary key (not a user input)
         name (str)
-            The Author's full name
+            The Person's full name
         email (str)
-            The Author's email address
+            The Person's email address
         affiliation (str)
-            The Author's academic affiliation
+            The Person's academic affiliation
+        authors_species (relationship)
+            An attribute that establishes a bidirectional relationship in a Many to Many data model
+            with the :ref:`Species table <species>` representing species authored by persons in this object.
+            This attribute is added automatically and is only defined under ``Species`` as ``authors``.
+        reviewers_species (relationship)
+            An attribute that establishes a bidirectional relationship in a Many to Many data model
+            with the :ref:`Species table <species>` representing species reviewed by persons in this object.
+            This attribute is added automatically and is only defined under ``Species`` as ``reviewers``.
+        authors_np_species (relationship)
+            An attribute that establishes a bidirectional relationship in a Many to Many data model
+            with the :ref:`NonPhysicalSpecies table <species>` representing non physical species
+            authored by persons in this object.
+            This attribute is added automatically and is only defined under ``NonPhysicalSpecies`` as ``authors``.
+        reviewers_np_species (relationship)
+            An attribute that establishes a bidirectional relationship in a Many to Many data model
+            with the :ref:`NonPhysicalSpecies table <species>` representing non physical species
+            reviewed by persons in this object.
+            This attribute is added automatically and is only defined under ``NonPhysicalSpecies`` as ``reviewers``.
         uploaded_species (int)
             The number of Species entries uploaded (not a user input)
         uploaded_non_physical_species (int)
