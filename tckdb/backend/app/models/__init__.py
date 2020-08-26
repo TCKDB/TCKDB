@@ -5,6 +5,7 @@ The SQLAlchemy Object Relational Mapper (ORM) presents a method of associating u
 with database tables, and instances of those classes (objects) with rows in their corresponding tables.
 """
 
+import tckdb.backend.app.models.associations
 from tckdb.backend.app.models.bot import Bot
 from tckdb.backend.app.models.encorr import EnCorr
 from tckdb.backend.app.models.ess import ESS
