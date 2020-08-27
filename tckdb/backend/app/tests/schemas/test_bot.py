@@ -1,5 +1,5 @@
 """
-TCKDB backend app tests schemas test_author module
+TCKDB backend app tests schemas test_bot module
 """
 
 import pytest
@@ -9,7 +9,7 @@ from tckdb.backend.app.schemas.bot import BotBase
 
 
 def test_bot_schema():
-    """Test creating an instance of Author"""
+    """Test creating an instance of Bot"""
     bot1 = BotBase(name='ARC', version='1.1.0', url='https://github.com/ReactionMechanismGenerator/ARC',
                    git_commit='7ba4d74c73198c76c70742de8c254e075200a582', git_branch='master')
     assert bot1.name == 'ARC'

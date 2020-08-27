@@ -1,10 +1,10 @@
 """
-TCKDB backend app schemas en_corr module
+TCKDB backend app schemas encorr module
 """
 
 from typing import Dict, List, Optional, Union
 
-from pydantic import BaseModel, conint, constr, validator
+from pydantic import BaseModel, Field, validator
 
 from .common import is_valid_energy_unit, is_valid_element_symbol, is_valid_inchi, is_valid_smiles
 
@@ -13,14 +13,19 @@ class EnCorrBase(BaseModel):
     """
     An EnCorrBase class (shared properties)
     """
-    level_id: conint(ge=0)
-    supported_elements: List[str]
-    energy_unit: constr(max_length=255)
-    aec: Optional[Dict[str, float]] = None
-    bac: Optional[Dict[str, float]] = None
-    isodesmic_reactions: Optional[List[Dict[str, Union[list, float]]]] = None
-    isodesmic_high_level_id: Optional[conint(ge=0)] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
+    level_id: int = Field(..., ge=0, title='The level of theory id from the Level table')
+    supported_elements: List[str] = Field(..., title='The chemical elements supported by this energy correction object')
+    energy_unit: str = Field(..., max_length=255, title='The energy units the corrections are given in')
+    aec: Optional[Dict[str, float]] = Field(None, title='Atom energy corrections dictionary '
+                                                        '(including spin-orbital corrections)')
+    bac: Optional[Dict[str, float]] = Field(None, title='Bond additivity energy corrections dictionary')
+    isodesmic_reactions: Optional[List[Dict[str, Union[list, float]]]] = Field(None, title='Isodesmic reactions')
+    isodesmic_high_level_id: Optional[int] = Field(None, ge=0, title='The high level of theory id from the Level table '
+                                                                     'used in the isodesmic reactions correction')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+
+    class Config:
+        extra = "forbid"
 
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
@@ -31,16 +36,18 @@ class EnCorrBase(BaseModel):
     def elements_exist(cls, value):
         """EnCorr.supported_elements validator"""
         for symbol in value:
-            if not is_valid_element_symbol(symbol):
-                raise ValueError(f'The symbol {symbol} does not seem to correspond to a known chemical element.\n'
-                                 f'Got: {value}')
+            is_valid, err = is_valid_element_symbol(symbol)
+            if not is_valid:
+                raise ValueError(f'The symbol {symbol} in {value} does not seem to correspond to a known '
+                                 f'chemical element. Reason: {err}')
         return value
 
     @validator('energy_unit')
     def validate_energy_unit(cls, value):
         """EnCorr.energy_unit validator"""
-        if not is_valid_energy_unit(value):
-            raise ValueError(f'The energy unit "{value}" does not seem to be a valid energy unit.')
+        is_valid, err = is_valid_energy_unit(value)
+        if not is_valid:
+            raise ValueError(f'The energy unit "{value}" does not seem to be a valid energy unit. Reason:\n{err}')
         return value
 
     @validator('aec')
@@ -103,9 +110,11 @@ class EnCorrBase(BaseModel):
                             raise ValueError(f'The reactants and products in an isodesmic reaction must be lists, '
                                              f'got {val} which is a {type(val)} in:\n{isodesmic_reaction}')
                         for identifier in val:
-                            if not is_valid_inchi(identifier) and not is_valid_smiles(identifier):
+                            is_valid_inchi_, inchi_err = is_valid_inchi(identifier)
+                            is_valid_smiles_, smiles_err = is_valid_smiles(identifier)
+                            if not is_valid_inchi_ and not is_valid_smiles_:
                                 raise ValueError(f'Got an invalid species identifier {identifier} '
-                                                 f'in {isodesmic_reaction}.')
+                                                 f'in {isodesmic_reaction}. Reason: {inchi_err or smiles_err}')
                     elif key == 'stoichiometry':
                         if not isinstance(val, list):
                             raise ValueError(f'The stoichiometry argument of an isodesmic reaction must be a list, '
@@ -170,6 +179,7 @@ class EnCorrUpdate(EnCorrBase):
 
 class EnCorrInDBBase(EnCorrBase):
     """Properties shared by models stored in DB"""
+    id: int
     level_id: int
     supported_elements: List[str]
     energy_unit: str
@@ -189,5 +199,5 @@ class EnCorr(EnCorrInDBBase):
 
 
 class EnCorrInDB(EnCorrInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

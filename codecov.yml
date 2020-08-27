@@ -7,11 +7,13 @@ codecov:
 coverage:
   range: 0..100
   round: nearest
-  percision: 2
+  precision: 2
   ignore:
     - test_*.py
     - tckdb/_version.py
 comment:
   layout: "reach, diff, flags, files"
-  require_changes: false
-  branches: master
+  behavior: default
+  require_changes: false  # if true: only post the comment if coverage changes
+  branches:               # branch names that can post comment
+    - "master"

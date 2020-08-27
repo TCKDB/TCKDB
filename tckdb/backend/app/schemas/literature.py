@@ -5,7 +5,7 @@ TCKDB backend app schemas literature module
 from enum import Enum
 from typing import Dict, Optional
 
-from pydantic import BaseModel, conint, constr, validator
+from pydantic import BaseModel, Field, validator
 
 
 class LiteratureTypeEnum(str, Enum):
@@ -21,25 +21,28 @@ class LiteratureBase(BaseModel):
     """
     A LiteratureBase class (shared properties)
     """
-    type: LiteratureTypeEnum
-    authors: constr(max_length=255)
-    title: constr(max_length=255)
-    year: conint(ge=1600, le=9999)
-    journal: Optional[constr(max_length=255)] = None
-    publisher: Optional[constr(max_length=255)] = None
-    volume: Optional[conint(gt=0)] = None
-    issue: Optional[conint(gt=0)] = None
-    page_start: Optional[conint(gt=0)] = None
-    page_end: Optional[conint(gt=0)] = None
-    editors: Optional[constr(max_length=255)] = None
-    edition: Optional[constr(max_length=50)] = None
-    chapter_title: Optional[constr(max_length=255)] = None
-    publication_place: Optional[constr(max_length=255)] = None
-    advisor: Optional[constr(max_length=255)] = None
-    doi: Optional[constr(max_length=255)] = None
-    isbn: Optional[constr(max_length=255)] = None
-    url: Optional[constr(max_length=500)] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
+    type: LiteratureTypeEnum = Field(..., title='The literature type, either article, book, or thesis')
+    authors: str = Field(..., max_length=255, title='The literature source authors')
+    title: str = Field(..., max_length=255, title='The literature source title')
+    year: int = Field(..., ge=1500, le=9999, title='The publication year')
+    journal: Optional[str] = Field(None, max_length=255, title='The Journal name (for an article)')
+    publisher: Optional[str] = Field(None, max_length=255, title='The publisher name (for a book)')
+    volume: Optional[int] = Field(None, gt=0, title='The volume number (for an article, optional for a book)')
+    issue: Optional[int] = Field(None, gt=0, title='The issue number (for an article)')
+    page_start: Optional[int] = Field(None, gt=0, title='The first page (for an article)')
+    page_end: Optional[int] = Field(None, gt=0, title='The last page (for an article)')
+    editors: Optional[str] = Field(None, max_length=255, title='The editor names (for a book)')
+    edition: Optional[str] = Field(None, max_length=50, title='The edition (for a book)')
+    chapter_title: Optional[str] = Field(None, max_length=255, title='The chapter title (for a book)')
+    publication_place: Optional[str] = Field(None, max_length=255, title='The publication place (for a book)')
+    advisor: Optional[str] = Field(None, max_length=255, title='The dissertation advisor (for a thesis)')
+    doi: Optional[str] = Field(None, max_length=255, title='The DOI')
+    isbn: Optional[str] = Field(None, max_length=255, title='The ISBN (for a book)')
+    url: Optional[str] = Field(None, max_length=255, title='The publication URL address')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+
+    class Config:
+        extra = "forbid"
 
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
@@ -219,5 +222,5 @@ class Literature(LiteratureInDBBase):
 
 
 class LiteratureInDB(LiteratureInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

@@ -6,7 +6,7 @@ from tckdb.backend.app.models.literature import Literature
 
 
 def test_literature_model():
-    """Test creating an instance of Author"""
+    """Test creating an instance of Literature"""
     lit1 = Literature(type='article',
                       authors='M.I. It, D.C. Wash',
                       title='Kinetics of the Reactions in a Model: Part II',

@@ -4,19 +4,25 @@ TCKDB backend app schemas bot module
 
 from typing import Dict, Optional
 
-from pydantic import BaseModel, constr, validator
+from pydantic import BaseModel, Field, validator
 
 
 class BotBase(BaseModel):
     """
     A BotBase class (shared properties)
     """
-    name: constr(max_length=100)
-    version: Optional[constr(max_length=100)] = None
-    url: constr(max_length=255)
-    git_commit: Optional[constr(max_length=100)] = None
-    git_branch: Optional[constr(max_length=100)] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
+    name: str = Field(..., max_length=100, title="The Bot's name")
+    version: Optional[str] = Field(None, max_length=100, title="The Bot's version")
+    url: str = Field(..., max_length=255, title="The Bot's official website "
+                                                "(documentation rather than source code, where possible)")
+    git_commit: Optional[str] = Field(None, min_length=40, max_length=40,
+                                      title="The latest git commit (useful when working on the "
+                                            "master branch rather than a stable release)")
+    git_branch: Optional[str] = Field(None, max_length=100, title="The git branch used if not 'master'")
+    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+
+    class Config:
+        extra = "forbid"
 
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
@@ -35,7 +41,7 @@ class BotBase(BaseModel):
     @validator('git_commit')
     def validate_git_commit(cls, value):
         """Bot.git_commit validator"""
-        if not value.isalnum():
+        if not value.isalnum():  # is alpha-numerical?
             raise ValueError(f'The git commit seems wrong, got {value}')
         return value
 
@@ -80,5 +86,5 @@ class Bot(BotInDBBase):
 
 
 class BotInDB(BotInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

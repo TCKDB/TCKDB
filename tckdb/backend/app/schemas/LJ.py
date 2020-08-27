@@ -4,16 +4,19 @@ TCKDB backend app schemas LJ module
 
 from typing import Dict, Optional, Tuple
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, validator
 
 
 class LJBase(BaseModel):
     """
     A LJBase class (shared properties)
     """
-    sigma: Tuple[float, str]
-    epsilon: Tuple[float, str]
-    reviewer_flags: Optional[Dict[str, str]] = None
+    sigma: Tuple[float, str] = Field(..., title="The L-J sigma parameter value-units tuple, e.g., (4.467, 'angstroms')")
+    epsilon: Tuple[float, str] = Field(..., title="The L-J epsilon parameter value-units tuple, e.g., (387.557, 'K')")
+    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+
+    class Config:
+        extra = "forbid"
 
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
@@ -37,6 +40,7 @@ class LJUpdate(LJBase):
 
 class LJInDBBase(LJBase):
     """Properties shared by models stored in DB"""
+    id: int
     sigma: Tuple[float, str]
     epsilon: Tuple[float, str]
     reviewer_flags: Optional[Dict[str, str]] = None
@@ -51,5 +55,5 @@ class LJ(LJInDBBase):
 
 
 class LJInDB(LJInDBBase):
-    """Properties properties stored in DB"""
+    """Properties stored in DB"""
     pass

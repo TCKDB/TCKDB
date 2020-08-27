@@ -11,15 +11,50 @@ from tckdb.backend.app.models.common import MsgpackExt
 class ESS(Base):
     """
     A class for representing a TCKDB ESS item
-    (Electronic structure software)
+
+    (ESS = electronic structure software)
+
+    Examples::
+
+        ESS(name='Psi4',
+            version='1.1',
+            url='http://www.psicode.org/')
+
+        ESS(name='Gaussian',
+            version='16',
+            revision='C.01',
+            url='https://gaussian.com/')
 
     Attributes:
-        id (int): The primary key.
+        id (int): The primary key (not a user input).
         name (str): The software name.
-        version (str): The software version.
-        revision (str): The software revision.
+        version (str, optional): The software version.
+        revision (str, optional): The software revision.
         url (str): The official software web address.
-        reviewer_flags (dict): Backend flags to assist the review process.
+
+        species_opt (relationship)
+            A One to Many relationship between ESS and Species.
+        species_freq (relationship)
+            A One to Many relationship between ESS and Species.
+        species_scan (relationship)
+            A One to Many relationship between ESS and Species.
+        species_irc (relationship)
+            A One to Many relationship between ESS and Species.
+        species_sp (relationship)
+            A One to Many relationship between ESS and Species.
+
+        np_species_opt (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+        np_species_freq (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+        np_species_scan (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+        np_species_irc (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+        np_species_sp (relationship)
+            A One to Many relationship between ESS and NonPhysicalSpecies.
+
+        reviewer_flags (Dict[str, str]): Backend flags to assist the review process (not a user input).
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     name = Column(String(100), unique=True, nullable=False)

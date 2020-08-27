@@ -7,7 +7,9 @@ channels:
   - pytorch
   - conda-forge
   - anaconda
+  - chembl
 dependencies:
+  - chembl_webresource_client
   - coverage
   - fastapi = 0.46.0
   - ipython
