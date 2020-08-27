@@ -3,5 +3,5 @@
 bot schema
 ==========
 
-.. autoclass:: tckdb.backend.app.schema.bot.Bot
+.. automodule:: tckdb.backend.app.schema.bot
     :members:

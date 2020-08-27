@@ -1040,17 +1040,15 @@ items for the reviewer).</p>
 <dt id="tckdb.backend.app.models.species.Species.inchi">
 <code class="sig-name descname">inchi</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.inchi" title="Permalink to this definition">¶</a></dt>
 <dd><p>The InChI descriptor with an explicit H layer and chirality information.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Either <code class="docutils literal notranslate"><span class="pre">smiles</span></code>, <code class="docutils literal notranslate"><span class="pre">inchi</span></code>, or <code class="docutils literal notranslate"><span class="pre">graph</span></code> must be specified.</p>
+</div>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>Optional[str]</p>
 </dd>
 </dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt>
-<code class="sig-name descname">.. note::</code></dt>
-<dd><p>Either <code class="docutils literal notranslate"><span class="pre">smiles</span></code>, <code class="docutils literal notranslate"><span class="pre">inchi</span></code>, or <code class="docutils literal notranslate"><span class="pre">graph</span></code> must be specified.</p>
 </dd></dl>
 
 <dl class="py attribute">
@@ -2137,6 +2135,12 @@ Entries are dictionaries, keys (values) are:</p>
 </dl>
 </dd></dl>
 
+</dd></dl>
+
+<dl class="py function">
+<dt id="tckdb.backend.app.models.species.species_as_str">
+<code class="sig-prename descclassname">tckdb.backend.app.models.species.</code><code class="sig-name descname">species_as_str</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">class_name</span></em>, <em class="sig-param"><span class="n">id</span></em>, <em class="sig-param"><span class="n">label</span></em>, <em class="sig-param"><span class="n">smiles</span></em>, <em class="sig-param"><span class="n">inchi</span></em>, <em class="sig-param"><span class="n">inchi_key</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/species.html#species_as_str"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.species.species_as_str" title="Permalink to this definition">¶</a></dt>
+<dd><p>A helper function for generating a user-friendly string representation of a Species or NonPhysicalSpecies object.</p>
 </dd></dl>
 
 </div>

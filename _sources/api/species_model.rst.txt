@@ -4,4 +4,4 @@ species model
 =============
 
 .. automodule:: tckdb.backend.app.models.species
-    :members: Species, NonPhysicalSpecies
+    :members:
