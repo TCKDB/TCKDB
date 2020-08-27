@@ -191,19 +191,13 @@
 </li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.affiliation">affiliation (tckdb.backend.app.models.person.Person attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.approved">approved (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.approved">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.approved">approved (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.authors">authors (tckdb.backend.app.models.literature.Literature attribute)</a>
 
       <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.authors">(tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-</li>
         <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.authors">(tckdb.backend.app.models.species.Species attribute)</a>
 </li>
       </ul></li>
@@ -224,21 +218,27 @@
       <li><a href="api/level_model.html#tckdb.backend.app.models.level.Level.basis">basis (tckdb.backend.app.models.level.Level attribute)</a>
 </li>
       <li><a href="api/bot_model.html#tckdb.backend.app.models.bot.Bot">Bot (class in tckdb.backend.app.models.bot)</a>
+
+      <ul>
+        <li><a href="api/bot_schema.html#tckdb.backend.app.schemas.bot.Bot">(class in tckdb.backend.app.schemas.bot)</a>
+</li>
+      </ul></li>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.bot">bot (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.bot">bot (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.bot">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.bot_id">bot_id (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.bot_id">bot_id (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.bot_id">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/bot_schema.html#tckdb.backend.app.schemas.bot.BotBase">BotBase (class in tckdb.backend.app.schemas.bot)</a>
 </li>
-      </ul></li>
+      <li><a href="api/bot_schema.html#tckdb.backend.app.schemas.bot.BotCreate">BotCreate (class in tckdb.backend.app.schemas.bot)</a>
+</li>
+      <li><a href="api/bot_schema.html#tckdb.backend.app.schemas.bot.BotInDB">BotInDB (class in tckdb.backend.app.schemas.bot)</a>
+</li>
+      <li><a href="api/bot_schema.html#tckdb.backend.app.schemas.bot.BotInDBBase">BotInDBBase (class in tckdb.backend.app.schemas.bot)</a>
+</li>
+      <li><a href="api/bot_schema.html#tckdb.backend.app.schemas.bot.BotUpdate">BotUpdate (class in tckdb.backend.app.schemas.bot)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -247,34 +247,74 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.chapter_title">chapter_title (tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.charge">charge (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.charge">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.charge">charge (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.chirality">chirality (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.chirality">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_advisor">check_advisor() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.conformation_method">conformation_method (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.conformation_method">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_authors">check_authors() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
 </li>
-      </ul></li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelBase.check_auxiliary_basis">check_auxiliary_basis() (tckdb.backend.app.schemas.level.LevelBase class method)</a>
+</li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelBase.check_basis">check_basis() (tckdb.backend.app.schemas.level.LevelBase class method)</a>
+</li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelBase.check_dispersion">check_dispersion() (tckdb.backend.app.schemas.level.LevelBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_doi">check_doi() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_editors">check_editors() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_isbn">check_isbn() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_journal">check_journal() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelBase.check_method">check_method() (tckdb.backend.app.schemas.level.LevelBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_page_end">check_page_end() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_page_start">check_page_start() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      <li><a href="api/trans_schema.html#tckdb.backend.app.schemas.trans.TransBase.check_parameters">check_parameters() (tckdb.backend.app.schemas.trans.TransBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_publication_place">check_publication_place() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_publisher">check_publisher() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.conformers">conformers (tckdb.backend.app.models.species.Species attribute)</a>
-</li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.coordinates">coordinates (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
+      <li><a href="api/bot_schema.html#tckdb.backend.app.schemas.bot.BotBase.check_reviewer_flags">check_reviewer_flags() (tckdb.backend.app.schemas.bot.BotBase class method)</a>
 
       <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.coordinates">(tckdb.backend.app.models.species.Species attribute)</a>
+        <li><a href="api/ess_schema.html#tckdb.backend.app.schemas.ess.ESSBase.check_reviewer_flags">(tckdb.backend.app.schemas.ess.ESSBase class method)</a>
+</li>
+        <li><a href="api/freq_schema.html#tckdb.backend.app.schemas.freq.FreqBase.check_reviewer_flags">(tckdb.backend.app.schemas.freq.FreqBase class method)</a>
+</li>
+        <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelBase.check_reviewer_flags">(tckdb.backend.app.schemas.level.LevelBase class method)</a>
+</li>
+        <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_reviewer_flags">(tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+        <li><a href="api/LJ_schema.html#tckdb.backend.app.schemas.LJ.LJBase.check_reviewer_flags">(tckdb.backend.app.schemas.LJ.LJBase class method)</a>
+</li>
+        <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.check_reviewer_flags">(tckdb.backend.app.schemas.person.PersonBase class method)</a>
+</li>
+        <li><a href="api/trans_schema.html#tckdb.backend.app.schemas.trans.TransBase.check_reviewer_flags">(tckdb.backend.app.schemas.trans.TransBase class method)</a>
 </li>
       </ul></li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelBase.check_solvation_method">check_solvation_method() (tckdb.backend.app.schemas.level.LevelBase class method)</a>
+</li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelBase.check_solvent">check_solvent() (tckdb.backend.app.schemas.level.LevelBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_title">check_title() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.check_volume">check_volume() (tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.chirality">chirality (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.conformation_method">conformation_method (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.conformers">conformers (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.coordinates">coordinates (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.Cp_T_list">Cp_T_list (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.Cp_values">Cp_values (tckdb.backend.app.models.species.Species attribute)</a>
@@ -305,36 +345,40 @@
 </li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.electronic_energy">electronic_energy (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.electronic_state">electronic_state (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.electronic_state">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.electronic_state">electronic_state (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.email">email (tckdb.backend.app.models.person.Person attribute)</a>
 </li>
       <li><a href="api/encorr_model.html#tckdb.backend.app.models.encorr.EnCorr">EnCorr (class in tckdb.backend.app.models.encorr)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.encorr">encorr (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.encorr_id">encorr_id (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/encorr_model.html#tckdb.backend.app.models.encorr.EnCorr.energy_unit">energy_unit (tckdb.backend.app.models.encorr.EnCorr attribute)</a>
 </li>
-      <li><a href="api/LJ_model.html#tckdb.backend.app.models.LJ.LJ.epsilon">epsilon (tckdb.backend.app.models.LJ.LJ attribute)</a>
-</li>
       <li><a href="api/ess_model.html#tckdb.backend.app.models.ess.ESS">ESS (class in tckdb.backend.app.models.ess)</a>
+
+      <ul>
+        <li><a href="api/ess_schema.html#tckdb.backend.app.schemas.ess.ESS">(class in tckdb.backend.app.schemas.ess)</a>
+</li>
+      </ul></li>
+      <li><a href="api/ess_schema.html#tckdb.backend.app.schemas.ess.ESSBase">ESSBase (class in tckdb.backend.app.schemas.ess)</a>
+</li>
+      <li><a href="api/ess_schema.html#tckdb.backend.app.schemas.ess.ESSCreate">ESSCreate (class in tckdb.backend.app.schemas.ess)</a>
+</li>
+      <li><a href="api/ess_schema.html#tckdb.backend.app.schemas.ess.ESSInDB">ESSInDB (class in tckdb.backend.app.schemas.ess)</a>
+</li>
+      <li><a href="api/ess_schema.html#tckdb.backend.app.schemas.ess.ESSInDBBase">ESSInDBBase (class in tckdb.backend.app.schemas.ess)</a>
+</li>
+      <li><a href="api/ess_schema.html#tckdb.backend.app.schemas.ess.ESSUpdate">ESSUpdate (class in tckdb.backend.app.schemas.ess)</a>
 </li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.external_symmetry">external_symmetry (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.extras">extras (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.extras">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.extras">extras (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -343,43 +387,37 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/freq_model.html#tckdb.backend.app.models.freq.Freq.factor">factor (tckdb.backend.app.models.freq.Freq attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.fragment_orientation">fragment_orientation (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.fragment_orientation">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.fragment_orientation">fragment_orientation (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.fragments">fragments (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.fragments">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.fragments">fragments (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
       <li><a href="api/freq_model.html#tckdb.backend.app.models.freq.Freq">Freq (class in tckdb.backend.app.models.freq)</a>
-</li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.freq_ess">freq_ess (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
 
       <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.freq_ess">(tckdb.backend.app.models.species.Species attribute)</a>
+        <li><a href="api/freq_schema.html#tckdb.backend.app.schemas.freq.Freq">(class in tckdb.backend.app.schemas.freq)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.freq_ess">freq_ess (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.freq_id">freq_id (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.freq_level">freq_level (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.freq_level">(tckdb.backend.app.models.species.Species attribute)</a>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.freq_level">freq_level (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.freq_path">freq_path (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.freq_path">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.freq_path">freq_path (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
+      <li><a href="api/freq_schema.html#tckdb.backend.app.schemas.freq.FreqBase">FreqBase (class in tckdb.backend.app.schemas.freq)</a>
+</li>
+      <li><a href="api/freq_schema.html#tckdb.backend.app.schemas.freq.FreqCreate">FreqCreate (class in tckdb.backend.app.schemas.freq)</a>
+</li>
+      <li><a href="api/freq_schema.html#tckdb.backend.app.schemas.freq.FreqInDB">FreqInDB (class in tckdb.backend.app.schemas.freq)</a>
+</li>
+      <li><a href="api/freq_schema.html#tckdb.backend.app.schemas.freq.FreqInDBBase">FreqInDBBase (class in tckdb.backend.app.schemas.freq)</a>
+</li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.frequencies">frequencies (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
+      <li><a href="api/freq_schema.html#tckdb.backend.app.schemas.freq.FreqUpdate">FreqUpdate (class in tckdb.backend.app.schemas.freq)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -391,20 +429,12 @@
 </li>
       <li><a href="api/bot_model.html#tckdb.backend.app.models.bot.Bot.git_commit">git_commit (tckdb.backend.app.models.bot.Bot attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.global_min_geometry">global_min_geometry (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.global_min_geometry">(tckdb.backend.app.models.species.Species attribute)</a>
-</li>
-      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.graph">graph (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.graph">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.global_min_geometry">global_min_geometry (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.graph">graph (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
       <li><a href="api/level_model.html#tckdb.backend.app.models.level.Level.grid">grid (tckdb.backend.app.models.level.Level attribute)</a>
 </li>
   </ul></td>
@@ -440,73 +470,31 @@
 </li>
         <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.id">(tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
-        <li><a href="api/LJ_model.html#tckdb.backend.app.models.LJ.LJ.id">(tckdb.backend.app.models.LJ.LJ attribute)</a>
-</li>
         <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.id">(tckdb.backend.app.models.person.Person attribute)</a>
-</li>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.id">(tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
 </li>
         <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.id">(tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-        <li><a href="api/trans_model.html#tckdb.backend.app.models.trans.Trans.id">(tckdb.backend.app.models.trans.Trans attribute)</a>
-</li>
       </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.inchi">inchi (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.inchi">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.inchi">inchi (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.inchi_key">inchi_key (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.inchi_key">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.inchi_key">inchi_key (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.irc_ess">irc_ess (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.irc_ess">(tckdb.backend.app.models.species.Species attribute)</a>
-</li>
-      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.irc_level">irc_level (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.irc_level">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.irc_ess">irc_ess (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.irc_paths">irc_paths (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.irc_paths">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.irc_level">irc_level (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.irc_trajectories">irc_trajectories (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.irc_trajectories">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.irc_paths">irc_paths (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.is_global_min">is_global_min (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.is_global_min">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.irc_trajectories">irc_trajectories (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.is_ts">is_ts (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.is_ts">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.is_global_min">is_global_min (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.is_well">is_well (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.is_well">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.is_ts">is_ts (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.is_well">is_well (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
       <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.isbn">isbn (tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
       <li><a href="api/encorr_model.html#tckdb.backend.app.models.encorr.EnCorr.isodesmic_high_level_id">isodesmic_high_level_id (tckdb.backend.app.models.encorr.EnCorr attribute)</a>
@@ -529,14 +517,14 @@
 <h2 id="L">L</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.label">label (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.label">label (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
+      <li><a href="api/level_model.html#tckdb.backend.app.models.level.Level">Level (class in tckdb.backend.app.models.level)</a>
 
       <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.label">(tckdb.backend.app.models.species.Species attribute)</a>
+        <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.Level">(class in tckdb.backend.app.schemas.level)</a>
 </li>
       </ul></li>
-      <li><a href="api/level_model.html#tckdb.backend.app.models.level.Level">Level (class in tckdb.backend.app.models.level)</a>
-</li>
       <li><a href="api/level_model.html#tckdb.backend.app.models.level.Level.level_arguments">level_arguments (tckdb.backend.app.models.level.Level attribute)</a>
 </li>
       <li><a href="api/encorr_model.html#tckdb.backend.app.models.encorr.EnCorr.level_id">level_id (tckdb.backend.app.models.encorr.EnCorr attribute)</a>
@@ -545,23 +533,51 @@
         <li><a href="api/freq_model.html#tckdb.backend.app.models.freq.Freq.level_id">(tckdb.backend.app.models.freq.Freq attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelBase">LevelBase (class in tckdb.backend.app.schemas.level)</a>
+</li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelCreate">LevelCreate (class in tckdb.backend.app.schemas.level)</a>
+</li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelInDB">LevelInDB (class in tckdb.backend.app.schemas.level)</a>
+</li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelInDBBase">LevelInDBBase (class in tckdb.backend.app.schemas.level)</a>
+</li>
+      <li><a href="api/level_schema.html#tckdb.backend.app.schemas.level.LevelUpdate">LevelUpdate (class in tckdb.backend.app.schemas.level)</a>
+</li>
+      <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature">Literature (class in tckdb.backend.app.models.literature)</a>
+
+      <ul>
+        <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.Literature">(class in tckdb.backend.app.schemas.literature)</a>
+</li>
+      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature">Literature (class in tckdb.backend.app.models.literature)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.literature">literature (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.literature">literature (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.literature">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.literature_id">literature_id (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.literature_id">literature_id (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.literature_id">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase">LiteratureBase (class in tckdb.backend.app.schemas.literature)</a>
 </li>
-      </ul></li>
-      <li><a href="api/LJ_model.html#tckdb.backend.app.models.LJ.LJ">LJ (class in tckdb.backend.app.models.LJ)</a>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureCreate">LiteratureCreate (class in tckdb.backend.app.schemas.literature)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureInDB">LiteratureInDB (class in tckdb.backend.app.schemas.literature)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureInDBBase">LiteratureInDBBase (class in tckdb.backend.app.schemas.literature)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureTypeEnum">LiteratureTypeEnum (class in tckdb.backend.app.schemas.literature)</a>
+</li>
+      <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureUpdate">LiteratureUpdate (class in tckdb.backend.app.schemas.literature)</a>
+</li>
+      <li><a href="api/LJ_schema.html#tckdb.backend.app.schemas.LJ.LJ">LJ (class in tckdb.backend.app.schemas.LJ)</a>
+</li>
+      <li><a href="api/LJ_schema.html#tckdb.backend.app.schemas.LJ.LJBase">LJBase (class in tckdb.backend.app.schemas.LJ)</a>
+</li>
+      <li><a href="api/LJ_schema.html#tckdb.backend.app.schemas.LJ.LJCreate">LJCreate (class in tckdb.backend.app.schemas.LJ)</a>
+</li>
+      <li><a href="api/LJ_schema.html#tckdb.backend.app.schemas.LJ.LJInDB">LJInDB (class in tckdb.backend.app.schemas.LJ)</a>
+</li>
+      <li><a href="api/LJ_schema.html#tckdb.backend.app.schemas.LJ.LJInDBBase">LJInDBBase (class in tckdb.backend.app.schemas.LJ)</a>
+</li>
+      <li><a href="api/LJ_schema.html#tckdb.backend.app.schemas.LJ.LJUpdate">LJUpdate (class in tckdb.backend.app.schemas.LJ)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -570,8 +586,6 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/level_model.html#tckdb.backend.app.models.level.Level.method">method (tckdb.backend.app.models.level.Level attribute)</a>
-</li>
-      <li><a href="api/trans_model.html#tckdb.backend.app.models.trans.Trans.model">model (tckdb.backend.app.models.trans.Trans attribute)</a>
 </li>
       <li>
     module
@@ -589,23 +603,31 @@
 </li>
         <li><a href="api/literature_model.html#module-tckdb.backend.app.models.literature">tckdb.backend.app.models.literature</a>
 </li>
-        <li><a href="api/LJ_model.html#module-tckdb.backend.app.models.LJ">tckdb.backend.app.models.LJ</a>
-</li>
         <li><a href="api/person_model.html#module-tckdb.backend.app.models.person">tckdb.backend.app.models.person</a>
 </li>
         <li><a href="api/species_model.html#module-tckdb.backend.app.models.species">tckdb.backend.app.models.species</a>
 </li>
-        <li><a href="api/trans_model.html#module-tckdb.backend.app.models.trans">tckdb.backend.app.models.trans</a>
+        <li><a href="api/bot_schema.html#module-tckdb.backend.app.schemas.bot">tckdb.backend.app.schemas.bot</a>
+</li>
+        <li><a href="api/ess_schema.html#module-tckdb.backend.app.schemas.ess">tckdb.backend.app.schemas.ess</a>
+</li>
+        <li><a href="api/freq_schema.html#module-tckdb.backend.app.schemas.freq">tckdb.backend.app.schemas.freq</a>
+</li>
+        <li><a href="api/level_schema.html#module-tckdb.backend.app.schemas.level">tckdb.backend.app.schemas.level</a>
+</li>
+        <li><a href="api/literature_schema.html#module-tckdb.backend.app.schemas.literature">tckdb.backend.app.schemas.literature</a>
+</li>
+        <li><a href="api/LJ_schema.html#module-tckdb.backend.app.schemas.LJ">tckdb.backend.app.schemas.LJ</a>
+</li>
+        <li><a href="api/person_schema.html#module-tckdb.backend.app.schemas.person">tckdb.backend.app.schemas.person</a>
+</li>
+        <li><a href="api/trans_schema.html#module-tckdb.backend.app.schemas.trans">tckdb.backend.app.schemas.trans</a>
 </li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.multiplicity">multiplicity (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.multiplicity">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.multiplicity">multiplicity (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -620,14 +642,14 @@
         <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.name">(tckdb.backend.app.models.person.Person attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.name_must_contain_space">name_must_contain_space() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
+</li>
       <li><a href="api/bot_model.html#tckdb.backend.app.models.bot.Bot.non_physical_species">non_physical_species (tckdb.backend.app.models.bot.Bot attribute)</a>
 
       <ul>
         <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.non_physical_species">(tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
       </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies">NonPhysicalSpecies (class in tckdb.backend.app.models.species)</a>
-</li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.normal_displacement_modes">normal_displacement_modes (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
       <li><a href="api/ess_model.html#tckdb.backend.app.models.ess.ESS.np_species_freq">np_species_freq (tckdb.backend.app.models.ess.ESS attribute)</a>
@@ -668,26 +690,14 @@
 <h2 id="O">O</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.opt_ess">opt_ess (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.opt_ess">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.opt_ess">opt_ess (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.opt_level">opt_level (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.opt_level">(tckdb.backend.app.models.species.Species attribute)</a>
-</li>
-      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.opt_path">opt_path (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.opt_path">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.opt_level">opt_level (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.opt_path">opt_path (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -698,11 +708,23 @@
 </li>
       <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.page_start">page_start (tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
-      <li><a href="api/trans_model.html#tckdb.backend.app.models.trans.Trans.parameters">parameters (tckdb.backend.app.models.trans.Trans attribute)</a>
+      <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person">Person (class in tckdb.backend.app.models.person)</a>
+
+      <ul>
+        <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.Person">(class in tckdb.backend.app.schemas.person)</a>
+</li>
+      </ul></li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase">PersonBase (class in tckdb.backend.app.schemas.person)</a>
+</li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonCreate">PersonCreate (class in tckdb.backend.app.schemas.person)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person">Person (class in tckdb.backend.app.models.person)</a>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonInDB">PersonInDB (class in tckdb.backend.app.schemas.person)</a>
+</li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonInDBBase">PersonInDBBase (class in tckdb.backend.app.schemas.person)</a>
+</li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonUpdate">PersonUpdate (class in tckdb.backend.app.schemas.person)</a>
 </li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.point_group">point_group (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
@@ -716,25 +738,25 @@
 <h2 id="R">R</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.retracted">retracted (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.retracted">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.retracted">retracted (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.reviewed">reviewed (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.reviewed">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.reviewed">reviewed (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.reviewed_networks">reviewed_networks (tckdb.backend.app.models.person.Person attribute)</a>
+</li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.reviewed_networks_validator">reviewed_networks_validator() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
 </li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.reviewed_non_physical_species">reviewed_non_physical_species (tckdb.backend.app.models.person.Person attribute)</a>
 </li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.reviewed_non_physical_species_validator">reviewed_non_physical_species_validator() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
+</li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.reviewed_reactions">reviewed_reactions (tckdb.backend.app.models.person.Person attribute)</a>
 </li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.reviewed_reactions_validator">reviewed_reactions_validator() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
+</li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.reviewed_species">reviewed_species (tckdb.backend.app.models.person.Person attribute)</a>
+</li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.reviewed_species_validator">reviewed_species_validator() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
 </li>
       <li><a href="api/bot_model.html#tckdb.backend.app.models.bot.Bot.reviewer_flags">reviewer_flags (tckdb.backend.app.models.bot.Bot attribute)</a>
 
@@ -749,23 +771,13 @@
 </li>
         <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.reviewer_flags">(tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
-        <li><a href="api/LJ_model.html#tckdb.backend.app.models.LJ.LJ.reviewer_flags">(tckdb.backend.app.models.LJ.LJ attribute)</a>
-</li>
         <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.reviewer_flags">(tckdb.backend.app.models.person.Person attribute)</a>
-</li>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.reviewer_flags">(tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-</li>
-        <li><a href="api/trans_model.html#tckdb.backend.app.models.trans.Trans.reviewer_flags">(tckdb.backend.app.models.trans.Trans attribute)</a>
 </li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.reviewers">reviewers (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.reviewers">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.reviewers">reviewers (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.reviewers_np_species">reviewers_np_species (tckdb.backend.app.models.person.Person attribute)</a>
 </li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.reviewers_species">reviewers_species (tckdb.backend.app.models.person.Person attribute)</a>
@@ -786,32 +798,14 @@
 </li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.scaled_projected_frequencies">scaled_projected_frequencies (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.scan_ess">scan_ess (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.scan_ess">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.scan_ess">scan_ess (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.scan_level">scan_level (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.scan_level">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.scan_level">scan_level (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.scan_paths">scan_paths (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.scan_paths">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.scan_paths">scan_paths (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/LJ_model.html#tckdb.backend.app.models.LJ.LJ.sigma">sigma (tckdb.backend.app.models.LJ.LJ attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.smiles">smiles (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.smiles">smiles (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.smiles">(tckdb.backend.app.models.species.Species attribute)</a>
-</li>
-      </ul></li>
       <li><a href="api/level_model.html#tckdb.backend.app.models.level.Level.solvation_description">solvation_description (tckdb.backend.app.models.level.Level attribute)</a>
 </li>
       <li><a href="api/level_model.html#tckdb.backend.app.models.level.Level.solvation_method">solvation_method (tckdb.backend.app.models.level.Level attribute)</a>
@@ -820,26 +814,12 @@
 </li>
       <li><a href="api/freq_model.html#tckdb.backend.app.models.freq.Freq.source">source (tckdb.backend.app.models.freq.Freq attribute)</a>
 </li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.sp_ess">sp_ess (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.sp_ess">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.sp_ess">sp_ess (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.sp_level">sp_level (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.sp_level">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.sp_level">sp_level (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.sp_path">sp_path (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.sp_path">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.sp_path">sp_path (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species">Species (class in tckdb.backend.app.models.species)</a>
 </li>
       <li><a href="api/bot_model.html#tckdb.backend.app.models.bot.Bot.species">species (tckdb.backend.app.models.bot.Bot attribute)</a>
@@ -850,6 +830,8 @@
         <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.species">(tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.species_as_str">species_as_str() (in module tckdb.backend.app.models.species)</a>
 </li>
       <li><a href="api/ess_model.html#tckdb.backend.app.models.ess.ESS.species_freq">species_freq (tckdb.backend.app.models.ess.ESS attribute)</a>
@@ -937,15 +919,6 @@
 </li>
       </ul></li>
       <li>
-    tckdb.backend.app.models.LJ
-
-      <ul>
-        <li><a href="api/LJ_model.html#module-tckdb.backend.app.models.LJ">module</a>
-</li>
-      </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li>
     tckdb.backend.app.models.person
 
       <ul>
@@ -960,23 +933,82 @@
 </li>
       </ul></li>
       <li>
-    tckdb.backend.app.models.trans
+    tckdb.backend.app.schemas.bot
 
       <ul>
-        <li><a href="api/trans_model.html#module-tckdb.backend.app.models.trans">module</a>
+        <li><a href="api/bot_schema.html#module-tckdb.backend.app.schemas.bot">module</a>
 </li>
       </ul></li>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.timestamp">timestamp (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
+      <li>
+    tckdb.backend.app.schemas.ess
 
       <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.timestamp">(tckdb.backend.app.models.species.Species attribute)</a>
+        <li><a href="api/ess_schema.html#module-tckdb.backend.app.schemas.ess">module</a>
 </li>
       </ul></li>
+      <li>
+    tckdb.backend.app.schemas.freq
+
+      <ul>
+        <li><a href="api/freq_schema.html#module-tckdb.backend.app.schemas.freq">module</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li>
+    tckdb.backend.app.schemas.level
+
+      <ul>
+        <li><a href="api/level_schema.html#module-tckdb.backend.app.schemas.level">module</a>
+</li>
+      </ul></li>
+      <li>
+    tckdb.backend.app.schemas.literature
+
+      <ul>
+        <li><a href="api/literature_schema.html#module-tckdb.backend.app.schemas.literature">module</a>
+</li>
+      </ul></li>
+      <li>
+    tckdb.backend.app.schemas.LJ
+
+      <ul>
+        <li><a href="api/LJ_schema.html#module-tckdb.backend.app.schemas.LJ">module</a>
+</li>
+      </ul></li>
+      <li>
+    tckdb.backend.app.schemas.person
+
+      <ul>
+        <li><a href="api/person_schema.html#module-tckdb.backend.app.schemas.person">module</a>
+</li>
+      </ul></li>
+      <li>
+    tckdb.backend.app.schemas.trans
+
+      <ul>
+        <li><a href="api/trans_schema.html#module-tckdb.backend.app.schemas.trans">module</a>
+</li>
+      </ul></li>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.timestamp">timestamp (tckdb.backend.app.models.species.Species attribute)</a>
+</li>
       <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.title">title (tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
       <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.torsions">torsions (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      <li><a href="api/trans_model.html#tckdb.backend.app.models.trans.Trans">Trans (class in tckdb.backend.app.models.trans)</a>
+      <li><a href="api/trans_schema.html#tckdb.backend.app.schemas.trans.Trans">Trans (class in tckdb.backend.app.schemas.trans)</a>
+</li>
+      <li><a href="api/trans_schema.html#tckdb.backend.app.schemas.trans.TransBase">TransBase (class in tckdb.backend.app.schemas.trans)</a>
+</li>
+      <li><a href="api/trans_schema.html#tckdb.backend.app.schemas.trans.TransCreate">TransCreate (class in tckdb.backend.app.schemas.trans)</a>
+</li>
+      <li><a href="api/trans_schema.html#tckdb.backend.app.schemas.trans.TransInDB">TransInDB (class in tckdb.backend.app.schemas.trans)</a>
+</li>
+      <li><a href="api/trans_schema.html#tckdb.backend.app.schemas.trans.TransInDBBase">TransInDBBase (class in tckdb.backend.app.schemas.trans)</a>
+</li>
+      <li><a href="api/trans_schema.html#tckdb.backend.app.schemas.trans.TransModelEnum">TransModelEnum (class in tckdb.backend.app.schemas.trans)</a>
+</li>
+      <li><a href="api/trans_schema.html#tckdb.backend.app.schemas.trans.TransUpdate">TransUpdate (class in tckdb.backend.app.schemas.trans)</a>
 </li>
       <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.type">type (tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
@@ -986,21 +1018,25 @@
 <h2 id="U">U</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies.unconverged_jobs">unconverged_jobs (tckdb.backend.app.models.species.NonPhysicalSpecies attribute)</a>
-
-      <ul>
-        <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.unconverged_jobs">(tckdb.backend.app.models.species.Species attribute)</a>
+      <li><a href="api/species_model.html#tckdb.backend.app.models.species.Species.unconverged_jobs">unconverged_jobs (tckdb.backend.app.models.species.Species attribute)</a>
 </li>
-      </ul></li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.uploaded_networks">uploaded_networks (tckdb.backend.app.models.person.Person attribute)</a>
+</li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.uploaded_networks_validator">uploaded_networks_validator() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
 </li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.uploaded_non_physical_species">uploaded_non_physical_species (tckdb.backend.app.models.person.Person attribute)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.uploaded_non_physical_species_validator">uploaded_non_physical_species_validator() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
+</li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.uploaded_reactions">uploaded_reactions (tckdb.backend.app.models.person.Person attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.uploaded_reactions_validator">uploaded_reactions_validator() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
+</li>
       <li><a href="api/person_model.html#tckdb.backend.app.models.person.Person.uploaded_species">uploaded_species (tckdb.backend.app.models.person.Person attribute)</a>
+</li>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.uploaded_species_validator">uploaded_species_validator() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
 </li>
       <li><a href="api/bot_model.html#tckdb.backend.app.models.bot.Bot.url">url (tckdb.backend.app.models.bot.Bot attribute)</a>
 
@@ -1016,14 +1052,26 @@
 <h2 id="V">V</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/person_schema.html#tckdb.backend.app.schemas.person.PersonBase.validate_email">validate_email() (tckdb.backend.app.schemas.person.PersonBase class method)</a>
+</li>
+      <li><a href="api/bot_schema.html#tckdb.backend.app.schemas.bot.BotBase.validate_git_commit">validate_git_commit() (tckdb.backend.app.schemas.bot.BotBase class method)</a>
+</li>
+      <li><a href="api/bot_schema.html#tckdb.backend.app.schemas.bot.BotBase.validate_url">validate_url() (tckdb.backend.app.schemas.bot.BotBase class method)</a>
+
+      <ul>
+        <li><a href="api/ess_schema.html#tckdb.backend.app.schemas.ess.ESSBase.validate_url">(tckdb.backend.app.schemas.ess.ESSBase class method)</a>
+</li>
+        <li><a href="api/literature_schema.html#tckdb.backend.app.schemas.literature.LiteratureBase.validate_url">(tckdb.backend.app.schemas.literature.LiteratureBase class method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/bot_model.html#tckdb.backend.app.models.bot.Bot.version">version (tckdb.backend.app.models.bot.Bot attribute)</a>
 
       <ul>
         <li><a href="api/ess_model.html#tckdb.backend.app.models.ess.ESS.version">(tckdb.backend.app.models.ess.ESS attribute)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/literature_model.html#tckdb.backend.app.models.literature.Literature.volume">volume (tckdb.backend.app.models.literature.Literature attribute)</a>
 </li>
   </ul></td>

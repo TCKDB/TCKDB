@@ -3,5 +3,5 @@
 frequencies (freq) schema
 =========================
 
-.. automodule:: tckdb.backend.app.schema.freq
+.. automodule:: tckdb.backend.app.schemas.freq
     :members:

@@ -102,6 +102,7 @@
 <li class="toctree-l2"><a class="reference internal" href="level_model.html">level of theory (level) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="level_schema.html">level of theory (level) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="literature_model.html">literature model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="literature_schema.html">literature schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_model.html">Lennard-Jones (LJ) model</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Lennard-Jones (LJ) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="person_model.html">person model</a></li>
@@ -180,8 +181,51 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="lennard-jones-lj-schema">
-<span id="lj-schema"></span><h1>Lennard-Jones (LJ) schema<a class="headerlink" href="#lennard-jones-lj-schema" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-tckdb.backend.app.schemas.LJ">
+<span id="lennard-jones-lj-schema"></span><span id="lj-schema"></span><h1>Lennard-Jones (LJ) schema<a class="headerlink" href="#module-tckdb.backend.app.schemas.LJ" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app schemas LJ module</p>
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.LJ.LJ">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.LJ.</code><code class="sig-name descname">LJ</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">sigma</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/LJ.html#LJ"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.LJ.LJ" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties to return to client</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.LJ.LJBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.LJ.</code><code class="sig-name descname">LJBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">sigma</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/LJ.html#LJBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.LJ.LJBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>A LJBase class (shared properties)</p>
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.LJ.LJBase.check_reviewer_flags">
+<em class="property">classmethod </em><code class="sig-name descname">check_reviewer_flags</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/LJ.html#LJBase.check_reviewer_flags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.LJ.LJBase.check_reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>LJ.reviewer_flags validator</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.LJ.LJCreate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.LJ.</code><code class="sig-name descname">LJCreate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">sigma</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/LJ.html#LJCreate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.LJ.LJCreate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an LJ item: Properties to receive on item creation</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.LJ.LJInDB">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.LJ.</code><code class="sig-name descname">LJInDB</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">sigma</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/LJ.html#LJInDB"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.LJ.LJInDB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.LJ.LJInDBBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.LJ.</code><code class="sig-name descname">LJInDBBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">sigma</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/LJ.html#LJInDBBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.LJ.LJInDBBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties shared by models stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.LJ.LJUpdate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.LJ.</code><code class="sig-name descname">LJUpdate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">sigma</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">epsilon</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/LJ.html#LJUpdate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.LJ.LJUpdate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update an LJ item: Properties to receive on item update</p>
+</dd></dl>
+
 </div>
 
 

@@ -102,6 +102,7 @@
 <li class="toctree-l2"><a class="reference internal" href="level_model.html">level of theory (level) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="level_schema.html">level of theory (level) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="literature_model.html">literature model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="literature_schema.html">literature schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_model.html">Lennard-Jones (LJ) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_schema.html">Lennard-Jones (LJ) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="person_model.html">person model</a></li>
@@ -180,8 +181,57 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="electronic-structure-software-ess-schema">
-<span id="ess-schema"></span><h1>electronic structure software (ess) schema<a class="headerlink" href="#electronic-structure-software-ess-schema" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-tckdb.backend.app.schemas.ess">
+<span id="electronic-structure-software-ess-schema"></span><span id="ess-schema"></span><h1>electronic structure software (ess) schema<a class="headerlink" href="#module-tckdb.backend.app.schemas.ess" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app schemas ess module</p>
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.ess.ESS">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.ess.</code><code class="sig-name descname">ESS</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">name</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.ess.ConstrainedStrValue</span></em>, <em class="sig-param"><span class="n">version</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.ess.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">revision</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.ess.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.ess.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/ess.html#ESS"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.ess.ESS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties to return to client</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.ess.ESSBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.ess.</code><code class="sig-name descname">ESSBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">name</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.ess.ConstrainedStrValue</span></em>, <em class="sig-param"><span class="n">version</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.ess.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">revision</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.ess.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.ess.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/ess.html#ESSBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.ess.ESSBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>An ESSBase class (shared properties)</p>
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.ess.ESSBase.check_reviewer_flags">
+<em class="property">classmethod </em><code class="sig-name descname">check_reviewer_flags</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/ess.html#ESSBase.check_reviewer_flags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.ess.ESSBase.check_reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>ESS.reviewer_flags validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.ess.ESSBase.validate_url">
+<em class="property">classmethod </em><code class="sig-name descname">validate_url</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/ess.html#ESSBase.validate_url"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.ess.ESSBase.validate_url" title="Permalink to this definition">¶</a></dt>
+<dd><p>ESS.url validator</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.ess.ESSCreate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.ess.</code><code class="sig-name descname">ESSCreate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">name</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">version</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">revision</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/ess.html#ESSCreate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.ess.ESSCreate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an ESS item: Properties to receive on item creation</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.ess.ESSInDB">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.ess.</code><code class="sig-name descname">ESSInDB</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">name</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">version</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">revision</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/ess.html#ESSInDB"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.ess.ESSInDB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.ess.ESSInDBBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.ess.</code><code class="sig-name descname">ESSInDBBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">name</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">version</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">revision</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/ess.html#ESSInDBBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.ess.ESSInDBBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties shared by models stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.ess.ESSUpdate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.ess.</code><code class="sig-name descname">ESSUpdate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">name</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">version</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">revision</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/ess.html#ESSUpdate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.ess.ESSUpdate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update an ESS item: Properties to receive on item update</p>
+</dd></dl>
+
 </div>
 
 

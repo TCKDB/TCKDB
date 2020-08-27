@@ -3,5 +3,5 @@
 energy correction (encorr) schema
 =================================
 
-.. automodule:: tckdb.backend.app.schema.encorr
+.. automodule:: tckdb.backend.app.schemas.encorr
     :members:

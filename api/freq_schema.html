@@ -102,6 +102,7 @@
 <li class="toctree-l2"><a class="reference internal" href="level_model.html">level of theory (level) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="level_schema.html">level of theory (level) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="literature_model.html">literature model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="literature_schema.html">literature schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_model.html">Lennard-Jones (LJ) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_schema.html">Lennard-Jones (LJ) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="person_model.html">person model</a></li>
@@ -180,8 +181,51 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="frequencies-freq-schema">
-<span id="freq-schema"></span><h1>frequencies (freq) schema<a class="headerlink" href="#frequencies-freq-schema" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-tckdb.backend.app.schemas.freq">
+<span id="frequencies-freq-schema"></span><span id="freq-schema"></span><h1>frequencies (freq) schema<a class="headerlink" href="#module-tckdb.backend.app.schemas.freq" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app schemas freq module</p>
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.freq.Freq">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.freq.</code><code class="sig-name descname">Freq</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">factor</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">level_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">source</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/freq.html#Freq"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.freq.Freq" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties to return to client</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.freq.FreqBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.freq.</code><code class="sig-name descname">FreqBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">factor</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.freq.ConstrainedFloatValue</span></em>, <em class="sig-param"><span class="n">level_id</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.freq.ConstrainedIntValue</span></em>, <em class="sig-param"><span class="n">source</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.freq.ConstrainedStrValue</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/freq.html#FreqBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.freq.FreqBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>A FreqBase class (shared properties)</p>
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.freq.FreqBase.check_reviewer_flags">
+<em class="property">classmethod </em><code class="sig-name descname">check_reviewer_flags</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/freq.html#FreqBase.check_reviewer_flags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.freq.FreqBase.check_reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Freq.reviewer_flags validator</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.freq.FreqCreate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.freq.</code><code class="sig-name descname">FreqCreate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">factor</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">level_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">source</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/freq.html#FreqCreate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.freq.FreqCreate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a Freq item: Properties to receive on item creation</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.freq.FreqInDB">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.freq.</code><code class="sig-name descname">FreqInDB</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">factor</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">level_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">source</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/freq.html#FreqInDB"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.freq.FreqInDB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.freq.FreqInDBBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.freq.</code><code class="sig-name descname">FreqInDBBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">factor</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">level_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">source</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/freq.html#FreqInDBBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.freq.FreqInDBBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties shared by models stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.freq.FreqUpdate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.freq.</code><code class="sig-name descname">FreqUpdate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">factor</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">level_id</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">source</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/freq.html#FreqUpdate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.freq.FreqUpdate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update a Freq item: Properties to receive on item update</p>
+</dd></dl>
+
 </div>
 
 

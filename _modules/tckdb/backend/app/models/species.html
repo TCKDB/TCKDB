@@ -165,11 +165,7 @@
 <span class="kn">from</span> <span class="nn">sqlalchemy.orm</span> <span class="kn">import</span> <span class="n">relationship</span>
 
 <span class="kn">from</span> <span class="nn">tckdb.backend.app.db.base_class</span> <span class="kn">import</span> <span class="n">Base</span>
-<span class="kn">from</span> <span class="nn">tckdb.backend.app.models.associations</span> <span class="kn">import</span> <span class="p">(</span><span class="n">species_authors</span><span class="p">,</span>
-                                                   <span class="n">species_reviewers</span><span class="p">,</span>
-                                                   <span class="n">np_species_authors</span><span class="p">,</span>
-                                                   <span class="n">np_species_reviewers</span><span class="p">,</span>
-                                                   <span class="p">)</span>
+<span class="kn">from</span> <span class="nn">tckdb.backend.app.models.associations</span> <span class="kn">import</span> <span class="n">species_authors</span><span class="p">,</span> <span class="n">species_reviewers</span>
 <span class="kn">from</span> <span class="nn">tckdb.backend.app.models.common</span> <span class="kn">import</span> <span class="n">MsgpackExt</span>
 
 
@@ -283,7 +279,6 @@
 
 <span class="sd">            Note:</span>
 <span class="sd">                Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
-
 <span class="sd">        inchi_key (Optional[str])</span>
 <span class="sd">            The InChI key descriptor. Automatically assigned if not given by the user.</span>
 <span class="sd">        charge (int)</span>
@@ -442,7 +437,7 @@
 <span class="sd">            Required for polyatomic species (with 2 or more atoms).</span>
 
 <span class="sd">            Note:</span>
-<span class="sd">                This argument will be facilitated by TCKDB by querying the :ref:`freq table &lt;frequencies_(freq)_model&gt;`.</span>
+<span class="sd">                This argument will be facilitated by TCKDB by querying the :ref:`freq table &lt;freq&gt;`.</span>
 
 <span class="sd">        # rotational modes</span>
 <span class="sd">        rigid_rotor (str)</span>
@@ -641,10 +636,10 @@
 <span class="sd">        # relationships - Many to Many</span>
 <span class="sd">        authors (relationship)</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
-<span class="sd">            with the :ref:`Person table &lt;person_model&gt;` representing authors of this object.</span>
+<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing authors of this object.</span>
 <span class="sd">        reviewers (relationship)</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
-<span class="sd">            with the :ref:`Person table &lt;person_model&gt;` representing reviewers of this object.</span>
+<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing reviewers of this object.</span>
 
 <span class="sd">        # paths</span>
 <span class="sd">        opt_path (Optional[str])</span>
@@ -784,271 +779,6 @@
     <span class="c1"># relationships - Many to Many</span>
     <span class="n">authors</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Person&#39;</span><span class="p">,</span> <span class="n">secondary</span><span class="o">=</span><span class="n">species_authors</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;authors_species&#39;</span><span class="p">)</span>
     <span class="n">reviewers</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Person&#39;</span><span class="p">,</span> <span class="n">secondary</span><span class="o">=</span><span class="n">species_reviewers</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;reviewers_species&#39;</span><span class="p">)</span>
-
-    <span class="c1"># paths</span>
-    <span class="n">opt_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">freq_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">scan_paths</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">irc_paths</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">sp_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-
-    <span class="c1"># unconverged jobs</span>
-    <span class="n">unconverged_jobs</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-    <span class="c1"># misc</span>
-    <span class="n">extras</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        A helper function for generating a user-friendly string representation of the object.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="n">species_as_str</span><span class="p">(</span><span class="n">class_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
-                              <span class="nb">id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
-                              <span class="n">label</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
-                              <span class="n">smiles</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">smiles</span><span class="p">,</span>
-                              <span class="n">inchi</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">inchi</span><span class="p">,</span>
-                              <span class="n">inchi_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">inchi_key</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="NonPhysicalSpecies"><a class="viewcode-back" href="../../../../../api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies">[docs]</a><span class="k">class</span> <span class="nc">NonPhysicalSpecies</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    A class for representing a TCKDB NonPhysicalSpecies item.</span>
-<span class="sd">    Note: All atom indices in these arguments are 1-indexed unless explicitly stated otherwise.</span>
-
-<span class="sd">    Attributes:</span>
-<span class="sd">        id (int): The primary key (not a user input).</span>
-
-<span class="sd">        label (Optional[str]): A free user label for the species.</span>
-
-<span class="sd">        # provenance</span>
-<span class="sd">        timestamp (float): The UTC timestamp of uploading the data to TCKDB (not a user input).</span>
-<span class="sd">        retracted (Optional[str]): A reason for retracting this object</span>
-<span class="sd">                                   (defaults to ``None``, denoting a non-retracted object).</span>
-
-<span class="sd">        # review</span>
-<span class="sd">        reviewed (bool): Whether this entry was reviewed (not a user input).</span>
-<span class="sd">        approved (bool): If reviewed, whether it was approved (not a user input).</span>
-<span class="sd">        reviewer_flags (dict): Backend flags to assist the review process</span>
-<span class="sd">                               (automatically determined, but users may add notes to flag items for the reviewer).</span>
-
-<span class="sd">        # chemical identifiers</span>
-<span class="sd">        smiles (Optional[str]): The canonical SMILES descriptor with chirality information.</span>
-<span class="sd">                                Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
-<span class="sd">        inchi (Optional[str]): The InChI descriptor with an explicit H layer and chirality information.</span>
-<span class="sd">                               Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
-<span class="sd">        inchi_key (Optional[str]): The InChI key descriptor.</span>
-<span class="sd">        charge (int): The net molecular charge.</span>
-<span class="sd">        multiplicity (int): The spin multiplicity.</span>
-<span class="sd">        electronic_state (Optional[str]): The species electronic state at CIS level.</span>
-<span class="sd">                                          Default: &#39;X&#39; (denoting ground state).</span>
-
-<span class="sd">        # geometry and connectivity</span>
-<span class="sd">        coordinates (Dict[str, Tuple]): Cartesian coordinates in standard orientation. Keys (values) are:</span>
-<span class="sd">                                        - &#39;symbols&#39; (Tuple[str]): The chemical element symbols,</span>
-<span class="sd">                                        - &#39;isotopes&#39; (Tuple[int]): The respective isotopes,</span>
-<span class="sd">                                        - &#39;coords&#39; (Tuple[Tuple[float]]): The respective coordinates.</span>
-<span class="sd">        graph (Optional[str]): A 2D connectivity graph in an RMG adjacency list format.</span>
-<span class="sd">                               Note that this graph represents a single Lewis structure (resonance structure).</span>
-<span class="sd">                               Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
-<span class="sd">        fragments (Optional[list]): Fragments represented by this species, e.g., VdW wells.</span>
-<span class="sd">                                    Entries are lists atom indices of all atoms in a fragment.</span>
-<span class="sd">                                    Default: ``None`` (denoting there&#39;s only one fragment).</span>
-<span class="sd">        fragment_orientation (Optional[List[Dict[str, Union[float, List[float]]]]]): Relative orientation of fragments,</span>
-<span class="sd">                starting from the heaviest one. All fragments must be in standard Cartesian orientation.</span>
-<span class="sd">                Entries are dictionaries with the following keys (values):</span>
-<span class="sd">                - &#39;cm&#39; (List[float]): A vector pointing from the center of mass of the previous fragment</span>
-<span class="sd">                                      to the center of mass of the current fragment in Angstroms.</span>
-<span class="sd">                - &#39;x&#39; (float): The X axis rotational angle in degrees.</span>
-<span class="sd">                - &#39;y&#39; (float): The Y axis rotational angle in degrees.</span>
-<span class="sd">                - &#39;z&#39; (float): The Z axis rotational angle in degrees.</span>
-<span class="sd">        chirality (Optional[Dict[Tuple[int], str]])</span>
-<span class="sd">            The species&#39; chiral centers, following the Cahn–Ingold–Prelog (CIP) notation (``&#39;R&#39;`` or ``&#39;S&#39;`` for atom</span>
-<span class="sd">            centers, ``&#39;E&#39;`` or ``&#39;Z&#39;`` for double bond centers). Keys are tuples of atom indices of a chiral center,</span>
-<span class="sd">            values are string representations of the respective chiral center.</span>
-
-<span class="sd">            Note: Non-radical valance 3 nitrogen atoms are also considered chiral if connected to three different groups</span>
-<span class="sd">            (considering the lone pair to always be a unique fourth group). In such cases, use a ``&#39;NR&#39;`` or ``&#39;NS&#39;``</span>
-<span class="sd">            notation.</span>
-
-<span class="sd">            Example:</span>
-
-<span class="sd">                A double bond with chirality ``&#39;E&#39;`` between atoms 1-2, an ``&#39;S&#39;`` chiral center on atom 3,</span>
-<span class="sd">                and an ``&#39;S&#39;`` chiral center on atom 6 which is a nitrogen are represented as::</span>
-
-<span class="sd">                    {(1, 2): &#39;E&#39;, (3,): &#39;S&#39;, (6,): &#39;NS&#39;})</span>
-<span class="sd">        conformation_method (Optional[str]): The method used to determine the lowest energy conformer.</span>
-<span class="sd">                                             Optional only for mono- and di-atomic species (required otherwise).</span>
-<span class="sd">        is_well (bool): Whether this conformer represents a local well (at the opt level used).</span>
-<span class="sd">        is_global_min (bool): If this conformer is a well, whether it is meant to represents the global minimum energy.</span>
-<span class="sd">        global_min_geometry (Optional[Dict[str, Tuple]]): If this species does not represent the global minimum well,</span>
-<span class="sd">            this argument must contain the coordinates of the global minimum energy conformer at the same opt level.</span>
-
-<span class="sd">        # TS</span>
-<span class="sd">        is_ts (bool): Whether this species represents a transition state.</span>
-<span class="sd">        irc_trajectories (Optional[List[List[Dict[str, Tuple[Union[float, Tuple[float]]]]]]]): The two IRC trajectories.</span>
-<span class="sd">            Each trajectory is a list of coordinates dictionaries.</span>
-<span class="sd">            Unlike the Species object, here IRC trajectories can be given even if the is_ts argument is not ``True``.</span>
-
-
-<span class="sd">        # relationships - Many to One</span>
-<span class="sd">        literature_id (int)</span>
-<span class="sd">            The literature reference from the :ref:`literature table &lt;Literature&gt;`.</span>
-<span class="sd">        literature (relationship)</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Literature table &lt;literature&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-<span class="sd">        bot_id (int)</span>
-<span class="sd">            The bot used to generate the object from the :ref:`Bot table &lt;bot&gt;`.</span>
-<span class="sd">        bot (relationship)</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Bot table &lt;bot&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-
-<span class="sd">        opt_level (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-<span class="sd">        freq_level (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-<span class="sd">        scan_level (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-<span class="sd">        irc_level (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-<span class="sd">        sp_level (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model. Required.</span>
-
-<span class="sd">        opt_ess (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-<span class="sd">        freq_ess (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-<span class="sd">        scan_ess (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-<span class="sd">        irc_ess (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
-<span class="sd">        sp_ess (Optional[relationship])</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
-<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model. Required.</span>
-
-<span class="sd">        # relationships - Many to Many</span>
-<span class="sd">        authors (relationship)</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
-<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing authors of this object.</span>
-<span class="sd">        reviewers (relationship)</span>
-<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
-<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing reviewers of this object.</span>
-
-<span class="sd">        # paths</span>
-<span class="sd">        opt_path (Optional[str]): The path to the optimization output file.</span>
-<span class="sd">            Required for polyatomic species (with 2 or more atoms).</span>
-<span class="sd">        freq_path (Optional[str]): The path to the frequencies calculation output file.</span>
-<span class="sd">            Required for polyatomic species (with 2 or more atoms).</span>
-<span class="sd">        scan_paths (Optional[Dict[Tuple[Tuple[int]], str]]): Paths to the torsion scan calculation output files.</span>
-<span class="sd">            Keys are tuples of tuples. The number of inner-level tuples corresponds to the torsion dimension. Entries of</span>
-<span class="sd">            the inner-level tuple are torsion atom indices. Values are paths to the respective scan calculation log file.</span>
-<span class="sd">        irc_paths (Optional[List[str]]): A length two list. Entries are paths to the IRC calculation output files.</span>
-<span class="sd">            Required for transition states.</span>
-<span class="sd">        sp_path (Optional[str]): The path to the single point energy output file. Unlike the ``Species`` object, here</span>
-<span class="sd">            ``sp_path`` is optional.</span>
-
-<span class="sd">        # unconverged jobs</span>
-<span class="sd">        unconverged_jobs (Optional[List[Dict[str, str]]]): Any relevant unconverged jobs that were troubleshooted while</span>
-<span class="sd">            calculating this Species. Entries are dictionaries, keys (values) are:</span>
-<span class="sd">                - &#39;job_type&#39; (str): &#39;opt&#39;, &#39;freq&#39;, &#39;scan&#39;, &#39;irc&#39;, or &#39;sp&#39;.</span>
-<span class="sd">                - &#39;issue&#39; (str): The identified issue.</span>
-<span class="sd">                - &#39;troubleshooting&#39; (str): Description of the troubleshooting method(s) that solved the issue.</span>
-<span class="sd">                - &#39;comment&#39; (str): A comment.</span>
-<span class="sd">                - &#39;file&#39; (str): The path to the relevant unconverged output file.</span>
-
-<span class="sd">        # misc</span>
-<span class="sd">        extras (Dict[str, Any]): Any additional information in the form of a Python dictionary.</span>
-<span class="sd">            Unlike the ``Species`` object, here ``extras`` is required and should at least contain the Author&#39;s</span>
-<span class="sd">            reasoning for declaring this species non-physical.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-
-    <span class="n">label</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-    <span class="c1"># provenance</span>
-    <span class="n">timestamp</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">retracted</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-    <span class="c1"># review</span>
-    <span class="n">reviewed</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">approved</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">reviewer_flags</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-    <span class="c1"># chemical identifiers</span>
-    <span class="n">smiles</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">inchi</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">inchi_key</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">charge</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">multiplicity</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">electronic_state</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">150</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-
-    <span class="c1"># geometry and connectivity</span>
-    <span class="n">coordinates</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">graph</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">fragments</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">fragment_orientation</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">chirality</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">conformation_method</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">500</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">is_well</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">is_global_min</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">global_min_geometry</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-    <span class="c1"># TS</span>
-    <span class="n">is_ts</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">irc_trajectories</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-    <span class="c1"># relationships - Many to One</span>
-    <span class="n">literature_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;literature.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">literature</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Literature&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;np_species&#39;</span><span class="p">)</span>
-    <span class="n">bot_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;bot.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">bot</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Bot&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;np_species&#39;</span><span class="p">)</span>
-
-    <span class="n">opt_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">opt_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s2">&quot;np_species_opt&quot;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">opt_level_id</span><span class="p">])</span>
-    <span class="n">freq_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">freq_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_freq&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">freq_level_id</span><span class="p">])</span>
-    <span class="n">scan_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">scan_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_scan&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">scan_level_id</span><span class="p">])</span>
-    <span class="n">irc_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">irc_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_irc&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">irc_level_id</span><span class="p">])</span>
-    <span class="n">sp_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">sp_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_sp&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">sp_level_id</span><span class="p">])</span>
-
-    <span class="n">opt_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">opt_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_opt&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">opt_ess_id</span><span class="p">])</span>
-    <span class="n">freq_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">freq_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_freq&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">freq_ess_id</span><span class="p">])</span>
-    <span class="n">scan_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">scan_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_scan&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">scan_ess_id</span><span class="p">])</span>
-    <span class="n">irc_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">irc_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_irc&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">irc_ess_id</span><span class="p">])</span>
-    <span class="n">sp_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">sp_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_sp&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">sp_ess_id</span><span class="p">])</span>
-
-    <span class="c1"># relationships - Many to Many</span>
-    <span class="n">authors</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Person&#39;</span><span class="p">,</span> <span class="n">secondary</span><span class="o">=</span><span class="n">np_species_authors</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;authors_np_species&#39;</span><span class="p">)</span>
-    <span class="n">reviewers</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Person&#39;</span><span class="p">,</span> <span class="n">secondary</span><span class="o">=</span><span class="n">np_species_reviewers</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;reviewers_np_species&#39;</span><span class="p">)</span>
 
     <span class="c1"># paths</span>
     <span class="n">opt_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>

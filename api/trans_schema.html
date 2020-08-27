@@ -102,6 +102,7 @@
 <li class="toctree-l2"><a class="reference internal" href="level_model.html">level of theory (level) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="level_schema.html">level of theory (level) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="literature_model.html">literature model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="literature_schema.html">literature schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_model.html">Lennard-Jones (LJ) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_schema.html">Lennard-Jones (LJ) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="person_model.html">person model</a></li>
@@ -180,8 +181,63 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="energy-transfer-model-trans-schema">
-<span id="trans-schema"></span><h1>energy transfer model (trans) schema<a class="headerlink" href="#energy-transfer-model-trans-schema" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-tckdb.backend.app.schemas.trans">
+<span id="energy-transfer-model-trans-schema"></span><span id="trans-schema"></span><h1>energy transfer model (trans) schema<a class="headerlink" href="#module-tckdb.backend.app.schemas.trans" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app schemas trans module</p>
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.trans.Trans">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.trans.</code><code class="sig-name descname">Trans</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">parameters</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Union<span class="p">[</span>Tuple<span class="p">[</span>Union<span class="p">[</span>float<span class="p">, </span>int<span class="p">]</span><span class="p">, </span>str<span class="p">]</span><span class="p">, </span>float<span class="p">, </span>int<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/trans.html#Trans"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.trans.Trans" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties to return to client</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.trans.TransBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.trans.</code><code class="sig-name descname">TransBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#tckdb.backend.app.schemas.trans.TransModelEnum" title="tckdb.backend.app.schemas.trans.TransModelEnum">tckdb.backend.app.schemas.trans.TransModelEnum</a></span></em>, <em class="sig-param"><span class="n">parameters</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Union<span class="p">[</span>Tuple<span class="p">[</span>float<span class="p">, </span>str<span class="p">]</span><span class="p">, </span>float<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/trans.html#TransBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.trans.TransBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>A TransBase class (shared properties)</p>
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.trans.TransBase.check_parameters">
+<em class="property">classmethod </em><code class="sig-name descname">check_parameters</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/trans.html#TransBase.check_parameters"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.trans.TransBase.check_parameters" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trans.parameters validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.trans.TransBase.check_reviewer_flags">
+<em class="property">classmethod </em><code class="sig-name descname">check_reviewer_flags</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/trans.html#TransBase.check_reviewer_flags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.trans.TransBase.check_reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trans.reviewer_flags validator</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.trans.TransCreate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.trans.</code><code class="sig-name descname">TransCreate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">parameters</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Union<span class="p">[</span>Tuple<span class="p">[</span>Union<span class="p">[</span>float<span class="p">, </span>int<span class="p">]</span><span class="p">, </span>str<span class="p">]</span><span class="p">, </span>float<span class="p">, </span>int<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/trans.html#TransCreate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.trans.TransCreate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a Trans item: Properties to receive on item creation</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.trans.TransInDB">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.trans.</code><code class="sig-name descname">TransInDB</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">parameters</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Union<span class="p">[</span>Tuple<span class="p">[</span>Union<span class="p">[</span>float<span class="p">, </span>int<span class="p">]</span><span class="p">, </span>str<span class="p">]</span><span class="p">, </span>float<span class="p">, </span>int<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/trans.html#TransInDB"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.trans.TransInDB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.trans.TransInDBBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.trans.</code><code class="sig-name descname">TransInDBBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">parameters</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Union<span class="p">[</span>Tuple<span class="p">[</span>Union<span class="p">[</span>float<span class="p">, </span>int<span class="p">]</span><span class="p">, </span>str<span class="p">]</span><span class="p">, </span>float<span class="p">, </span>int<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/trans.html#TransInDBBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.trans.TransInDBBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties shared by models stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.trans.TransModelEnum">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.trans.</code><code class="sig-name descname">TransModelEnum</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/trans.html#TransModelEnum"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.trans.TransModelEnum" title="Permalink to this definition">¶</a></dt>
+<dd><p>The supported Trans models</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.trans.TransUpdate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.trans.</code><code class="sig-name descname">TransUpdate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">model</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">parameters</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Union<span class="p">[</span>Tuple<span class="p">[</span>Union<span class="p">[</span>float<span class="p">, </span>int<span class="p">]</span><span class="p">, </span>str<span class="p">]</span><span class="p">, </span>float<span class="p">, </span>int<span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/trans.html#TransUpdate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.trans.TransUpdate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update a Trans item: Properties to receive on item update</p>
+</dd></dl>
+
 </div>
 
 

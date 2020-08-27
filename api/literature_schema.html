@@ -1,0 +1,371 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>literature schema &mdash; TCKDB 0.1.0 Documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Lennard-Jones (LJ) model" href="LJ_model.html" />
+    <link rel="prev" title="literature model" href="literature_model.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home" alt="Documentation Home"> TCKDB
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../contribute.html">Contribute</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../licence.html">Licence</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../credits.html">Credits</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">TCKDB’s API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="bot_model.html">bot model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bot_schema.html">bot schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="encorr_model.html">energy correction (encorr) model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="encorr_schema.html">energy correction (encorr) schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ess_model.html">electronic structure software (ess) model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ess_schema.html">electronic structure software (ess) schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="freq_model.html">frequencies (freq) model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="freq_schema.html">frequencies (freq) schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="level_model.html">level of theory (level) model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="level_schema.html">level of theory (level) schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="literature_model.html">literature model</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">literature schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LJ_model.html">Lennard-Jones (LJ) model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LJ_schema.html">Lennard-Jones (LJ) schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="person_model.html">person model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="person_schema.html">person schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="species_model.html">species model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="species_schema.html">species schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="trans_model.html">energy transfer model (trans) model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="trans_schema.html">energy transfer model (trans) schema</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../release.html">Release notes</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">TCKDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="index.html">TCKDB’s API</a> &raquo;</li>
+        
+      <li>literature schema</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/api/literature_schema.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-tckdb.backend.app.schemas.literature">
+<span id="id1"></span><span id="literature-schema"></span><h1>literature schema<a class="headerlink" href="#module-tckdb.backend.app.schemas.literature" title="Permalink to this headline">¶</a></h1>
+<p>TCKDB backend app schemas literature module</p>
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.literature.Literature">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.literature.</code><code class="sig-name descname">Literature</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">type</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#tckdb.backend.app.schemas.literature.LiteratureTypeEnum" title="tckdb.backend.app.schemas.literature.LiteratureTypeEnum">tckdb.backend.app.schemas.literature.LiteratureTypeEnum</a></span></em>, <em class="sig-param"><span class="n">authors</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">title</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">year</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">journal</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publisher</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">volume</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">issue</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_start</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_end</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">editors</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">edition</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">chapter_title</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publication_place</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">advisor</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">doi</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">isbn</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#Literature"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.Literature" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties to return to client</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.literature.</code><code class="sig-name descname">LiteratureBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">type</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#tckdb.backend.app.schemas.literature.LiteratureTypeEnum" title="tckdb.backend.app.schemas.literature.LiteratureTypeEnum">tckdb.backend.app.schemas.literature.LiteratureTypeEnum</a></span></em>, <em class="sig-param"><span class="n">authors</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span></em>, <em class="sig-param"><span class="n">title</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span></em>, <em class="sig-param"><span class="n">year</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedIntValue</span></em>, <em class="sig-param"><span class="n">journal</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publisher</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">volume</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedIntValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">issue</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedIntValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_start</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedIntValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_end</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedIntValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">editors</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">edition</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">chapter_title</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publication_place</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">advisor</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">doi</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">isbn</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>A LiteratureBase class (shared properties)</p>
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_advisor">
+<em class="property">classmethod </em><code class="sig-name descname">check_advisor</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_advisor"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_advisor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.advisor validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_authors">
+<em class="property">classmethod </em><code class="sig-name descname">check_authors</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_authors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_authors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.authors validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_doi">
+<em class="property">classmethod </em><code class="sig-name descname">check_doi</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_doi"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_doi" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.doi validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_editors">
+<em class="property">classmethod </em><code class="sig-name descname">check_editors</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_editors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_editors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.editors validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_isbn">
+<em class="property">classmethod </em><code class="sig-name descname">check_isbn</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_isbn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_isbn" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.isbn validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_journal">
+<em class="property">classmethod </em><code class="sig-name descname">check_journal</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_journal"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_journal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.journal validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_page_end">
+<em class="property">classmethod </em><code class="sig-name descname">check_page_end</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_page_end"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_page_end" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.page_end validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_page_start">
+<em class="property">classmethod </em><code class="sig-name descname">check_page_start</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_page_start"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_page_start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.page_start validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_publication_place">
+<em class="property">classmethod </em><code class="sig-name descname">check_publication_place</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_publication_place"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_publication_place" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.publication_place validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_publisher">
+<em class="property">classmethod </em><code class="sig-name descname">check_publisher</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_publisher"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_publisher" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.publisher validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_reviewer_flags">
+<em class="property">classmethod </em><code class="sig-name descname">check_reviewer_flags</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_reviewer_flags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.reviewer_flags validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_title">
+<em class="property">classmethod </em><code class="sig-name descname">check_title</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_title"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_title" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.title validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.check_volume">
+<em class="property">classmethod </em><code class="sig-name descname">check_volume</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.check_volume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.check_volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.volume validator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureBase.validate_url">
+<em class="property">classmethod </em><code class="sig-name descname">validate_url</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em>, <em class="sig-param"><span class="n">values</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureBase.validate_url"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureBase.validate_url" title="Permalink to this definition">¶</a></dt>
+<dd><p>Literature.url validator</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureCreate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.literature.</code><code class="sig-name descname">LiteratureCreate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">type</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">authors</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">title</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">year</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">journal</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publisher</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">volume</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">issue</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_start</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_end</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">editors</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">edition</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">chapter_title</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publication_place</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">advisor</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">doi</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">isbn</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureCreate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureCreate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a Literature item: Properties to receive on item creation</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureInDB">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.literature.</code><code class="sig-name descname">LiteratureInDB</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">type</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#tckdb.backend.app.schemas.literature.LiteratureTypeEnum" title="tckdb.backend.app.schemas.literature.LiteratureTypeEnum">tckdb.backend.app.schemas.literature.LiteratureTypeEnum</a></span></em>, <em class="sig-param"><span class="n">authors</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">title</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">year</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">journal</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publisher</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">volume</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">issue</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_start</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_end</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">editors</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">edition</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">chapter_title</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publication_place</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">advisor</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">doi</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">isbn</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureInDB"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureInDB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureInDBBase">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.literature.</code><code class="sig-name descname">LiteratureInDBBase</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">type</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#tckdb.backend.app.schemas.literature.LiteratureTypeEnum" title="tckdb.backend.app.schemas.literature.LiteratureTypeEnum">tckdb.backend.app.schemas.literature.LiteratureTypeEnum</a></span></em>, <em class="sig-param"><span class="n">authors</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">title</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">year</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">journal</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publisher</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">volume</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">issue</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_start</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_end</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">editors</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">edition</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">chapter_title</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publication_place</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">advisor</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">doi</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">isbn</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">id</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureInDBBase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureInDBBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Properties shared by models stored in DB</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureTypeEnum">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.literature.</code><code class="sig-name descname">LiteratureTypeEnum</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureTypeEnum"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureTypeEnum" title="Permalink to this definition">¶</a></dt>
+<dd><p>The supported literature reference types</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="tckdb.backend.app.schemas.literature.LiteratureUpdate">
+<em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.schemas.literature.</code><code class="sig-name descname">LiteratureUpdate</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span></em>, <em class="sig-param"><span class="n">type</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#tckdb.backend.app.schemas.literature.LiteratureTypeEnum" title="tckdb.backend.app.schemas.literature.LiteratureTypeEnum">tckdb.backend.app.schemas.literature.LiteratureTypeEnum</a></span></em>, <em class="sig-param"><span class="n">authors</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">title</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">year</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">journal</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publisher</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">volume</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">issue</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_start</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">page_end</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">editors</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">edition</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">chapter_title</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">publication_place</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">advisor</span><span class="p">:</span> <span class="n">tckdb.backend.app.schemas.literature.ConstrainedStrValue</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">doi</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">isbn</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">url</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/schemas/literature.html#LiteratureUpdate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.schemas.literature.LiteratureUpdate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update a Literature item: Properties to receive on item update</p>
+</dd></dl>
+
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="LJ_model.html" class="btn btn-neutral float-right" title="Lennard-Jones (LJ) model" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="literature_model.html" class="btn btn-neutral float-left" title="literature model" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2018-2020, Dana Research Group
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

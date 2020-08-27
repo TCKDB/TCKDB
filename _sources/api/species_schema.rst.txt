@@ -3,5 +3,5 @@
 species schema
 ==============
 
-.. automodule:: tckdb.backend.app.schema.species
+.. automodule:: tckdb.backend.app.schemas.species
     :members:
