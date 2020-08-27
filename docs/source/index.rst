@@ -1,5 +1,5 @@
 TCKDB -- Theoretical Chemical Kinetics Database v\ |release|
-===========================================================
+============================================================
 
 .. image:: TCKDB.gif
    :align: center
