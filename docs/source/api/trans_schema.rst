@@ -1,7 +1,7 @@
 .. _trans_schema:
 
-energy transfer model (trans) schema
-====================================
+Energy transfer schema
+======================
 
 .. automodule:: tckdb.backend.app.schemas.trans
     :members:

@@ -1,6 +1,6 @@
 .. _np_species_model:
 
-non physical species model
+Non-physical species model
 ==========================
 
 .. automodule:: tckdb.backend.app.models.np_species

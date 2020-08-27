@@ -1,6 +1,6 @@
 .. _literature_model:
 
-literature model
+Literature model
 ================
 
 .. automodule:: tckdb.backend.app.models.literature

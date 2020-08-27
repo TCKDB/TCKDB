@@ -1,7 +1,7 @@
 .. _ess_model:
 
-electronic structure software (ess) model
-=========================================
+Electronic structure software model
+===================================
 
 .. automodule:: tckdb.backend.app.models.ess
     :members:

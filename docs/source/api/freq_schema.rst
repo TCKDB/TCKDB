@@ -1,7 +1,7 @@
 .. _freq_schema:
 
-frequencies (freq) schema
-=========================
+Frequencies schema
+==================
 
 .. automodule:: tckdb.backend.app.schemas.freq
     :members:

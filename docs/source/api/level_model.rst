@@ -1,6 +1,6 @@
 .. _level_model:
 
-level of theory model
+Level of theory model
 =====================
 
 .. automodule:: tckdb.backend.app.models.level
