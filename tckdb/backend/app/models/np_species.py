@@ -1,5 +1,5 @@
 """
-TCKDB backend app models np_species module
+TCKDB backend app models non-physical species (np_species) module
 """
 
 from typing import List

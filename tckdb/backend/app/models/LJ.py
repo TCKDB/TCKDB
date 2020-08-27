@@ -1,5 +1,5 @@
 """
-TCKDB backend app models LJ module
+TCKDB backend app models Lennard-Jones (LJ) module
 """
 
 from typing import Union

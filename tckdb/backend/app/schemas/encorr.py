@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas encorr module
+TCKDB backend app schemas energy correction (encorr) module
 """
 
 from typing import Dict, List, Optional, Union

@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas ess module
+TCKDB backend app schemas electronic structure software (ess) module
 """
 
 from typing import Dict, Optional

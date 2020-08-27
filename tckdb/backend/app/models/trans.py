@@ -1,5 +1,5 @@
 """
-TCKDB backend app models trans module
+TCKDB backend app models energy transfer (trans) module
 """
 
 from sqlalchemy import Column, Integer, String

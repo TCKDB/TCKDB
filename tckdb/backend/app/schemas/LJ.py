@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas LJ module
+TCKDB backend app schemas Lennard-Jones (LJ) module
 """
 
 from typing import Dict, Optional, Tuple

@@ -1,5 +1,5 @@
 """
-TCKDB backend app models level module
+TCKDB backend app models level of theory module
 """
 
 from sqlalchemy import Column, Integer, String

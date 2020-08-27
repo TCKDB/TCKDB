@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas np_species module
+TCKDB backend app schemas non-physical species (np_species) module
 """
 
 from datetime import datetime

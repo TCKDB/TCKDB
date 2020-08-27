@@ -1,5 +1,5 @@
 """
-TCKDB backend app models freq module
+TCKDB backend app models frequencies (freq) module
 """
 
 from sqlalchemy import Column, Float, ForeignKey, Integer, String

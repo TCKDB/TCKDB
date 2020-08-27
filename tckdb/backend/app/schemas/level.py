@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas freq module
+TCKDB backend app schemas level of theory module
 """
 
 from typing import Dict, Optional

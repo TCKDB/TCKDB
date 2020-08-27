@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas trans module
+TCKDB backend app schemas energy transfer (trans) module
 """
 
 from enum import Enum
