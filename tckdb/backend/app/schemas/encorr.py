@@ -22,7 +22,7 @@ class EnCorrBase(BaseModel):
     isodesmic_reactions: Optional[List[Dict[str, Union[list, float]]]] = Field(None, title='Isodesmic reactions')
     isodesmic_high_level_id: Optional[int] = Field(None, ge=0, title='The high level of theory id from the Level table '
                                                                      'used in the isodesmic reactions correction')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
 
     class Config:
         extra = "forbid"

@@ -22,7 +22,7 @@ class PersonBase(BaseModel):
     reviewed_non_physical_species: Optional[int] = Field(0, ge=0)
     reviewed_reactions: Optional[int] = Field(0, ge=0)
     reviewed_networks: Optional[int] = Field(0, ge=0)
-    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
 
     class Config:
         extra = "forbid"

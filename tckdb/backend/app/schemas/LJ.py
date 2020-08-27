@@ -13,7 +13,7 @@ class LJBase(BaseModel):
     """
     sigma: Tuple[float, str] = Field(..., title="The L-J sigma parameter value-units tuple, e.g., (4.467, 'angstroms')")
     epsilon: Tuple[float, str] = Field(..., title="The L-J epsilon parameter value-units tuple, e.g., (387.557, 'K')")
-    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
 
     class Config:
         extra = "forbid"

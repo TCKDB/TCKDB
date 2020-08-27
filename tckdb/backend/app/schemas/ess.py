@@ -15,7 +15,7 @@ class ESSBase(BaseModel):
     version: Optional[str] = Field(None, max_length=100, title='The ESS version')
     revision: Optional[str] = Field(None, max_length=100, title='The ESS revision')
     url: str = Field(None, max_length=255, title='The ESS official website')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
 
     class Config:
         extra = "forbid"
