@@ -99,7 +99,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ess_schema.html">electronic structure software (ess) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="freq_model.html">frequencies (freq) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="freq_schema.html">frequencies (freq) schema</a></li>
-<li class="toctree-l2"><a class="reference internal" href="level_model.html">level of theory (level) model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="level_model.html">level of theory model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="level_schema.html">level of theory (level) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="literature_model.html">literature model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="literature_schema.html">literature schema</a></li>
@@ -109,6 +109,8 @@
 <li class="toctree-l2"><a class="reference internal" href="person_schema.html">person schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="species_model.html">species model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="species_schema.html">species schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="np_species_model.html">non physical species model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="np_species_schema.html">non physical species schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="trans_model.html">energy transfer model (trans) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="trans_schema.html">energy transfer model (trans) schema</a></li>
 </ul>
@@ -242,7 +244,7 @@
 <dt id="tckdb.backend.app.models.person.Person.authors_species">
 <code class="sig-name descname">authors_species</code><a class="headerlink" href="#tckdb.backend.app.models.person.Person.authors_species" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a Many to Many data model
-with the <span class="xref std std-ref">Species table</span> representing species authored by persons in this object.
+with the <a class="reference internal" href="species_model.html#species-model"><span class="std std-ref">Species table</span></a> representing species authored by persons in this object.
 This attribute is added automatically and is only defined under <code class="docutils literal notranslate"><span class="pre">Species</span></code> as <code class="docutils literal notranslate"><span class="pre">authors</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -255,7 +257,7 @@ This attribute is added automatically and is only defined under <code class="doc
 <dt id="tckdb.backend.app.models.person.Person.reviewers_species">
 <code class="sig-name descname">reviewers_species</code><a class="headerlink" href="#tckdb.backend.app.models.person.Person.reviewers_species" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a Many to Many data model
-with the <span class="xref std std-ref">Species table</span> representing species reviewed by persons in this object.
+with the <a class="reference internal" href="species_model.html#species-model"><span class="std std-ref">Species table</span></a> representing species reviewed by persons in this object.
 This attribute is added automatically and is only defined under <code class="docutils literal notranslate"><span class="pre">Species</span></code> as <code class="docutils literal notranslate"><span class="pre">reviewers</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -268,7 +270,7 @@ This attribute is added automatically and is only defined under <code class="doc
 <dt id="tckdb.backend.app.models.person.Person.authors_np_species">
 <code class="sig-name descname">authors_np_species</code><a class="headerlink" href="#tckdb.backend.app.models.person.Person.authors_np_species" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a Many to Many data model
-with the <span class="xref std std-ref">NonPhysicalSpecies table</span> representing non physical species
+with the <a class="reference internal" href="species_model.html#species-model"><span class="std std-ref">NonPhysicalSpecies table</span></a> representing non physical species
 authored by persons in this object.
 This attribute is added automatically and is only defined under <code class="docutils literal notranslate"><span class="pre">NonPhysicalSpecies</span></code> as <code class="docutils literal notranslate"><span class="pre">authors</span></code>.</p>
 <dl class="field-list simple">
@@ -282,7 +284,7 @@ This attribute is added automatically and is only defined under <code class="doc
 <dt id="tckdb.backend.app.models.person.Person.reviewers_np_species">
 <code class="sig-name descname">reviewers_np_species</code><a class="headerlink" href="#tckdb.backend.app.models.person.Person.reviewers_np_species" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a Many to Many data model
-with the <span class="xref std std-ref">NonPhysicalSpecies table</span> representing non physical species
+with the <a class="reference internal" href="species_model.html#species-model"><span class="std std-ref">NonPhysicalSpecies table</span></a> representing non physical species
 reviewed by persons in this object.
 This attribute is added automatically and is only defined under <code class="docutils literal notranslate"><span class="pre">NonPhysicalSpecies</span></code> as <code class="docutils literal notranslate"><span class="pre">reviewers</span></code>.</p>
 <dl class="field-list simple">

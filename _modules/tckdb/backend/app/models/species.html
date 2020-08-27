@@ -260,7 +260,7 @@
 <span class="sd">            Whether this entry was reviewed (not a user input).</span>
 <span class="sd">        approved (bool)</span>
 <span class="sd">            If reviewed, whether it was approved (not a user input).</span>
-<span class="sd">        Dict[str, str] (Dict[str, str])</span>
+<span class="sd">        reviewer_flags (Dict[str, str])</span>
 <span class="sd">            Backend flags to assist the review process (automatically determined, but users may add notes to flag</span>
 <span class="sd">            items for the reviewer).</span>
 
@@ -433,11 +433,11 @@
 <span class="sd">            Units:</span>
 <span class="sd">                Angstrom</span>
 <span class="sd">        freq_id (Optional[int])</span>
-<span class="sd">            The frequency scaling factor key for the :ref:`freq table &lt;freq&gt;`.</span>
+<span class="sd">            The frequency scaling factor key for the :ref:`Freq table &lt;freq_model&gt;`.</span>
 <span class="sd">            Required for polyatomic species (with 2 or more atoms).</span>
 
 <span class="sd">            Note:</span>
-<span class="sd">                This argument will be facilitated by TCKDB by querying the :ref:`freq table &lt;freq&gt;`.</span>
+<span class="sd">                This argument is facilitated by querying the :ref:`Freq table &lt;freq_model&gt;`.</span>
 
 <span class="sd">        # rotational modes</span>
 <span class="sd">        rigid_rotor (str)</span>
@@ -573,73 +573,73 @@
 
 <span class="sd">        # relationships - Many to One</span>
 <span class="sd">        encorr_id (int)</span>
-<span class="sd">            The energy correction key from the :ref:`EnCorr table &lt;encorr&gt;`.</span>
+<span class="sd">            The energy correction key from the :ref:`EnCorr table &lt;encorr_model&gt;`.</span>
 <span class="sd">        encorr (relationship)</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`EnCorr table &lt;encorr&gt;`,</span>
+<span class="sd">            with the :ref:`EnCorr table &lt;EnCorr_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        literature_id (int)</span>
-<span class="sd">            The literature reference from the :ref:`literature table &lt;Literature&gt;`.</span>
+<span class="sd">            The literature reference from the :ref:`Literature table &lt;literature_model&gt;`.</span>
 <span class="sd">        literature (relationship)</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Literature table &lt;literature&gt;`,</span>
+<span class="sd">            with the :ref:`Literature table &lt;literature_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        bot_id (int)</span>
-<span class="sd">            The bot used to generate the object from the :ref:`Bot table &lt;bot&gt;`.</span>
+<span class="sd">            The bot used to generate the object from the :ref:`Bot table &lt;bot_model&gt;`.</span>
 <span class="sd">        bot (relationship)</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Bot table &lt;bot&gt;`,</span>
+<span class="sd">            with the :ref:`Bot table &lt;bot_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 
 <span class="sd">        opt_level (Optional[relationship])</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            with the :ref:`Level table &lt;level_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        freq_level (Optional[relationship])</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            with the :ref:`Level table &lt;level_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        scan_level (Optional[relationship])</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            with the :ref:`Level table &lt;level_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        irc_level (Optional[relationship])</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            with the :ref:`Level table &lt;level_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        sp_level (relationship)</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            with the :ref:`Level table &lt;level_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model. Required.</span>
 
 <span class="sd">        opt_ess (Optional[relationship])</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        freq_ess (Optional[relationship])</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        scan_ess (Optional[relationship])</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        irc_ess (Optional[relationship])</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
 <span class="sd">        sp_ess (relationship)</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
-<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess_model&gt;`,</span>
 <span class="sd">            where the &quot;reverse&quot; side is a Many to One data model. Required.</span>
 
 <span class="sd">        # relationships - Many to Many</span>
 <span class="sd">        authors (relationship)</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
-<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing authors of this object.</span>
+<span class="sd">            with the :ref:`Person table &lt;person_model&gt;` representing authors of this object.</span>
 <span class="sd">        reviewers (relationship)</span>
 <span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
-<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing reviewers of this object.</span>
+<span class="sd">            with the :ref:`Person table &lt;person_model&gt;` representing reviewers of this object.</span>
 
 <span class="sd">        # paths</span>
 <span class="sd">        opt_path (Optional[str])</span>
@@ -669,7 +669,7 @@
 
 <span class="sd">        # misc</span>
 <span class="sd">        extras (Optional[Dict[str, Any]])</span>
-<span class="sd">            Any additional information in the form of a dictionary</span>
+<span class="sd">            Any additional information in the form of a dictionary.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>

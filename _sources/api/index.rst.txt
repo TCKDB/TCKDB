@@ -1,7 +1,7 @@
 .. _api:
 
 TCKDB's API
-=========
+===========
 
 
 .. toctree::
@@ -25,5 +25,7 @@ TCKDB's API
    person_schema
    species_model
    species_schema
+   np_species_model
+   np_species_schema
    trans_model
    trans_schema

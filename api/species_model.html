@@ -99,7 +99,7 @@
 <li class="toctree-l2"><a class="reference internal" href="ess_schema.html">electronic structure software (ess) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="freq_model.html">frequencies (freq) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="freq_schema.html">frequencies (freq) schema</a></li>
-<li class="toctree-l2"><a class="reference internal" href="level_model.html">level of theory (level) model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="level_model.html">level of theory model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="level_schema.html">level of theory (level) schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="literature_model.html">literature model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="literature_schema.html">literature schema</a></li>
@@ -109,6 +109,8 @@
 <li class="toctree-l2"><a class="reference internal" href="person_schema.html">person schema</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">species model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="species_schema.html">species schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="np_species_model.html">non physical species model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="np_species_schema.html">non physical species schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="trans_model.html">energy transfer model (trans) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="trans_schema.html">energy transfer model (trans) schema</a></li>
 </ul>
@@ -346,8 +348,8 @@ property computations. Should include the version. Example:</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt>
-<code class="sig-name descname">Dict[str, str]</code></dt>
+<dt id="tckdb.backend.app.models.species.Species.reviewer_flags">
+<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.reviewer_flags" title="Permalink to this definition">¶</a></dt>
 <dd><p>Backend flags to assist the review process (automatically determined, but users may add notes to flag
 items for the reviewer).</p>
 <p>Example:</p>
@@ -821,11 +823,11 @@ Entries of the third level list are normal displacement modes per frequency per 
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.species.Species.freq_id">
 <code class="sig-name descname">freq_id</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.freq_id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The frequency scaling factor key for the <span class="xref std std-ref">freq table</span>.
+<dd><p>The frequency scaling factor key for the <a class="reference internal" href="freq_model.html#freq-model"><span class="std std-ref">Freq table</span></a>.
 Required for polyatomic species (with 2 or more atoms).</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This argument will be facilitated by TCKDB by querying the <span class="xref std std-ref">freq table</span>.</p>
+<p>This argument is facilitated by querying the <a class="reference internal" href="freq_model.html#freq-model"><span class="std std-ref">Freq table</span></a>.</p>
 </div>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1147,7 +1149,7 @@ Must be specified for non-TS species. Keys (values) are:</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.species.Species.encorr_id">
 <code class="sig-name descname">encorr_id</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.encorr_id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The energy correction key from the <span class="xref std std-ref">EnCorr table</span>.</p>
+<dd><p>The energy correction key from the <a class="reference internal" href="encorr_model.html#encorr-model"><span class="std std-ref">EnCorr table</span></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>int</p>
@@ -1159,7 +1161,7 @@ Must be specified for non-TS species. Keys (values) are:</p>
 <dt id="tckdb.backend.app.models.species.Species.encorr">
 <code class="sig-name descname">encorr</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.encorr" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">EnCorr table</span>,
+with the <a class="reference internal" href="encorr_model.html#encorr-model"><span class="std std-ref">EnCorr table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1171,7 +1173,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.species.Species.literature_id">
 <code class="sig-name descname">literature_id</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.literature_id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The literature reference from the <span class="xref std std-ref">literature table</span>.</p>
+<dd><p>The literature reference from the <a class="reference internal" href="literature_model.html#literature-model"><span class="std std-ref">Literature table</span></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>int</p>
@@ -1183,7 +1185,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.literature">
 <code class="sig-name descname">literature</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.literature" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">Literature table</span>,
+with the <a class="reference internal" href="literature_model.html#literature-model"><span class="std std-ref">Literature table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1195,7 +1197,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.species.Species.bot_id">
 <code class="sig-name descname">bot_id</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.bot_id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The bot used to generate the object from the <span class="xref std std-ref">Bot table</span>.</p>
+<dd><p>The bot used to generate the object from the <a class="reference internal" href="bot_model.html#bot-model"><span class="std std-ref">Bot table</span></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>int</p>
@@ -1207,7 +1209,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.bot">
 <code class="sig-name descname">bot</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.bot" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">Bot table</span>,
+with the <a class="reference internal" href="bot_model.html#bot-model"><span class="std std-ref">Bot table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1220,7 +1222,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.opt_level">
 <code class="sig-name descname">opt_level</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.opt_level" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">Level table</span>,
+with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1233,7 +1235,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.freq_level">
 <code class="sig-name descname">freq_level</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.freq_level" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">Level table</span>,
+with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1246,7 +1248,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.scan_level">
 <code class="sig-name descname">scan_level</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.scan_level" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">Level table</span>,
+with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1259,7 +1261,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.irc_level">
 <code class="sig-name descname">irc_level</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.irc_level" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">Level table</span>,
+with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1272,7 +1274,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.sp_level">
 <code class="sig-name descname">sp_level</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.sp_level" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">Level table</span>,
+with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
 where the “reverse” side is a Many to One data model. Required.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1285,7 +1287,7 @@ where the “reverse” side is a Many to One data model. Required.</p>
 <dt id="tckdb.backend.app.models.species.Species.opt_ess">
 <code class="sig-name descname">opt_ess</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.opt_ess" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">ESS table</span>,
+with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1298,7 +1300,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.freq_ess">
 <code class="sig-name descname">freq_ess</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.freq_ess" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">ESS table</span>,
+with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1311,7 +1313,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.scan_ess">
 <code class="sig-name descname">scan_ess</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.scan_ess" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">ESS table</span>,
+with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1324,7 +1326,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.irc_ess">
 <code class="sig-name descname">irc_ess</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.irc_ess" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">ESS table</span>,
+with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
 where the “reverse” side is a Many to One data model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1337,7 +1339,7 @@ where the “reverse” side is a Many to One data model.</p>
 <dt id="tckdb.backend.app.models.species.Species.sp_ess">
 <code class="sig-name descname">sp_ess</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.sp_ess" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <span class="xref std std-ref">ESS table</span>,
+with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
 where the “reverse” side is a Many to One data model. Required.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -1355,7 +1357,7 @@ where the “reverse” side is a Many to One data model. Required.</p>
 <dt id="tckdb.backend.app.models.species.Species.authors">
 <code class="sig-name descname">authors</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.authors" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a Many to Many data model
-with the <span class="xref std std-ref">Person table</span> representing authors of this object.</p>
+with the <a class="reference internal" href="person_model.html#person-model"><span class="std std-ref">Person table</span></a> representing authors of this object.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>relationship</p>
@@ -1367,7 +1369,7 @@ with the <span class="xref std std-ref">Person table</span> representing authors
 <dt id="tckdb.backend.app.models.species.Species.reviewers">
 <code class="sig-name descname">reviewers</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.reviewers" title="Permalink to this definition">¶</a></dt>
 <dd><p>An attribute that establishes a bidirectional relationship in a Many to Many data model
-with the <span class="xref std std-ref">Person table</span> representing reviewers of this object.</p>
+with the <a class="reference internal" href="person_model.html#person-model"><span class="std std-ref">Person table</span></a> representing reviewers of this object.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>relationship</p>
@@ -1472,7 +1474,7 @@ Entries are dictionaries, keys (values) are:</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.species.Species.extras">
 <code class="sig-name descname">extras</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.extras" title="Permalink to this definition">¶</a></dt>
-<dd><p>Any additional information in the form of a dictionary</p>
+<dd><p>Any additional information in the form of a dictionary.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>Optional[Dict[str, Any]]</p>

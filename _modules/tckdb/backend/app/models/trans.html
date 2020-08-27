@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>tckdb.backend.app.models.freq &mdash; TCKDB 0.1.0 Documentation</title>
+  <title>tckdb.backend.app.models.trans &mdash; TCKDB 0.1.0 Documentation</title>
   
 
   
@@ -138,7 +138,7 @@
         
           <li><a href="../../../../index.html">Module code</a> &raquo;</li>
         
-      <li>tckdb.backend.app.models.freq</li>
+      <li>tckdb.backend.app.models.trans</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -153,70 +153,58 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <h1>Source code for tckdb.backend.app.models.freq</h1><div class="highlight"><pre>
+  <h1>Source code for tckdb.backend.app.models.trans</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">TCKDB backend app models freq module</span>
+<span class="sd">TCKDB backend app models trans module</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
-<span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="kn">import</span> <span class="n">Column</span><span class="p">,</span> <span class="n">Float</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">String</span>
+<span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="kn">import</span> <span class="n">Column</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">String</span>
 
 <span class="kn">from</span> <span class="nn">tckdb.backend.app.db.base_class</span> <span class="kn">import</span> <span class="n">Base</span>
 <span class="kn">from</span> <span class="nn">tckdb.backend.app.models.common</span> <span class="kn">import</span> <span class="n">MsgpackExt</span>
 
 
-<div class="viewcode-block" id="Freq"><a class="viewcode-back" href="../../../../../api/freq_model.html#tckdb.backend.app.models.freq.Freq">[docs]</a><span class="k">class</span> <span class="nc">Freq</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<div class="viewcode-block" id="Trans"><a class="viewcode-back" href="../../../../../api/trans_model.html#tckdb.backend.app.models.trans.Trans">[docs]</a><span class="k">class</span> <span class="nc">Trans</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    A class for representing a TCKDB Freq item (frequency scaling factor)</span>
+<span class="sd">    A class for representing a TCKDB Trans item (energy transfer model)</span>
 
 <span class="sd">    Example::</span>
 
-<span class="sd">        Freq(factor=0.99 * 1.014,  # this is the frequency scaling factor for CBS-QB3</span>
-<span class="sd">             level_id=1,</span>
-<span class="sd">             source=&#39;J.A. Montgomery, M.J. Frisch, J. Chem. Phys. 1999, 110, 2822–2827, DOI: 10.1063/1.477924&#39;)</span>
+<span class="sd">        Trans(model=&#39;Single Exponential Down&#39;,</span>
+<span class="sd">              parameters={&#39;alpha0&#39;: (175, &#39;cm^-1&#39;), &#39;T0&#39;: (300, &#39;K&#39;), &#39;n&#39;: 0.52})</span>
 
 <span class="sd">    Attributes:</span>
 <span class="sd">        id (int)</span>
-<span class="sd">            The primary key (not a user input).</span>
-<span class="sd">        factor (float)</span>
-<span class="sd">            The frequency scaling factor.</span>
-<span class="sd">        level_id (int)</span>
-<span class="sd">            The level of theory key for the :ref:`Level table &lt;level_model&gt;`.</span>
-
-<span class="sd">            Note:</span>
-<span class="sd">                This argument is facilitated by querying the :ref:`Level table &lt;level_model&gt;`.</span>
-<span class="sd">        source (str)</span>
-<span class="sd">            The source for the determine frequency scaling factor.</span>
-<span class="sd">        reviewer_flags (Dict[str, str])</span>
-<span class="sd">            Backend flags to assist the review process (not a user input).</span>
+<span class="sd">            The primary key (not a user input)</span>
+<span class="sd">        model (str)</span>
+<span class="sd">            The energy transfer model, currently only ``&#39;Single Exponential Down&#39;`` is supported</span>
+<span class="sd">        parameters (Dict[str, Union[Tuple[float, str], float]])</span>
+<span class="sd">            The energy transfer model parameters. Keys are parameter names</span>
+<span class="sd">            (e.g., ``&#39;alpha0&#39;``, ``&#39;T0&#39;``, and ``&#39;n&#39;`` for the common &#39;Single Exponential Down&#39; model)</span>
+<span class="sd">            and values are either Tuple[float, str] with the  value and unit,</span>
+<span class="sd">            or just a float for a dimensionless parameter (such as ``&#39;n&#39;`` in the &#39;Single Exponential Down&#39; model).</span>
+<span class="sd">        reviewer_flags (Dict[str, str]): Backend flags to assist the review process (not a user input)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">factor</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Float</span><span class="p">(),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="n">level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">source</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">parameters</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">reviewer_flags</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        A string representation from which the object can be reconstructed.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">str_</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(&quot;</span>
-        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;id=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">, &quot;</span>
-        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;factor=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">factor</span><span class="si">}</span><span class="s2">, &quot;</span>
-        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;level_id=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">level_id</span><span class="si">}</span><span class="s2">, &quot;</span>
-        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;source=&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
-        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;)&gt;&quot;</span>
-        <span class="k">return</span> <span class="n">str_</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(&quot;</span> \
+               <span class="sa">f</span><span class="s2">&quot;id=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">, &quot;</span> \
+               <span class="sa">f</span><span class="s2">&quot;model=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="si">}</span><span class="s2">, &quot;</span> \
+               <span class="sa">f</span><span class="s2">&quot;parameters=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="si">}</span><span class="s2">&quot;</span> \
+               <span class="sa">f</span><span class="s2">&quot;)&gt;&quot;</span>
 
     <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        A user-friendly string representation of the object.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">str_</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(&quot;</span>
-        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;factor=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">factor</span><span class="si">}</span><span class="s2">, &quot;</span>
-        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;level_id=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">level_id</span><span class="si">}</span><span class="s2">, &quot;</span>
-        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;source=&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
-        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;)&gt;&quot;</span>
-        <span class="k">return</span> <span class="n">str_</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(model=&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="si">}</span><span class="s2">&#39;, parameters=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="si">}</span><span class="s2">)&gt;&quot;</span></div>
 </pre></div>
 
            </div>

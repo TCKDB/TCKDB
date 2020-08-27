@@ -196,10 +196,11 @@
 <span class="sd">        id (int)</span>
 <span class="sd">            The primary key (not a user input)</span>
 <span class="sd">        level_id (int)</span>
-<span class="sd">            The level of theory key for the :ref:`level table &lt;level&gt;`.</span>
+<span class="sd">            The level of theory key for the :ref:`Level table &lt;level_model&gt;`.</span>
 
 <span class="sd">            Note:</span>
-<span class="sd">                This argument will be facilitated by TCKDB by querying the :ref:`level table &lt;level&gt;`.</span>
+<span class="sd">                This argument is facilitated by querying the</span>
+<span class="sd">                :ref:`Level table &lt;level_model&gt;`.</span>
 <span class="sd">        supported_elements (List[str])</span>
 <span class="sd">            Entries are atomic symbols of elements supported by this energy correction instance.</span>
 <span class="sd">        energy_unit (str)</span>
@@ -221,7 +222,7 @@
 <span class="sd">            of reaction at the &quot;low level&quot; in the specified ``energy_unit``. See example above.</span>
 <span class="sd">        isodesmic_high_level_id (int)</span>
 <span class="sd">            The high level of theory used for all other species. A level of theory key for the</span>
-<span class="sd">            :ref:`level table &lt;level&gt;`. Required if ``isodesmic_reactions`` is specified, ``None`` otherwise.</span>
+<span class="sd">            :ref:`Level table &lt;level_model&gt;`. Required if ``isodesmic_reactions`` is specified, ``None`` otherwise.</span>
 
 <span class="sd">        species (relationship)</span>
 <span class="sd">            A One to Many relationship between EnCorr and Species.</span>
