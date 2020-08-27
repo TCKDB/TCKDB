@@ -3,5 +3,5 @@
 electronic structure software (ess) schema
 ==========================================
 
-.. automodule:: tckdb.backend.app.schema.ess
+.. automodule:: tckdb.backend.app.schemas.ess
     :members:

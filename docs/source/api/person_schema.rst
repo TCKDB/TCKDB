@@ -3,5 +3,5 @@
 person schema
 =============
 
-.. automodule:: tckdb.backend.app.schema.person
+.. automodule:: tckdb.backend.app.schemas.person
     :members:

@@ -3,5 +3,5 @@
 literature schema
 =================
 
-.. automodule:: tckdb.backend.app.schema.literature
+.. automodule:: tckdb.backend.app.schemas.literature
     :members:

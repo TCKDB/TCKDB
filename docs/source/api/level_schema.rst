@@ -3,5 +3,5 @@
 level of theory (level) schema
 ==============================
 
-.. automodule:: tckdb.backend.app.schema.level
+.. automodule:: tckdb.backend.app.schemas.level
     :members:

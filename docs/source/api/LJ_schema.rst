@@ -3,5 +3,5 @@
 Lennard-Jones (LJ) schema
 =========================
 
-.. automodule:: tckdb.backend.app.schema.LJ
+.. automodule:: tckdb.backend.app.schemas.LJ
     :members:

@@ -3,5 +3,5 @@
 energy transfer model (trans) schema
 ====================================
 
-.. automodule:: tckdb.backend.app.schema.trans
+.. automodule:: tckdb.backend.app.schemas.trans
     :members:
