@@ -1,6 +1,6 @@
 .. _literature_schema:
 
-literature schema
+Literature schema
 =================
 
 .. automodule:: tckdb.backend.app.schemas.literature

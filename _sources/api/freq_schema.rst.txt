@@ -1,6 +1,6 @@
 .. _freq_schema:
 
-frequencies schema
+Frequencies schema
 ==================
 
 .. automodule:: tckdb.backend.app.schemas.freq

@@ -1,6 +1,6 @@
 .. _encorr_schema:
 
-energy correction schema
+Energy correction schema
 ========================
 
 .. automodule:: tckdb.backend.app.schemas.encorr

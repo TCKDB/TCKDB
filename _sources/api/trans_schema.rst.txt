@@ -1,6 +1,6 @@
 .. _trans_schema:
 
-energy transfer schema
+Energy transfer schema
 ======================
 
 .. automodule:: tckdb.backend.app.schemas.trans

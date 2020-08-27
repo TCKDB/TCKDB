@@ -1,6 +1,6 @@
 .. _person_schema:
 
-person schema
+Person schema
 =============
 
 .. automodule:: tckdb.backend.app.schemas.person

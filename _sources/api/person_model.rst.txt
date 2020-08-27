@@ -1,6 +1,6 @@
 .. _person_model:
 
-person model
+Person model
 ============
 
 .. automodule:: tckdb.backend.app.models.person

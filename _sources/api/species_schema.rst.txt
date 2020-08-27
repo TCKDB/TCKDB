@@ -1,6 +1,6 @@
 .. _species_schema:
 
-species schema
+Species schema
 ==============
 
 .. automodule:: tckdb.backend.app.schemas.species

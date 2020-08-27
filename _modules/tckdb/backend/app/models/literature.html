@@ -247,10 +247,6 @@
 <span class="sd">            A One to Many relationship between Literature and Species.</span>
 <span class="sd">        non_physical_species (relationship)</span>
 <span class="sd">            A One to Many relationship between Literature and NonPhysicalSpecies.</span>
-<span class="sd">        # reactions (relationship)</span>
-<span class="sd">        #     A One to Many relationship between Literature and Reactions.</span>
-<span class="sd">        # networks (relationship)</span>
-<span class="sd">        #     A One to Many relationship between Literature and Networks.</span>
 <span class="sd">        reviewer_flags (Dict[str, str])</span>
 <span class="sd">            Backend flags to assist the review process (not a user input)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -273,12 +269,6 @@
     <span class="n">doi</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">))</span>
     <span class="n">isbn</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">))</span>
     <span class="n">url</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">500</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-
-    <span class="n">species</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Species&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;literature&#39;</span><span class="p">)</span>
-    <span class="n">np_species</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;NonPhysicalSpecies&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;literature&#39;</span><span class="p">)</span>
-    <span class="c1"># reactions = relationship(&#39;Reactions&#39;, back_populates=&#39;literature&#39;)</span>
-    <span class="c1"># networks = relationship(&#39;Networks&#39;, back_populates=&#39;literature&#39;)</span>
-
     <span class="n">reviewer_flags</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>

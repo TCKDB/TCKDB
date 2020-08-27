@@ -1,6 +1,6 @@
 .. _freq_model:
 
-frequencies model
+Frequencies model
 =================
 
 .. automodule:: tckdb.backend.app.models.freq

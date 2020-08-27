@@ -1,6 +1,6 @@
 .. _species_model:
 
-species model
+Species model
 =============
 
 .. automodule:: tckdb.backend.app.models.species

@@ -1,6 +1,6 @@
 .. _encorr_model:
 
-energy correction model
+Energy correction model
 =======================
 
 .. automodule:: tckdb.backend.app.models.encorr

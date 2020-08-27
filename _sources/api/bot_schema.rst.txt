@@ -1,6 +1,6 @@
 .. _bot_schema:
 
-bot schema
+Bot schema
 ==========
 
 .. automodule:: tckdb.backend.app.schemas.bot
