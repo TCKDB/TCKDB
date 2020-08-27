@@ -168,12 +168,26 @@
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    A class for representing a TCKDB Freq item (frequency scaling factor)</span>
 
+<span class="sd">    Example::</span>
+
+<span class="sd">        Freq(factor=0.99 * 1.014,  # this is the frequency scaling factor for CBS-QB3</span>
+<span class="sd">             level_id=1,</span>
+<span class="sd">             source=&#39;J.A. Montgomery, M.J. Frisch, J. Chem. Phys. 1999, 110, 2822–2827, DOI: 10.1063/1.477924&#39;)</span>
+
 <span class="sd">    Attributes:</span>
-<span class="sd">        id (int): The primary key.</span>
-<span class="sd">        factor (float): The frequency scaling factor.</span>
-<span class="sd">        level_id (int): The level of theory key for the ``level`` table.</span>
-<span class="sd">        source (str): The source for the determine frequency scaling factor.</span>
-<span class="sd">        reviewer_flags (dict): Backend flags to assist the review process.</span>
+<span class="sd">        id (int)</span>
+<span class="sd">            The primary key (not a user input).</span>
+<span class="sd">        factor (float)</span>
+<span class="sd">            The frequency scaling factor.</span>
+<span class="sd">        level_id (int)</span>
+<span class="sd">            The level of theory key for the :ref:`level table &lt;level&gt;`.</span>
+
+<span class="sd">            Note:</span>
+<span class="sd">                This argument will be facilitated by TCKDB by querying the :ref:`level table &lt;level&gt;`.</span>
+<span class="sd">        source (str)</span>
+<span class="sd">            The source for the determine frequency scaling factor.</span>
+<span class="sd">        reviewer_flags (Dict[str, str])</span>
+<span class="sd">            Backend flags to assist the review process (not a user input).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">factor</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Float</span><span class="p">(),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>

@@ -167,20 +167,76 @@
 <div class="viewcode-block" id="Level"><a class="viewcode-back" href="../../../../../api/level_model.html#tckdb.backend.app.models.level.Level">[docs]</a><span class="k">class</span> <span class="nc">Level</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    A class for representing a TCKDB Level item</span>
+
 <span class="sd">    Describing a level of theory</span>
 
+<span class="sd">    Examples::</span>
+
+<span class="sd">        Level(method=&#39;cbs-qb3&#39;)</span>
+
+<span class="sd">        Level(method=&#39;B3LYP&#39;,</span>
+<span class="sd">              basis=&#39;6-31G(d,p)&#39;,</span>
+<span class="sd">              dispersion=&#39;gd3bj&#39;)</span>
+
+<span class="sd">        Level(method=&#39;wB97xd&#39;,</span>
+<span class="sd">              basis=&#39;def2TZVP&#39;,</span>
+<span class="sd">              solvation_method=&#39;PCM&#39;,</span>
+<span class="sd">              solvent=&#39;water&#39;,</span>
+<span class="sd">              grid=&#39;UltraFine&#39;)</span>
+
+<span class="sd">        Level(method=&#39;DLPNO-CCSD(T)-F12&#39;,</span>
+<span class="sd">              basis=&#39;cc-pVTZ-F12&#39;,</span>
+<span class="sd">              auxiliary_basis=&#39;aug-cc-pVTZ/C cc-pVTZ-F12-CABS&#39;,</span>
+<span class="sd">              level_arguments=&#39;tight-PNO&#39;,</span>
+<span class="sd">              solvation_description=&#39;APFD/6-311+G(2d,p) SMD water &#39;</span>
+<span class="sd">                                    &#39;e_elect = e_DLPNO + sp_e_APFD_sol - sp_e_APFD_gas&#39;)</span>
+
 <span class="sd">    Attributes:</span>
-<span class="sd">        id (int): The primary key.</span>
-<span class="sd">        method (str): The method part of the level of theory.</span>
-<span class="sd">        basis (str): The basis set part of the level of theory.</span>
-<span class="sd">        auxiliary_basis (str): The auxiliary basis set part of the level of theory.</span>
-<span class="sd">        dispersion (str): The dispersion part of the level of theory, where relevant and if not included in the method.</span>
-<span class="sd">        grid (str): A description of the DFT grid, if applicable.</span>
-<span class="sd">        level_arguments (str): Additional arguments for defining a level, e.g., &#39;normal-PNO&#39;.</span>
-<span class="sd">        solvation_method (str): The solvation method used, e.g., &#39;SMD&#39;.</span>
-<span class="sd">        solvent (str): The considered solvent, e.g., &#39;water&#39;.</span>
-<span class="sd">        solvation_description (str): An optional description of the solvation method used if not standard.</span>
-<span class="sd">        reviewer_flags (dict): Backend flags to assist the review process.</span>
+<span class="sd">        id (int)</span>
+<span class="sd">            The primary key (not a user input)</span>
+<span class="sd">        method (str)</span>
+<span class="sd">            The method part of the level of theory</span>
+<span class="sd">        basis (str)</span>
+<span class="sd">            The basis set part of the level of theory</span>
+<span class="sd">        auxiliary_basis (str)</span>
+<span class="sd">            The auxiliary basis set part of the level of theory</span>
+<span class="sd">        dispersion (str)</span>
+<span class="sd">            The dispersion part of the level of theory, where relevant and if not included in the method</span>
+<span class="sd">        grid (str)</span>
+<span class="sd">            A description of the DFT grid, if applicable</span>
+<span class="sd">        level_arguments (str)</span>
+<span class="sd">            Additional arguments for defining a level, e.g., &#39;normal-PNO&#39;</span>
+<span class="sd">        solvation_method (str)</span>
+<span class="sd">            The solvation method used, e.g., &#39;SMD&#39;</span>
+<span class="sd">        solvent (str)</span>
+<span class="sd">            The considered solvent, e.g., &#39;water&#39;</span>
+<span class="sd">        solvation_description (str)</span>
+<span class="sd">            An optional description of the solvation method used if not standard</span>
+
+<span class="sd">        species_opt (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and Species.</span>
+<span class="sd">        species_freq (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and Species.</span>
+<span class="sd">        species_scan (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and Species.</span>
+<span class="sd">        species_irc (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and Species.</span>
+<span class="sd">        species_sp (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and Species.</span>
+
+<span class="sd">        np_species_opt (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and NonPhysicalSpecies.</span>
+<span class="sd">        np_species_freq (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and NonPhysicalSpecies.</span>
+<span class="sd">        np_species_scan (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and NonPhysicalSpecies.</span>
+<span class="sd">        np_species_irc (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and NonPhysicalSpecies.</span>
+<span class="sd">        np_species_sp (relationship)</span>
+<span class="sd">            A One to Many relationship between Level and NonPhysicalSpecies.</span>
+
+<span class="sd">        reviewer_flags (Dict[str, str])</span>
+<span class="sd">            Backend flags to assist the review process (not a user input)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">method</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">500</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>

@@ -91,8 +91,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../licence.html">Licence</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../credits.html">Credits</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">TCKDB’s API</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="author_model.html">author model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="author_schema.html">author schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bot_model.html">bot model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bot_schema.html">bot schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="encorr_model.html">energy correction (encorr) model</a></li>
@@ -107,6 +105,8 @@
 <li class="toctree-l2"><a class="reference internal" href="literature_schema.html">literature schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_model.html">Lennard-Jones (LJ) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_schema.html">Lennard-Jones (LJ) schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="person_model.html">person model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="person_schema.html">person schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="species_model.html">species model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="species_schema.html">species schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="trans_model.html">energy transfer model (trans) model</a></li>
@@ -188,10 +188,44 @@
 <dt id="tckdb.backend.app.models.literature.Literature">
 <em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.literature.</code><code class="sig-name descname">Literature</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/literature.html#Literature"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature" title="Permalink to this definition">¶</a></dt>
 <dd><p>A class for representing a TCKDB Literature item</p>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Literature</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="s1">&#39;article&#39;</span><span class="p">,</span>
+           <span class="n">authors</span><span class="o">=</span><span class="s1">&#39;M.I. It, D.C. Wash&#39;</span><span class="p">,</span>
+           <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Kinetics of the Reactions in a Model: Part II&#39;</span><span class="p">,</span>
+           <span class="n">year</span><span class="o">=</span><span class="mi">2020</span><span class="p">,</span>
+           <span class="n">journal</span><span class="o">=</span><span class="s1">&#39;Int. J. Chem. Kin.&#39;</span><span class="p">,</span>
+           <span class="n">volume</span><span class="o">=</span><span class="mi">53</span><span class="p">,</span>
+           <span class="n">issue</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+           <span class="n">page_start</span><span class="o">=</span><span class="mi">2222</span><span class="p">,</span>
+           <span class="n">page_end</span><span class="o">=</span><span class="mi">2229</span><span class="p">,</span>
+           <span class="n">doi</span><span class="o">=</span><span class="s1">&#39;10.67/doi&#39;</span><span class="p">,</span>
+           <span class="n">url</span><span class="o">=</span><span class="s1">&#39;url.com/article/abstract&#39;</span><span class="p">)</span>
+
+<span class="n">Literature</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="s1">&#39;book&#39;</span><span class="p">,</span>
+           <span class="n">authors</span><span class="o">=</span><span class="s1">&#39;M.I. It, D.C. Wash&#39;</span><span class="p">,</span>
+           <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Principles of Kinetic Modeling&#39;</span><span class="p">,</span>
+           <span class="n">year</span><span class="o">=</span><span class="mi">1982</span><span class="p">,</span>
+           <span class="n">publisher</span><span class="o">=</span><span class="s1">&#39;WeeLy&#39;</span><span class="p">,</span>
+           <span class="n">editors</span><span class="o">=</span><span class="s1">&#39;E.D. Torr&#39;</span><span class="p">,</span>
+           <span class="n">edition</span><span class="o">=</span><span class="s1">&#39;2nd Edn.&#39;</span><span class="p">,</span>
+           <span class="n">chapter_title</span><span class="o">=</span><span class="s1">&#39;These are Updated Rates&#39;</span><span class="p">,</span>
+           <span class="n">publication_place</span><span class="o">=</span><span class="s1">&#39;New York NY&#39;</span><span class="p">,</span>
+           <span class="n">isbn</span><span class="o">=</span><span class="s1">&#39;978-3-16-148410-0&#39;</span><span class="p">,</span>
+           <span class="n">url</span><span class="o">=</span><span class="s1">&#39;url.com/book/abstract&#39;</span><span class="p">)</span>
+
+<span class="n">Literature</span><span class="p">(</span><span class="nb">type</span><span class="o">=</span><span class="s1">&#39;thesis&#39;</span><span class="p">,</span>
+           <span class="n">authors</span><span class="o">=</span><span class="s1">&#39;P.H. David&#39;</span><span class="p">,</span>
+           <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Kinetic Modeling Dissertation&#39;</span><span class="p">,</span>
+           <span class="n">year</span><span class="o">=</span><span class="mi">2020</span><span class="p">,</span>
+           <span class="n">publisher</span><span class="o">=</span><span class="s1">&#39;MIT&#39;</span><span class="p">,</span>
+           <span class="n">advisor</span><span class="o">=</span><span class="s1">&#39;P.R. Ofessor&#39;</span><span class="p">,</span>
+           <span class="n">url</span><span class="o">=</span><span class="s1">&#39;url.com/dissertation/abstract&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.id">
 <code class="sig-name descname">id</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The primary key.</p>
+<dd><p>The primary key (not a user input)</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>int</p>
@@ -202,7 +236,7 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.type">
 <code class="sig-name descname">type</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.type" title="Permalink to this definition">¶</a></dt>
-<dd><p>The Literature type. Allowed values are ‘article’, ‘book’, or ‘thesis’.</p>
+<dd><p>The Literature type. Allowed values are <code class="docutils literal notranslate"><span class="pre">'article'</span></code>, <code class="docutils literal notranslate"><span class="pre">'book'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'thesis'</span></code></p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -213,7 +247,7 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.authors">
 <code class="sig-name descname">authors</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.authors" title="Permalink to this definition">¶</a></dt>
-<dd><p>The names of all authors (limited to 255 characters, use “et al.” if needed).</p>
+<dd><p>The names of all authors (limited to 255 characters, use “et al.” if needed)</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -224,7 +258,7 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.title">
 <code class="sig-name descname">title</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.title" title="Permalink to this definition">¶</a></dt>
-<dd><p>The article, thesis, or book title.</p>
+<dd><p>The article, thesis, or book title</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -235,7 +269,7 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.year">
 <code class="sig-name descname">year</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.year" title="Permalink to this definition">¶</a></dt>
-<dd><p>The publication year.</p>
+<dd><p>The publication year</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>int</p>
@@ -246,21 +280,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.journal">
 <code class="sig-name descname">journal</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.journal" title="Permalink to this definition">¶</a></dt>
-<dd><p>The article journal.</p>
+<dd><p>The article journal, required for articles</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt id="tckdb.backend.app.models.literature.Literature.publisher">
-<code class="sig-name descname">publisher</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.publisher" title="Permalink to this definition">¶</a></dt>
-<dd><p>The book’s publisher.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -268,10 +291,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.volume">
 <code class="sig-name descname">volume</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.volume" title="Permalink to this definition">¶</a></dt>
-<dd><p>The journal volume.</p>
+<dd><p>The journal volume, required for articles</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>int</p>
+<dd class="field-odd"><p>int, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -279,10 +302,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.issue">
 <code class="sig-name descname">issue</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.issue" title="Permalink to this definition">¶</a></dt>
-<dd><p>The journal issue.</p>
+<dd><p>The journal issue</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>int</p>
+<dd class="field-odd"><p>int, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -290,10 +313,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.page_start">
 <code class="sig-name descname">page_start</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.page_start" title="Permalink to this definition">¶</a></dt>
-<dd><p>The article starting page.</p>
+<dd><p>The article starting page, required for articles</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>int</p>
+<dd class="field-odd"><p>int, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -301,10 +324,21 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.page_end">
 <code class="sig-name descname">page_end</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.page_end" title="Permalink to this definition">¶</a></dt>
-<dd><p>The article ending page.</p>
+<dd><p>The article ending page, required for articles</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>int</p>
+<dd class="field-odd"><p>int, optional</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.publisher">
+<code class="sig-name descname">publisher</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.publisher" title="Permalink to this definition">¶</a></dt>
+<dd><p>The book’s publisher, required for books</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -312,10 +346,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.editors">
 <code class="sig-name descname">editors</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.editors" title="Permalink to this definition">¶</a></dt>
-<dd><p>The book editors.</p>
+<dd><p>The book editors, required for books</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -323,10 +357,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.edition">
 <code class="sig-name descname">edition</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.edition" title="Permalink to this definition">¶</a></dt>
-<dd><p>The book edition.</p>
+<dd><p>The book edition</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -334,10 +368,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.chapter_title">
 <code class="sig-name descname">chapter_title</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.chapter_title" title="Permalink to this definition">¶</a></dt>
-<dd><p>The book’s chapter title.</p>
+<dd><p>The book’s chapter title</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -345,10 +379,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.publication_place">
 <code class="sig-name descname">publication_place</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.publication_place" title="Permalink to this definition">¶</a></dt>
-<dd><p>The book’s publication place.</p>
+<dd><p>The book’s publication place, required for books</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -356,10 +390,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.advisor">
 <code class="sig-name descname">advisor</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.advisor" title="Permalink to this definition">¶</a></dt>
-<dd><p>The thesis advisor.</p>
+<dd><p>The thesis advisor, required for theses</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -367,10 +401,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.doi">
 <code class="sig-name descname">doi</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.doi" title="Permalink to this definition">¶</a></dt>
-<dd><p>The article DOI.</p>
+<dd><p>The article DOI, required for articles</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -378,10 +412,10 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.isbn">
 <code class="sig-name descname">isbn</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.isbn" title="Permalink to this definition">¶</a></dt>
-<dd><p>The book ISBN.</p>
+<dd><p>The book ISBN, required for books</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -389,21 +423,73 @@
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.literature.Literature.url">
 <code class="sig-name descname">url</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.url" title="Permalink to this definition">¶</a></dt>
-<dd><p>The web address of the Literature source.</p>
+<dd><p>The web address of the Literature source</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.literature.Literature.reviewer_flags">
-<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.reviewer_flags" title="Permalink to this definition">¶</a></dt>
-<dd><p>Backend flags to assist the review process.</p>
+<dt id="tckdb.backend.app.models.literature.Literature.species">
+<code class="sig-name descname">species</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.species" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Literature and Species.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>dict</p>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.non_physical_species">
+<code class="sig-name descname">non_physical_species</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.non_physical_species" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Literature and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt>
+<code class="sig-name descname"># reactions</code></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt>
+<code class="sig-name descname">#     A One to Many relationship between Literature and Reactions.</code></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt>
+<code class="sig-name descname"># networks</code></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt>
+<code class="sig-name descname">#     A One to Many relationship between Literature and Networks.</code></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.literature.Literature.reviewer_flags">
+<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.literature.Literature.reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backend flags to assist the review process (not a user input)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dict[str, str]</p>
 </dd>
 </dl>
 </dd></dl>

@@ -171,11 +171,19 @@
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    A class for representing a TCKDB LJ (Lennard-Jones coefficients)</span>
 
+<span class="sd">    Example::</span>
+
+<span class="sd">        LJ(sigma=(4.467, &#39;angstroms&#39;), epsilon=(387.557, &#39;K&#39;))</span>
+
 <span class="sd">    Attributes:</span>
-<span class="sd">        id (int): The primary key.</span>
-<span class="sd">        sigma (tuple): The L-J sigma parameter.</span>
-<span class="sd">        epsilon (tuple): The L-J epsilon parameter.</span>
-<span class="sd">        reviewer_flags (dict): Backend flags to assist the review process.</span>
+<span class="sd">        id (int)</span>
+<span class="sd">            The primary key (not a user input)</span>
+<span class="sd">        sigma (Tuple[float, str])</span>
+<span class="sd">            The L-J sigma parameter</span>
+<span class="sd">        epsilon (Tuple[float, str])</span>
+<span class="sd">            The L-J epsilon parameter</span>
+<span class="sd">        reviewer_flags (Dict[str, str])</span>
+<span class="sd">            Backend flags to assist the review process (not a user input)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">sigma</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dimensions</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>

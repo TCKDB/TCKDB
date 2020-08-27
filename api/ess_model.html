@@ -91,8 +91,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../licence.html">Licence</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../credits.html">Credits</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">TCKDB’s API</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="author_model.html">author model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="author_schema.html">author schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bot_model.html">bot model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bot_schema.html">bot schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="encorr_model.html">energy correction (encorr) model</a></li>
@@ -107,6 +105,8 @@
 <li class="toctree-l2"><a class="reference internal" href="literature_schema.html">literature schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_model.html">Lennard-Jones (LJ) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_schema.html">Lennard-Jones (LJ) schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="person_model.html">person model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="person_schema.html">person schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="species_model.html">species model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="species_schema.html">species schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="trans_model.html">energy transfer model (trans) model</a></li>
@@ -187,12 +187,23 @@
 <dl class="py class">
 <dt id="tckdb.backend.app.models.ess.ESS">
 <em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.ess.</code><code class="sig-name descname">ESS</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/ess.html#ESS"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS" title="Permalink to this definition">¶</a></dt>
-<dd><p>A class for representing a TCKDB ESS item
-(Electronic structure software)</p>
+<dd><p>A class for representing a TCKDB ESS item</p>
+<p>(ESS = electronic structure software)</p>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ESS</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;Psi4&#39;</span><span class="p">,</span>
+    <span class="n">version</span><span class="o">=</span><span class="s1">&#39;1.1&#39;</span><span class="p">,</span>
+    <span class="n">url</span><span class="o">=</span><span class="s1">&#39;http://www.psicode.org/&#39;</span><span class="p">)</span>
+
+<span class="n">ESS</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;Gaussian&#39;</span><span class="p">,</span>
+    <span class="n">version</span><span class="o">=</span><span class="s1">&#39;16&#39;</span><span class="p">,</span>
+    <span class="n">revision</span><span class="o">=</span><span class="s1">&#39;C.01&#39;</span><span class="p">,</span>
+    <span class="n">url</span><span class="o">=</span><span class="s1">&#39;https://gaussian.com/&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.ess.ESS.id">
 <code class="sig-name descname">id</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The primary key.</p>
+<dd><p>The primary key (not a user input).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>int</p>
@@ -217,7 +228,7 @@
 <dd><p>The software version.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -228,7 +239,7 @@
 <dd><p>The software revision.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
+<dd class="field-odd"><p>str, optional</p>
 </dd>
 </dl>
 </dd></dl>
@@ -245,12 +256,122 @@
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.ess.ESS.reviewer_flags">
-<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.reviewer_flags" title="Permalink to this definition">¶</a></dt>
-<dd><p>Backend flags to assist the review process.</p>
+<dt id="tckdb.backend.app.models.ess.ESS.species_opt">
+<code class="sig-name descname">species_opt</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.species_opt" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and Species.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>dict</p>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.species_freq">
+<code class="sig-name descname">species_freq</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.species_freq" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and Species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.species_scan">
+<code class="sig-name descname">species_scan</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.species_scan" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and Species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.species_irc">
+<code class="sig-name descname">species_irc</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.species_irc" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and Species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.species_sp">
+<code class="sig-name descname">species_sp</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.species_sp" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and Species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.np_species_opt">
+<code class="sig-name descname">np_species_opt</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.np_species_opt" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.np_species_freq">
+<code class="sig-name descname">np_species_freq</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.np_species_freq" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.np_species_scan">
+<code class="sig-name descname">np_species_scan</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.np_species_scan" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.np_species_irc">
+<code class="sig-name descname">np_species_irc</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.np_species_irc" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.np_species_sp">
+<code class="sig-name descname">np_species_sp</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.np_species_sp" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between ESS and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.ess.ESS.reviewer_flags">
+<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.ess.ESS.reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backend flags to assist the review process (not a user input).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dict[str, str]</p>
 </dd>
 </dl>
 </dd></dl>

@@ -91,8 +91,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../licence.html">Licence</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../credits.html">Credits</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">TCKDB’s API</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="author_model.html">author model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="author_schema.html">author schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bot_model.html">bot model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bot_schema.html">bot schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="encorr_model.html">energy correction (encorr) model</a></li>
@@ -107,6 +105,8 @@
 <li class="toctree-l2"><a class="reference internal" href="literature_schema.html">literature schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_model.html">Lennard-Jones (LJ) model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="LJ_schema.html">Lennard-Jones (LJ) schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="person_model.html">person model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="person_schema.html">person schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="species_model.html">species model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="species_schema.html">species schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="trans_model.html">energy transfer model (trans) model</a></li>
@@ -187,12 +187,33 @@
 <dl class="py class">
 <dt id="tckdb.backend.app.models.level.Level">
 <em class="property">class </em><code class="sig-prename descclassname">tckdb.backend.app.models.level.</code><code class="sig-name descname">Level</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/level.html#Level"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tckdb.backend.app.models.level.Level" title="Permalink to this definition">¶</a></dt>
-<dd><p>A class for representing a TCKDB Level item
-Describing a level of theory</p>
+<dd><p>A class for representing a TCKDB Level item</p>
+<p>Describing a level of theory</p>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Level</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;cbs-qb3&#39;</span><span class="p">)</span>
+
+<span class="n">Level</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;B3LYP&#39;</span><span class="p">,</span>
+      <span class="n">basis</span><span class="o">=</span><span class="s1">&#39;6-31G(d,p)&#39;</span><span class="p">,</span>
+      <span class="n">dispersion</span><span class="o">=</span><span class="s1">&#39;gd3bj&#39;</span><span class="p">)</span>
+
+<span class="n">Level</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;wB97xd&#39;</span><span class="p">,</span>
+      <span class="n">basis</span><span class="o">=</span><span class="s1">&#39;def2TZVP&#39;</span><span class="p">,</span>
+      <span class="n">solvation_method</span><span class="o">=</span><span class="s1">&#39;PCM&#39;</span><span class="p">,</span>
+      <span class="n">solvent</span><span class="o">=</span><span class="s1">&#39;water&#39;</span><span class="p">,</span>
+      <span class="n">grid</span><span class="o">=</span><span class="s1">&#39;UltraFine&#39;</span><span class="p">)</span>
+
+<span class="n">Level</span><span class="p">(</span><span class="n">method</span><span class="o">=</span><span class="s1">&#39;DLPNO-CCSD(T)-F12&#39;</span><span class="p">,</span>
+      <span class="n">basis</span><span class="o">=</span><span class="s1">&#39;cc-pVTZ-F12&#39;</span><span class="p">,</span>
+      <span class="n">auxiliary_basis</span><span class="o">=</span><span class="s1">&#39;aug-cc-pVTZ/C cc-pVTZ-F12-CABS&#39;</span><span class="p">,</span>
+      <span class="n">level_arguments</span><span class="o">=</span><span class="s1">&#39;tight-PNO&#39;</span><span class="p">,</span>
+      <span class="n">solvation_description</span><span class="o">=</span><span class="s1">&#39;APFD/6-311+G(2d,p) SMD water &#39;</span>
+                            <span class="s1">&#39;e_elect = e_DLPNO + sp_e_APFD_sol - sp_e_APFD_gas&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.id">
 <code class="sig-name descname">id</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The primary key.</p>
+<dd><p>The primary key (not a user input)</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>int</p>
@@ -203,7 +224,7 @@ Describing a level of theory</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.method">
 <code class="sig-name descname">method</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.method" title="Permalink to this definition">¶</a></dt>
-<dd><p>The method part of the level of theory.</p>
+<dd><p>The method part of the level of theory</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -214,7 +235,7 @@ Describing a level of theory</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.basis">
 <code class="sig-name descname">basis</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.basis" title="Permalink to this definition">¶</a></dt>
-<dd><p>The basis set part of the level of theory.</p>
+<dd><p>The basis set part of the level of theory</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -225,7 +246,7 @@ Describing a level of theory</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.auxiliary_basis">
 <code class="sig-name descname">auxiliary_basis</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.auxiliary_basis" title="Permalink to this definition">¶</a></dt>
-<dd><p>The auxiliary basis set part of the level of theory.</p>
+<dd><p>The auxiliary basis set part of the level of theory</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -236,7 +257,7 @@ Describing a level of theory</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.dispersion">
 <code class="sig-name descname">dispersion</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.dispersion" title="Permalink to this definition">¶</a></dt>
-<dd><p>The dispersion part of the level of theory, where relevant and if not included in the method.</p>
+<dd><p>The dispersion part of the level of theory, where relevant and if not included in the method</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -247,7 +268,7 @@ Describing a level of theory</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.grid">
 <code class="sig-name descname">grid</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.grid" title="Permalink to this definition">¶</a></dt>
-<dd><p>A description of the DFT grid, if applicable.</p>
+<dd><p>A description of the DFT grid, if applicable</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -258,7 +279,7 @@ Describing a level of theory</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.level_arguments">
 <code class="sig-name descname">level_arguments</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.level_arguments" title="Permalink to this definition">¶</a></dt>
-<dd><p>Additional arguments for defining a level, e.g., ‘normal-PNO’.</p>
+<dd><p>Additional arguments for defining a level, e.g., ‘normal-PNO’</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -269,7 +290,7 @@ Describing a level of theory</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.solvation_method">
 <code class="sig-name descname">solvation_method</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.solvation_method" title="Permalink to this definition">¶</a></dt>
-<dd><p>The solvation method used, e.g., ‘SMD’.</p>
+<dd><p>The solvation method used, e.g., ‘SMD’</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -280,7 +301,7 @@ Describing a level of theory</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.solvent">
 <code class="sig-name descname">solvent</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.solvent" title="Permalink to this definition">¶</a></dt>
-<dd><p>The considered solvent, e.g., ‘water’.</p>
+<dd><p>The considered solvent, e.g., ‘water’</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -291,7 +312,7 @@ Describing a level of theory</p>
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.level.Level.solvation_description">
 <code class="sig-name descname">solvation_description</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.solvation_description" title="Permalink to this definition">¶</a></dt>
-<dd><p>An optional description of the solvation method used if not standard.</p>
+<dd><p>An optional description of the solvation method used if not standard</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>str</p>
@@ -300,12 +321,122 @@ Describing a level of theory</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.level.Level.reviewer_flags">
-<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.reviewer_flags" title="Permalink to this definition">¶</a></dt>
-<dd><p>Backend flags to assist the review process.</p>
+<dt id="tckdb.backend.app.models.level.Level.species_opt">
+<code class="sig-name descname">species_opt</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.species_opt" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and Species.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>dict</p>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.species_freq">
+<code class="sig-name descname">species_freq</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.species_freq" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and Species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.species_scan">
+<code class="sig-name descname">species_scan</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.species_scan" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and Species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.species_irc">
+<code class="sig-name descname">species_irc</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.species_irc" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and Species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.species_sp">
+<code class="sig-name descname">species_sp</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.species_sp" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and Species.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.np_species_opt">
+<code class="sig-name descname">np_species_opt</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.np_species_opt" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.np_species_freq">
+<code class="sig-name descname">np_species_freq</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.np_species_freq" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.np_species_scan">
+<code class="sig-name descname">np_species_scan</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.np_species_scan" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.np_species_irc">
+<code class="sig-name descname">np_species_irc</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.np_species_irc" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.np_species_sp">
+<code class="sig-name descname">np_species_sp</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.np_species_sp" title="Permalink to this definition">¶</a></dt>
+<dd><p>A One to Many relationship between Level and NonPhysicalSpecies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>relationship</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="tckdb.backend.app.models.level.Level.reviewer_flags">
+<code class="sig-name descname">reviewer_flags</code><a class="headerlink" href="#tckdb.backend.app.models.level.Level.reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Backend flags to assist the review process (not a user input)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dict[str, str]</p>
 </dd>
 </dl>
 </dd></dl>

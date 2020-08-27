@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>tckdb.backend.app.models.author &mdash; TCKDB 0.1.0 Documentation</title>
+  <title>tckdb.backend.app.models.person &mdash; TCKDB 0.1.0 Documentation</title>
   
 
   
@@ -138,7 +138,7 @@
         
           <li><a href="../../../../index.html">Module code</a> &raquo;</li>
         
-      <li>tckdb.backend.app.models.author</li>
+      <li>tckdb.backend.app.models.person</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -153,9 +153,9 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <h1>Source code for tckdb.backend.app.models.author</h1><div class="highlight"><pre>
+  <h1>Source code for tckdb.backend.app.models.person</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">TCKDB backend app models author module</span>
+<span class="sd">TCKDB backend app models person module</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="kn">import</span> <span class="n">Column</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">String</span>
@@ -164,24 +164,61 @@
 <span class="kn">from</span> <span class="nn">tckdb.backend.app.models.common</span> <span class="kn">import</span> <span class="n">MsgpackExt</span>
 
 
-<div class="viewcode-block" id="Author"><a class="viewcode-back" href="../../../../../api/author_model.html#tckdb.backend.app.models.author.Author">[docs]</a><span class="k">class</span> <span class="nc">Author</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<div class="viewcode-block" id="Person"><a class="viewcode-back" href="../../../../../api/person_model.html#tckdb.backend.app.models.person.Person">[docs]</a><span class="k">class</span> <span class="nc">Person</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    A class for representing a TCKDB Author item</span>
+<span class="sd">    A class for representing a TCKDB Person item</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        Person(name=&#39;I. B. Writing&#39;,</span>
+<span class="sd">               email=&#39;email@dot.com&#39;,</span>
+<span class="sd">               affiliation=&#39;Institution of Technology&#39;)</span>
 
 <span class="sd">    Attributes:</span>
-<span class="sd">        id (int): The primary key.</span>
-<span class="sd">        name (str): The Author&#39;s full name.</span>
-<span class="sd">        email (str): The Author&#39;s email address.</span>
-<span class="sd">        affiliation (str): The Author&#39;s academic affiliation.</span>
-<span class="sd">        uploaded_species (int): The number of Species entries uploaded.</span>
-<span class="sd">        uploaded_non_physical_species (int): The number of NonPhysicalSpecies entries uploaded.</span>
-<span class="sd">        uploaded_reactions (int): The number of Reaction entries uploaded.</span>
-<span class="sd">        uploaded_networks (int): The number of Network entries uploaded.</span>
-<span class="sd">        reviewed_species (int): The number of Species entries reviewed.</span>
-<span class="sd">        reviewed_non_physical_species (int): The number of NonPhysicalSpecies entries reviewed.</span>
-<span class="sd">        reviewed_reactions (int): The number of Reaction entries reviewed.</span>
-<span class="sd">        reviewed_networks (int): The number of Network entries reviewed.</span>
-<span class="sd">        reviewer_flags (dict): Backend flags to assist the review process.</span>
+<span class="sd">        id (int)</span>
+<span class="sd">            The primary key (not a user input)</span>
+<span class="sd">        name (str)</span>
+<span class="sd">            The Person&#39;s full name</span>
+<span class="sd">        email (str)</span>
+<span class="sd">            The Person&#39;s email address</span>
+<span class="sd">        affiliation (str)</span>
+<span class="sd">            The Person&#39;s academic affiliation</span>
+<span class="sd">        authors_species (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
+<span class="sd">            with the :ref:`Species table &lt;species&gt;` representing species authored by persons in this object.</span>
+<span class="sd">            This attribute is added automatically and is only defined under ``Species`` as ``authors``.</span>
+<span class="sd">        reviewers_species (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
+<span class="sd">            with the :ref:`Species table &lt;species&gt;` representing species reviewed by persons in this object.</span>
+<span class="sd">            This attribute is added automatically and is only defined under ``Species`` as ``reviewers``.</span>
+<span class="sd">        authors_np_species (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
+<span class="sd">            with the :ref:`NonPhysicalSpecies table &lt;species&gt;` representing non physical species</span>
+<span class="sd">            authored by persons in this object.</span>
+<span class="sd">            This attribute is added automatically and is only defined under ``NonPhysicalSpecies`` as ``authors``.</span>
+<span class="sd">        reviewers_np_species (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
+<span class="sd">            with the :ref:`NonPhysicalSpecies table &lt;species&gt;` representing non physical species</span>
+<span class="sd">            reviewed by persons in this object.</span>
+<span class="sd">            This attribute is added automatically and is only defined under ``NonPhysicalSpecies`` as ``reviewers``.</span>
+<span class="sd">        uploaded_species (int)</span>
+<span class="sd">            The number of Species entries uploaded (not a user input)</span>
+<span class="sd">        uploaded_non_physical_species (int)</span>
+<span class="sd">            The number of NonPhysicalSpecies entries uploaded (not a user input)</span>
+<span class="sd">        uploaded_reactions (int)</span>
+<span class="sd">            The number of Reaction entries uploaded (not a user input)</span>
+<span class="sd">        uploaded_networks (int)</span>
+<span class="sd">            The number of Network entries uploaded (not a user input)</span>
+<span class="sd">        reviewed_species (int)</span>
+<span class="sd">            The number of Species entries reviewed (not a user input)</span>
+<span class="sd">        reviewed_non_physical_species (int)</span>
+<span class="sd">            The number of NonPhysicalSpecies entries reviewed (not a user input)</span>
+<span class="sd">        reviewed_reactions (int)</span>
+<span class="sd">            The number of Reaction entries reviewed (not a user input)</span>
+<span class="sd">        reviewed_networks (int)</span>
+<span class="sd">            The number of Network entries reviewed (not a user input)</span>
+<span class="sd">        reviewer_flags (Dict[str, str])</span>
+<span class="sd">            Backend flags to assist the review process (not a user input)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">name</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>

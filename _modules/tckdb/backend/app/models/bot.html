@@ -159,6 +159,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="kn">import</span> <span class="n">Column</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">String</span>
+<span class="kn">from</span> <span class="nn">sqlalchemy.orm</span> <span class="kn">import</span> <span class="n">relationship</span>
 
 <span class="kn">from</span> <span class="nn">tckdb.backend.app.db.base_class</span> <span class="kn">import</span> <span class="n">Base</span>
 <span class="kn">from</span> <span class="nn">tckdb.backend.app.models.common</span> <span class="kn">import</span> <span class="n">MsgpackExt</span>
@@ -167,16 +168,42 @@
 <div class="viewcode-block" id="Bot"><a class="viewcode-back" href="../../../../../api/bot_model.html#tckdb.backend.app.models.bot.Bot">[docs]</a><span class="k">class</span> <span class="nc">Bot</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    A class for representing a TCKDB Bot item</span>
+
 <span class="sd">    (A bot is a software used to automatically generate data for TCKDB)</span>
 
+<span class="sd">    Example::</span>
+
+<span class="sd">        Bot(name=&#39;ARC&#39;,</span>
+<span class="sd">            version=&#39;1.1.0&#39;,</span>
+<span class="sd">            url=&#39;https://github.com/ReactionMechanismGenerator/ARC&#39;,</span>
+<span class="sd">            git_commit=&#39;7ba4d74c73198c76c70742de8c254e075200a582&#39;,</span>
+<span class="sd">            git_branch=&#39;master&#39;)</span>
+
 <span class="sd">    Attributes:</span>
-<span class="sd">        id (int): The primary key.</span>
-<span class="sd">        name (str): The software name.</span>
-<span class="sd">        version (str): The software version.</span>
-<span class="sd">        url (str): The official software web address.</span>
-<span class="sd">        git_commit (str): The git commit hash used for this run.</span>
-<span class="sd">        git_branch (str): The git branch used for this run.</span>
-<span class="sd">        reviewer_flags (dict): Backend flags to assist the review process.</span>
+<span class="sd">        id (int)</span>
+<span class="sd">            The primary key (not a user input)</span>
+<span class="sd">        name (str)</span>
+<span class="sd">            The software name</span>
+<span class="sd">        version (str, optional)</span>
+<span class="sd">            The software version</span>
+<span class="sd">        url (str)</span>
+<span class="sd">            The official software web address</span>
+<span class="sd">        git_commit (str, optional)</span>
+<span class="sd">            The git commit hash used for this run</span>
+<span class="sd">        git_branch (str, optional)</span>
+<span class="sd">            The git branch used for this run</span>
+
+<span class="sd">        species (relationship)</span>
+<span class="sd">            A One to Many relationship between Bot and Species.</span>
+<span class="sd">        non_physical_species (relationship)</span>
+<span class="sd">            A One to Many relationship between Bot and NonPhysicalSpecies.</span>
+<span class="sd">        # reactions (relationship)</span>
+<span class="sd">        #     A One to Many relationship between Bot and Reactions.</span>
+<span class="sd">        # networks (relationship)</span>
+<span class="sd">        #     A One to Many relationship between Bot and Networks.</span>
+
+<span class="sd">        reviewer_flags (Dict[str, str])</span>
+<span class="sd">            Backend flags to assist the review process (not a user input)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">name</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -184,6 +211,12 @@
     <span class="n">url</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">git_commit</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">500</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="n">git_branch</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">species</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Species&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;bot&#39;</span><span class="p">)</span>
+    <span class="n">np_species</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;NonPhysicalSpecies&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;bot&#39;</span><span class="p">)</span>
+    <span class="c1"># reactions = relationship(&#39;Reactions&#39;, back_populates=&#39;bot&#39;)</span>
+    <span class="c1"># networks = relationship(&#39;Networks&#39;, back_populates=&#39;bot&#39;)</span>
+
     <span class="n">reviewer_flags</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>

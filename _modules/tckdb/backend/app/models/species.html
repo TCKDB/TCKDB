@@ -1,0 +1,1141 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>tckdb.backend.app.models.species &mdash; TCKDB 0.1.0 Documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../../../" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+        <script src="../../../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../../../index.html" class="icon icon-home" alt="Documentation Home"> TCKDB
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../contribute.html">Contribute</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../licence.html">Licence</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../credits.html">Credits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/index.html">TCKDB’s API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../release.html">Release notes</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">TCKDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../../../index.html">Module code</a> &raquo;</li>
+        
+      <li>tckdb.backend.app.models.species</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for tckdb.backend.app.models.species</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">TCKDB backend app models species module</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="kn">import</span> <span class="n">Boolean</span><span class="p">,</span> <span class="n">Column</span><span class="p">,</span> <span class="n">Float</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">String</span>
+<span class="kn">from</span> <span class="nn">sqlalchemy.dialects.postgresql</span> <span class="kn">import</span> <span class="n">ARRAY</span>
+<span class="kn">from</span> <span class="nn">sqlalchemy.orm</span> <span class="kn">import</span> <span class="n">relationship</span>
+
+<span class="kn">from</span> <span class="nn">tckdb.backend.app.db.base_class</span> <span class="kn">import</span> <span class="n">Base</span>
+<span class="kn">from</span> <span class="nn">tckdb.backend.app.models.associations</span> <span class="kn">import</span> <span class="p">(</span><span class="n">species_authors</span><span class="p">,</span>
+                                                   <span class="n">species_reviewers</span><span class="p">,</span>
+                                                   <span class="n">np_species_authors</span><span class="p">,</span>
+                                                   <span class="n">np_species_reviewers</span><span class="p">,</span>
+                                                   <span class="p">)</span>
+<span class="kn">from</span> <span class="nn">tckdb.backend.app.models.common</span> <span class="kn">import</span> <span class="n">MsgpackExt</span>
+
+
+<div class="viewcode-block" id="Species"><a class="viewcode-back" href="../../../../../api/species_model.html#tckdb.backend.app.models.species.Species">[docs]</a><span class="k">class</span> <span class="nc">Species</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A class for representing a TCKDB Species item.</span>
+
+<span class="sd">    Note:</span>
+<span class="sd">        All atom indices in these arguments are 1-indexed unless explicitly stated otherwise.</span>
+
+<span class="sd">    Note:</span>
+<span class="sd">        Arguments use SI units as much as possible. Parameters must be provided in the requested units,</span>
+<span class="sd">        necessary unit conversions must be done by the user prior to uploading data.</span>
+<span class="sd">        The requested units are noted for each parameter where relevant.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        Species(label=&#39;formaldehyde&#39;,</span>
+<span class="sd">                statmech_software=&#39;Arkane (RMG) v3.0.0&#39;,</span>
+<span class="sd">                smiles=&#39;C=O&#39;,</span>
+<span class="sd">                charge=0,</span>
+<span class="sd">                multiplicity=1,</span>
+<span class="sd">                electronic_state=&#39;X&#39;,</span>
+<span class="sd">                coordinates={&#39;symbols&#39;: (&#39;C&#39;, &#39;O&#39;, &#39;H&#39;, &#39;H&#39;),</span>
+<span class="sd">                             &#39;isotopes&#39;: (12, 16, 1, 1),</span>
+<span class="sd">                             &#39;coords&#39;: ((-0.0122240982, 0.0001804054, -0.00162116),</span>
+<span class="sd">                                        (1.2016481968, -0.0177341701, 0.1593624097),</span>
+<span class="sd">                                        (-0.5971643978, 0.9327281670, 0.0424401022),</span>
+<span class="sd">                                        (-0.5922597008, -0.9151744023, -0.2001813507))},</span>
+<span class="sd">                external_symmetry=2,</span>
+<span class="sd">                point_group=&#39;C2v&#39;,</span>
+<span class="sd">                conformation_method=&#39;ARC&#39;,</span>
+<span class="sd">                is_well=True,</span>
+<span class="sd">                is_global_min=True,</span>
+<span class="sd">                is_ts=False,</span>
+<span class="sd">                electronic_energy=-325.6458956547,</span>
+<span class="sd">                E0=123.54842,</span>
+<span class="sd">                frequencies=[132.2, 548.5, 1032.5, 2015.22, 2018.12, 3005.22],</span>
+<span class="sd">                scaled_projected_frequencies=[130.217, 540.2725, 1017.013,</span>
+<span class="sd">                                              1984.992, 1987.848, 2960.142],</span>
+<span class="sd">                normal_displacement_modes=[[0.125, 0.89, 0.35],</span>
+<span class="sd">                                           [-0.25, 0.25, -0.89],</span>
+<span class="sd">                                           [0.56, 0.98, -0.65],</span>
+<span class="sd">                                           [0.022, -0.005, 0.5],</span>
+<span class="sd">                                           [-0.98, -0.002, 0.65],</span>
+<span class="sd">                                           [0.05, 0.0025, -0.722]],</span>
+<span class="sd">                freq_id=11,</span>
+<span class="sd">                rigid_rotor=&#39;asymmetric top&#39;,</span>
+<span class="sd">                statmech_treatment=&#39;RRHO&#39;,</span>
+<span class="sd">                rotational_constants=[1.25, 8.56, 9.55],</span>
+<span class="sd">                H298=-109.4534,</span>
+<span class="sd">                S298=218.237,</span>
+<span class="sd">                Cp_values=[35.313, 39.037, 43.4299, 47.7813, 55.438, 61.463, 70.71],</span>
+<span class="sd">                Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],</span>
+<span class="sd">                heat_capacity_model={&#39;model&#39;: &#39;NASA&#39;,</span>
+<span class="sd">                                     &#39;T min&#39;: 100,</span>
+<span class="sd">                                     &#39;T max&#39;: 5000,</span>
+<span class="sd">                                     &#39;coefficients&#39;: {&#39;low&#39;: [4.13878818E+00, -4.69514383E-03,</span>
+<span class="sd">                                                              2.25730249E-05, -2.09849937E-08,</span>
+<span class="sd">                                                              6.36123283E-12, -1.43493283E+04,</span>
+<span class="sd">                                                              3.23827482E+00],</span>
+<span class="sd">                                                      &#39;high&#39;: [2.36095410E+00, 7.66804276E-03,</span>
+<span class="sd">                                                               -3.19770442E-06, 6.04724833E-10,</span>
+<span class="sd">                                                               -4.27517878E-14, -1.42794809E+04,</span>
+<span class="sd">                                                               1.04457152E+01],</span>
+<span class="sd">                                                      &#39;T int&#39;: 1041.96}},</span>
+<span class="sd">                encorr_id=33,</span>
+<span class="sd">                opt_path=&#39;path_opt&#39;,</span>
+<span class="sd">                freq_path=&#39;path_freq&#39;,</span>
+<span class="sd">                sp_path=&#39;path_sp&#39;)</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        id (int)</span>
+<span class="sd">            The primary key (not a user input).</span>
+
+<span class="sd">        label (Optional[str])</span>
+<span class="sd">            A free user label for the species (maximum 255 characters).</span>
+
+<span class="sd">        # provenance</span>
+<span class="sd">        statmech_software (Optional[str])</span>
+<span class="sd">            The statistical mechanics software and version used for the statistical mechanics and thermodynamic</span>
+<span class="sd">            property computations. Should include the version. Example::</span>
+
+<span class="sd">                &#39;Arkane (RMG) v3.0.0&#39;</span>
+<span class="sd">        timestamp (float)</span>
+<span class="sd">            The UTC timestamp of uploading the data to TCKDB (not a user input).</span>
+<span class="sd">        retracted (str)</span>
+<span class="sd">            A reason for retracting this object. Default: ``None`` (not a user input).</span>
+
+<span class="sd">        # review</span>
+<span class="sd">        reviewed (bool)</span>
+<span class="sd">            Whether this entry was reviewed (not a user input).</span>
+<span class="sd">        approved (bool)</span>
+<span class="sd">            If reviewed, whether it was approved (not a user input).</span>
+<span class="sd">        Dict[str, str] (Dict[str, str])</span>
+<span class="sd">            Backend flags to assist the review process (automatically determined, but users may add notes to flag</span>
+<span class="sd">            items for the reviewer).</span>
+
+<span class="sd">            Example::</span>
+
+<span class="sd">                {&#39;general&#39;: &#39;This species has a shallow (1.5 kJ/mol) well along the 4-8-7-10 torsional mode.&#39;}</span>
+
+<span class="sd">        # chemical identifiers</span>
+<span class="sd">        smiles (Optional[str])</span>
+<span class="sd">            The canonical SMILES descriptor with chirality information.</span>
+
+<span class="sd">            Note:</span>
+<span class="sd">                Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
+<span class="sd">        inchi (Optional[str])</span>
+<span class="sd">            The InChI descriptor with an explicit H layer and chirality information.</span>
+
+<span class="sd">            Note:</span>
+<span class="sd">                Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
+<span class="sd">        inchi_key (Optional[str])</span>
+<span class="sd">            The InChI key descriptor. Automatically assigned if not given by the user.</span>
+<span class="sd">        charge (int)</span>
+<span class="sd">            The net molecular charge.</span>
+<span class="sd">        multiplicity (int)</span>
+<span class="sd">            The spin multiplicity.</span>
+<span class="sd">        electronic_state (Optional[str])</span>
+<span class="sd">            The species electronic state at CIS level. Default: ``&#39;X&#39;`` (denoting ground state).</span>
+
+<span class="sd">        # geometry and connectivity</span>
+<span class="sd">        coordinates (Dict[str, Union[Tuple[Tuple[float, float, float], ...], Tuple[int, ...], Tuple[str, ...]]])</span>
+<span class="sd">            Cartesian coordinates in standard orientation. Keys (values) are:</span>
+
+<span class="sd">            * &#39;symbols&#39; (Tuple[str])</span>
+<span class="sd">                Chemical element symbols</span>
+<span class="sd">            * &#39;isotopes&#39; (Tuple[int])</span>
+<span class="sd">                The respective isotopes</span>
+<span class="sd">            * &#39;coords&#39; (Tuple[Tuple[float]])</span>
+<span class="sd">                The respective coordinates</span>
+
+<span class="sd">            Example for methane::</span>
+
+<span class="sd">                {&#39;symbols&#39;: (&#39;C&#39;, &#39;H&#39;, &#39;H&#39;, &#39;H&#39;, &#39;H&#39;),</span>
+<span class="sd">                 &#39;isotopes&#39;: (12, 1, 1, 1, 1),</span>
+<span class="sd">                 &#39;coords&#39;: ((0.0, 0.0, 0.0),</span>
+<span class="sd">                            (0.6300326, 0.6300326, 0.6300326),</span>
+<span class="sd">                            (-0.6300326, -0.6300326, 0.6300326),</span>
+<span class="sd">                            (-0.6300326, 0.6300326, -0.6300326),</span>
+<span class="sd">                            (0.6300326, -0.6300326, -0.6300326))}</span>
+<span class="sd">        graph (Optional[str])</span>
+<span class="sd">            A 2D connectivity graph in an RMG adjacency list format. Note that this graph represents a single</span>
+<span class="sd">            Lewis structure (resonance structure). These graphs can be generated using RMG&#39;s API or online at</span>
+<span class="sd">            https://rmg.mit.edu/molecule_search.</span>
+
+<span class="sd">            Note:</span>
+<span class="sd">                Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
+
+<span class="sd">            Example for methane::</span>
+
+<span class="sd">                multiplicity 1</span>
+<span class="sd">                1 C u0 p0 c0 {2,S} {3,S} {4,S} {5,S}</span>
+<span class="sd">                2 H u0 p0 c0 {1,S}</span>
+<span class="sd">                3 H u0 p0 c0 {1,S}</span>
+<span class="sd">                4 H u0 p0 c0 {1,S}</span>
+<span class="sd">                5 H u0 p0 c0 {1,S}</span>
+
+<span class="sd">        fragments (Optional[List[List[int]]])</span>
+<span class="sd">            Fragments represented by this species, e.g., VdW wells. Entries are atom index lists of all atoms in a</span>
+<span class="sd">            fragment. Default: ``None`` (denoting there&#39;s only one fragment).</span>
+<span class="sd">        fragment_orientation (Optional[List[Dict[str, Union[float, List[float]]]]])</span>
+<span class="sd">            Relative orientation of fragments, starting from the heaviest one. All fragments must be in standard</span>
+<span class="sd">            Cartesian orientation prior to determining the following parameters. Entries are dictionaries with the</span>
+<span class="sd">            following keys (values):</span>
+
+<span class="sd">                * &#39;cm&#39; (List[float])</span>
+<span class="sd">                    A vector pointing from a fragment&#39;s center to the center of mass of the next fragment.</span>
+
+<span class="sd">                    Units:</span>
+<span class="sd">                        Angstrom</span>
+<span class="sd">                * &#39;x&#39; (float)</span>
+<span class="sd">                    The X axis rotational angle in degrees.</span>
+<span class="sd">                * &#39;y&#39; (float)</span>
+<span class="sd">                    The Y axis rotational angle in degrees.</span>
+<span class="sd">                * &#39;z&#39; (float)</span>
+<span class="sd">                    The Z axis rotational angle in degrees.</span>
+<span class="sd">        external_symmetry (int)</span>
+<span class="sd">            The species external symmetry (excluding internal torsions)</span>
+<span class="sd">        point_group (str)</span>
+<span class="sd">            The symmetry point group (use &quot;inf&quot; for infinity, don&#39;t add spaces or underscores). Examples: ``&#39;C1&#39;``,</span>
+<span class="sd">            ``&#39;Cinfv&#39;``, ``&#39;C2h&#39;``, ``&#39;D4&#39;``, ``&#39;Dinfh&#39;``, ``&#39;S4&#39;``, ``&#39;T&#39;``, ``&#39;Th&#39;``, ``&#39;Td&#39;``, ``&#39;O&#39;``, ``&#39;Oh&#39;``,</span>
+<span class="sd">            ``&#39;I&#39;``, ``&#39;Ih&#39;``.</span>
+<span class="sd">        chirality (Optional[Dict[Tuple[int], str]])</span>
+<span class="sd">            The species&#39; chiral centers, following the Cahn–Ingold–Prelog (CIP) notation (``&#39;R&#39;`` or ``&#39;S&#39;`` for atom</span>
+<span class="sd">            centers, ``&#39;E&#39;`` or ``&#39;Z&#39;`` for double bond centers). Keys are tuples of atom indices of a chiral center,</span>
+<span class="sd">            values are string representations of the respective chiral center.</span>
+
+<span class="sd">            Note: Non-radical valance 3 nitrogen atoms are also considered chiral if connected to three different groups</span>
+<span class="sd">            (considering the lone pair to always be a unique fourth group). In such cases, use a ``&#39;NR&#39;`` or ``&#39;NS&#39;``</span>
+<span class="sd">            notation.</span>
+
+<span class="sd">            Example:</span>
+
+<span class="sd">                A double bond with chirality ``&#39;E&#39;`` between atoms 1-2, an ``&#39;S&#39;`` chiral center on atom 3,</span>
+<span class="sd">                and an ``&#39;S&#39;`` chiral center on atom 6 which is a nitrogen are represented as::</span>
+
+<span class="sd">                    {(1, 2): &#39;E&#39;, (3,): &#39;S&#39;, (6,): &#39;NS&#39;})</span>
+<span class="sd">        conformation_method (Optional[str])</span>
+<span class="sd">            The method used to determine the lowest energy conformer. Required if the species has 4 or more atoms.</span>
+<span class="sd">        is_well (bool)</span>
+<span class="sd">            Whether this conformer represents a local well (at the opt level used).</span>
+<span class="sd">        is_global_min (bool)</span>
+<span class="sd">            If this conformer is a well, whether it is meant to represents the **global** minimum energy well.</span>
+<span class="sd">        global_min_geometry (Optional[Dict[str, tuple]])</span>
+<span class="sd">            If this species does not represent the global minimum well, this argument must contain the coordinates of</span>
+<span class="sd">            the global minimum energy conformer at the same opt level.</span>
+
+<span class="sd">        # TS</span>
+<span class="sd">        is_ts (bool)</span>
+<span class="sd">            Whether this species represents a transition state. Default: ``False``.</span>
+<span class="sd">        irc_trajectories (Optional[List[List[Dict[str, tuple]]]])</span>
+<span class="sd">            The two IRC trajectories. Each trajectory is a list of coordinates dictionaries.</span>
+<span class="sd">            Required if the species is a transition state. Cannot be specified for non-TS species.</span>
+
+<span class="sd">        # energy</span>
+<span class="sd">        electronic_energy (float)</span>
+<span class="sd">            The species single point electronic energy as calculated by the electronic structure software</span>
+<span class="sd">            (without zero-point energy correction).</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                Hartree.</span>
+<span class="sd">        E0 (float)</span>
+<span class="sd">            The zero kelvin enthalpy (electronic energy + zero-point energy correction) after applying</span>
+<span class="sd">            energy corrections.</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                kJ/mol</span>
+<span class="sd">        active_space (Optional[Dict[str, int]])</span>
+<span class="sd">            The active space used for a multireference calculation. Keys (values) are:</span>
+
+<span class="sd">                * &#39;electrons&#39; (int)</span>
+<span class="sd">                    The number of electrons in the active space,</span>
+<span class="sd">                * &#39;orbitals&#39; (int)</span>
+<span class="sd">                    The number of orbitals in the active space.</span>
+
+<span class="sd">        # Hessian</span>
+<span class="sd">        hessian (Optional[List[List[float]]])</span>
+<span class="sd">            The computed Hessian matrix (lower triangle). Required for polyatomic species (with 2 or more atoms).</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                Hartree / Bohr :sup:`2`</span>
+
+
+<span class="sd">        # vibrational modes</span>
+<span class="sd">        frequencies (Optional[List[float]])</span>
+<span class="sd">            Unscaled, unprojected frequencies. Complex roots are represented by a negative number.</span>
+<span class="sd">            Required for polyatomic species (with 2 or more atoms).</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                cm :sup:`-1`</span>
+<span class="sd">        scaled_projected_frequencies (Optional[List[float]])</span>
+<span class="sd">            Scaled, projected frequencies (user input). If no rotors are used then the projection is unnecessary.</span>
+<span class="sd">            Complex roots are represented by a negative number. Required for polyatomic species (with 2 or more atoms).</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                cm :sup:`-1`</span>
+<span class="sd">        normal_displacement_modes (Optional[List[List[List[float]]]])</span>
+<span class="sd">            The normal displacement modes. Required for polyatomic species (with 2 or more atoms).</span>
+<span class="sd">            Entries of the first level list are normal displacement modes per frequency.</span>
+<span class="sd">            Entries of the second level list are normal displacement modes per frequency per atom.</span>
+<span class="sd">            Entries of the third level list are normal displacement modes per frequency per atom per axis (X, Y, Z).</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                Angstrom</span>
+<span class="sd">        freq_id (Optional[int])</span>
+<span class="sd">            The frequency scaling factor key for the :ref:`freq table &lt;freq&gt;`.</span>
+<span class="sd">            Required for polyatomic species (with 2 or more atoms).</span>
+
+<span class="sd">            Note:</span>
+<span class="sd">                This argument will be facilitated by TCKDB by querying the :ref:`freq table &lt;freq&gt;`.</span>
+
+<span class="sd">        # rotational modes</span>
+<span class="sd">        rigid_rotor (str)</span>
+<span class="sd">            The rigid rotor treatment type.</span>
+<span class="sd">            Allowed values: ``&#39;atom&#39;``, ``&#39;linear&#39;``, ``&#39;spherical top&#39;``, ``&#39;symmetric top&#39;``, or ``&#39;asymmetric top&#39;``.</span>
+<span class="sd">        statmech_treatment (Optional[str])</span>
+<span class="sd">            The statistical mechanics treatment of the species. Required for polyatomic species (with 3 or more atoms).</span>
+
+<span class="sd">            Examples:</span>
+
+<span class="sd">            * &#39;RRHO&#39; (rigid rotor harmonic oscillator)</span>
+<span class="sd">            * &#39;RRHO-1D&#39; (rigid rotor harmonic oscillator with 1D torsions)</span>
+<span class="sd">            * &#39;RRHO-1D-ND&#39; (rigid rotor harmonic oscillator with mixed 1D torsions and ND torsions)</span>
+<span class="sd">            * &#39;RRHO-ND&#39; (rigid rotor harmonic oscillator with ND torsions)</span>
+<span class="sd">            * &#39;RRHO-AD&#39; (rigid rotor harmonic oscillator with ND torsions, D is the overall number of torsions, D &gt; 1)</span>
+<span class="sd">            * &#39;RRAO&#39; (rigid rotor anharmonic oscillator)</span>
+<span class="sd">        rotational_constants (Optional[List[float]])</span>
+<span class="sd">            Rotational constants. ``None`` for monoatomic species.</span>
+<span class="sd">            One entry for linear molecules, three entries for non-linear polyatomic molecules.</span>
+<span class="sd">            Computed from the geometry if not provided by the user.</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                amu * Angstrom :sup:`2`</span>
+
+<span class="sd">        # torsional modes</span>
+<span class="sd">        torsions (Optional[List[Dict[str, Union[Dict[Tuple[int], float], int, List[int], List[List[int]], str]]]])</span>
+<span class="sd">            The torsional modes. Entries are dictionaries with keys (values):</span>
+
+<span class="sd">            * &#39;computation_type&#39; (str, optional)</span>
+<span class="sd">                The torsional mode computation type. Allowed values: ``&#39;single point&#39;``, ``&#39;constrained optimization&#39;``,</span>
+<span class="sd">                or ``&#39;continuous constrained optimization&#39;``. Default: ``&#39;continuous constrained optimization&#39;``.</span>
+<span class="sd">            * &#39;dimension&#39; (int, optional)</span>
+<span class="sd">                The torsional dimension treated by this mode. Default: 1.</span>
+<span class="sd">            * &#39;constraints&#39; (Dict[Tuple[int, ...], float], optional)</span>
+<span class="sd">                Any constraints (bond distances, angles, and dihedral angles)</span>
+<span class="sd">                used in the optimization other than the primary torsion modes. Keys (values) are:</span>
+<span class="sd">                    * Tuple[int, ...] (float)</span>
+<span class="sd">                        A key is a tuple of atom indices representing an internal geometrical</span>
+<span class="sd">                        parameter (bond, angle, or dihedral angle). This parameter type is identified by the length</span>
+<span class="sd">                        of the tuple key (two, three, and four atom indices represent bond, angle and dihedral</span>
+<span class="sd">                        angle, respectively. Values are corresponding parameters in either degrees or Angstrom.</span>
+<span class="sd">            * &#39;symmetry&#39; (int)</span>
+<span class="sd">                The internal rotation symmetry</span>
+<span class="sd">            * &#39;treatment&#39; (str)</span>
+<span class="sd">                The torsion treatment method. Allowed values are ``&#39;hindered rotor&#39;``, ``&#39;free rotor&#39;``</span>
+<span class="sd">                ``&#39;rigid top&#39;``, or ``&#39;hindered rotor density of states&#39;``.</span>
+<span class="sd">            * &#39;torsions&#39; (Union[List[List[int]], Iterable[int]])</span>
+<span class="sd">                The atom indices describing the torsional mode. Entries are 4-length lists/tuples of atom</span>
+<span class="sd">                indices, the number of entries is the torsion dimension.</span>
+<span class="sd">            * &#39;top&#39; (List[int])</span>
+<span class="sd">                Atom indices of all atoms on one side of the internal rotor, starting from its center. For a 1D rotor</span>
+<span class="sd">                (&quot;R1-A-B-C-D-R2&quot;), this means listing all atoms starting from one of the pivotal atoms (&quot;C-D-R2&quot;).</span>
+<span class="sd">                For an adjacent 2D rotor (&quot;R1-A-B-C-D-E-R2&quot;), this means starting from the middle atom which is a</span>
+<span class="sd">                pivotal atom in both modes (&quot;C-D-E-R2&quot;).</span>
+<span class="sd">            * &#39;energies&#39; (list)</span>
+<span class="sd">                The scan energies. This is an ND array, axes order corresponds to the order</span>
+<span class="sd">                in which the torsions are defined under ``torsions``.</span>
+<span class="sd">                For a 1D torsion, this would be of type List[float].</span>
+<span class="sd">                For a 2D torsion, this would be of type List[List[float]].</span>
+<span class="sd">                For a 3D torsion, this would be of type List[List[List[float]]], and so on.</span>
+
+<span class="sd">                Units:</span>
+<span class="sd">                    kJ / mol</span>
+<span class="sd">            * &#39;resolution&#39; (Union[float, List[float]])</span>
+<span class="sd">                The dihedral angle increment resolutions.</span>
+
+<span class="sd">                Units:</span>
+<span class="sd">                    degrees</span>
+<span class="sd">            * &#39;trajectory&#39; (list)</span>
+<span class="sd">                Entries are Cartesian coordinates of respective points in the scan. This is an ND array.</span>
+<span class="sd">                Axes order corresponds to the order in which the torsions are defined under ``torsions``.</span>
+<span class="sd">                The structure of this argument is similar to the structure of the &#39;energies&#39; argument.</span>
+<span class="sd">            * &#39;invalidated&#39; (str, optional)</span>
+<span class="sd">                An invalidation reason, if this mode was invalidated. Useful for TSs where a torsion breaks the</span>
+<span class="sd">                connectivity near the reactive site, and for high-barrier torsions not considered in the statmech</span>
+<span class="sd">                treatment. Default: ``None``.</span>
+
+<span class="sd">        # conformers</span>
+<span class="sd">        conformers (Optional[List[Dict[str, Union[float, Tuple[Tuple[float]], Tuple[int], Tuple[str]]]]])</span>
+<span class="sd">            The species conformers used for Boltzmann averaging of accessible wells. ``None`` if ``torsions`` are used,</span>
+<span class="sd">            and vice versa. Entries are dictionaries containing the same keys as the ``coordinates`` attribute,</span>
+<span class="sd">            with two additional keys: ``&#39;energy&#39;`` with the relative conformer energy in kJ/mol at the sp level,</span>
+<span class="sd">            and ``&#39;degeneracy&#39;`` with the number of repetitions per conformer (defaults to 1).</span>
+
+<span class="sd">        # thermochemical properties</span>
+<span class="sd">        H298 (Optional[float])</span>
+<span class="sd">            The standard (298.15 K, 1 bar) enthalpy change of formation. Must be specified for non-TS species.</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                kJ/mol</span>
+<span class="sd">        S298 (Optional[float])</span>
+<span class="sd">            The standard (298.15 K, 1 bar) entropy change of formation. Must be specified for non-TS species.</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                J / (mol * K)</span>
+<span class="sd">        Cp_values (Optional[List[float]])</span>
+<span class="sd">            The constant pressure heat capacity values. Must be specified for non-TS species.</span>
+
+<span class="sd">            Units:</span>
+<span class="sd">                J / (mol * K).</span>
+<span class="sd">        Cp_T_list (Optional[List[float]])</span>
+<span class="sd">            The temperatures in K corresponding to the discrete Cp values. Must be specified for non-TS species.</span>
+<span class="sd">        heat_capacity_model (Optional[Dict[str, Union[float, Dict[str, Union[float, List[float]]], str]]])</span>
+<span class="sd">            The heat capacity extrapolation model and coefficients.</span>
+<span class="sd">            Must be specified for non-TS species. Keys (values) are:</span>
+
+<span class="sd">            * &#39;model&#39; (str)</span>
+<span class="sd">                The heat capacity model. For example: ``&#39;NASA&#39;``, ``&#39;Wilhoit&#39;``.</span>
+<span class="sd">            * &#39;T min&#39; (float)</span>
+<span class="sd">                The minimum temperature range in K.</span>
+<span class="sd">            * &#39;T max&#39; (float)</span>
+<span class="sd">                The maximum temperature range in K.</span>
+<span class="sd">            * &#39;P min&#39; (float)</span>
+<span class="sd">                The minimum temperature range in K (irrelevant for NASA/Wilhoit).</span>
+<span class="sd">            * &#39;P max&#39; (float)</span>
+<span class="sd">                The maximum temperature range in K (irrelevant for NASA/Wilhoit).</span>
+<span class="sd">            * &#39;coefficients&#39; (dict)</span>
+<span class="sd">                The heat capacity coefficients. For a ``&#39;NASA&#39;`` model the keys (values) are:</span>
+
+<span class="sd">                     * &#39;low&#39; (List[float]): Low T range coefficients</span>
+<span class="sd">                     * &#39;high&#39; (List[float]): High T range coefficients</span>
+<span class="sd">                     * &#39;T int&#39; (float): Intermediate range temperature in K</span>
+
+<span class="sd">                For a &#39;Wilhoit&#39; model the keys (values) are:</span>
+
+<span class="sd">                    * &#39;a0&#39; (float): The Wilhoit a0 coefficient</span>
+<span class="sd">                    * &#39;a1&#39; (float): The Wilhoit a1 coefficient</span>
+<span class="sd">                    * &#39;a2&#39; (float): The Wilhoit a2 coefficient</span>
+<span class="sd">                    * &#39;a3&#39; (float): The Wilhoit a3 coefficient</span>
+<span class="sd">                    * &#39;B&#39; (float): The Wilhoit B coefficient</span>
+<span class="sd">                    * &#39;H0&#39; (float): The Wilhoit H0 coefficient</span>
+<span class="sd">                    * &#39;S0&#39; (float): The Wilhoit S0 coefficient</span>
+
+<span class="sd">        # relationships - Many to One</span>
+<span class="sd">        encorr_id (int)</span>
+<span class="sd">            The energy correction key from the :ref:`EnCorr table &lt;encorr&gt;`.</span>
+<span class="sd">        encorr (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`EnCorr table &lt;encorr&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        literature_id (int)</span>
+<span class="sd">            The literature reference from the :ref:`literature table &lt;Literature&gt;`.</span>
+<span class="sd">        literature (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Literature table &lt;literature&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        bot_id (int)</span>
+<span class="sd">            The bot used to generate the object from the :ref:`Bot table &lt;bot&gt;`.</span>
+<span class="sd">        bot (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Bot table &lt;bot&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+
+<span class="sd">        opt_level (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        freq_level (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        scan_level (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        irc_level (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        sp_level (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model. Required.</span>
+
+<span class="sd">        opt_ess (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        freq_ess (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        scan_ess (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        irc_ess (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        sp_ess (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model. Required.</span>
+
+<span class="sd">        # relationships - Many to Many</span>
+<span class="sd">        authors (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
+<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing authors of this object.</span>
+<span class="sd">        reviewers (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
+<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing reviewers of this object.</span>
+
+<span class="sd">        # paths</span>
+<span class="sd">        opt_path (Optional[str])</span>
+<span class="sd">            The path to the optimization output file. Required for polyatomic species (with 2 or more atoms).</span>
+<span class="sd">        freq_path (Optional[str])</span>
+<span class="sd">            The path to the frequencies calculation output file. Required for polyatomic species (with 2 or more atoms).</span>
+<span class="sd">        scan_paths (Optional[Dict[Tuple[Tuple[int, int, int, int], ...], str]])</span>
+<span class="sd">            Paths to the torsion scan calculation output files.</span>
+<span class="sd">            Keys are tuples of tuples. The number of inner-level tuples corresponds to the torsion dimension. Entries of</span>
+<span class="sd">            the inner-level tuple are torsion atom indices. Values are paths to the respective scan calculation log file.</span>
+<span class="sd">        irc_paths (Optional[List[str]])</span>
+<span class="sd">            Entries are paths to the IRC calculation output files. Required for transition states.</span>
+<span class="sd">            Either a single path to a forward+reverse IRC, or two respective paths.</span>
+<span class="sd">        sp_path (str)</span>
+<span class="sd">            The path to the single point energy output file.</span>
+
+<span class="sd">        # unconverged jobs</span>
+<span class="sd">        unconverged_jobs (Optional[List[Dict[str, str]]])</span>
+<span class="sd">            Any relevant unconverged jobs that were troubleshooted while calculating this Species.</span>
+<span class="sd">            Entries are dictionaries, keys (values) are:</span>
+
+<span class="sd">                * &#39;job type&#39; (str): ``&#39;opt&#39;``, ``&#39;freq&#39;``, ``&#39;scan&#39;``, ``&#39;irc&#39;``, or ``&#39;sp&#39;``</span>
+<span class="sd">                * &#39;issue&#39; (str): The identified issue</span>
+<span class="sd">                * &#39;troubleshooting&#39; (str): Description of the troubleshooting method(s) that solved the issue</span>
+<span class="sd">                * &#39;comment&#39; (str): An optional comment explaining the troubleshooting approach</span>
+<span class="sd">                * &#39;path&#39; (str): The path to the relevant unconverged ESS log file</span>
+
+<span class="sd">        # misc</span>
+<span class="sd">        extras (Optional[Dict[str, Any]])</span>
+<span class="sd">            Any additional information in the form of a dictionary</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="n">label</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># provenance</span>
+    <span class="n">statmech_software</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">150</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">timestamp</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">retracted</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># review</span>
+    <span class="n">reviewed</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">approved</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">reviewer_flags</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># chemical identifiers</span>
+    <span class="n">smiles</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">inchi</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">inchi_key</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">27</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">charge</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">multiplicity</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">electronic_state</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">150</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># geometry and connectivity</span>
+    <span class="n">coordinates</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">fragments</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">fragment_orientation</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">external_symmetry</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">point_group</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">6</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">chirality</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">conformation_method</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">500</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">is_well</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">is_global_min</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">global_min_geometry</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># TS</span>
+    <span class="n">is_ts</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">irc_trajectories</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># energy</span>
+    <span class="n">electronic_energy</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">E0</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">active_space</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Hessian</span>
+    <span class="n">hessian</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># vibrational modes</span>
+    <span class="n">frequencies</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dimensions</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">scaled_projected_frequencies</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dimensions</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                                          <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">normal_displacement_modes</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]]],</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                                       <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">freq_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># rotational modes</span>
+    <span class="n">rigid_rotor</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">50</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">statmech_treatment</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">50</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">rotational_constants</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dimensions</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                                  <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># torsional modes</span>
+    <span class="n">torsions</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># conformers</span>
+    <span class="n">conformers</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># thermochemical properties</span>
+    <span class="n">H298</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">S298</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">Cp_values</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dimensions</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">Cp_T_list</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dimensions</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">heat_capacity_model</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># relationships - Many (species) to One (other table)</span>
+    <span class="n">encorr_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;encorr.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">encorr</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;EnCorr&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;species&#39;</span><span class="p">)</span>
+    <span class="n">literature_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;literature.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">literature</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Literature&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;species&#39;</span><span class="p">)</span>
+    <span class="n">bot_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;bot.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">bot</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Bot&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;species&#39;</span><span class="p">)</span>
+
+    <span class="n">opt_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">opt_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s2">&quot;species_opt&quot;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">opt_level_id</span><span class="p">])</span>
+    <span class="n">freq_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">freq_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;species_freq&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">freq_level_id</span><span class="p">])</span>
+    <span class="n">scan_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">scan_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;species_scan&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">scan_level_id</span><span class="p">])</span>
+    <span class="n">irc_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">irc_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;species_irc&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">irc_level_id</span><span class="p">])</span>
+    <span class="n">sp_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">sp_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;species_sp&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">sp_level_id</span><span class="p">])</span>
+
+    <span class="n">opt_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">opt_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;species_opt&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">opt_ess_id</span><span class="p">])</span>
+    <span class="n">freq_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">freq_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;species_freq&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">freq_ess_id</span><span class="p">])</span>
+    <span class="n">scan_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">scan_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;species_scan&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">scan_ess_id</span><span class="p">])</span>
+    <span class="n">irc_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">irc_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;species_irc&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">irc_ess_id</span><span class="p">])</span>
+    <span class="n">sp_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">sp_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;species_sp&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">sp_ess_id</span><span class="p">])</span>
+
+    <span class="c1"># relationships - Many to Many</span>
+    <span class="n">authors</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Person&#39;</span><span class="p">,</span> <span class="n">secondary</span><span class="o">=</span><span class="n">species_authors</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;authors_species&#39;</span><span class="p">)</span>
+    <span class="n">reviewers</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Person&#39;</span><span class="p">,</span> <span class="n">secondary</span><span class="o">=</span><span class="n">species_reviewers</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;reviewers_species&#39;</span><span class="p">)</span>
+
+    <span class="c1"># paths</span>
+    <span class="n">opt_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">freq_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">scan_paths</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">irc_paths</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">sp_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># unconverged jobs</span>
+    <span class="n">unconverged_jobs</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># misc</span>
+    <span class="n">extras</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        A helper function for generating a user-friendly string representation of the object.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">species_as_str</span><span class="p">(</span><span class="n">class_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+                              <span class="nb">id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                              <span class="n">label</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+                              <span class="n">smiles</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">smiles</span><span class="p">,</span>
+                              <span class="n">inchi</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">inchi</span><span class="p">,</span>
+                              <span class="n">inchi_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">inchi_key</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NonPhysicalSpecies"><a class="viewcode-back" href="../../../../../api/species_model.html#tckdb.backend.app.models.species.NonPhysicalSpecies">[docs]</a><span class="k">class</span> <span class="nc">NonPhysicalSpecies</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A class for representing a TCKDB NonPhysicalSpecies item.</span>
+<span class="sd">    Note: All atom indices in these arguments are 1-indexed unless explicitly stated otherwise.</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        id (int): The primary key (not a user input).</span>
+
+<span class="sd">        label (Optional[str]): A free user label for the species.</span>
+
+<span class="sd">        # provenance</span>
+<span class="sd">        timestamp (float): The UTC timestamp of uploading the data to TCKDB (not a user input).</span>
+<span class="sd">        retracted (Optional[str]): A reason for retracting this object</span>
+<span class="sd">                                   (defaults to ``None``, denoting a non-retracted object).</span>
+
+<span class="sd">        # review</span>
+<span class="sd">        reviewed (bool): Whether this entry was reviewed (not a user input).</span>
+<span class="sd">        approved (bool): If reviewed, whether it was approved (not a user input).</span>
+<span class="sd">        reviewer_flags (dict): Backend flags to assist the review process</span>
+<span class="sd">                               (automatically determined, but users may add notes to flag items for the reviewer).</span>
+
+<span class="sd">        # chemical identifiers</span>
+<span class="sd">        smiles (Optional[str]): The canonical SMILES descriptor with chirality information.</span>
+<span class="sd">                                Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
+<span class="sd">        inchi (Optional[str]): The InChI descriptor with an explicit H layer and chirality information.</span>
+<span class="sd">                               Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
+<span class="sd">        inchi_key (Optional[str]): The InChI key descriptor.</span>
+<span class="sd">        charge (int): The net molecular charge.</span>
+<span class="sd">        multiplicity (int): The spin multiplicity.</span>
+<span class="sd">        electronic_state (Optional[str]): The species electronic state at CIS level.</span>
+<span class="sd">                                          Default: &#39;X&#39; (denoting ground state).</span>
+
+<span class="sd">        # geometry and connectivity</span>
+<span class="sd">        coordinates (Dict[str, Tuple]): Cartesian coordinates in standard orientation. Keys (values) are:</span>
+<span class="sd">                                        - &#39;symbols&#39; (Tuple[str]): The chemical element symbols,</span>
+<span class="sd">                                        - &#39;isotopes&#39; (Tuple[int]): The respective isotopes,</span>
+<span class="sd">                                        - &#39;coords&#39; (Tuple[Tuple[float]]): The respective coordinates.</span>
+<span class="sd">        graph (Optional[str]): A 2D connectivity graph in an RMG adjacency list format.</span>
+<span class="sd">                               Note that this graph represents a single Lewis structure (resonance structure).</span>
+<span class="sd">                               Either ``smiles``, ``inchi``, or ``graph`` must be specified.</span>
+<span class="sd">        fragments (Optional[list]): Fragments represented by this species, e.g., VdW wells.</span>
+<span class="sd">                                    Entries are lists atom indices of all atoms in a fragment.</span>
+<span class="sd">                                    Default: ``None`` (denoting there&#39;s only one fragment).</span>
+<span class="sd">        fragment_orientation (Optional[List[Dict[str, Union[float, List[float]]]]]): Relative orientation of fragments,</span>
+<span class="sd">                starting from the heaviest one. All fragments must be in standard Cartesian orientation.</span>
+<span class="sd">                Entries are dictionaries with the following keys (values):</span>
+<span class="sd">                - &#39;cm&#39; (List[float]): A vector pointing from the center of mass of the previous fragment</span>
+<span class="sd">                                      to the center of mass of the current fragment in Angstroms.</span>
+<span class="sd">                - &#39;x&#39; (float): The X axis rotational angle in degrees.</span>
+<span class="sd">                - &#39;y&#39; (float): The Y axis rotational angle in degrees.</span>
+<span class="sd">                - &#39;z&#39; (float): The Z axis rotational angle in degrees.</span>
+<span class="sd">        chirality (Optional[Dict[Tuple[int], str]])</span>
+<span class="sd">            The species&#39; chiral centers, following the Cahn–Ingold–Prelog (CIP) notation (``&#39;R&#39;`` or ``&#39;S&#39;`` for atom</span>
+<span class="sd">            centers, ``&#39;E&#39;`` or ``&#39;Z&#39;`` for double bond centers). Keys are tuples of atom indices of a chiral center,</span>
+<span class="sd">            values are string representations of the respective chiral center.</span>
+
+<span class="sd">            Note: Non-radical valance 3 nitrogen atoms are also considered chiral if connected to three different groups</span>
+<span class="sd">            (considering the lone pair to always be a unique fourth group). In such cases, use a ``&#39;NR&#39;`` or ``&#39;NS&#39;``</span>
+<span class="sd">            notation.</span>
+
+<span class="sd">            Example:</span>
+
+<span class="sd">                A double bond with chirality ``&#39;E&#39;`` between atoms 1-2, an ``&#39;S&#39;`` chiral center on atom 3,</span>
+<span class="sd">                and an ``&#39;S&#39;`` chiral center on atom 6 which is a nitrogen are represented as::</span>
+
+<span class="sd">                    {(1, 2): &#39;E&#39;, (3,): &#39;S&#39;, (6,): &#39;NS&#39;})</span>
+<span class="sd">        conformation_method (Optional[str]): The method used to determine the lowest energy conformer.</span>
+<span class="sd">                                             Optional only for mono- and di-atomic species (required otherwise).</span>
+<span class="sd">        is_well (bool): Whether this conformer represents a local well (at the opt level used).</span>
+<span class="sd">        is_global_min (bool): If this conformer is a well, whether it is meant to represents the global minimum energy.</span>
+<span class="sd">        global_min_geometry (Optional[Dict[str, Tuple]]): If this species does not represent the global minimum well,</span>
+<span class="sd">            this argument must contain the coordinates of the global minimum energy conformer at the same opt level.</span>
+
+<span class="sd">        # TS</span>
+<span class="sd">        is_ts (bool): Whether this species represents a transition state.</span>
+<span class="sd">        irc_trajectories (Optional[List[List[Dict[str, Tuple[Union[float, Tuple[float]]]]]]]): The two IRC trajectories.</span>
+<span class="sd">            Each trajectory is a list of coordinates dictionaries.</span>
+<span class="sd">            Unlike the Species object, here IRC trajectories can be given even if the is_ts argument is not ``True``.</span>
+
+
+<span class="sd">        # relationships - Many to One</span>
+<span class="sd">        literature_id (int)</span>
+<span class="sd">            The literature reference from the :ref:`literature table &lt;Literature&gt;`.</span>
+<span class="sd">        literature (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Literature table &lt;literature&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        bot_id (int)</span>
+<span class="sd">            The bot used to generate the object from the :ref:`Bot table &lt;bot&gt;`.</span>
+<span class="sd">        bot (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Bot table &lt;bot&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+
+<span class="sd">        opt_level (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        freq_level (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        scan_level (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        irc_level (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        sp_level (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`Level table &lt;level&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model. Required.</span>
+
+<span class="sd">        opt_ess (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        freq_ess (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        scan_ess (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        irc_ess (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model.</span>
+<span class="sd">        sp_ess (Optional[relationship])</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a One to Many data model</span>
+<span class="sd">            with the :ref:`ESS table &lt;ess&gt;`,</span>
+<span class="sd">            where the &quot;reverse&quot; side is a Many to One data model. Required.</span>
+
+<span class="sd">        # relationships - Many to Many</span>
+<span class="sd">        authors (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
+<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing authors of this object.</span>
+<span class="sd">        reviewers (relationship)</span>
+<span class="sd">            An attribute that establishes a bidirectional relationship in a Many to Many data model</span>
+<span class="sd">            with the :ref:`Person table &lt;person&gt;` representing reviewers of this object.</span>
+
+<span class="sd">        # paths</span>
+<span class="sd">        opt_path (Optional[str]): The path to the optimization output file.</span>
+<span class="sd">            Required for polyatomic species (with 2 or more atoms).</span>
+<span class="sd">        freq_path (Optional[str]): The path to the frequencies calculation output file.</span>
+<span class="sd">            Required for polyatomic species (with 2 or more atoms).</span>
+<span class="sd">        scan_paths (Optional[Dict[Tuple[Tuple[int]], str]]): Paths to the torsion scan calculation output files.</span>
+<span class="sd">            Keys are tuples of tuples. The number of inner-level tuples corresponds to the torsion dimension. Entries of</span>
+<span class="sd">            the inner-level tuple are torsion atom indices. Values are paths to the respective scan calculation log file.</span>
+<span class="sd">        irc_paths (Optional[List[str]]): A length two list. Entries are paths to the IRC calculation output files.</span>
+<span class="sd">            Required for transition states.</span>
+<span class="sd">        sp_path (Optional[str]): The path to the single point energy output file. Unlike the ``Species`` object, here</span>
+<span class="sd">            ``sp_path`` is optional.</span>
+
+<span class="sd">        # unconverged jobs</span>
+<span class="sd">        unconverged_jobs (Optional[List[Dict[str, str]]]): Any relevant unconverged jobs that were troubleshooted while</span>
+<span class="sd">            calculating this Species. Entries are dictionaries, keys (values) are:</span>
+<span class="sd">                - &#39;job_type&#39; (str): &#39;opt&#39;, &#39;freq&#39;, &#39;scan&#39;, &#39;irc&#39;, or &#39;sp&#39;.</span>
+<span class="sd">                - &#39;issue&#39; (str): The identified issue.</span>
+<span class="sd">                - &#39;troubleshooting&#39; (str): Description of the troubleshooting method(s) that solved the issue.</span>
+<span class="sd">                - &#39;comment&#39; (str): A comment.</span>
+<span class="sd">                - &#39;file&#39; (str): The path to the relevant unconverged output file.</span>
+
+<span class="sd">        # misc</span>
+<span class="sd">        extras (Dict[str, Any]): Any additional information in the form of a Python dictionary.</span>
+<span class="sd">            Unlike the ``Species`` object, here ``extras`` is required and should at least contain the Author&#39;s</span>
+<span class="sd">            reasoning for declaring this species non-physical.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="n">label</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># provenance</span>
+    <span class="n">timestamp</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">retracted</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># review</span>
+    <span class="n">reviewed</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">approved</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">reviewer_flags</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># chemical identifiers</span>
+    <span class="n">smiles</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">inchi</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">inchi_key</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">charge</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">multiplicity</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">electronic_state</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">150</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># geometry and connectivity</span>
+    <span class="n">coordinates</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">fragments</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">fragment_orientation</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">chirality</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">conformation_method</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">500</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">is_well</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">is_global_min</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">global_min_geometry</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># TS</span>
+    <span class="n">is_ts</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Boolean</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">irc_trajectories</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># relationships - Many to One</span>
+    <span class="n">literature_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;literature.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">literature</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Literature&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;np_species&#39;</span><span class="p">)</span>
+    <span class="n">bot_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;bot.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">bot</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Bot&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;np_species&#39;</span><span class="p">)</span>
+
+    <span class="n">opt_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">opt_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s2">&quot;np_species_opt&quot;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">opt_level_id</span><span class="p">])</span>
+    <span class="n">freq_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">freq_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_freq&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">freq_level_id</span><span class="p">])</span>
+    <span class="n">scan_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">scan_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_scan&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">scan_level_id</span><span class="p">])</span>
+    <span class="n">irc_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">irc_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_irc&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">irc_level_id</span><span class="p">])</span>
+    <span class="n">sp_level_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;level.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">sp_level</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Level&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_sp&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">sp_level_id</span><span class="p">])</span>
+
+    <span class="n">opt_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">opt_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_opt&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">opt_ess_id</span><span class="p">])</span>
+    <span class="n">freq_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">freq_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_freq&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">freq_ess_id</span><span class="p">])</span>
+    <span class="n">scan_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">scan_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_scan&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">scan_ess_id</span><span class="p">])</span>
+    <span class="n">irc_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">irc_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_irc&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">irc_ess_id</span><span class="p">])</span>
+    <span class="n">sp_ess_id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">ForeignKey</span><span class="p">(</span><span class="s1">&#39;ess.id&#39;</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">unique</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">sp_ess</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;ESS&#39;</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;np_species_sp&#39;</span><span class="p">,</span> <span class="n">foreign_keys</span><span class="o">=</span><span class="p">[</span><span class="n">sp_ess_id</span><span class="p">])</span>
+
+    <span class="c1"># relationships - Many to Many</span>
+    <span class="n">authors</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Person&#39;</span><span class="p">,</span> <span class="n">secondary</span><span class="o">=</span><span class="n">np_species_authors</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;authors_np_species&#39;</span><span class="p">)</span>
+    <span class="n">reviewers</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Person&#39;</span><span class="p">,</span> <span class="n">secondary</span><span class="o">=</span><span class="n">np_species_reviewers</span><span class="p">,</span> <span class="n">backref</span><span class="o">=</span><span class="s1">&#39;reviewers_np_species&#39;</span><span class="p">)</span>
+
+    <span class="c1"># paths</span>
+    <span class="n">opt_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">freq_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">scan_paths</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">irc_paths</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">ARRAY</span><span class="p">(</span><span class="n">item_type</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">as_tuple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">zero_indexes</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">sp_path</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">5000</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># unconverged jobs</span>
+    <span class="n">unconverged_jobs</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># misc</span>
+    <span class="n">extras</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        A helper function for generating a user-friendly string representation of the object.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">species_as_str</span><span class="p">(</span><span class="n">class_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+                              <span class="nb">id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                              <span class="n">label</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">label</span><span class="p">,</span>
+                              <span class="n">smiles</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">smiles</span><span class="p">,</span>
+                              <span class="n">inchi</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">inchi</span><span class="p">,</span>
+                              <span class="n">inchi_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">inchi_key</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="species_as_str"><a class="viewcode-back" href="../../../../../api/species_model.html#tckdb.backend.app.models.species.species_as_str">[docs]</a><span class="k">def</span> <span class="nf">species_as_str</span><span class="p">(</span><span class="n">class_name</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">smiles</span><span class="p">,</span> <span class="n">inchi</span><span class="p">,</span> <span class="n">inchi_key</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A helper function for generating a user-friendly string representation of a Species or NonPhysicalSpecies object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">str_</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="n">class_name</span><span class="si">}</span><span class="s2">(&quot;</span>
+    <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;id=</span><span class="si">{</span><span class="nb">id</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">label</span><span class="p">:</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, label=</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">if</span> <span class="n">smiles</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">smiles</span><span class="p">:</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, smiles=</span><span class="si">{</span><span class="n">smiles</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">elif</span> <span class="n">inchi</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">inchi</span><span class="p">:</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, inchi=</span><span class="si">{</span><span class="n">inchi</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">elif</span> <span class="n">inchi_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">inchi_key</span><span class="p">:</span>
+        <span class="n">str_</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, inchi_key=</span><span class="si">{</span><span class="n">inchi_key</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">str_</span> <span class="o">+=</span> <span class="s2">&quot;)&gt;&quot;</span>
+    <span class="k">return</span> <span class="n">str_</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2018-2020, Dana Research Group
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

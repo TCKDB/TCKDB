@@ -159,6 +159,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span> <span class="nn">sqlalchemy</span> <span class="kn">import</span> <span class="n">Column</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">String</span>
+<span class="kn">from</span> <span class="nn">sqlalchemy.orm</span> <span class="kn">import</span> <span class="n">relationship</span>
 
 <span class="kn">from</span> <span class="nn">tckdb.backend.app.db.base_class</span> <span class="kn">import</span> <span class="n">Base</span>
 <span class="kn">from</span> <span class="nn">tckdb.backend.app.models.common</span> <span class="kn">import</span> <span class="n">MsgpackExt</span>
@@ -168,27 +169,90 @@
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    A class for representing a TCKDB Literature item</span>
 
+<span class="sd">    Examples::</span>
+
+<span class="sd">        Literature(type=&#39;article&#39;,</span>
+<span class="sd">                   authors=&#39;M.I. It, D.C. Wash&#39;,</span>
+<span class="sd">                   title=&#39;Kinetics of the Reactions in a Model: Part II&#39;,</span>
+<span class="sd">                   year=2020,</span>
+<span class="sd">                   journal=&#39;Int. J. Chem. Kin.&#39;,</span>
+<span class="sd">                   volume=53,</span>
+<span class="sd">                   issue=2,</span>
+<span class="sd">                   page_start=2222,</span>
+<span class="sd">                   page_end=2229,</span>
+<span class="sd">                   doi=&#39;10.67/doi&#39;,</span>
+<span class="sd">                   url=&#39;url.com/article/abstract&#39;)</span>
+
+<span class="sd">        Literature(type=&#39;book&#39;,</span>
+<span class="sd">                   authors=&#39;M.I. It, D.C. Wash&#39;,</span>
+<span class="sd">                   title=&#39;Principles of Kinetic Modeling&#39;,</span>
+<span class="sd">                   year=1982,</span>
+<span class="sd">                   publisher=&#39;WeeLy&#39;,</span>
+<span class="sd">                   editors=&#39;E.D. Torr&#39;,</span>
+<span class="sd">                   edition=&#39;2nd Edn.&#39;,</span>
+<span class="sd">                   chapter_title=&#39;These are Updated Rates&#39;,</span>
+<span class="sd">                   publication_place=&#39;New York NY&#39;,</span>
+<span class="sd">                   isbn=&#39;978-3-16-148410-0&#39;,</span>
+<span class="sd">                   url=&#39;url.com/book/abstract&#39;)</span>
+
+<span class="sd">        Literature(type=&#39;thesis&#39;,</span>
+<span class="sd">                   authors=&#39;P.H. David&#39;,</span>
+<span class="sd">                   title=&#39;Kinetic Modeling Dissertation&#39;,</span>
+<span class="sd">                   year=2020,</span>
+<span class="sd">                   publisher=&#39;MIT&#39;,</span>
+<span class="sd">                   advisor=&#39;P.R. Ofessor&#39;,</span>
+<span class="sd">                   url=&#39;url.com/dissertation/abstract&#39;)</span>
+
 <span class="sd">    Attributes:</span>
-<span class="sd">        id (int): The primary key.</span>
-<span class="sd">        type (str): The Literature type. Allowed values are &#39;article&#39;, &#39;book&#39;, or &#39;thesis&#39;.</span>
-<span class="sd">        authors (str): The names of all authors (limited to 255 characters, use &quot;et al.&quot; if needed).</span>
-<span class="sd">        title (str): The article, thesis, or book title.</span>
-<span class="sd">        year (int): The publication year.</span>
-<span class="sd">        journal (str): The article journal.</span>
-<span class="sd">        publisher (str): The book&#39;s publisher.</span>
-<span class="sd">        volume (int): The journal volume.</span>
-<span class="sd">        issue (int): The journal issue.</span>
-<span class="sd">        page_start (int): The article starting page.</span>
-<span class="sd">        page_end (int): The article ending page.</span>
-<span class="sd">        editors (str): The book editors.</span>
-<span class="sd">        edition (str): The book edition.</span>
-<span class="sd">        chapter_title (str): The book&#39;s chapter title.</span>
-<span class="sd">        publication_place (str): The book&#39;s publication place.</span>
-<span class="sd">        advisor (str): The thesis advisor.</span>
-<span class="sd">        doi (str): The article DOI.</span>
-<span class="sd">        isbn (str): The book ISBN.</span>
-<span class="sd">        url (str): The web address of the Literature source.</span>
-<span class="sd">        reviewer_flags (dict): Backend flags to assist the review process.</span>
+<span class="sd">        id (int)</span>
+<span class="sd">            The primary key (not a user input)</span>
+<span class="sd">        type (str)</span>
+<span class="sd">            The Literature type. Allowed values are ``&#39;article&#39;``, ``&#39;book&#39;``, or ``&#39;thesis&#39;``</span>
+<span class="sd">        authors (str)</span>
+<span class="sd">            The names of all authors (limited to 255 characters, use &quot;et al.&quot; if needed)</span>
+<span class="sd">        title (str)</span>
+<span class="sd">            The article, thesis, or book title</span>
+<span class="sd">        year (int)</span>
+<span class="sd">            The publication year</span>
+<span class="sd">        journal (str, optional)</span>
+<span class="sd">            The article journal, required for articles</span>
+<span class="sd">        volume (int, optional)</span>
+<span class="sd">            The journal volume, required for articles</span>
+<span class="sd">        issue (int, optional)</span>
+<span class="sd">            The journal issue</span>
+<span class="sd">        page_start (int, optional)</span>
+<span class="sd">            The article starting page, required for articles</span>
+<span class="sd">        page_end (int, optional)</span>
+<span class="sd">            The article ending page, required for articles</span>
+<span class="sd">        publisher (str, optional)</span>
+<span class="sd">            The book&#39;s publisher, required for books</span>
+<span class="sd">        editors (str, optional)</span>
+<span class="sd">            The book editors, required for books</span>
+<span class="sd">        edition (str, optional)</span>
+<span class="sd">            The book edition</span>
+<span class="sd">        chapter_title (str, optional)</span>
+<span class="sd">            The book&#39;s chapter title</span>
+<span class="sd">        publication_place (str, optional)</span>
+<span class="sd">            The book&#39;s publication place, required for books</span>
+<span class="sd">        advisor (str, optional)</span>
+<span class="sd">            The thesis advisor, required for theses</span>
+<span class="sd">        doi (str, optional)</span>
+<span class="sd">            The article DOI, required for articles</span>
+<span class="sd">        isbn (str, optional)</span>
+<span class="sd">            The book ISBN, required for books</span>
+<span class="sd">        url (str, optional)</span>
+<span class="sd">            The web address of the Literature source</span>
+
+<span class="sd">        species (relationship)</span>
+<span class="sd">            A One to Many relationship between Literature and Species.</span>
+<span class="sd">        non_physical_species (relationship)</span>
+<span class="sd">            A One to Many relationship between Literature and NonPhysicalSpecies.</span>
+<span class="sd">        # reactions (relationship)</span>
+<span class="sd">        #     A One to Many relationship between Literature and Reactions.</span>
+<span class="sd">        # networks (relationship)</span>
+<span class="sd">        #     A One to Many relationship between Literature and Networks.</span>
+<span class="sd">        reviewer_flags (Dict[str, str])</span>
+<span class="sd">            Backend flags to assist the review process (not a user input)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="nb">id</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="nb">type</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -209,6 +273,12 @@
     <span class="n">doi</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">))</span>
     <span class="n">isbn</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">255</span><span class="p">))</span>
     <span class="n">url</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">500</span><span class="p">),</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="n">species</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;Species&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;literature&#39;</span><span class="p">)</span>
+    <span class="n">np_species</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="s1">&#39;NonPhysicalSpecies&#39;</span><span class="p">,</span> <span class="n">back_populates</span><span class="o">=</span><span class="s1">&#39;literature&#39;</span><span class="p">)</span>
+    <span class="c1"># reactions = relationship(&#39;Reactions&#39;, back_populates=&#39;literature&#39;)</span>
+    <span class="c1"># networks = relationship(&#39;Networks&#39;, back_populates=&#39;literature&#39;)</span>
+
     <span class="n">reviewer_flags</span> <span class="o">=</span> <span class="n">Column</span><span class="p">(</span><span class="n">MsgpackExt</span><span class="p">,</span> <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
