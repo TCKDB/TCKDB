@@ -291,9 +291,9 @@ class NonPhysicalSpecies(Base):
 
     # relationships - Many to One
     literature_id = Column(Integer, ForeignKey('literature.id'), nullable=True, unique=False)
-    literature = relationship('Literature', back_populates='np_species')
+    literature = relationship('Literature', backref='np_species', foreign_keys=[literature_id])
     bot_id = Column(Integer, ForeignKey('bot.id'), nullable=True, unique=False)
-    bot = relationship('Bot', back_populates='np_species')
+    bot = relationship('Bot', backref='np_species', foreign_keys=[bot_id])
 
     opt_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
     opt_level = relationship('Level', backref="np_species_opt", foreign_keys=[opt_level_id])

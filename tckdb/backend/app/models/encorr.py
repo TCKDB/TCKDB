@@ -82,9 +82,6 @@ class EnCorr(Base):
     bac = Column(MsgpackExt, nullable=True)
     isodesmic_reactions = Column(ARRAY(item_type=dict, as_tuple=False, zero_indexes=True), nullable=True)
     isodesmic_high_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
-
-    species = relationship('Species', back_populates='encorr')
-
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:
