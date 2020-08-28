@@ -7,7 +7,11 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field, validator, constr, conint
 
-from rmgpy.molecule.adjlist import from_adjacency_list
+try:
+    from rmgpy.molecule.adjlist import from_adjacency_list
+except ImportError:
+    # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
+    pass
 
 import tckdb.backend.app.schemas.common as common
 import tckdb.backend.app.conversions.converter as converter

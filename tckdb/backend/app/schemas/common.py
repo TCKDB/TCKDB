@@ -8,11 +8,18 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import qcelemental as qcel
 from pint.errors import DefinitionSyntaxError, DimensionalityError, RedefinitionError, UndefinedUnitError
-from rdkit.Chem import MolFromSmiles
-from rdkit.Chem.inchi import MolFromInchi
+try:
+    from rdkit.Chem import MolFromSmiles
+    from rdkit.Chem.inchi import MolFromInchi
+except ImportError:
+    pass
 
-from rmgpy.exceptions import InvalidAdjacencyListError
-from rmgpy.molecule.adjlist import from_adjacency_list
+try:
+    from rmgpy.exceptions import InvalidAdjacencyListError
+    from rmgpy.molecule.adjlist import from_adjacency_list
+except ImportError:
+    # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
+    pass
 
 from tckdb.backend.app.conversions.converter import inchi_from_inchi_key
 

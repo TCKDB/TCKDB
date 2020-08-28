@@ -10,8 +10,12 @@ import numpy as np
 
 from pydantic import BaseModel, Field, validator, constr, conint, confloat
 
-from arkane.statmech import is_linear
-from rmgpy.molecule.adjlist import from_adjacency_list
+try:
+    from arkane.statmech import is_linear
+    from rmgpy.molecule.adjlist import from_adjacency_list
+except ImportError:
+    # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
+    pass
 
 import tckdb.backend.app.schemas.common as common
 import tckdb.backend.app.conversions.converter as converter

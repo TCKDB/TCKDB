@@ -9,11 +9,15 @@ Todo: Use the ``raise_atomtype_exception`` and ``raise_charge_exception`` argume
 from typing import Dict, Optional, Tuple, Union
 
 import qcelemental as qcel
-from chembl_webresource_client.unichem import UniChemClient
-from rdkit.Chem import MolFromSmiles, MolToSmiles
-from rdkit.Chem.inchi import InchiToInchiKey, MolFromInchi, MolToInchi
 
-from rmgpy.molecule import Molecule
+try:
+    from chembl_webresource_client.unichem import UniChemClient
+    from rdkit.Chem import MolFromSmiles, MolToSmiles
+    from rdkit.Chem.inchi import InchiToInchiKey, MolFromInchi, MolToInchi
+    from rmgpy.molecule import Molecule
+except ImportError:
+    # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
+    pass
 
 
 def inchi_from_smiles(smiles: str) -> Union[str, None]:
