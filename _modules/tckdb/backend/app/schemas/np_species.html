@@ -1,0 +1,618 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>tckdb.backend.app.schemas.np_species &mdash; TCKDB 0.1.0 Documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+
+  
+  
+  
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../../../" src="../../../../../_static/documentation_options.js"></script>
+        <script src="../../../../../_static/jquery.js"></script>
+        <script src="../../../../../_static/underscore.js"></script>
+        <script src="../../../../../_static/doctools.js"></script>
+        <script src="../../../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../../../index.html" class="icon icon-home" alt="Documentation Home"> TCKDB
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../contribute.html">Contribute</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../licence.html">Licence</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../credits.html">Credits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/index.html">TCKDB’s API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../release.html">Release notes</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">TCKDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../../../../index.html">Module code</a> &raquo;</li>
+        
+      <li>tckdb.backend.app.schemas.np_species</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for tckdb.backend.app.schemas.np_species</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">TCKDB backend app schemas non-physical species (np_species) module</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">from</span> <span class="nn">pydantic</span> <span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span><span class="p">,</span> <span class="n">validator</span><span class="p">,</span> <span class="n">constr</span><span class="p">,</span> <span class="n">conint</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">rmgpy.molecule.adjlist</span> <span class="kn">import</span> <span class="n">from_adjacency_list</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="c1"># These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present</span>
+    <span class="k">pass</span>
+
+<span class="kn">import</span> <span class="nn">tckdb.backend.app.schemas.common</span> <span class="k">as</span> <span class="nn">common</span>
+<span class="kn">import</span> <span class="nn">tckdb.backend.app.conversions.converter</span> <span class="k">as</span> <span class="nn">converter</span>
+
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase">[docs]</a><span class="k">class</span> <span class="nc">NonPhysicalSpeciesBase</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A NonPhysicalSpeciesBase class (shared properties)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">label</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">255</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Species label&#39;</span><span class="p">)</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">gt</span><span class="o">=</span><span class="mf">1.58E9</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Time stamp&#39;</span><span class="p">)</span>  <span class="c1"># 1.58E9 corresponds to 2020-01-25 19:53:20</span>
+    <span class="n">retracted</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">255</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Retracted&#39;</span><span class="p">)</span>
+    <span class="n">reviewed</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Retracted (bool)&#39;</span><span class="p">)</span>
+    <span class="n">approved</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Approved (bool)&#39;</span><span class="p">)</span>
+    <span class="n">charge</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">ge</span><span class="o">=-</span><span class="mi">10</span><span class="p">,</span> <span class="n">le</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Net charge&#39;</span><span class="p">)</span>
+    <span class="n">multiplicity</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">le</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Spin multiplicity&#39;</span><span class="p">)</span>
+    <span class="n">smiles</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;SMILES&#39;</span><span class="p">)</span>
+    <span class="n">inchi</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;InChI&#39;</span><span class="p">)</span>
+    <span class="n">inchi_key</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">27</span><span class="p">,</span> <span class="n">min_length</span><span class="o">=</span><span class="mi">27</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;InChI key&#39;</span><span class="p">)</span>
+    <span class="n">graph</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">100000</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Adjacency list graph&#39;</span><span class="p">)</span>
+    <span class="n">electronic_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="s1">&#39;X&#39;</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Electronic state&#39;</span><span class="p">)</span>
+    <span class="n">coordinates</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="o">...</span><span class="p">],</span>
+                                 <span class="n">Tuple</span><span class="p">[</span><span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="o">...</span><span class="p">],</span>
+                                 <span class="n">Tuple</span><span class="p">[</span><span class="n">constr</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">10</span><span class="p">),</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Cartesian coordinates&#39;</span><span class="p">)</span>
+    <span class="n">fragments</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">)]]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Fragments&#39;</span><span class="p">)</span>
+    <span class="n">fragment_orientation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]]]]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Fragment orientation&#39;</span><span class="p">)</span>
+    <span class="n">chirality</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="o">...</span><span class="p">],</span> <span class="n">constr</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">10</span><span class="p">)]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Chirality&#39;</span><span class="p">)</span>
+    <span class="n">conformation_method</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">constr</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">500</span><span class="p">)]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Conformarion method&#39;</span><span class="p">)</span>
+    <span class="n">is_well</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Is this species a well on the PES?&#39;</span><span class="p">)</span>
+    <span class="n">is_global_min</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;If this conformer is a well, whether it is meant to represents &#39;</span>
+                                                      <span class="s1">&#39;the **global** minimum energy well&#39;</span><span class="p">)</span>
+    <span class="n">global_min_geometry</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="o">...</span><span class="p">],</span>
+                                                  <span class="n">Tuple</span><span class="p">[</span><span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="o">...</span><span class="p">],</span>
+                                                  <span class="n">Tuple</span><span class="p">[</span><span class="n">constr</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">10</span><span class="p">),</span> <span class="o">...</span><span class="p">]]]]</span> <span class="o">=</span> \
+        <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;If this species does not represent the global minimum well, this argument must contain &#39;</span>
+                          <span class="s1">&#39;the coordinates of the global minimum energy conformer at the same opt level.&#39;</span><span class="p">)</span>
+    <span class="n">is_ts</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Does this species represent a transition state?&#39;</span><span class="p">)</span>
+    <span class="n">irc_trajectories</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="o">...</span><span class="p">],</span>
+                                              <span class="n">Tuple</span><span class="p">[</span><span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="o">...</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">constr</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">10</span><span class="p">),</span> <span class="o">...</span><span class="p">]]]]]]</span> <span class="o">=</span> \
+        <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;IRC trajectories (for TS species)&#39;</span><span class="p">)</span>
+    <span class="n">opt_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Path to optimization log file&#39;</span><span class="p">)</span>
+    <span class="n">freq_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Path to frequencies log file&#39;</span><span class="p">)</span>
+    <span class="n">scan_paths</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">)],</span> <span class="o">...</span><span class="p">],</span>
+                              <span class="n">constr</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">5000</span><span class="p">)]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Paths to scan log files&#39;</span><span class="p">)</span>
+    <span class="n">irc_paths</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">constr</span><span class="p">(</span><span class="n">max_length</span><span class="o">=</span><span class="mi">5000</span><span class="p">)]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Paths to IRC log files&#39;</span><span class="p">)</span>
+    <span class="n">sp_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Path to single-point energy log file&#39;</span><span class="p">)</span>
+    <span class="n">unconverged_jobs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Paths to unconverged job log files&#39;</span><span class="p">)</span>
+    <span class="n">extras</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Extras&#39;</span><span class="p">)</span>
+    <span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;Reviewer flags&#39;</span><span class="p">)</span>
+
+    <span class="k">class</span> <span class="nc">Config</span><span class="p">:</span>
+        <span class="n">extra</span> <span class="o">=</span> <span class="s2">&quot;forbid&quot;</span>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.check_reviewer_flags"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.check_reviewer_flags">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;reviewer_flags&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">check_reviewer_flags</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.reviewer_flags validator&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">value</span> <span class="ow">or</span> <span class="nb">dict</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.assign_timestamp"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.assign_timestamp">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;timestamp&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">assign_timestamp</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.timestamp validator&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timestamp</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.retracted_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.retracted_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;retracted&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">retracted_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.retracted validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; (non-physical-species label: &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;)&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The &quot;retracted&quot; argument is not a user input</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.reviewed_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.reviewed_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;reviewed&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">reviewed_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.reviewed validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; (non-physical-species label: &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;)&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The &quot;reviewed&quot; argument is not a user input</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.approved_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.approved_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;approved&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">approved_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.approved validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; (non-physical-species label: &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;)&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The &quot;approved&quot; argument is not a user input</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.smiles_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.smiles_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;smiles&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">smiles_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.smiles validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">is_valid</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">is_valid_smiles</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The SMILES &quot;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1">&quot;</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is invalid. Reason:</span><span class="se">\n</span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.inchi_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.inchi_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;inchi&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">inchi_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.inchi validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">is_valid</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">is_valid_inchi</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The InChI &quot;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1">&quot;</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is invalid. Reason:</span><span class="se">\n</span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.inchi_key_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.inchi_key_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;inchi_key&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">inchi_key_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.inchi_key validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">is_valid</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">is_valid_inchi_key</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The InChI Key &quot;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1">&quot;</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is invalid. Reason:</span><span class="se">\n</span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.graph_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.graph_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;graph&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">graph_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        NonPhysicalSpecies.graph validator</span>
+<span class="sd">        Also used to populate SMILES, InChI, InChI Key, adjlist</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; (non-physical-species label: &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;)&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># adjlist was given, populate other attributes as needed</span>
+            <span class="k">if</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">smiles</span><span class="p">,</span> <span class="n">inchi</span> <span class="o">=</span> <span class="n">converter</span><span class="o">.</span><span class="n">smiles_and_inchi_from_adjlist</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="n">smiles</span>
+                <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="n">inchi</span>
+        <span class="k">if</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># InChI was given, populate other attributes as needed</span>
+            <span class="k">if</span> <span class="s1">&#39;smiles&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">]:</span>
+                <span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">converter</span><span class="o">.</span><span class="n">smiles_from_inchi</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">])</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">value</span> <span class="ow">or</span> <span class="n">converter</span><span class="o">.</span><span class="n">adjlist_from_smiles</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="s1">&#39;smiles&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># SMILES was given, populate other attributes as needed</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">value</span> <span class="ow">or</span> <span class="n">converter</span><span class="o">.</span><span class="n">adjlist_from_smiles</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">])</span>
+            <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="n">converter</span><span class="o">.</span><span class="n">inchi_from_smiles</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">])</span>
+        <span class="c1"># populate the InChI Key if not already set</span>
+        <span class="k">if</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi_key&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># InChI Key was given (and there&#39;s no InChI), populate other attributes as needed</span>
+            <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">converter</span><span class="o">.</span><span class="n">inchi_from_inchi_key</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi_key&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="n">converter</span><span class="o">.</span><span class="n">smiles_from_inchi</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">])</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">value</span> <span class="ow">or</span> <span class="n">converter</span><span class="o">.</span><span class="n">adjlist_from_smiles</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">])</span>
+        <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi_key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi_key&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="n">converter</span><span class="o">.</span><span class="n">inchi_key_from_inchi</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">values</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="p">(</span><span class="s1">&#39;smiles&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;smiles&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> \
+                <span class="ow">or</span> <span class="p">(</span><span class="s1">&#39;inchi&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;inchi&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="c1"># couldn&#39;t populate adjlist, SMILES, nor InChI</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;A species descriptor (SMILES, InChI, or graph adjacency list) must be given</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="c1"># adjlist validation</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">is_valid</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">is_valid_adjlist</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The RMG adjacency list</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is invalid:</span><span class="se">\n</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="se">\n</span><span class="s1">Reason:</span><span class="se">\n</span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">multiplicity</span> <span class="o">=</span> <span class="n">from_adjacency_list</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">saturate_h</span><span class="o">=</span><span class="kc">False</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">multiplicity</span> <span class="o">!=</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;multiplicity&#39;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">abs</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;multiplicity&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">multiplicity</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">+</span> <span class="nb">abs</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;charge&#39;</span><span class="p">]):</span>
+                    <span class="c1"># the difference is even, so it makes sense</span>
+                    <span class="n">adjlist_no_multiplicity</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;multiplicity&#39;</span> <span class="ow">in</span> <span class="n">value</span> <span class="k">else</span> <span class="n">value</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;multiplicity </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;multiplicity&quot;</span><span class="p">]</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">adjlist_no_multiplicity</span><span class="si">}</span><span class="s1">&#39;</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The given multiplicity </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;multiplicity&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1"> and the multiplicity of the &#39;</span>
+                                     <span class="sa">f</span><span class="s1">&#39;graph adjacency list mismatch</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">:</span><span class="se">\n</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.coordinates_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.coordinates_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;coordinates&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">coordinates_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.coordinates validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">converter</span><span class="o">.</span><span class="n">add_common_isotopes_to_coords</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="n">is_valid</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">is_valid_coordinates</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The following coordinates dictionary</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is invalid:</span><span class="se">\n</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="se">\n</span><span class="s1">Reason:</span><span class="se">\n</span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.fragments_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.fragments_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;fragments&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">fragments_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.fragments validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; of non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">atom_indices</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">fragment</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">fragment</span><span class="p">:</span>
+                <span class="n">is_valid</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">is_valid_atom_index</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">index</span><span class="p">,</span>
+                                                           <span class="n">coordinates</span><span class="o">=</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;coordinates&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;coordinates&#39;</span> <span class="ow">in</span> <span class="n">values</span>
+                                                           <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                                                           <span class="n">existing_indices</span><span class="o">=</span><span class="n">atom_indices</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The atom index </span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s1"> in the fragments attribute</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is invalid. &#39;</span>
+                                     <span class="sa">f</span><span class="s1">&#39;Got:</span><span class="se">\n</span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+                <span class="n">atom_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;coordinates&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;coordinates&#39;</span><span class="p">][</span><span class="s1">&#39;symbols&#39;</span><span class="p">])</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">atom_indices</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;coordinates&quot;</span><span class="p">][</span><span class="s2">&quot;symbols&quot;</span><span class="p">])</span><span class="si">}</span><span class="s1"> atoms were specified in the fragments</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">, &#39;</span>
+                             <span class="sa">f</span><span class="s1">&#39;while according to its coordinates it has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">atom_indices</span><span class="p">)</span><span class="si">}</span><span class="s1"> atoms.&#39;</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.fragment_orientation_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.fragment_orientation_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;fragment_orientation&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">fragment_orientation_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.fragment_orientation validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; (non-physical-species label &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;)&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;fragments&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;fragments&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Must specify fragment_orientation if fragments are specified</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;fragments&#39;</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;fragments&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The fragment_orientation argument</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is unexpected if the fragments &#39;</span>
+                                     <span class="sa">f</span><span class="s1">&#39;argument is not specified.&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;fragments&#39;</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Expected </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;fragments&quot;</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="si">}</span><span class="s1"> fragment orientation entries for a &#39;</span>
+                                     <span class="sa">f</span><span class="s1">&#39;species with </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;fragments&quot;</span><span class="p">])</span><span class="si">}</span><span class="s1"> fragments, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+            <span class="n">valid_keys</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;cm&#39;</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;z&#39;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Expected the following keys in the fragment_orientation argument: &quot;cm&quot;, &quot;x&quot;, &#39;</span>
+                                     <span class="sa">f</span><span class="s1">&#39;&quot;y&quot;, and &quot;z&quot;. Got</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">entry</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">valid_keys</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Got an unrecognized key &quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s1">&quot; in the fragment_orientation &#39;</span>
+                                         <span class="sa">f</span><span class="s1">&#39;attribute</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;cm&#39;</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The center of mass vector in the fragment_orientation attribute must be &#39;</span>
+                                            <span class="sa">f</span><span class="s1">&#39;a list type, got</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">entry</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The center of mass vector in the fragment_orientation attribute</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> &#39;</span>
+                                             <span class="sa">f</span><span class="s1">&#39;has length </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="si">}</span><span class="s1">, should have a length of 3.&#39;</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
+                        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The &quot;x&quot;, &quot;y&quot;, and &quot;z&quot; in the fragment_orientation attribute must have &#39;</span>
+                                        <span class="sa">f</span><span class="s1">&#39;float type values, got</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">: </span><span class="si">{</span><span class="n">val</span><span class="si">}</span><span class="s1"> with type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="si">}</span><span class="s1"> in</span><span class="se">\n</span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.chirality_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.chirality_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;chirality&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">chirality_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.chirality validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">chiral_atom_indices</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="n">allowed_values</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;R&#39;</span><span class="p">,</span> <span class="s1">&#39;S&#39;</span><span class="p">,</span> <span class="s1">&#39;NR&#39;</span><span class="p">,</span> <span class="s1">&#39;NS&#39;</span><span class="p">,</span> <span class="s1">&#39;E&#39;</span><span class="p">,</span> <span class="s1">&#39;Z&#39;</span><span class="p">]</span>
+        <span class="n">allowed_atoms</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;Si&#39;</span><span class="p">,</span> <span class="s1">&#39;Ge&#39;</span><span class="p">,</span> <span class="s1">&#39;Sn&#39;</span><span class="p">,</span> <span class="s1">&#39;Pb&#39;</span><span class="p">,</span> <span class="s1">&#39;N&#39;</span><span class="p">,</span> <span class="s1">&#39;P&#39;</span><span class="p">,</span> <span class="s1">&#39;As&#39;</span><span class="p">,</span> <span class="s1">&#39;Sb&#39;</span><span class="p">,</span> <span class="s1">&#39;Bi&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
+                <span class="n">is_valid</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">is_valid_atom_index</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">index</span><span class="p">,</span>
+                                                           <span class="n">coordinates</span><span class="o">=</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;coordinates&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s1">&#39;coordinates&#39;</span> <span class="ow">in</span> <span class="n">values</span>
+                                                           <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                                                           <span class="n">existing_indices</span><span class="o">=</span><span class="n">chiral_atom_indices</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The atom index </span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s1"> in the fragments attribute</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is invalid. &#39;</span>
+                                     <span class="sa">f</span><span class="s1">&#39;Got:</span><span class="se">\n</span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+                <span class="n">chiral_atom_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+                <span class="k">if</span> <span class="s1">&#39;coordinates&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;coordinates&#39;</span><span class="p">][</span><span class="s1">&#39;symbols&#39;</span><span class="p">][</span><span class="n">index</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_atoms</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;A chiral site cannot include </span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;coordinates&quot;</span><span class="p">][</span><span class="s2">&quot;symbols&quot;</span><span class="p">][</span><span class="n">index</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s1"> &#39;</span>
+                                     <span class="sa">f</span><span class="s1">&#39;atoms. Got</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">:</span><span class="se">\n</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">val</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_values</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The chirality notation is not recognized. Expected it to be in </span><span class="si">{</span><span class="n">allowed_values</span><span class="si">}</span><span class="s1">, &#39;</span>
+                                 <span class="sa">f</span><span class="s1">&#39;got </span><span class="si">{</span><span class="n">val</span><span class="si">}</span><span class="s1"> in</span><span class="se">\n</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">val</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;R&#39;</span><span class="p">,</span> <span class="s1">&#39;S&#39;</span><span class="p">,</span> <span class="s1">&#39;NR&#39;</span><span class="p">,</span> <span class="s1">&#39;NS&#39;</span><span class="p">]:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;A chiral atom center must have one of the following notations: &quot;R&quot;, &quot;S&quot;, &quot;NR&quot;, &#39;</span>
+                                     <span class="sa">f</span><span class="s1">&#39;or &quot;NS&quot;, got </span><span class="si">{</span><span class="n">val</span><span class="si">}</span><span class="s1"> in </span><span class="si">{</span><span class="n">value</span><span class="si">}{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">val</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;E&#39;</span><span class="p">,</span> <span class="s1">&#39;Z&#39;</span><span class="p">]:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;A chiral center around a double bond must be noted by either &quot;E&quot; or &quot;Z&quot;, &#39;</span>
+                                     <span class="sa">f</span><span class="s1">&#39;got </span><span class="si">{</span><span class="n">val</span><span class="si">}</span><span class="s1"> in </span><span class="si">{</span><span class="n">value</span><span class="si">}{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;A chiral center must be noted by either a single atom index or two, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s1"> &#39;</span>
+                                 <span class="sa">f</span><span class="s1">&#39;in </span><span class="si">{</span><span class="n">value</span><span class="si">}{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">val</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;NR&#39;</span><span class="p">,</span> <span class="s1">&#39;NS&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="s1">&#39;coordinates&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;coordinates&#39;</span><span class="p">][</span><span class="s1">&#39;symbols&#39;</span><span class="p">][</span><span class="n">key</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;N&#39;</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;A chiral atom center</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> with an &quot;NR&quot; or &quot;NS&quot; notation but be a nitrogen atom.&#39;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">val</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;R&#39;</span><span class="p">,</span> <span class="s1">&#39;S&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="s1">&#39;coordinates&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;coordinates&#39;</span><span class="p">][</span><span class="s1">&#39;symbols&#39;</span><span class="p">][</span><span class="n">key</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;N&#39;</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;A chiral *nitrogen* atom center</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> with must be noted with &quot;NR&quot; or &quot;NS&quot;.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.conformation_method_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.conformation_method_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;conformation_method&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">conformation_method_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.conformation_method validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s1">&#39;coordinates&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="s1">&#39;coordinates&#39;</span><span class="p">][</span><span class="s1">&#39;symbols&#39;</span><span class="p">])</span> <span class="o">&gt;=</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Must provide a conformation method</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> when the species contains more than 4 atoms.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.global_min_geometry_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.global_min_geometry_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;global_min_geometry&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">global_min_geometry_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.global_min_geometry validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">converter</span><span class="o">.</span><span class="n">add_common_isotopes_to_coords</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="n">is_valid</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">is_valid_coordinates</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The following global_min_geometry coordinates dictionary</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is invalid:</span><span class="se">\n</span><span class="s1">&#39;</span>
+                             <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="se">\n</span><span class="s1">Reason:</span><span class="se">\n</span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.irc_trajectories_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.irc_trajectories_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;irc_trajectories&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">irc_trajectories_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.irc_trajectories validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="s1">&#39;is_ts&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;is_ts&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;IRC trajectories must be given</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1"> if the species is a TS.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">traj</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">frame</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">traj</span><span class="p">):</span>
+                    <span class="n">converter</span><span class="o">.</span><span class="n">add_common_isotopes_to_coords</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+                    <span class="n">is_valid</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">common</span><span class="o">.</span><span class="n">is_valid_coordinates</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Frame </span><span class="si">{</span><span class="n">j</span><span class="si">}</span><span class="s1"> in IRC trajectory </span><span class="si">{</span><span class="n">i</span><span class="si">}{</span><span class="n">label</span><span class="si">}</span><span class="s1"> is invalid:</span><span class="se">\n</span><span class="s1">&#39;</span>
+                                         <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">frame</span><span class="si">}</span><span class="se">\n</span><span class="s1">Reason:</span><span class="se">\n</span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.opt_path_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.opt_path_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;opt_path&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">opt_path_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.opt_path validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">common</span><span class="o">.</span><span class="n">get_number_of_atoms</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The opt_path was not given</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.freq_path_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.freq_path_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;freq_path&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">freq_path_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.freq_path validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">common</span><span class="o">.</span><span class="n">get_number_of_atoms</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The freq_path was not given</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.irc_paths_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.irc_paths_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;irc_paths&#39;</span><span class="p">,</span> <span class="n">always</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">irc_paths_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.irc_paths validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">if</span> <span class="s1">&#39;irc_trajectories&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;irc_trajectories&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The irc_paths argument was not given</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;The length of the IRC paths argument must be either 1 (for a forward+reverse IRC) or 2. &#39;</span>
+                             <span class="sa">f</span><span class="s1">&#39;Got: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}{</span><span class="n">label</span><span class="si">}</span><span class="s1">.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="NonPhysicalSpeciesBase.unconverged_jobs_validator"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesBase.unconverged_jobs_validator">[docs]</a>    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;unconverged_jobs&#39;</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">unconverged_jobs_validator</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;NonPhysicalSpecies.unconverged_jobs validator&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39; for non-physical-species &quot;</span><span class="si">{</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1">&quot;&#39;</span> \
+            <span class="k">if</span> <span class="s1">&#39;label&#39;</span> <span class="ow">in</span> <span class="n">values</span> <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="s1">&#39;label&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">allowed_keys</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;job type&#39;</span><span class="p">,</span> <span class="s1">&#39;issue&#39;</span><span class="p">,</span> <span class="s1">&#39;troubleshooting&#39;</span><span class="p">,</span> <span class="s1">&#39;comment&#39;</span><span class="p">,</span> <span class="s1">&#39;path&#39;</span><span class="p">]</span>
+        <span class="n">recognized_job_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;opt&#39;</span><span class="p">,</span> <span class="s1">&#39;freq&#39;</span><span class="p">,</span> <span class="s1">&#39;scan&#39;</span><span class="p">,</span> <span class="s1">&#39;irc&#39;</span><span class="p">,</span> <span class="s1">&#39;sp&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">unconverged_job</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">key</span> <span class="ow">in</span> <span class="n">allowed_keys</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">unconverged_job</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Got an unrecognized key in unconverged_jobs</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.</span><span class="se">\n</span><span class="s1">&#39;</span>
+                                 <span class="sa">f</span><span class="s1">&#39;Recognized keys are: </span><span class="si">{</span><span class="n">allowed_keys</span><span class="si">}</span><span class="se">\n</span><span class="s1">Got: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">unconverged_job</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">&#39;job type&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">unconverged_job</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;A job type is required when reporting an unconverged job. Got None</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.`&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">unconverged_job</span><span class="p">[</span><span class="s1">&#39;job type&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">recognized_job_types</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The unconverged job type </span><span class="si">{</span><span class="n">unconverged_job</span><span class="p">[</span><span class="s1">&#39;job type&#39;</span><span class="p">]</span><span class="si">}{</span><span class="n">label</span><span class="si">}</span><span class="s2"> is invalid.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                                     <span class="sa">f</span><span class="s2">&quot;Recognized job types are </span><span class="si">{</span><span class="n">recognized_job_types</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">&#39;path&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">unconverged_job</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;A file path is required when reporting an unconverged job. Got None</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">.`&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div></div>
+
+
+<div class="viewcode-block" id="NonPhysicalSpeciesCreate"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesCreate">[docs]</a><span class="k">class</span> <span class="nc">NonPhysicalSpeciesCreate</span><span class="p">(</span><span class="n">NonPhysicalSpeciesBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create a NonPhysicalSpecies item: Properties to receive on item creation&quot;&quot;&quot;</span>
+    <span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="NonPhysicalSpeciesUpdate"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesUpdate">[docs]</a><span class="k">class</span> <span class="nc">NonPhysicalSpeciesUpdate</span><span class="p">(</span><span class="n">NonPhysicalSpeciesBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Update a NonPhysicalSpecies item: Properties to receive on item update&quot;&quot;&quot;</span>
+    <span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="NonPhysicalSpeciesInDBBase"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesInDBBase">[docs]</a><span class="k">class</span> <span class="nc">NonPhysicalSpeciesInDBBase</span><span class="p">(</span><span class="n">NonPhysicalSpeciesBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Properties shared by models stored in DB&quot;&quot;&quot;</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">reviewer_flags</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">class</span> <span class="nc">Config</span><span class="p">:</span>
+        <span class="n">orm_mode</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="NonPhysicalSpecies"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpecies">[docs]</a><span class="k">class</span> <span class="nc">NonPhysicalSpecies</span><span class="p">(</span><span class="n">NonPhysicalSpeciesInDBBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Properties to return to client&quot;&quot;&quot;</span>
+    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="NonPhysicalSpeciesInDB"><a class="viewcode-back" href="../../../../../api/np_species_schema.html#tckdb.backend.app.schemas.np_species.NonPhysicalSpeciesInDB">[docs]</a><span class="k">class</span> <span class="nc">NonPhysicalSpeciesInDB</span><span class="p">(</span><span class="n">NonPhysicalSpeciesInDBBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Properties stored in DB&quot;&quot;&quot;</span>
+    <span class="k">pass</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        
+        &copy; Copyright 2018-2020, Dana Research Group
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
