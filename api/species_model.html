@@ -1025,7 +1025,7 @@ and <code class="docutils literal notranslate"><span class="pre">'degeneracy'</s
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.species.Species.H298">
 <code class="sig-name descname">H298</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.H298" title="Permalink to this definition">¶</a></dt>
-<dd><p>The standard (298.15 K, 1 bar) enthalpy change of formation. Must be specified for non-TS species.</p>
+<dd><p>The standard (298.15 K, 1 bar) enthalpy change of formation. Required for non-TS species.</p>
 <dl class="simple">
 <dt>Units:</dt><dd><p>kJ/mol</p>
 </dd>
@@ -1040,7 +1040,7 @@ and <code class="docutils literal notranslate"><span class="pre">'degeneracy'</s
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.species.Species.S298">
 <code class="sig-name descname">S298</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.S298" title="Permalink to this definition">¶</a></dt>
-<dd><p>The standard (298.15 K, 1 bar) entropy change of formation. Must be specified for non-TS species.</p>
+<dd><p>The standard (298.15 K, 1 bar) entropy change of formation. Required for non-TS species.</p>
 <dl class="simple">
 <dt>Units:</dt><dd><p>J / (mol * K)</p>
 </dd>
@@ -1055,7 +1055,7 @@ and <code class="docutils literal notranslate"><span class="pre">'degeneracy'</s
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.species.Species.Cp_values">
 <code class="sig-name descname">Cp_values</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.Cp_values" title="Permalink to this definition">¶</a></dt>
-<dd><p>The constant pressure heat capacity values. Must be specified for non-TS species.</p>
+<dd><p>The constant pressure heat capacity values. Required for non-TS species.</p>
 <dl class="simple">
 <dt>Units:</dt><dd><p>J / (mol * K).</p>
 </dd>
@@ -1070,7 +1070,7 @@ and <code class="docutils literal notranslate"><span class="pre">'degeneracy'</s
 <dl class="py attribute">
 <dt id="tckdb.backend.app.models.species.Species.Cp_T_list">
 <code class="sig-name descname">Cp_T_list</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.Cp_T_list" title="Permalink to this definition">¶</a></dt>
-<dd><p>The temperatures in K corresponding to the discrete Cp values. Must be specified for non-TS species.</p>
+<dd><p>The temperatures in K corresponding to the discrete Cp values. Required for non-TS species.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>Optional[List[float]]</p>
@@ -1082,7 +1082,7 @@ and <code class="docutils literal notranslate"><span class="pre">'degeneracy'</s
 <dt id="tckdb.backend.app.models.species.Species.heat_capacity_model">
 <code class="sig-name descname">heat_capacity_model</code><a class="headerlink" href="#tckdb.backend.app.models.species.Species.heat_capacity_model" title="Permalink to this definition">¶</a></dt>
 <dd><p>The heat capacity extrapolation model and coefficients.
-Must be specified for non-TS species. Keys (values) are:</p>
+Required for non-TS species. Keys (values) are:</p>
 <ul>
 <li><dl class="simple">
 <dt>‘model’ (str)</dt><dd><p>The heat capacity model. For example: <code class="docutils literal notranslate"><span class="pre">'NASA'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Wilhoit'</span></code>.</p>

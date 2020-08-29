@@ -524,25 +524,25 @@
 
 <span class="sd">        # thermochemical properties</span>
 <span class="sd">        H298 (Optional[float])</span>
-<span class="sd">            The standard (298.15 K, 1 bar) enthalpy change of formation. Must be specified for non-TS species.</span>
+<span class="sd">            The standard (298.15 K, 1 bar) enthalpy change of formation. Required for non-TS species.</span>
 
 <span class="sd">            Units:</span>
 <span class="sd">                kJ/mol</span>
 <span class="sd">        S298 (Optional[float])</span>
-<span class="sd">            The standard (298.15 K, 1 bar) entropy change of formation. Must be specified for non-TS species.</span>
+<span class="sd">            The standard (298.15 K, 1 bar) entropy change of formation. Required for non-TS species.</span>
 
 <span class="sd">            Units:</span>
 <span class="sd">                J / (mol * K)</span>
 <span class="sd">        Cp_values (Optional[List[float]])</span>
-<span class="sd">            The constant pressure heat capacity values. Must be specified for non-TS species.</span>
+<span class="sd">            The constant pressure heat capacity values. Required for non-TS species.</span>
 
 <span class="sd">            Units:</span>
 <span class="sd">                J / (mol * K).</span>
 <span class="sd">        Cp_T_list (Optional[List[float]])</span>
-<span class="sd">            The temperatures in K corresponding to the discrete Cp values. Must be specified for non-TS species.</span>
+<span class="sd">            The temperatures in K corresponding to the discrete Cp values. Required for non-TS species.</span>
 <span class="sd">        heat_capacity_model (Optional[Dict[str, Union[float, Dict[str, Union[float, List[float]]], str]]])</span>
 <span class="sd">            The heat capacity extrapolation model and coefficients.</span>
-<span class="sd">            Must be specified for non-TS species. Keys (values) are:</span>
+<span class="sd">            Required for non-TS species. Keys (values) are:</span>
 
 <span class="sd">            * &#39;model&#39; (str)</span>
 <span class="sd">                The heat capacity model. For example: ``&#39;NASA&#39;``, ``&#39;Wilhoit&#39;``.</span>
