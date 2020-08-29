@@ -10,16 +10,16 @@ Extracted from species and not used, should be implemented once we have Network
 (should be modified, this is not the correct implementation):
 
         # trans_id (int)
-        #     The energy transfer model from the :ref:`Trans table <trans>`.
+        #     The energy transfer model from the :ref:`Trans table <trans_model>`.
         # trans (relationship)
         #     An attribute that establishes a bidirectional relationship in a One to Many data model
-        #     with the :ref:`Trans table <trans>`,
+        #     with the :ref:`Trans table <trans_model>`,
         #     where the "reverse" side is a Many to One data model.
         # LJ_id (int)
-        #     The Lennard-Jones coefficients from the :ref:`LJ table <LJ>`.
+        #     The Lennard-Jones coefficients from the :ref:`LJ table <LJ_model>`.
         # LJ (relationship)
         #     An attribute that establishes a bidirectional relationship in a One to Many data model
-        #     with the :ref:`LJ table <LJ>`,
+        #     with the :ref:`LJ table <LJ_model>`,
         #     where the "reverse" side is a Many to One data model.
 
     trans_id = Column(Integer, ForeignKey('trans.id'), nullable=True, unique=False)

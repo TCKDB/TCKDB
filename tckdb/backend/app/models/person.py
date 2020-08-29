@@ -29,20 +29,20 @@ class Person(Base):
             The Person's academic affiliation
         authors_species (relationship)
             An attribute that establishes a bidirectional relationship in a Many to Many data model
-            with the :ref:`Species table <species>` representing species authored by persons in this object.
+            with the :ref:`Species table <species_model>` representing species authored by persons in this object.
             This attribute is added automatically and is only defined under ``Species`` as ``authors``.
         reviewers_species (relationship)
             An attribute that establishes a bidirectional relationship in a Many to Many data model
-            with the :ref:`Species table <species>` representing species reviewed by persons in this object.
+            with the :ref:`Species table <species_model>` representing species reviewed by persons in this object.
             This attribute is added automatically and is only defined under ``Species`` as ``reviewers``.
         authors_np_species (relationship)
             An attribute that establishes a bidirectional relationship in a Many to Many data model
-            with the :ref:`NonPhysicalSpecies table <species>` representing non physical species
+            with the :ref:`NonPhysicalSpecies table <np_species_model>` representing non physical species
             authored by persons in this object.
             This attribute is added automatically and is only defined under ``NonPhysicalSpecies`` as ``authors``.
         reviewers_np_species (relationship)
             An attribute that establishes a bidirectional relationship in a Many to Many data model
-            with the :ref:`NonPhysicalSpecies table <species>` representing non physical species
+            with the :ref:`NonPhysicalSpecies table <np_species_model>` representing non physical species
             reviewed by persons in this object.
             This attribute is added automatically and is only defined under ``NonPhysicalSpecies`` as ``reviewers``.
         uploaded_species (int)

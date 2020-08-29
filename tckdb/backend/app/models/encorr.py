@@ -40,10 +40,11 @@ class EnCorr(Base):
         id (int)
             The primary key (not a user input)
         level_id (int)
-            The level of theory key for the :ref:`level table <level>`.
+            The level of theory key for the :ref:`Level table <level_model>`.
 
             Note:
-                This argument will be facilitated by TCKDB by querying the :ref:`level table <level>`.
+                This argument is facilitated by querying the
+                :ref:`Level table <level_model>`.
         supported_elements (List[str])
             Entries are atomic symbols of elements supported by this energy correction instance.
         energy_unit (str)
@@ -65,7 +66,7 @@ class EnCorr(Base):
             of reaction at the "low level" in the specified ``energy_unit``. See example above.
         isodesmic_high_level_id (int)
             The high level of theory used for all other species. A level of theory key for the
-            :ref:`level table <level>`. Required if ``isodesmic_reactions`` is specified, ``None`` otherwise.
+            :ref:`Level table <level_model>`. Required if ``isodesmic_reactions`` is specified, ``None`` otherwise.
 
         species (relationship)
             A One to Many relationship between EnCorr and Species.
