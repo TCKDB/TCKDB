@@ -13,6 +13,7 @@ from tckdb.backend.app.models.freq import Freq
 from tckdb.backend.app.models.level import Level
 from tckdb.backend.app.models.literature import Literature
 from tckdb.backend.app.models.LJ import LJ
+from tckdb.backend.app.models.np_species import NonPhysicalSpecies
 from tckdb.backend.app.models.person import Person
-from tckdb.backend.app.models.species import Species, NonPhysicalSpecies
+from tckdb.backend.app.models.species import Species
 from tckdb.backend.app.models.trans import Trans

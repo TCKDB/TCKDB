@@ -49,6 +49,19 @@ def test_species_schema():
     ICdCC_Cl__I_NF_scaled_freqs = [(i + 1) * 0.973 for i in range(27)]
     ICdCC_Cl__I_NF_normal_disp_modes = [[[1, 2, 3]] * 11] * 27
 
+    heat_capacity_model = {'model': 'NASA',
+                           'T min': 100,
+                           'T max': 5000,
+                           'coefficients': {'low': [4.13878818E+00, -4.69514383E-03,
+                                                    2.25730249E-05, -2.09849937E-08,
+                                                    6.36123283E-12, -1.43493283E+04,
+                                                    3.23827482E+00],
+                                            'high': [2.36095410E+00, 7.66804276E-03,
+                                                     -3.19770442E-06, 6.04724833E-10,
+                                                     -4.27517878E-14, -1.42794809E+04,
+                                                     1.04457152E+01],
+                                            'T int': 1041.96}}
+
     # 1. descriptors
     # only providing SMILES
     spc_1 = SpeciesBase(smiles='C',
@@ -147,6 +160,7 @@ def test_species_schema():
                         S298=186.06,
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
+                        heat_capacity_model = heat_capacity_model,
                         encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
@@ -3474,6 +3488,8 @@ def test_species_schema():
     assert spc_20.S298 == 186.06
     assert spc_20.Cp_values == [36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94]
     assert spc_20.Cp_T_list == [300, 400, 500, 600, 800, 1000, 1500]
+    assert spc_2.heat_capacity_model is None
+    assert spc_3.heat_capacity_model == heat_capacity_model
 
     # Not specifying 298, S298, Cp_values, Cp_T_list for a TS
     SpeciesBase(smiles='C',

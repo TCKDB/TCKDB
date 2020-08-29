@@ -19,7 +19,7 @@ class BotBase(BaseModel):
                                       title="The latest git commit (useful when working on the "
                                             "master branch rather than a stable release)")
     git_branch: Optional[str] = Field(None, max_length=100, title="The git branch used if not 'master'")
-    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
 
     class Config:
         extra = "forbid"

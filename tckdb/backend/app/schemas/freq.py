@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas freq module
+TCKDB backend app schemas frequencies (freq) module
 """
 
 from typing import Dict, Optional
@@ -14,7 +14,7 @@ class FreqBase(BaseModel):
     factor: float = Field(..., gt=0, lt=2, title='The frequency scaling factor')
     level_id: int = Field(..., ge=0, title='The level of theory id from the Level table')
     source: str = Field(..., max_length=1600, title='The source of method used to derive this frequency scaling factor')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
 
     class Config:
         extra = "forbid"

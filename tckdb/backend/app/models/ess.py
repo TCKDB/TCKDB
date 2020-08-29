@@ -1,5 +1,5 @@
 """
-TCKDB backend app models ess module
+TCKDB backend app models electronic structure software (ess) module
 """
 
 from sqlalchemy import Column, Integer, String

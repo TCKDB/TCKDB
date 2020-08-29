@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas trans module
+TCKDB backend app schemas energy transfer (trans) module
 """
 
 from enum import Enum
@@ -23,7 +23,7 @@ class TransBase(BaseModel):
                                              'currently only "Single Exponential Down" is supported')
     parameters: Dict[str, Union[Tuple[Union[float], str], Union[float]]] = \
         Field(..., title='The energy transfer model parameters')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
 
     class Config:
         extra = "forbid"

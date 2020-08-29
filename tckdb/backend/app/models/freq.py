@@ -1,5 +1,5 @@
 """
-TCKDB backend app models freq module
+TCKDB backend app models frequencies (freq) module
 """
 
 from sqlalchemy import Column, Float, ForeignKey, Integer, String
@@ -24,10 +24,10 @@ class Freq(Base):
         factor (float)
             The frequency scaling factor.
         level_id (int)
-            The level of theory key for the :ref:`level table <level>`.
+            The level of theory key for the :ref:`Level table <level_model>`.
 
             Note:
-                This argument will be facilitated by TCKDB by querying the :ref:`level table <level>`.
+                This argument is facilitated by querying the :ref:`Level table <level_model>`.
         source (str)
             The source for the determine frequency scaling factor.
         reviewer_flags (Dict[str, str])

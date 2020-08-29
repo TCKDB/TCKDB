@@ -1,5 +1,5 @@
 """
-TCKDB backend app models encorr module
+TCKDB backend app models energy correction (encorr) module
 """
 
 from sqlalchemy import Column, ForeignKey, Integer, String
@@ -40,10 +40,11 @@ class EnCorr(Base):
         id (int)
             The primary key (not a user input)
         level_id (int)
-            The level of theory key for the :ref:`level table <level>`.
+            The level of theory key for the :ref:`Level table <level_model>`.
 
             Note:
-                This argument will be facilitated by TCKDB by querying the :ref:`level table <level>`.
+                This argument is facilitated by querying the
+                :ref:`Level table <level_model>`.
         supported_elements (List[str])
             Entries are atomic symbols of elements supported by this energy correction instance.
         energy_unit (str)
@@ -65,7 +66,7 @@ class EnCorr(Base):
             of reaction at the "low level" in the specified ``energy_unit``. See example above.
         isodesmic_high_level_id (int)
             The high level of theory used for all other species. A level of theory key for the
-            :ref:`level table <level>`. Required if ``isodesmic_reactions`` is specified, ``None`` otherwise.
+            :ref:`Level table <level_model>`. Required if ``isodesmic_reactions`` is specified, ``None`` otherwise.
 
         species (relationship)
             A One to Many relationship between EnCorr and Species.
@@ -81,9 +82,6 @@ class EnCorr(Base):
     bac = Column(MsgpackExt, nullable=True)
     isodesmic_reactions = Column(ARRAY(item_type=dict, as_tuple=False, zero_indexes=True), nullable=True)
     isodesmic_high_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
-
-    species = relationship('Species', back_populates='encorr')
-
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:

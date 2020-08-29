@@ -8,6 +8,7 @@ pint
 psycopg2
 pydantic
 pytest
+pyyaml
 qcelemental
 sqlalchemy
 starlette

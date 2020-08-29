@@ -91,10 +91,7 @@ class Literature(Base):
             A One to Many relationship between Literature and Species.
         non_physical_species (relationship)
             A One to Many relationship between Literature and NonPhysicalSpecies.
-        # reactions (relationship)
-        #     A One to Many relationship between Literature and Reactions.
-        # networks (relationship)
-        #     A One to Many relationship between Literature and Networks.
+
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input)
     """
@@ -117,12 +114,6 @@ class Literature(Base):
     doi = Column(String(255))
     isbn = Column(String(255))
     url = Column(String(500), nullable=False)
-
-    species = relationship('Species', back_populates='literature')
-    np_species = relationship('NonPhysicalSpecies', back_populates='literature')
-    # reactions = relationship('Reactions', back_populates='literature')
-    # networks = relationship('Networks', back_populates='literature')
-
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:

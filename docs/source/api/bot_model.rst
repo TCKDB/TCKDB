@@ -1,6 +1,6 @@
 .. _bot_model:
 
-bot model
+Bot model
 =========
 
 .. automodule:: tckdb.backend.app.models.bot

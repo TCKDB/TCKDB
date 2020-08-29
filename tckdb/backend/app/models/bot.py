@@ -41,10 +41,6 @@ class Bot(Base):
             A One to Many relationship between Bot and Species.
         non_physical_species (relationship)
             A One to Many relationship between Bot and NonPhysicalSpecies.
-        # reactions (relationship)
-        #     A One to Many relationship between Bot and Reactions.
-        # networks (relationship)
-        #     A One to Many relationship between Bot and Networks.
 
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input)
@@ -55,12 +51,6 @@ class Bot(Base):
     url = Column(String(255), nullable=False)
     git_commit = Column(String(500), nullable=True)
     git_branch = Column(String(100), nullable=True)
-
-    species = relationship('Species', back_populates='bot')
-    np_species = relationship('NonPhysicalSpecies', back_populates='bot')
-    # reactions = relationship('Reactions', back_populates='bot')
-    # networks = relationship('Networks', back_populates='bot')
-
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __str__(self) -> str:

@@ -1,5 +1,5 @@
 """
-TCKDB backend app schemas freq module
+TCKDB backend app schemas level of theory module
 """
 
 from typing import Dict, Optional
@@ -21,7 +21,7 @@ class LevelBase(BaseModel):
     solvent: Optional[str] = Field(None, max_length=100, title='The solvent used if a solvation correction was applied')
     solvation_method: Optional[str] = Field(None, max_length=500, title='The solvation method (e.g., SMD or COSMO-RS)')
     solvation_description: Optional[str] = Field(None, max_length=1000, title='Additional solvation scheme description')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None)
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
 
     class Config:
         extra = "forbid"

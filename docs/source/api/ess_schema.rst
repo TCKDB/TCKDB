@@ -1,7 +1,7 @@
 .. _ess_schema:
 
-electronic structure software (ess) schema
-==========================================
+Electronic structure software schema
+====================================
 
-.. automodule:: tckdb.backend.app.schema.ess
+.. automodule:: tckdb.backend.app.schemas.ess
     :members:
