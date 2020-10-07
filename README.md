@@ -33,5 +33,6 @@ International collaborators include researchers from the following institutions:
 *   National Renewable Energy Laboratory
 *   Northeastern University
 *   Polytechnic University of Milan
+*   Sandia National Laboratories
 *   Technion - Israel Institute of Technology
 *   U.S. Army Research Laboratories
