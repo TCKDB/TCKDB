@@ -13,6 +13,8 @@
   
   <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
 
   
   
@@ -29,6 +31,7 @@
   
     
       <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
         <script src="../_static/jquery.js"></script>
         <script src="../_static/underscore.js"></script>
         <script src="../_static/doctools.js"></script>
@@ -191,8 +194,8 @@
 <span id="energy-correction-model"></span><span id="encorr-model"></span><h1>Energy correction model<a class="headerlink" href="#module-tckdb.backend.app.models.encorr" title="Permalink to this headline">¶</a></h1>
 <p>TCKDB backend app models energy correction (encorr) module</p>
 <dl class="py class">
-<dt id="tckdb.backend.app.models.encorr.EnCorr">
-<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">tckdb.backend.app.models.encorr.</span></code><code class="sig-name descname"><span class="pre">EnCorr</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/encorr.html#EnCorr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr">
+<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">tckdb.backend.app.models.encorr.</span></span><span class="sig-name descname"><span class="pre">EnCorr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/encorr.html#EnCorr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr" title="Permalink to this definition">¶</a></dt>
 <dd><p>A class for representing a TCKDB EnCorr item</p>
 <p><strong>AEC and BAC</strong> Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">EnCorr</span><span class="p">(</span><span class="n">level_id</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">supported_elements</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;N&#39;</span><span class="p">,</span> <span class="s1">&#39;O&#39;</span><span class="p">,</span> <span class="s1">&#39;S&#39;</span><span class="p">],</span> <span class="n">energy_unit</span><span class="o">=</span><span class="s1">&#39;Hartree&#39;</span><span class="p">,</span>
@@ -217,8 +220,8 @@
 </pre></div>
 </div>
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.id">
-<code class="sig-name descname"><span class="pre">id</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.id" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.id">
+<span class="sig-name descname"><span class="pre">id</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.id" title="Permalink to this definition">¶</a></dt>
 <dd><p>The primary key (not a user input)</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -228,8 +231,8 @@
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.level_id">
-<code class="sig-name descname"><span class="pre">level_id</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.level_id" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.level_id">
+<span class="sig-name descname"><span class="pre">level_id</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.level_id" title="Permalink to this definition">¶</a></dt>
 <dd><p>The level of theory key for the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -244,8 +247,8 @@
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.supported_elements">
-<code class="sig-name descname"><span class="pre">supported_elements</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.supported_elements" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.supported_elements">
+<span class="sig-name descname"><span class="pre">supported_elements</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.supported_elements" title="Permalink to this definition">¶</a></dt>
 <dd><p>Entries are atomic symbols of elements supported by this energy correction instance.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -255,8 +258,8 @@
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.energy_unit">
-<code class="sig-name descname"><span class="pre">energy_unit</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.energy_unit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.energy_unit">
+<span class="sig-name descname"><span class="pre">energy_unit</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.energy_unit" title="Permalink to this definition">¶</a></dt>
 <dd><p>The energy units, default: ‘Hartree’</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -266,8 +269,8 @@
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.aec">
-<code class="sig-name descname"><span class="pre">aec</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.aec" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.aec">
+<span class="sig-name descname"><span class="pre">aec</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.aec" title="Permalink to this definition">¶</a></dt>
 <dd><p>Atomic energy corrections (including SOC). Keys are element symbols, values are energy
 corrections in the specified <code class="docutils literal notranslate"><span class="pre">energy_unit</span></code>.</p>
 <dl class="field-list simple">
@@ -278,8 +281,8 @@ corrections in the specified <code class="docutils literal notranslate"><span cl
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.bac">
-<code class="sig-name descname"><span class="pre">bac</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.bac" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.bac">
+<span class="sig-name descname"><span class="pre">bac</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.bac" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bond additivity corrections. Keys are strings representing two elements and the bond between them
 (e.g., <cite>‘C=O’</cite>). Values are energy corrections in the specified <code class="docutils literal notranslate"><span class="pre">energy_unit</span></code>.
 Allowed bond descriptors are <code class="docutils literal notranslate"><span class="pre">'-'</span></code>, <code class="docutils literal notranslate"><span class="pre">'='</span></code>, <code class="docutils literal notranslate"><span class="pre">'#'</span></code>, <code class="docutils literal notranslate"><span class="pre">'--'</span></code>, and <code class="docutils literal notranslate"><span class="pre">'&amp;'</span></code> for single, double, triple,
@@ -292,8 +295,8 @@ hydrogen, and aromatic bonds, respectively.</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.isodesmic_reactions">
-<code class="sig-name descname"><span class="pre">isodesmic_reactions</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.isodesmic_reactions" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.isodesmic_reactions">
+<span class="sig-name descname"><span class="pre">isodesmic_reactions</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.isodesmic_reactions" title="Permalink to this definition">¶</a></dt>
 <dd><p>The isodesmic reactions used for the energy correction. If specified, ‘AEC’ and ‘BAC’ must be <code class="docutils literal notranslate"><span class="pre">None</span></code>,
 and vice versa. Entries are dictionaries representing reactions. Each reaction dict has ‘reactants’,
 ‘products’, ‘stoichiometry’, and ‘DHrxn298’ keys. The values of the ‘reactants’ and ‘products’ are lists
@@ -308,8 +311,8 @@ of reaction at the “low level” in the specified <code class="docutils litera
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.isodesmic_high_level_id">
-<code class="sig-name descname"><span class="pre">isodesmic_high_level_id</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.isodesmic_high_level_id" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.isodesmic_high_level_id">
+<span class="sig-name descname"><span class="pre">isodesmic_high_level_id</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.isodesmic_high_level_id" title="Permalink to this definition">¶</a></dt>
 <dd><p>The high level of theory used for all other species. A level of theory key for the
 <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>. Required if <code class="docutils literal notranslate"><span class="pre">isodesmic_reactions</span></code> is specified, <code class="docutils literal notranslate"><span class="pre">None</span></code> otherwise.</p>
 <dl class="field-list simple">
@@ -320,8 +323,8 @@ of reaction at the “low level” in the specified <code class="docutils litera
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.species">
-<code class="sig-name descname"><span class="pre">species</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.species" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.species">
+<span class="sig-name descname"><span class="pre">species</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.species" title="Permalink to this definition">¶</a></dt>
 <dd><p>A One to Many relationship between EnCorr and Species.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -331,8 +334,8 @@ of reaction at the “low level” in the specified <code class="docutils litera
 </dd></dl>
 
 <dl class="py attribute">
-<dt id="tckdb.backend.app.models.encorr.EnCorr.reviewer_flags">
-<code class="sig-name descname"><span class="pre">reviewer_flags</span></code><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.reviewer_flags" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="tckdb.backend.app.models.encorr.EnCorr.reviewer_flags">
+<span class="sig-name descname"><span class="pre">reviewer_flags</span></span><a class="headerlink" href="#tckdb.backend.app.models.encorr.EnCorr.reviewer_flags" title="Permalink to this definition">¶</a></dt>
 <dd><p>Backend flags to assist the review process (not a user input).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
