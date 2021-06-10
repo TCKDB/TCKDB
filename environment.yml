@@ -8,7 +8,7 @@ channels:
 dependencies:
   - chembl_webresource_client
   - coverage
-  - fastapi = 0.46.0
+  - fastapi >=0.65.2
   - ipython
   - jupyter
   - msgpack-python
