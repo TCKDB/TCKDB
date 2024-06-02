@@ -114,6 +114,9 @@ venv.bak/
 # PyCharm project files
 .idea/*
 
+# VSCode project files
+.vscode/*
+
 # Unit test files
 .coverage
 testing/*

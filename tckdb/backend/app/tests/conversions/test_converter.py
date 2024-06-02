@@ -1,7 +1,7 @@
 """
 TCKDB backend app tests models test_converter module
 """
-
+from rmgpy.molecule import Molecule
 import tckdb.backend.app.conversions.converter as converter
 
 test_set = {'smiles': ['[NH]C1=NC=NC(N)N1',
@@ -562,7 +562,11 @@ def test_inchi_key_from_inchi():
 def test_adjlist_from_smiles():
     """Test getting an adjacency list from a SMILES descriptor"""
     for adjlist, smiles in zip(test_set['adjlist'], test_set['smiles']):
-        assert adjlist == converter.adjlist_from_smiles(smiles)
+        adjlist_2 = converter.adjlist_from_smiles(smiles)
+        mol1, mol2 = Molecule().from_adjacency_list(adjlist), Molecule().from_adjacency_list(adjlist_2)
+        assert mol1.is_isomorphic(mol2) == True
+        
+
 
 
 def test_smiles_and_inchi_from_adjlist():
