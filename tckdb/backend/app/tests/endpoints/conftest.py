@@ -14,6 +14,8 @@ from fastapi.testclient import TestClient
 from dotenv import load_dotenv
 import os
 from pathlib import Path
+from alembic.config import Config
+from alembic import command
 
 # Load environment variables from .env.test
 load_dotenv(dotenv_path="./tckdb/backend/app/core/.env.test")
@@ -30,15 +32,12 @@ SQLALCHEMY_DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{PO
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def setup_database():
     """
     Fixture to set up and tear down the database using Alembic migrations.
     It runs automatically for the module.
     """
-    from alembic.config import Config
-    from alembic import command
-
     # Construct the absolute path to alembic.ini
     BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # Adjust based on your directory structure
     ALEMBIC_INI = BASE_DIR / "alembic.ini"
@@ -46,14 +45,20 @@ def setup_database():
     # Ensure the alembic.ini file exists
     assert ALEMBIC_INI.exists(), f"Alembic config file not found at {ALEMBIC_INI}"
 
-    # Run migrations
+    # Configure Alembic
+    # This replaces the URL in alembic.ini with the test database URL
     alembic_cfg = Config(str(ALEMBIC_INI))
+    alembic_cfg.set_main_option("sqlalchemy.url", SQLALCHEMY_DATABASE_URL)  # Override URL
+
+    # Run migrations
     command.upgrade(alembic_cfg, "head")
-    
+    print("Alembic migrations applied.")
+
     yield
-    
+
     # Downgrade migrations after tests
     command.downgrade(alembic_cfg, "base")
+    print("Alembic migrations downgraded.")
 
 @pytest.fixture(scope="module")
 def db_session(setup_database):
@@ -63,7 +68,8 @@ def db_session(setup_database):
     session = TestingSessionLocal(bind=connection)
     yield session
     session.close()
-    transaction.rollback()
+    if transaction.is_active:
+        transaction.rollback()
     connection.close()
 
 @pytest.fixture(scope="module")
@@ -118,7 +124,7 @@ def test_encorr(db_session, test_level: Level):
     return encorr
 
 @pytest.fixture(scope="module")
-def test_freq(db_session,test_level):
+def test_freq(db_session, test_level):
     """
     Create a temporary Freq entry.
     """
@@ -132,7 +138,6 @@ def test_freq(db_session,test_level):
     db_session.commit()
     db_session.refresh(freq)
     return freq
-    
 
 @pytest.fixture(scope="module")
 def client(db_session):
@@ -150,5 +155,3 @@ def client(db_session):
         yield c
     app.dependency_overrides.pop(get_db, None)
     del os.environ["TESTING"]
-
-    
