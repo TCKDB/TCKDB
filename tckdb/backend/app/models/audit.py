@@ -33,7 +33,7 @@ def after_insert_listener(mapper, connection, target):
         model=target.__tablename__,
         model_id=target.id,
         action="create",
-        changes=target.__dict__,
+        changes=None,
     )
     session.add(audit)
 

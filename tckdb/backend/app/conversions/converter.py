@@ -10,14 +10,14 @@ from typing import Dict, Optional, Tuple, Union
 
 import qcelemental as qcel
 
-try:
-    from chembl_webresource_client.unichem import UniChemClient
-    from rdkit.Chem import MolFromSmiles, MolToSmiles
-    from rdkit.Chem.inchi import InchiToInchiKey, MolFromInchi, MolToInchi
-    from rmgpy.molecule import Molecule
-except ImportError:
-    # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
-    pass
+# try:
+from chembl_webresource_client.unichem import UniChemClient
+from rdkit.Chem import MolFromSmiles, MolToSmiles
+from rdkit.Chem.inchi import InchiToInchiKey, MolFromInchi, MolToInchi
+from rmgpy.molecule import Molecule
+# except ImportError:
+#     # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
+#     pass
 
 
 def inchi_from_smiles(smiles: str) -> Union[str, None]:

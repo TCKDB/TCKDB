@@ -46,7 +46,7 @@ services:
     env_file:
       - ./tckdb/backend/app/core/.env
     volumes:
-      - ./backend:/code/backend  # Mounts your backend code
+      - ./tckdb:/code/tckdb
     # depends_on:
       # db:
       #   condition: service_healthy

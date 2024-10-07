@@ -48,7 +48,7 @@ RUN make
 
 # Return to the main working directory and copy application code
 WORKDIR /code
-COPY ./tckdb /code/tckdb
+# COPY ./tckdb /code/tckdb
 
 # Copy the entrypoint script and ensure it's executable
 COPY entrypoint.sh /entrypoint.sh

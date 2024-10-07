@@ -548,7 +548,7 @@ class Species(Base, AuditMixin):
     chirality = Column(MsgpackExt, nullable=True)
     conformation_method = Column(String(500), nullable=False)
     is_well = Column(Boolean, nullable=False)
-    is_global_min = Column(Boolean, nullable=False)
+    is_global_min = Column(Boolean, nullable=True)
     global_min_geometry = Column(MsgpackExt, nullable=True)
 
     # TS

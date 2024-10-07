@@ -35,6 +35,10 @@ def create_species(species: SpeciesCreate, db: Session = Depends(get_db)):
     db.add(db_species)
     db.commit()
     db.refresh(db_species)
+    
+    print(f"Species {db_species.label} created")
+    print(f"Species: {db_species}")
+    
     return db_species
 
 @router.get("/{species_id}", response_model=Species)

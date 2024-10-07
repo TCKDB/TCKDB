@@ -13,7 +13,7 @@ app = FastAPI(
 
 @app.on_event("startup")
 def on_startup():
-    alembic_config = Config("alembic.ini")
+    alembic_config = Config("/code/tckdb/backend/alembic.ini")
     command.upgrade(alembic_config, "head")
 
 app.include_router(species.router, prefix="/api/v1/species")

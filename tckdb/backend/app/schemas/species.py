@@ -172,9 +172,6 @@ class SpeciesBase(BaseModel):
     label: Optional[str] = Field(None, max_length=255, title='Species label')
     statmech_software: Optional[str] = Field(None, max_length=150, title='Statmech software name')
     timestamp: Optional[float] = Field(None, gt=1.58E9, title='Time stamp')  # 1.58E9 corresponds to 2020-01-25 19:53:20
-    retracted: Optional[str] = Field(None, max_length=255, title='Retracted')
-    reviewed: Optional[bool] = Field(None, title='Retracted (bool)')
-    approved: Optional[bool] = Field(None, title='Approved (bool)')
     charge: int = Field(..., ge=-10, le=10, title='Net charge')
     multiplicity: int = Field(..., ge=1, le=10, title='Spin multiplicity')
     smiles: Optional[str] = Field(None, max_length=5000, title='SMILES')
@@ -235,10 +232,21 @@ class SpeciesBase(BaseModel):
     unconverged_jobs: Optional[List[Dict[str, str]]] = Field(None, title='Paths to unconverged job log files')
     extras: Optional[Dict[str, Any]] = Field(None, title='Extras')
     reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+    sp_level_id: int = Field(..., title='Single point level ID')
+    sp_ess_id: int = Field(..., title='Single point ESS ID')
 
     class Config:
+        orm_mode = True
         extra = "forbid"
 
+class SpeciesCreate(SpeciesBase):
+    """Create a Species item: Properties to receive on item creation"""
+    retracted: Optional[str] = Field(None, max_length=255, title='Retracted')
+    reviewed: Optional[bool] = Field(None, title='Retracted (bool)')
+    approved: Optional[bool] = Field(None, title='Approved (bool)')
+    reviewer_flags: Optional[Dict[str, str]] = None
+
+    # Validators
     @validator('reviewer_flags', always=True)
     def check_reviewer_flags(cls, value):
         """Species.reviewer_flags validator"""
@@ -521,6 +529,8 @@ class SpeciesBase(BaseModel):
         """Species.active_space validator"""
         label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
         allowed_keys = ['electrons', 'orbitals']
+        if value is None:
+            return value
         if any(key not in allowed_keys for key in value.keys()):
             raise ValueError(f'The active_space argument{label} has unrecognized keys.\n'
                              f'Allowed keys: {allowed_keys}, got: {[value.keys()]}.')
@@ -809,30 +819,43 @@ class SpeciesBase(BaseModel):
         return value
 
 
-class SpeciesCreate(SpeciesBase):
-    """Create a Species item: Properties to receive on item creation"""
-    reviewer_flags: Optional[Dict[str, str]] = None
-
-
 class SpeciesUpdate(SpeciesBase):
     """Update a Species item: Properties to receive on item update"""
-    reviewer_flags: Optional[Dict[str, str]] = None
+    label: Optional[str] = Field(None, max_length=255, title='Species label')
+    charge: Optional[int] = Field(None, ge=-10, le=10, title='Net charge')
+    multiplicity: Optional[int] = Field(None, ge=1, le=10, title='Spin multiplicity')
+    smiles: Optional[str] = Field(None, max_length=5000, title='SMILES')
+    inchi: Optional[str] = Field(None, max_length=5000, title='InChI')
+    inchi_key: Optional[str] = Field(None, max_length=27, min_length=27, title='InChI key')
+    graph: Optional[str] = Field(None, max_length=100000, title='Adjacency list graph')
 
-
-class SpeciesInDBBase(SpeciesBase):
-    """Properties shared by models stored in DB"""
+class SpeciesOutBase(SpeciesBase):
+    """
+    Base class for Species output with fields that should be included in responses.
+    """
     id: int
     reviewer_flags: Optional[Dict[str, str]] = None
+    reviewed: bool
+    approved: bool
+    # ... other fields that should be included in responses ...
 
     class Config:
         orm_mode = True
 
+# class SpeciesInDBBase(Species):
+#     """Properties shared by models stored in DB"""
+#     id: int
+#     reviewer_flags: Optional[Dict[str, str]] = None
 
-class Species(SpeciesInDBBase):
+#     class Config:
+#         orm_mode = True
+
+
+class Species(SpeciesOutBase):
     """Properties to return to client"""
     pass
 
 
-class SpeciesInDB(SpeciesInDBBase):
+class SpeciesInDB(SpeciesOutBase):
     """Properties stored in DB"""
     pass
