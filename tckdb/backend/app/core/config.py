@@ -3,6 +3,19 @@ TCKDB backend app core config module
 """
 
 import os
+from dotenv import load_dotenv
+
+# Determine if the application is running in a testing environment
+TESTING = os.getenv("TESTING", "false").lower() == "true"
+
+# Set the path to the appropriate .env file
+if TESTING:
+    env_path = "./tckdb/backend/app/core/.env.test"
+else:
+    env_path = "./tckdb/backend/app/core/.env"
+
+# Load environment variables from the determined .env file
+load_dotenv(dotenv_path=env_path, override=True)
 
 
 def getenv_boolean(var_name,
@@ -16,7 +29,6 @@ def getenv_boolean(var_name,
 
 
 API_V1_STR = "/api/v1"
-
 SECRET_KEY = os.getenvb(b"SECRET_KEY")
 if not SECRET_KEY:
     SECRET_KEY = os.urandom(32)

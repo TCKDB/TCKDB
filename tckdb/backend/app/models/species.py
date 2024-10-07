@@ -8,12 +8,12 @@ from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 
-from tckdb.backend.app.db.base_class import Base
+from tckdb.backend.app.db.base_class import AuditMixin, Base
 from tckdb.backend.app.models.associations import species_authors, species_reviewers
 from tckdb.backend.app.models.common import MsgpackExt
 
 
-class Species(Base):
+class Species(Base, AuditMixin):
     """
     A class for representing a TCKDB Species item.
 
@@ -541,7 +541,7 @@ class Species(Base):
     # geometry and connectivity
     coordinates = Column(MsgpackExt, nullable=False)
     graph = Column(String(100000), nullable=True)
-    fragments = Column(ARRAY(item_type=int, as_tuple=False, zero_indexes=True), nullable=True)
+    fragments = Column(ARRAY(Integer), nullable=True)    
     fragment_orientation = Column(MsgpackExt, nullable=True)
     external_symmetry = Column(Integer, nullable=False)
     point_group = Column(String(6), nullable=False)
@@ -564,18 +564,16 @@ class Species(Base):
     hessian = Column(MsgpackExt, nullable=True)
 
     # vibrational modes
-    frequencies = Column(ARRAY(item_type=float, as_tuple=False, dimensions=1, zero_indexes=True), nullable=True)
-    scaled_projected_frequencies = Column(ARRAY(item_type=float, as_tuple=False, dimensions=1, zero_indexes=True),
+    frequencies = Column(ARRAY(Float, as_tuple=False, dimensions=1, zero_indexes=True), nullable=True)
+    scaled_projected_frequencies = Column(ARRAY(Float, as_tuple=False, dimensions=1, zero_indexes=True),
                                           nullable=False)
-    normal_displacement_modes = Column(ARRAY(item_type=List[List[List[float]]], as_tuple=False, zero_indexes=True),
-                                       nullable=True)
+    normal_displacement_modes = Column(MsgpackExt, nullable=True)
     freq_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
 
     # rotational modes
     rigid_rotor = Column(String(50), nullable=False)
     statmech_treatment = Column(String(50), nullable=True)
-    rotational_constants = Column(ARRAY(item_type=Tuple[float, str], as_tuple=True, dimensions=1, zero_indexes=True),
-                                  nullable=True)
+    rotational_constants = Column(MsgpackExt, nullable=True)
 
     # torsional modes
     torsions = Column(MsgpackExt, nullable=True)
@@ -586,9 +584,9 @@ class Species(Base):
     # thermochemical properties
     H298 = Column(Float, nullable=False)
     S298 = Column(Float, nullable=False)
-    Cp_values = Column(ARRAY(item_type=float, as_tuple=False, dimensions=1, zero_indexes=True), nullable=False)
-    Cp_T_list = Column(ARRAY(item_type=float, as_tuple=False, dimensions=1, zero_indexes=True), nullable=False)
-    heat_capacity_model = Column(MsgpackExt, nullable=False)
+    Cp_values = Column(ARRAY(Float, as_tuple=False, dimensions=1, zero_indexes=True), nullable=False)
+    Cp_T_list = Column(ARRAY(Float, as_tuple=False, dimensions=1, zero_indexes=True), nullable=False)
+    heat_capacity_model = Column(MsgpackExt, nullable=True) # Described as optional
 
     # relationships - Many (species) to One (other table)
     encorr_id = Column(Integer, ForeignKey('encorr.id'), nullable=True, unique=False)
@@ -628,7 +626,7 @@ class Species(Base):
     opt_path = Column(String(5000), nullable=True)
     freq_path = Column(String(5000), nullable=True)
     scan_paths = Column(MsgpackExt, nullable=True)
-    irc_paths = Column(ARRAY(item_type=List[str], as_tuple=False, zero_indexes=True), nullable=True)
+    irc_paths = Column(MsgpackExt, nullable=True)
     sp_path = Column(String(5000), nullable=False)
 
     # unconverged jobs

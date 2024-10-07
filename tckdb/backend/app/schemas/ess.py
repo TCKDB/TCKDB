@@ -59,7 +59,7 @@ class ESSInDBBase(ESSBase):
     name: str
     version: Optional[str] = None
     revision: Optional[str] = None
-    url: int
+    url: str
     reviewer_flags: Optional[Dict[str, str]] = None
 
     class Config:

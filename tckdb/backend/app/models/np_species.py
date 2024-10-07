@@ -277,7 +277,7 @@ class NonPhysicalSpecies(Base):
     # geometry and connectivity
     coordinates = Column(MsgpackExt, nullable=False)
     graph = Column(String(100000), nullable=True)
-    fragments = Column(ARRAY(item_type=int, as_tuple=False, zero_indexes=True), nullable=True)
+    fragments = Column(ARRAY(Integer, as_tuple=False, zero_indexes=True), nullable=True)
     fragment_orientation = Column(MsgpackExt, nullable=True)
     chirality = Column(MsgpackExt, nullable=True)
     conformation_method = Column(String(500), nullable=False)
@@ -325,7 +325,7 @@ class NonPhysicalSpecies(Base):
     opt_path = Column(String(5000), nullable=True)
     freq_path = Column(String(5000), nullable=True)
     scan_paths = Column(MsgpackExt, nullable=True)
-    irc_paths = Column(ARRAY(item_type=List[str], as_tuple=False, zero_indexes=True), nullable=True)
+    irc_paths = Column(MsgpackExt, nullable=True)
     sp_path = Column(String(5000), nullable=False)
 
     # unconverged jobs

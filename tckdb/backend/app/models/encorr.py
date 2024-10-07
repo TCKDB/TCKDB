@@ -76,11 +76,11 @@ class EnCorr(Base):
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     level_id = Column(Integer, ForeignKey('level.id'), nullable=False, unique=False)
-    supported_elements = Column(ARRAY(item_type=str, as_tuple=False, zero_indexes=True), nullable=False)
+    supported_elements = Column(ARRAY(String, as_tuple=False, zero_indexes=True), nullable=False)
     energy_unit = Column(String(255), nullable=False)
     aec = Column(MsgpackExt, nullable=True)
     bac = Column(MsgpackExt, nullable=True)
-    isodesmic_reactions = Column(ARRAY(item_type=dict, as_tuple=False, zero_indexes=True), nullable=True)
+    isodesmic_reactions = Column(MsgpackExt, nullable=True)
     isodesmic_high_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
     reviewer_flags = Column(MsgpackExt, nullable=True)
 

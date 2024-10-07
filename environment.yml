@@ -6,6 +6,7 @@ channels:
   - anaconda
   - chembl
 dependencies:
+  - alembic =1.12
   - chembl_webresource_client
   - coverage
   - fastapi >=0.65.2
@@ -19,7 +20,7 @@ dependencies:
   - pytest
   - python >= 3.7
   - qcelemental
-  - rmg::rdkit >= 2019.09.2.0
+  - conda-forge::rdkit >=2022.09.1
   - sqlalchemy
   - starlette
   - sphinx
@@ -28,37 +29,39 @@ dependencies:
 
   - cairo
   - cairocffi
-  - rmg::cantera >=2.3.0
-  - cclib
-  - rmg::chemprop
-  - coolprop
+  - cantera::cantera =2.6.0
+  - conda-forge::cclib >=1.6.3,<1.9
+  # - rmg::chemprop # Why do we need this?
+  - coolprop # Is this related to RMG? We should look to using Molecule github repo
   - cython >=0.25.2
   - ffmpeg
-  - rmg::gprof2dot
+  - conda-forge::gprof2dot
   - graphviz
   - h5py
+  - httpx
   - jinja2
-  - rmg::lpsolve55
+  - conda-forge::lpsolve55
   - markupsafe
   - matplotlib >=1.5
-  - rmg::mopac
+  - conda-forge::mopac
   - mpmath
   - muq2
   - networkx
   - nose
-  - rmg::numdifftools
-  - openbabel
+  - conda-forge::numdifftools
+  - conda-forge::openbabel >= 3
   - pandas
   - psutil
   - rmg::pydas >=1.0.2
   - pydot
+  - python-dotenv
   - rmg::pydqed >=1.0.1
   - pymongo
   - pyparsing
-  - pyrdl
+  - rmg::pyrdl # Doesn't appear to be used in RMG
   - python >=3.7
   - pyyaml
-  - rmg::quantities
+  - quantities
   - scikit-learn
   - scipy
   - rmg::symmetry

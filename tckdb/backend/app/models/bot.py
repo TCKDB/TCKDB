@@ -5,11 +5,11 @@ TCKDB backend app models bot module
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 
-from tckdb.backend.app.db.base_class import Base
+from tckdb.backend.app.db.base_class import AuditMixin, Base
 from tckdb.backend.app.models.common import MsgpackExt
 
 
-class Bot(Base):
+class Bot(Base, AuditMixin):
     """
     A class for representing a TCKDB Bot item
 

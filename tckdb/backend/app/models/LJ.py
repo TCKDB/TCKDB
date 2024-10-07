@@ -30,8 +30,8 @@ class LJ(Base):
             Backend flags to assist the review process (not a user input)
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    sigma = Column(ARRAY(item_type=Union[float, str], as_tuple=True, dimensions=2, zero_indexes=True), nullable=False)
-    epsilon = Column(ARRAY(item_type=Union[float, str], as_tuple=True, dimensions=2, zero_indexes=True), nullable=False)
+    sigma = Column(MsgpackExt, nullable=False)
+    epsilon = Column(MsgpackExt, nullable=False)
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
     def __repr__(self) -> str:

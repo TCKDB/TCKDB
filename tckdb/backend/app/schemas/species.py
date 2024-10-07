@@ -10,12 +10,12 @@ import numpy as np
 
 from pydantic import BaseModel, Field, validator, constr, conint, confloat
 
-try:
-    from arkane.statmech import is_linear
-    from rmgpy.molecule.adjlist import from_adjacency_list
-except ImportError:
-    # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
-    pass
+# try:
+from arkane.statmech import is_linear
+from rmgpy.molecule.adjlist import from_adjacency_list
+# except ImportError:
+#     # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
+#     pass
 
 import tckdb.backend.app.schemas.common as common
 import tckdb.backend.app.conversions.converter as converter
@@ -323,15 +323,14 @@ class SpeciesBase(BaseModel):
             value = value or converter.adjlist_from_smiles(values['smiles'])
             values['inchi'] = values['inchi'] or converter.inchi_from_smiles(values['smiles'])
         # populate the InChI Key if not already set
-        if values['inchi_key'] is not None and values['inchi'] is None:
+        if values.get('inchi_key') is not None and values.get('inchi') is None:
             # InChI Key was given (and there's no InChI), populate other attributes as needed
             values['inchi'] = converter.inchi_from_inchi_key(values['inchi_key'])
             if values['inchi'] is not None:
                 values['smiles'] = values['smiles'] or converter.smiles_from_inchi(values['inchi'])
                 value = value or converter.adjlist_from_smiles(values['smiles'])
-        values['inchi_key'] = values['inchi_key'] or converter.inchi_key_from_inchi(values['inchi'])
-        if values is None or ('smiles' in values and values['smiles'] is None) \
-                or ('inchi' in values and values['inchi'] is None):
+        values['inchi_key'] = values.get("inchi_key") or converter.inchi_key_from_inchi(values['inchi'])
+        if not (values.get('smiles') or values.get('inchi') or value):
             # couldn't populate adjlist, SMILES, nor InChI
             raise ValueError(f'A species descriptor (SMILES, InChI, or graph adjacency list) must be given{label}.')
         # adjlist validation
@@ -444,6 +443,8 @@ class SpeciesBase(BaseModel):
         chiral_atom_indices = list()
         allowed_values = ['R', 'S', 'NR', 'NS', 'E', 'Z']
         allowed_atoms = ['C', 'Si', 'Ge', 'Sn', 'Pb', 'N', 'P', 'As', 'Sb', 'Bi']
+        if value is None:
+            return value
         for key, val in value.items():
             for index in key:
                 is_valid, err = common.is_valid_atom_index(index=index,
