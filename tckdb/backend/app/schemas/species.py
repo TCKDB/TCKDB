@@ -951,6 +951,7 @@ class SpeciesOut(SpeciesBase):
     reviewed: Optional[bool]
     approved: Optional[bool]
     reviewer_flags: Optional[Dict[str, str]]
+    deleted_at: Optional[datetime]
 
     class Config:
         orm_mode = True
@@ -967,7 +968,8 @@ class SpeciesInDBBase(SpeciesBase):
     reviewed: bool = Field(False, title='Whether this species has been reviewed')
     approved: Optional[bool] = Field(None, title='Whether this species has been approved')
     reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
-
+    deleted_at: Optional[datetime] = Field(None, title='Deletion timestamp')
+    
     class Config:
         orm_mode = True
         extra = "forbid"
@@ -978,23 +980,3 @@ class SpeciesInDB(SpeciesInDBBase):
     Species stored in the database
     """
     pass
-
-
-
-
-
-    # # Validators
-    # @validator('reviewer_flags', always=True)
-    # def check_reviewer_flags(cls, value):
-    #     """
-    #     species.reviewer_flags validator
-    #     """
-    #     return value or dict()
-
-    # @validator('retracted')
-    # def retracted_validator(cls, value, values):
-    #     """SpeciesCreate.retracted validator"""
-    #     label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
-    #     if value is not None:
-    #         raise ValueError(f'The "retracted" argument is not a user input{label}.')
-    #     return None

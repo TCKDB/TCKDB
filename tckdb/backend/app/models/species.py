@@ -525,6 +525,7 @@ class Species(Base, AuditMixin):
     statmech_software = Column(String(150), nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     retracted = Column(String(255), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, default=None)
 
     # review
     reviewed = Column(Boolean, nullable=False)

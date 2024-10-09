@@ -9,6 +9,7 @@ from tckdb.backend.app.models.ess import ESS
 from tckdb.backend.app.models.encorr import EnCorr
 from tckdb.backend.app.models.freq import Freq
 from tckdb.backend.app.db.session import get_db
+from tckdb.backend.app.db.query import SoftDeleteQuery
 from tckdb.backend.app.main import app
 from fastapi.testclient import TestClient
 from dotenv import load_dotenv
@@ -30,7 +31,7 @@ POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5434")
 SQLALCHEMY_DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, query_cls=SoftDeleteQuery)
 
 @pytest.fixture(scope="session")
 def setup_database():

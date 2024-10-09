@@ -196,7 +196,7 @@ def delete_species_soft(species_id: int, db: Session = Depends(get_db)):
     return {'detail': 'Species soft deleted'}
 
 
-@router.post("/{species_id}/restore", response_model=SpeciesBase)
+@router.post("/{species_id}/restore", response_model=SpeciesOut)
 def restore_species(species_id: int, db: Session = Depends(get_db)):
     """
     Restore a soft deleted species by its ID
