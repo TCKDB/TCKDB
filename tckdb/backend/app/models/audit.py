@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, Column, DateTime, Integer, String, func, event
+from sqlalchemy import JSON, Column, DateTime, Integer, String, func, event, inspect
 from sqlalchemy.orm import Session
 
 from tckdb.backend.app.db.base_class import Base
@@ -43,7 +43,7 @@ def after_update_listener(mapper, connection, target):
     Listener for update operations.
     """
     session = Session.object_session(target)
-    state = session.object_session(target)._inspect(target)
+    state = inspect(target)
     changes = {}
     for attr in state.attrs:
         hist = attr.history

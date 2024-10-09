@@ -1,8 +1,8 @@
 """Create migration tables
 
-Revision ID: b42042032371
+Revision ID: b304ed13dc6b
 Revises: 
-Create Date: 2024-10-07 11:37:21.927861
+Create Date: 2024-10-09 12:05:04.681155
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from tckdb.backend.app.models.common import MsgpackExt
 
 # revision identifiers, used by Alembic.
-revision: str = 'b42042032371'
+revision: str = 'b304ed13dc6b'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -179,7 +179,7 @@ def upgrade() -> None:
     sa.Column('chirality', MsgpackExt(), nullable=True),
     sa.Column('conformation_method', sa.String(length=500), nullable=False),
     sa.Column('is_well', sa.Boolean(), nullable=False),
-    sa.Column('is_global_min', sa.Boolean(), nullable=True),
+    sa.Column('is_global_min', sa.Boolean(), nullable=False),
     sa.Column('global_min_geometry', MsgpackExt(), nullable=True),
     sa.Column('is_ts', sa.Boolean(), nullable=False),
     sa.Column('irc_trajectories', MsgpackExt(), nullable=True),
@@ -238,7 +238,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('label', sa.String(length=255), nullable=True),
     sa.Column('statmech_software', sa.String(length=150), nullable=True),
-    sa.Column('timestamp', sa.Float(), nullable=False),
+    sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('retracted', sa.String(length=255), nullable=True),
     sa.Column('reviewed', sa.Boolean(), nullable=False),
     sa.Column('approved', sa.Boolean(), nullable=False),

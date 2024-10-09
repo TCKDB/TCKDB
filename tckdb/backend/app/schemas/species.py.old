@@ -2,29 +2,23 @@
 TCKDB backend app schemas species module
 """
 
-
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
-from math import log
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
+from pydantic import BaseModel, Field, validator, constr, conint, confloat
+
 # try:
 from arkane.statmech import is_linear
-from pydantic import BaseModel, Field, confloat, conint, constr, validator, root_validator
 from rmgpy.molecule.adjlist import from_adjacency_list
-
-import tckdb.backend.app.conversions.converter as converter
-import tckdb.backend.app.schemas.common as common
-from tckdb.backend import app
-
 # except ImportError:
 #     # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
 #     pass
-import logging
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+
+import tckdb.backend.app.schemas.common as common
+import tckdb.backend.app.conversions.converter as converter
 
 
 class TorsionComputationTypeEnum(str, Enum):
@@ -170,61 +164,31 @@ class TorsionsBase(BaseModel):
                              f"of {values['dimension']}{label}:\n{value}")
         return value
 
-# class Coordinates(BaseModel):
-#     symbols: Tuple[constr(max_length=10), ...] = Field(
-#         ..., 
-#         description="Chemical element symbols."
-#     )
-#     isotopes: Tuple[conint(ge=1), ...] = Field(
-#         ..., 
-#         description="The respective isotopes."
-#     )
-#     coords: Tuple[Tuple[float, float, float], ...] = Field(
-#         ..., 
-#         description="Cartesian coordinates in standard orientation."
-#     )
-
-#     class Config:
-#         schema_extra = {
-#             "example": {
-#                 "symbols": ("C", "H", "H", "H", "H"),
-#                 "isotopes": (12, 1, 1, 1, 1),
-#                 "coords": (
-#                     (0.0, 0.0, 0.0),
-#                     (0.6300326, 0.6300326, 0.6300326),
-#                     (-0.6300326, -0.6300326, 0.6300326),
-#                     (-0.6300326, 0.6300326, -0.6300326),
-#                     (0.6300326, -0.6300326, -0.6300326)
-#                 )
-#             }
-#         }
 
 class SpeciesBase(BaseModel):
+    """
+    A SpeciesBase class (shared properties)
+    """
     label: Optional[str] = Field(None, max_length=255, title='Species label')
-    statmech_software: Optional[str] = Field(None, max_length=150, title='The software used to compute the species statmech data')
-    #statmech_software_version: Optional[str] = Field(None, max_length=50, title='The version of the software used to compute the species statmech data')
-    charge: Optional[int] = Field(None, ge=-10, le=10, title='The net charge of the species')
-    multiplicity: Optional[int] = Field(None, ge=1, le=10, title='The spin multiplicity of the species')
+    statmech_software: Optional[str] = Field(None, max_length=150, title='Statmech software name')
+    timestamp: Optional[float] = Field(None, gt=1.58E9, title='Time stamp')  # 1.58E9 corresponds to 2020-01-25 19:53:20
+    charge: Optional[int] = Field(..., ge=-10, le=10, title='Net charge')
+    multiplicity: Optional[int] = Field(..., ge=1, le=10, title='Spin multiplicity')
     smiles: Optional[str] = Field(None, max_length=5000, title='SMILES')
     inchi: Optional[str] = Field(None, max_length=5000, title='InChI')
     inchi_key: Optional[str] = Field(None, max_length=27, min_length=27, title='InChI key')
     graph: Optional[str] = Field(None, max_length=100000, title='Adjacency list graph')
-    electronic_state: Optional[str] = Field('X', max_length=150, title='Electronic state. Default is "X", denoting ground state')
-    # coordinates: Optional[Coordinates] = Field(
-    #     None, 
-    #     title='Cartesian coordinates',
-    #     description="Cartesian coordinates in standard orientation. Keys are 'symbols', 'isotopes', and 'coords'."
-    # )
+    electronic_state: Optional[str] = Field('X', max_length=150, title='Electronic state')
     coordinates: Optional[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
                                  Tuple[conint(ge=1), ...],
-                                 Tuple[constr(max_length=10), ...]]]] = Field(None, title='Cartesian coordinates')
+                                 Tuple[constr(max_length=10), ...]]]] = Field(..., title='Cartesian coordinates')
     fragments: Optional[List[List[conint(ge=1)]]] = Field(None, title='Fragments')
     fragment_orientation: Optional[List[Dict[str, Union[float, List[float]]]]] = Field(None, title='Fragment orientation')
-    external_symmetry: Optional[int] = Field(None, ge=1, title='External symmetry')
-    point_group: Optional[str] = Field(None, max_length=6, title='Point group')
+    external_symmetry: Optional[int] = Field(..., ge=1, title='External symmetry')
+    point_group: Optional[str] = Field(..., max_length=6, title='Point group')
     chirality: Optional[Dict[Tuple[conint(ge=1), ...], constr(max_length=10)]] = Field(None, title='Chirality')
     conformation_method: Optional[constr(max_length=500)] = Field(None, title='Conformarion method')
-    is_well: Optional[bool] = Field(None, title='Is this species a well on the PES?')
+    is_well: Optional[bool] = Field(..., title='Is this species a well on the PES?')
     is_global_min: Optional[bool] = Field(None, title='If this conformer is a well, whether it is meant to represents '
                                                       'the **global** minimum energy well')
     global_min_geometry: Optional[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
@@ -235,16 +199,16 @@ class SpeciesBase(BaseModel):
     is_ts: Optional[bool] = Field(False, title='Does this species represent a transition state?')
     irc_trajectories: Optional[List[List[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
                                               Tuple[conint(ge=1), ...], Tuple[constr(max_length=10), ...]]]]]] = \
-        Field(None, title='IRC trajectories (for TS species)')    
-    electronic_energy: Optional[float] = Field(None, title='Electronic energy in Hartree')
-    E0: Optional[float] = Field(None, title='E0 (zero-point energy) in kJ/mol')
+        Field(None, title='IRC trajectories (for TS species)')
+    electronic_energy: float = Field(..., title='Electronic energy in Hartree')
+    E0: Optional[float] = Field(..., title='E0 (zero-point energy) in kJ/mol')
     active_space: Optional[Dict[str, int]] = Field(None, title='The active space (number of electrons and orbitals)')
     hessian: Optional[List[List[float]]] = Field(None, title='Hessian matrix')
     frequencies: Optional[List[float]] = Field(None, title='Calculated frequencies')
     scaled_projected_frequencies: Optional[List[float]] = Field(None, title='Scaled and projected frequencies')  # check length after rotors/confs
     normal_displacement_modes: Optional[List[List[List[float]]]] = Field(None, title='Normal displacement modes')
     freq_id: Optional[int] = Field(None, ge=0, title='Freq ID')
-    rigid_rotor: Optional[str] = Field(None, max_length=50, title='The rigid rotor treatment type. Allowed values: "atom", '
+    rigid_rotor: Optional[str] = Field(..., max_length=50, title='The rigid rotor treatment type. Allowed values: "atom", '
                                                        '"linear", "spherical top", "symmetric top", or "asymmetric top".')
     statmech_treatment: Optional[str] = Field(None, max_length=50, title='The statistical mechanics treatment')
     rotational_constants: Optional[List[float]] = Field(None, title='Rotational constants')
@@ -264,60 +228,34 @@ class SpeciesBase(BaseModel):
     scan_paths: Optional[Dict[Tuple[Tuple[conint(ge=1), conint(ge=1), conint(ge=1), conint(ge=1)], ...],
                               constr(max_length=5000)]] = Field(None, title='Paths to scan log files')
     irc_paths: Optional[List[constr(max_length=5000)]] = Field(None, title='Paths to IRC log files')
-    sp_path: Optional[str] = Field(None, max_length=5000, title='Path to single-point energy log file')
+    sp_path: Optional[str] = Field(..., max_length=5000, title='Path to single-point energy log file')
     unconverged_jobs: Optional[List[Dict[str, str]]] = Field(None, title='Paths to unconverged job log files')
     extras: Optional[Dict[str, Any]] = Field(None, title='Extras')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
-    sp_level_id: Optional[int] = Field(None, title='Single point level ID')
-    sp_ess_id: Optional[int] = Field(None, title='Single point ESS ID')
-    reviewed: Optional[bool] = Field(None, title='Whether the species has been reviewed')
+    sp_level_id: Optional[int] = Field(..., title='Single point level ID')
+    sp_ess_id: Optional[int] = Field(..., title='Single point ESS ID')
 
     class Config:
         orm_mode = True
         extra = "forbid"
 
-    
 class SpeciesCreate(SpeciesBase):
-    """
-    Create a species
-    """
-    # Override fields that are required during creation
-    charge: int = Field(..., ge=-10, le=10, title='The net charge of the species')
-    multiplicity: int = Field(..., ge=1, le=10, title='The spin multiplicity of the species')
-    # coordinates: Coordinates = Field(
-    #     ..., 
-    #     title='Cartesian coordinates',
-    #     description="Cartesian coordinates in standard orientation. Keys are 'symbols', 'isotopes', and 'coords'."
-    # )
-    external_symmetry: int = Field(..., ge=1, title='External symmetry')
-    point_group: str = Field(..., max_length=6, title='Point group')
-    electronic_energy: float = Field(..., title='Electronic energy in Hartree')
-    E0: float = Field(..., title='E0 (zero-point energy) in kJ/mol')
-    is_well: bool = Field(..., title='Is this species a well on the PES?')
-    frequencies: List[float] = Field(
-        ...,
-        title='Frequencies in cm^-1',
-        description='Frequencies in cm^-1. Must be a list of floats.'
-    )
-    sp_path: str = Field(..., max_length=5000, title='Path to single-point energy log file')
-    sp_level_id: int = Field(..., title='Single point level ID')
-    sp_ess_id: int = Field(..., title='Single point ESS ID')
+    """Create a Species item: Properties to receive on item creation"""
+    retracted: Optional[str] = Field(None, max_length=255, title='Retracted')
+    reviewed: Optional[bool] = Field(None, title='Retracted (bool)')
+    approved: Optional[bool] = Field(None, title='Approved (bool)')
+    reviewer_flags: Optional[Dict[str, str]] = None
 
-    # Fields that are automatically set and not provided by the user
-    timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), 
-        title='The timestamp of the species creation'
-    )
-    retracted: Optional[bool] = Field(None, title='Whether this species has been retracted')
-    reviewed: bool = Field(False, title='Whether this species has been reviewed')
-    approved: Optional[bool] = Field(None, title='Whether this species has been approved')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+    # Validators
+    @validator('reviewer_flags', always=True)
+    def check_reviewer_flags(cls, value):
+        """Species.reviewer_flags validator"""
+        return value or dict()
 
     @validator('timestamp', always=True)
     def assign_timestamp(cls, value):
         """Species.timestamp validator"""
-        return value or datetime.now(timezone.utc)
-    
+        return datetime.timestamp(datetime.utcnow())
+
     @validator('retracted')
     def retracted_validator(cls, value, values):
         """Species.retracted validator"""
@@ -330,7 +268,7 @@ class SpeciesCreate(SpeciesBase):
     def reviewed_validator(cls, value, values):
         """Species.reviewed validator"""
         label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
-        if value not in (False, None):
+        if value is not None:
             raise ValueError(f'The "reviewed" argument is not a user input{label}.')
         return False
 
@@ -341,61 +279,6 @@ class SpeciesCreate(SpeciesBase):
         if value is not None:
             raise ValueError(f'The "approved" argument is not a user input{label}.')
         return False
-
-    @validator('frequencies', always=True)
-    def frequencies_validator(cls, value, values):
-        """Species.frequencies validator"""
-        print('values:', values)
-        print('values["label"]:', values["label"])
-        print('value', value)
-        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
-        if value is None and common.get_number_of_atoms(values) > 1:
-            raise ValueError(f'Frequencies were not given{label}. Frequencies must be specified for polyatomic species.')
-        if value is not None:
-            if any(i == 0 for i in value):
-                raise ValueError(f'A frequency cannot be zero, got {value}{label}.')
-            if values['coordinates'] is not None and value is not None:
-                linear = is_linear(coordinates=np.array(values['coordinates']['coords']))
-                num_atoms = common.get_number_of_atoms(values)
-                if num_atoms is not None:
-                    expected_num_freqs = 3 * num_atoms - (6 - int(linear))  # 3N-6 for non linear, 3N-5 for linear
-                    if len(value) != expected_num_freqs:
-                        linear_txt = 'linear' if linear else 'non-linear'
-                        raise ValueError(f'Expected {expected_num_freqs} frequencies for a {linear_txt} molecule, '
-                                         f'got {len(value)} frequencies{label}.')
-            if 'is_ts' in values and values['is_ts'] and all(freq > 0 for freq in value):
-                raise ValueError(f'An imaginary frequency must be present for a TS species. '
-                                 f'Got all real frequencies{label}.')
-        return value
-    @root_validator
-    def check_descriptor_presence(cls, values):
-        """
-        Check that at least one of the species descriptors is provided
-        """
-        smiles, inchi, graph = values.get('smiles'), values.get('inchi'), values.get('graph')
-        if not (smiles or inchi or graph):
-            raise ValueError("At least one of 'smiles', 'inchi', or 'graph' must be provided.")
-        return values  # Ensure the values are returned
-
-    # @validator('reviewed', always=True)
-    # def reviewed_validator(cls, value, values, **kwargs):
-    #     label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
-    #     if cls.__name__ == 'SpeciesCreate':
-    #         # In SpeciesCreate, 'reviewed' should be False and not set by the user
-    #         if value not in (False, None):
-    #             raise ValueError(f'The "reviewed" argument cannot be set by the user{label}.')
-    #         return False
-    #     else:
-    #         # In other models, 'reviewed' should not be set by the user
-    #         if value is not None:
-    #             raise ValueError(f'The "reviewed" argument is not a user input{label}.')
-    #         return False
-
-
-    @validator('reviewer_flags', always=True)
-    def check_reviewer_flags(cls, value):
-        """Species.reviewer_flags validator"""
-        return value or dict()
 
     @validator('smiles')
     def smiles_validator(cls, value, values):
@@ -486,24 +369,23 @@ class SpeciesCreate(SpeciesBase):
     @validator('fragments')
     def fragments_validator(cls, value, values):
         """Species.fragments validator"""
-        if value is None:
-            return value  # Allow None if the field is optional
-
         label = f' of species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
         atom_indices = list()
         for fragment in value:
             for index in fragment:
                 is_valid, err = common.is_valid_atom_index(index=index,
-                                                        coordinates=values.get('coordinates'),
-                                                        existing_indices=atom_indices)
+                                                           coordinates=values['coordinates'] if 'coordinates' in values
+                                                           else None,
+                                                           existing_indices=atom_indices)
                 if not is_valid:
                     raise ValueError(f'The atom index {index} in the fragments attribute{label} is invalid. '
-                                    f'Got:\n{err}.')
+                                     f'Got:\n{err}.')
                 atom_indices.append(index)
-        if 'coordinates' in values and values['coordinates'] and len(values['coordinates']['symbols']) != len(atom_indices):
+        if 'coordinates' in values and len(values['coordinates']['symbols']) != len(atom_indices):
             raise ValueError(f'{len(values["coordinates"]["symbols"])} atoms were specified in the fragments{label}, '
-                            f'while according to its coordinates it has {len(atom_indices)} atoms.')
-        return value if len(value) > 1 else []
+                             f'while according to its coordinates it has {len(atom_indices)} atoms.')
+        value = value if len(value) > 1 else None
+        return value
 
     @validator('fragment_orientation', always=True)
     def fragment_orientation_validator(cls, value, values):
@@ -614,8 +496,6 @@ class SpeciesCreate(SpeciesBase):
     @validator('global_min_geometry')
     def global_min_geometry_validator(cls, value, values):
         """Species.global_min_geometry validator"""
-        if value is None:
-            return value
         label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
         converter.add_common_isotopes_to_coords(value)
         is_valid, err = common.is_valid_coordinates(value)
@@ -673,6 +553,29 @@ class SpeciesCreate(SpeciesBase):
                 if len(row) < i + 1:
                     raise ValueError(f'Row {i} of the Hesian matrix{label} has only {len(row)} elements, '
                                      f'expected {i + 1} elements.')
+        return value
+
+    @validator('frequencies', always=True)
+    def frequencies_validator(cls, value, values):
+        """Species.frequencies validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if value is None and common.get_number_of_atoms(values) > 1:
+            raise ValueError(f'Frequencies were not given{label}. Frequencies must be specified for polyatomic species.')
+        if value is not None:
+            if any(i == 0 for i in value):
+                raise ValueError(f'A frequency cannot be zero, got {value}{label}.')
+            if values['coordinates'] is not None and value is not None:
+                linear = is_linear(coordinates=np.array(values['coordinates']['coords']))
+                num_atoms = common.get_number_of_atoms(values)
+                if num_atoms is not None:
+                    expected_num_freqs = 3 * num_atoms - (6 - int(linear))  # 3N-6 for non linear, 3N-5 for linear
+                    if len(value) != expected_num_freqs:
+                        linear_txt = 'linear' if linear else 'non-linear'
+                        raise ValueError(f'Expected {expected_num_freqs} frequencies for a {linear_txt} molecule, '
+                                         f'got {len(value)} frequencies{label}.')
+            if 'is_ts' in values and values['is_ts'] and all(freq > 0 for freq in value):
+                raise ValueError(f'An imaginary frequency must be present for a TS species. '
+                                 f'Got all real frequencies{label}.')
         return value
 
     @validator('scaled_projected_frequencies', always=True)
@@ -769,30 +672,19 @@ class SpeciesCreate(SpeciesBase):
     @validator('torsions')
     def torsions_validator(cls, value, values):
         """Species.torsions validator"""
-        if value is None:
-            return value  # Allow None if the field is optional
-
         label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
-        if not isinstance(value[0], list):
-            # correct to a List[List[int]] form
-            value = [value]
-        for atom_indices in value:
-            if len(atom_indices) != 4:
-                raise ValueError(f'Atom indices in "torsions" must be of length 4, got{label} {atom_indices}'
-                                f'in\n{values}')
-            if any(index == 0 for index in atom_indices):
-                raise ValueError(f'Torsion atom indices must be 1-indexed, got{label} {atom_indices} in\n{values}')
-        if 'dimension' in values and values['dimension'] and len(value) != values['dimension']:
-            raise ValueError(f"Got a {len(value)}D torsion for a declared dimension of "
-                            f"{values['dimension']}{label}:\n{value}")
+        if 'scaled_projected_frequencies' in values and values['scaled_projected_frequencies'] \
+                and 'frequencies' in values and values['frequencies'] \
+                and len(values['frequencies']) - len(value) != len(values['scaled_projected_frequencies']):
+            raise ValueError(f"Expected to have "
+                             f"{len(values['frequencies']) - len(value)} "
+                             f"scaled projected frequencies for {len(value)} torsions, but got "
+                             f"{len(values['scaled_projected_frequencies'])}{label}.")
         return value
-
 
     @validator('conformers')
     def conformers_validator(cls, value, values):
         """Species.conformers validator"""
-        if value is None:
-            return value
         label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
         if 'torsions' in values and values['torsions']:
             raise ValueError(f'Either torsions or conformers must be given, got both{label}.')
@@ -908,8 +800,6 @@ class SpeciesCreate(SpeciesBase):
     @validator('unconverged_jobs')
     def unconverged_jobs_validator(cls, value, values):
         """Species.unconverged_jobs validator"""
-        if value is None:
-            return value
         label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
         allowed_keys = ['job type', 'issue', 'troubleshooting', 'comment', 'path']
         recognized_job_types = ['opt', 'freq', 'scan', 'irc', 'sp']
@@ -927,74 +817,40 @@ class SpeciesCreate(SpeciesBase):
                 raise ValueError(f'A file path is required when reporting an unconverged job. Got None{label}.`')
         return value
 
-    class Config:
-        orm_mode = True
-        extra = "forbid"
 
 class SpeciesUpdate(SpeciesBase):
     """
-    Update a species: Partial update
-    """
-
-    class Config:
-        orm_mode = True
-        extra = "forbid"
-
-
-class SpeciesOut(SpeciesBase):
-    """
-    Output a species
-    """
-    id: int
-    timestamp: datetime
-    retracted: Optional[bool]
-    reviewed: Optional[bool]
-    approved: Optional[bool]
-    reviewer_flags: Optional[Dict[str, str]]
-
-    class Config:
-        orm_mode = True
-        extra = "forbid"
-
-
-class SpeciesInDBBase(SpeciesBase):
-    """
-    Species stored in the database
-    """
-    id: int = Field(..., title="Unique identifier for the species")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), title='Creation timestamp')
-    retracted: Optional[bool] = Field(None, title='Whether this species has been retracted')
-    reviewed: bool = Field(False, title='Whether this species has been reviewed')
-    approved: Optional[bool] = Field(None, title='Whether this species has been approved')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
-
-    class Config:
-        orm_mode = True
-        extra = "forbid"
-
-
-class SpeciesInDB(SpeciesInDBBase):
-    """
-    Species stored in the database
+    Update a Species item: All fields are optional to allow partial updates.
     """
     pass
 
+class SpeciesOutBase(SpeciesBase):
+    """
+    Base class for Species output with fields that should be included in responses.
+    """
+    id: int
+    reviewer_flags: Optional[Dict[str, str]] = None
+    reviewed: bool
+    approved: bool
+    # ... other fields that should be included in responses ...
+
+    class Config:
+        orm_mode = True
+
+# class SpeciesInDBBase(Species):
+#     """Properties shared by models stored in DB"""
+#     id: int
+#     reviewer_flags: Optional[Dict[str, str]] = None
+
+#     class Config:
+#         orm_mode = True
 
 
+class Species(SpeciesOutBase):
+    """Properties to return to client"""
+    pass
 
 
-    # # Validators
-    # @validator('reviewer_flags', always=True)
-    # def check_reviewer_flags(cls, value):
-    #     """
-    #     species.reviewer_flags validator
-    #     """
-    #     return value or dict()
-
-    # @validator('retracted')
-    # def retracted_validator(cls, value, values):
-    #     """SpeciesCreate.retracted validator"""
-    #     label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
-    #     if value is not None:
-    #         raise ValueError(f'The "retracted" argument is not a user input{label}.')
-    #     return None
+class SpeciesInDB(SpeciesOutBase):
+    """Properties stored in DB"""
+    pass

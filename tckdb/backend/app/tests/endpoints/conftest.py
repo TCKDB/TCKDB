@@ -46,21 +46,43 @@ def setup_database():
     assert ALEMBIC_INI.exists(), f"Alembic config file not found at {ALEMBIC_INI}"
 
     # Configure Alembic
-    # This replaces the URL in alembic.ini with the test database URL
     alembic_cfg = Config(str(ALEMBIC_INI))
     alembic_cfg.set_main_option("sqlalchemy.url", SQLALCHEMY_DATABASE_URL)  # Override URL
 
     # Run migrations
-    command.upgrade(alembic_cfg, "head")
-    print("Alembic migrations applied.")
+    try:
+        command.upgrade(alembic_cfg, "head")
+        print("Alembic migrations applied.")
+    except Exception as e:
+        print(f"Error applying migrations: {e}")
+        raise
+
+    # **Debugging: Check if 'level' table exists**
+    try:
+        with engine.connect() as connection:
+            result = connection.execute("SELECT to_regclass('public.level');")
+            table_exists = result.fetchone()[0] is not None
+            if table_exists:
+                print("Table 'level' exists in the database.")
+            else:
+                print("Table 'level' does NOT exist in the database.")
+                raise Exception("Migration did not create 'level' table.")
+    except Exception as e:
+        print(f"Error during migration verification: {e}")
+        raise
 
     yield
 
     # Downgrade migrations after tests
-    command.downgrade(alembic_cfg, "base")
-    print("Alembic migrations downgraded.")
+    try:
+        command.downgrade(alembic_cfg, "base")
+        print("Alembic migrations downgraded.")
+    except Exception as e:
+        print(f"Error downgrading migrations: {e}")
+        raise
 
-@pytest.fixture(scope="module")
+
+@pytest.fixture(scope="class")
 def db_session(setup_database):
     """Create a new database session for a test module."""
     connection = engine.connect()
@@ -72,7 +94,7 @@ def db_session(setup_database):
         transaction.rollback()
     connection.close()
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def test_level(db_session):
     """Create a temporary Level entry."""
     level = Level(
@@ -85,7 +107,7 @@ def test_level(db_session):
     db_session.refresh(level)
     return level
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def test_ess(db_session):
     """Create a temporary ESS entry."""
     ess = ESS(
@@ -99,7 +121,7 @@ def test_ess(db_session):
     db_session.refresh(ess)
     return ess
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def test_encorr(db_session, test_level: Level):
     """
     Fixture to create a test EnCorr record.
@@ -123,7 +145,7 @@ def test_encorr(db_session, test_level: Level):
     db_session.refresh(encorr)
     return encorr
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def test_freq(db_session, test_level):
     """
     Create a temporary Freq entry.
@@ -139,7 +161,7 @@ def test_freq(db_session, test_level):
     db_session.refresh(freq)
     return freq
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="class")
 def client(db_session):
     """Provide a TestClient with overridden dependencies."""
     def override_get_db():

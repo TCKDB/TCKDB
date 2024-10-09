@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from tckdb.backend.app.schemas.species import Species, SpeciesCreate, SpeciesUpdate
+from tckdb.backend.app.schemas.species import SpeciesBase, SpeciesCreate, SpeciesUpdate, SpeciesOut
 from tckdb.backend.app.models.species import Species as SpeciesModel
 from tckdb.backend.app.db.session import get_db
 
@@ -11,7 +11,7 @@ router = APIRouter(
     tags=["species"],
 )
 
-@router.post("/", response_model=Species, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=SpeciesOut, status_code=status.HTTP_201_CREATED)
 def create_species(species: SpeciesCreate, db: Session = Depends(get_db)):
     """
     Create a new species entry in the database
@@ -41,7 +41,7 @@ def create_species(species: SpeciesCreate, db: Session = Depends(get_db)):
     
     return db_species
 
-@router.get("/{species_id}", response_model=Species)
+@router.get("/{species_id}", response_model=SpeciesOut)
 def read_species(species_id: int, db: Session=Depends(get_db)):
     """
     Retrieve a species by its ID
@@ -62,13 +62,13 @@ def read_species(species_id: int, db: Session=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Species not found")
     return db_species
 
-@router.get("/", response_model=List[Species])
+@router.get("/", response_model=List[SpeciesOut])
 def read_species_list(skip: int = 0, 
                       limit: int = 100, 
                       label: Optional[str] = None,
                       smiles: Optional[str] = None,
                       inchi: Optional[str] = None,
-                      db: Session = Depends(get_db)) -> List[Species]:
+                      db: Session = Depends(get_db)) -> List[SpeciesBase]:
     """
     Retrieve a list of species with optional pagination
     
@@ -93,7 +93,7 @@ def read_species_list(skip: int = 0,
     species = query.offset(skip).limit(limit).all()
     return species
 
-@router.put("/{species_id}", response_model=Species)
+@router.put("/{species_id}", response_model=SpeciesBase)
 def update_species(species_id: int, species: SpeciesCreate, db: Session = Depends(get_db)):
     """
     Update an existing species entry in the database
@@ -119,7 +119,7 @@ def update_species(species_id: int, species: SpeciesCreate, db: Session = Depend
     db.refresh(db_species)
     return db_species
 
-@router.patch("/{species_id}", response_model=Species)
+@router.patch("/{species_id}", response_model=SpeciesOut)
 def partial_update_species(species_id: int, species: SpeciesUpdate, db: Session = Depends(get_db)):
     """
     Partially update an existing species entry in the database
@@ -196,7 +196,7 @@ def delete_species_soft(species_id: int, db: Session = Depends(get_db)):
     return {'detail': 'Species soft deleted'}
 
 
-@router.post("/{species_id}/restore", response_model=Species)
+@router.post("/{species_id}/restore", response_model=SpeciesBase)
 def restore_species(species_id: int, db: Session = Depends(get_db)):
     """
     Restore a soft deleted species by its ID

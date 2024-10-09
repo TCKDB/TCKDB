@@ -1,12 +1,13 @@
 """
 TCKDB backend app models species module
 """
-
+from datetime import datetime
 from typing import List, Tuple
 
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, DateTime
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from tckdb.backend.app.db.base_class import AuditMixin, Base
 from tckdb.backend.app.models.associations import species_authors, species_reviewers
@@ -522,7 +523,7 @@ class Species(Base, AuditMixin):
 
     # provenance
     statmech_software = Column(String(150), nullable=True)
-    timestamp = Column(Float, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     retracted = Column(String(255), nullable=True)
 
     # review

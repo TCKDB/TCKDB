@@ -1,6 +1,8 @@
+from urllib import response
 import pytest
 from fastapi.testclient import TestClient
 from tckdb.backend.app.main import app
+from tckdb.backend.app.models import species
 """
 TestClient: Provided by FastAPI, allows you to simulate HTTP requests to your
 application
@@ -37,13 +39,12 @@ Response Constructed and Sent Back to Client
 
 """
 
-API_V1_STR = "/api/v1"
 
-@pytest.fixture(scope="module", autouse=True)
-def setup_and_teardown_database():
-    # This fixture ensures that the database setup and teardown is handled
-    # by the setup_database fixture in conftest.py
-    pass
+import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
+
+API_V1_STR = "/api/v1"
 
 
 # shared data
@@ -91,54 +92,105 @@ heat_capacity_model = {'model': 'NASA',
                                                     1.04457152E+01],
                                         'T int': 1041.96}}
 
+@pytest.mark.usefixtures("setup_database")
+class TestSpeciesEndpoints:
 
-def test_create_species(test_level, test_ess, test_encorr, test_freq, client):
-    """
-    Test creating a new species
-    """
-    response = client.post(
-        f"{API_V1_STR}/species/",
-        json={
-            "label": "TestSpecies",
-            "charge": 0,
-            "multiplicity": 1,
-            "smiles": "C",
-            "coordinates": ch4_xyz,
-            "external_symmetry": 4,
-            "point_group": "Td",
-            "conformation_method": "ARC v1.1.0",
-            "is_well": True,
-            "electronic_energy": -365.544,
-            "E0": -370.240,
-            "hessian": [[1] * 15] * 15,
-            "frequencies": ch4_freqs,
-            "scaled_projected_frequencies": ch4_scaled_freqs,
-            "normal_displacement_modes": ch4_normal_disp_modes,
-            #"freq_id": test_freq.id,
-            "freq_id": 1,
-            "rigid_rotor": "spherical top",
-            "statmech_treatment": "RRHO",
-            "rotational_constants": [1, 2, 3],
-            "H298": -74.52,
-            "S298": 186.06,
-            "Cp_values": [36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
-            "Cp_T_list": [300, 400, 500, 600, 800, 1000, 1500],
-            "encorr_id": test_encorr.id,
-            "sp_level_id": test_level.id,  # Use the created Level's ID
-            "sp_ess_id": test_ess.id,
-            "opt_path": "path/to/opt/job.log",
-            "freq_path": "path/to/freq/job.log",
-            "sp_path": "path/to/sp/job.log",
-        },
-    )
-    assert response.status_code == 201, response.text
-    data = response.json()
-    # show the data
-    print(data)
-    assert data["label"] == "TestSpecies"
-    assert data["smiles"] == "C"
-    assert data["inchi"] == "InChI=1S/CH4/h1H4"
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_species(self, request, test_level, test_ess, test_encorr, test_freq, client):
+        """
+        Class-level ficture to create a species for testing
+        """
+        response = client.post(
+            f"{API_V1_STR}/species/",
+            json={
+                "label": "TestSpecies",
+                "charge": 0,
+                "multiplicity": 1,
+                "smiles": "C",
+                "coordinates": ch4_xyz,
+                "external_symmetry": 4,
+                "point_group": "Td",
+                "conformation_method": "ARC v1.1.0",
+                "is_well": True,
+                "electronic_energy": -365.544,
+                "E0": -370.240,
+                "hessian": [[1] * 15] * 15,
+                "frequencies": ch4_freqs,
+                "scaled_projected_frequencies": ch4_scaled_freqs,
+                "normal_displacement_modes": ch4_normal_disp_modes,
+                #"freq_id": test_freq.id,
+                "freq_id": 1,
+                "rigid_rotor": "spherical top",
+                "statmech_treatment": "RRHO",
+                "rotational_constants": [1, 2, 3],
+                "H298": -74.52,
+                "S298": 186.06,
+                "Cp_values": [36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
+                "Cp_T_list": [300, 400, 500, 600, 800, 1000, 1500],
+                "encorr_id": test_encorr.id,
+                "sp_level_id": test_level.id,  # Use the created Level's ID
+                "sp_ess_id": test_ess.id,
+                "opt_path": "path/to/opt/job.log",
+                "freq_path": "path/to/freq/job.log",
+                "sp_path": "path/to/sp/job.log",
+            },
+        )
+        assert response.status_code == 201, response.text
+        data = response.json()
+        print("Response data:", data)  # Add this line for debugging
+        request.cls.species_id = data["id"]
+        request.cls.species_data = data
+        print("Created species data: ", data)
+
+    def test_create_species(self):
+        """
+        Test the initial creation of the species
+        """
+        assert self.species_data["label"] == "TestSpecies"
+        assert self.species_data["smiles"] == "C"
+        assert self.species_data["inchi"] == "InChI=1S/CH4/h1H4"
+
+    def test_read_species(self, client):
+        """
+        Test retrieving a species by its ID
+        """
+        species_id = self.species_id
+        response = client.get(f"{API_V1_STR}/species/{species_id}")
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["label"] == "TestSpecies"
+        assert data["smiles"] == "C"
+
+    def test_update_species_partial(self, client):
+        """
+        Test partial updating the species' attributes
+        """
+        species_id = self.species_id
+        response = client.patch(
+            f"{API_V1_STR}/species/{species_id}",
+            json={
+                "label": "UpdatedSpecies",
+                "charge": 1,
+                "multiplicity": 2,
+            },
+        )
+        assert response.status_code == 200, response.text
+        updated_data = response.json()
+        assert updated_data["label"] == "UpdatedSpecies"
+        assert updated_data["smiles"] == "C"
+        assert updated_data["charge"] == 1
+        assert updated_data["multiplicity"] == 2
+
+    def test_soft_delete_species(self, client):
+        """
+        Test soft deleting the species
+        """
+        species_id = self.species_id
+        response = client.delete(f"{API_V1_STR}/species/{species_id}/soft")
+        assert response.status_code == 200, response.text
+        assert response.json() == {"detail": "Species soft deleted"}
     
+
 
     # Verify AuditLog entry using the provided db_session_fixture
     # audit_logs = db_session_fixture.query(AuditLog).filter(
