@@ -595,8 +595,8 @@ class Species(Base, AuditMixin):
     encorr = relationship('EnCorr', backref='species', foreign_keys=[encorr_id])
     literature_id = Column(Integer, ForeignKey('literature.id'), nullable=True, unique=False)
     literature = relationship('Literature', backref='species', foreign_keys=[literature_id])
-    bot_id = Column(Integer, ForeignKey('bot.id'), nullable=True, unique=False)
-    bot = relationship('Bot', backref='species', foreign_keys=[bot_id])
+    bot_id = Column(Integer, ForeignKey('bot.id'), nullable=True, unique=False)  # Changed to nullable=False
+    bot = relationship('Bot', back_populates='species', foreign_keys=[bot_id])
 
     opt_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
     opt_level = relationship('Level', backref="species_opt", foreign_keys=[opt_level_id])

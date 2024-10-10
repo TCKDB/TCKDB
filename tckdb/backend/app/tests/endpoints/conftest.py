@@ -42,7 +42,7 @@ def setup_database():
     # Construct the absolute path to alembic.ini
     BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent  # Adjust based on your directory structure
     ALEMBIC_INI = BASE_DIR / "alembic.ini"
-
+    print (BASE_DIR)
     # Ensure the alembic.ini file exists
     assert ALEMBIC_INI.exists(), f"Alembic config file not found at {ALEMBIC_INI}"
 

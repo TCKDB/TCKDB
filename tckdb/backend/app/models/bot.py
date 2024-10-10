@@ -2,7 +2,7 @@
 TCKDB backend app models bot module
 """
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from tckdb.backend.app.db.base_class import AuditMixin, Base
@@ -52,6 +52,18 @@ class Bot(Base, AuditMixin):
     git_commit = Column(String(500), nullable=True)
     git_branch = Column(String(100), nullable=True)
     reviewer_flags = Column(MsgpackExt, nullable=True)
+
+    __table_args__ = (UniqueConstraint("name", "version", name="_bot_name_version_uc"),)
+
+
+    species = relationship("Species", back_populates="bot",
+                           cascade="save-update",
+                           passive_deletes=False,
+                           lazy="select")
+    non_physical_species = relationship("NonPhysicalSpecies", back_populates="bot",
+                                        cascade="save-update",
+                                        passive_deletes=False,
+                                        lazy="select")
 
     def __str__(self) -> str:
         """

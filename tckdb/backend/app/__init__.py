@@ -7,3 +7,4 @@ import tckdb.backend.app.core
 import tckdb.backend.app.db
 import tckdb.backend.app.models
 import tckdb.backend.app.schemas
+import tckdb.backend.app.api.api_v1.endpoints

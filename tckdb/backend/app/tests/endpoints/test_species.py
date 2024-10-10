@@ -1,8 +1,7 @@
-from difflib import restore
-from urllib import response
 import pytest
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
+from tckdb.backend.app.conversions.converter import normalize_coordinates
 from tckdb.backend.app.main import app
 from tckdb.backend.app.models import species
 from tckdb.backend.app.models.species import Species as SpeciesModel
@@ -170,7 +169,7 @@ class TestSpeciesEndpoints:
         data = response.json()
         assert data["label"] == "TestSpecies"
         assert data["smiles"] == "C"
-        assert data["coordinates"] == ch4_xyz
+        assert normalize_coordinates(data["coordinates"]) == ch4_xyz
 
     def test_update_species_partial(self, client):
         """

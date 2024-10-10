@@ -5,23 +5,18 @@ TCKDB backend app schemas species module
 
 from datetime import datetime, timezone
 from enum import Enum
-from math import log
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-# try:
 from arkane.statmech import is_linear
 from pydantic import BaseModel, Field, confloat, conint, constr, validator, root_validator
 from rmgpy.molecule.adjlist import from_adjacency_list
 
 import tckdb.backend.app.conversions.converter as converter
+from tckdb.backend.app.schemas.bot import BotCreate
 import tckdb.backend.app.schemas.common as common
-from tckdb.backend import app
 
-# except ImportError:
-#     # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
-#     pass
 import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -271,6 +266,8 @@ class SpeciesBase(BaseModel):
     sp_level_id: Optional[int] = Field(None, title='Single point level ID')
     sp_ess_id: Optional[int] = Field(None, title='Single point ESS ID')
     reviewed: Optional[bool] = Field(None, title='Whether the species has been reviewed')
+    bot_id: Optional[int] = Field(None, title='The ID of the bot that created this species')
+    bot: Optional[BotCreate] = None
 
     class Config:
         orm_mode = True

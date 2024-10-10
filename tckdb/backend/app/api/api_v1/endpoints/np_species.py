@@ -1,7 +1,11 @@
+from os import name
+from sqlalchemy.exc import IntegrityError
+from tempfile import TemporaryFile
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+from tckdb.backend.app.models.bot import Bot as BotModel
 from tckdb.backend.app.schemas.np_species import NonPhysicalSpeciesBase, NonPhysicalSpeciesCreate, NonPhysicalSpeciesUpdate, NonPhysicalSpeciesOut
 from tckdb.backend.app.models.np_species import NonPhysicalSpecies as NonPhysicalSpeciesModel
 from tckdb.backend.app.db.session import get_db
@@ -30,14 +34,47 @@ def create_np_species(np_species: NonPhysicalSpeciesCreate, db: Session = Depend
         existing_np_species = db.query(NonPhysicalSpeciesModel).filter(NonPhysicalSpeciesModel.label == np_species.label).first()
         if existing_np_species:
             raise HTTPException(status_code=400, detail="Non-physical species already exists")
-    db_np_species = NonPhysicalSpeciesModel(**np_species.dict())
+    
+    bot = None
+    if np_species.bot:
+        bot_data = np_species.bot
+
+        # Query for existing bot
+        existing_bot = db.query(BotModel).filter(
+            BotModel.name == bot_data.name,
+            BotModel.version == bot_data.version
+        ).first()
+        if existing_bot:
+            bot = existing_bot
+        else:
+            # Create new bot
+            bot = BotModel(**bot_data.dict())
+            db.add(bot)
+            try:
+                db.commit()
+                db.refresh(bot)
+            except IntegrityError as e:
+                db.rollback()
+                # Attempt to fetch the bot again in case of concurrent creation
+                existing_bot = db.query(BotModel).filter(
+                    BotModel.name == bot_data.name,
+                    BotModel.version == bot_data.version
+                ).first()
+                if not existing_bot:
+                    raise HTTPException(status_code=400, detail=f"Bot creation failed: {e}")
+
+    np_species_data = np_species.dict(exclude={"bot"})
+    if bot:
+        db_np_species = NonPhysicalSpeciesModel(**np_species_data, bot_id=bot.id)
+    else:
+        db_np_species = NonPhysicalSpeciesModel(**np_species_data)
     db.add(db_np_species)
-    db.commit()
-    db.refresh(db_np_species)
-    
-    print(f"Non-physical species {db_np_species.label} created")
-    print(f"Non-physical species: {db_np_species}")
-    
+    try:
+        db.commit()
+        db.refresh(db_np_species)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Failed to create non-physical species: {str(e)}")
     return db_np_species
 
 @router.get("/{np_species_id}", response_model=NonPhysicalSpeciesOut)

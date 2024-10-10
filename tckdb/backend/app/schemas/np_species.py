@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, validator, constr, conint
 
 from rmgpy.molecule.adjlist import from_adjacency_list
 
+from tckdb.backend.app.schemas.bot import BotCreate
 import tckdb.backend.app.schemas.common as common
 import tckdb.backend.app.conversions.converter as converter
 
@@ -59,6 +60,8 @@ class NonPhysicalSpeciesBase(BaseModel):
     unconverged_jobs: Optional[List[Dict[str, str]]] = Field(None, title='Paths to unconverged job log files')
     extras: Optional[Dict[str, Any]] = Field(None, title='Extras')
     reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+    bot_id: Optional[int] = Field(None, title='The ID of the bot that created this species')
+    bot: Optional[BotCreate] = None
 
     class Config:
         orm_mode = True

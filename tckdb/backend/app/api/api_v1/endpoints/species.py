@@ -1,7 +1,9 @@
+from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+from tckdb.backend.app.models.bot import Bot as BotModel
 from tckdb.backend.app.schemas.species import SpeciesBase, SpeciesCreate, SpeciesUpdate, SpeciesOut
 from tckdb.backend.app.models.species import Species as SpeciesModel
 from tckdb.backend.app.db.session import get_db
@@ -31,14 +33,42 @@ def create_species(species: SpeciesCreate, db: Session = Depends(get_db)):
         existing_species = db.query(SpeciesModel).filter(SpeciesModel.label == species.label).first()
         if existing_species:
             raise HTTPException(status_code=400, detail="Species already exists")
-    db_species = SpeciesModel(**species.dict())
+    bot = None
+    if species.bot:
+        bot_data = species.bot
+        existing_bot = db.query(BotModel).filter(
+            BotModel.name == bot_data.name,
+            BotModel.version == bot_data.version
+        ).first()
+        if existing_bot:
+            bot = existing_bot
+        else:
+            bot = BotModel(**bot_data.dict())
+            db.add(bot)
+            try:
+                db.commit()
+                db.refresh(bot)
+            except IntegrityError as e:
+                db.rollback()
+                existing_bot = db.query(BotModel).filter(
+                    BotModel.name == bot_data.name,
+                    BotModel.version == bot_data.version
+                ).first()
+                if not existing_bot:
+                    raise HTTPException(status_code=400, detail=f"Bot creation failed: {e}")
+    db_species_data = species.dict(exclude={'bot'})
+    if bot:
+        db_species = SpeciesModel(**db_species_data, bot_id=bot.id)
+    else:
+        db_species = SpeciesModel(**db_species_data)
     db.add(db_species)
-    db.commit()
-    db.refresh(db_species)
-    
-    print(f"Species {db_species.label} created")
-    print(f"Species: {db_species}")
-    
+    try:
+        db.commit()
+        db.refresh(db_species)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Species creation failed: {e}")
+
     return db_species
 
 @router.get("/{species_id}", response_model=SpeciesOut)

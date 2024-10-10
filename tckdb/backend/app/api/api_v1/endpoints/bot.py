@@ -5,14 +5,13 @@ from sqlalchemy.orm import Session
 
 from tckdb.backend.app.db.session import get_db
 from tckdb.backend.app.models.bot import Bot as BotModel
-from tckdb.backend.app.schemas.bot import Bot, BotCreate, BotFullUpdate, BotPartialUpdate
+from tckdb.backend.app.schemas.bot import BotCreate, BotUpdate, BotOut
 
 router = APIRouter(
-    prefix="/bot",
     tags=["bot"],
 )
 
-@router.post("/", response_model=Bot, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=BotOut, status_code=status.HTTP_201_CREATED)
 def create_bot(bot: BotCreate, db: Session = Depends(get_db)):
     """
     Create a new bot entry in the database
@@ -37,7 +36,7 @@ def create_bot(bot: BotCreate, db: Session = Depends(get_db)):
     db.refresh(db_bot)
     return db_bot
 
-@router.get("/{bot_id}", response_model=Bot)
+@router.get("/{bot_id}", response_model=BotOut)
 def read_bot(bot_id: int, db: Session=Depends(get_db)):
     """
     Retrieve a bot by its ID
@@ -58,7 +57,7 @@ def read_bot(bot_id: int, db: Session=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Bot not found")
     return db_bot
 
-@router.get("/", response_model=List[Bot])
+@router.get("/", response_model=List[BotOut])
 def read_bots_list(skip: int = 0,
                    limit: int = 100,
                    db: Session = Depends(get_db)):
@@ -77,35 +76,35 @@ def read_bots_list(skip: int = 0,
     bots = db.query(BotModel).offset(skip).limit(limit).all()
     return bots
 
-@router.put("/{bot_id}", response_model=Bot)
-def update_bot(bot_id: int, bot: BotFullUpdate, db: Session=Depends(get_db)):
-    """
-    Update a bot by its ID
+# @router.put("/{bot_id}", response_model=Bot)
+# def update_bot(bot_id: int, bot: BotFullUpdate, db: Session=Depends(get_db)):
+#     """
+#     Update a bot by its ID
     
-    Args:
-        bot_id(int): The bot ID
-        bot(BotFullUpdate): The bot data to be fully updated
-        db(Session): The database session. Defaults to Depends(get_db)
+#     Args:
+#         bot_id(int): The bot ID
+#         bot(BotFullUpdate): The bot data to be fully updated
+#         db(Session): The database session. Defaults to Depends(get_db)
     
-    Returns:
-        Bot: The updated bot object
+#     Returns:
+#         Bot: The updated bot object
     
-    Raises:
-        HTTPException: If the bot is not found
+#     Raises:
+#         HTTPException: If the bot is not found
     
-    """
-    db_bot = db.query(BotModel).filter(BotModel.id == bot_id).first()
-    if db_bot is None:
-        raise HTTPException(status_code=404, detail="Bot not found")
-    for key, value in bot.dict().items():
-        setattr(db_bot, key, value)
-    db.add(db_bot)
-    db.commit()
-    db.refresh(db_bot)
-    return db_bot
+#     """
+#     db_bot = db.query(BotModel).filter(BotModel.id == bot_id).first()
+#     if db_bot is None:
+#         raise HTTPException(status_code=404, detail="Bot not found")
+#     for key, value in bot.dict().items():
+#         setattr(db_bot, key, value)
+#     db.add(db_bot)
+#     db.commit()
+#     db.refresh(db_bot)
+#     return db_bot
 
-@router.patch("/{bot_id}", response_model=Bot)
-def partial_update_bot(bot_id: int, bot: BotPartialUpdate, db: Session=Depends(get_db)):
+@router.patch("/{bot_id}", response_model=BotOut)
+def partial_update_bot(bot_id: int, bot: BotUpdate, db: Session=Depends(get_db)):
     """
     Partially update a bot by its ID
     
@@ -173,7 +172,7 @@ def delete_bot_soft(bot_id: int, db: Session=Depends(get_db)):
     return {'detail': 'Bot soft deleted'}
 
 
-@router.post("/{bot_id}/restore", response_model=Bot)
+@router.post("/{bot_id}/restore", response_model=BotOut)
 def restore_bot(bot_id: int, db: Session=Depends(get_db),
                 #user=Depends(required_roles(["admin"])) # TODO: To be implemented later
                 ):
