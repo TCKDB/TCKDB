@@ -3,9 +3,11 @@ TCKDB backend app schemas literature module
 """
 
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from pydantic import BaseModel, Field, validator
+
+from tckdb.backend.app.schemas.author import Author, AuthorCreate, AuthorUpdate
 
 
 class LiteratureTypeEnum(str, Enum):
@@ -21,10 +23,11 @@ class LiteratureBase(BaseModel):
     """
     A LiteratureBase class (shared properties)
     """
-    type: LiteratureTypeEnum = Field(..., title='The literature type, either article, book, or thesis')
-    authors: str = Field(..., max_length=255, title='The literature source authors')
-    title: str = Field(..., max_length=255, title='The literature source title')
-    year: int = Field(..., ge=1500, le=9999, title='The publication year')
+    type: Optional[LiteratureTypeEnum] = Field(None, title='The literature type, either article, book, or thesis')
+    authors: Optional[List[Author]] = Field(None, title='A list of authors for the literature source')
+    author_ids: Optional[List[int]] = Field(None, title='A list of author IDs for the literature source')
+    title: Optional[str] = Field(None, max_length=255, title='The literature source title')
+    year: Optional[int] = Field(None, ge=1500, le=9999, title='The publication year')
     journal: Optional[str] = Field(None, max_length=255, title='The Journal name (for an article)')
     publisher: Optional[str] = Field(None, max_length=255, title='The publisher name (for a book)')
     volume: Optional[int] = Field(None, gt=0, title='The volume number (for an article, optional for a book)')
@@ -42,6 +45,7 @@ class LiteratureBase(BaseModel):
     reviewer_flags: Optional[Dict[str, str]] = Field(None)
 
     class Config:
+        orm_mode = True
         extra = "forbid"
 
     @validator('reviewer_flags', always=True)
@@ -150,52 +154,36 @@ class LiteratureBase(BaseModel):
 
 class LiteratureCreate(LiteratureBase):
     """Create a Literature item: Properties to receive on item creation"""
-    type: str
-    authors: str
-    title: str
-    year: int
-    journal: Optional[str] = None
-    publisher: Optional[str] = None
-    volume: Optional[int] = None
-    issue: Optional[int] = None
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
-    editors: Optional[str] = None
-    edition: Optional[str] = None
-    chapter_title: Optional[str] = None
-    publication_place: Optional[str] = None
-    doi: Optional[str] = None
-    isbn: Optional[str] = None
-    url: Optional[str] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
+    type: LiteratureTypeEnum = Field(..., title='The literature type, either article, book, or thesis')
+    authors: Optional[List[AuthorCreate]] = Field(None, title='A list of new authors for the literature source')  # New authors
+    author_ids: List[int] = Field(..., title='A list of author IDs for the literature source')
+    title: str = Field(..., max_length=255, title='The literature source title')
+    year: int = Field(..., ge=1500, le=9999, title='The publication year')
+    
+    class Config:
+        orm_mode = True
+        extra = "forbid"
 
 
 class LiteratureUpdate(LiteratureBase):
     """Update a Literature item: Properties to receive on item update"""
-    authors: str
-    title: str
-    year: int
-    journal: Optional[str] = None
-    publisher: Optional[str] = None
-    volume: Optional[int] = None
-    issue: Optional[int] = None
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
-    editors: Optional[str] = None
-    edition: Optional[str] = None
-    chapter_title: Optional[str] = None
-    publication_place: Optional[str] = None
-    doi: Optional[str] = None
-    isbn: Optional[str] = None
-    url: Optional[str] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
 
+    class Config:
+        orm_mode = True
+        extra = "forbid"
+
+class LiteratureOut(LiteratureBase):
+    """Properties to return to client"""
+    
+    class Config:
+        orm_mode = True
 
 class LiteratureInDBBase(LiteratureBase):
     """Properties shared by models stored in DB"""
     id: int
-    authors: str
     title: str
+    authors: List[Author]
+    author_ids: List[int]
     year: int
     journal: Optional[str] = None
     publisher: Optional[str] = None

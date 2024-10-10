@@ -97,7 +97,6 @@ class Literature(Base):
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     type = Column(String(10), nullable=False)
-    authors = Column(String(255), nullable=False)
     title = Column(String(255), nullable=False)
     year = Column(Integer, nullable=False)
     journal = Column(String(255))
@@ -116,6 +115,8 @@ class Literature(Base):
     url = Column(String(500), nullable=False)
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
+    authors = relationship("Author", secondary="literature_author", back_populates="literature")
+    
     def __repr__(self) -> str:
         """
         A string representation from which the object can be reconstructed.

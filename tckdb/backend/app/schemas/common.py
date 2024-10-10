@@ -14,12 +14,9 @@ try:
 except ImportError:
     pass
 
-try:
-    from rmgpy.exceptions import InvalidAdjacencyListError
-    from rmgpy.molecule.adjlist import from_adjacency_list
-except ImportError:
-    # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
-    pass
+
+from rmgpy.exceptions import InvalidAdjacencyListError
+from rmgpy.molecule.adjlist import from_adjacency_list
 
 from tckdb.backend.app.conversions.converter import inchi_from_inchi_key
 
