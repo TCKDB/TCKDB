@@ -170,6 +170,7 @@ class TestSpeciesEndpoints:
         data = response.json()
         assert data["label"] == "TestSpecies"
         assert data["smiles"] == "C"
+        assert data["coordinates"] == ch4_xyz
 
     def test_update_species_partial(self, client):
         """
@@ -207,13 +208,13 @@ class TestSpeciesEndpoints:
 
     def test_restore_species(self, client):
         """
-        Test for restpring a soft deleted species
+        Test for restoring a soft deleted species
         """
         species_id = self.species_id
         restore_response = client.post(f"{API_V1_STR}/species/{species_id}/restore")
         assert restore_response.status_code == 200, restore_response.text
         restored_data = restore_response.json()
-        
+
         assert restored_data['id'] == species_id
         assert restored_data["label"] == "UpdatedSpecies"
         assert restored_data["smiles"] == "C"

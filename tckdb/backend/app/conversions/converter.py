@@ -299,3 +299,19 @@ def xyz_to_str(xyz_dict, isotope_format=None):
         row += '{0:14.8f}{1:14.8f}{2:14.8f}'.format(*coord)
         xyz_list.append(row)
     return '\n'.join(xyz_list)
+
+def normalize_coordinates(coords_dict):
+    """
+    Convert lists to tuples in the coordinates dictionary
+
+    Args:
+        coords_dict (dict): The coordinates dictionary with lists
+
+    Returns:
+        dict: The coordinates dictionary with tuples
+    """
+    return {
+        'symbols': tuple(coords_dict.get('symbols', [])),
+        'isotopes': tuple(coords_dict.get('isotopes', [])),
+        'coords': tuple(tuple(coord) for coord in coords_dict.get('coords', []))
+    }

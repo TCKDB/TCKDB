@@ -1,8 +1,8 @@
 """Create migration tables
 
-Revision ID: b304ed13dc6b
+Revision ID: dc57fb31be79
 Revises: 
-Create Date: 2024-10-09 12:05:04.681155
+Create Date: 2024-10-10 09:15:49.661666
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from tckdb.backend.app.models.common import MsgpackExt
 
 # revision identifiers, used by Alembic.
-revision: str = 'b304ed13dc6b'
+revision: str = 'dc57fb31be79'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -161,7 +161,7 @@ def upgrade() -> None:
     op.create_table('nonphysicalspecies',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('label', sa.String(length=255), nullable=True),
-    sa.Column('timestamp', sa.Float(), nullable=False),
+    sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('retracted', sa.String(length=255), nullable=True),
     sa.Column('reviewed', sa.Boolean(), nullable=False),
     sa.Column('approved', sa.Boolean(), nullable=False),
@@ -234,12 +234,12 @@ def upgrade() -> None:
     op.create_table('species',
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('label', sa.String(length=255), nullable=True),
     sa.Column('statmech_software', sa.String(length=150), nullable=True),
     sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('retracted', sa.String(length=255), nullable=True),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('reviewed', sa.Boolean(), nullable=False),
     sa.Column('approved', sa.Boolean(), nullable=False),
     sa.Column('reviewer_flags', MsgpackExt(), nullable=True),

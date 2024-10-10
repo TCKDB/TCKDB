@@ -4,17 +4,17 @@ TCKDB backend app models non-physical species (np_species) module
 
 from typing import List
 
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, DateTime, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 
-from tckdb.backend.app.db.base_class import Base
+from tckdb.backend.app.db.base_class import AuditMixin, Base
 from tckdb.backend.app.models.associations import np_species_authors, np_species_reviewers
 from tckdb.backend.app.models.common import MsgpackExt
 from tckdb.backend.app.models.species import species_as_str
 
 
-class NonPhysicalSpecies(Base):
+class NonPhysicalSpecies(Base, AuditMixin):
     """
     A class for representing a TCKDB NonPhysicalSpecies item.
 
@@ -258,7 +258,7 @@ class NonPhysicalSpecies(Base):
     label = Column(String(255), nullable=True)
 
     # provenance
-    timestamp = Column(Float, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     retracted = Column(String(255), nullable=True)
 
     # review

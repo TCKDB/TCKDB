@@ -2,8 +2,7 @@
 TCKDB backend app schemas non-physical species (np_species) module
 """
 
-from datetime import datetime, timezone
-from math import e
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field, validator, constr, conint
@@ -17,28 +16,28 @@ import tckdb.backend.app.conversions.converter as converter
 
 class NonPhysicalSpeciesBase(BaseModel):
     """
-    A NonePhysicalSpeciesBase class (shared properties)
+    A NonPhysicalSpeciesBase class (shared properties)
     """
     label: Optional[str] = Field(None, max_length=255, title='Species label')
     timestamp: Optional[float] = Field(None, gt=1.58E9, title='Time stamp')  # 1.58E9 corresponds to 2020-01-25 19:53:20
     retracted: Optional[str] = Field(None, max_length=255, title='Retracted')
     reviewed: Optional[bool] = Field(None, title='Retracted (bool)')
     approved: Optional[bool] = Field(None, title='Approved (bool)')
-    charge: Optional[int] = Field(None, ge=-10, le=10, title='Net charge')
-    multiplicity: Optional[int] = Field(None, ge=1, le=10, title='Spin multiplicity')
+    charge: int = Field(..., ge=-10, le=10, title='Net charge')
+    multiplicity: int = Field(..., ge=1, le=10, title='Spin multiplicity')
     smiles: Optional[str] = Field(None, max_length=5000, title='SMILES')
     inchi: Optional[str] = Field(None, max_length=5000, title='InChI')
     inchi_key: Optional[str] = Field(None, max_length=27, min_length=27, title='InChI key')
     graph: Optional[str] = Field(None, max_length=100000, title='Adjacency list graph')
     electronic_state: Optional[str] = Field('X', max_length=150, title='Electronic state')
-    coordinates: Optional[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
+    coordinates: Dict[str, Union[Tuple[Tuple[float, float, float], ...],
                                  Tuple[conint(ge=1), ...],
-                                 Tuple[constr(max_length=10), ...]]]] = Field(None, title='Cartesian coordinates')
+                                 Tuple[constr(max_length=10), ...]]] = Field(..., title='Cartesian coordinates')
     fragments: Optional[List[List[conint(ge=1)]]] = Field(None, title='Fragments')
     fragment_orientation: Optional[List[Dict[str, Union[float, List[float]]]]] = Field(None, title='Fragment orientation')
     chirality: Optional[Dict[Tuple[conint(ge=1), ...], constr(max_length=10)]] = Field(None, title='Chirality')
     conformation_method: Optional[constr(max_length=500)] = Field(None, title='Conformarion method')
-    is_well: Optional[bool] = Field(None, title='Is this species a well on the PES?')
+    is_well: bool = Field(..., title='Is this species a well on the PES?')
     is_global_min: Optional[bool] = Field(None, title='If this conformer is a well, whether it is meant to represents '
                                                       'the **global** minimum energy well')
     global_min_geometry: Optional[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
@@ -46,7 +45,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                                                   Tuple[constr(max_length=10), ...]]]] = \
         Field(None, title='If this species does not represent the global minimum well, this argument must contain '
                           'the coordinates of the global minimum energy conformer at the same opt level.')
-    is_ts: Optional[bool] = Field(False, title='Does this species represent a transition state?')
+    is_ts: bool = Field(False, title='Does this species represent a transition state?')
     irc_trajectories: Optional[List[List[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
                                               Tuple[conint(ge=1), ...], Tuple[constr(max_length=10), ...]]]]]] = \
         Field(None, title='IRC trajectories (for TS species)')
@@ -61,48 +60,23 @@ class NonPhysicalSpeciesBase(BaseModel):
     reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
 
     class Config:
-        orm_mode = True
-        extra = 'forbid'
+        extra = "forbid"
 
-
-class NonPhysicalSpeciesCreate(NonPhysicalSpeciesBase):
-    """
-    A class for non-physical species creation (Inherited from NonPhysicalSpeciesBase)
-    """
-    charge: int = Field(..., ge=-10, le=10, title='Net charge')
-    multiplicity: int = Field(..., ge=1, le=10, title='Spin multiplicity')
-    coordinates: Dict[str, Union[Tuple[Tuple[float, float, float], ...],
-                                 Tuple[conint(ge=1), ...],
-                                 Tuple[constr(max_length=10), ...]]] = Field(..., title='Cartesian coordinates')
-    is_well: bool = Field(..., title='Is this species a well on the PES?')
-    is_ts: bool = Field(False, title='Does this species represent a transition state?')
-    sp_path: str = Field(..., max_length=5000, title='Path to single-point energy log file')
-    sp_level_id: int = Field(..., title='Single point level ID')
-    sp_ess_id: int = Field(..., title='Single point ESS ID')
-
-    # Fields that are automatically set and not provided by the user
-    timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        title='The timestamp of the species creation'
-    )
-    retracted: Optional[bool] = Field(None, title='Whether this species has been retracted')
-    reviewed: bool = Field(False, title='Whether this species has been reviewed')
-    approved: Optional[bool] = Field(None, title='Whether this species has been approved')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
-
-    class Config:
-        orm_mode = True
-        extra = 'forbid'
+    @validator('reviewer_flags', always=True)
+    def check_reviewer_flags(cls, value):
+        """NonPhysicalSpecies.reviewer_flags validator"""
+        return value or dict()
 
     @validator('timestamp', always=True)
     def assign_timestamp(cls, value):
         """NonPhysicalSpecies.timestamp validator"""
-        return value or datetime.now(timezone.utc)
+        return datetime.timestamp(datetime.utcnow())
 
     @validator('retracted')
     def retracted_validator(cls, value, values):
         """NonPhysicalSpecies.retracted validator"""
-        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+        label = f' (non-physical-species label: "{values["label"]}")' \
+            if 'label' in values and values['label'] is not None else ''
         if value is not None:
             raise ValueError(f'The "retracted" argument is not a user input{label}.')
         return None
@@ -110,15 +84,17 @@ class NonPhysicalSpeciesCreate(NonPhysicalSpeciesBase):
     @validator('reviewed', always=True)
     def reviewed_validator(cls, value, values):
         """NonPhysicalSpecies.reviewed validator"""
-        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
-        if value not in (False, None):
+        label = f' (non-physical-species label: "{values["label"]}")' \
+            if 'label' in values and values['label'] is not None else ''
+        if value is not None:
             raise ValueError(f'The "reviewed" argument is not a user input{label}.')
         return False
 
     @validator('approved', always=True)
     def approved_validator(cls, value, values):
         """NonPhysicalSpecies.approved validator"""
-        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+        label = f' (non-physical-species label: "{values["label"]}")' \
+            if 'label' in values and values['label'] is not None else ''
         if value is not None:
             raise ValueError(f'The "approved" argument is not a user input{label}.')
         return False
@@ -405,50 +381,30 @@ class NonPhysicalSpeciesCreate(NonPhysicalSpeciesBase):
         return value
 
 
+class NonPhysicalSpeciesCreate(NonPhysicalSpeciesBase):
+    """Create a NonPhysicalSpecies item: Properties to receive on item creation"""
+    reviewer_flags: Optional[Dict[str, str]] = None
+
+
 class NonPhysicalSpeciesUpdate(NonPhysicalSpeciesBase):
-    """
-    A class for updating an existing non-physical species (Inherited from NonPhysicalSpeciesBase)
-    """
-    
-    class Config:
-        orm_mode = True
-        extra = 'forbid'
+    """Update a NonPhysicalSpecies item: Properties to receive on item update"""
+    reviewer_flags: Optional[Dict[str, str]] = None
 
-
-class NonPhysicalSpeciesOut(NonPhysicalSpeciesBase):
-    """
-    A class for non-physical species output (Inherited from NonPhysicalSpeciesBase)
-    """
-    id:int
-    timestamp: datetime
-    retracted: Optional[bool]
-    reviewed: Optional[bool]
-    approved: Optional[bool]
-    reviewer_flags: Optional[Dict[str, str]]
-    deleted_at: Optional[datetime]
-    
-    class Config:
-        orm_mode = True
-        extra = 'forbid'
 
 class NonPhysicalSpeciesInDBBase(NonPhysicalSpeciesBase):
-    """
-    A class for non-physical species in the database (Inherited from NonPhysicalSpeciesOut)
-    """
-    id: int = Field(..., title="Unique identifier for the species")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), title='Creation timestamp')
-    retracted: Optional[bool] = Field(None, title='Whether this species has been retracted')
-    reviewed: bool = Field(False, title='Whether this species has been reviewed')
-    approved: Optional[bool] = Field(None, title='Whether this species has been approved')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
-    deleted_at: Optional[datetime] = Field(None, title='Deletion timestamp')
-    
+    """Properties shared by models stored in DB"""
+    id: int
+    reviewer_flags: Optional[Dict[str, str]] = None
+
     class Config:
         orm_mode = True
-        extra = 'forbid'
+
+
+class NonPhysicalSpecies(NonPhysicalSpeciesInDBBase):
+    """Properties to return to client"""
+    pass
+
 
 class NonPhysicalSpeciesInDB(NonPhysicalSpeciesInDBBase):
-    """
-    A class for non-physical species in the database (Inherited from NonPhysicalSpeciesInDBBase)
-    """
+    """Properties stored in DB"""
     pass
