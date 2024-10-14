@@ -1,9 +1,6 @@
 """
 TCKDB backend app models species module
 """
-from datetime import datetime
-from typing import List, Tuple
-
 from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, DateTime
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship

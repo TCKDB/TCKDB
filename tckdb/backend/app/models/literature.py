@@ -5,11 +5,13 @@ TCKDB backend app models literature module
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 
-from tckdb.backend.app.db.base_class import Base
+from tckdb.backend.app.db.base_class import Base, AuditMixin
 from tckdb.backend.app.models.common import MsgpackExt
+from tckdb.backend.app.models.literatureauthor import literature_author
 
 
-class Literature(Base):
+
+class Literature(Base, AuditMixin):
     """
     A class for representing a TCKDB Literature item
 
@@ -115,16 +117,21 @@ class Literature(Base):
     url = Column(String(500), nullable=False)
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
-    authors = relationship("Author", secondary="literature_author", back_populates="literature")
-    
+    authors = relationship(
+        "Author",
+        secondary=literature_author,
+        back_populates="literatures"
+    )
     def __repr__(self) -> str:
         """
         A string representation from which the object can be reconstructed.
         """
+        authors_repr = ', '.join([repr(author) for author in self.authors])
+
         repr_str = f"<{self.__class__.__name__}("
         repr_str += f"id={self.id}, "
         repr_str += f"type='{self.type}', "
-        repr_str += f"authors='{self.authors}', "
+        repr_str += f"authors=[{authors_repr}], "
         repr_str += f"title='{self.title}', "
         repr_str += f"year={self.year}, "
         if self.journal is not None:
@@ -160,12 +167,14 @@ class Literature(Base):
         """
         A user-friendly string representation of the object.
         """
+        self.authors_str = ', '.join([f"{author.first_name} {author.last_name}" for author in self.authors])
+
         if self.type == 'article':
-            return f'{self.authors}, "{self.title}", {self.journal} {self.year}, {self.volume}({self.issue}), ' \
+            return f'{self.authors_str}, "{self.title}", {self.journal} {self.year}, {self.volume}({self.issue}), ' \
                    f'{self.page_start}-{self.page_end}. doi: {self.doi}'
         if self.type == 'book':
-            return f'{self.authors}, "{self.chapter_title}", in: {self.editors} "{self.title}", {self.edition}, ' \
+            return f'{self.authors_str}, "{self.chapter_title}", in: {self.editors} "{self.title}", {self.edition}, ' \
                    f'{self.publisher}, {self.publication_place} {self.year}. ISBN: {self.isbn}'
         if self.type == 'thesis':
-            return f'{self.authors}, Dissertation title: "{self.title}", {self.year}, {self.publisher}, ' \
+            return f'{self.authors_str}, Dissertation title: "{self.title}", {self.year}, {self.publisher}, ' \
                    f'Advisor: {self.advisor}. URL: {self.url}'

@@ -4,10 +4,11 @@ TCKDB backend app schemas literature module
 
 from enum import Enum
 from typing import Dict, Optional, List
+from datetime import datetime
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, root_validator, validator
 
-from tckdb.backend.app.schemas.author import Author, AuthorCreate, AuthorUpdate
+from tckdb.backend.app.schemas.author import AuthorRead, AuthorCreate, AuthorReadLiterature
 
 
 class LiteratureTypeEnum(str, Enum):
@@ -24,8 +25,7 @@ class LiteratureBase(BaseModel):
     A LiteratureBase class (shared properties)
     """
     type: Optional[LiteratureTypeEnum] = Field(None, title='The literature type, either article, book, or thesis')
-    authors: Optional[List[Author]] = Field(None, title='A list of authors for the literature source')
-    author_ids: Optional[List[int]] = Field(None, title='A list of author IDs for the literature source')
+    #authors: Optional[List[AuthorCreate]] = Field(None, title='A list of authors for the literature source')
     title: Optional[str] = Field(None, max_length=255, title='The literature source title')
     year: Optional[int] = Field(None, ge=1500, le=9999, title='The publication year')
     journal: Optional[str] = Field(None, max_length=255, title='The Journal name (for an article)')
@@ -60,18 +60,27 @@ class LiteratureBase(BaseModel):
             raise ValueError(f'The journal argument is missing for a literature type {values["type"]}')
         return value
 
-    @validator('authors')
-    def check_authors(cls, value, values):
-        """Literature.authors validator"""
-        if ' ' not in value:
-            raise ValueError(f'The authors argument seems incomplete. Got: {value}')
-        return value
-
     @validator('title')
     def check_title(cls, value, values):
         """Literature.title validator"""
-        if ' ' not in value:
-            raise ValueError(f'The title argument seems incomplete. Got: {value}')
+        # Check if title is empty
+        if not value:
+            raise ValueError('The title is missing')
+        if '_' in value:
+            raise ValueError(f'The title appears to contain underscores. Got: {value}. Please replace underscores with spaces.')
+
+        return value
+
+    @validator('year')
+    def check_year(cls, value, values):
+        """
+        Validate the year input. Ensure it is not in the future and is after a reasonable minimum year (e.g., 1500).
+        """
+        current_year = datetime.now().year
+        if value > current_year:
+            raise ValueError(f'The year {value} is in the future. It must be <= {current_year}.')
+        if value < 1500:
+            raise ValueError('The year must be greater than or equal to 1500.')
         return value
 
     @validator('publisher', always=True)
@@ -102,7 +111,7 @@ class LiteratureBase(BaseModel):
             raise ValueError(f'The page_end argument is missing for a literature type "{values["type"]}"')
         if 'page_start' in values and isinstance(values['page_start'], int) and isinstance(value, int) \
                 and value < values['page_start']:
-            raise ValueError(f'The starting page cannot be lesser than the ending page, '
+            raise ValueError(f'The starting page cannot be less than the ending page, '
                              f'got page_start={values["page_start"]} and page_end={value}')
         return value
 
@@ -155,8 +164,7 @@ class LiteratureBase(BaseModel):
 class LiteratureCreate(LiteratureBase):
     """Create a Literature item: Properties to receive on item creation"""
     type: LiteratureTypeEnum = Field(..., title='The literature type, either article, book, or thesis')
-    authors: Optional[List[AuthorCreate]] = Field(None, title='A list of new authors for the literature source')  # New authors
-    author_ids: List[int] = Field(..., title='A list of author IDs for the literature source')
+    authors: List[AuthorCreate] = Field(None, title='A list of new authors for the literature source')  # New authors
     title: str = Field(..., max_length=255, title='The literature source title')
     year: int = Field(..., ge=1500, le=9999, title='The publication year')
     
@@ -164,26 +172,56 @@ class LiteratureCreate(LiteratureBase):
         orm_mode = True
         extra = "forbid"
 
+    @root_validator
+    def check_authors_and_author_ids(cls, values):
+        authors = values.get('authors')
+        author_ids = values.get('author_ids')
+
+        if not authors and not author_ids:
+            raise ValueError("Either 'authors' or 'author_ids' must be provided.")
+
+        return values
+
+    @validator('authors', always=True)
+    def check_authors(cls, value):
+        """Literature.authors validator"""
+        if value:
+            if not isinstance(value, list) or any(not author.first_name or not author.last_name for author in value):
+                raise ValueError(f'The authors argument seems incomplete. Got: {value}')
+        return value
 
 class LiteratureUpdate(LiteratureBase):
     """Update a Literature item: Properties to receive on item update"""
+
+    authors: Optional[List[AuthorCreate]] = Field(None, title='A list of new authors for the literature source')  # New authors
 
     class Config:
         orm_mode = True
         extra = "forbid"
 
-class LiteratureOut(LiteratureBase):
+class LiteratureRead(LiteratureBase):
     """Properties to return to client"""
-    
+    id: int
+    authors: List[AuthorReadLiterature]
+    author_ids: List[int]=Field(default_factory=list)
+
     class Config:
         orm_mode = True
+
+    @validator('author_ids', pre=True, always=True)
+    def populate_author_ids(cls, v, values):
+        authors = values.get('authors')
+        if authors:
+            return [author.id for author in authors]
+        return []
+
 
 class LiteratureInDBBase(LiteratureBase):
     """Properties shared by models stored in DB"""
     id: int
     title: str
-    authors: List[Author]
-    author_ids: List[int]
+    authors: List[AuthorRead]
+    author_ids: List[int] = Field(default_factory=list)
     year: int
     journal: Optional[str] = None
     publisher: Optional[str] = None
@@ -202,7 +240,6 @@ class LiteratureInDBBase(LiteratureBase):
 
     class Config:
         orm_mode = True
-
 
 class Literature(LiteratureInDBBase):
     """Properties to return to client"""

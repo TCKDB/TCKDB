@@ -3,15 +3,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
-from tckdb.backend.app.schemas.literature import LiteratureCreate, LiteratureUpdate, LiteratureOut
+from tckdb.backend.app.schemas.literature import LiteratureCreate, LiteratureUpdate, LiteratureRead
 from tckdb.backend.app.db.session import get_db
-from tckdb.backend.app.services.literature_service import create_literature, update_literature, get_literature_by_id, soft_delete_literature
+from tckdb.backend.app.services.literature_service import create_literature, update_literature, get_literature_by_id, soft_delete_literature, _restore_literature
 
 router = APIRouter(
     tags=["literature"],
 )
 
-@router.post("/", response_model=LiteratureOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=LiteratureRead, status_code=status.HTTP_201_CREATED)
 def create_new_literature(literature: LiteratureCreate, db: Session = Depends(get_db)):
     """
     API endpoint to create new literature
@@ -21,7 +21,7 @@ def create_new_literature(literature: LiteratureCreate, db: Session = Depends(ge
         db (Session): The database session (injected via Depends)
     
     Returns:
-        LiteratureOut: The created literature entry
+        LiteratureRead: The created literature entry
     """
     try:
         return create_literature(db=db, literature_data=literature)
@@ -29,7 +29,7 @@ def create_new_literature(literature: LiteratureCreate, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail=f"Failed to create literature: {str(e)}")
 
 
-@router.get("/{literature_id}", response_model=LiteratureOut)
+@router.get("/{literature_id}", response_model=LiteratureRead)
 def read_literature(literature_id: int, db: Session = Depends(get_db)):
     """
     Retrieve literature by ID.
@@ -39,7 +39,7 @@ def read_literature(literature_id: int, db: Session = Depends(get_db)):
         db (Session): The database session
     
     Returns:
-        LiteratureOut: The requested literature object
+        LiteratureRead: The requested literature object
     """
     literature = get_literature_by_id(db=db, literature_id=literature_id)
     if literature is None:
@@ -47,7 +47,7 @@ def read_literature(literature_id: int, db: Session = Depends(get_db)):
     return literature
 
 
-@router.put("/{literature_id}", response_model=LiteratureOut)
+@router.patch("/{literature_id}", response_model=LiteratureRead)
 def update_literature_entry(literature_id: int, literature: LiteratureUpdate, db: Session = Depends(get_db)):
     """
     Update an existing literature entry.
@@ -58,7 +58,7 @@ def update_literature_entry(literature_id: int, literature: LiteratureUpdate, db
         db (Session): The database session
     
     Returns:
-        LiteratureOut: The updated literature object
+        LiteratureRead: The updated literature object
     """
     try:
         return update_literature(db=db, literature_id=literature_id, literature_data=literature)
@@ -84,7 +84,7 @@ def delete_literature_soft(literature_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to delete literature: {str(e)}")
 
-@router.post("/{literature_id}/restore", response_model=LiteratureOut)
+@router.post("/{literature_id}/restore", response_model=LiteratureRead)
 def restore_literature(literature_id: int, db: Session = Depends(get_db)):
     """
     Restore a soft-deleted literature entry.
@@ -94,10 +94,10 @@ def restore_literature(literature_id: int, db: Session = Depends(get_db)):
         db (Session): The database session
     
     Returns:
-        LiteratureOut: The restored literature object
+        LiteratureRead: The restored literature object
     """
     try:
-        literature = restore_literature(db=db, literature_id=literature_id)
+        literature = _restore_literature(db=db, literature_id=literature_id)
         return literature
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to restore literature: {str(e)}")

@@ -1,181 +1,227 @@
 """
 TCKDB backend app tests schemas test_literature module
 """
-
+from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from tckdb.backend.app.schemas.literature import LiteratureBase, LiteratureTypeEnum
+from tckdb.backend.app.schemas.literature import LiteratureBase, LiteratureTypeEnum, LiteratureCreate
+from tckdb.backend.app.schemas.author import AuthorCreate
 
 
-def test_literature_type_enum():
-    """Test LiteratureTypeEnum"""
-    LiteratureTypeEnum('article')
-    LiteratureTypeEnum('book')
-    LiteratureTypeEnum('thesis')
+def create_author(first_name: str, last_name: str) -> AuthorCreate:
+    """Helper function to create an AuthorCreate instance."""
+    return AuthorCreate(first_name=first_name, last_name=last_name)
+
+
+@pytest.mark.parametrize("valid_type", ['article', 'book', 'thesis'])
+def test_literature_type_enum_valid(valid_type):
+    """Test valid LiteratureTypeEnum values."""
+    assert LiteratureTypeEnum(valid_type) == valid_type
+
+
+@pytest.mark.parametrize("invalid_type", ['1000', 'journal', '', None])
+def test_literature_type_enum_invalid(invalid_type):
+    """Test invalid LiteratureTypeEnum values."""
     with pytest.raises(ValueError):
-        LiteratureTypeEnum('1000')
+        LiteratureTypeEnum(invalid_type)
 
 
-def test_literature_schema():
-    """Test creating an instance of Literature"""
-    lit1 = LiteratureBase(type='article',
-                          authors='M.I. It, D.C. Wash',
-                          title='Kinetics of the Reactions in a Model: Part II',
-                          year=2020,
-                          journal='Int. J. Chem. Kin.',
-                          volume=53,
-                          issue=2,
-                          page_start=2222,
-                          page_end=2229,
-                          doi='10.67/doi',
-                          url='u.rl.com/article/abstract',
-                          )
-    assert lit1.type == 'article'
-    assert lit1.authors == 'M.I. It, D.C. Wash'
-    assert lit1.title == 'Kinetics of the Reactions in a Model: Part II'
-    assert lit1.year == 2020
-    assert lit1.journal == 'Int. J. Chem. Kin.'
-    assert lit1.volume == 53
-    assert lit1.issue == 2
-    assert lit1.page_start == 2222
-    assert lit1.page_end == 2229
-    assert lit1.doi == '10.67/doi'
-    assert lit1.url == 'u.rl.com/article/abstract'
+@pytest.mark.parametrize("case", [
+    {
+        "input": {
+            "type": 'article',
+            "authors": [
+                create_author('M.I.', 'It'),
+                create_author('D.C.', 'Wash')
+            ],
+            "title": 'Kinetics of the Reactions in a Model: Part II',
+            "year": 2020,
+            "journal": 'Int. J. Chem. Kin.',
+            "volume": 53,
+            "issue": 2,
+            "page_start": 2222,
+            "page_end": 2229,
+            "doi": '10.67/doi',
+            "url": 'u.rl.com/article/abstract',
+        },
+        "expected": {
+            "type": 'article',
+            "authors": [
+                create_author('M.I.', 'It'),
+                create_author('D.C.', 'Wash')
+            ],
+            "title": 'Kinetics of the Reactions in a Model: Part II',
+            "year": 2020,
+            "journal": 'Int. J. Chem. Kin.',
+            "volume": 53,
+            "issue": 2,
+            "page_start": 2222,
+            "page_end": 2229,
+            "doi": '10.67/doi',
+            "url": 'u.rl.com/article/abstract',
+        }
+    },
+    {
+        "input": {
+            "type": 'book',
+            "authors": [
+                create_author('M.I.', 'It'),
+                create_author('D.C.', 'Wash')
+            ],
+            "title": 'Principles of Kinetic Modeling',
+            "year": 1982,
+            "publisher": 'Wee-Ly',
+            "editors": 'E.D. Torr',
+            "edition": '2nd Edn.',
+            "chapter_title": 'These are Updated Rates',
+            "publication_place": 'New York NY',
+            "isbn": '978-3-16-148410-0',
+            "url": 'u.rl.com/book/abstract',
+        },
+        "expected": {
+            "type": 'book',
+            "authors": [
+                create_author('M.I.', 'It'),
+                create_author('D.C.', 'Wash')
+            ],
+            "title": 'Principles of Kinetic Modeling',
+            "year": 1982,
+            "publisher": 'Wee-Ly',
+            "editors": 'E.D. Torr',
+            "edition": '2nd Edn.',
+            "chapter_title": 'These are Updated Rates',
+            "publication_place": 'New York NY',
+            "isbn": '978-3-16-148410-0',
+            "url": 'u.rl.com/book/abstract',
+        }
+    },
+    {
+        "input": {
+            "type": 'thesis',
+            "authors": [
+                create_author('M.I.', 'It')
+            ],
+            "title": 'Kinetic Modeling Dissertation',
+            "year": 2020,
+            "publisher": 'MIT',
+            "advisor": 'P.R. Fessor',
+            "url": 'u.rl.com/dissertation/abstract',
+        },
+        "expected": {
+            "type": 'thesis',
+            "authors": [
+                create_author('M.I.', 'It')
+            ],
+            "title": 'Kinetic Modeling Dissertation',
+            "year": 2020,
+            "publisher": 'MIT',
+            "advisor": 'P.R. Fessor',
+            "url": 'u.rl.com/dissertation/abstract',
+        }
+    },
+])
 
-    lit2 = LiteratureBase(type='book',
-                          authors='M.I. It, D.C. Wash',
-                          title='Principles of Kinetic Modeling',
-                          year=1982,
-                          publisher='Wee-Ly',
-                          editors='E.D. Torr',
-                          edition='2nd Edn.',
-                          chapter_title='These are Updated Rates',
-                          publication_place='New York NY',
-                          isbn='978-3-16-148410-0',
-                          url='u.rl.com/book/abstract',
-                          )
-    assert lit2.type == 'book'
-    assert lit2.authors == 'M.I. It, D.C. Wash'
-    assert lit2.title == 'Principles of Kinetic Modeling'
-    assert lit2.year == 1982
-    assert lit2.publisher == 'Wee-Ly'
-    assert lit2.editors == 'E.D. Torr'
-    assert lit2.edition == '2nd Edn.'
-    assert lit2.chapter_title == 'These are Updated Rates'
-    assert lit2.publication_place == "New York NY"
-    assert lit2.isbn == '978-3-16-148410-0'
-    assert lit2.url == 'u.rl.com/book/abstract'
+def test_valid_literature_schema(case):
+    """Test creating valid instances of LiteratureCreate."""
+    lit = LiteratureCreate(**case["input"])
+    for field, expected_value in case["expected"].items():
+        assert getattr(lit, field) == expected_value, f"Mismatch in field '{field}'"
 
-    lit3 = LiteratureBase(type='thesis',
-                          authors='P.H. David',
-                          title='Kinetic Modeling Dissertation',
-                          year=2020,
-                          publisher='MIT',
-                          advisor='P.R. Fessor',
-                          url='u.rl.com/dissertation/abstract',
-                          )
-    assert lit3.type == 'thesis'
-    assert lit3.authors == 'P.H. David'
-    assert lit3.title == 'Kinetic Modeling Dissertation'
-    assert lit3.year == 2020
-    assert lit3.publisher == 'MIT'
-    assert lit3.advisor == 'P.R. Fessor'
-    assert lit3.url == 'u.rl.com/dissertation/abstract'
-
-    with pytest.raises(ValidationError):
-        # wrong type
-        LiteratureBase(type='wrong', authors='P.H. David', title='Kinetic Modeling Dissertation',
-                       year=2020, url='url.com')
-    with pytest.raises(ValidationError):
-        # wrong authors
-        LiteratureBase(type='thesis', authors='P.H.', title='Kinetic Modeling Dissertation',
-                       year=2020, url='url.com')
-    with pytest.raises(ValidationError):
-        # wrong title
-        LiteratureBase(type='thesis', authors='P.H. David', title='Kinetic_Modeling_Dissertation',
-                       year=2020, url='url.com')
-    with pytest.raises(ValidationError):
-        # wrong year
-        LiteratureBase(type='thesis', authors='P.H. David', title='Kinetic Modeling Dissertation',
-                       year=20020, url='url.com')
-    with pytest.raises(ValidationError):
-        # no journal for an article
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kinetics of', year=2020, volume=53,
-                       issue=2, page_start=2222, page_end=2229, doi='10.67/doi', url='url.com')
-    with pytest.raises(ValidationError):
-        # no publisher for a book
-        LiteratureBase(type='book', authors='M.I. It', title='Kinetic Modeling', year=1982, editors='E.D. Torr',
-                       edition='2nd Edn.', chapter_title='Updated Rates', publication_place='New York NY',
-                       isbn='978-3-16-148410-0', url='url.com')
-    with pytest.raises(ValidationError):
-        # no volume for an article
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kinetics of', year=2020,
-                       journal='Int. J.', issue=2, page_start=2222, page_end=2229, doi='10.67/doi', url='url.com')
-    with pytest.raises(ValidationError):
-        # wrong volume
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kin of', year=2020, journal='I. J.',
-                       volume=-50, issue=2, page_start=2222, page_end=2229, doi='10.67/doi', url='url.com')
-    with pytest.raises(ValidationError):
-        # wrong issue
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kin of', year=2020, journal='I. J.',
-                       volume=50, issue=-2, page_start=2222, page_end=2229, doi='10.67/doi', url='url.com')
-    with pytest.raises(ValidationError):
-        # no page_start for an article
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kinetics of', year=2020,
-                       journal='Int. J.', volume=50, issue=2, page_end=2229, doi='10.67/doi', url='url.com')
-    with pytest.raises(ValidationError):
-        # wrong page_start
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kin of', year=2020, journal='I. J.',
-                       volume=50, issue=2, page_start=-1, page_end=2229, doi='10.67/doi', url='url.com')
-    with pytest.raises(ValidationError):
-        # no page_end for an article
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kinetics of', year=2020,
-                       journal='Int. J.', volume=50, issue=2, page_start=2222, doi='10.67/doi', url='url.com')
-    with pytest.raises(ValidationError):
-        # wrong page_end
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kin of', year=2020, journal='I. J.',
-                       volume=50, issue=2, page_start=2222, page_end=-6, doi='10.67/doi', url='url.com')
-    with pytest.raises(ValidationError):
-        # page_end lower than page_start
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kin of', year=2020, journal='I. J.',
-                       volume=50, issue=2, page_start=2222, page_end=1222, doi='10.67/doi', url='url.com')
-    with pytest.raises(ValidationError):
-        # no editors for a book
-        LiteratureBase(type='book', authors='M.I. It', title='Kinetic Modeling', year=1982, publisher='Wee-Ly',
-                       edition='2nd Edn.', chapter_title='Updated Rates', publication_place='New York NY',
-                       isbn='978-3-16-148410-0', url='url.com')
-    with pytest.raises(ValidationError):
-        # long editions for a book
-        LiteratureBase(type='book', authors='M.I. It', title='Kinetic Modeling', year=1982, publisher='Wee-Ly',
-                       edition='2nd Edn. 2nd Edn. 2nd Edn. 2nd Edn. 2nd Edn. 2nd Edn. ',
-                       chapter_title='Updated Rates', publication_place='New York NY',
-                       isbn='978-3-16-148410-0', url='url.com', editors='E.D. Torr')
-    with pytest.raises(ValidationError):
-        # no publication_place for a book
-        LiteratureBase(type='book', authors='M.I. It', title='Kinetic Modeling', year=1982, publisher='Wee-Ly',
-                       edition='2nd Edn.', chapter_title='Updated Rates', editors='E.D. Torr',
-                       isbn='978-3-16-148410-0', url='url.com')
-    with pytest.raises(ValidationError):
-        # no advisor for a thesis
-        LiteratureBase(type='thesis', authors='P.H. David', title='Kinetic Modeling Dissertation', year=2020,
-                       publisher='MIT', url='u.rl.com/dissertation/abstract')
-    with pytest.raises(ValidationError):
-        # no doi for an article
-        LiteratureBase(type='article', authors='M.I. It, D.C. Wash', title='Kinetics of', year=2020,
-                       journal='Int. J.', volume=50, issue=2, page_start=2222, page_end=2229, url='url.com')
-    with pytest.raises(ValidationError):
-        # no isbn for a book
-        LiteratureBase(type='book', authors='M.I. It, D.C. Wash', title='Principles of Kinetic Modeling', year=1982,
-                       publisher='Wee-Ly', editors='E.D. Torr', edition='2nd Edn.', chapter_title='Updated Rates',
-                       publication_place='New York NY', url='u.rl.com/book/abstract')
-    with pytest.raises(ValidationError):
-        # wrong url
-        LiteratureBase(type='book', authors='M.I. It, D.C. Wash', title='Principles of Kinetic Modeling', year=1982,
-                       publisher='Wee-Ly', editors='E.D. Torr', edition='2nd Edn.', chapter_title='Updated Rates',
-                       publication_place='New York NY', isbn='978-3-16-148410-0', url='u.rl.com book/abstract')
-    with pytest.raises(ValidationError):
-        # wrong url
-        LiteratureBase(type='book', authors='M.I. It, D.C. Wash', title='Principles of Kinetic Modeling', year=1982,
-                       publisher='Wee-Ly', editors='E.D. Torr', edition='2nd Edn.', chapter_title='Updated Rates',
-                       publication_place='New York NY', isbn='978-3-16-148410-0', url='u-rl-com/book/abstract')
+@pytest.mark.parametrize("invalid_case", [
+    {
+        "input": {
+            "type": 'wrong',
+            "author_ids": [1],
+            "title": 'Kinetic Modeling Dissertation',
+            "year": 2020,
+            "url": 'u.rl.com/dissertation/abstract',
+            "advisor": 'P.R. Fessor'
+        },
+        "field": 'type',
+        "message": "value is not a valid enumeration member; permitted: 'article', 'book', 'thesis'"
+    },
+    {
+        "input": {
+            "type": 'thesis',
+            "title": 'Kinetic Modeling Dissertation',
+            "year": 2020,
+            "url": 'u.rl.com/dissertation/abstract',
+            "advisor": 'P.R. Fessor'
+            # Missing 'authors' and 'author_ids'
+        },
+        "field": 'authors or author_ids',
+        "message": "Either 'authors' or 'author_ids' must be provided."
+    },
+    {
+        "input": {
+            "type": 'thesis',
+            "authors": [
+                create_author('M.I.', 'It')
+            ],
+            "title": 'Kinetic_Modeling_Dissertation',  # Underscores in title
+            "year": 2020,
+            "url": 'url.com'
+            # Missing 'advisor'
+        },
+        "field": 'title',
+        "message": "The title appears to contain underscores. Got: Kinetic_Modeling_Dissertation. Please replace underscores with spaces."
+    },
+    {
+        "input": {
+            "type": 'thesis',
+            "authors": [
+                create_author('M.I.', 'It'),
+                create_author('D.C.', 'Wash')
+            ],
+            "title": 'Kinetic Modeling Dissertation',
+            "year": 20020,  # Year too large
+            "url": 'url.com'
+        },
+        "field": 'year',
+        "message": "ensure this value is less than or equal to 9999"
+    },
+    {
+        "input": {
+            "type": 'thesis',
+            "authors": [
+                create_author('M.I.', 'It'),
+                create_author('D.C.', 'Wash')
+            ],
+            "title": 'Kinetic Modeling Dissertation',
+            "year": datetime.now().year + 10,  # Year in the future
+            "url": 'url.com'
+        },
+        "field": 'year',
+        "message": f"The year {datetime.now().year + 10} is in the future. It must be <= {datetime.now().year}."
+    },
+    {
+        "input": {
+            "type": 'article',
+            "authors": [
+                create_author('M.I.', 'It'),
+                create_author('D.C.', 'Wash')
+            ],
+            "title": 'Kinetics of',
+            "year": 2020,
+            "volume": 53,
+            "issue": 2,
+            "page_start": 2222,
+            "page_end": 2229,
+            "doi": '10.67/doi',
+            "url": 'url.com',  # Missing 'journal'
+        },
+        "field": 'journal',
+        "message": "The journal argument is missing for a literature type article"
+    },
+    # Add more invalid cases as needed...
+])
+def test_invalid_literature_schema(invalid_case):
+    """Test creating invalid instances of LiteratureBase."""
+    with pytest.raises(ValidationError) as exc_info:
+        LiteratureBase(**invalid_case["input"])
+    error = exc_info.value.errors()[0]
+    assert invalid_case["message"] in error["msg"], f"Expected error message '{invalid_case['message']}' not found."
+    # Optionally, check the field location
+    if 'field' in invalid_case and invalid_case["field"] != 'authors or author_ids':
+        assert invalid_case["field"] in error['loc'], f"Expected error location '{invalid_case['field']}' not found."
