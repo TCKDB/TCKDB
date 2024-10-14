@@ -124,3 +124,5 @@ htmlcov/*
 
 # iPython files
 *.ipynb_*
+
+.trunk/
