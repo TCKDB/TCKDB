@@ -239,5 +239,3 @@ class TestLiteratureEndpoints:
         db_thesis = self.get_literature_from_db(self.thesis_id, db_session)
         assert db_thesis is not None
         assert db_thesis.deleted_at is None
-        
-        

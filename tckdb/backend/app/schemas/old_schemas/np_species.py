@@ -1,50 +1,43 @@
+"""
+TCKDB backend app schemas non-physical species (np_species) module
+"""
 
-from typing import Optional, List, Dict, Union, Tuple, Any
-from datetime import datetime
-from pydantic import BaseModel, Field, conint, constr, root_validator, validator
+from datetime import datetime, timezone
+from math import e
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from tckdb.backend.app.schemas.common import Coordinates, is_valid_smiles, is_valid_inchi, is_valid_inchi_key, \
-    is_valid_adjlist, is_valid_coordinates, is_valid_atom_index, get_number_of_atoms
+from pydantic import BaseModel, Field, validator, constr, conint
+
 
 from rmgpy.molecule.adjlist import from_adjacency_list
+
+from tckdb.backend.app.schemas.bot import BotCreate
+import tckdb.backend.app.schemas.common as common
 import tckdb.backend.app.conversions.converter as converter
-from tckdb.backend.app.schemas.connection_schema import ConnectionBase
-
-
-class ESSConnectionID(BaseModel):
-    irc: Optional[str] = Field(None, title='The connection ID of the IRC object for internal referencing')
-    opt: Optional[str] = Field(None, title='The connection ID of the opt object for internal referencing')
-    scan: Optional[str] = Field(None, title='The connection ID of the scan object for internal referencing')
-    freq: Optional[str] = Field(None, title='The connection ID of the freq object for internal referencing')
-
-
-class LevelConnectionID(BaseModel):
-    irc: Optional[str] = Field(None, title='The connection ID of the IRC object for internal referencing')
-    opt: Optional[str] = Field(None, title='The connection ID of the opt object for internal referencing')
-    scan: Optional[str] = Field(None, title='The connection ID of the scan object for internal referencing')
-    sp: Optional[str] = Field(None, title='The connection ID of the sp object for internal referencing')
-    freq: Optional[str] = Field(None, title='The connection ID of the freq object for internal referencing')
-
 
 
 class NonPhysicalSpeciesBase(BaseModel):
     """
-    A NonPhysicalSpeciesBase class (shared properties)
+    A NonePhysicalSpeciesBase class (shared properties)
     """
-    label: Optional[str] = Field(None, max_length=255, title='The label of the non-physical species')
-    smiles: Optional[str] = Field(None, max_length=255, title='The SMILES representation of the non-physical species')
-    inchi: Optional[str] = Field(None, max_length=255, title='The InChI representation of the non-physical species')
-    inchi_key: Optional[str] = Field(None, max_length=255, title='The InChI key of the non-physical species')
-    
-    charge: Optional[int] = Field(None, ge=-10, le=10, title='The net charge of the non-physical species')
-    multiplicity: Optional[int] = Field(None, ge=1, title='The multiplicity of the non-physical species')
-    electronic_state: Optional[str] = Field('X', title='The electronic state of the non-physical species. Default is "X", denoting ground state')
-    
-    graph: Optional[str] = Field(None, title='The 2D connectivity graph in an RMG adjacency list format')
-    coordinates: Optional[Coordinates] = Field(None, title='The Cartesian coordinates of the non-physical species')
-    fragments: Optional[List[List[conint(ge=1)]]] = Field(None, title='The fragments of the non-physical species')
-    fragment_orientation: Optional[List[Dict[str, Union[float, List[float]]]]] = Field(None, title='The orientation of the fragments of the non-physical species')
-    chirality: Optional[Dict[Tuple[conint(ge=1), ...], constr(max_length=10)]] = Field(None, title='The chirality of the non-physical species')
+    label: Optional[str] = Field(None, max_length=255, title='Species label')
+    timestamp: Optional[float] = Field(None, gt=1.58E9, title='Time stamp')  # 1.58E9 corresponds to 2020-01-25 19:53:20
+    retracted: Optional[str] = Field(None, max_length=255, title='Retracted')
+    reviewed: Optional[bool] = Field(None, title='Retracted (bool)')
+    approved: Optional[bool] = Field(None, title='Approved (bool)')
+    charge: Optional[int] = Field(None, ge=-10, le=10, title='Net charge')
+    multiplicity: Optional[int] = Field(None, ge=1, le=10, title='Spin multiplicity')
+    smiles: Optional[str] = Field(None, max_length=5000, title='SMILES')
+    inchi: Optional[str] = Field(None, max_length=5000, title='InChI')
+    inchi_key: Optional[str] = Field(None, max_length=27, min_length=27, title='InChI key')
+    graph: Optional[str] = Field(None, max_length=100000, title='Adjacency list graph')
+    electronic_state: Optional[str] = Field('X', max_length=150, title='Electronic state')
+    coordinates: Optional[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
+                                 Tuple[conint(ge=1), ...],
+                                 Tuple[constr(max_length=10), ...]]]] = Field(None, title='Cartesian coordinates')
+    fragments: Optional[List[List[conint(ge=1)]]] = Field(None, title='Fragments')
+    fragment_orientation: Optional[List[Dict[str, Union[float, List[float]]]]] = Field(None, title='Fragment orientation')
+    chirality: Optional[Dict[Tuple[conint(ge=1), ...], constr(max_length=10)]] = Field(None, title='Chirality')
     conformation_method: Optional[constr(max_length=500)] = Field(None, title='Conformarion method')
     is_well: Optional[bool] = Field(None, title='Is this species a well on the PES?')
     is_global_min: Optional[bool] = Field(None, title='If this conformer is a well, whether it is meant to represents '
@@ -52,66 +45,116 @@ class NonPhysicalSpeciesBase(BaseModel):
     global_min_geometry: Optional[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
                                                   Tuple[conint(ge=1), ...],
                                                   Tuple[constr(max_length=10), ...]]]] = \
-        Field(None, title='If this non-phsyical species does not represent the global minimum well, this argument must contain '
+        Field(None, title='If this species does not represent the global minimum well, this argument must contain '
                           'the coordinates of the global minimum energy conformer at the same opt level.')
-
-    # TS
     is_ts: Optional[bool] = Field(False, title='Does this species represent a transition state?')
     irc_trajectories: Optional[List[List[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
                                               Tuple[conint(ge=1), ...], Tuple[constr(max_length=10), ...]]]]]] = \
-        Field(None, title='IRC trajectories (for TS species)')    
-
-    # Paths
-    # Storage requires consideration
-    opt_path: Optional[str] = Field(None, title='The path to the opt output file')
-    freq_path: Optional[str] = Field(None, title='The path to the freq output file')
+        Field(None, title='IRC trajectories (for TS species)')
+    opt_path: Optional[str] = Field(None, max_length=5000, title='Path to optimization log file')
+    freq_path: Optional[str] = Field(None, max_length=5000, title='Path to frequencies log file')
     scan_paths: Optional[Dict[Tuple[Tuple[conint(ge=1), conint(ge=1), conint(ge=1), conint(ge=1)], ...],
                               constr(max_length=5000)]] = Field(None, title='Paths to scan log files')
     irc_paths: Optional[List[constr(max_length=5000)]] = Field(None, title='Paths to IRC log files')
     sp_path: Optional[str] = Field(None, max_length=5000, title='Path to single-point energy log file')
-
+    unconverged_jobs: Optional[List[Dict[str, str]]] = Field(None, title='Paths to unconverged job log files')
     extras: Optional[Dict[str, Any]] = Field(None, title='Extras')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+    bot_id: Optional[int] = Field(None, title='The ID of the bot that created this species')
+    bot: Optional[BotCreate] = None
 
     class Config:
         orm_mode = True
         extra = 'forbid'
-    
-    @root_validator
-    def check_descriptor_presence(cls, v):
-        smiles, inchi, graph = v.get('smiles'), v.get('inchi'), v.get('graph')
-        if not (smiles or inchi or graph):
-            raise ValueError("At least one of 'smiles', 'inchi', or 'graph' must be provided.")
-        return v
-    
+
+
+class NonPhysicalSpeciesCreate(NonPhysicalSpeciesBase):
+    """
+    A class for non-physical species creation (Inherited from NonPhysicalSpeciesBase)
+    """
+    charge: int = Field(..., ge=-10, le=10, title='Net charge')
+    multiplicity: int = Field(..., ge=1, le=10, title='Spin multiplicity')
+    coordinates: Dict[str, Union[Tuple[Tuple[float, float, float], ...],
+                                 Tuple[conint(ge=1), ...],
+                                 Tuple[constr(max_length=10), ...]]] = Field(..., title='Cartesian coordinates')
+    is_well: bool = Field(..., title='Is this species a well on the PES?')
+    is_ts: bool = Field(False, title='Does this species represent a transition state?')
+    sp_path: str = Field(..., max_length=5000, title='Path to single-point energy log file')
+    sp_level_id: int = Field(..., title='Single point level ID')
+    sp_ess_id: int = Field(..., title='Single point ESS ID')
+
+    # Fields that are automatically set and not provided by the user
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        title='The timestamp of the species creation'
+    )
+    retracted: Optional[bool] = Field(None, title='Whether this species has been retracted')
+    reviewed: bool = Field(False, title='Whether this species has been reviewed')
+    approved: Optional[bool] = Field(None, title='Whether this species has been approved')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+
+    class Config:
+        orm_mode = True
+        extra = 'forbid'
+
+    @validator('timestamp', always=True)
+    def assign_timestamp(cls, value):
+        """NonPhysicalSpecies.timestamp validator"""
+        return value or datetime.now(timezone.utc)
+
+    @validator('retracted')
+    def retracted_validator(cls, value, values):
+        """NonPhysicalSpecies.retracted validator"""
+        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+        if value is not None:
+            raise ValueError(f'The "retracted" argument is not a user input{label}.')
+        return None
+
+    @validator('reviewed', always=True)
+    def reviewed_validator(cls, value, values):
+        """NonPhysicalSpecies.reviewed validator"""
+        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+        if value not in (False, None):
+            raise ValueError(f'The "reviewed" argument is not a user input{label}.')
+        return False
+
+    @validator('approved', always=True)
+    def approved_validator(cls, value, values):
+        """NonPhysicalSpecies.approved validator"""
+        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+        if value is not None:
+            raise ValueError(f'The "approved" argument is not a user input{label}.')
+        return False
+
     @validator('smiles')
-    def smiles_validator(cls, v, values):
+    def smiles_validator(cls, value, values):
         """NonPhysicalSpecies.smiles validator"""
         label = f' for non-physical-species "{values["label"]}"' \
             if 'label' in values and values['label'] is not None else ''
-        is_valid, err = is_valid_smiles(v)
+        is_valid, err = common.is_valid_smiles(value)
         if not is_valid:
-            raise ValueError(f'The SMILES "{v}"{label} is invalid. Reason:\n{err}')
-        return v
+            raise ValueError(f'The SMILES "{value}"{label} is invalid. Reason:\n{err}')
+        return value
 
     @validator('inchi')
-    def inchi_validator(cls, v, values):
+    def inchi_validator(cls, value, values):
         """NonPhysicalSpecies.inchi validator"""
         label = f' for non-physical-species "{values["label"]}"' \
             if 'label' in values and values['label'] is not None else ''
-        is_valid, err = is_valid_inchi(v)
+        is_valid, err = common.is_valid_inchi(value)
         if not is_valid:
-            raise ValueError(f'The InChI "{v}"{label} is invalid. Reason:\n{err}')
-        return v
+            raise ValueError(f'The InChI "{value}"{label} is invalid. Reason:\n{err}')
+        return value
 
     @validator('inchi_key')
-    def inchi_key_validator(cls, v, values):
+    def inchi_key_validator(cls, value, values):
         """NonPhysicalSpecies.inchi_key validator"""
         label = f' for non-physical-species "{values["label"]}"' \
             if 'label' in values and values['label'] is not None else ''
-        is_valid, err = is_valid_inchi_key(v)
+        is_valid, err = common.is_valid_inchi_key(value)
         if not is_valid:
-            raise ValueError(f'The InChI Key "{v}"{label} is invalid. Reason:\n{err}')
-        return v
+            raise ValueError(f'The InChI Key "{value}"{label} is invalid. Reason:\n{err}')
+        return value
 
     @validator('graph', always=True)
     def graph_validator(cls, value, values):
@@ -150,7 +193,7 @@ class NonPhysicalSpeciesBase(BaseModel):
             raise ValueError(f'A species descriptor (SMILES, InChI, or graph adjacency list) must be given{label}.')
         # adjlist validation
         if value is not None:
-            is_valid, err = is_valid_adjlist(value)
+            is_valid, err = common.is_valid_adjlist(value)
             if not is_valid:
                 raise ValueError(f'The RMG adjacency list{label} is invalid:\n{value}\nReason:\n{err}')
             multiplicity = from_adjacency_list(value, group=False, saturate_h=False)[1]
@@ -165,15 +208,15 @@ class NonPhysicalSpeciesBase(BaseModel):
         return value
 
     @validator('coordinates')
-    def coordinates_validator(cls, v, values):
+    def coordinates_validator(cls, value, values):
         """NonPhysicalSpecies.coordinates validator"""
         label = f' for non-physical-species "{values["label"]}"' \
             if 'label' in values and values['label'] is not None else ''
-        converter.add_common_isotopes_to_coords(v)
-        is_valid, err = is_valid_coordinates(v)
+        converter.add_common_isotopes_to_coords(value)
+        is_valid, err = common.is_valid_coordinates(value)
         if not is_valid:
-            raise ValueError(f'The following coordinates dictionary{label} is invalid:\n{v}\nReason:\n{err}')
-        return v
+            raise ValueError(f'The following coordinates dictionary{label} is invalid:\n{value}\nReason:\n{err}')
+        return value
 
     @validator('fragments')
     def fragments_validator(cls, value, values):
@@ -183,7 +226,7 @@ class NonPhysicalSpeciesBase(BaseModel):
         atom_indices = list()
         for fragment in value:
             for index in fragment:
-                is_valid, err = is_valid_atom_index(index=index,
+                is_valid, err = common.is_valid_atom_index(index=index,
                                                            coordinates=values['coordinates'] if 'coordinates' in values
                                                            else None,
                                                            existing_indices=atom_indices)
@@ -244,7 +287,7 @@ class NonPhysicalSpeciesBase(BaseModel):
         allowed_atoms = ['C', 'Si', 'Ge', 'Sn', 'Pb', 'N', 'P', 'As', 'Sb', 'Bi']
         for key, val in value.items():
             for index in key:
-                is_valid, err = is_valid_atom_index(index=index,
+                is_valid, err = common.is_valid_atom_index(index=index,
                                                            coordinates=values['coordinates'] if 'coordinates' in values
                                                            else None,
                                                            existing_indices=chiral_atom_indices)
@@ -290,7 +333,7 @@ class NonPhysicalSpeciesBase(BaseModel):
         label = f' for non-physical-species "{values["label"]}"' \
             if 'label' in values and values['label'] is not None else ''
         converter.add_common_isotopes_to_coords(value)
-        is_valid, err = is_valid_coordinates(value)
+        is_valid, err = common.is_valid_coordinates(value)
         if not is_valid:
             raise ValueError(f'The following global_min_geometry coordinates dictionary{label} is invalid:\n'
                              f'{value}\nReason:\n{err}')
@@ -307,7 +350,7 @@ class NonPhysicalSpeciesBase(BaseModel):
             for i, traj in enumerate(value):
                 for j, frame in enumerate(traj):
                     converter.add_common_isotopes_to_coords(frame)
-                    is_valid, err = is_valid_coordinates(frame)
+                    is_valid, err = common.is_valid_coordinates(frame)
                     if not is_valid:
                         raise ValueError(f'Frame {j} in IRC trajectory {i}{label} is invalid:\n'
                                          f'{frame}\nReason:\n{err}')
@@ -318,7 +361,7 @@ class NonPhysicalSpeciesBase(BaseModel):
         """NonPhysicalSpecies.opt_path validator"""
         label = f' for non-physical-species "{values["label"]}"' \
             if 'label' in values and values['label'] is not None else ''
-        if get_number_of_atoms(values) > 1 and value is None:
+        if common.get_number_of_atoms(values) > 1 and value is None:
             raise ValueError(f'The opt_path was not given{label}.')
         return value
 
@@ -327,7 +370,7 @@ class NonPhysicalSpeciesBase(BaseModel):
         """NonPhysicalSpecies.freq_path validator"""
         label = f' for non-physical-species "{values["label"]}"' \
             if 'label' in values and values['label'] is not None else ''
-        if get_number_of_atoms(values) > 1 and value is None:
+        if common.get_number_of_atoms(values) > 1 and value is None:
             raise ValueError(f'The freq_path was not given{label}.')
         return value
 
@@ -343,77 +386,72 @@ class NonPhysicalSpeciesBase(BaseModel):
                              f'Got: {len(value)}{label}.')
         return value
 
+    @validator('unconverged_jobs')
+    def unconverged_jobs_validator(cls, value, values):
+        """NonPhysicalSpecies.unconverged_jobs validator"""
+        label = f' for non-physical-species "{values["label"]}"' \
+            if 'label' in values and values['label'] is not None else ''
+        allowed_keys = ['job type', 'issue', 'troubleshooting', 'comment', 'path']
+        recognized_job_types = ['opt', 'freq', 'scan', 'irc', 'sp']
+        for unconverged_job in value:
+            if not any(key in allowed_keys for key in unconverged_job.keys()):
+                raise ValueError(f'Got an unrecognized key in unconverged_jobs{label}.\n'
+                                 f'Recognized keys are: {allowed_keys}\nGot: {list(unconverged_job.keys())}')
+            if 'job type' not in unconverged_job:
+                raise ValueError(f'A job type is required when reporting an unconverged job. Got None{label}.`')
+            else:
+                if unconverged_job['job type'] not in recognized_job_types:
+                    raise ValueError(f"The unconverged job type {unconverged_job['job type']}{label} is invalid.\n"
+                                     f"Recognized job types are {recognized_job_types}.")
+            if 'path' not in unconverged_job:
+                raise ValueError(f'A file path is required when reporting an unconverged job. Got None{label}.`')
+        return value
 
-class NonPhysicalSpeciesCreate(NonPhysicalSpeciesBase):
-    """
-    A NonPhysicalSpeciesCreate class (to be used to create non-physical species)
-    """
-    charge: int = Field(..., ge=-10, le=10, title='Net charge')
-    multiplicity: int = Field(..., ge=1, le=10, title='Spin multiplicity')
-    coordinates: Dict[str, Union[Tuple[Tuple[float, float, float], ...],
-                                 Tuple[conint(ge=1), ...],
-                                 Tuple[constr(max_length=10), ...]]] = Field(..., title='Cartesian coordinates')
-    is_well: bool = Field(..., title='Is this species a well on the PES?')
-    is_ts: bool = Field(False, title='Does this species represent a transition state?')
 
+class NonPhysicalSpeciesUpdate(NonPhysicalSpeciesBase):
+    """
+    A class for updating an existing non-physical species (Inherited from NonPhysicalSpeciesBase)
+    """
+    
     class Config:
         orm_mode = True
         extra = 'forbid'
 
 
-class NonPhysicalSpeciesCreateBatch(NonPhysicalSpeciesCreate, ConnectionBase):
-    """
-    A NonPhysicalSpeciesCreateBatch class (to be used
-    to create non-physical species with connection to a other objects
-    """
-    bot_connection_id: Optional[str] = Field(None, title='The id of the bot connection')
-    lit_connection_id: Optional[str] = Field(None, title='The id of the literature connection')
-    encorr_connection_id: Optional[str] = Field(None, title='The id of the EnCorr connection')
-    freq_scale_connection_id: Optional[str] = Field(None, title='The id of the frequency scaling connection')
-    
-    level_connections: Optional[LevelConnectionID] = Field(None, title='The id of the level connections')
-    ess_connections: Optional[ESSConnectionID] = Field(None, title='The id of the ESS connections')
-
-
-class NonPhysicalSpeciesUpdate(NonPhysicalSpeciesBase):
-    """
-    A NonPhysicalSpeciesUpdate class (to be used to update non-physical species)
-    """
-    pass
-
 class NonPhysicalSpeciesRead(NonPhysicalSpeciesBase):
     """
-    A NonPhysicalSpeciesRead class (to be used
-    to return non-physical species)
+    A class for non-physical species output (Inherited from NonPhysicalSpeciesBase)
     """
-    id: int = Field(..., title='NonPhysicalSpecies ID')
-    
-    # Non-User Input
-    reviewed: bool = Field(False, title='Is this species reviewed?')
-    approved: bool = Field(None, title='Is this species approved?')
-    retraction: str = Field(None, title='Retraction reason')
-    reviewer_flags: Dict[str, str] = Field(None, title='Reviewer flags')
-    timestamp: datetime = Field(..., title='Timestamp')
-
-    # Freq Scale, Encorr, Lit, Bot and ESS Level IDs
-    # TODO: Discuss how to show the readout of these other tables
-    freq_scale_id: Optional[int] = Field(None, title='The frequency scaling ID')
-    
-    encorr_id: Optional[int] = Field(None, title='The enthalpy correction ID')
-    literature_id: Optional[int] = Field(None, title='The literature ID')
-    bot_id: Optional[int] = Field(None, title='The bot ID')
-    
-    opt_level_id: Optional[int] = Field(None, title='The opt level ID')
-    freq_level_id: Optional[int] = Field(None, title='The freq level ID')
-    scan_level_id: Optional[int] = Field(None, title='The scan level ID')
-    irc_level_id: Optional[int] = Field(None, title='The IRC level ID')
-    sp_level_id: Optional[int] = Field(None, title='The single point level ID')
-    
-    opt_ess_id: Optional[int] = Field(None, title='The opt ESS ID')
-    freq_ess_id: Optional[int] = Field(None, title='The freq ESS ID')
-    scan_ess_id: Optional[int] = Field(None, title='The scan ESS ID')
-    irc_ess_id: Optional[int] = Field(None, title='The IRC ESS ID')
-    sp_ess_id: Optional[int] = Field(None, title='The single point ESS ID')
+    id:int
+    timestamp: datetime
+    retracted: Optional[bool]
+    reviewed: Optional[bool]
+    approved: Optional[bool]
+    reviewer_flags: Optional[Dict[str, str]]
+    deleted_at: Optional[datetime]
     
     class Config:
         orm_mode = True
+        extra = 'forbid'
+
+class NonPhysicalSpeciesInDBBase(NonPhysicalSpeciesBase):
+    """
+    A class for non-physical species in the database (Inherited from NonPhysicalSpeciesRead)
+    """
+    id: int = Field(..., title="Unique identifier for the species")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), title='Creation timestamp')
+    retracted: Optional[bool] = Field(None, title='Whether this species has been retracted')
+    reviewed: bool = Field(False, title='Whether this species has been reviewed')
+    approved: Optional[bool] = Field(None, title='Whether this species has been approved')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+    deleted_at: Optional[datetime] = Field(None, title='Deletion timestamp')
+    
+    class Config:
+        orm_mode = True
+        extra = 'forbid'
+
+class NonPhysicalSpeciesInDB(NonPhysicalSpeciesInDBBase):
+    """
+    A class for non-physical species in the database (Inherited from NonPhysicalSpeciesInDBBase)
+    """
+    pass

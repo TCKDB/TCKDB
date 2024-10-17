@@ -21,7 +21,7 @@ class TestBotsEndpoints:
                 "name": "test_bot",
                 "version": "0.1",
                 "url": "https://test_bot.com",
-                "git_commit": "123456789012345678901234567890123456789a",
+                "git_hash": "123456789012345678901234567890123456789a",
                 "git_branch": "main"
             },
         )

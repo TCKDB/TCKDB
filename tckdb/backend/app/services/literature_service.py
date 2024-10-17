@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from tckdb.backend.app.models.author import Author
 from tckdb.backend.app.models.literature import Literature
-from tckdb.backend.app.schemas.literature import LiteratureCreate, LiteratureRead, LiteratureTypeEnum, LiteratureUpdate
+from tckdb.backend.app.schemas.literature import LiteratureCreate, LiteratureRead, LiteratureType, LiteratureUpdate
 from fastapi import HTTPException, APIRouter, Depends
 
 from tckdb.backend.app.core.config import API_V1_STR
@@ -25,7 +25,7 @@ def create_literature(literature_data: LiteratureCreate, db: Session):
         Literature: The created literature entry.
     """
     # 1. Check ISBN uniqueness for books
-    if literature_data.type == LiteratureTypeEnum.book and literature_data.isbn:
+    if literature_data.type == LiteratureType.book and literature_data.isbn:
         existing_book = db.query(Literature).filter_by(isbn=literature_data.isbn).first()
         if existing_book:
             raise HTTPException(
@@ -34,7 +34,7 @@ def create_literature(literature_data: LiteratureCreate, db: Session):
             )
     
     # 2. Check DOI uniqueness for articles
-    if literature_data.type == LiteratureTypeEnum.article and literature_data.doi:
+    if literature_data.type == LiteratureType.article and literature_data.doi:
         existing_article = db.query(Literature).filter_by(doi=literature_data.doi).first()
         if existing_article:
             raise HTTPException(

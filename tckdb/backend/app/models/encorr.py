@@ -75,7 +75,6 @@ class EnCorr(Base):
             Backend flags to assist the review process (not a user input).
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    level_id = Column(Integer, ForeignKey('level.id'), nullable=False, unique=False)
     supported_elements = Column(ARRAY(String, as_tuple=False, zero_indexes=True), nullable=False)
     energy_unit = Column(String(255), nullable=False)
     aec = Column(MsgpackExt, nullable=True)
@@ -83,6 +82,37 @@ class EnCorr(Base):
     isodesmic_reactions = Column(MsgpackExt, nullable=True)
     isodesmic_high_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
     reviewer_flags = Column(MsgpackExt, nullable=True)
+
+    level_id = Column(
+        Integer,
+        ForeignKey('level.id', ondelete="SET NULL"),
+        nullable=True
+    )
+    isodesmic_high_level_id = Column(
+        Integer,
+        ForeignKey('level.id', ondelete="SET NULL"),
+        nullable=True
+    )
+
+    # Relationships to Level
+    primary_level = relationship(
+        "Level",
+        back_populates="en_corrs_primary",
+        foreign_keys=[level_id]
+    )
+    isodesmic_high_level = relationship(
+        "Level",
+        back_populates="en_corrs_isodesmic",
+        foreign_keys=[isodesmic_high_level_id]
+    )
+
+    # Relationships to Species
+    species = relationship(
+        "Species",
+        back_populates="encorr",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
     def __repr__(self) -> str:
         """

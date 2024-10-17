@@ -8,17 +8,48 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import qcelemental as qcel
 from pint.errors import DefinitionSyntaxError, DimensionalityError, RedefinitionError, UndefinedUnitError
-try:
-    from rdkit.Chem import MolFromSmiles
-    from rdkit.Chem.inchi import MolFromInchi
-except ImportError:
-    pass
+
+from rdkit.Chem import MolFromSmiles
+from rdkit.Chem.inchi import MolFromInchi
 
 
 from rmgpy.exceptions import InvalidAdjacencyListError
 from rmgpy.molecule.adjlist import from_adjacency_list
 
 from tckdb.backend.app.conversions.converter import inchi_from_inchi_key
+
+from pydantic import BaseModel, Field, constr, conint, HttpUrl, validator
+
+class Coordinates(BaseModel):
+    symbols: Tuple[constr(max_length=10), ...] = Field(
+        ..., 
+        description="Chemical element symbols."
+    )
+    isotopes: Tuple[conint(ge=1), ...] = Field(
+        ..., 
+        description="The respective isotopes."
+    )
+    coords: Tuple[Tuple[float, float, float], ...] = Field(
+        ..., 
+        description="Cartesian coordinates in standard orientation."
+    )
+
+    class Config:
+        orm_mode = True
+        extra = 'forbid'
+        schema_extra = {
+            "example": {
+                "symbols": ("C", "H", "H", "H", "H"),
+                "isotopes": (12, 1, 1, 1, 1),
+                "coords": (
+                    (0.0, 0.0, 0.0),
+                    (0.6300326, 0.6300326, 0.6300326),
+                    (-0.6300326, -0.6300326, 0.6300326),
+                    (-0.6300326, 0.6300326, -0.6300326),
+                    (0.6300326, -0.6300326, -0.6300326)
+                )
+            }
+        }
 
 
 def lowercase_dict(dictionary: dict) -> dict:
@@ -300,8 +331,8 @@ def is_valid_atom_index(index: int,
     """
     if index == 0:
         return False, 'A 1-indexed atom index cannot be zero.'
-    if coordinates is not None and index > len(coordinates['symbols']):
-        return False, f'An atom index {index} cannot be greater than the number of atoms {len(coordinates["symbols"])}.'
+    if coordinates is not None and index > len(coordinates.symbols):
+        return False, f'An atom index {index} cannot be greater than the number of atoms {len(coordinates.symbols)}.'
     if existing_indices is not None and index in existing_indices:
         return False, f'Atom index {index} appears more than once in this argument.'
     return True, ''
@@ -321,6 +352,8 @@ def get_number_of_atoms(coords: Optional[dict]) -> Optional[int]:
     if coords is not None:
         if 'coordinates' in coords:
             coords = coords['coordinates']
-        if isinstance(coords, dict) and 'symbols' in coords and isinstance(coords['symbols'], (list, tuple)):
-            return len(coords['symbols'])
+        # if isinstance(coords, dict) and 'symbols' in coords and isinstance(coords['symbols'], (list, tuple)):
+        #     return len(coords['symbols'])
+        if isinstance(coords, Coordinates) and isinstance(coords.symbols, (list, tuple)):
+            return len(coords.symbols)
     return None

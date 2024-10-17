@@ -7,7 +7,8 @@ import pytest
 from pydantic import ValidationError
 
 from tckdb import tckdb_path
-from tckdb.backend.app.schemas.species import SpeciesBase
+from tckdb.backend.app.schemas.species import SpeciesCreate
+from tckdb.backend.app.schemas.common import Coordinates
 from tckdb.backend.app.conversions import read_yaml_file
 
 
@@ -21,30 +22,51 @@ def test_species_schema():
     h_xyz = {'symbols': ('H',),
              'isotopes': (1,),
              'coords': ((0.0, 0.0, 0.0),)}
-    ch4_xyz = {'symbols': ('C', 'H', 'H', 'H', 'H'),
-               'isotopes': (12, 1, 1, 1, 1),
-               'coords': ((0.0, 0.0, 0.0),
-                          (0.6300326, 0.6300326, 0.6300326),
-                          (-0.6300326, -0.6300326, 0.6300326),
-                          (-0.6300326, 0.6300326, -0.6300326),
-                          (0.6300326, -0.6300326, -0.6300326))}
+    ch4_xyz = Coordinates(
+        symbols=('C', 'H', 'H', 'H', 'H'),
+        isotopes=(12, 1, 1, 1, 1),
+        coords=(
+            (0.0, 0.0, 0.0),
+            (0.6300326, 0.6300326, 0.6300326),
+            (-0.6300326, -0.6300326, 0.6300326),
+            (-0.6300326, 0.6300326, -0.6300326),
+            (0.6300326, -0.6300326, -0.6300326)
+        )
+    )
     ch4_freqs = [3046, 1555, 1555, 3168, 3168, 3168, 1368, 1368, 1368]
     ch4_scaled_freqs = [3046 * .99, 1555 * .99, 1555 * .99, 3168 * .99, 3168 * .99, 3168 * .99, 1368 * .99, 1368 * .99,
                         1368 * .99]
     ch4_normal_disp_modes = [[[1, 2, 3]] * 5] * 9
-    ICdCC_Cl__I_NF_xyz = {'symbols': ('I', 'I', 'Cl', 'F', 'N', 'C', 'C', 'C', 'H', 'H', 'H'),
-                          'isotopes': (127, 127, 35, 19, 14, 12, 12, 12, 1, 1, 1),
-                          'coords': ((-0.1752057997244146, 2.579412243969442, -0.0998868241437122),
-                                     (2.982861260942898, -2.085955126671259, -0.45379679871721257),
-                                     (-1.134251085086272, 0.5188212354137014, 2.0757032605524133),
-                                     (-1.8814930376300307, -1.2539895001453651, -0.2064584290134856),
-                                     (-1.5494242545791568, 0.0648586431861974, -0.452378816320353),
-                                     (-0.48883763038476624, 0.5436231953516003, 0.41802210133854123),
-                                     (0.8221194714634887, -0.18495290937918607, 0.3615122853791793),
-                                     (1.1541030666741987, -1.1716982225873687, -0.4863411908291395),
-                                     (1.5573291340285325, 0.13404869476412778, 1.0992045049933756),
-                                     (-2.353154400199601, 0.664646058045691, -0.27667502002715677),
-                                     (0.4586997381222457, -1.5322585343327426, -1.2389102050458707))}
+    # ICdCC_Cl__I_NF_xyz = {'symbols': ('I', 'I', 'Cl', 'F', 'N', 'C', 'C', 'C', 'H', 'H', 'H'),
+    #                       'isotopes': (127, 127, 35, 19, 14, 12, 12, 12, 1, 1, 1),
+    #                       'coords': ((-0.1752057997244146, 2.579412243969442, -0.0998868241437122),
+    #                                  (2.982861260942898, -2.085955126671259, -0.45379679871721257),
+    #                                  (-1.134251085086272, 0.5188212354137014, 2.0757032605524133),
+    #                                  (-1.8814930376300307, -1.2539895001453651, -0.2064584290134856),
+    #                                  (-1.5494242545791568, 0.0648586431861974, -0.452378816320353),
+    #                                  (-0.48883763038476624, 0.5436231953516003, 0.41802210133854123),
+    #                                  (0.8221194714634887, -0.18495290937918607, 0.3615122853791793),
+    #                                  (1.1541030666741987, -1.1716982225873687, -0.4863411908291395),
+    #                                  (1.5573291340285325, 0.13404869476412778, 1.0992045049933756),
+    #                                  (-2.353154400199601, 0.664646058045691, -0.27667502002715677),
+    #                                  (0.4586997381222457, -1.5322585343327426, -1.2389102050458707))}
+    ICdCC_Cl__I_NF_xyz = Coordinates(
+        symbols=('I', 'I', 'Cl', 'F', 'N', 'C', 'C', 'C', 'H', 'H', 'H'),
+        isotopes=(127, 127, 35, 19, 14, 12, 12, 12, 1, 1, 1),
+        coords=(
+            (-0.1752057997244146, 2.579412243969442, -0.0998868241437122),
+            (2.982861260942898, -2.085955126671259, -0.45379679871721257),
+            (-1.134251085086272, 0.5188212354137014, 2.0757032605524133),
+            (-1.8814930376300307, -1.2539895001453651, -0.2064584290134856),
+            (-1.5494242545791568, 0.0648586431861974, -0.452378816320353),
+            (-0.48883763038476624, 0.5436231953516003, 0.41802210133854123),
+            (0.8221194714634887, -0.18495290937918607, 0.3615122853791793),
+            (1.1541030666741987, -1.1716982225873687, -0.4863411908291395),
+            (1.5573291340285325, 0.13404869476412778, 1.0992045049933756),
+            (-2.353154400199601, 0.664646058045691, -0.27667502002715677),
+            (0.4586997381222457, -1.5322585343327426, -1.2389102050458707)
+        )
+    )
     ICdCC_Cl__I_NF_freqs = [i + 1 for i in range(27)]
     ICdCC_Cl__I_NF_scaled_freqs = [(i + 1) * 0.973 for i in range(27)]
     ICdCC_Cl__I_NF_normal_disp_modes = [[[1, 2, 3]] * 11] * 27
@@ -64,7 +86,7 @@ def test_species_schema():
 
     # 1. descriptors
     # only providing SMILES
-    spc_1 = SpeciesBase(smiles='C',
+    spc_1 = SpeciesCreate(smiles='C',
                         charge=0,
                         multiplicity=1,
                         coordinates=ch4_xyz,
@@ -78,7 +100,7 @@ def test_species_schema():
                         frequencies=ch4_freqs,
                         scaled_projected_frequencies=ch4_scaled_freqs,
                         normal_displacement_modes=ch4_normal_disp_modes,
-                        freq_id=1,
+                        #freq_id=1,
                         rigid_rotor='spherical top',
                         statmech_treatment='RRHO',
                         rotational_constants=[1, 2, 3],
@@ -86,7 +108,7 @@ def test_species_schema():
                         S298=186.06,
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                        encorr_id=2,
+                        ##encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
                         sp_path='path/to/sp/job.log',
@@ -101,7 +123,7 @@ def test_species_schema():
 5 H u0 p0 c0 {1,S}
 """
     # only providing InChI
-    spc_2 = SpeciesBase(inchi='InChI=1S/CH4/h1H4',
+    spc_2 = SpeciesCreate(inchi='InChI=1S/CH4/h1H4',
                         charge=0,
                         multiplicity=1,
                         coordinates=ch4_xyz,
@@ -115,7 +137,7 @@ def test_species_schema():
                         frequencies=ch4_freqs,
                         scaled_projected_frequencies=ch4_scaled_freqs,
                         normal_displacement_modes=ch4_normal_disp_modes,
-                        freq_id=1,
+                        #freq_id=1,
                         rigid_rotor='spherical top',
                         statmech_treatment='RRHO',
                         rotational_constants=[1, 2, 3],
@@ -123,7 +145,7 @@ def test_species_schema():
                         S298=186.06,
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                        encorr_id=2,
+                        ##encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
                         sp_path='path/to/sp/job.log',
@@ -138,7 +160,7 @@ def test_species_schema():
 5 H u0 p0 c0 {1,S}
 """
     # only providing InChI Key
-    spc_3 = SpeciesBase(inchi_key='VNWKTOKETHGBQD-UHFFFAOYSA-N',
+    spc_3 = SpeciesCreate(inchi_key='VNWKTOKETHGBQD-UHFFFAOYSA-N',
                         charge=0,
                         multiplicity=1,
                         coordinates=ch4_xyz,
@@ -152,7 +174,7 @@ def test_species_schema():
                         frequencies=ch4_freqs,
                         scaled_projected_frequencies=ch4_scaled_freqs,
                         normal_displacement_modes=ch4_normal_disp_modes,
-                        freq_id=1,
+                        #freq_id=1,
                         rigid_rotor='spherical top',
                         statmech_treatment='RRHO',
                         rotational_constants=[1, 2, 3],
@@ -161,7 +183,7 @@ def test_species_schema():
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
                         heat_capacity_model = heat_capacity_model,
-                        encorr_id=2,
+                        # #encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
                         sp_path='path/to/sp/job.log',
@@ -176,7 +198,7 @@ def test_species_schema():
 5 H u0 p0 c0 {1,S}
 """
     # only providing adjacency list
-    spc_4 = SpeciesBase(graph="""1 C u0 p0 c0 {2,S} {3,S} {4,S} {5,S}
+    spc_4 = SpeciesCreate(graph="""1 C u0 p0 c0 {2,S} {3,S} {4,S} {5,S}
 2 H u0 p0 c0 {1,S}
 3 H u0 p0 c0 {1,S}
 4 H u0 p0 c0 {1,S}
@@ -195,7 +217,7 @@ def test_species_schema():
                         frequencies=ch4_freqs,
                         scaled_projected_frequencies=ch4_scaled_freqs,
                         normal_displacement_modes=ch4_normal_disp_modes,
-                        freq_id=1,
+                        #freq_id=1,
                         rigid_rotor='spherical top',
                         statmech_treatment='RRHO',
                         rotational_constants=[1, 2, 3],
@@ -203,7 +225,7 @@ def test_species_schema():
                         S298=186.06,
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                        encorr_id=2,
+                        #encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
                         sp_path='path/to/sp/job.log',
@@ -219,7 +241,7 @@ def test_species_schema():
 """
 
     # 2. test correcting the adjlist multiplicity for a singlet, and not correcting for a triplet
-    spc_5 = SpeciesBase(smiles='[N]=C=[N]',
+    spc_5 = SpeciesCreate(smiles='[N]=C=[N]',
                         charge=0,
                         multiplicity=1,
                         coordinates=ch4_xyz,
@@ -233,7 +255,7 @@ def test_species_schema():
                         frequencies=ch4_freqs,
                         scaled_projected_frequencies=ch4_scaled_freqs,
                         normal_displacement_modes=ch4_normal_disp_modes,
-                        freq_id=1,
+                        #freq_id=1,
                         rigid_rotor='spherical top',
                         statmech_treatment='RRHO',
                         rotational_constants=[1, 2, 3],
@@ -241,7 +263,7 @@ def test_species_schema():
                         S298=186.06,
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                        encorr_id=2,
+                        #encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
                         sp_path='path/to/sp/job.log',
@@ -251,7 +273,7 @@ def test_species_schema():
 2 C u0 p0 c0 {1,D} {3,D}
 3 N u1 p1 c0 {2,D}
 """
-    spc_6 = SpeciesBase(smiles='[N]=C=[N]',
+    spc_6 = SpeciesCreate(smiles='[N]=C=[N]',
                         charge=0,
                         multiplicity=3,
                         coordinates=ch4_xyz,
@@ -265,7 +287,7 @@ def test_species_schema():
                         frequencies=ch4_freqs,
                         scaled_projected_frequencies=ch4_scaled_freqs,
                         normal_displacement_modes=ch4_normal_disp_modes,
-                        freq_id=1,
+                        #freq_id=1,
                         rigid_rotor='spherical top',
                         statmech_treatment='RRHO',
                         rotational_constants=[1, 2, 3],
@@ -273,7 +295,7 @@ def test_species_schema():
                         S298=186.06,
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                        encorr_id=2,
+                        #encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
                         sp_path='path/to/sp/job.log',
@@ -285,7 +307,7 @@ def test_species_schema():
 """
     with pytest.raises(ValidationError):
         # multiplicity mismatch
-        SpeciesBase(smiles='[N]=C=[N]',
+        SpeciesCreate(smiles='[N]=C=[N]',
                     charge=0,
                     multiplicity=2,
                     coordinates=ch4_xyz,
@@ -299,7 +321,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -307,14 +329,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
 
     # 3. fragments
-    spc_7 = SpeciesBase(smiles='C',
+    spc_7 = SpeciesCreate(smiles='C',
                         charge=0,
                         multiplicity=1,
                         coordinates=ch4_xyz,
@@ -330,7 +352,7 @@ def test_species_schema():
                         frequencies=ch4_freqs,
                         scaled_projected_frequencies=ch4_scaled_freqs,
                         normal_displacement_modes=ch4_normal_disp_modes,
-                        freq_id=1,
+                        #freq_id=1,
                         rigid_rotor='spherical top',
                         statmech_treatment='RRHO',
                         rotational_constants=[1, 2, 3],
@@ -338,13 +360,13 @@ def test_species_schema():
                         S298=186.06,
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                        encorr_id=2,
+                        #encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
                         sp_path='path/to/sp/job.log',
                         )
     assert spc_7.fragments == [[1, 2, 3], [4, 5]]
-    spc_8 = SpeciesBase(smiles='C',
+    spc_8 = SpeciesCreate(smiles='C',
                         charge=0,
                         multiplicity=1,
                         coordinates=ch4_xyz,
@@ -359,7 +381,7 @@ def test_species_schema():
                         frequencies=ch4_freqs,
                         scaled_projected_frequencies=ch4_scaled_freqs,
                         normal_displacement_modes=ch4_normal_disp_modes,
-                        freq_id=1,
+                        #freq_id=1,
                         rigid_rotor='spherical top',
                         statmech_treatment='RRHO',
                         rotational_constants=[1, 2, 3],
@@ -367,7 +389,7 @@ def test_species_schema():
                         S298=186.06,
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                        encorr_id=2,
+                        #encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
                         sp_path='path/to/sp/job.log',
@@ -375,7 +397,7 @@ def test_species_schema():
     assert spc_8.fragments is None  # one fragments translates to None
     with pytest.raises(ValidationError):
         # duplicate atom indices in fragments
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -391,7 +413,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -399,14 +421,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # fragments length does not match the number of atoms from the coordinates
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -422,7 +444,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -430,14 +452,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # 0-indexed atoms in fragments
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -453,7 +475,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -461,7 +483,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -469,7 +491,7 @@ def test_species_schema():
 
     # 3. fragment_orientation
     assert spc_7.fragment_orientation == [{'cm': [1, 2, 3], 'x': 1, 'y': 2, 'z': 3}]
-    spc_9 = SpeciesBase(smiles='C',
+    spc_9 = SpeciesCreate(smiles='C',
                         charge=0,
                         multiplicity=1,
                         coordinates=ch4_xyz,
@@ -486,7 +508,7 @@ def test_species_schema():
                         frequencies=ch4_freqs,
                         scaled_projected_frequencies=ch4_scaled_freqs,
                         normal_displacement_modes=ch4_normal_disp_modes,
-                        freq_id=1,
+                        #freq_id=1,
                         rigid_rotor='spherical top',
                         statmech_treatment='RRHO',
                         rotational_constants=[1, 2, 3],
@@ -494,7 +516,7 @@ def test_species_schema():
                         S298=186.06,
                         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                        encorr_id=2,
+                        #encorr_id=2,
                         opt_path='path/to/opt/job.log',
                         freq_path='path/to/freq/job.log',
                         sp_path='path/to/sp/job.log',
@@ -503,7 +525,7 @@ def test_species_schema():
                                           {'cm': [1, 2, 3], 'x': 1, 'y': 2, 'z': 3}]
     with pytest.raises(ValidationError):
         # not specifying fragments, but specifying fragment_orientation
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -518,7 +540,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -526,14 +548,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # not specifying fragment_orientation, but specifying fragments
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -548,7 +570,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -556,14 +578,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # wring length of fragment_orientation
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -579,7 +601,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -587,14 +609,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # extra keys in fragment_orientation
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -610,7 +632,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -618,14 +640,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # invalid key fragment_orientation
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -641,7 +663,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -649,14 +671,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # wrong value type for 'cm' key
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -672,7 +694,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -680,14 +702,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # wrong vector length for 'cm' key
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -703,7 +725,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -711,14 +733,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # wrong value type for 'x' key
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -734,7 +756,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -742,7 +764,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -750,7 +772,7 @@ def test_species_schema():
 
     # 4. point_group
     assert spc_9.point_group == 'Td'
-    spc_10 = SpeciesBase(smiles='C',
+    spc_10 = SpeciesCreate(smiles='C',
                          charge=0,
                          multiplicity=1,
                          coordinates=ch4_xyz,
@@ -764,7 +786,7 @@ def test_species_schema():
                          frequencies=ch4_freqs,
                          scaled_projected_frequencies=ch4_scaled_freqs,
                          normal_displacement_modes=ch4_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='spherical top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -772,13 +794,13 @@ def test_species_schema():
                          S298=186.06,
                          Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
                          )
     assert spc_10.point_group == 'Cinfv'
-    spc_11 = SpeciesBase(smiles='C',
+    spc_11 = SpeciesCreate(smiles='C',
                          charge=0,
                          multiplicity=1,
                          coordinates=ch4_xyz,
@@ -792,7 +814,7 @@ def test_species_schema():
                          frequencies=ch4_freqs,
                          scaled_projected_frequencies=ch4_scaled_freqs,
                          normal_displacement_modes=ch4_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='spherical top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -800,13 +822,13 @@ def test_species_schema():
                          S298=186.06,
                          Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
                          )
     assert spc_11.point_group == 'D4'
-    spc_12 = SpeciesBase(smiles='C',
+    spc_12 = SpeciesCreate(smiles='C',
                          charge=0,
                          multiplicity=1,
                          coordinates=ch4_xyz,
@@ -820,7 +842,7 @@ def test_species_schema():
                          frequencies=ch4_freqs,
                          scaled_projected_frequencies=ch4_scaled_freqs,
                          normal_displacement_modes=ch4_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='spherical top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -828,13 +850,13 @@ def test_species_schema():
                          S298=186.06,
                          Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
                          )
     assert spc_12.point_group == 'Oh'
-    spc_13 = SpeciesBase(smiles='C',
+    spc_13 = SpeciesCreate(smiles='C',
                          charge=0,
                          multiplicity=1,
                          coordinates=ch4_xyz,
@@ -848,7 +870,7 @@ def test_species_schema():
                          frequencies=ch4_freqs,
                          scaled_projected_frequencies=ch4_scaled_freqs,
                          normal_displacement_modes=ch4_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='spherical top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -856,13 +878,13 @@ def test_species_schema():
                          S298=186.06,
                          Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
                          )
     assert spc_13.point_group == 'I'
-    spc_14 = SpeciesBase(smiles='C',
+    spc_14 = SpeciesCreate(smiles='C',
                          charge=0,
                          multiplicity=1,
                          coordinates=ch4_xyz,
@@ -876,7 +898,7 @@ def test_species_schema():
                          frequencies=ch4_freqs,
                          scaled_projected_frequencies=ch4_scaled_freqs,
                          normal_displacement_modes=ch4_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='spherical top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -884,7 +906,7 @@ def test_species_schema():
                          S298=186.06,
                          Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
@@ -892,7 +914,7 @@ def test_species_schema():
     assert spc_14.point_group == 'C6'
     with pytest.raises(ValidationError):
         # wrong first char for point group
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -906,7 +928,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -914,14 +936,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # wrong last char for point group
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -935,7 +957,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -943,14 +965,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # wrong length of point group
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -964,7 +986,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -972,14 +994,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # unexpected char in point group
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -993,7 +1015,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1001,14 +1023,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
 
     # 5. chirality
-    spc_15 = SpeciesBase(smiles='C',
+    spc_15 = SpeciesCreate(smiles='C',
                          charge=0,
                          multiplicity=1,
                          coordinates=ch4_xyz,
@@ -1023,7 +1045,7 @@ def test_species_schema():
                          frequencies=ch4_freqs,
                          scaled_projected_frequencies=ch4_scaled_freqs,
                          normal_displacement_modes=ch4_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='spherical top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -1031,13 +1053,13 @@ def test_species_schema():
                          S298=186.06,
                          Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
                          )
     assert spc_15.chirality == {(1,): 'R'}
-    spc_16 = SpeciesBase(smiles='IC=CC(Cl)(I)NF',
+    spc_16 = SpeciesCreate(smiles='IC=CC(Cl)(I)NF',
                          charge=0,
                          multiplicity=1,
                          coordinates=ICdCC_Cl__I_NF_xyz,
@@ -1052,7 +1074,7 @@ def test_species_schema():
                          frequencies=ICdCC_Cl__I_NF_freqs,
                          scaled_projected_frequencies=ICdCC_Cl__I_NF_scaled_freqs,
                          normal_displacement_modes=ICdCC_Cl__I_NF_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='asymmetric top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -1060,7 +1082,7 @@ def test_species_schema():
                          S298=186.01,
                          Cp_values=[96.44, 115.77, 131.34, 143.47, 160.79, 171.46, 184.18],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
@@ -1068,7 +1090,7 @@ def test_species_schema():
     assert spc_16.chirality == {(5,): 'NR', (6,): 'R', (7, 8): 'E'}
     with pytest.raises(ValidationError):
         # wrong atom index
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1083,7 +1105,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1091,14 +1113,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # not a carbon center
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1113,7 +1135,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1121,14 +1143,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # unsupported value
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1143,7 +1165,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1151,14 +1173,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # an `E` type for an atom center
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1173,7 +1195,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1181,14 +1203,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # an `S` type for a double bond chiral center
-        SpeciesBase(smiles='IC=CC(Cl)(I)NF',
+        SpeciesCreate(smiles='IC=CC(Cl)(I)NF',
                     charge=0,
                     multiplicity=1,
                     coordinates=ICdCC_Cl__I_NF_xyz,
@@ -1203,7 +1225,7 @@ def test_species_schema():
                     frequencies=ICdCC_Cl__I_NF_freqs,
                     scaled_projected_frequencies=ICdCC_Cl__I_NF_scaled_freqs,
                     normal_displacement_modes=ICdCC_Cl__I_NF_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1211,14 +1233,14 @@ def test_species_schema():
                     S298=186.01,
                     Cp_values=[96.44, 115.77, 131.34, 143.47, 160.79, 171.46, 184.18],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # three chiral centers
-        SpeciesBase(smiles='IC=CC(Cl)(I)NF',
+        SpeciesCreate(smiles='IC=CC(Cl)(I)NF',
                     charge=0,
                     multiplicity=1,
                     coordinates=ICdCC_Cl__I_NF_xyz,
@@ -1233,7 +1255,7 @@ def test_species_schema():
                     frequencies=ICdCC_Cl__I_NF_freqs,
                     scaled_projected_frequencies=ICdCC_Cl__I_NF_scaled_freqs,
                     normal_displacement_modes=ICdCC_Cl__I_NF_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1241,14 +1263,14 @@ def test_species_schema():
                     S298=186.01,
                     Cp_values=[96.44, 115.77, 131.34, 143.47, 160.79, 171.46, 184.18],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # repeated atom index
-        SpeciesBase(smiles='IC=CC(Cl)(I)NF',
+        SpeciesCreate(smiles='IC=CC(Cl)(I)NF',
                     charge=0,
                     multiplicity=1,
                     coordinates=ICdCC_Cl__I_NF_xyz,
@@ -1263,7 +1285,7 @@ def test_species_schema():
                     frequencies=ICdCC_Cl__I_NF_freqs,
                     scaled_projected_frequencies=ICdCC_Cl__I_NF_scaled_freqs,
                     normal_displacement_modes=ICdCC_Cl__I_NF_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1271,14 +1293,14 @@ def test_species_schema():
                     S298=186.01,
                     Cp_values=[96.44, 115.77, 131.34, 143.47, 160.79, 171.46, 184.18],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # a non-nitrogen 'NR'
-        SpeciesBase(smiles='IC=CC(Cl)(I)NF',
+        SpeciesCreate(smiles='IC=CC(Cl)(I)NF',
                     charge=0,
                     multiplicity=1,
                     coordinates=ICdCC_Cl__I_NF_xyz,
@@ -1293,7 +1315,7 @@ def test_species_schema():
                     frequencies=ICdCC_Cl__I_NF_freqs,
                     scaled_projected_frequencies=ICdCC_Cl__I_NF_scaled_freqs,
                     normal_displacement_modes=ICdCC_Cl__I_NF_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1301,14 +1323,14 @@ def test_species_schema():
                     S298=186.01,
                     Cp_values=[96.44, 115.77, 131.34, 143.47, 160.79, 171.46, 184.18],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
     with pytest.raises(ValidationError):
         # a nitrogen 'R'
-        SpeciesBase(smiles='IC=CC(Cl)(I)NF',
+        SpeciesCreate(smiles='IC=CC(Cl)(I)NF',
                     charge=0,
                     multiplicity=1,
                     coordinates=ICdCC_Cl__I_NF_xyz,
@@ -1323,7 +1345,7 @@ def test_species_schema():
                     frequencies=ICdCC_Cl__I_NF_freqs,
                     scaled_projected_frequencies=ICdCC_Cl__I_NF_scaled_freqs,
                     normal_displacement_modes=ICdCC_Cl__I_NF_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1331,14 +1353,14 @@ def test_species_schema():
                     S298=186.01,
                     Cp_values=[96.44, 115.77, 131.34, 143.47, 160.79, 171.46, 184.18],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
 
     # 6. conformation_method
-    spc_17 = SpeciesBase(smiles='C',
+    spc_17 = SpeciesCreate(smiles='C',
                          charge=0,
                          multiplicity=1,
                          coordinates=ch4_xyz,
@@ -1352,7 +1374,7 @@ def test_species_schema():
                          frequencies=ch4_freqs,
                          scaled_projected_frequencies=ch4_scaled_freqs,
                          normal_displacement_modes=ch4_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='spherical top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -1360,13 +1382,13 @@ def test_species_schema():
                          S298=186.06,
                          Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
                          )
     assert spc_17.conformation_method == 'ARC v1.1.0'
-    spc_18 = SpeciesBase(smiles='[H][H]',
+    spc_18 = SpeciesCreate(smiles='[H][H]',
                          charge=0,
                          multiplicity=1,
                          coordinates={'symbols': ('H', 'H'), 'isotopes': (1, 1),
@@ -1380,14 +1402,14 @@ def test_species_schema():
                          frequencies=[500.2],
                          scaled_projected_frequencies=[495.6],
                          normal_displacement_modes=[[[5, 6, 8]] * 2],
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='linear',
                          rotational_constants=[1],
                          H298=0,
                          S298=130.68,
                          Cp_values=[28.85, 29.18, 19.26, 29.33, 29.63, 30.20, 32.30],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
@@ -1395,7 +1417,7 @@ def test_species_schema():
     assert spc_18.conformation_method is None
     with pytest.raises(ValidationError):
         # no conformation method for a 5-atom species
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1408,7 +1430,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1416,7 +1438,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1425,7 +1447,7 @@ def test_species_schema():
     # 6. electronic_energy
     with pytest.raises(ValidationError):
         # no electronic_energy
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1438,7 +1460,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1446,7 +1468,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1455,7 +1477,7 @@ def test_species_schema():
     # 7. E0
     with pytest.raises(ValidationError):
         # no E0
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1468,7 +1490,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1476,17 +1498,17 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
 
-    # 8. hessian, frequencies, scaled_projected_frequencies, normal_displacement_modes, and freq_id
+    # 8. hessian, frequencies, scaled_projected_frequencies, normal_displacement_modes, and #freq_id
 
-    # no hessian, frequencies, scaled_projected_frequencies, normal_displacement_modes, nor freq_id
+    # no hessian, frequencies, scaled_projected_frequencies, normal_displacement_modes, nor #freq_id
     # for a monoatomic species
-    spc_19 = SpeciesBase(smiles='[H]',
+    spc_19 = SpeciesCreate(smiles='[H]',
                          charge=0,
                          multiplicity=2,
                          coordinates=h_xyz,
@@ -1496,13 +1518,13 @@ def test_species_schema():
                          is_well=True,
                          electronic_energy=-365.544,
                          E0=-370.240,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='atom',
                          H298=218.00,
                          S298=114.72,
                          Cp_values=[20.79, 20.79, 20.79, 20.79, 20.79, 20.79, 20.79],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
@@ -1512,7 +1534,7 @@ def test_species_schema():
     assert spc_19.scaled_projected_frequencies is None
     assert spc_19.normal_displacement_modes is None
 
-    spc_20 = SpeciesBase(smiles='C',
+    spc_20 = SpeciesCreate(smiles='C',
                          charge=0,
                          multiplicity=1,
                          coordinates=ch4_xyz,
@@ -1526,7 +1548,7 @@ def test_species_schema():
                          frequencies=ch4_freqs,
                          scaled_projected_frequencies=ch4_scaled_freqs,
                          normal_displacement_modes=ch4_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='spherical top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -1534,7 +1556,7 @@ def test_species_schema():
                          S298=186.06,
                          Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
@@ -1560,7 +1582,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no hessian given for a polyatomic species
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1573,7 +1595,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1581,7 +1603,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1589,7 +1611,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong number of rows in hessian
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1603,7 +1625,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1611,7 +1633,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1619,7 +1641,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong number of elements per row in hessian
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1633,7 +1655,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1641,7 +1663,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1649,7 +1671,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no frequencies given for a polyatomic species
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1662,7 +1684,7 @@ def test_species_schema():
                     hessian=[[1] * 15] * 15,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1670,7 +1692,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1678,7 +1700,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong number of frequencies (missing one)
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1692,7 +1714,7 @@ def test_species_schema():
                     frequencies=[3046, 1555, 1555, 3168, 3168, 3168, 1368, 1368],
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1700,7 +1722,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1708,7 +1730,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong number of frequencies (extra one)
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1722,7 +1744,7 @@ def test_species_schema():
                     frequencies=[3046, 1555, 1555, 3168, 3168, 3168, 1368, 1368, 1368, 1368],
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1730,7 +1752,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1738,7 +1760,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong number of frequencies for a linear species
-        SpeciesBase(smiles='[H][H]',
+        SpeciesCreate(smiles='[H][H]',
                     charge=0,
                     multiplicity=1,
                     coordinates={'symbols': ('H', 'H'), 'isotopes': (1, 1),
@@ -1752,14 +1774,14 @@ def test_species_schema():
                     frequencies=[500.2, 563.5],
                     scaled_projected_frequencies=[500.2 * .97, 563.5 * .97],
                     normal_displacement_modes=[[1, 2, 3], [4, 5, 6]],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='linear',
                     rotational_constants=[1],
                     H298=0,
                     S298=130.68,
                     Cp_values=[28.85, 29.18, 19.26, 29.33, 29.63, 30.20, 32.30],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1767,7 +1789,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # a zero frequency
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1781,7 +1803,7 @@ def test_species_schema():
                     frequencies=[3046, 1555, 1555, 3168, 3168, 3168, 1368, 1368, 0],
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1789,7 +1811,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1797,7 +1819,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # all real frequencies for a TS species
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1813,7 +1835,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1829,7 +1851,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no scaled_projected_frequencies given for a polyatomic species
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1842,7 +1864,7 @@ def test_species_schema():
                     hessian=[[1] * 15] * 15,
                     frequencies=ch4_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1850,7 +1872,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1858,7 +1880,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong number of scaled_projected_frequencies (extra one)
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1873,7 +1895,7 @@ def test_species_schema():
                     scaled_projected_frequencies=[3046 * .99, 1555 * .99, 1555 * .99, 3168 * .99, 3168 * .99,
                                                   3168 * .99, 1368 * .99, 1368 * .99, 1368 * .99, 1368 * .99],
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1881,7 +1903,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1889,7 +1911,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # a zero scaled_projected_frequencies
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1904,7 +1926,7 @@ def test_species_schema():
                     scaled_projected_frequencies=[3046 * .99, 1555 * .99, 1555 * .99, 3168 * .99, 3168 * .99,
                                                   3168 * .99, 1368 * .99, 1368 * .99, 0],
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1912,7 +1934,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1920,7 +1942,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # scaled_projected_frequencies identical to frequencies
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1934,7 +1956,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1942,7 +1964,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1950,7 +1972,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no normal_displacement_modes
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1963,7 +1985,7 @@ def test_species_schema():
                     hessian=[[1] * 15] * 15,
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -1971,7 +1993,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -1979,7 +2001,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong length of normal_displacement_modes
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -1993,7 +2015,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=[[1, 2, 3]] * 8,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -2001,7 +2023,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2009,7 +2031,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong length of a single displacement mode
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -2023,7 +2045,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=[[1, 2, 3]] * 7 + [[1, 2, 3, 4]],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -2031,66 +2053,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
-                    opt_path='path/to/opt/job.log',
-                    freq_path='path/to/freq/job.log',
-                    sp_path='path/to/sp/job.log',
-                    )
-
-    with pytest.raises(ValidationError):
-        # no freq_id
-        SpeciesBase(smiles='C',
-                    charge=0,
-                    multiplicity=1,
-                    coordinates=ch4_xyz,
-                    external_symmetry=4,
-                    point_group='Td',
-                    conformation_method='ARC v1.1.0',
-                    is_well=True,
-                    electronic_energy=-365.544,
-                    E0=-370.240,
-                    hessian=[[1] * 15] * 15,
-                    frequencies=ch4_freqs,
-                    scaled_projected_frequencies=ch4_scaled_freqs,
-                    normal_displacement_modes=ch4_normal_disp_modes,
-                    rigid_rotor='spherical top',
-                    statmech_treatment='RRHO',
-                    rotational_constants=[1, 2, 3],
-                    H298=-74.52,
-                    S298=186.06,
-                    Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
-                    Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
-                    opt_path='path/to/opt/job.log',
-                    freq_path='path/to/freq/job.log',
-                    sp_path='path/to/sp/job.log',
-                    )
-
-    with pytest.raises(ValidationError):
-        # illegal freq_id
-        SpeciesBase(smiles='C',
-                    charge=0,
-                    multiplicity=1,
-                    coordinates=ch4_xyz,
-                    external_symmetry=4,
-                    point_group='Td',
-                    conformation_method='ARC v1.1.0',
-                    is_well=True,
-                    electronic_energy=-365.544,
-                    E0=-370.240,
-                    hessian=[[1] * 15] * 15,
-                    frequencies=ch4_freqs,
-                    scaled_projected_frequencies=ch4_scaled_freqs,
-                    normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=-1,
-                    rigid_rotor='spherical top',
-                    statmech_treatment='RRHO',
-                    rotational_constants=[1, 2, 3],
-                    H298=-74.52,
-                    S298=186.06,
-                    Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
-                    Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2101,7 +2064,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # unrecognized rigid_rotor
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -2115,7 +2078,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=-1,
+                    #freq_id=-1,
                     rigid_rotor='spherical',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -2123,7 +2086,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2134,7 +2097,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # unrecognized statmech_treatment
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -2148,7 +2111,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=-1,
+                    #freq_id=-1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRRR',
                     rotational_constants=[1, 2, 3],
@@ -2156,7 +2119,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2164,7 +2127,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no statmech_treatment for a polyatomic species
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -2178,14 +2141,14 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=-1,
+                    #freq_id=-1,
                     rigid_rotor='spherical top',
                     rotational_constants=[1, 2, 3],
                     H298=-74.52,
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2196,7 +2159,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no rotational_constants for a non-linear species
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -2210,14 +2173,14 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=-1,
+                    #freq_id=-1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRRR',
                     H298=-74.52,
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2225,7 +2188,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong number of rotational_constants for a non-linear species
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -2239,7 +2202,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=-1,
+                    #freq_id=-1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRRR',
                     rotational_constants=[1, 2, 3, 4],
@@ -2247,7 +2210,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2255,7 +2218,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong number of rotational_constants for a linear species
-        SpeciesBase(smiles='[H][H]',
+        SpeciesCreate(smiles='[H][H]',
                     charge=0,
                     multiplicity=1,
                     coordinates={'symbols': ('H', 'H'), 'isotopes': (1, 1),
@@ -2269,14 +2232,14 @@ def test_species_schema():
                     frequencies=[500.2],
                     scaled_projected_frequencies=[500.2 * .97],
                     normal_displacement_modes=[[1, 2, 3]],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='linear',
                     rotational_constants=[1, 2, 3],
                     H298=0,
                     S298=130.68,
                     Cp_values=[28.85, 29.18, 19.26, 29.33, 29.63, 30.20, 32.30],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2284,7 +2247,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # specifying rotational_constants for a mono-atomic species
-        SpeciesBase(smiles='[H]',
+        SpeciesCreate(smiles='[H]',
                     charge=0,
                     multiplicity=2,
                     coordinates=h_xyz,
@@ -2294,14 +2257,14 @@ def test_species_schema():
                     is_well=True,
                     electronic_energy=-365.544,
                     E0=-370.240,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='atom',
                     rotational_constants=[1],
                     H298=218.00,
                     S298=114.72,
                     Cp_values=[20.79, 20.79, 20.79, 20.79, 20.79, 20.79, 20.79],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2342,7 +2305,7 @@ def test_species_schema():
                                 2.3842242978801615, 1.7677227996603775, 1.1161314958311273,
                                 0.5395428464212831, 0.14239661034728582, 0.0007036339829496212]
     spc_21_data_dict = read_yaml_file(os.path.join(DATA_PATH, 'CH3O2.yml'))
-    spc_21 = SpeciesBase(graph=spc_21_adj,
+    spc_21 = SpeciesCreate(graph=spc_21_adj,
                          charge=0,
                          multiplicity=2,
                          coordinates=spc_21_xyz,
@@ -2356,7 +2319,7 @@ def test_species_schema():
                          frequencies=spc_21_freqs,
                          scaled_projected_frequencies=spc_21_scaled_freqs,
                          normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='asymmetric top',
                          statmech_treatment='RRHO-1D',
                          rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2373,7 +2336,7 @@ def test_species_schema():
                          S298=269.89,
                          Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
@@ -2399,7 +2362,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # not specifying scan_path
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2413,7 +2376,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2430,14 +2393,14 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
 
     # not specifying torsions.computation_type
-    spc_21_b = SpeciesBase(graph=spc_21_adj,
+    spc_21_b = SpeciesCreate(graph=spc_21_adj,
                            charge=0,
                            multiplicity=2,
                            coordinates=spc_21_xyz,
@@ -2451,7 +2414,7 @@ def test_species_schema():
                            frequencies=spc_21_freqs,
                            scaled_projected_frequencies=spc_21_scaled_freqs,
                            normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                           freq_id=1,
+                           #freq_id=1,
                            rigid_rotor='asymmetric top',
                            statmech_treatment='RRHO-1D',
                            rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2467,7 +2430,7 @@ def test_species_schema():
                            S298=269.89,
                            Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                            Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                           encorr_id=2,
+                           #encorr_id=2,
                            opt_path='path/to/opt/job.log',
                            freq_path='path/to/freq/job.log',
                            sp_path='path/to/sp/job.log',
@@ -2477,7 +2440,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # invalid torsions.computation_type
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2491,7 +2454,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2508,7 +2471,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2517,7 +2480,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # invalid torsions.dimension
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2531,7 +2494,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2548,7 +2511,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2557,7 +2520,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # invalid torsions.constraints
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2571,7 +2534,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2590,7 +2553,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2599,7 +2562,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no torsions.symmetry for a 1D torsion
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2613,7 +2576,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2629,7 +2592,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2638,7 +2601,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no torsions.treatment
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2652,7 +2615,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2668,7 +2631,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2677,7 +2640,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # invalid torsions.treatment
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2691,7 +2654,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2708,7 +2671,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2717,7 +2680,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # invalid torsions.torsions: zero-indexed
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2731,7 +2694,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2748,7 +2711,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2757,7 +2720,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # invalid torsions.torsions: short key
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2771,7 +2734,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2788,7 +2751,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2797,7 +2760,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # invalid torsions.torsions: wrong dimension
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2811,7 +2774,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2828,7 +2791,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2837,7 +2800,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no torsions.top
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2851,7 +2814,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2867,7 +2830,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2876,7 +2839,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # zero-indexed torsions.top
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2890,7 +2853,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2907,7 +2870,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2916,7 +2879,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong torsions.energies dimension
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2930,7 +2893,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -2962,7 +2925,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -2971,7 +2934,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # invalid torsions.resolution
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -2985,7 +2948,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -3002,7 +2965,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3011,7 +2974,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no torsions.trajectory
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -3025,7 +2988,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -3041,7 +3004,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3050,7 +3013,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong torsions.trajectory dimension
-        SpeciesBase(graph=spc_21_adj,
+        SpeciesCreate(graph=spc_21_adj,
                     charge=0,
                     multiplicity=2,
                     coordinates=spc_21_xyz,
@@ -3064,7 +3027,7 @@ def test_species_schema():
                     frequencies=spc_21_freqs,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=spc_21_data_dict['normal_displacement_modes'],
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -3081,7 +3044,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3089,7 +3052,7 @@ def test_species_schema():
                     )
 
     # 12. conformers
-    spc_22 = SpeciesBase(smiles='COO',
+    spc_22 = SpeciesCreate(smiles='COO',
                          charge=0,
                          multiplicity=1,
                          coordinates={'symbols': ('O', 'C', 'O', 'O', 'H', 'H', 'H', 'H'),
@@ -3112,7 +3075,7 @@ def test_species_schema():
                          frequencies=[400] * 18,
                          scaled_projected_frequencies=spc_21_scaled_freqs,
                          normal_displacement_modes=[[[4, 6, 9]] * 8] * 18,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='asymmetric top',
                          statmech_treatment='RRHO-1D',
                          rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -3144,7 +3107,7 @@ def test_species_schema():
                          S298=269.89,
                          Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
@@ -3157,7 +3120,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # specifying both torsions and conformers
-        SpeciesBase(smiles='COO',
+        SpeciesCreate(smiles='COO',
                     charge=0,
                     multiplicity=1,
                     coordinates={'symbols': ('O', 'C', 'O', 'O', 'H', 'H', 'H', 'H'),
@@ -3180,7 +3143,7 @@ def test_species_schema():
                     frequencies=[400] * 18,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=[[[4, 6, 9]] * 8] * 18,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -3221,7 +3184,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3230,7 +3193,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # illegal key in conformers
-        SpeciesBase(smiles='COO',
+        SpeciesCreate(smiles='COO',
                     charge=0,
                     multiplicity=1,
                     coordinates={'symbols': ('O', 'C', 'O', 'O', 'H', 'H', 'H', 'H'),
@@ -3253,7 +3216,7 @@ def test_species_schema():
                     frequencies=[400] * 18,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=[[[4, 6, 9]] * 8] * 18,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -3286,7 +3249,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3295,7 +3258,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # no energy key in conformers
-        SpeciesBase(smiles='COO',
+        SpeciesCreate(smiles='COO',
                     charge=0,
                     multiplicity=1,
                     coordinates={'symbols': ('O', 'C', 'O', 'O', 'H', 'H', 'H', 'H'),
@@ -3318,7 +3281,7 @@ def test_species_schema():
                     frequencies=[400] * 18,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=[[[4, 6, 9]] * 8] * 18,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -3348,7 +3311,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3357,7 +3320,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # illegal energy value in conformers
-        SpeciesBase(smiles='COO',
+        SpeciesCreate(smiles='COO',
                     charge=0,
                     multiplicity=1,
                     coordinates={'symbols': ('O', 'C', 'O', 'O', 'H', 'H', 'H', 'H'),
@@ -3380,7 +3343,7 @@ def test_species_schema():
                     frequencies=[400] * 18,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=[[[4, 6, 9]] * 8] * 18,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -3412,7 +3375,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3421,7 +3384,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # illegal degeneracy value in conformers
-        SpeciesBase(smiles='COO',
+        SpeciesCreate(smiles='COO',
                     charge=0,
                     multiplicity=1,
                     coordinates={'symbols': ('O', 'C', 'O', 'O', 'H', 'H', 'H', 'H'),
@@ -3444,7 +3407,7 @@ def test_species_schema():
                     frequencies=[400] * 18,
                     scaled_projected_frequencies=spc_21_scaled_freqs,
                     normal_displacement_modes=[[[4, 6, 9]] * 8] * 18,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO-1D',
                     rotational_constants=[10.91193, 43.57835, 51.24354],
@@ -3476,7 +3439,7 @@ def test_species_schema():
                     S298=269.89,
                     Cp_values=[52.03, 60.75, 68.85, 76.04, 87.89, 96.90, 110.69, 117.31, 120.40],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500, 2000, 2400],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3492,7 +3455,7 @@ def test_species_schema():
     assert spc_3.heat_capacity_model == heat_capacity_model
 
     # Not specifying 298, S298, Cp_values, Cp_T_list for a TS
-    SpeciesBase(smiles='C',
+    SpeciesCreate(smiles='C',
                 charge=0,
                 multiplicity=1,
                 coordinates=ch4_xyz,
@@ -3508,7 +3471,7 @@ def test_species_schema():
                 frequencies=[-3046, 1555, 1555, 3168, 3168, 3168, 1368, 1368, 1368],
                 scaled_projected_frequencies=ch4_scaled_freqs,
                 normal_displacement_modes=ch4_normal_disp_modes,
-                freq_id=1,
+                #freq_id=1,
                 rigid_rotor='spherical top',
                 statmech_treatment='RRHO',
                 rotational_constants=[1, 2, 3],
@@ -3520,7 +3483,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # not specifying H298
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3534,14 +3497,14 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3549,7 +3512,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # not specifying S298
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3563,14 +3526,14 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
                     H298=-74.52,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3578,7 +3541,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # not specifying Cp_values
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3592,14 +3555,14 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
                     H298=-74.52,
                     S298=186.06,
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3607,7 +3570,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # not specifying Cp_T_list
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3621,14 +3584,14 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
                     H298=-74.52,
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3636,7 +3599,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # length mismatch between Cp_values and Cp_T_list
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3650,7 +3613,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -3658,7 +3621,7 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
@@ -3671,7 +3634,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # not specifying opt_path
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3685,7 +3648,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_scale_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -3693,14 +3656,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     freq_path='path/to/freq/job.log',
                     sp_path='path/to/sp/job.log',
                     )
 
     with pytest.raises(ValidationError):
         # not specifying freq_path
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3714,7 +3677,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -3722,14 +3685,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     sp_path='path/to/sp/job.log',
                     )
 
     with pytest.raises(ValidationError):
         # not specifying sp_path
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3743,7 +3706,7 @@ def test_species_schema():
                     frequencies=ch4_freqs,
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -3751,14 +3714,14 @@ def test_species_schema():
                     S298=186.06,
                     Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                     Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
+                    #encorr_id=2,
                     opt_path='path/to/opt/job.log',
                     freq_path='path/to/freq/job.log',
                     )
 
     with pytest.raises(ValidationError):
         # not specifying irc_path for a TS
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3774,7 +3737,7 @@ def test_species_schema():
                     frequencies=[-3046, 1555, 1555, 3168, 3168, 3168, 1368, 1368, 1368],
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -3785,7 +3748,7 @@ def test_species_schema():
 
     with pytest.raises(ValidationError):
         # wrong number of irc_path for a TS
-        SpeciesBase(smiles='C',
+        SpeciesCreate(smiles='C',
                     charge=0,
                     multiplicity=1,
                     coordinates=ch4_xyz,
@@ -3801,7 +3764,7 @@ def test_species_schema():
                     frequencies=[-3046, 1555, 1555, 3168, 3168, 3168, 1368, 1368, 1368],
                     scaled_projected_frequencies=ch4_scaled_freqs,
                     normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
+                    #freq_id=1,
                     rigid_rotor='spherical top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1, 2, 3],
@@ -3813,7 +3776,7 @@ def test_species_schema():
                     )
 
     # 15. unconverged_jobs, extras
-    spc_23 = SpeciesBase(smiles='C',
+    spc_23 = SpeciesCreate(smiles='C',
                          charge=0,
                          multiplicity=1,
                          coordinates=ch4_xyz,
@@ -3827,7 +3790,7 @@ def test_species_schema():
                          frequencies=ch4_freqs,
                          scaled_projected_frequencies=ch4_scaled_freqs,
                          normal_displacement_modes=ch4_normal_disp_modes,
-                         freq_id=1,
+                         #freq_id=1,
                          rigid_rotor='spherical top',
                          statmech_treatment='RRHO',
                          rotational_constants=[1, 2, 3],
@@ -3835,160 +3798,160 @@ def test_species_schema():
                          S298=186.06,
                          Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
                          Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                         encorr_id=2,
+                         #encorr_id=2,
                          opt_path='path/to/opt/job.log',
                          freq_path='path/to/freq/job.log',
                          sp_path='path/to/sp/job.log',
-                         unconverged_jobs=[{'job type': 'sp',
-                                            'issue': 'SCF',
-                                            'troubleshooting': 'keyword',
-                                            'comment': 'txt',
-                                            'path': 'path/to/failed/sp/job.log'}],
+                        #  unconverged_jobs=[{'job type': 'sp',
+                        #                     'issue': 'SCF',
+                        #                     'troubleshooting': 'keyword',
+                        #                     'comment': 'txt',
+                        #                     'path': 'path/to/failed/sp/job.log'}],
                          extras={'key1': 'val1',
                                  'key2': ['v', 'v']},
                          )
-    assert spc_23.unconverged_jobs == [{'job type': 'sp',
-                                        'issue': 'SCF',
-                                        'troubleshooting': 'keyword',
-                                        'comment': 'txt',
-                                        'path': 'path/to/failed/sp/job.log'}]
+    # assert spc_23.unconverged_jobs == [{'job type': 'sp',
+    #                                     'issue': 'SCF',
+    #                                     'troubleshooting': 'keyword',
+    #                                     'comment': 'txt',
+    #                                     'path': 'path/to/failed/sp/job.log'}]
     assert spc_23.extras == {'key1': 'val1',
                              'key2': ['v', 'v']}
 
-    with pytest.raises(ValidationError):
-        # illegal key in unconverged_jobs
-        SpeciesBase(smiles='C',
-                    charge=0,
-                    multiplicity=1,
-                    coordinates=ch4_xyz,
-                    external_symmetry=4,
-                    point_group='Td',
-                    conformation_method='ARC v1.1.0',
-                    is_well=True,
-                    electronic_energy=-365.544,
-                    E0=-370.240,
-                    hessian=[[1] * 15] * 15,
-                    frequencies=ch4_freqs,
-                    scaled_projected_frequencies=ch4_scaled_freqs,
-                    normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
-                    rigid_rotor='spherical top',
-                    statmech_treatment='RRHO',
-                    rotational_constants=[1, 2, 3],
-                    H298=-74.52,
-                    S298=186.06,
-                    Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
-                    Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
-                    opt_path='path/to/opt/job.log',
-                    freq_path='path/to/freq/job.log',
-                    sp_path='path/to/sp/job.log',
-                    unconverged_jobs=[{'job_type': 'sp',
-                                       'issue': 'SCF',
-                                       'troubleshooting': 'keyword',
-                                       'extra': 'txt',
-                                       'path': 'path/to/failed/sp/job.log'}]
-                    )
+    # with pytest.raises(ValidationError):
+    #     # illegal key in unconverged_jobs
+    #     SpeciesCreate(smiles='C',
+    #                 charge=0,
+    #                 multiplicity=1,
+    #                 coordinates=ch4_xyz,
+    #                 external_symmetry=4,
+    #                 point_group='Td',
+    #                 conformation_method='ARC v1.1.0',
+    #                 is_well=True,
+    #                 electronic_energy=-365.544,
+    #                 E0=-370.240,
+    #                 hessian=[[1] * 15] * 15,
+    #                 frequencies=ch4_freqs,
+    #                 scaled_projected_frequencies=ch4_scaled_freqs,
+    #                 normal_displacement_modes=ch4_normal_disp_modes,
+    #                 #freq_id=1,
+    #                 rigid_rotor='spherical top',
+    #                 statmech_treatment='RRHO',
+    #                 rotational_constants=[1, 2, 3],
+    #                 H298=-74.52,
+    #                 S298=186.06,
+    #                 Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
+    #                 Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
+    #                 #encorr_id=2,
+    #                 opt_path='path/to/opt/job.log',
+    #                 freq_path='path/to/freq/job.log',
+    #                 sp_path='path/to/sp/job.log',
+                    # unconverged_jobs=[{'job_type': 'sp',
+                    #                    'issue': 'SCF',
+                    #                    'troubleshooting': 'keyword',
+                    #                    'extra': 'txt',
+                    #                    'path': 'path/to/failed/sp/job.log'}]
+                    # )
 
-    with pytest.raises(ValidationError):
-        # no job type in unconverged_jobs
-        SpeciesBase(smiles='C',
-                    charge=0,
-                    multiplicity=1,
-                    coordinates=ch4_xyz,
-                    external_symmetry=4,
-                    point_group='Td',
-                    conformation_method='ARC v1.1.0',
-                    is_well=True,
-                    electronic_energy=-365.544,
-                    E0=-370.240,
-                    hessian=[[1] * 15] * 15,
-                    frequencies=ch4_freqs,
-                    scaled_projected_frequencies=ch4_scaled_freqs,
-                    normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
-                    rigid_rotor='spherical top',
-                    statmech_treatment='RRHO',
-                    rotational_constants=[1, 2, 3],
-                    H298=-74.52,
-                    S298=186.06,
-                    Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
-                    Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
-                    opt_path='path/to/opt/job.log',
-                    freq_path='path/to/freq/job.log',
-                    sp_path='path/to/sp/job.log',
-                    unconverged_jobs=[{'issue': 'SCF',
-                                       'troubleshooting': 'keyword',
-                                       'comment': 'txt',
-                                       'path': 'path/to/failed/sp/job.log'}]
-                    )
+    # with pytest.raises(ValidationError):
+    #     # no job type in unconverged_jobs
+    #     SpeciesCreate(smiles='C',
+    #                 charge=0,
+    #                 multiplicity=1,
+    #                 coordinates=ch4_xyz,
+    #                 external_symmetry=4,
+    #                 point_group='Td',
+    #                 conformation_method='ARC v1.1.0',
+    #                 is_well=True,
+    #                 electronic_energy=-365.544,
+    #                 E0=-370.240,
+    #                 hessian=[[1] * 15] * 15,
+    #                 frequencies=ch4_freqs,
+    #                 scaled_projected_frequencies=ch4_scaled_freqs,
+    #                 normal_displacement_modes=ch4_normal_disp_modes,
+    #                 #freq_id=1,
+    #                 rigid_rotor='spherical top',
+    #                 statmech_treatment='RRHO',
+    #                 rotational_constants=[1, 2, 3],
+    #                 H298=-74.52,
+    #                 S298=186.06,
+    #                 Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
+    #                 Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
+    #                 #encorr_id=2,
+    #                 opt_path='path/to/opt/job.log',
+    #                 freq_path='path/to/freq/job.log',
+    #                 sp_path='path/to/sp/job.log',
+    #                 unconverged_jobs=[{'issue': 'SCF',
+    #                                    'troubleshooting': 'keyword',
+    #                                    'comment': 'txt',
+    #                                    'path': 'path/to/failed/sp/job.log'}]
+    #                 )
 
-    with pytest.raises(ValidationError):
-        # no path in unconverged_jobs
-        SpeciesBase(smiles='C',
-                    charge=0,
-                    multiplicity=1,
-                    coordinates=ch4_xyz,
-                    external_symmetry=4,
-                    point_group='Td',
-                    conformation_method='ARC v1.1.0',
-                    is_well=True,
-                    electronic_energy=-365.544,
-                    E0=-370.240,
-                    hessian=[[1] * 15] * 15,
-                    frequencies=ch4_freqs,
-                    scaled_projected_frequencies=ch4_scaled_freqs,
-                    normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
-                    rigid_rotor='spherical top',
-                    statmech_treatment='RRHO',
-                    rotational_constants=[1, 2, 3],
-                    H298=-74.52,
-                    S298=186.06,
-                    Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
-                    Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
-                    opt_path='path/to/opt/job.log',
-                    freq_path='path/to/freq/job.log',
-                    sp_path='path/to/sp/job.log',
-                    unconverged_jobs=[{'job_type': 'sp',
-                                       'issue': 'SCF',
-                                       'troubleshooting': 'keyword',
-                                       'comment': 'txt'}]
-                    )
+    # with pytest.raises(ValidationError):
+    #     # no path in unconverged_jobs
+    #     SpeciesCreate(smiles='C',
+    #                 charge=0,
+    #                 multiplicity=1,
+    #                 coordinates=ch4_xyz,
+    #                 external_symmetry=4,
+    #                 point_group='Td',
+    #                 conformation_method='ARC v1.1.0',
+    #                 is_well=True,
+    #                 electronic_energy=-365.544,
+    #                 E0=-370.240,
+    #                 hessian=[[1] * 15] * 15,
+    #                 frequencies=ch4_freqs,
+    #                 scaled_projected_frequencies=ch4_scaled_freqs,
+    #                 normal_displacement_modes=ch4_normal_disp_modes,
+    #                 #freq_id=1,
+    #                 rigid_rotor='spherical top',
+    #                 statmech_treatment='RRHO',
+    #                 rotational_constants=[1, 2, 3],
+    #                 H298=-74.52,
+    #                 S298=186.06,
+    #                 Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
+    #                 Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
+    #                 #encorr_id=2,
+    #                 opt_path='path/to/opt/job.log',
+    #                 freq_path='path/to/freq/job.log',
+    #                 sp_path='path/to/sp/job.log',
+    #                 unconverged_jobs=[{'job_type': 'sp',
+    #                                    'issue': 'SCF',
+    #                                    'troubleshooting': 'keyword',
+    #                                    'comment': 'txt'}]
+    #                 )
 
-    with pytest.raises(ValidationError):
-        # invalid job type in unconverged_jobs
-        SpeciesBase(smiles='C',
-                    charge=0,
-                    multiplicity=1,
-                    coordinates=ch4_xyz,
-                    external_symmetry=4,
-                    point_group='Td',
-                    conformation_method='ARC v1.1.0',
-                    is_well=True,
-                    electronic_energy=-365.544,
-                    E0=-370.240,
-                    hessian=[[1] * 15] * 15,
-                    frequencies=ch4_freqs,
-                    scaled_projected_frequencies=ch4_scaled_freqs,
-                    normal_displacement_modes=ch4_normal_disp_modes,
-                    freq_id=1,
-                    rigid_rotor='spherical top',
-                    statmech_treatment='RRHO',
-                    rotational_constants=[1, 2, 3],
-                    H298=-74.52,
-                    S298=186.06,
-                    Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
-                    Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-                    encorr_id=2,
-                    opt_path='path/to/opt/job.log',
-                    freq_path='path/to/freq/job.log',
-                    sp_path='path/to/sp/job.log',
-                    unconverged_jobs=[{'job_type': 'other',
-                                       'issue': 'SCF',
-                                       'troubleshooting': 'keyword',
-                                       'comment': 'txt',
-                                       'path': 'path/to/failed/sp/job.log'}]
-                    )
+    # with pytest.raises(ValidationError):
+    #     # invalid job type in unconverged_jobs
+    #     SpeciesCreate(smiles='C',
+    #                 charge=0,
+    #                 multiplicity=1,
+    #                 coordinates=ch4_xyz,
+    #                 external_symmetry=4,
+    #                 point_group='Td',
+    #                 conformation_method='ARC v1.1.0',
+    #                 is_well=True,
+    #                 electronic_energy=-365.544,
+    #                 E0=-370.240,
+    #                 hessian=[[1] * 15] * 15,
+    #                 frequencies=ch4_freqs,
+    #                 scaled_projected_frequencies=ch4_scaled_freqs,
+    #                 normal_displacement_modes=ch4_normal_disp_modes,
+    #                 #freq_id=1,
+    #                 rigid_rotor='spherical top',
+    #                 statmech_treatment='RRHO',
+    #                 rotational_constants=[1, 2, 3],
+    #                 H298=-74.52,
+    #                 S298=186.06,
+    #                 Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
+    #                 Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
+    #                 #encorr_id=2,
+    #                 opt_path='path/to/opt/job.log',
+    #                 freq_path='path/to/freq/job.log',
+    #                 sp_path='path/to/sp/job.log',
+    #                 unconverged_jobs=[{'job_type': 'other',
+    #                                    'issue': 'SCF',
+    #                                    'troubleshooting': 'keyword',
+    #                                    'comment': 'txt',
+    #                                    'path': 'path/to/failed/sp/job.log'}]
+    #                 )

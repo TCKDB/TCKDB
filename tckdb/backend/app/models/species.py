@@ -567,7 +567,7 @@ class Species(Base, AuditMixin):
     scaled_projected_frequencies = Column(ARRAY(Float, as_tuple=False, dimensions=1, zero_indexes=True),
                                           nullable=False)
     normal_displacement_modes = Column(MsgpackExt, nullable=True)
-    freq_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
+    freq_scale_id = Column(Integer, ForeignKey('freq.id'), nullable=True, unique=False)
 
     # rotational modes
     rigid_rotor = Column(String(50), nullable=False)
@@ -588,10 +588,10 @@ class Species(Base, AuditMixin):
     heat_capacity_model = Column(MsgpackExt, nullable=True) # Described as optional
 
     # relationships - Many (species) to One (other table)
-    encorr_id = Column(Integer, ForeignKey('encorr.id'), nullable=True, unique=False)
-    encorr = relationship('EnCorr', backref='species', foreign_keys=[encorr_id])
-    literature_id = Column(Integer, ForeignKey('literature.id'), nullable=True, unique=False)
-    literature = relationship('Literature', backref='species', foreign_keys=[literature_id])
+    encorr_id = Column(Integer, ForeignKey('encorr.id'), nullable=True)
+    encorr = relationship("EnCorr", back_populates="species")
+    literature_id = Column(Integer, ForeignKey('literature.id', ondelete="SET NULL"), nullable=True)
+    literature = relationship('Literature', back_populates='species', foreign_keys=[literature_id])
     bot_id = Column(Integer, ForeignKey('bot.id'), nullable=True, unique=False)  # Changed to nullable=False
     bot = relationship('Bot', back_populates='species', foreign_keys=[bot_id])
 
@@ -633,6 +633,7 @@ class Species(Base, AuditMixin):
 
     # misc
     extras = Column(MsgpackExt, nullable=True)
+
 
     def __str__(self) -> str:
         """

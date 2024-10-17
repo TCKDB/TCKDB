@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from tckdb.backend.app.models.bot import Bot as BotModel
-from tckdb.backend.app.schemas.species import SpeciesBase, SpeciesCreate, SpeciesUpdate, SpeciesOut
+from tckdb.backend.app.schemas.species import SpeciesBase, SpeciesCreate, SpeciesUpdate, SpeciesRead
 from tckdb.backend.app.models.species import Species as SpeciesModel
 from tckdb.backend.app.db.session import get_db
 
@@ -13,7 +13,7 @@ router = APIRouter(
     tags=["species"],
 )
 
-@router.post("/", response_model=SpeciesOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=SpeciesRead, status_code=status.HTTP_201_CREATED)
 def create_species(species: SpeciesCreate, db: Session = Depends(get_db)):
     """
     Create a new species entry in the database
@@ -71,7 +71,7 @@ def create_species(species: SpeciesCreate, db: Session = Depends(get_db)):
 
     return db_species
 
-@router.get("/{species_id}", response_model=SpeciesOut)
+@router.get("/{species_id}", response_model=SpeciesRead)
 def read_species(species_id: int, db: Session=Depends(get_db)):
     """
     Retrieve a species by its ID
@@ -92,7 +92,7 @@ def read_species(species_id: int, db: Session=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Species not found")
     return db_species
 
-@router.get("/", response_model=List[SpeciesOut])
+@router.get("/", response_model=List[SpeciesRead])
 def read_species_list(skip: int = 0, 
                       limit: int = 100, 
                       label: Optional[str] = None,
@@ -149,7 +149,7 @@ def update_species(species_id: int, species: SpeciesCreate, db: Session = Depend
     db.refresh(db_species)
     return db_species
 
-@router.patch("/{species_id}", response_model=SpeciesOut)
+@router.patch("/{species_id}", response_model=SpeciesRead)
 def partial_update_species(species_id: int, species: SpeciesUpdate, db: Session = Depends(get_db)):
     """
     Partially update an existing species entry in the database
@@ -226,7 +226,7 @@ def delete_species_soft(species_id: int, db: Session = Depends(get_db)):
     return {'detail': 'Species soft deleted'}
 
 
-@router.post("/{species_id}/restore", response_model=SpeciesOut)
+@router.post("/{species_id}/restore", response_model=SpeciesRead)
 def restore_species(species_id: int, db: Session = Depends(get_db)):
     """
     Restore a soft deleted species by its ID

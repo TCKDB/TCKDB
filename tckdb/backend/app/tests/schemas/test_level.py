@@ -5,12 +5,12 @@ TCKDB backend app tests schemas test_level module
 import pytest
 from pydantic import ValidationError
 
-from tckdb.backend.app.schemas.level import LevelBase
+from tckdb.backend.app.schemas.level import LevelBase, LevelCreate
 
 
 def test_level_schema():
     """Test creating an instance of Level"""
-    level1 = LevelBase(method='CBS-QB3', grid='UltraFine')
+    level1 = LevelCreate(method='CBS-QB3', grid='UltraFine')
     assert level1.method == 'cbs-qb3'  # lowered
     assert level1.basis == None
     assert level1.auxiliary_basis == None
@@ -19,9 +19,8 @@ def test_level_schema():
     assert level1.solvation_method == None
     assert level1.solvent == None
     assert level1.solvation_description == None
-    assert level1.reviewer_flags == dict()
 
-    level2 = LevelBase(method='DLPNO-CCSD(T)-F12',
+    level2 = LevelCreate(method='DLPNO-CCSD(T)-F12',
                        basis='cc-pVTZ-F12',
                        auxiliary_basis='aug-cc-pVTZ/C cc-pVTZ-F12-CABS',
                        level_arguments='normal-PNO',
@@ -39,19 +38,19 @@ def test_level_schema():
 
     with pytest.raises(ValidationError):
         # no method
-        LevelBase(basis='B3lyp')
+        LevelCreate(basis='B3lyp')
     with pytest.raises(ValidationError):
         # slash in method
-        LevelBase(method='b3lyp/6-311g+(2d,2p)')
+        LevelCreate(method='b3lyp/6-311g+(2d,2p)')
     with pytest.raises(ValidationError):
         # slash in basis
-        LevelBase(method='b3lyp', basis='/6-311g+(2d,2p)')
+        LevelCreate(method='b3lyp', basis='/6-311g+(2d,2p)')
     with pytest.raises(ValidationError):
         # slash in dispersion
-        LevelBase(method='b3lyp', basis='6-311g+(2d,2p)', dispersion='gd3bj/')
+        LevelCreate(method='b3lyp', basis='6-311g+(2d,2p)', dispersion='gd3bj/')
     with pytest.raises(ValidationError):
         # slash in solvation_method
-        LevelBase(method='b3lyp', basis='6-311g+(2d,2p)', solvation_method='SMD/', solvent='methanol')
+        LevelCreate(method='b3lyp', basis='6-311g+(2d,2p)', solvation_method='SMD/', solvent='methanol')
     with pytest.raises(ValidationError):
         # solvation method with no solvent
-        LevelBase(method='wb97xd', basis='def2-tzvp', solvation_method='SMD')
+        LevelCreate(method='wb97xd', basis='def2-tzvp', solvation_method='SMD')

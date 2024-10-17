@@ -1,4 +1,3 @@
-from click import edit
 from tckdb.backend.app.models.literature import Literature
 from tckdb.backend.app.models.author import Author
 
@@ -49,7 +48,7 @@ def test_literature_model():
                          f"url='u.rl.com/article/abstract')>"
     assert str(lit1) == 'M.I. It, D.C. Wash, "Kinetics of the Reactions in a Model: Part II", ' \
                         'Int. J. Chem. Kin. 2020, 53(2), 2222-2229. doi: 10.67/doi'
-    
+
     # Testing a Book
     lit2 = Literature(type='book',
                       authors=[author1, author2],

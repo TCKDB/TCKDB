@@ -56,7 +56,7 @@ species_1 = Species(label='formaldehyde',
                                                [0.022, -0.005, 0.5],
                                                [-0.98, -0.002, 0.65],
                                                [0.05, 0.0025, -0.722]],
-                    freq_id=11,
+                    #freq_id=11,
                     rigid_rotor='asymmetric top',
                     statmech_treatment='RRHO',
                     rotational_constants=[1.25, 8.56, 9.55],
@@ -133,7 +133,7 @@ def test_species_model():
                                                    [0.022, -0.005, 0.5],
                                                    [-0.98, -0.002, 0.65],
                                                    [0.05, 0.0025, -0.722]]
-    assert species_1.freq_id == 11
+    #assert species_1.freq_id == 11
     assert species_1.rigid_rotor == 'asymmetric top'
     assert species_1.statmech_treatment == 'RRHO'
     assert species_1.rotational_constants == [1.25, 8.56, 9.55]

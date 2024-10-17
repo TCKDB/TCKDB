@@ -2,6 +2,8 @@
 TCKDB backend app models literature module
 """
 
+from calendar import c
+from turtle import back
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 
@@ -122,6 +124,14 @@ class Literature(Base, AuditMixin):
         secondary=literature_author,
         back_populates="literatures"
     )
+
+    species = relationship(
+        "Species",
+        back_populates="literature",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+
     def __repr__(self) -> str:
         """
         A string representation from which the object can be reconstructed.

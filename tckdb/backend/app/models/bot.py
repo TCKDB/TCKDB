@@ -20,7 +20,7 @@ class Bot(Base, AuditMixin):
         Bot(name='ARC',
             version='1.1.0',
             url='https://github.com/ReactionMechanismGenerator/ARC',
-            git_commit='7ba4d74c73198c76c70742de8c254e075200a582',
+            git_hash='7ba4d74c73198c76c70742de8c254e075200a582',
             git_branch='master')
 
     Attributes:
@@ -32,7 +32,7 @@ class Bot(Base, AuditMixin):
             The software version
         url (str)
             The official software web address
-        git_commit (str, optional)
+        git_hash (str, optional)
             The git commit hash used for this run
         git_branch (str, optional)
             The git branch used for this run
@@ -49,7 +49,7 @@ class Bot(Base, AuditMixin):
     name = Column(String(100), unique=True, nullable=False)
     version = Column(String(100), nullable=False)
     url = Column(String(255), nullable=False)
-    git_commit = Column(String(500), nullable=True)
+    git_hash = Column(String(500), nullable=True)
     git_branch = Column(String(100), nullable=True)
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
@@ -84,6 +84,6 @@ class Bot(Base, AuditMixin):
                f"name='{self.name}', " \
                f"version='{self.version}', " \
                f"url='{self.url}', " \
-               f"git_commit='{self.git_commit}', " \
+               f"git_hash='{self.git_hash}', " \
                f"git_branch='{self.git_branch}'" \
                f")>"

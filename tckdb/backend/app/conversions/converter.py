@@ -11,7 +11,9 @@ from typing import Dict, Optional, Tuple, Union
 import qcelemental as qcel
 
 # try:
-from chembl_webresource_client.unichem import UniChemClient
+#from chembl_webresource_client.unichem import UniChemClient
+from chembl_webresource_client.new_client import new_client
+
 from rdkit.Chem import MolFromSmiles, MolToSmiles
 from rdkit.Chem.inchi import InchiToInchiKey, MolFromInchi, MolToInchi
 from rmgpy.molecule import Molecule
@@ -104,13 +106,20 @@ def inchi_from_inchi_key(inchi_key: str,
     Returns:
         str: The standard InChI descriptor.
     """
-    uni_chem_client = UniChemClient()
-    try:
-        inchi = uni_chem_client.inchiFromKey(inchi_key)
-    except:
-        return None
-    if len(inchi) and inchi_type in inchi[0]:
-        return inchi[0][inchi_type]
+    #uni_chem_client = UniChemClient()
+
+    # try:
+    #     inchi = unichem.inchiFromKey(inchi_key)
+    # except:
+    #     return None
+    # if len(inchi) and inchi_type in inchi[0]:
+    #     return inchi[0][inchi_type]
+    # return None
+
+    molecule = new_client.molecule
+    mol = molecule.filter(molecule_structures__standard_inchi_key=inchi_key).only(['molecule_structures'])
+    if mol:
+        return mol[0]['molecule_structures']['standard_inchi']
     return None
 
 
@@ -315,3 +324,21 @@ def normalize_coordinates(coords_dict):
         'isotopes': tuple(coords_dict.get('isotopes', [])),
         'coords': tuple(tuple(coord) for coord in coords_dict.get('coords', []))
     }
+
+def generate_check_digit(base_digits: str) -> str:
+    """
+    Generates the ORCID check digit as per ISO 7064 11,2.
+
+    Args:
+        base_digits (str): The base string of digits.
+
+    Returns:
+        str: The check digit.
+    """
+    total = 0
+    for char in base_digits:
+        digit = int(char)
+        total = (total + digit) * 2
+    remainder = total % 11
+    result = (12 - remainder) % 11
+    return "X" if result == 10 else str(result)

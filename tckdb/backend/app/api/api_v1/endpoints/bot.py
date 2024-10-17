@@ -5,13 +5,13 @@ from sqlalchemy.orm import Session
 
 from tckdb.backend.app.db.session import get_db
 from tckdb.backend.app.models.bot import Bot as BotModel
-from tckdb.backend.app.schemas.bot import BotCreate, BotUpdate, BotOut
+from tckdb.backend.app.schemas.bot import BotCreate, BotUpdate, BotRead
 
 router = APIRouter(
     tags=["bot"],
 )
 
-@router.post("/", response_model=BotOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=BotRead, status_code=status.HTTP_201_CREATED)
 def create_bot(bot: BotCreate, db: Session = Depends(get_db)):
     """
     Create a new bot entry in the database
@@ -36,7 +36,7 @@ def create_bot(bot: BotCreate, db: Session = Depends(get_db)):
     db.refresh(db_bot)
     return db_bot
 
-@router.get("/{bot_id}", response_model=BotOut)
+@router.get("/{bot_id}", response_model=BotRead)
 def read_bot(bot_id: int, db: Session=Depends(get_db)):
     """
     Retrieve a bot by its ID
@@ -57,7 +57,7 @@ def read_bot(bot_id: int, db: Session=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Bot not found")
     return db_bot
 
-@router.get("/", response_model=List[BotOut])
+@router.get("/", response_model=List[BotRead])
 def read_bots_list(skip: int = 0,
                    limit: int = 100,
                    db: Session = Depends(get_db)):
@@ -103,7 +103,7 @@ def read_bots_list(skip: int = 0,
 #     db.refresh(db_bot)
 #     return db_bot
 
-@router.patch("/{bot_id}", response_model=BotOut)
+@router.patch("/{bot_id}", response_model=BotRead)
 def partial_update_bot(bot_id: int, bot: BotUpdate, db: Session=Depends(get_db)):
     """
     Partially update a bot by its ID
@@ -172,7 +172,7 @@ def delete_bot_soft(bot_id: int, db: Session=Depends(get_db)):
     return {'detail': 'Bot soft deleted'}
 
 
-@router.post("/{bot_id}/restore", response_model=BotOut)
+@router.post("/{bot_id}/restore", response_model=BotRead)
 def restore_bot(bot_id: int, db: Session=Depends(get_db),
                 #user=Depends(required_roles(["admin"])) # TODO: To be implemented later
                 ):

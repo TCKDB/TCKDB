@@ -1,48 +1,218 @@
-from typing import Optional, Tuple, List, Dict, Union, Any
-from datetime import datetime
+"""
+TCKDB backend app schemas species module
+"""
+
+
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from pydantic import BaseModel, Field, constr, conint, confloat, root_validator, validator
-
-from tckdb.backend.app.schemas.connection_schema import ConnectionBase
-from tckdb.backend.app.schemas.torsion import TorsionsBase
-import tckdb.backend.app.schemas.common as common
-import tckdb.backend.app.conversions.converter as converter
-from tckdb.backend.app.schemas.common import Coordinates
 
 from arkane.statmech import is_linear
+from pydantic import BaseModel, Field, confloat, conint, constr, validator, root_validator
 from rmgpy.molecule.adjlist import from_adjacency_list
 
+import tckdb.backend.app.conversions.converter as converter
+from tckdb.backend.app.schemas.bot import BotCreate
+import tckdb.backend.app.schemas.common as common
 
-class ESSConnectionID(BaseModel):
-    irc: Optional[str] = Field(None, title='The connection ID of the IRC object for internal referencing')
-    opt: Optional[str] = Field(None, title='The connection ID of the opt object for internal referencing')
-    scan: Optional[str] = Field(None, title='The connection ID of the scan object for internal referencing')
-    freq: Optional[str] = Field(None, title='The connection ID of the freq object for internal referencing')
+import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 
-class LevelConnectionID(BaseModel):
-    irc: Optional[str] = Field(None, title='The connection ID of the IRC object for internal referencing')
-    opt: Optional[str] = Field(None, title='The connection ID of the opt object for internal referencing')
-    scan: Optional[str] = Field(None, title='The connection ID of the scan object for internal referencing')
-    sp: Optional[str] = Field(None, title='The connection ID of the sp object for internal referencing')
-    freq: Optional[str] = Field(None, title='The connection ID of the freq object for internal referencing')
+class TorsionComputationTypeEnum(str, Enum):
+    """
+    The supported torsion computation types
+    """
+    single_point = 'single point'
+    constrained_optimization = 'constrained optimization'
+    continuous_constrained_optimization = 'continuous constrained optimization'
 
+
+class TorsionTreatmentEnum(str, Enum):
+    """
+    The supported torsion treatment types
+    """
+    hindered_rotor = 'hindered rotor'
+    free_rotor = 'free rotor'
+    rigid_top = 'rigid top'
+    hindered_rotor_density_of_states = 'hindered rotor density of states'
+
+
+class TorsionsBase(BaseModel):
+    """
+    A class for validating SpeciesBase.torsions arguments
+    """
+    computation_type: TorsionComputationTypeEnum = Field(TorsionComputationTypeEnum.continuous_constrained_optimization,
+                                                         title="The computation type used for torsion scans, either "
+                                                               "'single point', 'constrained optimization', "
+                                                               "or 'continuous constrained optimization' (default)")
+    dimension: int = Field(1, ge=1, title='The scan dimension')
+    constraints: Optional[Dict[Tuple[int, ...], float]] = \
+        Field(None, title='Any non-trivial constraints (i.e., other than the scanned mode) used during optimization')
+    symmetry: Optional[int] = Field(None, gt=0, title='The internal symmetry number of the scanned mode')
+    treatment: TorsionTreatmentEnum = Field(..., title="The torsion treatment, either 'hindered rotor', 'free rotor', "
+                                                       "'rigid top', or 'hindered rotor density of states'")
+    torsions: Union[List[List[int]], List[int]] = Field(..., title='The torsions list described by this mode')
+    top: List[int] = Field(..., title='The lost of atoms at one of the tops')
+    energies: list
+    resolution: Union[float, List[float]]
+    trajectory: list
+    invalidated: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+    @validator('constraints')
+    def constraints_validator(cls, value, values):
+        """TorsionsBase.constraints validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        for key in value.keys():
+            if len(key) not in [2, 3, 4]:
+                raise ValueError(f'A constraint key length must be between 2 to 4, got {key} of length '
+                                 f'{len(key)}{label} in\n{value}')
+            if any(index == 0 for index in key):
+                raise ValueError(f'Atom indices in the constrains must be 1-indexed, got{label} {key} in\n{value}')
+        return value
+
+    @validator('symmetry', always=True)
+    def symmetry_validator(cls, value, values):
+        """TorsionsBase.symmetry validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if 'dimension' in values and values['dimension'] == 1 and value is None:
+            raise ValueError(f'The "symmetry" key is required for a torsion dictionary{label}.\nGot: {values}')
+        return value
+
+    @validator('torsions')
+    def torsions_validator(cls, value, values):
+        """TorsionsBase.torsions validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if not isinstance(value[0], list):
+            # correct to a List[List[float]] form
+            value = [value]
+        for atom_indices in value:
+            if len(atom_indices) != 4:
+                raise ValueError(f'Atom indices in "torsions" must be of length 4, got{label} {atom_indices}'
+                                 f'in\n{values}')
+            if any(index == 0 for index in atom_indices):
+                raise ValueError(f'Torsion atom indices must be 1-indexed, got{label} {atom_indices} in\n{values}')
+        if 'dimension' in values and values['dimension'] and len(value) != values['dimension']:
+            raise ValueError(f"Got a {len(value)}D torsion for a declared dimension of "
+                             f"{values['dimension']}{label}:\n{value}")
+        return value
+
+    @validator('top')
+    def top_validator(cls, value, values):
+        """TorsionsBase.top validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if any(index == 0 for index in value):
+            raise ValueError(f'Top atom indices must be 1-indexed, got{label} {value} in\n{values}')
+        return value
+
+    @validator('energies')
+    def energies_validator(cls, value, values):
+        """TorsionsBase.energies validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if 'dimension' in values and values['dimension']:
+            energies_dimension = 0
+            entry = value
+            while not isinstance(entry, float):
+                if isinstance(entry, (list, tuple)):
+                    entry = entry[0]
+                    energies_dimension += 1
+                elif not isinstance(entry, float):
+                    raise ValueError(f"Lowest level energy entries in a torsion must be floats, "
+                                     f"got {entry}{label} which is a {type(entry)} in\n{value}")
+            if energies_dimension != values['dimension']:
+                raise ValueError(f"Got a {energies_dimension}D energies attribute for a declared dimension "
+                                 f"of {values['dimension']}{label}:\n{value}")
+        return value
+
+    @validator('resolution')
+    def resolution_validator(cls, value, values):
+        """TorsionsBase.resolution validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if not isinstance(value, list):
+            value = [value]
+        for resolution in value:
+            if 360 % resolution:
+                raise ValueError(f"The scan resolution {resolution} in {value}{label} is invalid. "
+                                 f"It has to be a divisor of 360.")
+        return value
+
+    @validator('trajectory')
+    def trajectory_validator(cls, value, values):
+        """TorsionsBase.trajectory validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        trajectory_dimension = 0
+        entry = value
+        while not isinstance(entry, dict):
+            if isinstance(entry, (list, tuple)):
+                entry = entry[0]
+                trajectory_dimension += 1
+            elif isinstance(entry, dict):
+                is_valid, err = common.is_valid_coordinates(entry)
+                if not is_valid:
+                    raise ValueError(f"Not all coordinates in the torsion trajectory{label} are valid."
+                                     f"Reason:\n{err}\nGot:\n{entry}.")
+            else:
+                raise ValueError(f"Lowest level trajectory entries in a torsion must be coordinates "
+                                 f"dictionaries, got {entry}{label} which is a {type(entry)}.")
+        if 'dimension' in values and values['dimension'] and trajectory_dimension != values['dimension']:
+            raise ValueError(f"Got a {trajectory_dimension}D trajectory attribute for a declared dimension "
+                             f"of {values['dimension']}{label}:\n{value}")
+        return value
+
+# class Coordinates(BaseModel):
+#     symbols: Tuple[constr(max_length=10), ...] = Field(
+#         ..., 
+#         description="Chemical element symbols."
+#     )
+#     isotopes: Tuple[conint(ge=1), ...] = Field(
+#         ..., 
+#         description="The respective isotopes."
+#     )
+#     coords: Tuple[Tuple[float, float, float], ...] = Field(
+#         ..., 
+#         description="Cartesian coordinates in standard orientation."
+#     )
+
+#     class Config:
+#         schema_extra = {
+#             "example": {
+#                 "symbols": ("C", "H", "H", "H", "H"),
+#                 "isotopes": (12, 1, 1, 1, 1),
+#                 "coords": (
+#                     (0.0, 0.0, 0.0),
+#                     (0.6300326, 0.6300326, 0.6300326),
+#                     (-0.6300326, -0.6300326, 0.6300326),
+#                     (-0.6300326, 0.6300326, -0.6300326),
+#                     (0.6300326, -0.6300326, -0.6300326)
+#                 )
+#             }
+#         }
 
 class SpeciesBase(BaseModel):
-    
     label: Optional[str] = Field(None, max_length=255, title='Species label')
     statmech_software: Optional[str] = Field(None, max_length=150, title='The software used to compute the species statmech data')
-    smiles: Optional[str] = Field(None, max_length=5000, title='SMILES')
-    inchi: Optional[str] = Field(None, max_length=5000, title='InChI')
-    inchi_key: Optional[str] = Field(None, max_length=27, title='InChI key')
-    
+    #statmech_software_version: Optional[str] = Field(None, max_length=50, title='The version of the software used to compute the species statmech data')
     charge: Optional[int] = Field(None, ge=-10, le=10, title='The net charge of the species')
     multiplicity: Optional[int] = Field(None, ge=1, le=10, title='The spin multiplicity of the species')
-    electronic_state: Optional[str] = Field('X', max_length=150, title='Electronic state. Default is "X", denoting ground state')
-
+    smiles: Optional[str] = Field(None, max_length=5000, title='SMILES')
+    inchi: Optional[str] = Field(None, max_length=5000, title='InChI')
+    inchi_key: Optional[str] = Field(None, max_length=27, min_length=27, title='InChI key')
     graph: Optional[str] = Field(None, max_length=100000, title='Adjacency list graph')
-    coordinates: Optional[Coordinates] = Field(None, title='Cartesian coordinates')
+    electronic_state: Optional[str] = Field('X', max_length=150, title='Electronic state. Default is "X", denoting ground state')
+    # coordinates: Optional[Coordinates] = Field(
+    #     None, 
+    #     title='Cartesian coordinates',
+    #     description="Cartesian coordinates in standard orientation. Keys are 'symbols', 'isotopes', and 'coords'."
+    # )
+    coordinates: Optional[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
+                                 Tuple[conint(ge=1), ...],
+                                 Tuple[constr(max_length=10), ...]]]] = Field(None, title='Cartesian coordinates')
     fragments: Optional[List[List[conint(ge=1)]]] = Field(None, title='Fragments')
     fragment_orientation: Optional[List[Dict[str, Union[float, List[float]]]]] = Field(None, title='Fragment orientation')
     external_symmetry: Optional[int] = Field(None, ge=1, title='External symmetry')
@@ -68,6 +238,7 @@ class SpeciesBase(BaseModel):
     frequencies: Optional[List[float]] = Field(None, title='Calculated frequencies')
     scaled_projected_frequencies: Optional[List[float]] = Field(None, title='Scaled and projected frequencies')  # check length after rotors/confs
     normal_displacement_modes: Optional[List[List[List[float]]]] = Field(None, title='Normal displacement modes')
+    freq_id: Optional[int] = Field(None, ge=0, title='Freq ID')
     rigid_rotor: Optional[str] = Field(None, max_length=50, title='The rigid rotor treatment type. Allowed values: "atom", '
                                                        '"linear", "spherical top", "symmetric top", or "asymmetric top".')
     statmech_treatment: Optional[str] = Field(None, max_length=50, title='The statistical mechanics treatment')
@@ -82,22 +253,233 @@ class SpeciesBase(BaseModel):
     Cp_T_list: Optional[List[confloat(gt=0)]] = Field(None, title='Constant pressure heat capacity temperature list')
     heat_capacity_model: Optional[Dict[str, Union[float, Dict[str, Union[float, List[float]]], str]]] = \
         Field(None, title='Heat capacity model')
-    
-    # Paths
-    # Storage requires consideration
-    opt_path: Optional[str] = Field(None, title='The path to the opt output file')
-    freq_path: Optional[str] = Field(None, title='The path to the freq output file')
+    encorr_id: Optional[int] = Field(None, ge=0, title='Energy correction index')
+    opt_path: Optional[str] = Field(None, max_length=5000, title='Path to optimization log file')
+    freq_path: Optional[str] = Field(None, max_length=5000, title='Path to frequencies log file')
     scan_paths: Optional[Dict[Tuple[Tuple[conint(ge=1), conint(ge=1), conint(ge=1), conint(ge=1)], ...],
                               constr(max_length=5000)]] = Field(None, title='Paths to scan log files')
     irc_paths: Optional[List[constr(max_length=5000)]] = Field(None, title='Paths to IRC log files')
     sp_path: Optional[str] = Field(None, max_length=5000, title='Path to single-point energy log file')
-
+    unconverged_jobs: Optional[List[Dict[str, str]]] = Field(None, title='Paths to unconverged job log files')
     extras: Optional[Dict[str, Any]] = Field(None, title='Extras')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+    sp_level_id: Optional[int] = Field(None, title='Single point level ID')
+    sp_ess_id: Optional[int] = Field(None, title='Single point ESS ID')
+    reviewed: Optional[bool] = Field(None, title='Whether the species has been reviewed')
+    bot_id: Optional[int] = Field(None, title='The ID of the bot that created this species')
+    bot: Optional[BotCreate] = None
 
     class Config:
         orm_mode = True
-        extra = 'forbid'
+        extra = "forbid"
+
     
+class SpeciesCreate(SpeciesBase):
+    """
+    Create a species
+    """
+    # Override fields that are required during creation
+    charge: int = Field(..., ge=-10, le=10, title='The net charge of the species')
+    multiplicity: int = Field(..., ge=1, le=10, title='The spin multiplicity of the species')
+    # coordinates: Coordinates = Field(
+    #     ..., 
+    #     title='Cartesian coordinates',
+    #     description="Cartesian coordinates in standard orientation. Keys are 'symbols', 'isotopes', and 'coords'."
+    # )
+    external_symmetry: int = Field(..., ge=1, title='External symmetry')
+    point_group: str = Field(..., max_length=6, title='Point group')
+    electronic_energy: float = Field(..., title='Electronic energy in Hartree')
+    E0: float = Field(..., title='E0 (zero-point energy) in kJ/mol')
+    is_well: bool = Field(..., title='Is this species a well on the PES?')
+    frequencies: List[float] = Field(
+        ...,
+        title='Frequencies in cm^-1',
+        description='Frequencies in cm^-1. Must be a list of floats.'
+    )
+    sp_path: str = Field(..., max_length=5000, title='Path to single-point energy log file')
+    sp_level_id: int = Field(..., title='Single point level ID')
+    sp_ess_id: int = Field(..., title='Single point ESS ID')
+
+    # Fields that are automatically set and not provided by the user
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc), 
+        title='The timestamp of the species creation'
+    )
+    retracted: Optional[bool] = Field(None, title='Whether this species has been retracted')
+    reviewed: bool = Field(False, title='Whether this species has been reviewed')
+    approved: Optional[bool] = Field(None, title='Whether this species has been approved')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+
+    @validator('timestamp', always=True)
+    def assign_timestamp(cls, value):
+        """Species.timestamp validator"""
+        return value or datetime.now(timezone.utc)
+    
+    @validator('retracted')
+    def retracted_validator(cls, value, values):
+        """Species.retracted validator"""
+        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+        if value is not None:
+            raise ValueError(f'The "retracted" argument is not a user input{label}.')
+        return None
+
+    @validator('reviewed', always=True)
+    def reviewed_validator(cls, value, values):
+        """Species.reviewed validator"""
+        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+        if value not in (False, None):
+            raise ValueError(f'The "reviewed" argument is not a user input{label}.')
+        return False
+
+    @validator('approved', always=True)
+    def approved_validator(cls, value, values):
+        """Species.approved validator"""
+        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+        if value is not None:
+            raise ValueError(f'The "approved" argument is not a user input{label}.')
+        return False
+
+    @validator('frequencies', always=True)
+    def frequencies_validator(cls, value, values):
+        """Species.frequencies validator"""
+        print('values:', values)
+        print('values["label"]:', values["label"])
+        print('value', value)
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if value is None and common.get_number_of_atoms(values) > 1:
+            raise ValueError(f'Frequencies were not given{label}. Frequencies must be specified for polyatomic species.')
+        if value is not None:
+            if any(i == 0 for i in value):
+                raise ValueError(f'A frequency cannot be zero, got {value}{label}.')
+            if values['coordinates'] is not None and value is not None:
+                linear = is_linear(coordinates=np.array(values['coordinates']['coords']))
+                num_atoms = common.get_number_of_atoms(values)
+                if num_atoms is not None:
+                    expected_num_freqs = 3 * num_atoms - (6 - int(linear))  # 3N-6 for non linear, 3N-5 for linear
+                    if len(value) != expected_num_freqs:
+                        linear_txt = 'linear' if linear else 'non-linear'
+                        raise ValueError(f'Expected {expected_num_freqs} frequencies for a {linear_txt} molecule, '
+                                         f'got {len(value)} frequencies{label}.')
+            if 'is_ts' in values and values['is_ts'] and all(freq > 0 for freq in value):
+                raise ValueError(f'An imaginary frequency must be present for a TS species. '
+                                 f'Got all real frequencies{label}.')
+        return value
+    @root_validator
+    def check_descriptor_presence(cls, values):
+        """
+        Check that at least one of the species descriptors is provided
+        """
+        smiles, inchi, graph = values.get('smiles'), values.get('inchi'), values.get('graph')
+        if not (smiles or inchi or graph):
+            raise ValueError("At least one of 'smiles', 'inchi', or 'graph' must be provided.")
+        return values  # Ensure the values are returned
+
+    # @validator('reviewed', always=True)
+    # def reviewed_validator(cls, value, values, **kwargs):
+    #     label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+    #     if cls.__name__ == 'SpeciesCreate':
+    #         # In SpeciesCreate, 'reviewed' should be False and not set by the user
+    #         if value not in (False, None):
+    #             raise ValueError(f'The "reviewed" argument cannot be set by the user{label}.')
+    #         return False
+    #     else:
+    #         # In other models, 'reviewed' should not be set by the user
+    #         if value is not None:
+    #             raise ValueError(f'The "reviewed" argument is not a user input{label}.')
+    #         return False
+
+
+    @validator('reviewer_flags', always=True)
+    def check_reviewer_flags(cls, value):
+        """Species.reviewer_flags validator"""
+        return value or dict()
+
+    @validator('smiles')
+    def smiles_validator(cls, value, values):
+        """Species.smiles validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        is_valid, err = common.is_valid_smiles(value)
+        if not is_valid:
+            raise ValueError(f'The SMILES "{value}"{label} is invalid. Reason:\n{err}')
+        return value
+
+    @validator('inchi')
+    def inchi_validator(cls, value, values):
+        """Species.inchi validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        is_valid, err = common.is_valid_inchi(value)
+        if not is_valid:
+            raise ValueError(f'The InChI "{value}"{label} is invalid. Reason:\n{err}')
+        return value
+
+    @validator('inchi_key')
+    def inchi_key_validator(cls, value, values):
+        """Species.inchi_key validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        is_valid, err = common.is_valid_inchi_key(value)
+        if not is_valid:
+            raise ValueError(f'The InChI Key "{value}"{label} is invalid. Reason:\n{err}')
+        return value
+
+    @validator('graph', always=True)
+    def graph_validator(cls, value, values):
+        """
+        Species.graph validator
+        Also used to populate SMILES, InChI, InChI Key, adjlist
+        """
+        label = f' (species label: "{values["label"]}")' if 'label' in values and values['label'] is not None else ''
+        if value is not None:
+            # adjlist was given, populate other attributes as needed
+            if values['smiles'] is None or values['inchi'] is None:
+                smiles, inchi = converter.smiles_and_inchi_from_adjlist(value)
+                values['smiles'] = values['smiles'] or smiles
+                values['inchi'] = values['inchi'] or inchi
+        if values['inchi'] is not None:
+            # InChI was given, populate other attributes as needed
+            if 'smiles' not in values or not values['smiles']:
+                values['smiles'] = converter.smiles_from_inchi(values['inchi'])
+            value = value or converter.adjlist_from_smiles(values['smiles'])
+        if 'smiles' in values and values['smiles'] is not None:
+            # SMILES was given, populate other attributes as needed
+            value = value or converter.adjlist_from_smiles(values['smiles'])
+            values['inchi'] = values['inchi'] or converter.inchi_from_smiles(values['smiles'])
+        # populate the InChI Key if not already set
+        if values.get('inchi_key') is not None and values.get('inchi') is None:
+            # InChI Key was given (and there's no InChI), populate other attributes as needed
+            values['inchi'] = converter.inchi_from_inchi_key(values['inchi_key'])
+            if values['inchi'] is not None:
+                values['smiles'] = values['smiles'] or converter.smiles_from_inchi(values['inchi'])
+                value = value or converter.adjlist_from_smiles(values['smiles'])
+        values['inchi_key'] = values.get("inchi_key") or converter.inchi_key_from_inchi(values['inchi'])
+        if not (values.get('smiles') or values.get('inchi') or value):
+            # couldn't populate adjlist, SMILES, nor InChI
+            raise ValueError(f'A species descriptor (SMILES, InChI, or graph adjacency list) must be given{label}.')
+        # adjlist validation
+        if value is not None:
+            is_valid, err = common.is_valid_adjlist(value)
+            if not is_valid:
+                raise ValueError(f'The RMG adjacency list{label} is invalid:\n{value}\nReason:\n{err}')
+            multiplicity = from_adjacency_list(value, group=False, saturate_h=False)[1]
+            if multiplicity != values['multiplicity']:
+                if not abs(values['multiplicity'] - multiplicity) % 2 + abs(values['charge']):
+                    # the difference is even, so it makes sense
+                    adjlist_no_multiplicity = value.split("\n", 1)[1] if 'multiplicity' in value else value
+                    value = f'multiplicity {values["multiplicity"]}\n{adjlist_no_multiplicity}'
+                else:
+                    raise ValueError(f'The given multiplicity {values["multiplicity"]} and the multiplicity of the '
+                                     f'graph adjacency list mismatch{label}:\n{value}')
+        return value
+
+    @validator('coordinates')
+    def coordinates_validator(cls, value, values):
+        """Species.coordinates validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        converter.add_common_isotopes_to_coords(value)
+        is_valid, err = common.is_valid_coordinates(value)
+        if not is_valid:
+            raise ValueError(f'The following coordinates dictionary{label} is invalid:\n{value}\nReason:\n{err}')
+        return value
+
     @validator('fragments')
     def fragments_validator(cls, value, values):
         """Species.fragments validator"""
@@ -115,10 +497,10 @@ class SpeciesBase(BaseModel):
                     raise ValueError(f'The atom index {index} in the fragments attribute{label} is invalid. '
                                     f'Got:\n{err}.')
                 atom_indices.append(index)
-        if 'coordinates' in values and values['coordinates'] and len(values['coordinates'].symbols) != len(atom_indices):
-            raise ValueError(f'{len(values["coordinates"].symbols)} atoms were specified in the fragments{label}, '
+        if 'coordinates' in values and values['coordinates'] and len(values['coordinates']['symbols']) != len(atom_indices):
+            raise ValueError(f'{len(values["coordinates"]["symbols"])} atoms were specified in the fragments{label}, '
                             f'while according to its coordinates it has {len(atom_indices)} atoms.')
-        return value if len(value) > 1 else None
+        return value if len(value) > 1 else []
 
     @validator('fragment_orientation', always=True)
     def fragment_orientation_validator(cls, value, values):
@@ -195,8 +577,8 @@ class SpeciesBase(BaseModel):
                     raise ValueError(f'The atom index {index} in the fragments attribute{label} is invalid. '
                                      f'Got:\n{err}.')
                 chiral_atom_indices.append(index)
-                if 'coordinates' in values and values['coordinates'].symbols[index - 1] not in allowed_atoms:
-                    raise ValueError(f'A chiral site cannot include {values["coordinates"].symbols[index - 1]} '
+                if 'coordinates' in values and values['coordinates']['symbols'][index - 1] not in allowed_atoms:
+                    raise ValueError(f'A chiral site cannot include {values["coordinates"]["symbols"][index - 1]} '
                                      f'atoms. Got{label}:\n{value}')
             if val not in allowed_values:
                 raise ValueError(f'The chirality notation is not recognized. Expected it to be in {allowed_values}, '
@@ -212,9 +594,9 @@ class SpeciesBase(BaseModel):
             else:
                 raise ValueError(f'A chiral center must be noted by either a single atom index or two, got {len(key)} '
                                  f'in {value}{label}.')
-            if val in ['NR', 'NS'] and 'coordinates' in values and values['coordinates'].symbols[key[0] - 1] != 'N':
+            if val in ['NR', 'NS'] and 'coordinates' in values and values['coordinates']['symbols'][key[0] - 1] != 'N':
                 raise ValueError(f'A chiral atom center{label} with an "NR" or "NS" notation but be a nitrogen atom.')
-            elif val in ['R', 'S'] and 'coordinates' in values and values['coordinates'].symbols[key[0] - 1] == 'N':
+            elif val in ['R', 'S'] and 'coordinates' in values and values['coordinates']['symbols'][key[0] - 1] == 'N':
                 raise ValueError(f'A chiral *nitrogen* atom center{label} with must be noted with "NR" or "NS".')
         return value
 
@@ -222,7 +604,7 @@ class SpeciesBase(BaseModel):
     def conformation_method_validator(cls, value, values):
         """Species.conformation_method validator"""
         label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
-        if value is None and 'coordinates' in values and len(values['coordinates'].symbols) >= 4:
+        if value is None and 'coordinates' in values and len(values['coordinates']['symbols']) >= 4:
             raise ValueError(f'Must provide a conformation method{label} when the species contains more than 4 atoms.')
         return value
 
@@ -331,111 +713,12 @@ class SpeciesBase(BaseModel):
                                              f'got {len(displacement)}.')
         return value
 
-
-    @validator('frequencies', always=False)
-    def frequencies_validator(cls, value, values):
-        """Species.frequencies validator"""
-        label = f' for species "{values["label"]}"' if values.get("label") else ''
-
-        if value is None and common.get_number_of_atoms(values) > 1:
-            raise ValueError(f'Frequencies were not given{label}. Frequencies must be specified for polyatomic species.')
-
-        if value is not None:
-            if any(i == 0 for i in value):
-                raise ValueError(f'A frequency cannot be zero, got {value}{label}.')
-
-            coordinates = values.get('coordinates')
-            if coordinates is not None:
-                linear = is_linear(coordinates=np.array(coordinates.coords))
-                num_atoms = common.get_number_of_atoms(values)
-                if num_atoms is not None:
-                    expected_num_freqs = 3 * num_atoms - (6 - int(linear))  # 3N-6 for non-linear, 3N-5 for linear
-                    if len(value) != expected_num_freqs:
-                        linear_txt = 'linear' if linear else 'non-linear'
-                        raise ValueError(f'Expected {expected_num_freqs} frequencies for a {linear_txt} molecule, '
-                                        f'got {len(value)} frequencies{label}.')
-
-            if values.get('is_ts') and all(freq > 0 for freq in value):
-                raise ValueError(f'An imaginary frequency must be present for a TS species. '
-                                f'Got all real frequencies{label}.')
-
-        return value
-    
-    @root_validator(pre=True)
-    def handle_descriptors(cls, values):
-        """
-        Handle the interdependent fields: smiles, inchi, and graph.
-        Populate missing fields based on the provided descriptor.
-        """
-        smiles = values.get('smiles')
-        inchi = values.get('inchi')
-        graph = values.get('graph')
-        inchi_key = values.get('inchi_key')
-
-        if graph:
-            # If graph is provided, derive smiles and inchi if not provided
-            if not smiles or not inchi:
-                smiles, inchi = converter.smiles_and_inchi_from_adjlist(graph)
-                values['smiles'] = smiles or values.get('smiles')
-                values['inchi'] = inchi or values.get('inchi')
-        elif inchi:
-            # If InChI is provided, derive smiles and graph if not provided
-            if not smiles:
-                smiles = converter.smiles_from_inchi(inchi)
-                values['smiles'] = smiles
-            if not graph:
-                graph = converter.adjlist_from_smiles(smiles)
-                values['graph'] = graph
-        elif smiles:
-            # If SMILES is provided, derive inchi and graph if not provided
-            if not inchi:
-                inchi = converter.inchi_from_smiles(smiles)
-                values['inchi'] = inchi
-            if not graph:
-                graph = converter.adjlist_from_smiles(smiles)
-                values['graph'] = graph
-        elif inchi_key:
-            # If InChI Key is provided without InChI, derive InChI, smiles, and graph
-            if not inchi:
-                inchi = converter.inchi_from_inchi_key(inchi_key)
-                values['inchi'] = inchi
-            if inchi:
-                if not smiles:
-                    smiles = converter.smiles_from_inchi(inchi)
-                    values['smiles'] = smiles
-                if not graph:
-                    graph = converter.adjlist_from_smiles(smiles)
-                    values['graph'] = graph
-
-        if not inchi_key and inchi:
-            inchi_key = converter.inchi_key_from_inchi(inchi)
-            values['inchi_key'] = inchi_key
-
-        # Ensure that at least one descriptor is present
-        if not (values.get('smiles') or values.get('inchi') or values.get('graph')):
-            raise ValueError("A species descriptor (SMILES, InChI, or graph adjacency list) must be given.")
-
-        return values
-
-    @validator('graph')
-    def validate_graph(cls, value, values):
-        """
-        Validate the adjacency list graph.
-        """
-        label = f' (species label: "{values.get("label")}")' if values.get("label") else ''
-        if value:
-            is_valid, err = common.is_valid_adjlist(value)
-            if not is_valid:
-                raise ValueError(f'The RMG adjacency list{label} is invalid:\n{value}\nReason:\n{err}')
-            multiplicity = from_adjacency_list(value, group=False, saturate_h=False)[1]
-            if multiplicity != values.get('multiplicity'):
-                if not (abs(values.get('multiplicity') - multiplicity) % 2 + abs(values.get('charge', 0))):
-                    # the difference is even, so it makes sense
-                    adjlist_no_multiplicity = value.split("\n", 1)[1] if 'multiplicity' in value else value
-                    value = f'multiplicity {values["multiplicity"]}\n{adjlist_no_multiplicity}'
-                else:
-                    raise ValueError(f'The given multiplicity {values.get("multiplicity")} and the multiplicity of the '
-                                     f'graph adjacency list mismatch{label}:\n{value}')
+    @validator('freq_id', always=True)
+    def freq_id_validator(cls, value, values):
+        """Species.freq_id validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if 'frequencies' in values and values['frequencies'] is not None and value is None:
+            raise ValueError(f'freq_id was not given{label}.')
         return value
 
     @validator('rigid_rotor')
@@ -478,6 +761,27 @@ class SpeciesBase(BaseModel):
                 if len(value) != 3 and not linear:
                     raise ValueError(f'The number of rotational constants for a non-linear species{label} must be 3.\n'
                                      f'Got {len(value)} rotational constants: {value}.')
+        return value
+
+    @validator('torsions')
+    def torsions_validator(cls, value, values):
+        """Species.torsions validator"""
+        if value is None:
+            return value  # Allow None if the field is optional
+
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if not isinstance(value[0], list):
+            # correct to a List[List[int]] form
+            value = [value]
+        for atom_indices in value:
+            if len(atom_indices) != 4:
+                raise ValueError(f'Atom indices in "torsions" must be of length 4, got{label} {atom_indices}'
+                                f'in\n{values}')
+            if any(index == 0 for index in atom_indices):
+                raise ValueError(f'Torsion atom indices must be 1-indexed, got{label} {atom_indices} in\n{values}')
+        if 'dimension' in values and values['dimension'] and len(value) != values['dimension']:
+            raise ValueError(f"Got a {len(value)}D torsion for a declared dimension of "
+                            f"{values['dimension']}{label}:\n{value}")
         return value
 
 
@@ -543,6 +847,14 @@ class SpeciesBase(BaseModel):
                              f"must be equal to the number of Cp temperatures ({len(value)}).")
         return value
 
+    @validator('encorr_id', always=True)
+    def encorr_id_validator(cls, value, values):
+        """Species.encorr_id validator"""
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        if 'is_ts' in values and not values['is_ts'] and value is None:
+            raise ValueError(f'encorr_id was not given{label}.')
+        return value
+
     @validator('opt_path', always=True)
     def opt_path_validator(cls, value, values):
         """Species.opt_path validator"""
@@ -590,110 +902,78 @@ class SpeciesBase(BaseModel):
                              f'Got: {len(value)}{label}.')
         return value
 
-
-class SpeciesCreate(SpeciesBase):
-    
-    # Required Fields
-    charge: int = Field(..., ge=-10, le=10, title='The net charge of the species')
-    multiplicity: int = Field(..., ge=1, le=10, title='The spin multiplicity of the species')
-    external_symmetry: int = Field(..., ge=1, title='External symmetry')
-    point_group: str = Field(..., max_length=6, title='Point group')
-    electronic_energy: float = Field(..., title='Electronic energy in Hartree')
-    E0: float = Field(..., title='E0 (zero-point energy) in kJ/mol')
-    is_well: bool = Field(..., title='Is this species a well on the PES?')
-
-    sp_path: str = Field(..., max_length=5000, title='Path to single-point energy log file')
+    @validator('unconverged_jobs')
+    def unconverged_jobs_validator(cls, value, values):
+        """Species.unconverged_jobs validator"""
+        if value is None:
+            return value
+        label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
+        allowed_keys = ['job type', 'issue', 'troubleshooting', 'comment', 'path']
+        recognized_job_types = ['opt', 'freq', 'scan', 'irc', 'sp']
+        for unconverged_job in value:
+            if not any(key in allowed_keys for key in unconverged_job.keys()):
+                raise ValueError(f'Got an unrecognized key in unconverged_jobs{label}.\n'
+                                 f'Recognized keys are: {allowed_keys}\nGot: {list(unconverged_job.keys())}')
+            if 'job type' not in unconverged_job:
+                raise ValueError(f'A job type is required when reporting an unconverged job. Got None{label}.`')
+            else:
+                if unconverged_job['job type'] not in recognized_job_types:
+                    raise ValueError(f"The unconverged job type {unconverged_job['job type']}{label} is invalid.\n"
+                                     f"Recognized job types are {recognized_job_types}.")
+            if 'path' not in unconverged_job:
+                raise ValueError(f'A file path is required when reporting an unconverged job. Got None{label}.`')
+        return value
 
     class Config:
         orm_mode = True
-        extra = 'forbid'
-    
-    # @root_validator
-    # def check_descriptor_presence(cls, values):
-    #     smiles, inchi, graph = values.get('smiles'), values.get('inchi'), values.get('graph')
-    #     if not (smiles or inchi or graph):
-    #         raise ValueError("At least one of 'smiles', 'inchi', or 'graph' must be provided.")
-    #     return values
-
-
-class SpeciesCreateBatch(SpeciesBase, ConnectionBase):
-    
-    bot_connection_id: Optional[str] = Field(None, title='The connection ID of the bot object for internal referencing')
-    literature_connection_id: Optional[str] = Field(None, title='The connection ID of the literature object for internal referencing')
-    encorr_connection_id: Optional[str] = Field(None, title='The connection ID of the enthalpy correction object for internal referencing')
-    freq_scale_connection_id: Optional[str] = Field(None, title='The connection ID of the frequency scaling object for internal referencing')
-    
-    level_connections: Optional[LevelConnectionID] = Field(None, title='The connection IDs of the level objects for internal referencing')
-    ess_connections: Optional[ESSConnectionID] = Field(None, title='The connection IDs of the ESS objects for internal referencing')
-
+        extra = "forbid"
 
 class SpeciesUpdate(SpeciesBase):
-    pass
+    """
+    Update a species: Partial update
+    """
+
+    class Config:
+        orm_mode = True
+        extra = "forbid"
+
 
 class SpeciesRead(SpeciesBase):
+    """
+    Output a species
+    """
+    id: int
+    timestamp: datetime
+    retracted: Optional[bool]
+    reviewed: Optional[bool]
+    approved: Optional[bool]
+    reviewer_flags: Optional[Dict[str, str]]
+    deleted_at: Optional[datetime]
 
-    id: int = Field(..., title='Species ID')
-    
-    # Non-User Input
-    reviewed: bool = Field(False, title='Is this species reviewed?')
-    approved: bool = Field(None, title='Is this species approved?')
-    retraction: str = Field(None, title='Retraction reason')
-    reviewer_flags: Dict[str, str] = Field(None, title='Reviewer flags')
-    timestamp: datetime = Field(..., title='Timestamp')
-
-    # Freq Scale, Encorr, Lit, Bot and ESS Level IDs
-    # TODO: Discuss how to show the readout of these other tables
-    freq_scale_id: Optional[int] = Field(None, title='The frequency scaling ID')
-    
-    encorr_id: Optional[int] = Field(None, title='The enthalpy correction ID')
-    literature_id: Optional[int] = Field(None, title='The literature ID')
-    bot_id: Optional[int] = Field(None, title='The bot ID')
-    
-    opt_level_id: Optional[int] = Field(None, title='The opt level ID')
-    freq_level_id: Optional[int] = Field(None, title='The freq level ID')
-    scan_level_id: Optional[int] = Field(None, title='The scan level ID')
-    irc_level_id: Optional[int] = Field(None, title='The IRC level ID')
-    sp_level_id: Optional[int] = Field(None, title='The single point level ID')
-    
-    opt_ess_id: Optional[int] = Field(None, title='The opt ESS ID')
-    freq_ess_id: Optional[int] = Field(None, title='The freq ESS ID')
-    scan_ess_id: Optional[int] = Field(None, title='The scan ESS ID')
-    irc_ess_id: Optional[int] = Field(None, title='The IRC ESS ID')
-    sp_ess_id: Optional[int] = Field(None, title='The single point ESS ID')
-    
     class Config:
         orm_mode = True
-    
-    
-class SpeciesUpdate(SpeciesBase):
-    pass
-
-
-class SpeciesUpdateBatch(SpeciesBase, ConnectionBase):
-    pass
+        extra = "forbid"
 
 
 class SpeciesInDBBase(SpeciesBase):
-    id: int = Field(..., title='Species ID')
-    
-    freq_scale_id: Optional[int] = Field(None, title='The frequency scaling ID')
-    
-    encorr_id: Optional[int] = Field(None, title='The enthalpy correction ID')
-    literature_id: Optional[int] = Field(None, title='The literature ID')
-    bot_id: Optional[int] = Field(None, title='The bot ID')
-    
-    opt_level_id: Optional[int] = Field(None, title='The opt level ID')
-    freq_level_id: Optional[int] = Field(None, title='The freq level ID')
-    scan_level_id: Optional[int] = Field(None, title='The scan level ID')
-    irc_level_id: Optional[int] = Field(None, title='The IRC level ID')
-    sp_level_id: Optional[int] = Field(None, title='The single point level ID')
-    
-    opt_ess_id: Optional[int] = Field(None, title='The opt ESS ID')
-    freq_ess_id: Optional[int] = Field(None, title='The freq ESS ID')
-    scan_ess_id: Optional[int] = Field(None, title='The scan ESS ID')
-    irc_ess_id: Optional[int] = Field(None, title='The IRC ESS ID')
-    sp_ess_id: Optional[int] = Field(None, title='The single point ESS ID')
-    
+    """
+    Species stored in the database
+    """
+    id: int = Field(..., title="Unique identifier for the species")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), title='Creation timestamp')
+    retracted: Optional[bool] = Field(None, title='Whether this species has been retracted')
+    reviewed: bool = Field(False, title='Whether this species has been reviewed')
+    approved: Optional[bool] = Field(None, title='Whether this species has been approved')
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+    deleted_at: Optional[datetime] = Field(None, title='Deletion timestamp')
     
     class Config:
         orm_mode = True
+        extra = "forbid"
+
+
+class SpeciesInDB(SpeciesInDBBase):
+    """
+    Species stored in the database
+    """
+    pass
