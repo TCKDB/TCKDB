@@ -1,8 +1,9 @@
 from typing import Optional, List
-
+import re
 from pydantic import Field, BaseModel, validator
 
 from tckdb.backend.app.conversions.converter import generate_check_digit
+from tckdb.backend.app.schemas.connection_schema import ConnectionBase
 
 
 class LiteratureTitle(BaseModel):
@@ -17,7 +18,7 @@ class AuthorBase(BaseModel):
     first_name: Optional[str] = Field(None, title='The first name of the author')
     last_name: Optional[str] = Field(None, title='The last name of the author')
     orcid: Optional[str] = Field(None, title='The ORCID of the author', description='More information about ORCID can be found at https://orcid.org')
-    
+
     class Config:
         orm_mode = True
         extra = 'forbid'
@@ -65,7 +66,10 @@ class AuthorCreate(AuthorBase):
     class Config:
         orm_mode = True
         extra = 'forbid'
-    
+
+class AuthorCreateBatch(AuthorCreate, ConnectionBase):
+    """Schema for creating a batch of Authors"""
+    pass
 
 class AuthorUpdate(AuthorBase):
     """Schema for updating an Author"""

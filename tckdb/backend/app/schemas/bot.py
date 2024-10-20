@@ -35,7 +35,7 @@ class BotCreate(BotBase):
     name: str = Field(..., max_length=100, title="The Bot's name")
     version: str = Field(..., max_length=100, title="The Bot's version")
     url: HttpUrl = Field(..., title="The Bot's official website")
-    
+
     class Config:
         orm_mode = True
         extra = "forbid"

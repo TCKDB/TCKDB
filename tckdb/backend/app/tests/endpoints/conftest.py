@@ -1,6 +1,6 @@
 # tckdb/backend/app/tests/conftest.py
 
-from click import echo
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

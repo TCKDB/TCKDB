@@ -116,7 +116,7 @@ class Literature(Base, AuditMixin):
     advisor = Column(String(255))
     doi = Column(String(255))
     isbn = Column(String(255))
-    url = Column(String(500), nullable=False)
+    url = Column(String(500), nullable=True)
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
     authors = relationship(

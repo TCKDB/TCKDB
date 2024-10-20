@@ -10,6 +10,7 @@ class Author(Base):
     id = Column(Integer, primary_key=True, index=True)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
+    orcid = Column(String(19), nullable=True, unique=True, index=True)
 
     # Unique constraint to prevent duplicate authors
     __table_args__ = (
