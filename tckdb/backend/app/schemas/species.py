@@ -18,6 +18,7 @@ class ESSConnectionID(BaseModel):
     irc: Optional[str] = Field(None, title='The connection ID of the IRC object for internal referencing')
     opt: Optional[str] = Field(None, title='The connection ID of the opt object for internal referencing')
     scan: Optional[str] = Field(None, title='The connection ID of the scan object for internal referencing')
+    sp: Optional[str] = Field(None, title='The connection ID of the sp object for internal referencing')
     freq: Optional[str] = Field(None, title='The connection ID of the freq object for internal referencing')
 
 
@@ -312,6 +313,9 @@ class SpeciesBase(BaseModel):
     @validator('normal_displacement_modes', always=True)
     def normal_displacement_modes_validator(cls, value, values):
         """Species.normal_displacement_modes validator"""
+        # The normal displacement modes. Required for polyatomic species (with 2 or more atoms).
+        if value is None and common.get_number_of_atoms(values) < 2:
+            return value
         label = f' for species "{values["label"]}"' if 'label' in values and values['label'] is not None else ''
         if 'frequencies' in values and values['frequencies'] is not None:
             if value is None:

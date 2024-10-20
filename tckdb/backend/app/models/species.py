@@ -525,8 +525,8 @@ class Species(Base, AuditMixin):
     deleted_at = Column(DateTime(timezone=True), nullable=True, default=None)
 
     # review
-    reviewed = Column(Boolean, nullable=False)
-    approved = Column(Boolean, nullable=False)
+    reviewed = Column(Boolean, nullable=False, default=False)
+    approved = Column(Boolean, nullable=True, default=None )
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
     # chemical identifiers

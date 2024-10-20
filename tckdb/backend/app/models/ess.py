@@ -2,7 +2,7 @@
 TCKDB backend app models electronic structure software (ess) module
 """
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, UniqueConstraint
 
 from tckdb.backend.app.db.base_class import Base
 from tckdb.backend.app.models.common import MsgpackExt
@@ -57,11 +57,14 @@ class ESS(Base):
         reviewer_flags (Dict[str, str]): Backend flags to assist the review process (not a user input).
     """
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    name = Column(String(100), unique=True, nullable=False)
+    name = Column(String(100), nullable=False)
     version = Column(String(100), nullable=False)
     revision = Column(String(100), nullable=False)
     url = Column(String(255), nullable=False)
     reviewer_flags = Column(MsgpackExt, nullable=True)
+
+    # Unique constraint on the name, version, and revision
+    __table_args__ = (UniqueConstraint('name', 'version', 'revision', name='ess_name_version_revision_uc'),)
 
     def __str__(self) -> str:
         """

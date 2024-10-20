@@ -1,6 +1,8 @@
 
+from curses.ascii import isdigit
 from datetime import datetime
 from enum import Enum
+import re
 
 from typing import Optional, List
 
@@ -8,6 +10,73 @@ from pydantic import BaseModel, Field, HttpUrl, validator, root_validator
 
 from tckdb.backend.app.schemas.author import AuthorCreate, AuthorReadLiterature
 from tckdb.backend.app.schemas.connection_schema import ConnectionBase
+
+
+class ISBN(str):
+    """
+    The ISBN class - Supports ISBN-10 and ISBN-13
+    """
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+    
+    @classmethod
+    def validate(cls, v):
+        if not isinstance(v, str):
+            raise TypeError('ISBN must be a string')
+        
+        # Remone hyphens and spaces
+        isbn = re.sub(r'[\s-]', '', v)
+        
+        if len(isbn) == 10:
+            if not re.match(r'^\d{9}[\dXx]$', isbn):
+                raise ValueError('Invalid ISBN-10')
+            if not cls.is_valid_isbn10(isbn):
+                raise ValueError('Invalid ISBN-10 check digit')
+            return cls(isbn.upper())
+        elif len(isbn) == 13:
+            if not isbn.isdigit():
+                raise ValueError('Invalid ISBN-13')
+            if not cls.is_valid_isbn13(isbn):
+                raise ValueError('Invalid ISBN-13 check digit')
+            return cls(isbn)
+        else:
+            raise ValueError('Invalid ISBN length - must be 10 or 13 digits')
+
+    @staticmethod
+    def is_valid_isbn10(isbn10: str) -> bool:
+        """
+        Check if the ISBN-10 check digit is valid
+        """
+        total = 0
+        for i in range(9):
+            if not isbn10[i].isdigit():
+                return False
+            total += int(isbn10[i]) * (i + 1)
+        check_digit = isbn10[9]
+        if check_digit in ['X', 'x']:
+            total += 10 * 10
+        elif check_digit.isdigit():
+            total += int(check_digit) * 10
+        else:
+            return False
+        return total % 11 == 0
+
+    @staticmethod
+    def is_valid_isbn13(isbn13: str) -> bool:
+        """
+        Check if the ISBN-13 check digit is valid
+        """
+        total = 0
+        for i in range(12):
+            digit = int(isbn13[i])
+            if i % 2 == 0:
+                total += digit
+            else:
+                total += 3 * digit
+        check_digit = (10 - (total % 10)) % 10
+        return check_digit == int(isbn13[12])
 
 class LiteratureType(str, Enum):
     """
@@ -37,7 +106,7 @@ class LiteratureBase(BaseModel):
     publication_place: Optional[str] = Field(None, title='The publication place for a book')
     advisor: Optional[str] = Field(None, title='The dissertation advisor for a thesis')
     doi: Optional[str] = Field(None, title='The DOI')
-    isbn: Optional[str] = Field(None, title='The ISBN')
+    isbn: Optional[ISBN] = Field(None, title='The ISBN')
     url: Optional[HttpUrl] = Field(None, title='The publication URL address')
     
     class Config:
@@ -53,12 +122,12 @@ class LiteratureBase(BaseModel):
             if not values.get('advisor'):
                 raise ValueError('Advisor name is required for a thesis')
         elif lit_type == LiteratureType.article:
-            required_fields = ['journal', 'volume', 'issue', 'page_start', 'page_end']
+            required_fields = ['journal', 'volume', 'issue', 'page_start', 'page_end', 'doi']
             for field in required_fields:
                 if not values.get(field):
                     raise ValueError(f'{field} is required for an article')
         elif lit_type == LiteratureType.book:
-            required_fields = ['publisher', 'editors', 'publication_place']
+            required_fields = ['publisher', 'editors', 'publication_place', 'isbn']
             for field in required_fields:
                 if not values.get(field):
                     raise ValueError(f'{field} is required for a book')
@@ -135,14 +204,28 @@ class LiteratureCreate(LiteratureBase):
             raise ValueError("Authors are required")
         return v
 
-class LiteratureCreateBatch(LiteratureCreate, ConnectionBase):
+class LiteratureCreateBatch(LiteratureBase, ConnectionBase):
     """
     A LiteratureCreateBatch class (properties to receive on literature creation)
     """
-    pass
+    type: LiteratureType = Field(..., title='The literature type, either article, book, or thesis')
+    title: str = Field(..., max_length=255, title='The literature source title')
+    author_connection_ids: Optional[List[str]] = Field(None, title='The connection ID of the author objects for internal referencing')
+    year: int = Field(..., ge=1500, le=9999, title='The publication year')
 
+    class Config:
+        orm_mode = True
+        extra = "forbid"
+        
+    @validator('author_connection_ids', always=True)
+    def validate_author_connection_ids(cls, v):
+        if not v:
+            raise ValueError("Author connection IDs are required")
+        return v
 class LiteratureUpdate(LiteratureBase):
     pass
+
+
 
 class LiteratureRead(LiteratureBase):
     id: int
