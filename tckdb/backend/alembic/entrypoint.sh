@@ -28,6 +28,7 @@ echo "PostgreSQL started."
 # Run Alembic migrations with explicit config path
 echo "Running Alembic migrations..."
 alembic -c /code/tckdb/backend/alembic.ini upgrade head
+echo "Database is up to date!"
 
 # Keep the container running (optional)
 tail -f /dev/null
