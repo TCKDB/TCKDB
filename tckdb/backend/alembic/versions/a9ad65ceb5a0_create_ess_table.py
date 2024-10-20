@@ -30,6 +30,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
+    op.create_index(op.f('ix_ess_id'), 'ess', ['id'], unique=False)
     pass
 
 
