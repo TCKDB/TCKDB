@@ -41,7 +41,7 @@ def upgrade() -> None:
     sa.Column('advisor', sa.String(length=255), nullable=True),
     sa.Column('doi', sa.String(length=255), nullable=True),
     sa.Column('isbn', sa.String(length=255), nullable=True),
-    sa.Column('url', sa.String(length=500), nullable=False),
+    sa.Column('url', sa.VARCHAR(length=500), nullable=True),
     sa.Column('reviewer_flags', MsgpackExt(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )

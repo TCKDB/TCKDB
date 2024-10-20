@@ -28,8 +28,8 @@ def upgrade() -> None:
     sa.Column('url', sa.String(length=255), nullable=False),
     sa.Column('reviewer_flags', MsgpackExt(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('name')
     )
+    op.create_unique_constraint('ess_name_version_revision_uc', 'ess', ['name', 'version', 'revision'])
     op.create_index(op.f('ix_ess_id'), 'ess', ['id'], unique=False)
     pass
 

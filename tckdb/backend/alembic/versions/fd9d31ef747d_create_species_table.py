@@ -31,7 +31,7 @@ def upgrade() -> None:
     sa.Column('retracted', sa.String(length=255), nullable=True),
     sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('reviewed', sa.Boolean(), nullable=False),
-    sa.Column('approved', sa.Boolean(), nullable=False),
+    sa.Column('approved', sa.Boolean(), nullable=True),
     sa.Column('reviewer_flags', MsgpackExt(), nullable=True),
     sa.Column('smiles', sa.String(length=5000), nullable=False),
     sa.Column('inchi', sa.String(length=5000), nullable=False),
