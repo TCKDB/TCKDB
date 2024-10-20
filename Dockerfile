@@ -51,7 +51,7 @@ WORKDIR /code
 # COPY ./tckdb /code/tckdb
 
 # Copy the entrypoint script and ensure it's executable
-COPY entrypoint.sh /entrypoint.sh
+COPY tckdb/backend/alembic/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # (Optional) Expose necessary ports
