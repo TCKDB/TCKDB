@@ -48,15 +48,8 @@ RUN make
 
 # Return to the main working directory and copy application code
 WORKDIR /code
-# COPY ./tckdb /code/tckdb
-
-# Copy the entrypoint script and ensure it's executable
-COPY tckdb/backend/alembic/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
 # (Optional) Expose necessary ports
-# EXPOSE 8000
+EXPOSE 8000
 
-# Define the entrypoint and default command
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["bash"]
+ENTRYPOINT ["python",  "/code/tckdb/backend/app/main.py"]
