@@ -42,6 +42,8 @@ services:
     build: .
     platform: linux/amd64 # Forces the use of amd64 architecture
     container_name: tckdb_app
+    environment:
+      - RUNNING_IN_DOCKER=true
     env_file:
       - ./tckdb/backend/app/core/.env
     volumes:

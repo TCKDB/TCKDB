@@ -20,7 +20,11 @@ from tckdb.backend.app.models.ess import ESS
 from tckdb.backend.app.models.level import Level
 
 # Load environment variables from .env.test
-load_dotenv(dotenv_path="./tckdb/backend/app/core/.env.test")
+# if os.getenv("RUNNING_IN_DOCKER") == "True":
+#     load_dotenv(dotenv_path="./app/core/.env.test.docker")
+# else:
+#     load_dotenv(dotenv_path="./tckdb/backend/app/core/.env.test")
+
 
 API_V1_STR = "/api/v1"
 POSTGRES_USER = os.getenv("POSTGRES_USER", "test_user")

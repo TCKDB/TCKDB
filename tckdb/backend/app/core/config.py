@@ -8,10 +8,14 @@ from dotenv import load_dotenv
 
 # Determine if the application is running in a testing environment
 TESTING = os.getenv("TESTING", "false").lower() == "true"
+RUNNING_IN_DOCKER = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
 
 # Set the path to the appropriate .env file
 if TESTING:
-    env_path = "./tckdb/backend/app/core/.env.test"
+    if RUNNING_IN_DOCKER:
+        env_path = "./tckdb/backend/app/core/.env.test.docker"
+    else:
+        env_path = "./tckdb/backend/app/core/.env.test"
 else:
     env_path = "./tckdb/backend/app/core/.env"
 
@@ -28,7 +32,6 @@ def getenv_boolean(
     if env_value is not None:
         result = env_value.upper() in ("TRUE", "1")
     return result
-
 
 API_V1_STR = "/api/v1"
 SECRET_KEY = os.getenv("SECRET_KEY")
