@@ -2,10 +2,7 @@
 TCKDB backend app models Lennard-Jones (LJ) module
 """
 
-from typing import Union
-
 from sqlalchemy import Column, Integer
-from sqlalchemy.dialects.postgresql import ARRAY
 
 from tckdb.backend.app.db.base_class import Base
 from tckdb.backend.app.models.common import MsgpackExt
@@ -29,6 +26,7 @@ class LJ(Base):
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input)
     """
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     sigma = Column(MsgpackExt, nullable=False)
     epsilon = Column(MsgpackExt, nullable=False)
@@ -38,8 +36,10 @@ class LJ(Base):
         """
         A string representation from which the object can be reconstructed.
         """
-        return f"<{self.__class__.__name__}(" \
-               f"id={self.id}, " \
-               f"sigma={self.sigma}, " \
-               f"epsilon={self.epsilon}" \
-               f")>"
+        return (
+            f"<{self.__class__.__name__}("
+            f"id={self.id}, "
+            f"sigma={self.sigma}, "
+            f"epsilon={self.epsilon}"
+            f")>"
+        )

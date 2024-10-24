@@ -56,6 +56,7 @@ class ESS(Base):
 
         reviewer_flags (Dict[str, str]): Backend flags to assist the review process (not a user input).
     """
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     name = Column(String(100), nullable=False)
     version = Column(String(100), nullable=False)
@@ -64,7 +65,11 @@ class ESS(Base):
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
     # Unique constraint on the name, version, and revision
-    __table_args__ = (UniqueConstraint('name', 'version', 'revision', name='ess_name_version_revision_uc'),)
+    __table_args__ = (
+        UniqueConstraint(
+            "name", "version", "revision", name="ess_name_version_revision_uc"
+        ),
+    )
 
     def __str__(self) -> str:
         """

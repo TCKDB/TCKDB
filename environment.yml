@@ -1,69 +1,49 @@
 name: tck_env
 channels:
   - defaults
-  - rmg
   - conda-forge
   - anaconda
   - chembl
 dependencies:
-  - alembic =1.12
+  - alembic
   - chembl_webresource_client
   - coverage
-  - fastapi >=0.65.2
-  - ipython
-  - jupyter
+  - fastapi
   - msgpack-python
   - numpy
   - pint
   - psycopg2
   - pydantic
   - pytest
-  - python >= 3.7
   - qcelemental
-  - conda-forge::rdkit >=2022.09.1
+  - rdkit
   - sqlalchemy
   - starlette
   - sphinx
   - sphinx_rtd_theme
   - uvicorn
-  - requests-cache=0.6.4
+  - requests-cache
   - cairo
   - cairocffi
-  - cantera::cantera =2.6.0
-  - conda-forge::cclib >=1.6.3,<1.9
-  # - rmg::chemprop # Why do we need this?
-  - coolprop # Is this related to RMG? We should look to using Molecule github repo
-  - cython >=0.25.2
+  - cantera::cantera
   - ffmpeg
   - conda-forge::gprof2dot
   - graphviz
   - h5py
   - httpx
   - jinja2
-  - conda-forge::lpsolve55
   - markupsafe
   - matplotlib >=1.5
-  - conda-forge::mopac
   - mpmath
-  - muq2
-  - networkx
-  - nose
-  - conda-forge::numdifftools
-  - conda-forge::openbabel >= 3
   - pandas
   - psutil
-  - rmg::pydas >=1.0.2
   - pydot
   - python-dotenv
-  - rmg::pydqed >=1.0.1
-  - pymongo
   - pyparsing
-  - rmg::pyrdl # Doesn't appear to be used in RMG
-  - python >=3.7
+  - pip
+  - pip:
+      - isbnlib
   - pyyaml
   - quantities
-  - scikit-learn
-  - scipy
-  - rmg::symmetry
   - xlrd
   - xlwt

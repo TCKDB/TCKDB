@@ -28,25 +28,25 @@ WORKDIR /code
 COPY environment.yml .
 
 # Clone the required Git repositories with shallow clones for efficiency
-RUN git clone --single-branch --branch main --depth 1 https://github.com/ReactionMechanismGenerator/RMG-Py.git /code/RMG-Py && \
+RUN git clone --single-branch --branch main --depth 1 https://github.com/ReactionMechanismGenerator/molecule.git /code/Molecule && \
     git clone --single-branch --branch main --depth 1 https://github.com/ReactionMechanismGenerator/RMG-database.git /code/RMG-database
 
 # Set PATH and PYTHONPATH in a single ENV command to minimize layers
-ENV PATH=/opt/conda/envs/tck_env/bin:/code/RMG-Py:/code/RMG-database:$PATH \
-    PYTHONPATH=/code/tckdb:/code/RMG-Py:/code/RMG-database:/code
+ENV PATH=/opt/conda/envs/tck_env/bin:/code/Molecule:/code/RMG-database:$PATH \
+    PYTHONPATH=/code/tckdb:/code/Molecule:/code/RMG-database:/code
 
 # Create the Conda environment and clean up to reduce image size
 RUN mamba env create -f environment.yml && \
+    mamba env create -f /code/Molecule/environment.yml && \
     mamba clean --all -y
 
 # Use the new Conda environment for subsequent RUN commands
-SHELL ["conda", "run", "--no-capture-output", "-n", "tck_env", "/bin/bash", "-c"]
+SHELL ["conda", "run", "--no-capture-output", "-n", "molecule_env", "/bin/bash", "-c"]
 
 # Build RMG-Py within the Conda environment
-WORKDIR /code/RMG-Py
+WORKDIR /code/Molecule
 RUN make
 
-# Return to the main working directory and copy application code
 WORKDIR /code
 
 # (Optional) Expose necessary ports

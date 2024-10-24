@@ -1,10 +1,8 @@
 import pytest
-from sqlalchemy.orm import Session
-from fastapi.testclient import TestClient
+
 from tckdb.backend.app.conversions.converter import normalize_coordinates
-from tckdb.backend.app.main import app
-from tckdb.backend.app.models import species
 from tckdb.backend.app.models.species import Species as SpeciesModel
+
 """
 TestClient: Provided by FastAPI, allows you to simulate HTTP requests to your
 application
@@ -43,6 +41,7 @@ Response Constructed and Sent Back to Client
 
 
 import logging
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
@@ -50,55 +49,87 @@ API_V1_STR = "/api/v1"
 
 
 # shared data
-h_xyz = {'symbols': ('H',),
-            'isotopes': (1,),
-            'coords': ((0.0, 0.0, 0.0),)}
-ch4_xyz = {'symbols': ('C', 'H', 'H', 'H', 'H'),
-            'isotopes': (12, 1, 1, 1, 1),
-            'coords': ((0.0, 0.0, 0.0),
-                        (0.6300326, 0.6300326, 0.6300326),
-                        (-0.6300326, -0.6300326, 0.6300326),
-                        (-0.6300326, 0.6300326, -0.6300326),
-                        (0.6300326, -0.6300326, -0.6300326))}
+h_xyz = {"symbols": ("H",), "isotopes": (1,), "coords": ((0.0, 0.0, 0.0),)}
+ch4_xyz = {
+    "symbols": ("C", "H", "H", "H", "H"),
+    "isotopes": (12, 1, 1, 1, 1),
+    "coords": (
+        (0.0, 0.0, 0.0),
+        (0.6300326, 0.6300326, 0.6300326),
+        (-0.6300326, -0.6300326, 0.6300326),
+        (-0.6300326, 0.6300326, -0.6300326),
+        (0.6300326, -0.6300326, -0.6300326),
+    ),
+}
 ch4_freqs = [3046, 1555, 1555, 3168, 3168, 3168, 1368, 1368, 1368]
-ch4_scaled_freqs = [3046 * .99, 1555 * .99, 1555 * .99, 3168 * .99, 3168 * .99, 3168 * .99, 1368 * .99, 1368 * .99,
-                    1368 * .99]
+ch4_scaled_freqs = [
+    3046 * 0.99,
+    1555 * 0.99,
+    1555 * 0.99,
+    3168 * 0.99,
+    3168 * 0.99,
+    3168 * 0.99,
+    1368 * 0.99,
+    1368 * 0.99,
+    1368 * 0.99,
+]
 ch4_normal_disp_modes = [[[1, 2, 3]] * 5] * 9
-ICdCC_Cl__I_NF_xyz = {'symbols': ('I', 'I', 'Cl', 'F', 'N', 'C', 'C', 'C', 'H', 'H', 'H'),
-                        'isotopes': (127, 127, 35, 19, 14, 12, 12, 12, 1, 1, 1),
-                        'coords': ((-0.1752057997244146, 2.579412243969442, -0.0998868241437122),
-                                    (2.982861260942898, -2.085955126671259, -0.45379679871721257),
-                                    (-1.134251085086272, 0.5188212354137014, 2.0757032605524133),
-                                    (-1.8814930376300307, -1.2539895001453651, -0.2064584290134856),
-                                    (-1.5494242545791568, 0.0648586431861974, -0.452378816320353),
-                                    (-0.48883763038476624, 0.5436231953516003, 0.41802210133854123),
-                                    (0.8221194714634887, -0.18495290937918607, 0.3615122853791793),
-                                    (1.1541030666741987, -1.1716982225873687, -0.4863411908291395),
-                                    (1.5573291340285325, 0.13404869476412778, 1.0992045049933756),
-                                    (-2.353154400199601, 0.664646058045691, -0.27667502002715677),
-                                    (0.4586997381222457, -1.5322585343327426, -1.2389102050458707))}
+ICdCC_Cl__I_NF_xyz = {
+    "symbols": ("I", "I", "Cl", "F", "N", "C", "C", "C", "H", "H", "H"),
+    "isotopes": (127, 127, 35, 19, 14, 12, 12, 12, 1, 1, 1),
+    "coords": (
+        (-0.1752057997244146, 2.579412243969442, -0.0998868241437122),
+        (2.982861260942898, -2.085955126671259, -0.45379679871721257),
+        (-1.134251085086272, 0.5188212354137014, 2.0757032605524133),
+        (-1.8814930376300307, -1.2539895001453651, -0.2064584290134856),
+        (-1.5494242545791568, 0.0648586431861974, -0.452378816320353),
+        (-0.48883763038476624, 0.5436231953516003, 0.41802210133854123),
+        (0.8221194714634887, -0.18495290937918607, 0.3615122853791793),
+        (1.1541030666741987, -1.1716982225873687, -0.4863411908291395),
+        (1.5573291340285325, 0.13404869476412778, 1.0992045049933756),
+        (-2.353154400199601, 0.664646058045691, -0.27667502002715677),
+        (0.4586997381222457, -1.5322585343327426, -1.2389102050458707),
+    ),
+}
 ICdCC_Cl__I_NF_freqs = [i + 1 for i in range(27)]
 ICdCC_Cl__I_NF_scaled_freqs = [(i + 1) * 0.973 for i in range(27)]
 ICdCC_Cl__I_NF_normal_disp_modes = [[[1, 2, 3]] * 11] * 27
 
-heat_capacity_model = {'model': 'NASA',
-                        'T min': 100,
-                        'T max': 5000,
-                        'coefficients': {'low': [4.13878818E+00, -4.69514383E-03,
-                                                2.25730249E-05, -2.09849937E-08,
-                                                6.36123283E-12, -1.43493283E+04,
-                                                3.23827482E+00],
-                                        'high': [2.36095410E+00, 7.66804276E-03,
-                                                    -3.19770442E-06, 6.04724833E-10,
-                                                    -4.27517878E-14, -1.42794809E+04,
-                                                    1.04457152E+01],
-                                        'T int': 1041.96}}
+heat_capacity_model = {
+    "model": "NASA",
+    "T min": 100,
+    "T max": 5000,
+    "coefficients": {
+        "low": [
+            4.13878818e00,
+            -4.69514383e-03,
+            2.25730249e-05,
+            -2.09849937e-08,
+            6.36123283e-12,
+            -1.43493283e04,
+            3.23827482e00,
+        ],
+        "high": [
+            2.36095410e00,
+            7.66804276e-03,
+            -3.19770442e-06,
+            6.04724833e-10,
+            -4.27517878e-14,
+            -1.42794809e04,
+            1.04457152e01,
+        ],
+        "T int": 1041.96,
+    },
+}
+
 
 @pytest.mark.usefixtures("setup_database")
 class TestSpeciesEndpoints:
 
     @pytest.fixture(scope="class", autouse=True)
-    def setup_species(self, request, test_level, test_ess, test_encorr, test_freq, client):
+    def setup_species(
+        self, request, test_level, test_ess, test_encorr, test_freq, client
+    ):
         """
         Class-level ficture to create a species for testing
         """
@@ -120,7 +151,7 @@ class TestSpeciesEndpoints:
                 "frequencies": ch4_freqs,
                 "scaled_projected_frequencies": ch4_scaled_freqs,
                 "normal_displacement_modes": ch4_normal_disp_modes,
-                #"freq_id": test_freq.id,
+                # "freq_id": test_freq.id,
                 "freq_id": 1,
                 "rigid_rotor": "spherical top",
                 "statmech_treatment": "RRHO",
@@ -149,7 +180,6 @@ class TestSpeciesEndpoints:
         Helper method to fetch a species from the database by ID.
         """
         return db.query(SpeciesModel).filter(SpeciesModel.id == species_id).first()
-
 
     def test_create_species(self):
         """
@@ -199,11 +229,12 @@ class TestSpeciesEndpoints:
         response = client.delete(f"{API_V1_STR}/species/{species_id}/soft")
         assert response.status_code == 200, response.text
         assert response.json() == {"detail": "Species soft deleted"}
-        
+
         db_species = self.get_species_from_db(species_id, db_session)
         assert db_species is not None, "Species should exist before soft deletion."
-        assert db_species.deleted_at is not None, "Species should be soft-deleted (deleted_at should be set)."
-
+        assert (
+            db_species.deleted_at is not None
+        ), "Species should be soft-deleted (deleted_at should be set)."
 
     def test_restore_species(self, client):
         """
@@ -214,7 +245,9 @@ class TestSpeciesEndpoints:
         assert restore_response.status_code == 200, restore_response.text
         restored_data = restore_response.json()
 
-        assert restored_data['id'] == species_id
+        assert restored_data["id"] == species_id
         assert restored_data["label"] == "UpdatedSpecies"
         assert restored_data["smiles"] == "C"
-        assert restored_data["deleted_at"] is None, "Species should be restored (deleted_at should be None)."
+        assert (
+            restored_data["deleted_at"] is None
+        ), "Species should be restored (deleted_at should be None)."

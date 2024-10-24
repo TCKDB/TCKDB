@@ -1,6 +1,6 @@
-
 from datetime import datetime
-from sqlalchemy import JSON, Column, DateTime, Integer, String, func, event, inspect
+
+from sqlalchemy import JSON, Column, DateTime, Integer, String, event, func, inspect
 from sqlalchemy.orm import Session
 
 from tckdb.backend.app.db.base_class import Base
@@ -21,6 +21,7 @@ def serialize_changes(changes):
     else:
         return changes
 
+
 class AuditLog(Base):
     """
     Model to store audit logs
@@ -36,7 +37,9 @@ class AuditLog(Base):
     timestamp = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    performed_by = Column(String(50), nullable=True)  # eg. "user1", "bot2" #TODO: Implement this, then make it not nullable
+    performed_by = Column(
+        String(50), nullable=True
+    )  # eg. "user1", "bot2" #TODO: Implement this, then make it not nullable
 
 
 def after_insert_listener(mapper, connection, target):
@@ -77,16 +80,17 @@ def after_update_listener(mapper, connection, target):
         )
         session.add(audit)
 
+
 def after_delete_listener(mapper, connection, target):
     """
     Listener for delete operations.
     Dtermines if the delection is soft or hard based on the presence of 'deleted_at'
     """
     session = Session.object_session(target)
-    if hasattr(target, 'deleted_at') and target.deleted_at is not None:
-        action = 'soft_delete'
+    if hasattr(target, "deleted_at") and target.deleted_at is not None:
+        action = "soft_delete"
     else:
-        action = 'hard_delete'
+        action = "hard_delete"
     audit = AuditLog(
         model=target.__tablename__,
         model_id=target.id,
@@ -95,9 +99,9 @@ def after_delete_listener(mapper, connection, target):
     )
     session.add(audit)
 
-    
+
 # Register the listeners
 for cls in [BotModel, SpeciesModel]:
-    event.listen(cls, 'after_insert', after_insert_listener)
-    event.listen(cls, 'after_update', after_update_listener)
-    event.listen(cls, 'after_delete', after_delete_listener)
+    event.listen(cls, "after_insert", after_insert_listener)
+    event.listen(cls, "after_update", after_update_listener)
+    event.listen(cls, "after_delete", after_delete_listener)

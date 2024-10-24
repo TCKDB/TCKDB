@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import NoResultFound
+
 from tckdb.backend.app.models.encorr import EnCorr
 from tckdb.backend.app.models.level import Level
 from tckdb.backend.app.schemas.encorr import EnCorrCreate, EnCorrUpdate
 from tckdb.backend.app.schemas.level import LevelCreate
+
 
 def get_or_create_level(db: Session, level_data: LevelCreate) -> Level:
     """
@@ -22,7 +23,7 @@ def get_or_create_level(db: Session, level_data: LevelCreate) -> Level:
         basis=level_data.basis,
         auxiliary_basis=level_data.auxiliary_basis,
         level_arguments=level_data.level_arguments,
-        solvation_description=level_data.solvation_description
+        solvation_description=level_data.solvation_description,
     )
     existing_level = query.first()
     if existing_level:
@@ -33,6 +34,7 @@ def get_or_create_level(db: Session, level_data: LevelCreate) -> Level:
         db.commit()
         db.refresh(new_level)
         return new_level
+
 
 def create_encorr(db: Session, encorr_data: EnCorrCreate) -> EnCorr:
     """
@@ -47,12 +49,12 @@ def create_encorr(db: Session, encorr_data: EnCorrCreate) -> EnCorr:
     """
     # Handle primary_level
     primary_level = get_or_create_level(db, encorr_data.primary_level)
-    
+
     # Handle isodesmic_high_level if provided
     isodesmic_high_level = None
     if encorr_data.isodesmic_high_level:
         isodesmic_high_level = get_or_create_level(db, encorr_data.isodesmic_high_level)
-    
+
     # Create EnCorr object
     encorr = EnCorr(
         supported_elements=encorr_data.supported_elements,
@@ -62,13 +64,14 @@ def create_encorr(db: Session, encorr_data: EnCorrCreate) -> EnCorr:
         isodesmic_reactions=encorr_data.isodesmic_reactions,
         reviewer_flags=encorr_data.reviewer_flags,
         primary_level=primary_level,
-        isodesmic_high_level=isodesmic_high_level
+        isodesmic_high_level=isodesmic_high_level,
     )
-    
+
     db.add(encorr)
     db.commit()
     db.refresh(encorr)
     return encorr
+
 
 def get_encorr_by_id(db: Session, encorr_id: int) -> EnCorr:
     """
@@ -82,6 +85,7 @@ def get_encorr_by_id(db: Session, encorr_id: int) -> EnCorr:
         EnCorr | None: The EnCorr object or None if not found.
     """
     return db.query(EnCorr).filter(EnCorr.id == encorr_id).first()
+
 
 def update_encorr(db: Session, encorr_id: int, encorr_data: EnCorrUpdate) -> EnCorr:
     """
@@ -98,7 +102,7 @@ def update_encorr(db: Session, encorr_id: int, encorr_data: EnCorrUpdate) -> EnC
     encorr = get_encorr_by_id(db, encorr_id)
     if not encorr:
         raise ValueError("Energy correction not found")
-    
+
     # Update fields
     for key, value in encorr_data.dict(exclude_unset=True).items():
         if key in ["primary_level", "isodesmic_high_level"]:
@@ -108,10 +112,11 @@ def update_encorr(db: Session, encorr_id: int, encorr_data: EnCorrUpdate) -> EnC
                 setattr(encorr, key, level)
         else:
             setattr(encorr, key, value)
-    
+
     db.commit()
     db.refresh(encorr)
     return encorr
+
 
 def soft_delete_encorr(db: Session, encorr_id: int):
     """
@@ -130,6 +135,7 @@ def soft_delete_encorr(db: Session, encorr_id: int):
     encorr.deleted = True  # Ensure 'deleted' column exists in the EnCorr model
     db.commit()
 
+
 def _restore_encorr(db: Session, encorr_id: int) -> EnCorr:
     """
     Restores a soft-deleted EnCorr entry.
@@ -141,7 +147,9 @@ def _restore_encorr(db: Session, encorr_id: int) -> EnCorr:
     Returns:
         EnCorr | None: The restored EnCorr object or None if not found or not deleted.
     """
-    encorr = db.query(EnCorr).filter(EnCorr.id == encorr_id, EnCorr.deleted is True).first()
+    encorr = (
+        db.query(EnCorr).filter(EnCorr.id == encorr_id, EnCorr.deleted is True).first()
+    )
     if not encorr:
         return None
     encorr.deleted = False

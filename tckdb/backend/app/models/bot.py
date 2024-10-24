@@ -45,6 +45,7 @@ class Bot(Base, AuditMixin):
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input)
     """
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     name = Column(String(100), unique=True, nullable=False)
     version = Column(String(100), nullable=False)
@@ -55,35 +56,44 @@ class Bot(Base, AuditMixin):
 
     __table_args__ = (UniqueConstraint("name", "version", name="_bot_name_version_uc"),)
 
-
-    species = relationship("Species", back_populates="bot",
-                           cascade="save-update",
-                           passive_deletes=False,
-                           lazy="select")
-    non_physical_species = relationship("NonPhysicalSpecies", back_populates="bot",
-                                        cascade="save-update",
-                                        passive_deletes=False,
-                                        lazy="select")
+    species = relationship(
+        "Species",
+        back_populates="bot",
+        cascade="save-update",
+        passive_deletes=False,
+        lazy="select",
+    )
+    non_physical_species = relationship(
+        "NonPhysicalSpecies",
+        back_populates="bot",
+        cascade="save-update",
+        passive_deletes=False,
+        lazy="select",
+    )
 
     def __str__(self) -> str:
         """
         A string representation from which the object can be reconstructed.
         """
-        return f"<{self.__class__.__name__}(" \
-               f"name='{self.name}', " \
-               f"version='{self.version}', " \
-               f"url='{self.url}'" \
-               f")>"
+        return (
+            f"<{self.__class__.__name__}("
+            f"name='{self.name}', "
+            f"version='{self.version}', "
+            f"url='{self.url}'"
+            f")>"
+        )
 
     def __repr__(self) -> str:
         """
         A string representation from which the object can be reconstructed.
         """
-        return f"<{self.__class__.__name__}(" \
-               f"id={self.id}, " \
-               f"name='{self.name}', " \
-               f"version='{self.version}', " \
-               f"url='{self.url}', " \
-               f"git_hash='{self.git_hash}', " \
-               f"git_branch='{self.git_branch}'" \
-               f")>"
+        return (
+            f"<{self.__class__.__name__}("
+            f"id={self.id}, "
+            f"name='{self.name}', "
+            f"version='{self.version}', "
+            f"url='{self.url}', "
+            f"git_hash='{self.git_hash}', "
+            f"git_branch='{self.git_branch}'"
+            f")>"
+        )

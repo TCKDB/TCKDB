@@ -2,14 +2,15 @@
 TCKDB backend app models non-physical species (np_species) module
 """
 
-from typing import List
-
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, DateTime, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 
 from tckdb.backend.app.db.base_class import AuditMixin, Base
-from tckdb.backend.app.models.associations import np_species_authors, np_species_reviewers
+from tckdb.backend.app.models.associations import (
+    np_species_authors,
+    np_species_reviewers,
+)
 from tckdb.backend.app.models.common import MsgpackExt
 from tckdb.backend.app.models.species import species_as_str
 
@@ -258,7 +259,9 @@ class NonPhysicalSpecies(Base, AuditMixin):
     label = Column(String(255), nullable=True)
 
     # provenance
-    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    timestamp = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     retracted = Column(String(255), nullable=True)
 
     # review
@@ -290,36 +293,60 @@ class NonPhysicalSpecies(Base, AuditMixin):
     irc_trajectories = Column(MsgpackExt, nullable=True)
 
     # relationships - Many to One
-    literature_id = Column(Integer, ForeignKey('literature.id'), nullable=True, unique=False)
-    literature = relationship('Literature', backref='np_species', foreign_keys=[literature_id])
-    bot_id = Column(Integer, ForeignKey('bot.id'), nullable=True, unique=False)
-    bot = relationship('Bot', back_populates='non_physical_species', foreign_keys=[bot_id])
+    literature_id = Column(
+        Integer, ForeignKey("literature.id"), nullable=True, unique=False
+    )
+    literature = relationship(
+        "Literature", backref="np_species", foreign_keys=[literature_id]
+    )
+    bot_id = Column(Integer, ForeignKey("bot.id"), nullable=True, unique=False)
+    bot = relationship(
+        "Bot", back_populates="non_physical_species", foreign_keys=[bot_id]
+    )
 
-    opt_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
-    opt_level = relationship('Level', backref="np_species_opt", foreign_keys=[opt_level_id])
-    freq_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
-    freq_level = relationship('Level', backref='np_species_freq', foreign_keys=[freq_level_id])
-    scan_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
-    scan_level = relationship('Level', backref='np_species_scan', foreign_keys=[scan_level_id])
-    irc_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
-    irc_level = relationship('Level', backref='np_species_irc', foreign_keys=[irc_level_id])
-    sp_level_id = Column(Integer, ForeignKey('level.id'), nullable=False, unique=False)
-    sp_level = relationship('Level', backref='np_species_sp', foreign_keys=[sp_level_id])
+    opt_level_id = Column(Integer, ForeignKey("level.id"), nullable=True, unique=False)
+    opt_level = relationship(
+        "Level", backref="np_species_opt", foreign_keys=[opt_level_id]
+    )
+    freq_level_id = Column(Integer, ForeignKey("level.id"), nullable=True, unique=False)
+    freq_level = relationship(
+        "Level", backref="np_species_freq", foreign_keys=[freq_level_id]
+    )
+    scan_level_id = Column(Integer, ForeignKey("level.id"), nullable=True, unique=False)
+    scan_level = relationship(
+        "Level", backref="np_species_scan", foreign_keys=[scan_level_id]
+    )
+    irc_level_id = Column(Integer, ForeignKey("level.id"), nullable=True, unique=False)
+    irc_level = relationship(
+        "Level", backref="np_species_irc", foreign_keys=[irc_level_id]
+    )
+    sp_level_id = Column(Integer, ForeignKey("level.id"), nullable=False, unique=False)
+    sp_level = relationship(
+        "Level", backref="np_species_sp", foreign_keys=[sp_level_id]
+    )
 
-    opt_ess_id = Column(Integer, ForeignKey('ess.id'), nullable=True, unique=False)
-    opt_ess = relationship('ESS', backref='np_species_opt', foreign_keys=[opt_ess_id])
-    freq_ess_id = Column(Integer, ForeignKey('ess.id'), nullable=True, unique=False)
-    freq_ess = relationship('ESS', backref='np_species_freq', foreign_keys=[freq_ess_id])
-    scan_ess_id = Column(Integer, ForeignKey('ess.id'), nullable=True, unique=False)
-    scan_ess = relationship('ESS', backref='np_species_scan', foreign_keys=[scan_ess_id])
-    irc_ess_id = Column(Integer, ForeignKey('ess.id'), nullable=True, unique=False)
-    irc_ess = relationship('ESS', backref='np_species_irc', foreign_keys=[irc_ess_id])
-    sp_ess_id = Column(Integer, ForeignKey('ess.id'), nullable=False, unique=False)
-    sp_ess = relationship('ESS', backref='np_species_sp', foreign_keys=[sp_ess_id])
+    opt_ess_id = Column(Integer, ForeignKey("ess.id"), nullable=True, unique=False)
+    opt_ess = relationship("ESS", backref="np_species_opt", foreign_keys=[opt_ess_id])
+    freq_ess_id = Column(Integer, ForeignKey("ess.id"), nullable=True, unique=False)
+    freq_ess = relationship(
+        "ESS", backref="np_species_freq", foreign_keys=[freq_ess_id]
+    )
+    scan_ess_id = Column(Integer, ForeignKey("ess.id"), nullable=True, unique=False)
+    scan_ess = relationship(
+        "ESS", backref="np_species_scan", foreign_keys=[scan_ess_id]
+    )
+    irc_ess_id = Column(Integer, ForeignKey("ess.id"), nullable=True, unique=False)
+    irc_ess = relationship("ESS", backref="np_species_irc", foreign_keys=[irc_ess_id])
+    sp_ess_id = Column(Integer, ForeignKey("ess.id"), nullable=False, unique=False)
+    sp_ess = relationship("ESS", backref="np_species_sp", foreign_keys=[sp_ess_id])
 
     # relationships - Many to Many
-    authors = relationship('Person', secondary=np_species_authors, backref='authors_np_species')
-    reviewers = relationship('Person', secondary=np_species_reviewers, backref='reviewers_np_species')
+    authors = relationship(
+        "Person", secondary=np_species_authors, backref="authors_np_species"
+    )
+    reviewers = relationship(
+        "Person", secondary=np_species_reviewers, backref="reviewers_np_species"
+    )
 
     # paths
     opt_path = Column(String(5000), nullable=True)
@@ -338,9 +365,11 @@ class NonPhysicalSpecies(Base, AuditMixin):
         """
         A helper function for generating a user-friendly string representation of the object.
         """
-        return species_as_str(class_name=self.__class__.__name__,
-                              id=self.id,
-                              label=self.label,
-                              smiles=self.smiles,
-                              inchi=self.inchi,
-                              inchi_key=self.inchi_key)
+        return species_as_str(
+            class_name=self.__class__.__name__,
+            id=self.id,
+            label=self.label,
+            smiles=self.smiles,
+            inchi=self.inchi,
+            inchi_key=self.inchi_key,
+        )

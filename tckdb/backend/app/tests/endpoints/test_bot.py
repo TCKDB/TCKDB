@@ -1,16 +1,16 @@
-from fastapi.testclient import TestClient
 import pytest
 
 from tckdb.backend.app.core.config import API_V1_STR
 from tckdb.backend.app.models.bot import Bot as BotModel
 
 
-@pytest.mark.usefixtures('setup_database')
+@pytest.mark.usefixtures("setup_database")
 class TestBotsEndpoints:
     """
     A class to test the bots endpoints
     """
-    @pytest.fixture(scope='class', autouse=True)
+
+    @pytest.fixture(scope="class", autouse=True)
     def setup_bot(self, request, client):
         """
         A function to setup a bot
@@ -22,7 +22,7 @@ class TestBotsEndpoints:
                 "version": "0.1",
                 "url": "https://test_bot.com",
                 "git_hash": "123456789012345678901234567890123456789a",
-                "git_branch": "main"
+                "git_branch": "main",
             },
         )
         print("Response status code:", response.status_code)
@@ -33,13 +33,13 @@ class TestBotsEndpoints:
         request.cls.bot_id = data["id"]
         request.cls.bot_data = data
         print("Created bot data: ", data)
-    
+
     def get_bot_from_db(self, bot_id, db):
         """
         Helper method to fetch a bot from the database by ID.
         """
         return db.query(BotModel).filter(BotModel.id == bot_id).first()
-    
+
     def test_create_bot(self):
         """
         Test the initial creation of the bot
@@ -47,7 +47,7 @@ class TestBotsEndpoints:
         assert self.bot_data["name"] == "test_bot"
         assert self.bot_data["version"] == "0.1"
         assert self.bot_data["url"] == "https://test_bot.com"
-    
+
     def test_read_bot(self, client):
         """
         Test retrieving a bot by its ID
@@ -58,7 +58,7 @@ class TestBotsEndpoints:
         data = response.json()
         assert data["name"] == "test_bot"
         assert data["version"] == "0.1"
-    
+
     def test_update_bot_partial(self, client):
         """
         Test partial updating the bot's attributes
@@ -77,7 +77,7 @@ class TestBotsEndpoints:
         assert updated_data["name"] == "updated_bot"
         assert updated_data["version"] == "0.2"
         assert updated_data["url"] == "https://updated_bot.com"
-    
+
     def test_soft_delete_bot(self, client, db_session):
         """
         Test soft deleting the bot
@@ -99,9 +99,7 @@ class TestBotsEndpoints:
         db_bot = self.get_bot_from_db(bot_id, db_session)
         assert db_bot is not None
         assert db_bot.deleted_at is None
-        
+
         assert db_bot.name == "updated_bot"
         assert db_bot.version == "0.2"
         assert db_bot.url == "https://updated_bot.com"
-        
-    
