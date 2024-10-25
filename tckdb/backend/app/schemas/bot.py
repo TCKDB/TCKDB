@@ -17,9 +17,7 @@ class BotBase(BaseModel):
         None, min_length=40, max_length=40, title="The latest git hash "
     )
     git_branch: Optional[str] = Field(None, max_length=100, title="The git branch")
-    model_config = ConfigDict(
-        from_attributes=True,
-        extra="forbid")
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     @field_validator("git_hash")
     @classmethod
@@ -33,6 +31,7 @@ class BotBase(BaseModel):
     def convert_url_to_str(cls, v):
         """Convert the URL to a string"""
         return str(v) if v is not None else None
+
 
 class BotCreate(BotBase):
     """Create a Bot item: Properties to receive on item creation"""

@@ -5,7 +5,7 @@ TCKDB backend app tests schemas test_level module
 import pytest
 from pydantic import ValidationError
 
-from tckdb.backend.app.schemas.level import LevelBase, LevelCreate
+from tckdb.backend.app.schemas.level import LevelCreate
 
 
 def test_level_schema():

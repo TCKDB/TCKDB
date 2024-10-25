@@ -1,4 +1,3 @@
-
 from typing import Dict, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
@@ -11,14 +10,12 @@ class ESSBase(BaseModel):
     version: Optional[str] = Field(None, max_length=100, title="The ESS version")
     revision: Optional[str] = Field(None, max_length=100, title="The ESS revision")
     url: Optional[HttpUrl] = Field(None, title="The ESS official website")
-    model_config = ConfigDict(extra="forbid",
-                              from_attributes=True)
-    
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
     @field_validator("url")
     def convert_url_to_str(cls, v):
         """Convert the URL to a string"""
         return str(v) if v is not None else None
-    
 
 
 class ESSCreate(ESSBase):

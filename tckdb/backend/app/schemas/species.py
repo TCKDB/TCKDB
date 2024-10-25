@@ -7,10 +7,9 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
-    ValidationInfo,
     field_validator,
     model_validator,
-    ValidationInfo
+    ValidationInfo,
 )
 from typing_extensions import Annotated
 
@@ -234,7 +233,7 @@ class SpeciesBase(BaseModel):
 
         label = (
             f' of species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         atom_indices = list()
@@ -267,11 +266,11 @@ class SpeciesBase(BaseModel):
         """Species.fragment_orientation validator"""
         label = (
             f' (species label "{values.data["label"]}")'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if value is None:
-            if "fragments" in values.data and  values.data["fragments"] is not None:
+            if "fragments" in values.data and values.data["fragments"] is not None:
                 raise ValueError(
                     f"Must specify fragment_orientation if fragments are specified{label}."
                 )
@@ -370,7 +369,9 @@ class SpeciesBase(BaseModel):
                 is_valid, err = common.is_valid_atom_index(
                     index=index,
                     coordinates=(
-                        values.data["coordinates"] if "coordinates" in values.data else None
+                        values.data["coordinates"]
+                        if "coordinates" in values.data
+                        else None
                     ),
                     existing_indices=chiral_atom_indices,
                 )
@@ -500,7 +501,7 @@ class SpeciesBase(BaseModel):
         """Species.active_space validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         allowed_keys = ["electrons", "orbitals"]
@@ -523,7 +524,7 @@ class SpeciesBase(BaseModel):
         """Species.hessian validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         num_atoms = common.get_number_of_atoms(values.data)
@@ -550,7 +551,7 @@ class SpeciesBase(BaseModel):
         """Species.scaled_projected_frequencies validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if value is None and common.get_number_of_atoms(values.data) > 1:
@@ -571,7 +572,7 @@ class SpeciesBase(BaseModel):
                     )
                 if value == values.data["frequencies"]:
                     raise ValueError(
-                        f"The scaled_projected_frequencies are identical to the frequencies.\n"
+                        "The scaled_projected_frequencies are identical to the frequencies.\n"
                         f"Did you forget to scale?"
                     )
         return value
@@ -584,10 +585,10 @@ class SpeciesBase(BaseModel):
             return value
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "frequencies" in values.data and  values.data["frequencies"] is not None:
+        if "frequencies" in values.data and values.data["frequencies"] is not None:
             if value is None:
                 raise ValueError(f"Normal displacement modes were not given{label}.")
             if len(value) != len(values.data["frequencies"]):
@@ -614,9 +615,7 @@ class SpeciesBase(BaseModel):
     @field_validator("frequencies")
     def frequencies_validator(cls, value, values: ValidationInfo):
         """Species.frequencies validator"""
-        label = (
-            f' for species "{values.data["label"]}"' if values.data["label"]else ""
-        )
+        label = f' for species "{values.data["label"]}"' if values.data["label"] else ""
 
         if value is None and common.get_number_of_atoms(values.data) > 1:
             raise ValueError(
@@ -642,7 +641,7 @@ class SpeciesBase(BaseModel):
                             f"got {len(value)} frequencies{label}."
                         )
 
-            if values.data["is_ts"]and all(freq > 0 for freq in value):
+            if values.data["is_ts"] and all(freq > 0 for freq in value):
                 raise ValueError(
                     f"An imaginary frequency must be present for a TS species. "
                     f"Got all real frequencies{label}."
@@ -704,9 +703,7 @@ class SpeciesBase(BaseModel):
             values["inchi_key"] = inchi_key
 
         # Ensure that at least one descriptor is present
-        if not (
-            values["smiles"] or values["inchi"] or values["graph"]
-        ):
+        if not (values["smiles"] or values["inchi"] or values["graph"]):
             raise ValueError(
                 "A species descriptor (SMILES, InChI, or graph adjacency list) must be given."
             )
@@ -729,9 +726,7 @@ class SpeciesBase(BaseModel):
                 raise ValueError(
                     f"The RMG adjacency list{label} is invalid:\n{value}\nReason:\n{err}"
                 )
-            multiplicity = multiplicity_from_adjlist(
-                value
-            )
+            multiplicity = multiplicity_from_adjlist(value)
             print("**************")
             print(multiplicity)
             print("**************")
@@ -757,7 +752,7 @@ class SpeciesBase(BaseModel):
         """Species.rigid_rotor validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         allowed_values = [
@@ -779,7 +774,7 @@ class SpeciesBase(BaseModel):
         """Species.statmech_treatment validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         allowed_values = ["RRHO", "RRHO-1D", "RRHO-1D-ND", "RRHO-ND", "RRHO-AD", "RRAO"]
@@ -800,7 +795,7 @@ class SpeciesBase(BaseModel):
         """Species.rotational_constants validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if value is None and common.get_number_of_atoms(values.data) > 1:
@@ -810,7 +805,7 @@ class SpeciesBase(BaseModel):
                 raise ValueError(
                     f"Rotational constants were specified for a monoatomic species{label} ({value})."
                 )
-            if "coordinates" in values.data and  "coords" in values.data["coordinates"]:
+            if "coordinates" in values.data and "coords" in values.data["coordinates"]:
                 linear = is_linear(
                     coordinates=np.array(values.data["coordinates"]["coords"])
                 )
@@ -833,10 +828,10 @@ class SpeciesBase(BaseModel):
             return value
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "torsions" in values.data and  values.data["torsions"]:
+        if "torsions" in values.data and values.data["torsions"]:
             raise ValueError(
                 f"Either torsions or conformers must be given, got both{label}."
             )
@@ -873,10 +868,10 @@ class SpeciesBase(BaseModel):
         """Species.H298 validator"""
         label = (
             f' "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "is_ts" in values.data and  not values.data["is_ts"] and value is None:
+        if "is_ts" in values.data and not values.data["is_ts"] and value is None:
             raise ValueError(
                 f'The "H298" argument must be given for non-TS species{label}.'
             )
@@ -887,10 +882,10 @@ class SpeciesBase(BaseModel):
         """Species.S298 validator"""
         label = (
             f' "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "is_ts" in values.data and  not values.data["is_ts"] and value is None:
+        if "is_ts" in values.data and not values.data["is_ts"] and value is None:
             raise ValueError(
                 f'The "S298" argument must be given for non-TS species{label}.'
             )
@@ -901,10 +896,10 @@ class SpeciesBase(BaseModel):
         """Species.Cp_values validator"""
         label = (
             f' "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "is_ts" in values.data and  not values.data["is_ts"] and value is None:
+        if "is_ts" in values.data and not values.data["is_ts"] and value is None:
             raise ValueError(
                 f'The "Cp_values" argument must be given for non-TS species{label}.'
             )
@@ -915,10 +910,10 @@ class SpeciesBase(BaseModel):
         """Species.Cp_T_list validator"""
         label = (
             f' "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "is_ts" in values.data and  not values.data["is_ts"] and value is None:
+        if "is_ts" in values.data and not values.data["is_ts"] and value is None:
             raise ValueError(
                 f'The "Cp_T_list" argument must be given for non-TS species{label}.'
             )
@@ -939,7 +934,7 @@ class SpeciesBase(BaseModel):
         """Species.opt_path validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if common.get_number_of_atoms(values.data) > 1 and value is None:
@@ -951,7 +946,7 @@ class SpeciesBase(BaseModel):
         """Species.freq_path validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if common.get_number_of_atoms(values.data) > 1 and value is None:
@@ -963,10 +958,10 @@ class SpeciesBase(BaseModel):
         """Species.scan_paths validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "torsions" in values.data and  values.data["torsions"]:
+        if "torsions" in values.data and values.data["torsions"]:
             if value is None:
                 raise ValueError(f"The scan_paths was not given{label}.")
             else:
@@ -991,10 +986,10 @@ class SpeciesBase(BaseModel):
         """Species.irc_paths validator"""
         label = (
             f' for species "{values.data["label"]}"'
-            if "label" in values.data and  values.data["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "is_ts" in values.data and  values.data["is_ts"] and value is None:
+        if "is_ts" in values.data and values.data["is_ts"] and value is None:
             raise ValueError(f"The irc_paths argument was not given{label}.")
         if value is not None and len(value) not in [1, 2]:
             raise ValueError(

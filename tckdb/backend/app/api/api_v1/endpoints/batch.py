@@ -72,7 +72,9 @@ def batch_upload(payload: BatchUploadPayload, db=Depends(get_db)):
                     temp_id_map[literature_data.connection_id] = existing_literature.id
                 else:
                     new_literature = LiteratureModel(
-                        **literature_data.model_dump(exclude={"connection_id", "authors"})
+                        **literature_data.model_dump(
+                            exclude={"connection_id", "authors"}
+                        )
                     )
                     db.add(new_literature)
                     db.flush()
@@ -112,7 +114,9 @@ def batch_upload(payload: BatchUploadPayload, db=Depends(get_db)):
                 if existing_level:
                     temp_id_map[level_data.connection_id] = existing_level.id
                 else:
-                    new_level = LevelModel(**level_data.model_dump(exclude={"connection_id"}))
+                    new_level = LevelModel(
+                        **level_data.model_dump(exclude={"connection_id"})
+                    )
                     db.add(new_level)
                     db.flush()
                     temp_id_map[level_data.connection_id] = new_level.id

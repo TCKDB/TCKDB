@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Tuple, Callable, Dict
+from typing import List, Optional, Tuple
 
 from pydantic import (
     BaseModel,
@@ -11,7 +11,6 @@ from pydantic import (
     field_validator,
     model_validator,
     ValidationInfo,
-    PydanticUserError,
 )
 
 from tckdb.backend.app.schemas.author import AuthorCreate, AuthorReadLiterature
@@ -28,29 +27,29 @@ class ISBN(str):
     @classmethod
     def __get_validators__(cls):
         yield cls.validate
-    
+
     @classmethod
     def validate(cls, v, values):
         if not isinstance(v, str):
-            raise TypeError('ISBN must be a string')
-        
+            raise TypeError("ISBN must be a string")
+
         # Remone hyphens and spaces
-        isbn = re.sub(r'[\s-]', '', v)
-        
+        isbn = re.sub(r"[\s-]", "", v)
+
         if len(isbn) == 10:
-            if not re.match(r'^\d{9}[\dXx]$', isbn):
-                raise ValueError('Invalid ISBN-10')
+            if not re.match(r"^\d{9}[\dXx]$", isbn):
+                raise ValueError("Invalid ISBN-10")
             if not cls.is_valid_isbn10(isbn):
-                raise ValueError('Invalid ISBN-10 check digit')
+                raise ValueError("Invalid ISBN-10 check digit")
             return cls(isbn.upper())
         elif len(isbn) == 13:
             if not isbn.isdigit():
-                raise ValueError('Invalid ISBN-13')
+                raise ValueError("Invalid ISBN-13")
             if not cls.is_valid_isbn13(isbn):
-                raise ValueError('Invalid ISBN-13 check digit')
+                raise ValueError("Invalid ISBN-13 check digit")
             return cls(isbn)
         else:
-            raise ValueError('Invalid ISBN length - must be 10 or 13 digits')
+            raise ValueError("Invalid ISBN length - must be 10 or 13 digits")
 
     @staticmethod
     def is_valid_isbn10(isbn10: str) -> bool:
@@ -97,6 +96,7 @@ class ISBN(str):
                 total += 3 * digit
         check_digit = (10 - (total % 10)) % 10
         return check_digit == int(isbn13[12])
+
 
 class LiteratureType(str, Enum):
     """
@@ -219,9 +219,7 @@ class LiteratureBase(BaseModel):
             # Replace or set the title, year, and publisher if not already set
             values["title"] = metadata.get("title", values["title"])
             values["year"] = metadata.get("issued", values["year"])
-            values["publisher"] = metadata.get(
-                "publisher", values["publisher"]
-            )
+            values["publisher"] = metadata.get("publisher", values["publisher"])
             values["volume"] = metadata.get("volume", values["volume"])
             pages = metadata.get("page")
             if pages:
@@ -229,9 +227,7 @@ class LiteratureBase(BaseModel):
                 pages = pages.split("-")
                 values["page_start"] = values.data.get("page_start", int(pages[0]))
                 values["page_end"] = values.data.get("page_end", int(pages[1]))
-            values["journal"] = metadata.get(
-                "container-title", values["journal"]
-            )
+            values["journal"] = metadata.get("container-title", values["journal"])
             values["issue"] = metadata.get("issue", values["issue"])
             if metadata.get("author"):
                 authors = []
@@ -327,8 +323,6 @@ class LiteratureCreateBatch(LiteratureBase, ConnectionBase):
     #         raise ValueError("Author connection IDs are required")
     #     return v
 
-        
-        
     # @validator('author_connection_ids', always=True)
     # def validate_author_connection_ids(cls, v):
     #     if not v:
@@ -340,6 +334,8 @@ class LiteratureCreateBatch(LiteratureBase, ConnectionBase):
     #     if not v:
     #         raise ValueError("Author connection IDs are required")
     #     return v
+
+
 class LiteratureUpdate(LiteratureBase):
     pass
 

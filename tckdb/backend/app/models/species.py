@@ -573,7 +573,9 @@ class Species(Base, AuditMixin):
         ARRAY(Float, as_tuple=False, dimensions=1, zero_indexes=True), nullable=False
     )
     normal_displacement_modes = Column(MsgpackExt, nullable=True)
-    freq_scale_id = Column(Integer, ForeignKey("freqscale.id"), nullable=True, unique=False)
+    freq_scale_id = Column(
+        Integer, ForeignKey("freqscale.id"), nullable=True, unique=False
+    )
 
     # rotational modes
     rigid_rotor = Column(String(50), nullable=False)

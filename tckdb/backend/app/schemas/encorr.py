@@ -1,6 +1,13 @@
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, ValidationInfo
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+    ValidationInfo,
+)
 
 from tckdb.backend.app.schemas.common import (
     is_valid_element_symbol,
@@ -22,7 +29,9 @@ class IsodesmicReactionEntry(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     @model_validator(mode="after")
-    def check_required_fields(cls, model: 'IsodesmicReactionEntry') -> 'IsodesmicReactionEntry':
+    def check_required_fields(
+        cls, model: "IsodesmicReactionEntry"
+    ) -> "IsodesmicReactionEntry":
         if not all(
             [
                 model.reactants,
@@ -169,10 +178,7 @@ class EnCorrBase(BaseModel):
             and "aec" in values.data
             and "bac" in values.data
             and not all(
-                [
-                    attribute is not None
-                    for attribute in [values["aec"], values["bac"]]
-                ]
+                [attribute is not None for attribute in [values["aec"], values["bac"]]]
             )
         ):
             raise ValueError(

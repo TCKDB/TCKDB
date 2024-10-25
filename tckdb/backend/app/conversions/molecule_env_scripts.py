@@ -105,9 +105,10 @@ def main():
         type=str,
         help="Path to a file containing the adjacency list. If omitted, reads from standard input.",
     )
-    
+
     multiplicity_parser = subparsers.add_parser(
-        "multiplicity", help="Calculate the multiplicity of a molecule from its adjacency list."
+        "multiplicity",
+        help="Calculate the multiplicity of a molecule from its adjacency list.",
     )
     multiplicity_parser.add_argument(
         "-f",

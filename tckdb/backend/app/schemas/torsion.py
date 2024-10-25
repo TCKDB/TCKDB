@@ -70,7 +70,7 @@ class TorsionsBase(BaseModel):
         """TorsionsBase.constraints validator"""
         label = (
             f' for species "{values["label"]}"'
-            if "label" in values and  values["label"] is not None
+            if "label" in values and values["label"] is not None
             else ""
         )
         for key in value.keys():

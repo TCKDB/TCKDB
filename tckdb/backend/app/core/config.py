@@ -33,6 +33,7 @@ def getenv_boolean(
         result = env_value.upper() in ("TRUE", "1")
     return result
 
+
 API_V1_STR = "/api/v1"
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:

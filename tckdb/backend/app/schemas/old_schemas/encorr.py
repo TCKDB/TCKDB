@@ -195,10 +195,7 @@ class EnCorrBase(BaseModel):
             and "aec" in info
             and "bac" in info
             and not all(
-                [
-                    attribute is not None
-                    for attribute in [values["aec"], values["bac"]]
-                ]
+                [attribute is not None for attribute in [values["aec"], values["bac"]]]
             )
         ):
             raise ValueError(
@@ -307,7 +304,7 @@ class EnCorrCreate(EnCorrBase):
     @field_validator("isodesmic_high_level", mode="before")
     def validate_isodesmic_high_level(cls, value, values: ValidationInfo):
         """Ensure that isodesmic_high_level is provided if isodesmic_reactions are specified."""
-        if values["isodesmic_reactions"]is not None and value is None:
+        if values["isodesmic_reactions"] is not None and value is None:
             raise ValueError(
                 "The isodesmic_high_level must be provided when isodesmic_reactions are specified."
             )

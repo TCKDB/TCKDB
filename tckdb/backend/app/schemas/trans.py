@@ -46,35 +46,35 @@ class TransBase(BaseModel):
         ):
             if "alpha0" not in value:
                 raise ValueError(
-                    f"The 'alpha0' parameter is required for a "
-                    f"Single Exponential Down energy transfer model"
+                    "The 'alpha0' parameter is required for a "
+                    "Single Exponential Down energy transfer model"
                 )
             if "T0" not in value:
                 raise ValueError(
-                    f"The 'T0' parameter is required for a "
-                    f"Single Exponential Down energy transfer model"
+                    "The 'T0' parameter is required for a "
+                    "Single Exponential Down energy transfer model"
                 )
             if "n" not in value:
                 raise ValueError(
-                    f"The 'n' parameter is required for a "
-                    f"Single Exponential Down energy transfer model"
+                    "The 'n' parameter is required for a "
+                    "Single Exponential Down energy transfer model"
                 )
             for key, val in value.items():
                 if key not in ["alpha0", "T0", "n"]:
                     raise ValueError(
-                        f"Got an unexpected key for the Single Exponential Down energy transfer model: "
+                        "Got an unexpected key for the Single Exponential Down energy transfer model: "
                         f"'{key}'. Allowed keys are 'alpha0', 'T0', 'n'."
                     )
                 if key == "n":
                     if not isinstance(val, (float, int)):
                         raise ValueError(
-                            f"The 'n' parameter of the Single Exponential Down energy transfer model must "
+                            "The 'n' parameter of the Single Exponential Down energy transfer model must "
                             f"be dimensionless, got {val} in {value} which is a {type(val)}"
                         )
                 else:
                     if not isinstance(val, tuple):
                         raise ValueError(
-                            f"The 'alpha0' and 'T0' parameters of the Single Exponential Down energy "
+                            "The 'alpha0' and 'T0' parameters of the Single Exponential Down energy "
                             f"transfer model must be dimensionless, got {val} in {value} "
                             f"which is a {type(val)}"
                         )
