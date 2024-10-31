@@ -2,26 +2,56 @@
 TCKDB backend app schemas common module
 """
 
-import numpy as np
+import os
 import re
-from typing import Dict, List, Optional, Tuple, Union
+import subprocess
+import sys
+from typing import Dict, List, Optional, Tuple, Union, Any
 
+import numpy as np
 import qcelemental as qcel
-from pint.errors import DefinitionSyntaxError, DimensionalityError, RedefinitionError, UndefinedUnitError
-try:
-    from rdkit.Chem import MolFromSmiles
-    from rdkit.Chem.inchi import MolFromInchi
-except ImportError:
-    pass
-
-try:
-    from rmgpy.exceptions import InvalidAdjacencyListError
-    from rmgpy.molecule.adjlist import from_adjacency_list
-except ImportError:
-    # These modules are not in the requirements.txt file (cannot be installed via pip) and are skipped if not present
-    pass
+from pint.errors import (
+    DefinitionSyntaxError,
+    DimensionalityError,
+    RedefinitionError,
+    UndefinedUnitError,
+)
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from rdkit.Chem import MolFromSmiles
+from rdkit.Chem.inchi import MolFromInchi
+from typing_extensions import Annotated
 
 from tckdb.backend.app.conversions.converter import inchi_from_inchi_key
+from tckdb.backend.app.utils.python_paths import MOLECULE_PYTHON
+
+
+class Coordinates(BaseModel):
+    symbols: Tuple[Annotated[str, StringConstraints(max_length=10)], ...] = Field(
+        ..., description="Chemical element symbols."
+    )
+    isotopes: Tuple[Annotated[int, Field(ge=1)], ...] = Field(
+        ..., description="The respective isotopes."
+    )
+    coords: Tuple[Tuple[float, float, float], ...] = Field(
+        ..., description="Cartesian coordinates in standard orientation."
+    )
+    model_config = ConfigDict(
+        from_attributes=True,
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "symbols": ("C", "H", "H", "H", "H"),
+                "isotopes": (12, 1, 1, 1, 1),
+                "coords": (
+                    (0.0, 0.0, 0.0),
+                    (0.6300326, 0.6300326, 0.6300326),
+                    (-0.6300326, -0.6300326, 0.6300326),
+                    (-0.6300326, 0.6300326, -0.6300326),
+                    (0.6300326, -0.6300326, -0.6300326),
+                ),
+            }
+        },
+    )
 
 
 def lowercase_dict(dictionary: dict) -> dict:
@@ -38,7 +68,7 @@ def lowercase_dict(dictionary: dict) -> dict:
         dict: A dictionary with all string keys and values lowercase.
     """
     if not isinstance(dictionary, dict):
-        raise TypeError(f'Expected a dictionary, got a {type(dictionary)}')
+        raise TypeError(f"Expected a dictionary, got a {type(dictionary)}")
     new_dict = dict()
     for key, val in dictionary.items():
         new_key = key.lower() if isinstance(key, str) else key
@@ -49,9 +79,10 @@ def lowercase_dict(dictionary: dict) -> dict:
     return new_dict
 
 
-def is_valid_energy_unit(unit: str,
-                         raise_error: bool = False,
-                         ) -> Tuple[bool, str]:
+def is_valid_energy_unit(
+    unit: str,
+    raise_error: bool = False,
+) -> Tuple[bool, str]:
     """
     Check whether a string represents a valid energy unit.
 
@@ -65,22 +96,27 @@ def is_valid_energy_unit(unit: str,
             - A reason for invalidating the argument.
     """
     try:
-        qcel.constants.conversion_factor(unit, 'kJ/mol')
-    except (AttributeError,
-            DefinitionSyntaxError,
-            DimensionalityError,
-            RedefinitionError,
-            UndefinedUnitError) as e:
+        qcel.constants.conversion_factor(unit, "kJ/mol")
+    except (
+        AttributeError,
+        DefinitionSyntaxError,
+        DimensionalityError,
+        RedefinitionError,
+        UndefinedUnitError,
+    ) as e:
         if raise_error:
-            raise ValueError(f'The unit "{unit}" does not seem to be a valid energy unit. Got:\n{e}')
+            raise ValueError(
+                f'The unit "{unit}" does not seem to be a valid energy unit. Got:\n{e}'
+            )
         else:
             return False, str(e)
-    return True, ''
+    return True, ""
 
 
-def is_valid_element_symbol(symbol: str,
-                            raise_error: bool = False,
-                            ) -> Tuple[bool, str]:
+def is_valid_element_symbol(
+    symbol: str,
+    raise_error: bool = False,
+) -> Tuple[bool, str]:
     """
     Check whether an element symbol is valid.
 
@@ -95,16 +131,26 @@ def is_valid_element_symbol(symbol: str,
     """
     if not isinstance(symbol, str):
         if raise_error:
-            raise ValueError(f'An element symbol must be a string, got "{symbol}" which is a {type(symbol)}.')
-        return False, f'An element symbol must be a string, got "{symbol}" which is a {type(symbol)}.'
+            raise ValueError(
+                f'An element symbol must be a string, got "{symbol}" which is a {type(symbol)}.'
+            )
+        return (
+            False,
+            f'An element symbol must be a string, got "{symbol}" which is a {type(symbol)}.',
+        )
     try:
         qcel.periodictable.to_Z(symbol)
     except qcel.exceptions.NotAnElementError:
         if raise_error:
-            raise ValueError(f'The symbol "{symbol}" does not seem to correspond to a known chemical element.')
+            raise ValueError(
+                f'The symbol "{symbol}" does not seem to correspond to a known chemical element.'
+            )
         else:
-            return False, f'The symbol "{symbol}" does not seem to correspond to a known chemical element.'
-    return True, ''
+            return (
+                False,
+                f'The symbol "{symbol}" does not seem to correspond to a known chemical element.',
+            )
+    return True, ""
 
 
 def is_valid_inchi(inchi: str) -> Tuple[bool, str]:
@@ -122,19 +168,23 @@ def is_valid_inchi(inchi: str) -> Tuple[bool, str]:
     if not isinstance(inchi, str):
         # this is important, not only a shortcut, since a try except block does not capture Boost.Python.ArgumentError
         # being raised if the argument does not match the C++ signature.
-        return False, f'An InChI descriptor must be a string, got "{inchi}" which is a {type(inchi)}.'
+        return (
+            False,
+            f'An InChI descriptor must be a string, got "{inchi}" which is a {type(inchi)}.',
+        )
     try:
         rd_mol = MolFromInchi(inchi)
     except Exception as e:
         return False, str(e)
     if rd_mol is None:
         return False, f'Could not generate an RDKit Molecule from InChI "{inchi}"'
-    return True, ''
+    return True, ""
 
 
-def is_valid_inchi_key(inchi_key: str,
-                       regex_only: bool = True,
-                       ) -> Tuple[bool, str]:
+def is_valid_inchi_key(
+    inchi_key: str,
+    regex_only: bool = True,
+) -> Tuple[bool, str]:
     """
     Check whether a string represents a valid InChI Key descriptor.
     Note that ``regex_only`` is set to ``True`` by default, since the InChI Key resolving method is not robust.
@@ -149,19 +199,22 @@ def is_valid_inchi_key(inchi_key: str,
             - A reason for invalidating the argument.
     """
     if not isinstance(inchi_key, str):
-        return False, f'An InChI Key descriptor must be a string, got "{inchi_key}" which is a {type(inchi_key)}.'
-    inchi_key_regex = re.compile('[A-Z]{14}-[A-Z]{10}-[A-Z]')
+        return (
+            False,
+            f'An InChI Key descriptor must be a string, got "{inchi_key}" which is a {type(inchi_key)}.',
+        )
+    inchi_key_regex = re.compile("[A-Z]{14}-[A-Z]{10}-[A-Z]")
     if not inchi_key_regex.match(inchi_key):
         return False, f'The InChI Key descriptor is corrupt, got: "{inchi_key}".'
     if regex_only:
-        return True, ''
+        return True, ""
     try:
         inchi = inchi_from_inchi_key(inchi_key)
     except:
-        return False, 'Could not decode InChI Key'
+        return False, "Could not decode InChI Key"
     if inchi is None:
-        return False, 'Could not decode InChI Key'
-    return True, ''
+        return False, "Could not decode InChI Key"
+    return True, ""
 
 
 def is_valid_smiles(smiles: str) -> Tuple[bool, str]:
@@ -179,14 +232,17 @@ def is_valid_smiles(smiles: str) -> Tuple[bool, str]:
     if not isinstance(smiles, str):
         # this is important, not only a shortcut, since a try except block does not capture Boost.Python.ArgumentError
         # being raised if the argument does not match the C++ signature.
-        return False, f'A SMILES descriptor must be a string, got "{smiles}" which is a {type(smiles)}.'
+        return (
+            False,
+            f'A SMILES descriptor must be a string, got "{smiles}" which is a {type(smiles)}.',
+        )
     try:
         rd_mol = MolFromSmiles(smiles)
     except:
         return False, f'Could not decode the SMILES string "{smiles}".'
     if rd_mol is None:
         return False, f'Could not decode the SMILES string "{smiles}".'
-    return True, ''
+    return True, ""
 
 
 def is_valid_adjlist(adjlist: str) -> Tuple[bool, str]:
@@ -201,18 +257,38 @@ def is_valid_adjlist(adjlist: str) -> Tuple[bool, str]:
             - Whether the string represents a valid adjacency list.
             - A reason for invalidating the argument.
     """
-    if not isinstance(adjlist, str):
-        return False, f'An adjacency list graph must be a string, got "{adjlist}" which is a {type(adjlist)}.'
     try:
-        from_adjacency_list(adjlist, group=False, saturate_h=False)
-    except InvalidAdjacencyListError as e:
-        return False, str(e)
-    return True, ''
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        conversion_script = os.path.abspath(
+            os.path.join(script_dir, "..", "conversions", "molecule_env_scripts.py")
+        )
+        cmd = [MOLECULE_PYTHON, conversion_script, "validate"]
+
+        result = subprocess.run(
+            cmd, input=adjlist, text=True, capture_output=True, check=True
+        )
+
+        output = result.stdout.strip()
+        if output == "True":
+            return True, ""
+        else:
+            return False, print(
+                "Unexpected output: {output} and stderr:", file=sys.stderr
+            )
+
+    except subprocess.CalledProcessError as e:
+        error_message = e.stderr.strip()
+        if not error_message:
+            error_message = "Unknown error occurred during validation."
+        return False, f"Validation failed: {error_message}"
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
 
 
-def check_colliding_atoms(xyz: dict,
-                          threshold: float = 0.55,
-                          ) -> bool:
+def check_colliding_atoms(
+    xyz: Union[Coordinates, Dict[str, Any]],
+    threshold: float = 0.55,
+) -> bool:
     """
     Check whether atoms are too close to each other.
     A default threshold of 55% of the covalent radii of two atoms is used.
@@ -233,58 +309,132 @@ def check_colliding_atoms(xyz: dict,
     Returns:
          bool: ``True`` if there are colliding atoms in the input, ``False`` otherwise.
     """
-    if len(xyz['symbols']) == 1:
+    if isinstance(xyz, Coordinates):
+        coords = xyz.coords
+        symbols = xyz.symbols
+    elif isinstance(xyz, dict):
+        coords = xyz["coords"]
+        symbols = xyz["symbols"]
+
+    if len(xyz["symbols"]) == 1:
         # monoatomic
         return False
     # convert Angstrom to Bohr
-    geometry = np.array([np.array(coord, np.float64) * 1.8897259886 for coord in xyz['coords']])
-    qcel_out = qcel.molutil.guess_connectivity(symbols=xyz['symbols'], geometry=geometry, threshold=threshold)
+    geometry = np.array(
+        [np.array(coord, np.float64) * 1.8897259886 for coord in coords]
+    )
+    qcel_out = qcel.molutil.guess_connectivity(
+        symbols=symbols, geometry=geometry, threshold=threshold
+    )
     return bool(len(qcel_out))
 
 
-def is_valid_coordinates(xyz: Dict[str, Union[Tuple[Tuple[float, float, float], ...],
-                                              Tuple[int, ...], Tuple[str, ...]]],
-                         collision_threshold: Optional[float] = 0.55,
-                         allowed_keys: Optional[List[str]] = None
-                         ) -> Tuple[bool, str]:
+def is_valid_coordinates(
+    xyz: Union[Coordinates, Dict[str, Any]],
+    allowed_keys: Optional[List[str]] = None,
+    collision_threshold: Optional[float] = None,
+) -> Tuple[bool, str]:
     """
-    Check whether a coordinates dictionary is valid.
+    Validate the coordinates of a species, whether provided as a Coordinates instance or a dictionary.
 
     Args:
-        xyz (dict): The string to be checked.
-        collision_threshold (float, optional): The atoms collision threshold to use. Pass ``None`` to skip this check.
-        allowed_keys (list, optional): Entries are additional keys that are allowed to be in the dictionary.
+        xyz (Union[Coordinates, Dict[str, Any]]): The coordinates to validate.
+        allowed_keys (Optional[List[str]]): Additional keys allowed in the coordinates dictionary.
+        collision_threshold (Optional[float]): Threshold for detecting colliding atoms.
 
     Returns:
-        Tuple[bool, str]:
-            - Whether the coordinates dictionary is valid.
-            - A reason for invalidating the argument.
+        Tuple[bool, str]: (True, "") if valid, otherwise (False, error_message)
     """
-    valid_keys = ['symbols', 'isotopes', 'coords']
-    allowed_keys = allowed_keys or list()
-    for valid_key in valid_keys:
-        if valid_key not in xyz:
-            return False, f'The "{valid_key}" key is missing from the coordinates dictionary.'
-    invalid_keys = [key for key in xyz.keys() if key not in valid_keys + allowed_keys]
-    if len(invalid_keys):
-        return False, f'The coordinates dictionary has the following invalid key(s): {invalid_keys}.'
-    if len(xyz['coords']) != len(xyz['symbols']) \
-            or len(xyz['coords']) != len(xyz['isotopes']):
-        return False, f'Got {len(xyz["symbols"])} symbols, {len(xyz["isotopes"])} isotopes, ' \
-                      f'and {len(xyz["coords"])} coordinates in\n{xyz}'
-    for coord in xyz['coords']:
-        if len(coord) != 3:
-            return False, f'All atom coordinates must be of length 3, got:\n{xyz}'
-    if collision_threshold is not None:
-        if check_colliding_atoms(xyz=xyz, threshold=collision_threshold):
-            return False, f'The coordinates have colliding atoms (at a tolerance of {collision_threshold}).'
-    return True, ''
+    valid_keys = ["symbols", "isotopes", "coords"]
+    allowed_keys = allowed_keys or []
+
+    if isinstance(xyz, Coordinates):
+        # Validate Coordinates instance
+        num_symbols = len(xyz.symbols)
+        num_isotopes = len(xyz.isotopes)
+        num_coords = len(xyz.coords)
+
+        if num_symbols != num_isotopes or num_symbols != num_coords:
+            return (
+                False,
+                f"Got {num_symbols} symbols, {num_isotopes} isotopes, and {num_coords} coordinates in\n{xyz}",
+            )
+
+        for idx, coord in enumerate(xyz.coords):
+            if len(coord) != 3:
+                return (
+                    False,
+                    f"All atom coordinates must be of length 3, got: {coord} at index {idx}",
+                )
+
+        if collision_threshold is not None:
+            try:
+                has_collision = check_colliding_atoms(
+                    coordinates=xyz, threshold=collision_threshold
+                )
+            except TypeError as e:
+                return False, str(e)
+            if has_collision:
+                return (
+                    False,
+                    f"The coordinates have colliding atoms (at a tolerance of {collision_threshold}).",
+                )
+
+        return True, ""
+
+    elif isinstance(xyz, dict):
+        # Validate dictionary input
+        invalid_keys = [
+            key for key in xyz.keys() if key not in valid_keys + allowed_keys
+        ]
+        for valid_key in valid_keys:
+            if valid_key not in xyz:
+                return (
+                    False,
+                    f'The "{valid_key}" key is missing from the coordinates dictionary.',
+                )
+        if len(invalid_keys):
+            return (
+                False,
+                f"The coordinates dictionary has the following invalid key(s): {invalid_keys}.",
+            )
+        if len(xyz["coords"]) != len(xyz["symbols"]) or len(xyz["coords"]) != len(
+            xyz["isotopes"]
+        ):
+            return (
+                False,
+                f'Got {len(xyz["symbols"])} symbols, {len(xyz["isotopes"])} isotopes, '
+                f'and {len(xyz["coords"])} coordinates in\n{xyz}',
+            )
+        for coord in xyz["coords"]:
+            if len(coord) != 3:
+                return False, f"All atom coordinates must be of length 3, got:\n{xyz}"
+        if collision_threshold is not None:
+            try:
+                has_collision = check_colliding_atoms(
+                    coordinates=xyz, threshold=collision_threshold
+                )
+            except TypeError as e:
+                return False, str(e)
+            if has_collision:
+                return (
+                    False,
+                    f"The coordinates have colliding atoms (at a tolerance of {collision_threshold}).",
+                )
+        return True, ""
+
+    else:
+        return (
+            False,
+            "Invalid type for coordinates. Expected Coordinates instance or dict.",
+        )
 
 
-def is_valid_atom_index(index: int,
-                        coordinates: Optional[dict] = None,
-                        existing_indices: Optional[List[int]] = None,
-                        ) -> Tuple[bool, str]:
+def is_valid_atom_index(
+    index: int,
+    coordinates: Optional[dict] = None,
+    existing_indices: Optional[List[int]] = None,
+) -> Tuple[bool, str]:
     """
     Check whether an atom index is valid:
     1. it is not 0
@@ -302,12 +452,15 @@ def is_valid_atom_index(index: int,
             - A reason for invalidating the argument.
     """
     if index == 0:
-        return False, 'A 1-indexed atom index cannot be zero.'
-    if coordinates is not None and index > len(coordinates['symbols']):
-        return False, f'An atom index {index} cannot be greater than the number of atoms {len(coordinates["symbols"])}.'
+        return False, "A 1-indexed atom index cannot be zero."
+    if coordinates is not None and index > len(coordinates.symbols):
+        return (
+            False,
+            f"An atom index {index} cannot be greater than the number of atoms {len(coordinates.symbols)}.",
+        )
     if existing_indices is not None and index in existing_indices:
-        return False, f'Atom index {index} appears more than once in this argument.'
-    return True, ''
+        return False, f"Atom index {index} appears more than once in this argument."
+    return True, ""
 
 
 def get_number_of_atoms(coords: Optional[dict]) -> Optional[int]:
@@ -322,8 +475,15 @@ def get_number_of_atoms(coords: Optional[dict]) -> Optional[int]:
         Optional[int]: The number of atoms in the coordinates matrix.
     """
     if coords is not None:
-        if 'coordinates' in coords:
-            coords = coords['coordinates']
-        if isinstance(coords, dict) and 'symbols' in coords and isinstance(coords['symbols'], (list, tuple)):
-            return len(coords['symbols'])
+        if "coordinates" in coords:
+            coords = coords["coordinates"]
+        if isinstance(coords, Coordinates) and isinstance(
+            coords.symbols, (list, tuple)
+        ):
+            return len(coords.symbols)
+        elif isinstance(coords, dict):
+            if "symbols" in coords:
+                return len(coords["symbols"])
+            elif "symbols" in coords.keys():
+                return len(coords["symbols"])
     return None
