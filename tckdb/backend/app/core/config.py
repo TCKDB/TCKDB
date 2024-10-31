@@ -4,10 +4,29 @@ TCKDB backend app core config module
 
 import os
 
+from dotenv import load_dotenv
 
-def getenv_boolean(var_name,
-                   default_value: bool = False,
-                   ) -> bool:
+# Determine if the application is running in a testing environment
+TESTING = os.getenv("TESTING", "false").lower() == "true"
+RUNNING_IN_DOCKER = os.getenv("RUNNING_IN_DOCKER", "false").lower() == "true"
+
+# Set the path to the appropriate .env file
+if TESTING:
+    if RUNNING_IN_DOCKER:
+        env_path = "./tckdb/backend/app/core/.env.test.docker"
+    else:
+        env_path = "./tckdb/backend/app/core/.env.test"
+else:
+    env_path = "./tckdb/backend/app/core/.env"
+
+# Load environment variables from the determined .env file
+load_dotenv(dotenv_path=env_path, override=True)
+
+
+def getenv_boolean(
+    var_name,
+    default_value: bool = False,
+) -> bool:
     result = default_value
     env_value = os.getenv(var_name)
     if env_value is not None:
@@ -16,8 +35,7 @@ def getenv_boolean(var_name,
 
 
 API_V1_STR = "/api/v1"
-
-SECRET_KEY = os.getenvb(b"SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     SECRET_KEY = os.urandom(32)
 
@@ -61,3 +79,7 @@ FIRST_SUPERUSER_PASSWORD = os.getenv("FIRST_SUPERUSER_PASSWORD")
 USERS_OPEN_REGISTRATION = getenv_boolean("USERS_OPEN_REGISTRATION")
 
 EMAIL_TEST_USER = "test@example.com"
+
+FAST_API_PORT = os.getenv("FAST_API_PORT")
+
+ENV = os.getenv("ENV")
