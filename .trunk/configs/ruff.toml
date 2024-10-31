@@ -1,5 +1,10 @@
 # Generic, formatter-friendly config.
 select = ["B", "D3", "E", "F"]
 
-# Never enforce `E501` (line length violations). This should be handled by formatters.
-ignore = ["E501"]
+ignore = [
+    # Never enforce `E501` (line length violations). This should be handled by formatters.
+    "E501", 
+
+    # Ignore calling function in dependencies injection - used in fast-api routes 
+    "B008"
+]
