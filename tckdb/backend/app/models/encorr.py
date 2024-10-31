@@ -74,15 +74,44 @@ class EnCorr(Base):
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input).
     """
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    level_id = Column(Integer, ForeignKey('level.id'), nullable=False, unique=False)
-    supported_elements = Column(ARRAY(item_type=str, as_tuple=False, zero_indexes=True), nullable=False)
+    supported_elements = Column(
+        ARRAY(String, as_tuple=False, zero_indexes=True), nullable=False
+    )
     energy_unit = Column(String(255), nullable=False)
     aec = Column(MsgpackExt, nullable=True)
     bac = Column(MsgpackExt, nullable=True)
-    isodesmic_reactions = Column(ARRAY(item_type=dict, as_tuple=False, zero_indexes=True), nullable=True)
-    isodesmic_high_level_id = Column(Integer, ForeignKey('level.id'), nullable=True, unique=False)
+    isodesmic_reactions = Column(MsgpackExt, nullable=True)
+    isodesmic_high_level_id = Column(
+        Integer, ForeignKey("level.id"), nullable=True, unique=False
+    )
     reviewer_flags = Column(MsgpackExt, nullable=True)
+
+    level_id = Column(
+        Integer, ForeignKey("level.id", ondelete="SET NULL"), nullable=True
+    )
+    isodesmic_high_level_id = Column(
+        Integer, ForeignKey("level.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Relationships to Level
+    primary_level = relationship(
+        "Level", back_populates="en_corrs_primary", foreign_keys=[level_id]
+    )
+    isodesmic_high_level = relationship(
+        "Level",
+        back_populates="en_corrs_isodesmic",
+        foreign_keys=[isodesmic_high_level_id],
+    )
+
+    # Relationships to Species
+    species = relationship(
+        "Species",
+        back_populates="encorr",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def __repr__(self) -> str:
         """
@@ -95,10 +124,17 @@ class EnCorr(Base):
         str_ += f"energy_unit='{self.energy_unit}'"
         str_ += f", aec={self.aec}" if self.aec is not None else ""
         str_ += f", bac={self.bac}" if self.bac is not None else ""
-        str_ += f", isodesmic_reactions={self.isodesmic_reactions}" if self.isodesmic_reactions is not None else ""
-        str_ += f", isodesmic_high_level_id={self.isodesmic_high_level_id}" \
-            if self.isodesmic_high_level_id is not None else ""
-        str_ += f")>"
+        str_ += (
+            f", isodesmic_reactions={self.isodesmic_reactions}"
+            if self.isodesmic_reactions is not None
+            else ""
+        )
+        str_ += (
+            f", isodesmic_high_level_id={self.isodesmic_high_level_id}"
+            if self.isodesmic_high_level_id is not None
+            else ""
+        )
+        str_ += ")>"
         return str_
 
     def __str__(self) -> str:
@@ -108,5 +144,5 @@ class EnCorr(Base):
         str_ = f"<{self.__class__.__name__}("
         str_ += f"level_id='{self.level_id}', "
         str_ += f"supported_elements={self.supported_elements}"
-        str_ += f")>"
+        str_ += ")>"
         return str_

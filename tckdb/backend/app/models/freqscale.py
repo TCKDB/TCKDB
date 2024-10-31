@@ -8,7 +8,7 @@ from tckdb.backend.app.db.base_class import Base
 from tckdb.backend.app.models.common import MsgpackExt
 
 
-class Freq(Base):
+class FreqScale(Base):
     """
     A class for representing a TCKDB Freq item (frequency scaling factor)
 
@@ -33,9 +33,10 @@ class Freq(Base):
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input).
     """
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     factor = Column(Float(), nullable=False)
-    level_id = Column(Integer, ForeignKey('level.id'), nullable=False, unique=True)
+    level_id = Column(Integer, ForeignKey("level.id"), nullable=False, unique=True)
     source = Column(String(255), nullable=False)
     reviewer_flags = Column(MsgpackExt, nullable=True)
 
@@ -48,7 +49,7 @@ class Freq(Base):
         str_ += f"factor={self.factor}, "
         str_ += f"level_id={self.level_id}, "
         str_ += f"source='{self.source}'"
-        str_ += f")>"
+        str_ += ")>"
         return str_
 
     def __str__(self) -> str:
@@ -59,5 +60,5 @@ class Freq(Base):
         str_ += f"factor={self.factor}, "
         str_ += f"level_id={self.level_id}, "
         str_ += f"source='{self.source}'"
-        str_ += f")>"
+        str_ += ")>"
         return str_

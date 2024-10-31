@@ -3,6 +3,7 @@ TCKDB backend app models level of theory module
 """
 
 from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import relationship
 
 from tckdb.backend.app.db.base_class import Base
 from tckdb.backend.app.models.common import MsgpackExt
@@ -82,6 +83,7 @@ class Level(Base):
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input)
     """
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     method = Column(String(500), nullable=False)
     basis = Column(String(500), nullable=True)
@@ -93,6 +95,23 @@ class Level(Base):
     solvent = Column(String(500), nullable=True)
     solvation_description = Column(String(1000), nullable=True)
     reviewer_flags = Column(MsgpackExt, nullable=True)
+
+    # Relationships
+    en_corrs_primary = relationship(
+        "EnCorr",
+        back_populates="primary_level",
+        foreign_keys="EnCorr.level_id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    en_corrs_isodesmic = relationship(
+        "EnCorr",
+        back_populates="isodesmic_high_level",
+        foreign_keys="EnCorr.isodesmic_high_level_id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def __repr__(self) -> str:
         """
