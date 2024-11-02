@@ -87,7 +87,7 @@ def create_np_species(
                 if not existing_bot:
                     raise HTTPException(
                         status_code=400, detail=f"Bot creation failed: {e}"
-                    )
+                    ) from e
 
     np_species_data = np_species.dict(exclude={"bot"})
     if bot:
@@ -102,7 +102,7 @@ def create_np_species(
         db.rollback()
         raise HTTPException(
             status_code=400, detail=f"Failed to create non-physical species: {str(e)}"
-        )
+        ) from e
     return db_np_species
 
 

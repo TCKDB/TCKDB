@@ -90,5 +90,5 @@ class ESS(Base):
             str_ += f", revision='{self.revision}'"
         if self.url is not None:
             str_ += f", url='{self.url}'"
-        str_ += f")>"
+        str_ += ")>"
         return str_

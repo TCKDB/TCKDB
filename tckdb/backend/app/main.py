@@ -16,8 +16,8 @@ if FAST_API_PORT is None:
     raise ValueError("FAST_API_PORT is not set in the environment variables.")
 try:
     port = int(FAST_API_PORT)
-except ValueError:
-    raise ValueError("FAST_API_PORT must be an integer.")
+except ValueError as e:
+    raise ValueError("FAST_API_PORT must be an integer.") from e
 
 
 @asynccontextmanager

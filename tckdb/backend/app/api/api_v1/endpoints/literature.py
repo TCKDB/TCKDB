@@ -38,7 +38,7 @@ def create_new_literature(literature: LiteratureCreate, db: Session = Depends(ge
     except IntegrityError as e:
         raise HTTPException(
             status_code=400, detail=f"Failed to create literature: {str(e)}"
-        )
+        ) from e
 
 
 @router.get("/{literature_id}", response_model=LiteratureRead)
@@ -81,7 +81,7 @@ def update_literature_entry(
     except IntegrityError as e:
         raise HTTPException(
             status_code=400, detail=f"Failed to update literature: {str(e)}"
-        )
+        ) from e
 
 
 @router.delete("/{literature_id}/soft", response_model=dict)
@@ -102,7 +102,7 @@ def delete_literature_soft(literature_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=400, detail=f"Failed to delete literature: {str(e)}"
-        )
+        ) from e
 
 
 @router.post("/{literature_id}/restore", response_model=LiteratureRead)
@@ -123,4 +123,4 @@ def restore_literature(literature_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=400, detail=f"Failed to restore literature: {str(e)}"
-        )
+        ) from e

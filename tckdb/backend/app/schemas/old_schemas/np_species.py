@@ -5,7 +5,14 @@ TCKDB backend app schemas non-physical species (np_species) module
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    ValidationInfo,
+)
 from rmgpy.molecule.adjlist import from_adjacency_list
 from typing_extensions import Annotated
 

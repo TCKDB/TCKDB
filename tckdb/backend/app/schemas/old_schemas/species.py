@@ -16,6 +16,7 @@ from pydantic import (
     StringConstraints,
     field_validator,
     model_validator,
+    ValidationInfo
 )
 from rmgpy.molecule.adjlist import from_adjacency_list
 from typing_extensions import Annotated
@@ -53,15 +54,15 @@ class TorsionsBase(BaseModel):
     A class for validating SpeciesBase.torsions arguments
     """
     computation_type: TorsionComputationTypeEnum = Field(TorsionComputationTypeEnum.continuous_constrained_optimization,
-                                                         title="The computation type used for torsion scans, either "
-                                                               "'single point', 'constrained optimization', "
-                                                               "or 'continuous constrained optimization' (default)")
+                                                        title="The computation type used for torsion scans, either "
+                                                            "'single point', 'constrained optimization', "
+                                                            "or 'continuous constrained optimization' (default)")
     dimension: int = Field(1, ge=1, title='The scan dimension')
     constraints: Optional[Dict[Tuple[int, ...], float]] = \
         Field(None, title='Any non-trivial constraints (i.e., other than the scanned mode) used during optimization')
     symmetry: Optional[int] = Field(None, gt=0, title='The internal symmetry number of the scanned mode')
     treatment: TorsionTreatmentEnum = Field(..., title="The torsion treatment, either 'hindered rotor', 'free rotor', "
-                                                       "'rigid top', or 'hindered rotor density of states'")
+                                                    "'rigid top', or 'hindered rotor density of states'")
     torsions: Union[List[List[int]], List[int]] = Field(..., title='The torsions list described by this mode')
     top: List[int] = Field(..., title='The lost of atoms at one of the tops')
     energies: list
@@ -77,7 +78,7 @@ class TorsionsBase(BaseModel):
         for key in value.keys():
             if len(key) not in [2, 3, 4]:
                 raise ValueError(f'A constraint key length must be between 2 to 4, got {key} of length '
-                                 f'{len(key)}{label} in\n{value}')
+                                f'{len(key)}{label} in\n{value}')
             if any(index == 0 for index in key):
                 raise ValueError(f'Atom indices in the constrains must be 1-indexed, got{label} {key} in\n{value}')
         return value
@@ -101,12 +102,12 @@ class TorsionsBase(BaseModel):
         for atom_indices in value:
             if len(atom_indices) != 4:
                 raise ValueError(f'Atom indices in "torsions" must be of length 4, got{label} {atom_indices}'
-                                 f'in\n{values}')
+                                f'in\n{values}')
             if any(index == 0 for index in atom_indices):
                 raise ValueError(f'Torsion atom indices must be 1-indexed, got{label} {atom_indices} in\n{values}')
         if 'dimension' in values and  values['dimension'] and len(value) != values['dimension']:
             raise ValueError(f"Got a {len(value)}D torsion for a declared dimension of "
-                             f"{values['dimension']}{label}:\n{value}")
+                            f"{values['dimension']}{label}:\n{value}")
         return value
 
 
@@ -132,10 +133,10 @@ class TorsionsBase(BaseModel):
                     energies_dimension += 1
                 elif not isinstance(entry, float):
                     raise ValueError(f"Lowest level energy entries in a torsion must be floats, "
-                                     f"got {entry}{label} which is a {type(entry)} in\n{value}")
+                                    f"got {entry}{label} which is a {type(entry)} in\n{value}")
             if energies_dimension != values['dimension']:
                 raise ValueError(f"Got a {energies_dimension}D energies attribute for a declared dimension "
-                                 f"of {values['dimension']}{label}:\n{value}")
+                                f"of {values['dimension']}{label}:\n{value}")
         return value
 
 
@@ -148,7 +149,7 @@ class TorsionsBase(BaseModel):
         for resolution in value:
             if 360 % resolution:
                 raise ValueError(f"The scan resolution {resolution} in {value}{label} is invalid. "
-                                 f"It has to be a divisor of 360.")
+                                f"It has to be a divisor of 360.")
         return value
 
 
@@ -166,13 +167,13 @@ class TorsionsBase(BaseModel):
                 is_valid, err = common.is_valid_coordinates(entry)
                 if not is_valid:
                     raise ValueError(f"Not all coordinates in the torsion trajectory{label} are valid."
-                                     f"Reason:\n{err}\nGot:\n{entry}.")
+                                f"Reason:\n{err}\nGot:\n{entry}.")
             else:
                 raise ValueError(f"Lowest level trajectory entries in a torsion must be coordinates "
-                                 f"dictionaries, got {entry}{label} which is a {type(entry)}.")
+                                f"dictionaries, got {entry}{label} which is a {type(entry)}.")
         if 'dimension' in values and  values['dimension'] and trajectory_dimension != values['dimension']:
             raise ValueError(f"Got a {trajectory_dimension}D trajectory attribute for a declared dimension "
-                             f"of {values['dimension']}{label}:\n{value}")
+                            f"of {values['dimension']}{label}:\n{value}")
         return value
 
 # class Coordinates(BaseModel):
@@ -233,13 +234,13 @@ class SpeciesBase(BaseModel):
     is_global_min: Optional[bool] = Field(None, title='If this conformer is a well, whether it is meant to represents '
                                                       'the **global** minimum energy well')
     global_min_geometry: Optional[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
-                                                  Tuple[Annotated[int, Field(ge=1)], ...],
-                                                  Tuple[Annotated[str, StringConstraints(max_length=10)], ...]]]] = \
+                                                Tuple[Annotated[int, Field(ge=1)], ...],
+                                                Tuple[Annotated[str, StringConstraints(max_length=10)], ...]]]] = \
         Field(None, title='If this species does not represent the global minimum well, this argument must contain '
-                          'the coordinates of the global minimum energy conformer at the same opt level.')
+                        'the coordinates of the global minimum energy conformer at the same opt level.')
     is_ts: Optional[bool] = Field(False, title='Does this species represent a transition state?')
     irc_trajectories: Optional[List[List[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
-                                              Tuple[Annotated[int, Field(ge=1)], ...], Tuple[Annotated[str, StringConstraints(max_length=10)], ...]]]]]] = \
+                                            Tuple[Annotated[int, Field(ge=1)], ...], Tuple[Annotated[str, StringConstraints(max_length=10)], ...]]]]]] = \
         Field(None, title='IRC trajectories (for TS species)')    
     electronic_energy: Optional[float] = Field(None, title='Electronic energy in Hartree')
     E0: Optional[float] = Field(None, title='E0 (zero-point energy) in kJ/mol')
@@ -250,13 +251,13 @@ class SpeciesBase(BaseModel):
     normal_displacement_modes: Optional[List[List[List[float]]]] = Field(None, title='Normal displacement modes')
     freq_id: Optional[int] = Field(None, ge=0, title='Freq ID')
     rigid_rotor: Optional[str] = Field(None, max_length=50, title='The rigid rotor treatment type. Allowed values: "atom", '
-                                                       '"linear", "spherical top", "symmetric top", or "asymmetric top".')
+                                                    '"linear", "spherical top", "symmetric top", or "asymmetric top".')
     statmech_treatment: Optional[str] = Field(None, max_length=50, title='The statistical mechanics treatment')
     rotational_constants: Optional[List[float]] = Field(None, title='Rotational constants')
     torsions: Optional[List[TorsionsBase]] = Field(None, title='Torsions')
     conformers: Optional[List[Dict[str, Union[Tuple[Tuple[float, float, float], ...],
-                                              Tuple[Annotated[int, Field(ge=1)], ...], Tuple[Annotated[str, StringConstraints(max_length=10)], ...],
-                                              float]]]] = Field(None, title='Conformers')
+                                            Tuple[Annotated[int, Field(ge=1)], ...], Tuple[Annotated[str, StringConstraints(max_length=10)], ...],
+                                            float]]]] = Field(None, title='Conformers')
     H298: Optional[float] = Field(None, title='Standard enthalpy of formation')
     S298: Optional[float] = Field(None, gt=0, title='Standard entropy of formation')
     Cp_values: Optional[List[Annotated[float, Field(gt=0)]]] = Field(None, title='Constant pressure heat capacity values')
@@ -267,7 +268,7 @@ class SpeciesBase(BaseModel):
     opt_path: Optional[str] = Field(None, max_length=5000, title='Path to optimization log file')
     freq_path: Optional[str] = Field(None, max_length=5000, title='Path to frequencies log file')
     scan_paths: Optional[Dict[Tuple[Tuple[Annotated[int, Field(ge=1)], Annotated[int, Field(ge=1)], Annotated[int, Field(ge=1)], Annotated[int, Field(ge=1)]], ...],
-                              Annotated[str, StringConstraints(max_length=5000)]]] = Field(None, title='Paths to scan log files')
+                            Annotated[str, StringConstraints(max_length=5000)]]] = Field(None, title='Paths to scan log files')
     irc_paths: Optional[List[Annotated[str, StringConstraints(max_length=5000)]]] = Field(None, title='Paths to IRC log files')
     sp_path: Optional[str] = Field(None, max_length=5000, title='Path to single-point energy log file')
     unconverged_jobs: Optional[List[Dict[str, str]]] = Field(None, title='Paths to unconverged job log files')
@@ -371,10 +372,10 @@ class SpeciesCreate(SpeciesBase):
                     if len(value) != expected_num_freqs:
                         linear_txt = 'linear' if linear else 'non-linear'
                         raise ValueError(f'Expected {expected_num_freqs} frequencies for a {linear_txt} molecule, '
-                                         f'got {len(value)} frequencies{label}.')
+                                        f'got {len(value)} frequencies{label}.')
             if 'is_ts' in values and  values['is_ts'] and all(freq > 0 for freq in value):
                 raise ValueError(f'An imaginary frequency must be present for a TS species. '
-                                 f'Got all real frequencies{label}.')
+                                f'Got all real frequencies{label}.')
         return value
     @model_validator(mode="before")
     def check_descriptor_presence(cls, info: ValidationInfo):
@@ -931,7 +932,7 @@ class SpeciesCreate(SpeciesBase):
                             break
                     if not match:
                         raise ValueError(f'Could not find a corresponding scan path '
-                                         f'for the torsion {torsion_indices}{label}.')
+                                        f'for the torsion {torsion_indices}{label}.')
         return value
 
 
@@ -943,7 +944,7 @@ class SpeciesCreate(SpeciesBase):
             raise ValueError(f'The irc_paths argument was not given{label}.')
         if value is not None and len(value) not in [1, 2]:
             raise ValueError(f'The length of the IRC paths argument must be either 1 (for a forward+reverse IRC) or 2. '
-                             f'Got: {len(value)}{label}.')
+                            f'Got: {len(value)}{label}.')
         return value
 
 

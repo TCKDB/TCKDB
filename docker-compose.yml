@@ -7,7 +7,7 @@ services:
     env_file:
       - ./tckdb/backend/app/core/.env
     ports:
-      - "5433:5432" # Maps host port 5433 to container port 5432
+      - 5433:5432 # Maps host port 5433 to container port 5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -27,7 +27,7 @@ services:
     env_file:
       - ./tckdb/backend/app/core/.env.test # Separate env file for testing
     ports:
-      - "5434:5432" # Maps host port 5434 to container port 5432
+      - 5434:5432 # Maps host port 5434 to container port 5432
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
     networks:
@@ -49,7 +49,7 @@ services:
     volumes:
       - ./tckdb:/code/tckdb
     ports:
-      - "8000:8000" # Maps host port 8000 to container port 8000
+      - 8000:8000 # Maps host port 8000 to container port 8000
     depends_on:
       - db
       - test-db
@@ -65,7 +65,7 @@ services:
       PGADMIN_DEFAULT_EMAIL: calvinpieters@gmail.com
       PGADMIN_DEFAULT_PASSWORD: password
     ports:
-      - "5050:80"
+      - 5050:80
     depends_on:
       - db
       - test-db

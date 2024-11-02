@@ -7,4 +7,7 @@ import tckdb.backend.app.conversions
 import tckdb.backend.app.core
 import tckdb.backend.app.db
 import tckdb.backend.app.models
+
+# trunk-ignore(ruff/F401)
+# trunk-ignore(flake8/F401)
 import tckdb.backend.app.schemas

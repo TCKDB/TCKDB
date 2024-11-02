@@ -4,7 +4,7 @@ TCKDB backend app schemas energy correction (encorr) module
 
 from typing import Dict, List, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationInfo
 
 from tckdb.backend.app.schemas.level import Level, LevelCreate, LevelUpdate
 from tckdb.backend.app.schemas.species import SpeciesRead
@@ -244,12 +244,12 @@ class EnCorrBase(BaseModel):
                                     value["stoichiometry"] = [
                                         int(v) for v in value["stoichiometry"]
                                     ]
-                                except ValueError:
+                                except ValueError as e:
                                     raise ValueError(
-                                        f"The stoichiometry coefficients must be integers, "
+                                        "The stoichiometry coefficients must be integers, \n"
                                         f"got {coefficient} which is a {type(coefficient)} in:"
                                         f"\n{isodesmic_reaction}"
-                                    )
+                                    ) from e
                                 break
                     elif key == "DHrxn298":
                         if not isinstance(val, float):

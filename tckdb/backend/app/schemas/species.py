@@ -573,7 +573,7 @@ class SpeciesBase(BaseModel):
                 if value == values.data["frequencies"]:
                     raise ValueError(
                         "The scaled_projected_frequencies are identical to the frequencies.\n"
-                        f"Did you forget to scale?"
+                        "Did you forget to scale?"
                     )
         return value
 
@@ -1049,10 +1049,6 @@ class SpeciesCreateBatch(SpeciesBase, ConnectionBase):
     ess_connections: Optional[ESSConnectionID] = Field(
         None, title="The connection IDs of the ESS objects for internal referencing"
     )
-
-
-class SpeciesUpdate(SpeciesBase):
-    pass
 
 
 class SpeciesRead(SpeciesBase):

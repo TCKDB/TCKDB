@@ -73,7 +73,7 @@ def create_species(species: SpeciesCreate, db: Session = Depends(get_db)):
                 if not existing_bot:
                     raise HTTPException(
                         status_code=400, detail=f"Bot creation failed: {e}"
-                    )
+                    ) from e
     db_species_data = species.dict(exclude={"bot"})
     if bot:
         db_species = SpeciesModel(**db_species_data, bot_id=bot.id)
@@ -85,7 +85,9 @@ def create_species(species: SpeciesCreate, db: Session = Depends(get_db)):
         db.refresh(db_species)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Species creation failed: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"Species creation failed: {e}"
+        ) from e
 
     return db_species
 

@@ -6,7 +6,14 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+    ValidationInfo,
+)
 
 from tckdb.backend.app.schemas.author import (
     AuthorCreate,
@@ -86,7 +93,7 @@ class LiteratureBase(BaseModel):
         """Literature.journal validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.article
+            and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
             raise ValueError(
@@ -126,7 +133,7 @@ class LiteratureBase(BaseModel):
         """Literature.publisher validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.book
+            and values["type"] == LiteratureType.book
             and (value is None or not value)
         ):
             raise ValueError(
@@ -139,7 +146,7 @@ class LiteratureBase(BaseModel):
         """Literature.volume validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.article
+            and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
             raise ValueError(
@@ -152,7 +159,7 @@ class LiteratureBase(BaseModel):
         """Literature.page_start validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.article
+            and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
             raise ValueError(
@@ -165,7 +172,7 @@ class LiteratureBase(BaseModel):
         """Literature.page_end validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.article
+            and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
             raise ValueError(
@@ -188,7 +195,7 @@ class LiteratureBase(BaseModel):
         """Literature.editors validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.book
+            and values["type"] == LiteratureType.book
             and (value is None or not value)
         ):
             raise ValueError(
@@ -201,7 +208,7 @@ class LiteratureBase(BaseModel):
         """Literature.publication_place validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.book
+            and values["type"] == LiteratureType.book
             and (value is None or not value)
         ):
             raise ValueError(
@@ -214,7 +221,7 @@ class LiteratureBase(BaseModel):
         """Literature.advisor validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.thesis
+            and values["type"] == LiteratureType.thesis
             and (value is None or not value)
         ):
             raise ValueError(
@@ -227,7 +234,7 @@ class LiteratureBase(BaseModel):
         """Literature.doi validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.article
+            and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
             raise ValueError(
@@ -240,7 +247,7 @@ class LiteratureBase(BaseModel):
         """Literature.isbn validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.book
+            and values["type"] == LiteratureType.book
             and (value is None or not value)
         ):
             raise ValueError(
@@ -253,7 +260,7 @@ class LiteratureBase(BaseModel):
         """Literature.url validator"""
         if (
             "type" in info
-            and values["type"] = = LiteratureType.thesis
+            and values["type"] == LiteratureType.thesis
             or value is not None
         ):
             if "." not in value:

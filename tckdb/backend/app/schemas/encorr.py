@@ -237,12 +237,12 @@ class EnCorrBase(BaseModel):
                                 isodesmic_reaction.stoichiometry = [
                                     int(v) for v in isodesmic_reaction.stoichiometry
                                 ]
-                            except ValueError:
+                            except ValueError as e:
                                 raise ValueError(
                                     f"The stoichiometry coefficients must be integers, "
                                     f"got {coefficient} which is a {type(coefficient)} in:"
                                     f"\n{isodesmic_reaction}"
-                                )
+                                ) from e
                 if DHrxn298:
                     if not isinstance(DHrxn298, float):
                         raise ValueError(

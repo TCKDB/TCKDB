@@ -110,7 +110,7 @@ def is_valid_energy_unit(
         if raise_error:
             raise ValueError(
                 f'The unit "{unit}" does not seem to be a valid energy unit. Got:\n{e}'
-            )
+            ) from e
         else:
             return False, str(e)
     return True, ""
@@ -143,11 +143,11 @@ def is_valid_element_symbol(
         )
     try:
         qcel.periodictable.to_Z(symbol)
-    except qcel.exceptions.NotAnElementError:
+    except qcel.exceptions.NotAnElementError as e:
         if raise_error:
             raise ValueError(
                 f'The symbol "{symbol}" does not seem to correspond to a known chemical element.'
-            )
+            ) from e
         else:
             return (
                 False,
@@ -213,8 +213,8 @@ def is_valid_inchi_key(
         return True, ""
     try:
         inchi = inchi_from_inchi_key(inchi_key)
-    except:
-        return False, "Could not decode InChI Key"
+    except Exception as e:
+        return False, f"Could not decode InChI Key {e.args}"
     if inchi is None:
         return False, "Could not decode InChI Key"
     return True, ""
@@ -241,8 +241,8 @@ def is_valid_smiles(smiles: str) -> Tuple[bool, str]:
         )
     try:
         rd_mol = MolFromSmiles(smiles)
-    except:
-        return False, f'Could not decode the SMILES string "{smiles}".'
+    except Exception as e:
+        return False, f'Could not decode the SMILES string "{smiles}, {e.args}".'
     if rd_mol is None:
         return False, f'Could not decode the SMILES string "{smiles}".'
     return True, ""

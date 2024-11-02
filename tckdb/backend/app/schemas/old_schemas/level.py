@@ -4,7 +4,7 @@ TCKDB backend app schemas level of theory module
 
 from typing import Dict, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationInfo
 
 from tckdb.backend.app.schemas.temp_id import TempBase
 

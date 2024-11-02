@@ -42,7 +42,7 @@ class TransBase(BaseModel):
         """Trans.parameters validator"""
         if (
             "model" in info
-            and values["model"] = = TransModelEnum.single_exponential_down
+            and values["model"] == TransModelEnum.single_exponential_down
         ):
             if "alpha0" not in value:
                 raise ValueError(

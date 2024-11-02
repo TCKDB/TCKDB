@@ -35,7 +35,8 @@ def inchi_from_smiles(smiles: str) -> Union[str, None]:
     """
     try:
         inchi = MolToInchi(MolFromSmiles(smiles))
-    except:
+    except Exception as e:
+        print(f"Failed to convert smiles to inchi {e.args}")
         return None
     return inchi
 
@@ -209,7 +210,8 @@ def inchi_key_from_inchi(inchi: str) -> Union[str, None]:
     """
     try:
         inchi_key = InchiToInchiKey(inchi)
-    except:
+    except Exception as e:
+        print(f"Failed to convert inchi to inchi key {e.args}")
         return None
     return inchi_key
 
@@ -234,7 +236,8 @@ def smiles_from_inchi(inchi: str) -> Union[str, None]:
             allBondsExplicit=False,
             allHsExplicit=False,
         )
-    except:
+    except Exception as e:
+        print(f"Failed to convert inchi to smiles {e.args}")
         return None
     return smiles
 

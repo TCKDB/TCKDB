@@ -1,4 +1,6 @@
 # /code/tckdb/backend/app/alembic/env.py
+from tckdb.backend.app.db.base_class import Base
+from tckdb.backend.app.models.common import MsgpackExt
 
 import os
 from logging.config import fileConfig
@@ -10,8 +12,6 @@ from sqlalchemy import engine_from_config, pool
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'app')))
 # Add at the top of env.py
 print("Alembic is configuring migrations...")
-from tckdb.backend.app.db.base_class import Base
-from tckdb.backend.app.models.common import MsgpackExt
 
 print(f"Imported models: {Base.metadata.tables.keys()}")
 # This is the Alembic Config object, which provides access to the values within the .ini file
