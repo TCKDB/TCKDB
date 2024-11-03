@@ -92,7 +92,7 @@ class LiteratureBase(BaseModel):
     def check_journal(cls, value, values: ValidationInfo):
         """Literature.journal validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
@@ -132,7 +132,7 @@ class LiteratureBase(BaseModel):
     def check_publisher(cls, value, values: ValidationInfo):
         """Literature.publisher validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.book
             and (value is None or not value)
         ):
@@ -145,7 +145,7 @@ class LiteratureBase(BaseModel):
     def check_volume(cls, value, values: ValidationInfo):
         """Literature.volume validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
@@ -158,7 +158,7 @@ class LiteratureBase(BaseModel):
     def check_page_start(cls, value, values: ValidationInfo):
         """Literature.page_start validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
@@ -171,7 +171,7 @@ class LiteratureBase(BaseModel):
     def check_page_end(cls, value, values: ValidationInfo):
         """Literature.page_end validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
@@ -179,7 +179,7 @@ class LiteratureBase(BaseModel):
                 f'The page_end argument is missing for a literature type "{values["type"]}"'
             )
         if (
-            "page_start" in info
+            "page_start" in values.data
             and isinstance(values["page_start"], int)
             and isinstance(value, int)
             and value < values["page_start"]
@@ -194,7 +194,7 @@ class LiteratureBase(BaseModel):
     def check_editors(cls, value, values: ValidationInfo):
         """Literature.editors validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.book
             and (value is None or not value)
         ):
@@ -207,7 +207,7 @@ class LiteratureBase(BaseModel):
     def check_publication_place(cls, value, values: ValidationInfo):
         """Literature.publication_place validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.book
             and (value is None or not value)
         ):
@@ -220,7 +220,7 @@ class LiteratureBase(BaseModel):
     def check_advisor(cls, value, values: ValidationInfo):
         """Literature.advisor validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.thesis
             and (value is None or not value)
         ):
@@ -233,7 +233,7 @@ class LiteratureBase(BaseModel):
     def check_doi(cls, value, values: ValidationInfo):
         """Literature.doi validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.article
             and (value is None or not value)
         ):
@@ -246,7 +246,7 @@ class LiteratureBase(BaseModel):
     def check_isbn(cls, value, values: ValidationInfo):
         """Literature.isbn validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.book
             and (value is None or not value)
         ):
@@ -259,7 +259,7 @@ class LiteratureBase(BaseModel):
     def validate_url(cls, value, values: ValidationInfo):
         """Literature.url validator"""
         if (
-            "type" in info
+            "type" in values.data
             and values["type"] == LiteratureType.thesis
             or value is not None
         ):
@@ -284,7 +284,7 @@ class LiteratureCreate(LiteratureBase):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     @model_validator
-    def check_authors_and_author_ids(cls, info: ValidationInfo):
+    def check_authors_and_author_ids(cls, values: ValidationInfo):
         authors = values.data.get("authors")
         author_ids = values.data.get("author_ids")
 

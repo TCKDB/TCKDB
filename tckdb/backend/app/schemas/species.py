@@ -1138,10 +1138,6 @@ class SpeciesRead(SpeciesBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class SpeciesUpdate(SpeciesBase):
-    pass
-
-
 class SpeciesUpdateBatch(SpeciesBase, ConnectionBase):
     pass
 

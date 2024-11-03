@@ -2,6 +2,7 @@ import pytest
 
 from tckdb.backend.app.conversions.converter import normalize_coordinates
 from tckdb.backend.app.models.species import Species as SpeciesModel
+import logging
 
 """
 TestClient: Provided by FastAPI, allows you to simulate HTTP requests to your
@@ -39,8 +40,6 @@ Response Constructed and Sent Back to Client
 
 """
 
-
-import logging
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)

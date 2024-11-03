@@ -1,4 +1,6 @@
 import os
+
+# trunk-ignore(bandit/B404)
 import subprocess
 import sys
 from typing import Optional, Tuple
@@ -25,6 +27,7 @@ def smiles_and_inchi_from_adjlist(adjlist: str) -> Optional[Tuple[str, str]]:
         conversion_script = os.path.join(script_dir, "molecule_env_scripts.py")
         cmd = [MOLECULE_PYTHON, conversion_script, "convert"]
 
+        # trunk-ignore(bandit/B603)
         result = subprocess.run(
             cmd, input=adjlist, text=True, capture_output=True, check=True
         )
@@ -62,6 +65,7 @@ def multiplicity_from_adjlist(adjlist: str) -> Optional[int]:
         conversion_script = os.path.join(script_dir, "molecule_env_scripts.py")
         cmd = [MOLECULE_PYTHON, conversion_script, "multiplicity"]
 
+        # trunk-ignore(bandit/B603)
         result = subprocess.run(
             cmd, input=adjlist, text=True, capture_output=True, check=True
         )

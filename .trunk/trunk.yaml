@@ -17,12 +17,12 @@ lint:
   disabled:
     - hadolint
     - isort
+    - checkov
   enabled:
     - flake8@7.1.1
     - actionlint@1.7.3
     - bandit@1.7.10
     - black@24.10.0
-    - checkov@3.2.276
     - git-diff-check
     - markdownlint@0.42.0
     - osv-scanner@1.9.1

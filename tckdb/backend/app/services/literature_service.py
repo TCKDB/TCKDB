@@ -70,12 +70,12 @@ def create_literature(literature_data: LiteratureCreate, db: Session):
                 db.commit()  # Commit to assign an ID
                 db.refresh(new_author)
                 author_instances.append(new_author)
-            except IntegrityError:
+            except IntegrityError as e:
                 db.rollback()
                 raise HTTPException(
                     status_code=400,
                     detail=f"Author {first_name} {last_name} could not be created due to a database error.",
-                )
+                ) from e
 
     # 4. Create Literature Instance
     literature = Literature(
@@ -120,9 +120,9 @@ def create_literature(literature_data: LiteratureCreate, db: Session):
         if "unique constraint" in str(e.orig).lower():
             raise HTTPException(
                 status_code=400, detail="Duplicate ISBN or DOI detected."
-            )
+            ) from e
         else:
-            raise HTTPException(status_code=500, detail="Internal server error.")
+            raise HTTPException(status_code=500, detail="Internal server error.") from e
 
     # 6. Optional Debugging Print
     print(f"Created literature: {literature}")
@@ -197,7 +197,7 @@ def update_literature(
         db.rollback()
         raise HTTPException(
             status_code=400, detail=f"Failed to update literature: {str(e)}"
-        )
+        ) from e
 
     return db_literature
 

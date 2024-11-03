@@ -251,7 +251,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                 values["inchi"] = values["inchi"] or inchi
         if values["inchi"] is not None:
             # InChI was given, populate other attributes as needed
-            if "smiles" not in info or not values["smiles"]:
+            if "smiles" not in values.data or not values["smiles"]:
                 values["smiles"] = converter.smiles_from_inchi(values["inchi"])
             value = value or converter.adjlist_from_smiles(values["smiles"])
         if "smiles" in values and values["smiles"] is not None:
@@ -335,7 +335,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                 is_valid, err = is_valid_atom_index(
                     index=index,
                     coordinates=(
-                        values["coordinates"] if "coordinates" in info else None
+                        values["coordinates"] if "coordinates" in values.data else None
                     ),
                     existing_indices=atom_indices,
                 )
@@ -369,7 +369,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                     f"Must specify fragment_orientation if fragments are specified{label}."
                 )
         else:
-            if "fragments" in info:
+            if "fragments" in values.data:
                 if values["fragments"] is None:
                     raise ValueError(
                         f"The fragment_orientation argument{label} is unexpected if the fragments "
@@ -427,7 +427,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                 is_valid, err = is_valid_atom_index(
                     index=index,
                     coordinates=(
-                        values["coordinates"] if "coordinates" in info else None
+                        values["coordinates"] if "coordinates" in values.data else None
                     ),
                     existing_indices=chiral_atom_indices,
                 )
@@ -438,7 +438,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                     )
                 chiral_atom_indices.append(index)
                 if (
-                    "coordinates" in info
+                    "coordinates" in values.data
                     and values["coordinates"]["symbols"][index - 1] not in allowed_atoms
                 ):
                     raise ValueError(
@@ -469,7 +469,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                 )
             if (
                 val in ["NR", "NS"]
-                and "coordinates" in info
+                and "coordinates" in values.data
                 and values["coordinates"]["symbols"][key[0] - 1] != "N"
             ):
                 raise ValueError(
@@ -477,7 +477,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                 )
             elif (
                 val in ["R", "S"]
-                and "coordinates" in info
+                and "coordinates" in values.data
                 and values["coordinates"]["symbols"][key[0] - 1] == "N"
             ):
                 raise ValueError(
@@ -495,7 +495,7 @@ class NonPhysicalSpeciesBase(BaseModel):
         )
         if (
             value is None
-            and "coordinates" in info
+            and "coordinates" in values.data
             and len(values["coordinates"]["symbols"]) >= 4
         ):
             raise ValueError(
@@ -576,7 +576,11 @@ class NonPhysicalSpeciesBase(BaseModel):
             if "label" in values and values["label"] is not None
             else ""
         )
-        if "irc_trajectories" in info and values["irc_trajectories"] and value is None:
+        if (
+            "irc_trajectories" in values.data
+            and values["irc_trajectories"]
+            and value is None
+        ):
             raise ValueError(f"The irc_paths argument was not given{label}.")
         if value is not None and len(value) not in [1, 2]:
             raise ValueError(

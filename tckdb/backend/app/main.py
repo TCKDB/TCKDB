@@ -38,6 +38,7 @@ def main():
         "main:app",
         port=int(FAST_API_PORT),
         log_level="info" if IS_DEV else "warning",
+        # trunk-ignore(bandit/B104)
         host="0.0.0.0",
         reload=IS_DEV,
     )

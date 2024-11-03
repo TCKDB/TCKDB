@@ -19,7 +19,7 @@ def fetch_doi_metadata(doi: str) -> Optional[Dict[str, any]]:
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
     }
     try:
-        response = requests.get(f"{BASE_URL}{doi}", headers=headers)
+        response = requests.get(f"{BASE_URL}{doi}", headers=headers, timeout=10)
         response.raise_for_status()
         api_data = response.json()
         if "message" in api_data:

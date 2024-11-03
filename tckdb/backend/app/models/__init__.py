@@ -34,7 +34,7 @@ from tckdb.backend.app.models.ess import ESS
 from tckdb.backend.app.models.freqscale import FreqScale
 
 # trunk-ignore(flake8/F401)
-# trunk-ignore(flake8/F401)
+# trunk-ignore(ruff/F401)
 from tckdb.backend.app.models.level import Level
 
 # trunk-ignore(ruff/F401)

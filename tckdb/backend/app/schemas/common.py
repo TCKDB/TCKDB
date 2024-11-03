@@ -4,6 +4,8 @@ TCKDB backend app schemas common module
 
 import os
 import re
+
+# trunk-ignore(bandit/B404)
 import subprocess
 import sys
 from typing import Dict, List, Optional, Tuple, Union, Any
@@ -264,6 +266,7 @@ def is_valid_adjlist(adjlist: str) -> Tuple[bool, str]:
         )
         cmd = [MOLECULE_PYTHON, conversion_script, "validate"]
 
+        # trunk-ignore(bandit/B603)
         result = subprocess.run(
             cmd, input=adjlist, text=True, capture_output=True, check=True
         )

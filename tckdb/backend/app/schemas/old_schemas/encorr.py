@@ -134,7 +134,7 @@ class EnCorrBase(BaseModel):
     def validate_aec(cls, value, values: ValidationInfo):
         """EnCorr.aec validator"""
         for symbol in value.keys():
-            if "supported_elements" in info:
+            if "supported_elements" in values.data:
                 if symbol not in values["supported_elements"]:
                     raise ValueError(
                         f'The supported_elements list is missing the symbol "{symbol}".\n'
@@ -177,7 +177,7 @@ class EnCorrBase(BaseModel):
             symbols = entry.split(bond_descriptor)
             for symbol in symbols:
                 if (
-                    "supported_elements" in info
+                    "supported_elements" in values.data
                     and symbol not in values["supported_elements"]
                 ):
                     raise ValueError(
@@ -192,8 +192,8 @@ class EnCorrBase(BaseModel):
         """EnCorr.isodesmic_reactions validator"""
         if (
             not value
-            and "aec" in info
-            and "bac" in info
+            and "aec" in values.data
+            and "bac" in values.data
             and not all(
                 [attribute is not None for attribute in [values["aec"], values["bac"]]]
             )
@@ -203,8 +203,8 @@ class EnCorrBase(BaseModel):
             )
         if value is not None:
             if (
-                "aec" in info
-                and "bac" in info
+                "aec" in values.data
+                and "bac" in values.data
                 and any(
                     [
                         attribute is not None
@@ -308,7 +308,7 @@ class EnCorrCreate(EnCorrBase):
             raise ValueError(
                 "The isodesmic_high_level must be provided when isodesmic_reactions are specified."
             )
-        if value is not None and "primary_level" in info:
+        if value is not None and "primary_level" in values.data:
             # Assuming Level uniqueness is based on method, basis, etc., prevent primary and isodesmic levels from being the same
             primary_level = values["primary_level"]
             if (
