@@ -3,7 +3,6 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Tuple
 
-from matplotlib.pylab import f
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -141,7 +140,6 @@ class LiteratureBase(BaseModel):
     isbn: Optional[ISBN] = Field(None, title="The ISBN")
     url: Optional[HttpUrl] = Field(None, title="The publication URL address")
     model_config = ConfigDict(from_attributes=True, extra="forbid")
-
 
     @field_validator("advisor", mode="after")
     @classmethod
@@ -350,7 +348,6 @@ class LiteratureCreateBatch(LiteratureBase, ConnectionBase):
     authors: List[AuthorCreate] = Field(..., title="Authors for the literature source")
     year: int = Field(..., ge=1500, le=9999, title="The publication year")
     model_config = ConfigDict(from_attributes=True, extra="forbid")
-
 
 
 class LiteratureUpdate(LiteratureBase):

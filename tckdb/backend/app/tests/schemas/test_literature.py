@@ -142,7 +142,7 @@ def test_valid_literature_schema(case):
                 # Missing 'authors'
             },
             "field": "authors",
-            #"message": "Value error, Authors are required",
+            # "message": "Value error, Authors are required",
             "message": "Field required",
         },
         {
@@ -207,7 +207,10 @@ def test_invalid_literature_schema(invalid_case):
         invalid_case["message"] in error["msg"]
     ), f"Expected error message '{invalid_case['message']}' not found."
     # Optionally, check the field location
-    if "field" in invalid_case and (invalid_case["field"] != "authors or author_ids" and invalid_case["field"] != "journal"):
+    if "field" in invalid_case and (
+        invalid_case["field"] != "authors or author_ids"
+        and invalid_case["field"] != "journal"
+    ):
         assert (
             invalid_case["field"] in error["loc"]
         ), f"Expected error location '{invalid_case['field']}' not found."

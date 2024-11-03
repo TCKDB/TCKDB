@@ -141,8 +141,7 @@ def inchi_from_inchi_key(
     # return None
 
     molecule = new_client.molecule
-    mol = molecule.filter(
-        molecule_structures__standard_inchi_key=inchi_key).only(
+    mol = molecule.filter(molecule_structures__standard_inchi_key=inchi_key).only(
         ["molecule_structures"]
     )
     if mol:

@@ -8,12 +8,15 @@ with database tables, and instances of those classes (objects) with rows in thei
 # trunk-ignore(ruff/F401)
 # trunk-ignore(flake8/F401)
 import tckdb.backend.app.models.associations
+
 # trunk-ignore(ruff/F401)
 # trunk-ignore(flake8/F401)
 from tckdb.backend.app.models.audit import AuditLog
+
 # trunk-ignore(flake8/F401)
 # trunk-ignore(ruff/F401)
 from tckdb.backend.app.models.author import Author
+
 # trunk-ignore(flake8/F401)
 # trunk-ignore(ruff/F401)
 from tckdb.backend.app.models.bot import Bot
@@ -25,9 +28,11 @@ from tckdb.backend.app.models.encorr import EnCorr
 # trunk-ignore(ruff/F401)
 # trunk-ignore(flake8/F401)
 from tckdb.backend.app.models.ess import ESS
+
 # trunk-ignore(ruff/F401)
 # trunk-ignore(flake8/F401)
 from tckdb.backend.app.models.freqscale import FreqScale
+
 # trunk-ignore(flake8/F401)
 # trunk-ignore(flake8/F401)
 from tckdb.backend.app.models.level import Level

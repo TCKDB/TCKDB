@@ -38,21 +38,21 @@ jobs:
 
       - name: Install Molecule
         run: conda env create -f ./code/Molecule/environment.yml
-      
+
       - name: Build Molecule
         run: conda run -n molecule_env make -C ./code/Molecule
-      
+
       - name: Set PYTHONPATH
         run: |
           echo "PYTHONPATH=${{ github.workspace }}/tckdb:${{ github.workspace }}/code/Molecule:${{ github.workspace }}/code/RMG-database:${{ github.workspace }}" >> $GITHUB_ENV
-      
+
       - name: Update PATH
         run: |
           echo "PATH=${{ github.workspace }}/code/Molecule:${{ github.workspace }}/code/RMG-database:${{ github.workspace }}/tckdb:$PATH" >> $GITHUB_ENV
 
       - name: Run Schema Tests
         run: make test-schemas
-      
+
       - name: Run Models Tests
         run: make test-models
 

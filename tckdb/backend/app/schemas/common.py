@@ -24,6 +24,7 @@ from typing_extensions import Annotated
 from tckdb.backend.app.conversions.converter import inchi_from_inchi_key
 from tckdb.backend.app.utils.python_paths import MOLECULE_PYTHON
 
+
 class Coordinates(BaseModel):
     symbols: Tuple[Annotated[str, StringConstraints(max_length=10)], ...] = Field(
         ..., description="Chemical element symbols."

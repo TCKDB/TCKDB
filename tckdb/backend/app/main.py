@@ -5,7 +5,6 @@ from fastapi import FastAPI
 
 from tckdb.backend.app.api.api_v1.endpoints import batch
 
-from tckdb.backend.app.api.api_v1.endpoints import batch
 from tckdb.backend.app.core.config import ENV, FAST_API_PORT
 
 if FAST_API_PORT is None:
