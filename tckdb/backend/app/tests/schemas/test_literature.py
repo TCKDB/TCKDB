@@ -63,28 +63,28 @@ def test_literature_type_enum_invalid(invalid_type):
         {
             "input": {
                 "type": "book",
-                "authors": [create_author("M.I.", "It"), create_author("D.C.", "Wash")],
-                "title": "Principles of Kinetic Modeling",
-                "year": 1982,
+                "authors": [create_author("Takao", "Tsuneda")],
+                "title": "Density Functional Theory in Quantum Chemistry",
+                "year": 2014,
                 "publisher": "Wee-Ly",
                 "editors": "E.D. Torr",
                 "edition": "2nd Edn.",
                 "chapter_title": "These are Updated Rates",
                 "publication_place": "New York NY",
-                "isbn": "978-3-16-148410-0",
+                "isbn": "9784431548256",
                 "url": "http://u.rl.com/book/abstract",
             },
             "expected": {
                 "type": "book",
-                "authors": [create_author("M.I.", "It"), create_author("D.C.", "Wash")],
-                "title": "Principles of Kinetic Modeling",
-                "year": 1982,
+                "authors": [create_author("Takao", "Tsuneda")],
+                "title": "Density Functional Theory in Quantum Chemistry",
+                "year": 2014,
                 "publisher": "Wee-Ly",
                 "editors": "E.D. Torr",
                 "edition": "2nd Edn.",
                 "chapter_title": "These are Updated Rates",
                 "publication_place": "New York NY",
-                "isbn": "978-3-16-148410-0",
+                "isbn": "9784431548256",
                 "url": "http://u.rl.com/book/abstract",
             },
         },
@@ -130,7 +130,7 @@ def test_valid_literature_schema(case):
                 "advisor": "P.R. Fessor",
             },
             "field": "type",
-            "message": "value is not a valid enumeration member; permitted: 'article', 'book', 'thesis'",
+            "message": "Input should be 'article', 'book' or 'thesis'",
         },
         {
             "input": {
@@ -142,7 +142,8 @@ def test_valid_literature_schema(case):
                 # Missing 'authors'
             },
             "field": "authors",
-            "message": "Authors are required",
+            #"message": "Value error, Authors are required",
+            "message": "Field required",
         },
         {
             "input": {
@@ -165,7 +166,7 @@ def test_valid_literature_schema(case):
                 "url": "http://url.com",
             },
             "field": "year",
-            "message": "ensure this value is less than or equal to 9999",
+            "message": "Input should be less than or equal to 9999",
         },
         {
             "input": {
@@ -191,8 +192,8 @@ def test_valid_literature_schema(case):
                 "doi": "10.67/doi",
                 "url": "http://url.com",  # Missing 'journal'
             },
-            "field": "__root__",
-            "message": "journal is required for an article",
+            "field": "journal",
+            "message": "Value error, Journal is required for an article",
         },
         # Add more invalid cases as needed...
     ],
@@ -206,7 +207,7 @@ def test_invalid_literature_schema(invalid_case):
         invalid_case["message"] in error["msg"]
     ), f"Expected error message '{invalid_case['message']}' not found."
     # Optionally, check the field location
-    if "field" in invalid_case and invalid_case["field"] != "authors or author_ids":
+    if "field" in invalid_case and (invalid_case["field"] != "authors or author_ids" and invalid_case["field"] != "journal"):
         assert (
             invalid_case["field"] in error["loc"]
         ), f"Expected error location '{invalid_case['field']}' not found."

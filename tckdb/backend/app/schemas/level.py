@@ -85,10 +85,10 @@ class LevelBase(BaseModel):
                 raise ValueError(
                     f"cannot have a slash symbol in 'solvation_method', got: {v}"
                 )
-            if values["solvent"] is None or not values["solvent"]:
+            if values.data["solvent"] is None or not values.data["solvent"]:
                 raise ValueError(
                     f"Must specify a solvent if a solvation method was specified.\n"
-                    f"Got {v} and {values['solvent']}"
+                    f"Got {v} and {values.data['solvent']}"
                 )
             return v.lower()
 

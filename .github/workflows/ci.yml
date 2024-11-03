@@ -1,0 +1,62 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  conda-tests:
+    name: Conda Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Checkout Molecule Repository
+        uses: actions/checkout@v3
+        with:
+          repository: ReactionMechanismGenerator/molecule
+          path: ./code/Molecule
+
+      - name: Checkout RMG-database Repository
+        uses: actions/checkout@v3
+        with:
+          repository: ReactionMechanismGenerator/RMG-database
+          path: ./code/RMG-database
+
+      - name: Set up miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          environment-file: environment.yml
+          activate-environment: tck_env
+          miniconda-version: "latest"
+          conda-solver: "libmamba"
+
+      - name: Install Molecule
+        run: conda env create -f ./code/Molecule/environment.yml
+      
+      - name: Build Molecule
+        run: conda run -n molecule_env make -C ./code/Molecule
+      
+      - name: Set PYTHONPATH
+        run: |
+          echo "PYTHONPATH=${{ github.workspace }}/tckdb:${{ github.workspace }}/code/Molecule:${{ github.workspace }}/code/RMG-database:${{ github.workspace }}" >> $GITHUB_ENV
+      
+      - name: Update PATH
+        run: |
+          echo "PATH=${{ github.workspace }}/code/Molecule:${{ github.workspace }}/code/RMG-database:${{ github.workspace }}/tckdb:$PATH" >> $GITHUB_ENV
+
+      - name: Run Schema Tests
+        run: make test-schemas
+      
+      - name: Run Models Tests
+        run: make test-models
+
+      - name: Collect Logs on Failure
+        if: failure()
+        run: |
+          echo "Tests failed. Please check the logs for details."

@@ -25,7 +25,7 @@ dependencies:
   - httpx
   - jinja2
   - markupsafe
-  - matplotlib >=1.5
+  - matplotlib
   - mpmath
   - pandas
   - python-dotenv

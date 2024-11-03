@@ -6,7 +6,7 @@ import os
 import re
 import subprocess
 import sys
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, Any
 
 import numpy as np
 import qcelemental as qcel
@@ -23,10 +23,6 @@ from typing_extensions import Annotated
 
 from tckdb.backend.app.conversions.converter import inchi_from_inchi_key
 from tckdb.backend.app.utils.python_paths import MOLECULE_PYTHON
-
-# from rmgpy.exceptions import InvalidAdjacencyListError
-# from rmgpy.molecule.adjlist import from_adjacency_list
-
 
 class Coordinates(BaseModel):
     symbols: Tuple[Annotated[str, StringConstraints(max_length=10)], ...] = Field(
@@ -248,27 +244,6 @@ def is_valid_smiles(smiles: str) -> Tuple[bool, str]:
     return True, ""
 
 
-# def is_valid_adjlist(adjlist: str) -> Tuple[bool, str]:
-#     """
-#     Check whether a string represents a valid adjacency list.
-
-#     Args:
-#         adjlist (str): The string to be checked.
-
-#     Returns:
-#         Tuple[bool, str]:
-#             - Whether the string represents a valid adjacency list.
-#             - A reason for invalidating the argument.
-#     """
-#     if not isinstance(adjlist, str):
-#         return False, f'An adjacency list graph must be a string, got "{adjlist}" which is a {type(adjlist)}.'
-#     try:
-#         from_adjacency_list(adjlist, group=False, saturate_h=False)
-#     except InvalidAdjacencyListError as e:
-#         return False, str(e)
-#     return True, ''
-
-
 def is_valid_adjlist(adjlist: str) -> Tuple[bool, str]:
     """
     Check whether a string represents a valid adjacency list.
@@ -310,7 +285,7 @@ def is_valid_adjlist(adjlist: str) -> Tuple[bool, str]:
 
 
 def check_colliding_atoms(
-    xyz: dict,
+    xyz: Union[Coordinates, Dict[str, Any]],
     threshold: float = 0.55,
 ) -> bool:
     """
@@ -333,72 +308,125 @@ def check_colliding_atoms(
     Returns:
          bool: ``True`` if there are colliding atoms in the input, ``False`` otherwise.
     """
+    if isinstance(xyz, Coordinates):
+        coords = xyz.coords
+        symbols = xyz.symbols
+    elif isinstance(xyz, dict):
+        coords = xyz["coords"]
+        symbols = xyz["symbols"]
+
     if len(xyz["symbols"]) == 1:
         # monoatomic
         return False
     # convert Angstrom to Bohr
     geometry = np.array(
-        [np.array(coord, np.float64) * 1.8897259886 for coord in xyz["coords"]]
+        [np.array(coord, np.float64) * 1.8897259886 for coord in coords]
     )
     qcel_out = qcel.molutil.guess_connectivity(
-        symbols=xyz["symbols"], geometry=geometry, threshold=threshold
+        symbols=symbols, geometry=geometry, threshold=threshold
     )
     return bool(len(qcel_out))
 
 
 def is_valid_coordinates(
-    xyz: Dict[
-        str,
-        Union[Tuple[Tuple[float, float, float], ...], Tuple[int, ...], Tuple[str, ...]],
-    ],
-    collision_threshold: Optional[float] = 0.55,
+    xyz: Union[Coordinates, Dict[str, Any]],
     allowed_keys: Optional[List[str]] = None,
+    collision_threshold: Optional[float] = None,
 ) -> Tuple[bool, str]:
     """
-    Check whether a coordinates dictionary is valid.
+    Validate the coordinates of a species, whether provided as a Coordinates instance or a dictionary.
 
     Args:
-        xyz (dict): The string to be checked.
-        collision_threshold (float, optional): The atoms collision threshold to use. Pass ``None`` to skip this check.
-        allowed_keys (list, optional): Entries are additional keys that are allowed to be in the dictionary.
+        xyz (Union[Coordinates, Dict[str, Any]]): The coordinates to validate.
+        allowed_keys (Optional[List[str]]): Additional keys allowed in the coordinates dictionary.
+        collision_threshold (Optional[float]): Threshold for detecting colliding atoms.
 
     Returns:
-        Tuple[bool, str]:
-            - Whether the coordinates dictionary is valid.
-            - A reason for invalidating the argument.
+        Tuple[bool, str]: (True, "") if valid, otherwise (False, error_message)
     """
     valid_keys = ["symbols", "isotopes", "coords"]
-    allowed_keys = allowed_keys or list()
-    for valid_key in valid_keys:
-        if valid_key not in xyz:
+    allowed_keys = allowed_keys or []
+
+    if isinstance(xyz, Coordinates):
+        # Validate Coordinates instance
+        num_symbols = len(xyz.symbols)
+        num_isotopes = len(xyz.isotopes)
+        num_coords = len(xyz.coords)
+
+        if num_symbols != num_isotopes or num_symbols != num_coords:
             return (
                 False,
-                f'The "{valid_key}" key is missing from the coordinates dictionary.',
+                f"Got {num_symbols} symbols, {num_isotopes} isotopes, and {num_coords} coordinates in\n{xyz}",
             )
-    invalid_keys = [key for key in xyz.keys() if key not in valid_keys + allowed_keys]
-    if len(invalid_keys):
-        return (
-            False,
-            f"The coordinates dictionary has the following invalid key(s): {invalid_keys}.",
-        )
-    if len(xyz["coords"]) != len(xyz["symbols"]) or len(xyz["coords"]) != len(
-        xyz["isotopes"]
-    ):
-        return (
-            False,
-            f'Got {len(xyz["symbols"])} symbols, {len(xyz["isotopes"])} isotopes, '
-            f'and {len(xyz["coords"])} coordinates in\n{xyz}',
-        )
-    for coord in xyz["coords"]:
-        if len(coord) != 3:
-            return False, f"All atom coordinates must be of length 3, got:\n{xyz}"
-    if collision_threshold is not None:
-        if check_colliding_atoms(xyz=xyz, threshold=collision_threshold):
+
+        for idx, coord in enumerate(xyz.coords):
+            if len(coord) != 3:
+                return (
+                    False,
+                    f"All atom coordinates must be of length 3, got: {coord} at index {idx}",
+                )
+
+        if collision_threshold is not None:
+            try:
+                has_collision = check_colliding_atoms(
+                    coordinates=xyz, threshold=collision_threshold
+                )
+            except TypeError as e:
+                return False, str(e)
+            if has_collision:
+                return (
+                    False,
+                    f"The coordinates have colliding atoms (at a tolerance of {collision_threshold}).",
+                )
+
+        return True, ""
+
+    elif isinstance(xyz, dict):
+        # Validate dictionary input
+        invalid_keys = [
+            key for key in xyz.keys() if key not in valid_keys + allowed_keys
+        ]
+        for valid_key in valid_keys:
+            if valid_key not in xyz:
+                return (
+                    False,
+                    f'The "{valid_key}" key is missing from the coordinates dictionary.',
+                )
+        if len(invalid_keys):
             return (
                 False,
-                f"The coordinates have colliding atoms (at a tolerance of {collision_threshold}).",
+                f"The coordinates dictionary has the following invalid key(s): {invalid_keys}.",
             )
-    return True, ""
+        if len(xyz["coords"]) != len(xyz["symbols"]) or len(xyz["coords"]) != len(
+            xyz["isotopes"]
+        ):
+            return (
+                False,
+                f'Got {len(xyz["symbols"])} symbols, {len(xyz["isotopes"])} isotopes, '
+                f'and {len(xyz["coords"])} coordinates in\n{xyz}',
+            )
+        for coord in xyz["coords"]:
+            if len(coord) != 3:
+                return False, f"All atom coordinates must be of length 3, got:\n{xyz}"
+        if collision_threshold is not None:
+            try:
+                has_collision = check_colliding_atoms(
+                    coordinates=xyz, threshold=collision_threshold
+                )
+            except TypeError as e:
+                return False, str(e)
+            if has_collision:
+                return (
+                    False,
+                    f"The coordinates have colliding atoms (at a tolerance of {collision_threshold}).",
+                )
+        return True, ""
+
+    else:
+        return (
+            False,
+            "Invalid type for coordinates. Expected Coordinates instance or dict.",
+        )
 
 
 def is_valid_atom_index(
@@ -448,10 +476,13 @@ def get_number_of_atoms(coords: Optional[dict]) -> Optional[int]:
     if coords is not None:
         if "coordinates" in coords:
             coords = coords["coordinates"]
-        # if isinstance(coords, dict) and 'symbols' in coords and isinstance(coords['symbols'], (list, tuple)):
-        #     return len(coords['symbols'])
         if isinstance(coords, Coordinates) and isinstance(
             coords.symbols, (list, tuple)
         ):
             return len(coords.symbols)
+        elif isinstance(coords, dict):
+            if "symbols" in coords:
+                return len(coords["symbols"])
+            elif "symbols" in coords.keys():
+                return len(coords["symbols"])
     return None

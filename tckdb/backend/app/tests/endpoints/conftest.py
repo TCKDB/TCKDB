@@ -7,8 +7,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -18,7 +17,6 @@ from tckdb.backend.app.db.session import get_db
 from tckdb.backend.app.main import app
 from tckdb.backend.app.models.encorr import EnCorr
 from tckdb.backend.app.models.ess import ESS
-from tckdb.backend.app.models.freqscale import FreqScale
 from tckdb.backend.app.models.level import Level
 
 # Load environment variables from .env.test
@@ -188,7 +186,7 @@ def test_freq(db_session, test_level):
     """
     Create a temporary Freq entry.
     """
-    freq = FreqScale(
+    freq = Freq(
         factor=1.0, level_id=test_level.id, source="Test source", reviewer_flags={}
     )
     db_session.add(freq)

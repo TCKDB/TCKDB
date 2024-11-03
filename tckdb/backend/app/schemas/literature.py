@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Tuple
 
+from matplotlib.pylab import f
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -141,33 +142,59 @@ class LiteratureBase(BaseModel):
     url: Optional[HttpUrl] = Field(None, title="The publication URL address")
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
-    @model_validator(mode="before")
-    def check_required_fields(cls, values: dict):
-        lit_type = values.get("type")
-        if not lit_type:
-            raise ValueError("Literature type is required")
-        if lit_type == LiteratureType.thesis:
-            if not values["advisor"]:
-                raise ValueError("Advisor name is required for a thesis")
-        elif lit_type == LiteratureType.article:
-            required_fields = [
-                "journal",
-                "volume",
-                "issue",
-                "page_start",
-                "page_end",
-                "doi",
-            ]
-            for field in required_fields:
-                if not values.get(field):
-                    raise ValueError(f"{field} is required for an article")
-        elif lit_type == LiteratureType.book:
-            required_fields = ["publisher", "editors", "publication_place", "isbn"]
-            for field in required_fields:
-                if not values.get(field):
-                    raise ValueError(f"{field} is required for a book")
 
+    @field_validator("advisor", mode="after")
+    @classmethod
+    def validate_advisor(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.thesis and not v:
+            raise ValueError("Value error, advisor is required for a thesis")
+        return v
+
+    # @field_validator("journal", mode="after")
+    # @classmethod
+    # def validate_journal(cls, v, info: ValidationInfo):
+    #     lit_type = info.data.get("type")
+    #     if lit_type == LiteratureType.article and not v:
+    #         raise ValueError("Value error, journal is required for an article")
+    #     return v
+    @model_validator(mode="after")
+    def validate_journal(cls, values):
+        if values.type == LiteratureType.article and not values.journal:
+            raise ValueError("Journal is required for an article")
         return values
+
+    @field_validator("volume", mode="after")
+    @classmethod
+    def validate_volume(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.article and not v:
+            raise ValueError("Value error, volume is required for an article")
+        return v
+
+    @field_validator("issue", mode="after")
+    @classmethod
+    def validate_issue(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.article and not v:
+            raise ValueError("Value error, issue is required for an article")
+        return v
+
+    @field_validator("editors", mode="after")
+    @classmethod
+    def validate_editors(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.book and not v:
+            raise ValueError("Value error, editors are required for a book")
+        return v
+
+    @field_validator("edition", mode="after")
+    @classmethod
+    def validate_edition(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.book and not v:
+            raise ValueError("Value error, edition is required for a book")
+        return v
 
     @field_validator("title")
     @classmethod
@@ -192,16 +219,16 @@ class LiteratureBase(BaseModel):
 
     @field_validator("page_start")
     def check_page_start(cls, v, values: ValidationInfo):
-        if values.data.get["type"] == LiteratureType.article and not v:
+        if values.data["type"] == LiteratureType.article and not v:
             raise ValueError("Page start is required for an article")
         return v
 
     @field_validator("page_end")
     def check_page_end(cls, v, values: ValidationInfo):
-        if values.data.get["type"] == LiteratureType.article and not v:
+        if values.data["type"] == LiteratureType.article and not v:
             raise ValueError("Page end is required for an article")
         # Must be greater than or equal to page_start
-        if values.data.get["page_start"] and v < values.data.get["page_start"]:
+        if values.data["page_start"] and v < values.data["page_start"]:
             raise ValueError(
                 "Page end must be greater than or equal to page start."
                 f'Received page_start={values.data.get["page_start"]}, page_end={v}'
@@ -210,8 +237,10 @@ class LiteratureBase(BaseModel):
 
     @field_validator("doi")
     def check_doi(cls, v, values: ValidationInfo):
-        if not v:
+        if not v and values.data["type"] != LiteratureType.article:
             return v
+        elif not v and values.data["type"] == LiteratureType.article:
+            raise ValueError("DOI is required for an article")
         if not v.startswith("10."):
             raise ValueError("DOI must start with 10.")
         metadata = fetch_doi_metadata(v)
@@ -271,6 +300,11 @@ class LiteratureBase(BaseModel):
                     values.data["authors"] = authors
         return v
 
+    @field_validator("url")
+    def convert_url_to_str(cls, v):
+        """Convert the URL to a string"""
+        return str(v) if v is not None else None
+
     @staticmethod
     def parse_author_name(full_name: str) -> Tuple[str, str]:
         """
@@ -293,12 +327,12 @@ class LiteratureCreate(LiteratureBase):
         ..., title="The literature type, either article, book, or thesis"
     )
     title: str = Field(..., max_length=255, title="The literature source title")
-    authors: List[AuthorCreate] = Field(None, title="Authors for the literature source")
+    authors: List[AuthorCreate] = Field(..., title="Authors for the literature source")
     year: int = Field(..., ge=1500, le=9999, title="The publication year")
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     @field_validator("authors", mode="before")
-    def validate_authors(cls, v):
+    def check_authors(cls, v):
         if not v:
             raise ValueError("Authors are required")
         return v
@@ -313,27 +347,10 @@ class LiteratureCreateBatch(LiteratureBase, ConnectionBase):
         ..., title="The literature type, either article, book, or thesis"
     )
     title: str = Field(..., max_length=255, title="The literature source title")
-    # author_connection_ids: Optional[List[str]] = Field(None, title='The connection ID of the author objects for internal referencing')
-    authors: List[AuthorCreate] = Field(None, title="Authors for the literature source")
+    authors: List[AuthorCreate] = Field(..., title="Authors for the literature source")
     year: int = Field(..., ge=1500, le=9999, title="The publication year")
     model_config = ConfigDict(from_attributes=True, extra="forbid")
-    # @field_validator('author_connection_ids', mode="before")
-    # def validate_author_connection_ids(cls, v):
-    #     if not v:
-    #         raise ValueError("Author connection IDs are required")
-    #     return v
 
-    # @validator('author_connection_ids', always=True)
-    # def validate_author_connection_ids(cls, v):
-    #     if not v:
-    #         raise ValueError("Author connection IDs are required")
-    #     return v
-
-    # @validator('author_connection_ids', always=True)
-    # def validate_author_connection_ids(cls, v):
-    #     if not v:
-    #         raise ValueError("Author connection IDs are required")
-    #     return v
 
 
 class LiteratureUpdate(LiteratureBase):

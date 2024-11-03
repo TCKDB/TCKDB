@@ -70,54 +70,6 @@ def adjlist_from_smiles(smiles: str) -> Union[str, None]:
         return None
 
 
-# def adjlist_from_smiles(smiles: str) -> Union[str, None]:
-#     """
-#     Get an RMG adjacency list from SMILES.
-#     Uses RMG for the conversion.
-
-#     Args:
-#         smiles (str): The SMILES descriptor.
-
-#     Returns:
-#         str: The respective adjacency list.
-#     """
-#     try:
-#         mol = Molecule().from_smiles(smilesstr=smiles,
-#                                      raise_atomtype_exception=False)
-#     except:
-#         return None
-#     if mol is not None:
-#         adjlist = mol.to_adjacency_list()
-#         return adjlist
-#     return None
-
-
-# def smiles_and_inchi_from_adjlist(adjlist: str) -> Union[Tuple[str, str], Tuple[None, None]]:
-#     """
-#     Get the SMILES and InChI descriptors corresponding to an RMG adjacency list
-#     Uses RMG for the conversions.
-
-#     Args:
-#         adjlist (str): The adjacency list.
-
-#     Returns:
-#         Tuple[str, str]:
-#             - The respective SMILES.
-#             - The respective InChI.
-#     """
-#     try:
-#         mol = Molecule().from_adjacency_list(adjlist=adjlist,
-#                                              raise_atomtype_exception=False,
-#                                              raise_charge_exception=False)
-#     except:
-#         return None, None
-#     if mol is not None:
-#         smiles = mol.to_smiles()
-#         inchi = mol.to_inchi()
-#         return smiles, inchi
-#     return None, None
-
-
 def smiles_and_inchi_from_adjlist(adjlist: str) -> Optional[Tuple[str, str]]:
     """
     Get the SMILEs and InChI descriptors corresponding to an RMG adjaceny list
@@ -189,7 +141,8 @@ def inchi_from_inchi_key(
     # return None
 
     molecule = new_client.molecule
-    mol = molecule.filter(molecule_structures__standard_inchi_key=inchi_key).only(
+    mol = molecule.filter(
+        molecule_structures__standard_inchi_key=inchi_key).only(
         ["molecule_structures"]
     )
     if mol:

@@ -17,7 +17,7 @@ def test_ess_schema():
 
     with pytest.raises(ValidationError):
         # wrong url (no dot)
-        ESSBase(name='QChem', version='5.3', url='https://wwwq-chem-com/')
+        ESSBase(name='QChem', version='5.3', url='https://wwwq-chem>com/')
     with pytest.raises(ValidationError):
         # wrong url (has space)
         ESSBase(name='QChem', version='5.3', url='https://www.q-chem com/')

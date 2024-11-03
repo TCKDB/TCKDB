@@ -3,13 +3,9 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
-from tckdb.backend.app.api.api_v1.endpoints import (
-    batch,
-    bot,
-    literature,
-    np_species,
-    species,
-)
+from tckdb.backend.app.api.api_v1.endpoints import batch
+
+from tckdb.backend.app.api.api_v1.endpoints import batch
 from tckdb.backend.app.core.config import ENV, FAST_API_PORT
 
 if FAST_API_PORT is None:
@@ -33,10 +29,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(species.router, prefix="/api/v1/species")
-app.include_router(np_species.router, prefix="/api/v1/np_species")
-app.include_router(bot.router, prefix="/api/v1/bot")
-app.include_router(literature.router, prefix="/api/v1/literature")
 app.include_router(batch.router, prefix="/api/v1/batch-upload")
 
 

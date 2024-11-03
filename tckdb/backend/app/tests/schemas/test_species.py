@@ -132,7 +132,7 @@ def test_species_schema():
         S298=186.06,
         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-        # encorr_id=2,
+        ##encorr_id=2,
         opt_path="path/to/opt/job.log",
         freq_path="path/to/freq/job.log",
         sp_path="path/to/sp/job.log",
@@ -173,7 +173,7 @@ def test_species_schema():
         S298=186.06,
         Cp_values=[36.07, 40.38, 45.77, 51.63, 62.30, 71.00, 85.94],
         Cp_T_list=[300, 400, 500, 600, 800, 1000, 1500],
-        # encorr_id=2,
+        ##encorr_id=2,
         opt_path="path/to/opt/job.log",
         freq_path="path/to/freq/job.log",
         sp_path="path/to/sp/job.log",
@@ -390,7 +390,7 @@ def test_species_schema():
         multiplicity=1,
         coordinates=ch4_xyz,
         fragments=[[1, 2, 3], [4, 5]],
-        fragment_orientation=[{"cm": [1, 2, 3], "x": 1, "y": 2, "z": 3}],
+        fragment_orientation=[{"cm": [1, 2, 3], "x": 1.0, "y": 2.0, "z": 3.0}],
         external_symmetry=4,
         point_group="Td",
         conformation_method="ARC v1.1.0",
@@ -739,7 +739,7 @@ def test_species_schema():
             freq_path="path/to/freq/job.log",
             sp_path="path/to/sp/job.log",
         )
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         # wrong value type for 'cm' key
         SpeciesCreate(
             smiles="C",
@@ -803,7 +803,7 @@ def test_species_schema():
             freq_path="path/to/freq/job.log",
             sp_path="path/to/sp/job.log",
         )
-    with pytest.raises(ValidationError):
+    with pytest.raises(TypeError):
         # wrong value type for 'x' key
         SpeciesCreate(
             smiles="C",
@@ -1681,6 +1681,7 @@ def test_species_schema():
     with pytest.raises(ValidationError):
         # no hessian given for a polyatomic species
         SpeciesCreate(
+            label="SPC20",
             smiles="C",
             charge=0,
             multiplicity=1,

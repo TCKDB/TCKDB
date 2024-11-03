@@ -24,11 +24,11 @@ def test_bot_schema():
     assert bot1.git_branch == "master"
 
     with pytest.raises(ValidationError):
-        # wrong url (no .)
+        # wrong url (not allowed >)
         BotBase(
             name="ARC",
             version="1.1.0",
-            url="https://github-com/ReactionMechanismGenerator/ARC",
+            url="https://github>.com/ReactionMechanismGenerator/ARC",
         )
     with pytest.raises(ValidationError):
         # wrong url (space)

@@ -41,8 +41,8 @@ class TransBase(BaseModel):
     def check_parameters(cls, value, values: ValidationInfo):
         """Trans.parameters validator"""
         if (
-            "model" in info
-            and values["model"] == TransModelEnum.single_exponential_down
+            "model" in values.data
+            and values.data["model"] == TransModelEnum.single_exponential_down
         ):
             if "alpha0" not in value:
                 raise ValueError(

@@ -130,20 +130,9 @@ class SpeciesBase(BaseModel):
     is_ts: Optional[bool] = Field(
         False, title="Does this species represent a transition state?"
     )
-    irc_trajectories: Optional[
-        List[
-            List[
-                Dict[
-                    str,
-                    Union[
-                        Tuple[Tuple[float, float, float], ...],
-                        Tuple[Annotated[int, Field(ge=1)], ...],
-                        Tuple[Annotated[str, StringConstraints(max_length=10)], ...],
-                    ],
-                ]
-            ]
-        ]
-    ] = Field(None, title="IRC trajectories (for TS species)")
+    irc_trajectories: Optional[List[List[Coordinates]]] = Field(
+        None, title="IRC trajectories (for TS species)"
+    )
     electronic_energy: Optional[float] = Field(
         None, title="Electronic energy in Hartree"
     )
@@ -166,12 +155,17 @@ class SpeciesBase(BaseModel):
         '"linear", "spherical top", "symmetric top", or "asymmetric top".',
     )
     statmech_treatment: Optional[str] = Field(
-        None, max_length=50, title="The statistical mechanics treatment"
+        None,
+        max_length=50,
+        title="The statistical mechanics treatment",
+        validate_default=True,
     )
     rotational_constants: Optional[List[float]] = Field(
         None, title="Rotational constants"
     )
-    torsions: Optional[List[TorsionsBase]] = Field(None, title="Torsions")
+    torsions: Optional[List[TorsionsBase]] = Field(
+        None, title="Torsions", validate_default=True
+    )
     conformers: Optional[
         List[
             Dict[
@@ -185,13 +179,19 @@ class SpeciesBase(BaseModel):
             ]
         ]
     ] = Field(None, title="Conformers")
-    H298: Optional[float] = Field(None, title="Standard enthalpy of formation")
-    S298: Optional[float] = Field(None, gt=0, title="Standard entropy of formation")
+    H298: Optional[float] = Field(
+        None, title="Standard enthalpy of formation", validate_default=True
+    )
+    S298: Optional[float] = Field(
+        None, gt=0, title="Standard entropy of formation", validate_default=True
+    )
     Cp_values: Optional[List[Annotated[float, Field(gt=0)]]] = Field(
-        None, title="Constant pressure heat capacity values"
+        None, title="Constant pressure heat capacity values",
+        validate_default=True,
     )
     Cp_T_list: Optional[List[Annotated[float, Field(gt=0)]]] = Field(
-        None, title="Constant pressure heat capacity temperature list"
+        None, title="Constant pressure heat capacity temperature list",
+        validate_default=True,
     )
     heat_capacity_model: Optional[
         Dict[str, Union[float, Dict[str, Union[float, List[float]]], str]]
@@ -199,8 +199,10 @@ class SpeciesBase(BaseModel):
 
     # Paths
     # Storage requires consideration
-    opt_path: Optional[str] = Field(None, title="The path to the opt output file")
-    freq_path: Optional[str] = Field(None, title="The path to the freq output file")
+    opt_path: Optional[str] = Field(None, title="The path to the opt output file",
+                                    validate_default=True)
+    freq_path: Optional[str] = Field(None, title="The path to the freq output file",
+                                     validate_default=True)
     scan_paths: Optional[
         Dict[
             Tuple[
@@ -214,12 +216,14 @@ class SpeciesBase(BaseModel):
             ],
             Annotated[str, StringConstraints(max_length=5000)],
         ]
-    ] = Field(None, title="Paths to scan log files")
+    ] = Field(None, title="Paths to scan log files", validate_default=True)
     irc_paths: Optional[List[Annotated[str, StringConstraints(max_length=5000)]]] = (
-        Field(None, title="Paths to IRC log files")
+        Field(None, title="Paths to IRC log files",
+              validate_default=True)
     )
     sp_path: Optional[str] = Field(
-        None, max_length=5000, title="Path to single-point energy log file"
+        None, max_length=5000, title="Path to single-point energy log file",
+        validate_default=True
     )
 
     extras: Optional[Dict[str, Any]] = Field(None, title="Extras")
@@ -261,6 +265,31 @@ class SpeciesBase(BaseModel):
             )
         return value if len(value) > 1 else None
 
+    @model_validator(mode="after")
+    def check_fragments_and_fragment_orientation(cls, data):
+        """Validate that fragment_orientation is specified if fragments are specified, and vice versa."""
+        fragments = data.fragments
+        fragment_orientation = data.fragment_orientation
+        label = f' (species label "{data.label}")' if data.label else ""
+
+        if fragment_orientation is None:
+            if fragments is not None:
+                raise ValueError(
+                    f"Must specify fragment_orientation if fragments are specified{label}."
+                )
+        else:
+            if fragments is None:
+                raise ValueError(
+                    f"The fragment_orientation argument{label} is unexpected if the fragments "
+                    f"argument is not specified."
+                )
+            if len(fragment_orientation) != len(fragments) - 1:
+                raise ValueError(
+                    f"Expected {len(fragments) - 1} fragment orientation entries for a "
+                    f"species with {len(fragments)} fragments, got {len(fragment_orientation)}."
+                )
+        return data
+
     @field_validator("fragment_orientation", mode="before")
     def fragment_orientation_validator(cls, value, values: ValidationInfo):
         """Species.fragment_orientation validator"""
@@ -269,48 +298,34 @@ class SpeciesBase(BaseModel):
             if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if value is None:
-            if "fragments" in values.data and values.data["fragments"] is not None:
+        valid_keys = ["cm", "x", "y", "z"]
+        for entry in value:
+            if len(list(entry.keys())) != 4:
                 raise ValueError(
-                    f"Must specify fragment_orientation if fragments are specified{label}."
+                    f'Expected the following keys in the fragment_orientation argument: "cm", "x", '
+                    f'"y", and "z". Got{label}: {list(entry.keys())}'
                 )
-        else:
-            if "fragments" in values.data:
-                if values.data["fragments"] is None:
+            for key, val in entry.items():
+                if key not in valid_keys:
                     raise ValueError(
-                        f"The fragment_orientation argument{label} is unexpected if the fragments "
-                        f"argument is not specified."
+                        f'Got an unrecognized key "{key}" in the fragment_orientation '
+                        f"attribute{label}."
                     )
-                if len(value) != len(values.data["fragments"]) - 1:
-                    raise ValueError(
-                        f'Expected {len(values.data["fragments"]) - 1} fragment orientation entries for a '
-                        f'species with {len(values.data["fragments"])} fragments, got {len(value)}.'
-                    )
-            valid_keys = ["cm", "x", "y", "z"]
-            for entry in value:
-                if len(list(entry.keys())) != 4:
-                    raise ValueError(
-                        f'Expected the following keys in the fragment_orientation argument: "cm", "x", '
-                        f'"y", and "z". Got{label}: {list(entry.keys())}'
-                    )
-                for key, val in entry.items():
-                    if key not in valid_keys:
-                        raise ValueError(
-                            f'Got an unrecognized key "{key}" in the fragment_orientation '
-                            f"attribute{label}."
+                if key == "cm":
+                    if not isinstance(val, list):
+                        raise TypeError(
+                            f"The center of mass vector in the fragment_orientation attribute must be "
+                            f"a list type, got{label}: {type(val)}."
                         )
-                    if key == "cm":
-                        if not isinstance(val, list):
-                            raise TypeError(
-                                f"The center of mass vector in the fragment_orientation attribute must be "
-                                f"a list type, got{label}: {type(val)}."
-                            )
-                        if len(entry[key]) != 3:
-                            raise ValueError(
-                                f"The center of mass vector in the fragment_orientation attribute{label} "
-                                f"has length {len(val)}, should have a length of 3."
-                            )
-                    elif not isinstance(val, float):
+                    if len(entry[key]) != 3:
+                        raise ValueError(
+                            f"The center of mass vector in the fragment_orientation attribute{label} "
+                            f"has length {len(val)}, should have a length of 3."
+                        )
+                elif not isinstance(val, float):
+                    if isinstance(val, int):
+                        entry[key] = float(val)
+                    else:
                         raise TypeError(
                             f'The "x", "y", and "z" in the fragment_orientation attribute must have '
                             f"float type values, got{label}: {val} with type {type(val)} in\n{entry}."
@@ -430,23 +445,18 @@ class SpeciesBase(BaseModel):
                 )
         return value
 
-    @field_validator("conformation_method", mode="before")
-    def conformation_method_validator(cls, value, values: ValidationInfo):
-        """Species.conformation_method validator"""
-        label = (
-            f' for species "{values.data["label"]}"'
-            if "label" in values.data and values.data["label"] is not None
-            else ""
-        )
+    @model_validator(mode="after")
+    def conformation_method_validation(cls, data):
+        """Validate that the conformation_method is specified if the species has more than 4 atoms."""
         if (
-            value is None
-            and "coordinates" in values.data
-            and len(values.data["coordinates"].symbols) >= 4
+            data.conformation_method is None
+            and data.coordinates is not None
+            and len(data.coordinates.symbols) >= 4
         ):
             raise ValueError(
-                f"Must provide a conformation method{label} when the species contains more than 4 atoms."
+                f"Must provide a conformation method for species with more than 4 atoms."
             )
-        return value
+        return data
 
     @field_validator("global_min_geometry")
     def global_min_geometry_validator(cls, value, values: ValidationInfo):
@@ -519,98 +529,133 @@ class SpeciesBase(BaseModel):
             )
         return value
 
-    @field_validator("hessian", mode="before")
-    def hessian_validator(cls, value, values: ValidationInfo):
+    @model_validator(mode="after")
+    def hessian_validator(cls, data):
         """Species.hessian validator"""
-        label = (
-            f' for species "{values.data["label"]}"'
-            if "label" in values.data and values.data["label"] is not None
-            else ""
-        )
-        num_atoms = common.get_number_of_atoms(values.data)
+        label = f' for species "{data.label}"' if data.label else ""
+        num_atoms = common.get_number_of_atoms(data.coordinates)
         if num_atoms > 1:
-            if value is None:
+            if data.hessian is None:
                 raise ValueError(
                     f"The Hessian was not given{label}. It must be given for polyatomic species."
                 )
-            if len(value) != num_atoms * 3:
+            if len(data.hessian) != num_atoms * 3:
                 raise ValueError(
-                    f"The number of rows in the Hessian matrix ({len(value)}){label} is invalid, "
+                    f"The number of rows in the Hessian matrix ({len(data.hessian)}){label} is invalid, "
                     f"expected {num_atoms * 3} rows for {num_atoms} atoms."
                 )
-            for i, row in enumerate(value):
+            for i, row in enumerate(data.hessian):
                 if len(row) < i + 1:
                     raise ValueError(
                         f"Row {i} of the Hesian matrix{label} has only {len(row)} elements, "
                         f"expected {i + 1} elements."
                     )
-        return value
+        return data
 
-    @field_validator("scaled_projected_frequencies", mode="before")
-    def scaled_projected_frequencies_validator(cls, value, values: ValidationInfo):
-        """Species.scaled_projected_frequencies validator"""
-        label = (
-            f' for species "{values.data["label"]}"'
-            if "label" in values.data and values.data["label"] is not None
-            else ""
-        )
-        if value is None and common.get_number_of_atoms(values.data) > 1:
-            raise ValueError(
-                f"Scaled projected frequencies were not given{label}."
-                f"Must be specified for polyatomic species."
-            )
+    @field_validator("scaled_projected_frequencies")
+    def scaled_projected_frequencies_validator(cls, value):
+        """Validate the scaled_projected_frequencies field."""
         if value is not None:
             if any(i == 0 for i in value):
                 raise ValueError(
-                    f"A frequency (scaled_projected_frequencies) cannot be zero, got {value}{label}."
+                    f"A frequency (scaled_projected_frequencies) cannot be zero, got {value}."
                 )
-            if "frequencies" in values.data:
-                if len(value) > len(values.data["frequencies"]):
+        return value
+
+    # Model Validator for the scaled_projected_frequencies field
+    @model_validator(mode="after")
+    def validate_scaled_projected_frequencies(cls, data):
+        """Validate cross-field dependencies for scaled_projected_frequencies."""
+        label = f' for species "{data.label}"' if data.label else ""
+        scaled_projected_frequencies = data.scaled_projected_frequencies
+        frequencies = data.frequencies
+        if scaled_projected_frequencies is None:
+            if common.get_number_of_atoms(data.coordinates) > 1:
+                raise ValueError(
+                    f"Scaled projected frequencies were not given{label}. "
+                    "Must be specified for polyatomic species."
+                )
+        else:
+            if frequencies is None:
+                raise ValueError(
+                    f"Frequencies must be provided when scaled_projected_frequencies are given{label}."
+                )
+            else:
+                if len(scaled_projected_frequencies) > len(frequencies):
                     raise ValueError(
-                        f"The scaled_projected_frequencies (length {len(value)}) cannot have more "
-                        f"entries that the frequencies (length {len(values.data['frequencies'])}{label}."
+                        f"The scaled_projected_frequencies (length {len(scaled_projected_frequencies)}) cannot have more "
+                        f"entries than the frequencies (length {len(frequencies)}){label}."
                     )
-                if value == values.data["frequencies"]:
+                if scaled_projected_frequencies == frequencies:
                     raise ValueError(
                         "The scaled_projected_frequencies are identical to the frequencies.\n"
                         "Did you forget to scale?"
                     )
+        return data
+
+    @field_validator("normal_displacement_modes")
+    def normal_displacement_modes_validator(cls, value):
+        """Validate the structure of normal_displacement_modes field."""
+        if value is not None:
+            for ndm in value:
+                if not isinstance(ndm, (list, tuple)):
+                    raise ValueError(
+                        f"Each normal displacement mode must be a list or tuple, got {type(ndm)}."
+                    )
+                for displacement in ndm:
+                    if (
+                        not isinstance(displacement, (list, tuple))
+                        or len(displacement) != 3
+                    ):
+                        raise ValueError(
+                            f"Each displacement must be a list or tuple of length 3, "
+                            f"got {displacement} of type {type(displacement)} with length {len(displacement) if hasattr(displacement, '__len__') else 'unknown'}."
+                        )
         return value
 
-    @field_validator("normal_displacement_modes", mode="before")
-    def normal_displacement_modes_validator(cls, value, values: ValidationInfo):
-        """Species.normal_displacement_modes validator"""
-        # The normal displacement modes. Required for polyatomic species (with 2 or more atoms).
-        if value is None and common.get_number_of_atoms(values.data) < 2:
-            return value
-        label = (
-            f' for species "{values.data["label"]}"'
-            if "label" in values.data and values.data["label"] is not None
-            else ""
-        )
-        if "frequencies" in values.data and values.data["frequencies"] is not None:
-            if value is None:
-                raise ValueError(f"Normal displacement modes were not given{label}.")
-            if len(value) != len(values.data["frequencies"]):
+    # Model Validator
+    @model_validator(mode="after")
+    def validate_normal_displacement_modes(cls, data):
+        """Validate cross-field dependencies for normal_displacement_modes."""
+        label = f' for species "{data.label}"' if data.label else ""
+        normal_displacement_modes = data.normal_displacement_modes
+        frequencies = data.frequencies
+        num_atoms = common.get_number_of_atoms(data.coordinates)
+
+        if num_atoms is None:
+            # Can't proceed without knowing the number of atoms
+            return data
+
+        if num_atoms < 2:
+            # Monoatomic species
+            if normal_displacement_modes is not None:
                 raise ValueError(
-                    f"The number of normal displacement modes ({len(value)}) "
-                    f"differs from the number of frequencies ({len(values.data['frequencies'])}){label}."
+                    f"Normal displacement modes should not be provided for monoatomic species{label}."
                 )
-            num_atoms = common.get_number_of_atoms(values.data)
-            if num_atoms is not None:
-                for ndm in value:
-                    if len(ndm) != num_atoms:
-                        raise ValueError(
-                            f"The number of normal displacement modes per frequency must be equal "
-                            f"to the number of atoms ({num_atoms}), got {len(ndm)}."
-                        )
-                    for displacement in ndm:
-                        if len(displacement) != 3:
-                            raise ValueError(
-                                f"Each displacement (per frequency per atom) must be a list of length 3, "
-                                f"got {len(displacement)}."
-                            )
-        return value
+            return data  # No further validation needed
+
+        # Polyatomic species
+        if frequencies is not None:
+            if normal_displacement_modes is None:
+                raise ValueError(f"Normal displacement modes were not given{label}.")
+            if len(normal_displacement_modes) != len(frequencies):
+                raise ValueError(
+                    f"The number of normal displacement modes ({len(normal_displacement_modes)}) "
+                    f"differs from the number of frequencies ({len(frequencies)}){label}."
+                )
+            for ndm in normal_displacement_modes:
+                if len(ndm) != num_atoms:
+                    raise ValueError(
+                        f"The number of displacements per normal mode must equal the number of atoms ({num_atoms}), "
+                        f"got {len(ndm)} displacements{label}."
+                    )
+        else:
+            # frequencies is None
+            if normal_displacement_modes is not None:
+                raise ValueError(
+                    f"Cannot specify normal displacement modes without frequencies{label}."
+                )
+        return data
 
     @field_validator("frequencies")
     def frequencies_validator(cls, value, values: ValidationInfo):
@@ -769,7 +814,7 @@ class SpeciesBase(BaseModel):
             )
         return value
 
-    @field_validator("statmech_treatment", mode="before")
+    @field_validator("statmech_treatment", mode="after")
     def statmech_treatment_validator(cls, value, values: ValidationInfo):
         """Species.statmech_treatment validator"""
         label = (
@@ -1049,6 +1094,10 @@ class SpeciesCreateBatch(SpeciesBase, ConnectionBase):
     ess_connections: Optional[ESSConnectionID] = Field(
         None, title="The connection IDs of the ESS objects for internal referencing"
     )
+
+
+class SpeciesUpdate(SpeciesBase):
+    pass
 
 
 class SpeciesRead(SpeciesBase):

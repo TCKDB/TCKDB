@@ -234,10 +234,7 @@ def test_encorr_schema(
             # bac=None,
             primary_level=primary_level,
         )
-    assert (
-        "Either isodesmic reactions or aec and bac arguments must be specified."
-        in str(exc_info.value)
-    )
+    assert "Either BAC or isodesmic reactions must be provided." in str(exc_info.value)
 
     # Test case 12: No aec nor isodesmic
     with pytest.raises(ValidationError) as exc_info:
@@ -248,25 +245,26 @@ def test_encorr_schema(
             # aec=None,
             primary_level=primary_level,
         )
-    assert (
-        "Either isodesmic reactions or aec and bac arguments must be specified"
-        in str(exc_info.value)
+    assert "Either isodesmic reactions or BAC and AEC must be provided" in str(
+        exc_info.value
     )
 
     # Test case 13: Both isodesmic and aec
+    isodesmic_reactions = [
+        IsodesmicReactionEntry(
+            reactants=["[CH2]CCCC", "[CH]"],
+            products=["[C]C", "[CH2]C(C)C"],
+            stoichiometry=[1, 1, 1, 1],
+            DHrxn298=16.809,
+        )
+    ]
+
     with pytest.raises(ValidationError) as exc_info:
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="hartree",
             aec=valid_aec,
-            isodesmic_reactions=[
-                {
-                    "reactants": ["[CH2]CCCC", "[CH]"],
-                    "products": ["[C]C", "[CH2]C(C)C"],
-                    "stoichiometry": [1, 1, 1, 1],
-                    "DHrxn298": 16.809,
-                }
-            ],
+            isodesmic_reactions=isodesmic_reactions,
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -281,14 +279,12 @@ def test_encorr_schema(
             supported_elements=supported_elements,
             energy_unit="hartree",
             bac=valid_bac,
-            isodesmic_reactions=[
-                {
-                    "reactants": ["[CH2]CCCC", "[CH]"],
-                    "products": ["[C]C", "[CH2]C(C)C"],
-                    "stoichiometry": [1, 1, 1, 1],
-                    "DHrxn298": 16.809,
-                }
-            ],
+            isodesmic_reactions=IsodesmicReactionEntry(
+                reactants=["[CH2]CCCC", "[CH]"],
+                products=["[C]C", "[CH2]C(C)C"],
+                stoichiometry=[1, 1, 1, 1],
+                DHrxn298=16.809,
+            ),
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -304,14 +300,12 @@ def test_encorr_schema(
             energy_unit="hartree",
             aec=valid_aec,
             bac=valid_bac,
-            isodesmic_reactions=[
-                {
-                    "reactants": ["[CH2]CCCC", "[CH]"],
-                    "products": ["[C]C", "[CH2]C(C)C"],
-                    "stoichiometry": [1, 1, 1, 1],
-                    "DHrxn298": 16.809,
-                }
-            ],
+            isodesmic_reactions=IsodesmicReactionEntry(
+                reactants=["[CH2]CCCC", "[CH]"],
+                products=["[C]C", "[CH2]C(C)C"],
+                stoichiometry=[1, 1, 1, 1],
+                DHrxn298=16.809,
+            ),
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -325,67 +319,68 @@ def test_encorr_schema(
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=[
-                {
-                    "reactants": "[CH2]CCCC+[CH]",
-                    "products": ["[C]C", "[CH2]C(C)C"],
-                    "stoichiometry": [1, 1, 1, 1],
-                    "DHrxn298": 16.809,
-                }
-            ],
+            isodesmic_reactions=IsodesmicReactionEntry(
+                reactants="[CH2]CCCC+[CH]",
+                products=["[C]C", "[CH2]C(C)C"],
+                stoichiometry=[1, 1, 1, 1],
+                DHrxn298=16.809,
+            ),
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
-    assert "value is not a valid list" in str(exc_info.value)
+    assert (
+        "Input should be a valid list [type=list_type, input_value='[CH2]CCCC+[CH]', input_type=str]"
+        in str(exc_info.value)
+    )
 
     # Test case 17: isodesmic 'products' not a list
+
     with pytest.raises(ValidationError) as exc_info:
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=[
-                {
-                    "reactants": ["[CH2]CCCC", "[CH]"],
-                    "products": "[C]C+[CH2]C(C)C",
-                    "stoichiometry": [1, 1, 1, 1],
-                    "DHrxn298": 16.809,
-                }
-            ],
+            isodesmic_reactions=IsodesmicReactionEntry(
+                reactants=["[CH2]CCCC", "[CH]"],
+                products="[C]C+[CH2]C(C)C",
+                stoichiometry=[1, 1, 1, 1],
+                DHrxn298=16.809,
+            ),
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
-    assert "value is not a valid list" in str(exc_info.value)
+    assert (
+        "Input should be a valid list [type=list_type, input_value='[C]C+[CH2]C(C)C', input_type=str]"
+        in str(exc_info.value)
+    )
 
     # Test case 18: isodesmic 'products' has an invalid identifier
     with pytest.raises(ValidationError) as exc_info:
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=[
-                {
-                    "reactants": ["[CH2]CCCC", "[CH]"],
-                    "products": ["[C]C++++f151_invalid", "[CH2]C(C)C"],
-                    "stoichiometry": [1, 1, 1, 1],
-                    "DHrxn298": 16.809,
-                }
-            ],
+            isodesmic_reactions=IsodesmicReactionEntry(
+                reactants=["[CH2]CCCC", "[CH]"],
+                products=["[C]C++++f151_invalid", "[CH2]C(C)C"],
+                stoichiometry=[1, 1, 1, 1],
+                DHrxn298=16.809,
+            ),
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
     assert "Invalid species identifier" in str(exc_info.value)
 
     # Test case 19: isodesmic 'stoichiometry' is not a list
-    with pytest.raises(ValidationError) as exc_info:
+    with pytest.raises(TypeError) as exc_info:
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
             isodesmic_reactions=[
-                {
-                    "reactants": ["[CH2]CCCC", "[CH]"],
-                    "products": ["[C]C", "[CH2]C(C)C"],
-                    "stoichiometry": "*1 *1 *1 *1",
-                    "DHrxn298": 16.809,
-                }
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry="*1 *1 *1 *1",
+                    DHrxn298=16.809,
+                )
             ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
@@ -398,17 +393,17 @@ def test_encorr_schema(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
             isodesmic_reactions=[
-                {
-                    "reactants": ["[CH2]CCCC", "[CH]"],
-                    "products": ["[C]C", "[CH2]C(C)C"],
-                    "stoichiometry": ["one", 1, 1, 1],
-                    "DHrxn298": 16.809,
-                }
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry=["one", 1, 1, 1],
+                    DHrxn298=16.809,
+                )
             ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
-    assert "value is not a valid integer" in str(exc_info.value)
+    assert "Input should be a valid integer, unable to parse" in str(exc_info.value)
 
     # Test case 21: isodesmic 'DHrxn298' is not a float
     with pytest.raises(ValidationError) as exc_info:
@@ -416,17 +411,17 @@ def test_encorr_schema(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
             isodesmic_reactions=[
-                {
-                    "reactants": ["[CH2]CCCC", "[CH]"],
-                    "products": ["[C]C", "[CH2]C(C)C"],
-                    "stoichiometry": [1, 1, 1, 1],
-                    "DHrxn298": (16.809, "kJ/mol"),
-                }
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=(16.809, "kJ/mol"),
+                )
             ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
-    assert "value is not a valid float" in str(exc_info.value)
+    assert " Input should be a valid number [type=float_type, input_value=(16.809, 'kJ/mol'), input_type=tuple]" in str(exc_info.value)
 
     # Test case 22: isodesmic reaction has a wrong key
     with pytest.raises(ValidationError) as exc_info:
@@ -443,7 +438,7 @@ def test_encorr_schema(
             primary_level=primary_level,
         )
     assert (
-        'An isodesmic reaction entry must include all four "reactants", "products", "stoichiometry", and "DHrxn298" keys.'
+        'enthalpy_change_of_reaction\n  Extra inputs are not permitted [type=extra_forbidden, input_value=16.809, input_type=float]'
         in str(exc_info.value)
     )
 
@@ -461,8 +456,8 @@ def test_encorr_schema(
             primary_level=primary_level,
         )
     assert (
-        'An isodesmic reaction entry must include all four "reactants", "products", "stoichiometry", and "DHrxn298" keys.'
-        in str(exc_info.value.errors()[1]["msg"])
+        "products\n  Field required [type=missing, input_value={'reactants': ['[CH2]CCCC... 1], 'DHrxn298': 16.809}, input_type=dict]"
+        in str(exc_info.value)
     )
 
     # Test case 24: isodesmic reaction is missing a key ('reactants')
@@ -479,7 +474,7 @@ def test_encorr_schema(
             primary_level=primary_level,
         )
     assert (
-        'An isodesmic reaction entry must include all four "reactants", "products", "stoichiometry", and "DHrxn298" keys.'
+        "reactants\n  Field required [type=missing, input_value={'products': ['[C]C', '[C... 1], 'DHrxn298': 16.809}, input_type=dict]"
         in str(exc_info.value)
     )
 
@@ -498,25 +493,23 @@ def test_encorr_schema(
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
-    assert "extra fields not permitted" in str(exc_info.value)
+    assert "index\n  Extra inputs are not permitted [type=extra_forbidden, input_value=152, input_type=int]" in str(exc_info.value)
 
     # Test case 26: isodesmic reaction with no isodesmic_high_level_id
     with pytest.raises(ValidationError) as exc_info:
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=[
-                {
-                    "reactants": ["[CH2]CCCC", "[CH]"],
-                    "products": ["[C]C", "[CH2]C(C)C"],
-                    "stoichiometry": [1, 1, 1, 1],
-                    "DHrxn298": 16.809,
-                }
+            isodesmic_reactions=[IsodesmicReactionEntry(
+                reactants=["[CH2]CCCC", "[CH]"],
+                products=["[C]C", "[CH2]C(C)C"],
+                stoichiometry=[1, 1, 1, 1],
+                DHrxn298=16.809,)
             ],
             # isodesmic_high_level is missing
             primary_level=primary_level,
         )
     assert (
-        "The isodesmic_high_level must be provided when isodesmic_reactions are specified"
+        "Value error, The 'isodesmic_high_level' must be provided when 'isodesmic_reactions' are specified"
         in str(exc_info.value)
     )

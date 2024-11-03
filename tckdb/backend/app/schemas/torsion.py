@@ -46,9 +46,11 @@ class TorsionsBase(BaseModel):
     constraints: Optional[Dict[Tuple[int, ...], float]] = Field(
         None,
         title="Any non-trivial constraints (i.e., other than the scanned mode) used during optimization",
+        validate_default=True,
     )
     symmetry: Optional[int] = Field(
-        None, gt=0, title="The internal symmetry number of the scanned mode"
+        None, gt=0, title="The internal symmetry number of the scanned mode",
+        validate_default=True,
     )
     treatment: TorsionTreatmentEnum = Field(
         ...,
@@ -66,13 +68,16 @@ class TorsionsBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("constraints")
+    @classmethod
     def constraints_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.constraints validator"""
         label = (
-            f' for species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
+        if value is None:
+            return value
         for key in value.keys():
             if len(key) not in [2, 3, 4]:
                 raise ValueError(
@@ -89,13 +94,13 @@ class TorsionsBase(BaseModel):
     def symmetry_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.symmetry validator"""
         label = (
-            f' for species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "dimension" in values and values["dimension"] == 1 and value is None:
+        if "dimension" in values.data and values.data["dimension"] == 1 and value is None:
             raise ValueError(
-                f'The "symmetry" key is required for a torsion dictionary{label}.\nGot: {values}'
+                f'The "symmetry" key is required for a torsion dictionary{label}.\nGot: {values.data}'
             )
         return value
 
@@ -103,8 +108,8 @@ class TorsionsBase(BaseModel):
     def torsions_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.torsions validator"""
         label = (
-            f' for species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if not isinstance(value[0], list):
@@ -114,20 +119,20 @@ class TorsionsBase(BaseModel):
             if len(atom_indices) != 4:
                 raise ValueError(
                     f'Atom indices in "torsions" must be of length 4, got{label} {atom_indices}'
-                    f"in\n{values}"
+                    f"in\n{values.data}"
                 )
             if any(index == 0 for index in atom_indices):
                 raise ValueError(
-                    f"Torsion atom indices must be 1-indexed, got{label} {atom_indices} in\n{values}"
+                    f"Torsion atom indices must be 1-indexed, got{label} {atom_indices} in\n{values.data}"
                 )
         if (
-            "dimension" in values
-            and values["dimension"]
-            and len(value) != values["dimension"]
+            "dimension" in values.data
+            and values.data["dimension"]
+            and len(value) != values.data["dimension"]
         ):
             raise ValueError(
                 f"Got a {len(value)}D torsion for a declared dimension of "
-                f"{values['dimension']}{label}:\n{value}"
+                f"{values.data['dimension']}{label}:\n{value}"
             )
         return value
 
@@ -136,12 +141,12 @@ class TorsionsBase(BaseModel):
         """TorsionsBase.top validator"""
         label = (
             f' for species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if any(index == 0 for index in value):
             raise ValueError(
-                f"Top atom indices must be 1-indexed, got{label} {value} in\n{values}"
+                f"Top atom indices must be 1-indexed, got{label} {value} in\n{values.data}"
             )
         return value
 
@@ -149,11 +154,11 @@ class TorsionsBase(BaseModel):
     def energies_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.energies validator"""
         label = (
-            f' for species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "dimension" in values and values["dimension"]:
+        if "dimension" in values.data and values.data["dimension"]:
             energies_dimension = 0
             entry = value
             while not isinstance(entry, float):
@@ -165,10 +170,10 @@ class TorsionsBase(BaseModel):
                         f"Lowest level energy entries in a torsion must be floats, "
                         f"got {entry}{label} which is a {type(entry)} in\n{value}"
                     )
-            if energies_dimension != values["dimension"]:
+            if energies_dimension != values.data["dimension"]:
                 raise ValueError(
                     f"Got a {energies_dimension}D energies attribute for a declared dimension "
-                    f"of {values['dimension']}{label}:\n{value}"
+                    f"of {values.data['dimension']}{label}:\n{value}"
                 )
         return value
 
@@ -176,8 +181,8 @@ class TorsionsBase(BaseModel):
     def resolution_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.resolution validator"""
         label = (
-            f' for species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if not isinstance(value, list):
@@ -194,8 +199,8 @@ class TorsionsBase(BaseModel):
     def trajectory_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.trajectory validator"""
         label = (
-            f' for species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         trajectory_dimension = 0
@@ -217,12 +222,12 @@ class TorsionsBase(BaseModel):
                     f"dictionaries, got {entry}{label} which is a {type(entry)}."
                 )
         if (
-            "dimension" in info
-            and values["dimension"]
-            and trajectory_dimension != values["dimension"]
+            "dimension" in values.data
+            and values.data["dimension"]
+            and trajectory_dimension != values.data["dimension"]
         ):
             raise ValueError(
                 f"Got a {trajectory_dimension}D trajectory attribute for a declared dimension "
-                f"of {values['dimension']}{label}:\n{value}"
+                f"of {values.data['dimension']}{label}:\n{value}"
             )
         return value

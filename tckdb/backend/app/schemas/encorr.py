@@ -91,10 +91,34 @@ class EnCorrBase(BaseModel):
         None, title="Bond additivity energy corrections dictionary"
     )
 
+    primary_level: Optional[LevelCreate] = Field(
+        None, title="The primary level of theory for the energy correction"
+    )
+
     isodesmic_reactions: Optional[List[IsodesmicReactionEntry]] = Field(
         None, title="Isodesmic reactions for the EnCorr calculation"
     )
+    isodesmic_high_level: Optional[LevelCreate] = Field(
+        None, title="The high level of theory for the isodesmic reactions"
+    )
     model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    @model_validator(mode="after")
+    def check_bac_or_isodesmic(cls, model):
+        if (
+            model.bac is None
+            and model.isodesmic_reactions is None
+            and model.aec is not None
+        ):
+            raise ValueError("Either BAC or isodesmic reactions must be provided.")
+        # Either isodesimic reactions or BAC and AEC must be provided
+        if model.bac and (
+            model.isodesmic_reactions is None and model.aec is None
+        ):
+            raise ValueError(
+                "Either isodesmic reactions or BAC and AEC must be provided"
+            )
+        return model
 
     @field_validator("supported_elements")
     @classmethod
@@ -118,18 +142,18 @@ class EnCorrBase(BaseModel):
         """EnCorr.aec validator"""
         for symbol in value.keys():
             if "supported_elements" in values.data:
-                if symbol not in values["supported_elements"]:
+                if symbol not in values.data["supported_elements"]:
                     raise ValueError(
                         f'The supported_elements list is missing the symbol "{symbol}".\n'
-                        f'Got: {values["supported_elements"]}\n'
+                        f'Got: {values.data["supported_elements"]}\n'
                         f"and: {value}"
                     )
-                if len(values["supported_elements"]) != len(list(value.keys())):
+                if len(values.data["supported_elements"]) != len(list(value.keys())):
                     raise ValueError(
                         f"The supported_elements list length and the number "
                         f"of entries in aec must be equal.\n"
-                        f'Got: {values["supported_elements"]} '
-                        f'(length {len(values["supported_elements"])})\n'
+                        f'Got: {values.data["supported_elements"]} '
+                        f'(length {len(values.data["supported_elements"])})\n'
                         f"and: {value}\n(number of elements: {len(list(value.keys()))})"
                     )
         return value
@@ -161,11 +185,11 @@ class EnCorrBase(BaseModel):
             for symbol in symbols:
                 if (
                     "supported_elements" in values.data
-                    and symbol not in values["supported_elements"]
+                    and symbol not in values.data["supported_elements"]
                 ):
                     raise ValueError(
                         f'The supported_elements list is missing the symbol "{symbol}".\n'
-                        f'Got: {values["supported_elements"]} and {entry} in\n'
+                        f'Got: {values.data["supported_elements"]} and {entry} in\n'
                         f"{value}"
                     )
         return value
@@ -173,17 +197,6 @@ class EnCorrBase(BaseModel):
     @field_validator("isodesmic_reactions", mode="before")
     def validate_isodesmic_reactions(cls, value, values: ValidationInfo):
         """EnCorr.isodesmic_reactions validator"""
-        if (
-            not value
-            and "aec" in values.data
-            and "bac" in values.data
-            and not all(
-                [attribute is not None for attribute in [values["aec"], values["bac"]]]
-            )
-        ):
-            raise ValueError(
-                "Either isodesmic reactions or aec and bac arguments must be specified."
-            )
         if value is not None:
             if (
                 "aec" in values.data
@@ -200,13 +213,10 @@ class EnCorrBase(BaseModel):
                     f'specified.\nGot: {values.data["aec"]}\nand: {values.data["bac"]}'
                 )
             for isodesmic_reaction in value:
-                print("************ISODESMIC REACTION************")
-                print(isodesmic_reaction)
-                print("************ISODESMIC REACTION************")
-                reactants = isodesmic_reaction["reactants"]
-                products = isodesmic_reaction["products"]
-                stoichiometry = isodesmic_reaction["stoichiometry"]
-                DHrxn298 = isodesmic_reaction["DHrxn298"]
+                reactants = isodesmic_reaction.reactants
+                products = isodesmic_reaction.products
+                stoichiometry = isodesmic_reaction.stoichiometry
+                DHrxn298 = isodesmic_reaction.DHrxn298
 
                 if reactants and products:
                     if not isinstance(reactants, list) or not isinstance(
@@ -237,12 +247,12 @@ class EnCorrBase(BaseModel):
                                 isodesmic_reaction.stoichiometry = [
                                     int(v) for v in isodesmic_reaction.stoichiometry
                                 ]
-                            except ValueError as e:
+                            except ValueError:
                                 raise ValueError(
                                     f"The stoichiometry coefficients must be integers, "
                                     f"got {coefficient} which is a {type(coefficient)} in:"
                                     f"\n{isodesmic_reaction}"
-                                ) from e
+                                )
                 if DHrxn298:
                     if not isinstance(DHrxn298, float):
                         raise ValueError(
@@ -258,6 +268,43 @@ class EnCorrBase(BaseModel):
                         f"in: {value}"
                     )
         return value
+
+    @model_validator(mode="after")
+    def validate_cross_fields(cls, model: "EnCorrBase") -> "EnCorrBase":
+        """
+        Perform cross-field validations:
+        - Either BAC and AEC must be provided, or isodesmic_reactions must be provided.
+        - If isodesmic_reactions are provided, isodesmic_high_level must also be provided.
+        - Prevent both BAC/AEC and isodesmic_reactions from being provided simultaneously.
+        - Ensure isodesmic_high_level is different from primary_level.
+        """
+        if model.isodesmic_reactions is not None:
+            if model.aec is not None or model.bac is not None:
+                raise ValueError(
+                    "When specifying isodesmic reactions, 'aec' and 'bac' must not be provided."
+                )
+            if model.isodesmic_high_level is None:
+                raise ValueError(
+                    "The 'isodesmic_high_level' must be provided when 'isodesmic_reactions' are specified."
+                )
+            # Ensure isodesmic_high_level is different from primary_level
+            if (
+                model.primary_level.method == model.isodesmic_high_level.method
+                and model.primary_level.basis == model.isodesmic_high_level.basis
+                and model.primary_level.auxiliary_basis == model.isodesmic_high_level.auxiliary_basis
+                and model.primary_level.level_arguments == model.isodesmic_high_level.level_arguments
+                and model.primary_level.solvation_description == model.isodesmic_high_level.solvation_description
+            ):
+                raise ValueError(
+                    "The 'isodesmic_high_level' must be different than the 'primary_level' of theory."
+                )
+        else:
+            # Ensure that both BAC and AEC are provided if isodesmic_reactions are not specified
+            if model.bac is None or model.aec is None:
+                raise ValueError(
+                    "Either BAC and AEC or isodesmic reactions must be provided."
+                )
+        return model
 
 
 class EnCorrCreate(EnCorrBase):
@@ -278,32 +325,8 @@ class EnCorrCreate(EnCorrBase):
     primary_level: LevelCreate = Field(
         ..., title="The primary level of theory for the energy correction"
     )
-    isodesmic_high_level: Optional[LevelCreate] = Field(
-        None, title="The high level of theory for the isodesmic reactions"
-    )
-    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
-    @field_validator("isodesmic_high_level", mode="before")
-    def validate_isodesmic_high_level(cls, value, values: ValidationInfo):
-        """Ensure that isodesmic_high_level is provided if isodesmic_reactions are specified."""
-        if values["isodesmic_reactions"] is not None and value is None:
-            raise ValueError(
-                "The isodesmic_high_level must be provided when isodesmic_reactions are specified."
-            )
-        if value is not None and "primary_level" in values.data:
-            # Assuming Level uniqueness is based on method, basis, etc., prevent primary and isodesmic levels from being the same
-            primary_level = values["primary_level"]
-            if (
-                primary_level.method == value.method
-                and primary_level.basis == value.basis
-                and primary_level.auxiliary_basis == value.auxiliary_basis
-                and primary_level.level_arguments == value.level_arguments
-                and primary_level.solvation_description == value.solvation_description
-            ):
-                raise ValueError(
-                    "The isodesmic_high_level must be different than the primary_level of theory."
-                )
-        return value
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
 
 class EnCorrCreateBatch(EnCorrBase, ConnectionBase):
