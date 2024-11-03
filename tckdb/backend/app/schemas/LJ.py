@@ -23,6 +23,7 @@ class LJBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("reviewer_flags", mode="before")
+    @classmethod
     def check_reviewer_flags(cls, value):
         """LJ.reviewer_flags validator"""
         return value or dict()

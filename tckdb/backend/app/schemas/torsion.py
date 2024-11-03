@@ -91,6 +91,7 @@ class TorsionsBase(BaseModel):
         return value
 
     @field_validator("symmetry", mode="before")
+    @classmethod
     def symmetry_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.symmetry validator"""
         label = (
@@ -105,6 +106,7 @@ class TorsionsBase(BaseModel):
         return value
 
     @field_validator("torsions")
+    @classmethod
     def torsions_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.torsions validator"""
         label = (
@@ -137,6 +139,7 @@ class TorsionsBase(BaseModel):
         return value
 
     @field_validator("top")
+    @classmethod
     def top_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.top validator"""
         label = (
@@ -151,6 +154,7 @@ class TorsionsBase(BaseModel):
         return value
 
     @field_validator("energies")
+    @classmethod
     def energies_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.energies validator"""
         label = (
@@ -178,6 +182,7 @@ class TorsionsBase(BaseModel):
         return value
 
     @field_validator("resolution")
+    @classmethod
     def resolution_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.resolution validator"""
         label = (
@@ -196,6 +201,7 @@ class TorsionsBase(BaseModel):
         return value
 
     @field_validator("trajectory")
+    @classmethod
     def trajectory_validator(cls, value, values: ValidationInfo):
         """TorsionsBase.trajectory validator"""
         label = (

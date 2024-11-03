@@ -194,11 +194,12 @@ class NonPhysicalSpeciesBase(BaseModel):
         return v
 
     @field_validator("smiles")
+    @classmethod
     def smiles_validator(cls, v, values: ValidationInfo):
         """NonPhysicalSpecies.smiles validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         is_valid, err = is_valid_smiles(v)
@@ -207,11 +208,12 @@ class NonPhysicalSpeciesBase(BaseModel):
         return v
 
     @field_validator("inchi")
+    @classmethod
     def inchi_validator(cls, v, values: ValidationInfo):
         """NonPhysicalSpecies.inchi validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         is_valid, err = is_valid_inchi(v)
@@ -220,11 +222,12 @@ class NonPhysicalSpeciesBase(BaseModel):
         return v
 
     @field_validator("inchi_key")
+    @classmethod
     def inchi_key_validator(cls, v, values: ValidationInfo):
         """NonPhysicalSpecies.inchi_key validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         is_valid, err = is_valid_inchi_key(v)
@@ -233,49 +236,50 @@ class NonPhysicalSpeciesBase(BaseModel):
         return v
 
     @field_validator("graph", mode="before")
+    @classmethod
     def graph_validator(cls, value, values: ValidationInfo):
         """
         NonPhysicalSpecies.graph validator
         Also used to populate SMILES, InChI, InChI Key, adjlist
         """
         label = (
-            f' (non-physical-species label: "{values["label"]}")'
-            if "label" in values and values["label"] is not None
+            f' (non-physical-species label: "{values.data["label"]}")'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if value is not None:
             # adjlist was given, populate other attributes as needed
-            if values["smiles"] is None or values["inchi"] is None:
+            if values.data["smiles"] is None or values.data["inchi"] is None:
                 smiles, inchi = converter.smiles_and_inchi_from_adjlist(value)
-                values["smiles"] = values["smiles"] or smiles
-                values["inchi"] = values["inchi"] or inchi
+                values.data["smiles"] = values.data["smiles"] or smiles
+                values.data["inchi"] = values.data["inchi"] or inchi
         if values["inchi"] is not None:
             # InChI was given, populate other attributes as needed
-            if "smiles" not in info or not values["smiles"]:
-                values["smiles"] = converter.smiles_from_inchi(values["inchi"])
-            value = value or converter.adjlist_from_smiles(values["smiles"])
-        if "smiles" in values and values["smiles"] is not None:
+            if "smiles" not in values.data or not values.data["smiles"]:
+                values.data["smiles"] = converter.smiles_from_inchi(values.data["inchi"])
+            value = value or converter.adjlist_from_smiles(values.data["smiles"])
+        if "smiles" in values.data and values.data["smiles"] is not None:
             # SMILES was given, populate other attributes as needed
             value = value or converter.adjlist_from_smiles(values["smiles"])
-            values["inchi"] = values["inchi"] or converter.inchi_from_smiles(
-                values["smiles"]
+            values["inchi"] = values.data["inchi"] or converter.inchi_from_smiles(
+                values.data["smiles"]
             )
         # populate the InChI Key if not already set
-        if values["inchi_key"] is not None and values["inchi"] is None:
+        if values.data["inchi_key"] is not None and values.data["inchi"] is None:
             # InChI Key was given (and there's no InChI), populate other attributes as needed
-            values["inchi"] = converter.inchi_from_inchi_key(values["inchi_key"])
-            if values["inchi"] is not None:
-                values["smiles"] = values["smiles"] or converter.smiles_from_inchi(
-                    values["inchi"]
+            values.data["inchi"] = converter.inchi_from_inchi_key(values.data["inchi_key"])
+            if values.data["inchi"] is not None:
+                values["smiles"] = values.data["smiles"] or converter.smiles_from_inchi(
+                    values.data["inchi"]
                 )
-                value = value or converter.adjlist_from_smiles(values["smiles"])
-        values["inchi_key"] = values["inchi_key"] or converter.inchi_key_from_inchi(
-            values["inchi"]
+                value = value or converter.adjlist_from_smiles(values.data["smiles"])
+        values.data["inchi_key"] = values.data["inchi_key"] or converter.inchi_key_from_inchi(
+            values.data["inchi"]
         )
         if (
-            values is None
-            or ("smiles" in values and values["smiles"] is None)
-            or ("inchi" in values and values["inchi"] is None)
+            values.data is None
+            or ("smiles" in values.data and values.data["smiles"] is None)
+            or ("inchi" in values.data and values.data["inchi"] is None)
         ):
             # couldn't populate adjlist, SMILES, nor InChI
             raise ValueError(
@@ -289,28 +293,29 @@ class NonPhysicalSpeciesBase(BaseModel):
                     f"The RMG adjacency list{label} is invalid:\n{value}\nReason:\n{err}"
                 )
             multiplicity = multiplicity_from_adjlist(value)
-            if multiplicity != values["multiplicity"]:
-                if not abs(values["multiplicity"] - multiplicity) % 2 + abs(
-                    values["charge"]
+            if multiplicity != values.data["multiplicity"]:
+                if not abs(values.data["multiplicity"] - multiplicity) % 2 + abs(
+                    values.data["charge"]
                 ):
                     # the difference is even, so it makes sense
                     adjlist_no_multiplicity = (
                         value.split("\n", 1)[1] if "multiplicity" in value else value
                     )
-                    value = f'multiplicity {values["multiplicity"]}\n{adjlist_no_multiplicity}'
+                    value = f'multiplicity {values.data["multiplicity"]}\n{adjlist_no_multiplicity}'
                 else:
                     raise ValueError(
-                        f'The given multiplicity {values["multiplicity"]} and the multiplicity of the '
+                        f'The given multiplicity {values.data["multiplicity"]} and the multiplicity of the '
                         f"graph adjacency list mismatch{label}:\n{value}"
                     )
         return value
 
     @field_validator("coordinates")
+    @classmethod
     def coordinates_validator(cls, v, values: ValidationInfo):
         """NonPhysicalSpecies.coordinates validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         converter.add_common_isotopes_to_coords(v)
@@ -322,11 +327,12 @@ class NonPhysicalSpeciesBase(BaseModel):
         return v
 
     @field_validator("fragments")
+    @classmethod
     def fragments_validator(cls, value, values: ValidationInfo):
         """NonPhysicalSpecies.fragments validator"""
         label = (
-            f' of non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' of non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         atom_indices = list()
@@ -335,7 +341,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                 is_valid, err = is_valid_atom_index(
                     index=index,
                     coordinates=(
-                        values["coordinates"] if "coordinates" in info else None
+                        values.data["coordinates"] if "coordinates" in values.data else None
                     ),
                     existing_indices=atom_indices,
                 )
@@ -345,7 +351,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                         f"Got:\n{err}."
                     )
                 atom_indices.append(index)
-        if "coordinates" in values and len(values["coordinates"]["symbols"]) != len(
+        if "coordinates" in values.data and len(values.data["coordinates"]["symbols"]) != len(
             atom_indices
         ):
             raise ValueError(
@@ -356,29 +362,30 @@ class NonPhysicalSpeciesBase(BaseModel):
         return value
 
     @field_validator("fragment_orientation", mode="before")
+    @classmethod
     def fragment_orientation_validator(cls, value, values: ValidationInfo):
         """NonPhysicalSpecies.fragment_orientation validator"""
         label = (
             f' (non-physical-species label "{values["label"]}")'
-            if "label" in values and values["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if value is None:
-            if "fragments" in values and values["fragments"] is not None:
+            if "fragments" in values.data and values.data["fragments"] is not None:
                 raise ValueError(
                     f"Must specify fragment_orientation if fragments are specified{label}."
                 )
         else:
-            if "fragments" in info:
-                if values["fragments"] is None:
+            if "fragments" in values.data:
+                if values.data["fragments"] is None:
                     raise ValueError(
                         f"The fragment_orientation argument{label} is unexpected if the fragments "
                         f"argument is not specified."
                     )
-                if len(value) != len(values["fragments"]) - 1:
+                if len(value) != len(values.data["fragments"]) - 1:
                     raise ValueError(
-                        f'Expected {len(values["fragments"]) - 1} fragment orientation entries for a '
-                        f'species with {len(values["fragments"])} fragments, got {len(value)}.'
+                        f'Expected {len(values.data["fragments"]) - 1} fragment orientation entries for a '
+                        f'species with {len(values.data["fragments"])} fragments, got {len(value)}.'
                     )
             valid_keys = ["cm", "x", "y", "z"]
             for entry in value:
@@ -412,11 +419,12 @@ class NonPhysicalSpeciesBase(BaseModel):
         return value
 
     @field_validator("chirality")
+    @classmethod
     def chirality_validator(cls, value, values: ValidationInfo):
         """NonPhysicalSpecies.chirality validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         chiral_atom_indices = list()
@@ -427,7 +435,7 @@ class NonPhysicalSpeciesBase(BaseModel):
                 is_valid, err = is_valid_atom_index(
                     index=index,
                     coordinates=(
-                        values["coordinates"] if "coordinates" in info else None
+                        values.data["coordinates"] if "coordinates" in values.data else None
                     ),
                     existing_indices=chiral_atom_indices,
                 )
@@ -438,11 +446,11 @@ class NonPhysicalSpeciesBase(BaseModel):
                     )
                 chiral_atom_indices.append(index)
                 if (
-                    "coordinates" in info
-                    and values["coordinates"]["symbols"][index - 1] not in allowed_atoms
+                    "coordinates" in values.data
+                    and values.data["coordinates"]["symbols"][index - 1] not in allowed_atoms
                 ):
                     raise ValueError(
-                        f'A chiral site cannot include {values["coordinates"]["symbols"][index - 1]} '
+                        f'A chiral site cannot include {values.data["coordinates"]["symbols"][index - 1]} '
                         f"atoms. Got{label}:\n{value}"
                     )
             if val not in allowed_values:
@@ -469,15 +477,15 @@ class NonPhysicalSpeciesBase(BaseModel):
                 )
             if (
                 val in ["NR", "NS"]
-                and "coordinates" in info
-                and values["coordinates"]["symbols"][key[0] - 1] != "N"
+                and "coordinates" in values.data
+                and values.data["coordinates"]["symbols"][key[0] - 1] != "N"
             ):
                 raise ValueError(
                     f'A chiral atom center{label} with an "NR" or "NS" notation but be a nitrogen atom.'
                 )
             elif (
                 val in ["R", "S"]
-                and "coordinates" in info
+                and "coordinates" in values.data
                 and values["coordinates"]["symbols"][key[0] - 1] == "N"
             ):
                 raise ValueError(
@@ -486,17 +494,18 @@ class NonPhysicalSpeciesBase(BaseModel):
         return value
 
     @field_validator("conformation_method", mode="before")
+    @classmethod
     def conformation_method_validator(cls, value, values: ValidationInfo):
         """NonPhysicalSpecies.conformation_method validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if (
             value is None
-            and "coordinates" in info
-            and len(values["coordinates"]["symbols"]) >= 4
+            and "coordinates" in values.data
+            and len(values.data["coordinates"]["symbols"]) >= 4
         ):
             raise ValueError(
                 f"Must provide a conformation method{label} when the species contains more than 4 atoms."
@@ -504,11 +513,12 @@ class NonPhysicalSpeciesBase(BaseModel):
         return value
 
     @field_validator("global_min_geometry")
+    @classmethod
     def global_min_geometry_validator(cls, value, values: ValidationInfo):
         """NonPhysicalSpecies.global_min_geometry validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         converter.add_common_isotopes_to_coords(value)
@@ -521,14 +531,15 @@ class NonPhysicalSpeciesBase(BaseModel):
         return value
 
     @field_validator("irc_trajectories", mode="before")
+    @classmethod
     def irc_trajectories_validator(cls, value, values: ValidationInfo):
         """NonPhysicalSpecies.irc_trajectories validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "is_ts" in values and values["is_ts"] and value is None:
+        if "is_ts" in values.data and values.data["is_ts"] and value is None:
             raise ValueError(
                 f"IRC trajectories must be given{label} if the species is a TS."
             )
@@ -545,11 +556,12 @@ class NonPhysicalSpeciesBase(BaseModel):
         return value
 
     @field_validator("opt_path", mode="before")
+    @classmethod
     def opt_path_validator(cls, value, values: ValidationInfo):
         """NonPhysicalSpecies.opt_path validator"""
         label = (
             f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if get_number_of_atoms(values.data) > 1 and value is None:
@@ -557,11 +569,12 @@ class NonPhysicalSpeciesBase(BaseModel):
         return value
 
     @field_validator("freq_path", mode="before")
+    @classmethod
     def freq_path_validator(cls, value, values: ValidationInfo):
         """NonPhysicalSpecies.freq_path validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
         if get_number_of_atoms(values.data) > 1 and value is None:
@@ -569,14 +582,15 @@ class NonPhysicalSpeciesBase(BaseModel):
         return value
 
     @field_validator("irc_paths", mode="before")
+    @classmethod
     def irc_paths_validator(cls, value, values: ValidationInfo):
         """NonPhysicalSpecies.irc_paths validator"""
         label = (
-            f' for non-physical-species "{values["label"]}"'
-            if "label" in values and values["label"] is not None
+            f' for non-physical-species "{values.data["label"]}"'
+            if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "irc_trajectories" in info and values["irc_trajectories"] and value is None:
+        if "irc_trajectories" in values.data and values.data["irc_trajectories"] and value is None:
             raise ValueError(f"The irc_paths argument was not given{label}.")
         if value is not None and len(value) not in [1, 2]:
             raise ValueError(
