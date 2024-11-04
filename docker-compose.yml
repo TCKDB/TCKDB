@@ -13,7 +13,6 @@ services:
     networks:
       - tckdb_network
 
-
   test-db:
     image: postgres:13
     platform: linux/amd64 # Ensures compatibility on AMD64 platforms
@@ -27,7 +26,6 @@ services:
       - postgres_test_data:/var/lib/postgresql/data
     networks:
       - tckdb_network
-
 
   app:
     build: .

@@ -16,10 +16,6 @@ from sqlalchemy.orm import sessionmaker
 from tckdb.backend.app.db.query import SoftDeleteQuery
 from tckdb.backend.app.db.session import get_db
 from tckdb.backend.app.main import app
-from tckdb.backend.app.models.encorr import EnCorr
-from tckdb.backend.app.models.ess import ESS
-from tckdb.backend.app.models.freqscale import FreqScale
-from tckdb.backend.app.models.level import Level
 
 
 API_V1_STR = "/api/v1"
@@ -103,6 +99,7 @@ def db_session(setup_database):
     if transaction.is_active:
         transaction.rollback()
     connection.close()
+
 
 @pytest.fixture(scope="class")
 def client(db_session):
