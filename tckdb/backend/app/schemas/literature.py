@@ -149,13 +149,6 @@ class LiteratureBase(BaseModel):
             raise ValueError("Value error, advisor is required for a thesis")
         return v
 
-    # @field_validator("journal", mode="after")
-    # @classmethod
-    # def validate_journal(cls, v, info: ValidationInfo):
-    #     lit_type = info.data.get("type")
-    #     if lit_type == LiteratureType.article and not v:
-    #         raise ValueError("Value error, journal is required for an article")
-    #     return v
     @model_validator(mode="after")
     def validate_journal(cls, values):
         if values.type == LiteratureType.article and not values.journal:
@@ -216,12 +209,14 @@ class LiteratureBase(BaseModel):
         return v
 
     @field_validator("page_start")
+    @classmethod
     def check_page_start(cls, v, values: ValidationInfo):
         if values.data["type"] == LiteratureType.article and not v:
             raise ValueError("Page start is required for an article")
         return v
 
     @field_validator("page_end")
+    @classmethod
     def check_page_end(cls, v, values: ValidationInfo):
         if values.data["type"] == LiteratureType.article and not v:
             raise ValueError("Page end is required for an article")
@@ -234,6 +229,7 @@ class LiteratureBase(BaseModel):
         return v
 
     @field_validator("doi")
+    @classmethod
     def check_doi(cls, v, values: ValidationInfo):
         if not v and values.data["type"] != LiteratureType.article:
             return v
@@ -278,6 +274,7 @@ class LiteratureBase(BaseModel):
         return v
 
     @field_validator("isbn")
+    @classmethod
     def process_isbn(cls, v, values: ValidationInfo, **kwargs):
         if v:
             metadata = fetch_isbn_metadata(v)
@@ -299,6 +296,7 @@ class LiteratureBase(BaseModel):
         return v
 
     @field_validator("url")
+    @classmethod
     def convert_url_to_str(cls, v):
         """Convert the URL to a string"""
         return str(v) if v is not None else None
@@ -330,6 +328,7 @@ class LiteratureCreate(LiteratureBase):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     @field_validator("authors", mode="before")
+    @classmethod
     def check_authors(cls, v):
         if not v:
             raise ValueError("Authors are required")

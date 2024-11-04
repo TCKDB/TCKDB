@@ -21,12 +21,6 @@ from tckdb.backend.app.models.ess import ESS
 from tckdb.backend.app.models.freqscale import FreqScale
 from tckdb.backend.app.models.level import Level
 
-# Load environment variables from .env.test
-# if os.getenv("RUNNING_IN_DOCKER") == "True":
-#     load_dotenv(dotenv_path="./app/core/.env.test.docker")
-# else:
-#     load_dotenv(dotenv_path="./tckdb/backend/app/core/.env.test")
-
 
 API_V1_STR = "/api/v1"
 POSTGRES_USER = os.getenv("POSTGRES_USER", "test_user")
@@ -109,93 +103,6 @@ def db_session(setup_database):
     if transaction.is_active:
         transaction.rollback()
     connection.close()
-
-
-@pytest.fixture(scope="class")
-def test_level(db_session):
-    """Create a temporary Level entry."""
-    level = Level(method="B3LYP", basis="6-31G(d,p)", dispersion="gd3bj")
-    db_session.add(level)
-    db_session.commit()
-    db_session.refresh(level)
-    return level
-
-
-@pytest.fixture(scope="class")
-def test_ess(db_session):
-    """Create a temporary ESS entry."""
-    ess = ESS(
-        name="TestESS", version="1.0", revision="A", url="http://testess.example.com"
-    )
-    db_session.add(ess)
-    db_session.commit()
-    db_session.refresh(ess)
-    return ess
-
-
-@pytest.fixture(scope="class")
-def test_encorr(db_session, test_level: Level):
-    """
-    Fixture to create a test EnCorr record.
-    """
-    encorr = EnCorr(
-        level_id=test_level.id,
-        supported_elements=["H", "C", "N", "O", "S"],
-        energy_unit="Hartree",
-        aec={
-            "H": -0.499459,
-            "C": -37.786694,
-            "N": -54.524279,
-            "O": -74.992097,
-            "S": -397.648733,
-        },
-        bac={
-            "C-H": -0.46,
-            "C-C": -0.68,
-            "C=C": -1.9,
-            "C#C": -3.13,
-            "O-H": -0.51,
-            "C-O": -0.23,
-            "C=O": -0.69,
-            "O-O": -0.02,
-            "C-N": -0.67,
-            "C=N": -1.46,
-            "C#N": -2.79,
-            "N-O": 0.74,
-            "N_O": -0.23,
-            "N=O": -0.51,
-            "N-H": -0.69,
-            "N-N": -0.47,
-            "N=N": -1.54,
-            "N#N": -2.05,
-            "S-H": 0.87,
-            "C-S": 0.42,
-            "C=S": 0.51,
-            "S-S": 0.86,
-            "O-S": 0.23,
-            "O=S": -0.53,
-        },
-        reviewer_flags={},
-    )
-    db_session.add(encorr)
-    db_session.commit()
-    db_session.refresh(encorr)
-    return encorr
-
-
-@pytest.fixture(scope="class")
-def test_freq(db_session, test_level):
-    """
-    Create a temporary Freq entry.
-    """
-    freq = FreqScale(
-        factor=1.0, level_id=test_level.id, source="Test source", reviewer_flags={}
-    )
-    db_session.add(freq)
-    db_session.commit()
-    db_session.refresh(freq)
-    return freq
-
 
 @pytest.fixture(scope="class")
 def client(db_session):

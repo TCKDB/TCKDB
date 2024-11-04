@@ -25,6 +25,7 @@ class AuthorBase(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     @field_validator("first_name", "last_name")
+    @classmethod
     def names_cannot_be_empty(cls, v, field):
         if not v.strip():
             raise ValueError(f"{field.name.replace('_', ' ').title()} cannot be empty.")

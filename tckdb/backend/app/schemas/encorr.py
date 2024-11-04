@@ -53,6 +53,7 @@ class IsodesmicReactionEntry(BaseModel):
         return v
 
     @field_validator("reactants", "products")
+    @classmethod
     def validate_species_identifiers(cls, v, field):
         for identifier in v:
             is_valid_inchi_, inchi_err = is_valid_inchi(identifier)
@@ -136,6 +137,7 @@ class EnCorrBase(BaseModel):
         return v
 
     @field_validator("aec")
+    @classmethod
     def validate_aec(cls, value, values: ValidationInfo):
         """EnCorr.aec validator"""
         for symbol in value.keys():
@@ -157,6 +159,7 @@ class EnCorrBase(BaseModel):
         return value
 
     @field_validator("bac")
+    @classmethod
     def validate_bac(cls, value, values: ValidationInfo):
         """EnCorr.bac validator"""
         bond_descriptors = ["-", "=", "#", "--", "&"]
@@ -193,6 +196,7 @@ class EnCorrBase(BaseModel):
         return value
 
     @field_validator("isodesmic_reactions", mode="before")
+    @classmethod
     def validate_isodesmic_reactions(cls, value, values: ValidationInfo):
         """EnCorr.isodesmic_reactions validator"""
         if value is not None:
@@ -361,6 +365,7 @@ class EnCorrCreateBatch(EnCorrBase, ConnectionBase):
         return v
 
     @field_validator("isodesmic_level_connection_id")
+    @classmethod
     def validate_isodesmic_level(cls, v, values: ValidationInfo):
         if values.data["isodesmic_reactions"] is not None and v is None:
             raise ValueError(

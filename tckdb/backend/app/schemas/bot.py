@@ -28,6 +28,7 @@ class BotBase(BaseModel):
         return v
 
     @field_validator("url")
+    @classmethod
     def convert_url_to_str(cls, v):
         """Convert the URL to a string"""
         return str(v) if v is not None else None
