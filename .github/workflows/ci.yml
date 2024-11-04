@@ -14,9 +14,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # Fetch full history
-          ref: master # Ensure 'master' branch is fetched for Trunk comparison
 
       - name: Checkout Molecule Repository
         uses: actions/checkout@v3
@@ -52,6 +49,11 @@ jobs:
       - name: Update PATH
         run: |
           echo "PATH=${{ github.workspace }}/code/Molecule:${{ github.workspace }}/code/RMG-database:${{ github.workspace }}/tckdb:$PATH" >> $GITHUB_ENV
+
+      - name: Fetch master branch explicitly
+        run: |
+          git fetch origin master:master
+          git checkout ${{ github.head_ref }}
 
       - name: Install Trunk
         run: |
