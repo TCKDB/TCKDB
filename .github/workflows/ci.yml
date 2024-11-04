@@ -56,6 +56,15 @@ jobs:
       - name: Run Models Tests
         run: make test-models
 
+      - name: Install Trunk
+        run: |
+          curl -fsSL https://get.trunk.io -o get-trunk.sh
+          chmod +x get-trunk.sh
+          ./get-trunk.sh
+
+      - name: Run Trunk Check
+        run: trunk check
+
       - name: Run Lint Tests
         run: make test-lint
 
