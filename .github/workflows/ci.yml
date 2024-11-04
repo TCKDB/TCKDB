@@ -14,10 +14,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-        # trunk lint tests needs master branch for comparison.
-        with:
-          fetch-depth: 0 # Fetch full history
-          ref: master # Ensure 'master' branch is fetched for Trunk comparison
 
       - name: Checkout Molecule Repository
         uses: actions/checkout@v3

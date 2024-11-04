@@ -59,4 +59,4 @@ test-endpoints:
 
 test-lint:
 	@echo "Running lint tests in Conda environment"
-	@conda run -n tck_env trunk check --all --ci
+	@conda run -n tck_env trunk check --all
