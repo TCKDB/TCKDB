@@ -56,6 +56,9 @@ jobs:
       - name: Run Models Tests
         run: make test-models
 
+      - name: Run Lint Tests
+        run: make test-models
+
       - name: Collect Logs on Failure
         if: failure()
         run: |
