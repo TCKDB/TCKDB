@@ -62,11 +62,10 @@ jobs:
       - name: Run Models Tests
         run: make test-models
 
-      - name: Manually fetch upstream (for trunk check)
-        run: git fetch origin master
-
-      - name: Run Lint Tests
-        run: make test-lint
+      - name: Trunk Check
+        uses: trunk-io/trunk-action@v1
+        with:
+          post-annotations: true
 
       - name: Collect Logs on Failure
         if: failure()
