@@ -14,6 +14,9 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch full history
+          ref: master # Ensure 'master' branch is fetched for Trunk comparison
 
       - name: Checkout Molecule Repository
         uses: actions/checkout@v3
@@ -50,20 +53,17 @@ jobs:
         run: |
           echo "PATH=${{ github.workspace }}/code/Molecule:${{ github.workspace }}/code/RMG-database:${{ github.workspace }}/tckdb:$PATH" >> $GITHUB_ENV
 
-      - name: Run Schema Tests
-        run: make test-schemas
-
-      - name: Run Models Tests
-        run: make test-models
-
       - name: Install Trunk
         run: |
           curl -fsSL https://get.trunk.io -o get-trunk.sh
           chmod +x get-trunk.sh
           ./get-trunk.sh
 
-      - name: Run Trunk Check
-        run: trunk check
+      - name: Run Schema Tests
+        run: make test-schemas
+
+      - name: Run Models Tests
+        run: make test-models
 
       - name: Run Lint Tests
         run: make test-lint
