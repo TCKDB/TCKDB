@@ -50,12 +50,6 @@ jobs:
         run: |
           echo "PATH=${{ github.workspace }}/code/Molecule:${{ github.workspace }}/code/RMG-database:${{ github.workspace }}/tckdb:$PATH" >> $GITHUB_ENV
 
-      - name: Install Trunk
-        run: |
-          curl -fsSL https://get.trunk.io -o get-trunk.sh
-          chmod +x get-trunk.sh
-          ./get-trunk.sh
-
       - name: Run Schema Tests
         run: make test-schemas
 
