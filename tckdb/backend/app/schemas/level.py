@@ -79,6 +79,7 @@ class LevelBase(BaseModel):
         return v.lower() if v is not None else None
 
     @field_validator("solvation_method")
+    @classmethod
     def check_solvation_method(cls, v, values: ValidationInfo):
         if v is not None:
             if "/" in v:

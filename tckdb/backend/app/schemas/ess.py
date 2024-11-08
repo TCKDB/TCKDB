@@ -13,6 +13,7 @@ class ESSBase(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     @field_validator("url")
+    @classmethod
     def convert_url_to_str(cls, v):
         """Convert the URL to a string"""
         return str(v) if v is not None else None

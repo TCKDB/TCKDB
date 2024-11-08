@@ -33,11 +33,13 @@ class TransBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("reviewer_flags", mode="before")
+    @classmethod
     def check_reviewer_flags(cls, value):
         """Trans.reviewer_flags validator"""
         return value or dict()
 
     @field_validator("parameters", mode="before")
+    @classmethod
     def check_parameters(cls, value, values: ValidationInfo):
         """Trans.parameters validator"""
         if (
