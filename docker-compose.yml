@@ -12,12 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - tckdb_network
-    # # Uncomment healthcheck if needed
-    # healthcheck:
-    #   test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 5
+
 
   test-db:
     image: postgres:13
@@ -32,11 +27,7 @@ services:
       - postgres_test_data:/var/lib/postgresql/data
     networks:
       - tckdb_network
-    # healthcheck:
-    #   test: ["CMD", "pg_isready", "-U", "test_user"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 5
+
 
   app:
     build: .
