@@ -15,13 +15,6 @@ from typing_extensions import Annotated
 
 import tckdb.backend.app.conversions.converter as converter
 import tckdb.backend.app.schemas.common as common
-from tckdb.backend.app.conversions import adjlist_conversion_process
-
-# from tckdb.backend.app.conversions.converter import is_linear
-# from rmgpy.molecule.adjlist import from_adjacency_list
-from tckdb.backend.app.conversions.adjlist_conversion_process import (
-    multiplicity_from_adjlist,
-)
 from tckdb.backend.app.conversions.converter import is_linear
 from tckdb.backend.app.schemas.common import Coordinates
 from tckdb.backend.app.schemas.connection_schema import ConnectionBase
@@ -230,6 +223,7 @@ class SpeciesBase(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     @field_validator("fragments")
+    @classmethod
     def fragments_validator(cls, value, values: ValidationInfo):
         """Species.fragments validator"""
         if value is None:
@@ -291,6 +285,7 @@ class SpeciesBase(BaseModel):
         return data
 
     @field_validator("fragment_orientation", mode="before")
+    @classmethod
     def fragment_orientation_validator(cls, value, values: ValidationInfo):
         """Species.fragment_orientation validator"""
         label = (
@@ -333,6 +328,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("point_group")
+    @classmethod
     def point_group_validator(cls, value, values: ValidationInfo):
         """Species.point_group validator"""
         label = (
@@ -367,6 +363,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("chirality")
+    @classmethod
     def chirality_validator(cls, value, values: ValidationInfo):
         """Species.chirality validator"""
         label = (
@@ -459,6 +456,7 @@ class SpeciesBase(BaseModel):
         return data
 
     @field_validator("global_min_geometry")
+    @classmethod
     def global_min_geometry_validator(cls, value, values: ValidationInfo):
         """Species.global_min_geometry validator"""
         if value is None:
@@ -478,6 +476,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("irc_trajectories", mode="before")
+    @classmethod
     def irc_trajectories_validator(cls, value, values: ValidationInfo):
         """Species.irc_trajectories validator"""
         label = (
@@ -507,6 +506,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("active_space")
+    @classmethod
     def active_space_validator(cls, value, values: ValidationInfo):
         """Species.active_space validator"""
         label = (
@@ -553,6 +553,7 @@ class SpeciesBase(BaseModel):
         return data
 
     @field_validator("scaled_projected_frequencies")
+    @classmethod
     def scaled_projected_frequencies_validator(cls, value):
         """Validate the scaled_projected_frequencies field."""
         if value is not None:
@@ -594,6 +595,7 @@ class SpeciesBase(BaseModel):
         return data
 
     @field_validator("normal_displacement_modes")
+    @classmethod
     def normal_displacement_modes_validator(cls, value):
         """Validate the structure of normal_displacement_modes field."""
         if value is not None:
@@ -658,6 +660,7 @@ class SpeciesBase(BaseModel):
         return data
 
     @field_validator("frequencies")
+    @classmethod
     def frequencies_validator(cls, value, values: ValidationInfo):
         """Species.frequencies validator"""
         label = f' for species "{values.data["label"]}"' if values.data["label"] else ""
@@ -710,7 +713,7 @@ class SpeciesBase(BaseModel):
             # If graph is provided, derive smiles and inchi if not provided
             if not smiles or not inchi:
                 smiles, inchi = (
-                    adjlist_conversion_process.smiles_and_inchi_from_adjlist(graph)
+                    converter.smiles_and_inchi_from_adjlist(graph)
                 )
                 values["smiles"] = smiles or values.data["smiles"]
                 values["inchi"] = inchi or values.data["inchi"]
@@ -756,6 +759,7 @@ class SpeciesBase(BaseModel):
         return values
 
     @field_validator("graph")
+    @classmethod
     def validate_graph(cls, value, values: ValidationInfo):
         """
         Validate the adjacency list graph.
@@ -771,10 +775,7 @@ class SpeciesBase(BaseModel):
                 raise ValueError(
                     f"The RMG adjacency list{label} is invalid:\n{value}\nReason:\n{err}"
                 )
-            multiplicity = multiplicity_from_adjlist(value)
-            print("**************")
-            print(multiplicity)
-            print("**************")
+            multiplicity = converter.multiplicity_from_adjlist(value)
             if multiplicity != values.data.get("multiplicity"):
                 if not (
                     abs(values.data.get("multiplicity") - multiplicity) % 2
@@ -793,6 +794,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("rigid_rotor")
+    @classmethod
     def rigid_rotor_validator(cls, value, values: ValidationInfo):
         """Species.rigid_rotor validator"""
         label = (
@@ -815,6 +817,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("statmech_treatment", mode="after")
+    @classmethod
     def statmech_treatment_validator(cls, value, values: ValidationInfo):
         """Species.statmech_treatment validator"""
         label = (
@@ -836,6 +839,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("rotational_constants", mode="before")
+    @classmethod
     def rotational_constants_validator(cls, value, values: ValidationInfo):
         """Species.rotational_constants validator"""
         label = (
@@ -867,6 +871,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("conformers")
+    @classmethod
     def conformers_validator(cls, value, values: ValidationInfo):
         """Species.conformers validator"""
         if value is None:
@@ -909,6 +914,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("H298", mode="before")
+    @classmethod
     def h298_validator(cls, value, values: ValidationInfo):
         """Species.H298 validator"""
         label = (
@@ -923,6 +929,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("S298", mode="before")
+    @classmethod
     def s298_validator(cls, value, values: ValidationInfo):
         """Species.S298 validator"""
         label = (
@@ -937,6 +944,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("Cp_values", mode="before")
+    @classmethod
     def cp_values_validator(cls, value, values: ValidationInfo):
         """Species.Cp_values validator"""
         label = (
@@ -951,6 +959,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("Cp_T_list", mode="before")
+    @classmethod
     def cp_t_list_validator(cls, value, values: ValidationInfo):
         """Species.Cp_T_list validator"""
         label = (
@@ -975,6 +984,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("opt_path", mode="before")
+    @classmethod
     def opt_path_validator(cls, value, values: ValidationInfo):
         """Species.opt_path validator"""
         label = (
@@ -987,6 +997,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("freq_path", mode="before")
+    @classmethod
     def freq_path_validator(cls, value, values: ValidationInfo):
         """Species.freq_path validator"""
         label = (
@@ -999,6 +1010,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("scan_paths", mode="before")
+    @classmethod
     def scan_paths_validator(cls, value, values: ValidationInfo):
         """Species.scan_paths validator"""
         label = (
@@ -1027,6 +1039,7 @@ class SpeciesBase(BaseModel):
         return value
 
     @field_validator("irc_paths", mode="before")
+    @classmethod
     def irc_paths_validator(cls, value, values: ValidationInfo):
         """Species.irc_paths validator"""
         label = (
