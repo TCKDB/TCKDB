@@ -35,28 +35,7 @@ def batch_upload(payload: BatchUploadPayload, db=Depends(get_db)):
     try:
         with db.begin_nested():
 
-            # 1. Process Authors
-            # for author_data in payload.authors:
-            #     # Check if existing author
-            #     existing_author = db.query(AuthorModel).filter(
-            #         AuthorModel.first_name == author_data.first_name.strip(),
-            #         AuthorModel.last_name == author_data.last_name.strip(),
-            #         AuthorModel.orcid == author_data.orcid
-            #     ).first()
-
-            #     if existing_author:
-            #         temp_id_map[author_data.connection_id] = existing_author.id
-            #     else:
-            #         new_author = AuthorModel(
-            #             first_name=author_data.first_name.strip(),
-            #             last_name=author_data.last_name.strip(),
-            #             orcid=author_data.orcid
-            #         )
-            #         db.add(new_author)
-            #         db.flush() # flush to get the ID
-            #         temp_id_map[author_data.connection_id] = new_author.id
-
-            # 2. Process Literature
+            # 1. Process Literature
             for literature_data in payload.literature:
                 # Check if existing literature
                 existing_literature = (
@@ -91,7 +70,7 @@ def batch_upload(payload: BatchUploadPayload, db=Depends(get_db)):
                         )
                         new_literature.authors.append(author)
 
-            # 3. Process Levels
+            # 2. Process Levels
             for level_data in payload.levels:
                 # Check if existing level
                 existing_level = (
@@ -121,7 +100,7 @@ def batch_upload(payload: BatchUploadPayload, db=Depends(get_db)):
                     db.flush()
                     temp_id_map[level_data.connection_id] = new_level.id
 
-            # 4. Process Bots
+            # 3. Process Bots
             for bot_data in payload.bots:
                 # Check if existing bot
                 existing_bot = (
@@ -144,7 +123,7 @@ def batch_upload(payload: BatchUploadPayload, db=Depends(get_db)):
                     db.flush()
                     temp_id_map[bot_data.connection_id] = new_bot.id
 
-            # 5. Process ESS
+            # 4. Process ESS
             for ess_data in payload.ess:
                 # Check if existing ess
                 existing_ess = (
@@ -166,7 +145,7 @@ def batch_upload(payload: BatchUploadPayload, db=Depends(get_db)):
                     db.flush()
                     temp_id_map[ess_data.connection_id] = new_ess.id
 
-            # 6. Process Frequencies Scale
+            # 5. Process Frequencies Scale
             for freq_scale_data in payload.freq_scales:
                 # Grab the connection level ID
                 freq_level_connection = freq_scale_data.level_connection_id
