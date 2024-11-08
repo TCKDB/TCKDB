@@ -9,9 +9,6 @@ from tckdb.backend.app.core import config
 from tckdb.backend.app.db.query import SoftDeleteQuery
 
 engine = create_engine(config.SQLALCHEMY_DATABASE_URI, pool_pre_ping=True)
-# db_session = scoped_session(
-#     sessionmaker(autocommit=False, autoflush=False, bind=engine)
-# )
 SessionLocal = sessionmaker(
     autocommit=False, autoflush=False, bind=engine, query_cls=SoftDeleteQuery
 )
