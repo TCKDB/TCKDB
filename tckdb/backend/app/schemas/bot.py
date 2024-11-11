@@ -1,90 +1,69 @@
-"""
-TCKDB backend app schemas bot module
-"""
-
 from typing import Dict, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+
+from tckdb.backend.app.schemas.connection_schema import ConnectionBase
 
 
 class BotBase(BaseModel):
     """
     A BotBase class (shared properties)
     """
-    name: str = Field(..., max_length=100, title="The Bot's name")
+
+    name: Optional[str] = Field(None, max_length=100, title="The Bot's name")
     version: Optional[str] = Field(None, max_length=100, title="The Bot's version")
-    url: str = Field(..., max_length=255, title="The Bot's official website "
-                                                "(documentation rather than source code, where possible)")
-    git_commit: Optional[str] = Field(None, min_length=40, max_length=40,
-                                      title="The latest git commit (useful when working on the "
-                                            "master branch rather than a stable release)")
-    git_branch: Optional[str] = Field(None, max_length=100, title="The git branch used if not 'master'")
-    reviewer_flags: Optional[Dict[str, str]] = Field(None, title='Reviewer flags')
+    url: Optional[HttpUrl] = Field(None, title="The Bot's official website")
+    git_hash: Optional[str] = Field(
+        None, min_length=40, max_length=40, title="The latest git hash "
+    )
+    git_branch: Optional[str] = Field(None, max_length=100, title="The git branch")
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
-    class Config:
-        extra = "forbid"
+    @field_validator("git_hash")
+    @classmethod
+    def check_git_hash(cls, v):
+        """Check if the git hash is a valid SHA-1 hash"""
+        if v is not None and not v.isalnum():
+            raise ValueError(f"The git hash seems wrong, got {v}")
+        return v
 
-    @validator('reviewer_flags', always=True)
-    def check_reviewer_flags(cls, value):
-        """Bot.reviewer_flags validator"""
-        return value or dict()
-
-    @validator('url')
-    def validate_url(cls, value):
-        """Bot.url validator"""
-        if '.' not in value:
-            raise ValueError('url invalid (expected a ".")')
-        if ' ' in value:
-            raise ValueError('url invalid (no spaces allowed)')
-        return value
-
-    @validator('git_commit')
-    def validate_git_commit(cls, value):
-        """Bot.git_commit validator"""
-        if not value.isalnum():  # is alpha-numerical?
-            raise ValueError(f'The git commit seems wrong, got {value}')
-        return value
+    @field_validator("url")
+    @classmethod
+    def convert_url_to_str(cls, v):
+        """Convert the URL to a string"""
+        return str(v) if v is not None else None
 
 
 class BotCreate(BotBase):
     """Create a Bot item: Properties to receive on item creation"""
-    name: str
-    version: Optional[str] = None
-    url: str
-    git_commit: Optional[str] = None
-    git_branch: Optional[str] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
+
+    name: str = Field(..., max_length=100, title="The Bot's name")
+    version: str = Field(..., max_length=100, title="The Bot's version")
+    url: HttpUrl = Field(..., title="The Bot's official website")
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            HttpUrl: lambda v: str(v),  # Ensure HttpUrl is serialized as string
+        },
+    )
+
+
+class BotCreateBatch(BotCreate, ConnectionBase):
+    """Create a batch of Bot items: Properties to receive on item creation"""
+
+    pass
 
 
 class BotUpdate(BotBase):
     """Update a Bot item: Properties to receive on item update"""
-    name: str
-    version: Optional[str] = None
-    url: str
-    git_commit: Optional[str] = None
-    git_branch: Optional[str] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
+
+    pass
 
 
-class BotInDBBase(BotBase):
-    """Properties shared by models stored in DB"""
-    id: int
-    name: str
-    version: Optional[str] = None
-    url: int
-    git_commit: Optional[str] = None
-    git_branch: Optional[str] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
-
-    class Config:
-        orm_mode = True
-
-
-class Bot(BotInDBBase):
+class BotRead(BotBase):
     """Properties to return to client"""
-    pass
 
+    id: int
 
-class BotInDB(BotInDBBase):
-    """Properties stored in DB"""
-    pass
+    reviewer_flags: Optional[Dict[str, str]] = Field(None, title="Reviewer flags")
+    model_config = ConfigDict(from_attributes=True)

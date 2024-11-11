@@ -5,15 +5,21 @@ TCKDB backend app tests schemas test_freq module
 import pytest
 import tckdb.backend.app.conversions.converter as converter
 import tckdb.backend.app.schemas.common as common
+from tckdb.backend.app.schemas.common import Coordinates
 
 
-ch4_coords = {'symbols': ('C', 'H', 'H', 'H', 'H'),
-              'isotopes': (12, 1, 1, 1, 1),
-              'coords': ((0.0, 0.0, 0.0),
-                         (0.6300326, 0.6300326, 0.6300326),
-                         (-0.6300326, -0.6300326, 0.6300326),
-                         (-0.6300326, 0.6300326, -0.6300326),
-                         (0.6300326, -0.6300326, -0.6300326))}
+ch4_coords = Coordinates(
+    symbols=('C', 'H', 'H', 'H', 'H'),
+    isotopes=(12, 1, 1, 1, 1),
+    coords=(
+        (0.0, 0.0, 0.0),
+        (0.6300326, 0.6300326, 0.6300326),
+        (-0.6300326, -0.6300326, 0.6300326),
+        (-0.6300326, 0.6300326, -0.6300326),
+        (0.6300326, -0.6300326, -0.6300326)
+    )
+)
+
 n3h5_xyz = {'symbols': ('N', 'H', 'H', 'N', 'H', 'N', 'H', 'H'),
             'coords': ((-1.1997440839, -0.1610052059, 0.0274738287),
                        (-1.4016624407, -0.6229695533, -0.848703408),

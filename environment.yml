@@ -1,66 +1,37 @@
 name: tck_env
 channels:
   - defaults
-  - rmg
   - conda-forge
   - anaconda
   - chembl
 dependencies:
+  - alembic
   - chembl_webresource_client
   - coverage
-  - fastapi >=0.65.2
-  - ipython
-  - jupyter
+  - fastapi
   - msgpack-python
   - numpy
   - pint
   - psycopg2
   - pydantic
   - pytest
-  - python >= 3.7
+  - python == 3.12
   - qcelemental
-  - rmg::rdkit >= 2019.09.2.0
+  - rdkit
   - sqlalchemy
-  - starlette
-  - sphinx
-  - sphinx_rtd_theme
   - uvicorn
-
-  - cairo
-  - cairocffi
-  - rmg::cantera >=2.3.0
-  - cclib
-  - rmg::chemprop
-  - coolprop
-  - cython >=0.25.2
+  - requests-cache
   - ffmpeg
-  - rmg::gprof2dot
-  - graphviz
   - h5py
+  - httpx
   - jinja2
-  - rmg::lpsolve55
   - markupsafe
-  - matplotlib >=1.5
-  - rmg::mopac
+  - matplotlib
   - mpmath
-  - muq2
-  - networkx
-  - nose
-  - rmg::numdifftools
-  - openbabel
   - pandas
-  - psutil
-  - rmg::pydas >=1.0.2
-  - pydot
-  - rmg::pydqed >=1.0.1
-  - pymongo
+  - python-dotenv
   - pyparsing
-  - pyrdl
-  - python >=3.7
+  - pip
+  - pip:
+      - isbnlib
   - pyyaml
-  - rmg::quantities
-  - scikit-learn
-  - scipy
-  - rmg::symmetry
-  - xlrd
-  - xlwt

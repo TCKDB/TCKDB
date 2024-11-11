@@ -1,226 +1,361 @@
-"""
-TCKDB backend app schemas literature module
-"""
-
+import re
+from datetime import datetime
 from enum import Enum
-from typing import Dict, Optional
+from typing import List, Optional, Tuple
 
-from pydantic import BaseModel, Field, validator
+from matplotlib.pylab import f
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    field_validator,
+    model_validator,
+    ValidationInfo,
+)
+
+from tckdb.backend.app.schemas.author import AuthorCreate, AuthorReadLiterature
+from tckdb.backend.app.schemas.connection_schema import ConnectionBase
+from tckdb.backend.app.utils.doi_lookup import fetch_doi_metadata
+from tckdb.backend.app.utils.isbn_lookup import fetch_isbn_metadata
 
 
-class LiteratureTypeEnum(str, Enum):
+class ISBN(str):
+    """
+    The ISBN class - Supports ISBN-10 and ISBN-13
+    """
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v, values):
+        if not isinstance(v, str):
+            raise TypeError("ISBN must be a string")
+
+        # Remone hyphens and spaces
+        isbn = re.sub(r"[\s-]", "", v)
+
+        if len(isbn) == 10:
+            if not re.match(r"^\d{9}[\dXx]$", isbn):
+                raise ValueError("Invalid ISBN-10")
+            if not cls.is_valid_isbn10(isbn):
+                raise ValueError("Invalid ISBN-10 check digit")
+            return cls(isbn.upper())
+        elif len(isbn) == 13:
+            if not isbn.isdigit():
+                raise ValueError("Invalid ISBN-13")
+            if not cls.is_valid_isbn13(isbn):
+                raise ValueError("Invalid ISBN-13 check digit")
+            return cls(isbn)
+        else:
+            raise ValueError("Invalid ISBN length - must be 10 or 13 digits")
+
+    @staticmethod
+    def is_valid_isbn10(isbn10: str) -> bool:
+        """
+        Checks if the ISBN-10 check digit is valid.
+
+        Args:
+            isbn10 (str): The ISBN-10 string.
+
+        Returns:
+            bool: True if valid, False otherwise.
+        """
+        total = 0
+        for i in range(9):
+            if not isbn10[i].isdigit():
+                return False
+            total += int(isbn10[i]) * (i + 1)
+        check_digit = isbn10[9]
+        if check_digit in ["X", "x"]:
+            total += 10 * 10
+        elif check_digit.isdigit():
+            total += int(check_digit) * 10
+        else:
+            return False
+        return total % 11 == 0
+
+    @staticmethod
+    def is_valid_isbn13(isbn13: str) -> bool:
+        """
+        Checks if the ISBN-13 check digit is valid.
+
+        Args:
+            isbn13 (str): The ISBN-13 string.
+
+        Returns:
+            bool: True if valid, False otherwise.
+        """
+        total = 0
+        for i in range(12):
+            digit = int(isbn13[i])
+            if i % 2 == 0:
+                total += digit
+            else:
+                total += 3 * digit
+        check_digit = (10 - (total % 10)) % 10
+        return check_digit == int(isbn13[12])
+
+
+class LiteratureType(str, Enum):
     """
     The supported literature reference types
     """
-    article = 'article'
-    book = 'book'
-    thesis = 'thesis'
+
+    article = "article"
+    book = "book"
+    thesis = "thesis"
 
 
 class LiteratureBase(BaseModel):
     """
     A LiteratureBase class (shared properties)
     """
-    type: LiteratureTypeEnum = Field(..., title='The literature type, either article, book, or thesis')
-    authors: str = Field(..., max_length=255, title='The literature source authors')
-    title: str = Field(..., max_length=255, title='The literature source title')
-    year: int = Field(..., ge=1500, le=9999, title='The publication year')
-    journal: Optional[str] = Field(None, max_length=255, title='The Journal name (for an article)')
-    publisher: Optional[str] = Field(None, max_length=255, title='The publisher name (for a book)')
-    volume: Optional[int] = Field(None, gt=0, title='The volume number (for an article, optional for a book)')
-    issue: Optional[int] = Field(None, gt=0, title='The issue number (for an article)')
-    page_start: Optional[int] = Field(None, gt=0, title='The first page (for an article)')
-    page_end: Optional[int] = Field(None, gt=0, title='The last page (for an article)')
-    editors: Optional[str] = Field(None, max_length=255, title='The editor names (for a book)')
-    edition: Optional[str] = Field(None, max_length=50, title='The edition (for a book)')
-    chapter_title: Optional[str] = Field(None, max_length=255, title='The chapter title (for a book)')
-    publication_place: Optional[str] = Field(None, max_length=255, title='The publication place (for a book)')
-    advisor: Optional[str] = Field(None, max_length=255, title='The dissertation advisor (for a thesis)')
-    doi: Optional[str] = Field(None, max_length=255, title='The DOI')
-    isbn: Optional[str] = Field(None, max_length=255, title='The ISBN (for a book)')
-    url: Optional[str] = Field(None, max_length=255, title='The publication URL address')
-    reviewer_flags: Optional[Dict[str, str]] = Field(None)
 
-    class Config:
-        extra = "forbid"
+    type: Optional[LiteratureType] = Field(
+        None, title="The literature type, either article, book, or thesis"
+    )
+    title: Optional[str] = Field(
+        None, max_length=255, title="The literature source title"
+    )
+    year: Optional[int] = Field(None, ge=1500, le=9999, title="The publication year")
+    authors: Optional[List[AuthorCreate]] = Field(
+        None, title="Authors for the literature source"
+    )
+    journal: Optional[str] = Field(None, title="The journal name")
+    publisher: Optional[str] = Field(None, title="The publisher name")
+    volume: Optional[int] = Field(None, title="The volume number")
+    issue: Optional[int] = Field(None, title="The issue number")
+    page_start: Optional[int] = Field(None, title="The first page")
+    page_end: Optional[int] = Field(None, title="The last page")
+    editors: Optional[str] = Field(None, title="The editor names for a book")
+    edition: Optional[str] = Field(None, title="The edition for a book")
+    chapter_title: Optional[str] = Field(None, title="The chapter title for a book")
+    publication_place: Optional[str] = Field(
+        None, title="The publication place for a book"
+    )
+    advisor: Optional[str] = Field(None, title="The dissertation advisor for a thesis")
+    doi: Optional[str] = Field(None, title="The DOI")
+    isbn: Optional[ISBN] = Field(None, title="The ISBN")
+    url: Optional[HttpUrl] = Field(None, title="The publication URL address")
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
-    @validator('reviewer_flags', always=True)
-    def check_reviewer_flags(cls, value):
-        """Literature.reviewer_flags validator"""
-        return value or dict()
 
-    @validator('journal', always=True)
-    def check_journal(cls, value, values):
-        """Literature.journal validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.article and (value is None or not value):
-            raise ValueError(f'The journal argument is missing for a literature type {values["type"]}')
-        return value
+    @field_validator("advisor", mode="after")
+    @classmethod
+    def validate_advisor(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.thesis and not v:
+            raise ValueError("Value error, advisor is required for a thesis")
+        return v
 
-    @validator('authors')
-    def check_authors(cls, value, values):
-        """Literature.authors validator"""
-        if ' ' not in value:
-            raise ValueError(f'The authors argument seems incomplete. Got: {value}')
-        return value
+    @model_validator(mode="after")
+    def validate_journal(cls, values):
+        if values.type == LiteratureType.article and not values.journal:
+            raise ValueError("Journal is required for an article")
+        return values
 
-    @validator('title')
-    def check_title(cls, value, values):
-        """Literature.title validator"""
-        if ' ' not in value:
-            raise ValueError(f'The title argument seems incomplete. Got: {value}')
-        return value
+    @field_validator("volume", mode="after")
+    @classmethod
+    def validate_volume(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.article and not v:
+            raise ValueError("Value error, volume is required for an article")
+        return v
 
-    @validator('publisher', always=True)
-    def check_publisher(cls, value, values):
-        """Literature.publisher validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.book and (value is None or not value):
-            raise ValueError(f'The publisher argument is missing for a literature type {values["type"]}')
-        return value
+    @field_validator("issue", mode="after")
+    @classmethod
+    def validate_issue(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.article and not v:
+            raise ValueError("Value error, issue is required for an article")
+        return v
 
-    @validator('volume', always=True)
-    def check_volume(cls, value, values):
-        """Literature.volume validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.article and (value is None or not value):
-            raise ValueError(f'The volume argument is missing for a literature type {values["type"]}')
-        return value
+    @field_validator("editors", mode="after")
+    @classmethod
+    def validate_editors(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.book and not v:
+            raise ValueError("Value error, editors are required for a book")
+        return v
 
-    @validator('page_start', always=True)
-    def check_page_start(cls, value, values):
-        """Literature.page_start validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.article and (value is None or not value):
-            raise ValueError(f'The page_start argument is missing for a literature type "{values["type"]}"')
-        return value
+    @field_validator("edition", mode="after")
+    @classmethod
+    def validate_edition(cls, v, info: ValidationInfo):
+        lit_type = info.data.get("type")
+        if lit_type == LiteratureType.book and not v:
+            raise ValueError("Value error, edition is required for a book")
+        return v
 
-    @validator('page_end', always=True)
-    def check_page_end(cls, value, values):
-        """Literature.page_end validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.article and (value is None or not value):
-            raise ValueError(f'The page_end argument is missing for a literature type "{values["type"]}"')
-        if 'page_start' in values and isinstance(values['page_start'], int) and isinstance(value, int) \
-                and value < values['page_start']:
-            raise ValueError(f'The starting page cannot be lesser than the ending page, '
-                             f'got page_start={values["page_start"]} and page_end={value}')
-        return value
+    @field_validator("title")
+    @classmethod
+    def check_title(cls, v):
+        if not v:
+            raise ValueError("Title is required")
+        if "_" in v:
+            raise ValueError("Title cannot contain underscores")
+        return v
 
-    @validator('editors', always=True)
-    def check_editors(cls, value, values):
-        """Literature.editors validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.book and (value is None or not value):
-            raise ValueError(f'The editors argument is missing for a literature type {values["type"]}')
-        return value
+    @field_validator("year")
+    @classmethod
+    def check_year(cls, v):
+        current_year = datetime.now().year
+        if v > current_year:
+            raise ValueError(
+                f"The year {v} is in the future. It must be <= {current_year}."
+            )
+        if v < 1500:
+            raise ValueError("The year must be greater than or equal to 1500.")
+        return v
 
-    @validator('publication_place', always=True)
-    def check_publication_place(cls, value, values):
-        """Literature.publication_place validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.book and (value is None or not value):
-            raise ValueError(f'The publication_place argument is missing for a literature type {values["type"]}')
-        return value
+    @field_validator("page_start")
+    @classmethod
+    def check_page_start(cls, v, values: ValidationInfo):
+        if values.data["type"] == LiteratureType.article and not v:
+            raise ValueError("Page start is required for an article")
+        return v
 
-    @validator('advisor', always=True)
-    def check_advisor(cls, value, values):
-        """Literature.advisor validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.thesis and (value is None or not value):
-            raise ValueError(f'The advisor argument is missing for a literature type {values["type"]}')
-        return value
+    @field_validator("page_end")
+    @classmethod
+    def check_page_end(cls, v, values: ValidationInfo):
+        if values.data["type"] == LiteratureType.article and not v:
+            raise ValueError("Page end is required for an article")
+        # Must be greater than or equal to page_start
+        if values.data["page_start"] and v < values.data["page_start"]:
+            raise ValueError(
+                "Page end must be greater than or equal to page start."
+                f'Received page_start={values.data.get["page_start"]}, page_end={v}'
+            )
+        return v
 
-    @validator('doi', always=True)
-    def check_doi(cls, value, values):
-        """Literature.doi validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.article and (value is None or not value):
-            raise ValueError(f'The doi argument is missing for a literature type {values["type"]}')
-        return value
+    @field_validator("doi")
+    @classmethod
+    def check_doi(cls, v, values: ValidationInfo):
+        if not v and values.data["type"] != LiteratureType.article:
+            return v
+        elif not v and values.data["type"] == LiteratureType.article:
+            raise ValueError("DOI is required for an article")
+        if not v.startswith("10."):
+            raise ValueError("DOI must start with 10.")
+        metadata = fetch_doi_metadata(v)
+        if metadata:
+            # Replace or set the title, year, and publisher if not already set
+            values["title"] = metadata.get("title", values["title"])
+            values["year"] = metadata.get("issued", values["year"])
+            values["publisher"] = metadata.get("publisher", values["publisher"])
+            values["volume"] = metadata.get("volume", values["volume"])
+            pages = metadata.get("page")
+            if pages:
+                # split the pages into start and end
+                pages = pages.split("-")
+                values["page_start"] = values.data.get("page_start", int(pages[0]))
+                values["page_end"] = values.data.get("page_end", int(pages[1]))
+            values["journal"] = metadata.get("container-title", values["journal"])
+            values["issue"] = metadata.get("issue", values["issue"])
+            if metadata.get("author"):
+                authors = []
+                for author in metadata["author"]:
+                    first_name, last_name = cls.parse_author_name(
+                        author.get("given", ""), author.get("family", "")
+                    )
+                    # Check if orcid is available
+                    orcid = None
+                    if author.get("ORCID"):
+                        orcid = author["ORCID"]
+                        # transform the orcid into the proper format http://orcid.org/0000-0003-0019-8806' -> '0000-0003-0019-8806'
+                        orcid = orcid.split("/")[-1]
+                    authors.append(
+                        AuthorCreate(
+                            first_name=first_name, last_name=last_name, orcid=orcid
+                        )
+                    )
+                    values["authors"] = authors
 
-    @validator('isbn', always=True)
-    def check_isbn(cls, value, values):
-        """Literature.isbn validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.book and (value is None or not value):
-            raise ValueError(f'The isbn argument is missing for a literature type {values["type"]}')
-        return value
+        return v
 
-    @validator('url')
-    def validate_url(cls, value, values):
-        """Literature.url validator"""
-        if 'type' in values and values['type'] == LiteratureTypeEnum.thesis or value is not None:
-            if '.' not in value:
-                raise ValueError('url invalid (expected a ".")')
-            if ' ' in value:
-                raise ValueError('url invalid (no spaces allowed)')
-        return value
+    @field_validator("isbn")
+    @classmethod
+    def process_isbn(cls, v, values: ValidationInfo, **kwargs):
+        if v:
+            metadata = fetch_isbn_metadata(v)
+            if metadata:
+                # Replace or set the title, year, and publisher if not already set
+                values.data["title"] = metadata.get("Title", values.data["title"])
+                values.data["year"] = metadata.get("Year", values.data["year"])
+                values.data["publisher"] = metadata.get(
+                    "Publisher", values.data["publisher"]
+                )
+                if metadata.get("Authors"):
+                    authors = []
+                    for author in metadata["Authors"]:
+                        first_name, last_name = cls.parse_author_name(author)
+                        authors.append(
+                            AuthorCreate(first_name=first_name, last_name=last_name)
+                        )
+                    values.data["authors"] = authors
+        return v
+
+    @field_validator("url")
+    @classmethod
+    def convert_url_to_str(cls, v):
+        """Convert the URL to a string"""
+        return str(v) if v is not None else None
+
+    @staticmethod
+    def parse_author_name(full_name: str) -> Tuple[str, str]:
+        """
+        Parses a full author name into first and last names
+        """
+        parts = full_name.strip().split()
+        if len(parts) == 1:
+            return parts[0], ""
+        first_name = " ".join(parts[:-1])
+        last_name = parts[-1]
+        return first_name, last_name
 
 
 class LiteratureCreate(LiteratureBase):
-    """Create a Literature item: Properties to receive on item creation"""
-    type: str
-    authors: str
-    title: str
-    year: int
-    journal: Optional[str] = None
-    publisher: Optional[str] = None
-    volume: Optional[int] = None
-    issue: Optional[int] = None
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
-    editors: Optional[str] = None
-    edition: Optional[str] = None
-    chapter_title: Optional[str] = None
-    publication_place: Optional[str] = None
-    doi: Optional[str] = None
-    isbn: Optional[str] = None
-    url: Optional[str] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
+    """
+    A LiteratureCreate class (properties to receive on literature creation)
+    """
+
+    type: LiteratureType = Field(
+        ..., title="The literature type, either article, book, or thesis"
+    )
+    title: str = Field(..., max_length=255, title="The literature source title")
+    authors: List[AuthorCreate] = Field(..., title="Authors for the literature source")
+    year: int = Field(..., ge=1500, le=9999, title="The publication year")
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    @field_validator("authors", mode="before")
+    @classmethod
+    def check_authors(cls, v):
+        if not v:
+            raise ValueError("Authors are required")
+        return v
+
+
+class LiteratureCreateBatch(LiteratureBase, ConnectionBase):
+    """
+    A LiteratureCreateBatch class (properties to receive on literature creation)
+    """
+
+    type: LiteratureType = Field(
+        ..., title="The literature type, either article, book, or thesis"
+    )
+    title: str = Field(..., max_length=255, title="The literature source title")
+    authors: List[AuthorCreate] = Field(..., title="Authors for the literature source")
+    year: int = Field(..., ge=1500, le=9999, title="The publication year")
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
 
 
 class LiteratureUpdate(LiteratureBase):
-    """Update a Literature item: Properties to receive on item update"""
-    authors: str
-    title: str
-    year: int
-    journal: Optional[str] = None
-    publisher: Optional[str] = None
-    volume: Optional[int] = None
-    issue: Optional[int] = None
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
-    editors: Optional[str] = None
-    edition: Optional[str] = None
-    chapter_title: Optional[str] = None
-    publication_place: Optional[str] = None
-    doi: Optional[str] = None
-    isbn: Optional[str] = None
-    url: Optional[str] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
+    pass
 
 
-class LiteratureInDBBase(LiteratureBase):
-    """Properties shared by models stored in DB"""
+class LiteratureRead(LiteratureBase):
     id: int
-    authors: str
-    title: str
-    year: int
-    journal: Optional[str] = None
-    publisher: Optional[str] = None
-    volume: Optional[int] = None
-    issue: Optional[int] = None
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
-    editors: Optional[str] = None
-    edition: Optional[str] = None
-    chapter_title: Optional[str] = None
-    publication_place: Optional[str] = None
-    doi: Optional[str] = None
-    isbn: Optional[str] = None
-    url: Optional[str] = None
-    reviewer_flags: Optional[Dict[str, str]] = None
-
-    class Config:
-        orm_mode = True
-
-
-class Literature(LiteratureInDBBase):
-    """Properties to return to client"""
-    pass
-
-
-class LiteratureInDB(LiteratureInDBBase):
-    """Properties stored in DB"""
-    pass
+    authors: List[AuthorReadLiterature]

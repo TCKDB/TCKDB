@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:13
+    platform: linux/amd64 # Forces the use of amd64 architecture
+    container_name: tckdb_postgres
+    restart: always
+    env_file:
+      - ./tckdb/backend/app/core/.env
+    ports:
+      - "5433:5432" # Maps host port 5433 to container port 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - tckdb_network
+
+
+  test-db:
+    image: postgres:13
+    platform: linux/amd64 # Ensures compatibility on AMD64 platforms
+    container_name: tckdb_test_postgres
+    restart: always
+    env_file:
+      - ./tckdb/backend/app/core/.env.test # Separate env file for testing
+    ports:
+      - "5434:5432" # Maps host port 5434 to container port 5432
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    networks:
+      - tckdb_network
+
+
+  app:
+    build: .
+    platform: linux/amd64 # Forces the use of amd64 architecture
+    container_name: tckdb_app
+    environment:
+      - RUNNING_IN_DOCKER=true
+    env_file:
+      - ./tckdb/backend/app/core/.env
+    volumes:
+      - ./tckdb:/code/tckdb
+    ports:
+      - "8000:8000" # Maps host port 8000 to container port 8000
+    depends_on:
+      - db
+      - test-db
+    networks:
+      - tckdb_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    platform: linux/amd64 # Ensures compatibility on AMD64 platforms
+    container_name: pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: calvinpieters@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: password
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+      - test-db
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - tckdb_network
+
+volumes:
+  postgres_data:
+  postgres_test_data:
+  pgadmin_data:
+
+networks:
+  tckdb_network:
+    driver: bridge
