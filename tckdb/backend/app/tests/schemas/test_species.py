@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from tckdb import tckdb_path
-from tckdb.backend.app.conversions import read_yaml_file
+from tckdb.backend.app.conversions.files import read_yaml_file
 from tckdb.backend.app.schemas.common import Coordinates
 from tckdb.backend.app.schemas.species import SpeciesCreate
 

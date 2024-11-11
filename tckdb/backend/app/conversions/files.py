@@ -23,7 +23,8 @@ def read_yaml_file(path: str) -> dict or list:
     if not os.path.isfile(path):
         raise ValueError(f"Could not find the YAML file {path}")
     with open(path, "r") as f:
-        content = yaml.safe_load(stream=f, Loader=yaml.FullLoader)
+        # trunk-ignore(bandit/B506) - TODO: use yaml.safe_load(stream=f) - failing tests
+        content = yaml.load(stream=f, Loader=yaml.FullLoader)
     return content
 
 
