@@ -9,7 +9,7 @@ import rdkit
 from tckdb.backend.app.models.np_species import NonPhysicalSpecies
 
 
-timestamp = datetime.now(datetime.UTC).timestamp()
+timestamp = datetime.now().timestamp()
 formaldehyde_xyz = {
     "symbols": ("C", "O", "H", "H"),
     "isotopes": (12, 16, 1, 1),

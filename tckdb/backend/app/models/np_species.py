@@ -254,6 +254,8 @@ class NonPhysicalSpecies(Base, AuditMixin):
             for declaring this species non-physical.
     """
 
+    __tablename__ = "nonphysicalspecies"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
 
     label = Column(String(255), nullable=True)

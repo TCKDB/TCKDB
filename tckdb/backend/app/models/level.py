@@ -84,6 +84,8 @@ class Level(Base):
             Backend flags to assist the review process (not a user input)
     """
 
+    __tablename__ = "level"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     method = Column(String(500), nullable=False)
     basis = Column(String(500), nullable=True)

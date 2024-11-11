@@ -4,13 +4,13 @@ TCKDB backend app tests models test_species module
 
 from datetime import datetime
 
-import rdkit
+from rdkit import Chem
 
 from tckdb.backend.app.models.ess import ESS
 from tckdb.backend.app.models.level import Level
 from tckdb.backend.app.models.species import Species
 
-timestamp = datetime.timestamp(datetime.utcnow())
+timestamp = datetime.now().timestamp()
 formaldehyde_xyz = {
     "symbols": ("C", "O", "H", "H"),
     "isotopes": (12, 16, 1, 1),
@@ -34,7 +34,7 @@ species_1 = Species(
     approved=False,
     smiles="C=O",
     inchi="InChI=1S/CH2O/c1-2/h1H2",
-    inchi_key=rdkit.Chem.inchi.InchiToInchiKey("InChI=1S/CH2O/c1-2/h1H2"),
+    inchi_key=Chem.inchi.InchiToInchiKey("InChI=1S/CH2O/c1-2/h1H2"),
     charge=0,
     multiplicity=1,
     electronic_state="X",

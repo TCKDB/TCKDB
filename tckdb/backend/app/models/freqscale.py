@@ -34,6 +34,8 @@ class FreqScale(Base):
             Backend flags to assist the review process (not a user input).
     """
 
+    __tablename__ = "freqscale"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     factor = Column(Float(), nullable=False)
     level_id = Column(Integer, ForeignKey("level.id"), nullable=False, unique=True)

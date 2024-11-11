@@ -29,6 +29,9 @@ class Trans(Base):
             or just a float for a dimensionless parameter (such as ``'n'`` in the 'Single Exponential Down' model).
         reviewer_flags (Dict[str, str]): Backend flags to assist the review process (not a user input)
     """
+
+    __tablename__ = "trans"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     model = Column(String(100), nullable=False)
     parameters = Column(MsgpackExt, nullable=False)
@@ -38,11 +41,13 @@ class Trans(Base):
         """
         A string representation from which the object can be reconstructed.
         """
-        return f"<{self.__class__.__name__}(" \
-               f"id={self.id}, " \
-               f"model={self.model}, " \
-               f"parameters={self.parameters}" \
-               f")>"
+        return (
+            f"<{self.__class__.__name__}("
+            f"id={self.id}, "
+            f"model={self.model}, "
+            f"parameters={self.parameters}"
+            f")>"
+        )
 
     def __str__(self) -> str:
         """

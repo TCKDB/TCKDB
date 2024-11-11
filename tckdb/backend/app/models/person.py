@@ -64,6 +64,9 @@ class Person(Base):
         reviewer_flags (Dict[str, str])
             Backend flags to assist the review process (not a user input)
     """
+
+    __tablename__ = "person"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     name = Column(String(255), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
@@ -87,17 +90,47 @@ class Person(Base):
         str_ += f"name='{self.name}', "
         str_ += f"email='{self.email}', "
         str_ += f"affiliation='{self.affiliation}'"
-        str_ += f", uploaded_species={self.uploaded_species}" if self.uploaded_species is not None else ""
-        str_ += f", uploaded_non_physical_species={self.uploaded_non_physical_species}" \
-            if self.uploaded_non_physical_species is not None else ""
-        str_ += f", uploaded_reactions={self.uploaded_reactions}" if self.uploaded_reactions is not None else ""
-        str_ += f", uploaded_networks={self.uploaded_networks}" if self.uploaded_networks is not None else ""
-        str_ += f", reviewed_species={self.reviewed_species}" if self.reviewed_species is not None else ""
-        str_ += f", reviewed_non_physical_species={self.reviewed_non_physical_species}" \
-            if self.reviewed_non_physical_species is not None else ""
-        str_ += f", reviewed_reactions={self.reviewed_reactions}" if self.reviewed_reactions is not None else ""
-        str_ += f", reviewed_networks={self.reviewed_networks}" if self.reviewed_networks is not None else ""
-        str_ += f")>"
+        str_ += (
+            f", uploaded_species={self.uploaded_species}"
+            if self.uploaded_species is not None
+            else ""
+        )
+        str_ += (
+            f", uploaded_non_physical_species={self.uploaded_non_physical_species}"
+            if self.uploaded_non_physical_species is not None
+            else ""
+        )
+        str_ += (
+            f", uploaded_reactions={self.uploaded_reactions}"
+            if self.uploaded_reactions is not None
+            else ""
+        )
+        str_ += (
+            f", uploaded_networks={self.uploaded_networks}"
+            if self.uploaded_networks is not None
+            else ""
+        )
+        str_ += (
+            f", reviewed_species={self.reviewed_species}"
+            if self.reviewed_species is not None
+            else ""
+        )
+        str_ += (
+            f", reviewed_non_physical_species={self.reviewed_non_physical_species}"
+            if self.reviewed_non_physical_species is not None
+            else ""
+        )
+        str_ += (
+            f", reviewed_reactions={self.reviewed_reactions}"
+            if self.reviewed_reactions is not None
+            else ""
+        )
+        str_ += (
+            f", reviewed_networks={self.reviewed_networks}"
+            if self.reviewed_networks is not None
+            else ""
+        )
+        str_ += ")>"
         return str_
 
     def __str__(self) -> str:
@@ -108,15 +141,23 @@ class Person(Base):
         str_ += f"name='{self.name}', "
         str_ += f"email='{self.email}', "
         str_ += f"affiliation='{self.affiliation}', "
-        uploads = sum([self.uploaded_species or 0,
-                       self.uploaded_non_physical_species or 0,
-                       self.uploaded_reactions or 0,
-                       self.uploaded_networks or 0])
-        reviewes = sum([self.reviewed_species or 0,
-                        self.reviewed_non_physical_species or 0,
-                        self.reviewed_reactions or 0,
-                        self.reviewed_networks or 0])
+        uploads = sum(
+            [
+                self.uploaded_species or 0,
+                self.uploaded_non_physical_species or 0,
+                self.uploaded_reactions or 0,
+                self.uploaded_networks or 0,
+            ]
+        )
+        reviewes = sum(
+            [
+                self.reviewed_species or 0,
+                self.reviewed_non_physical_species or 0,
+                self.reviewed_reactions or 0,
+                self.reviewed_networks or 0,
+            ]
+        )
         str_ += f"uploads={uploads}, "
         str_ += f"reviews={reviewes}"
-        str_ += f")>"
+        str_ += ")>"
         return str_

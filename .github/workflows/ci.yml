@@ -13,16 +13,16 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Checkout Molecule Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ReactionMechanismGenerator/molecule
           path: ./code/Molecule
 
       - name: Checkout RMG-database Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ReactionMechanismGenerator/RMG-database
           path: ./code/RMG-database

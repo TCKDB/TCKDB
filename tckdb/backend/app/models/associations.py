@@ -33,26 +33,34 @@ from sqlalchemy import Column, Integer, ForeignKey, Table
 from tckdb.backend.app.db.base_class import Base
 
 
-species_authors = Table('species_authors',
-                        Base.metadata,
-                        Column('species_id', Integer, ForeignKey('species.id'), primary_key=True),
-                        Column('author_id', Integer, ForeignKey('person.id'), primary_key=True),
-                        )
+species_authors = Table(
+    "species_authors",
+    Base.metadata,
+    Column("species_id", Integer, ForeignKey("species.id"), primary_key=True),
+    Column("author_id", Integer, ForeignKey("person.id"), primary_key=True),
+)
 
-species_reviewers = Table('species_reviewers',
-                          Base.metadata,
-                          Column('species_id', Integer, ForeignKey('species.id'), primary_key=True),
-                          Column('reviewer_id', Integer, ForeignKey('person.id'), primary_key=True),
-                          )
+species_reviewers = Table(
+    "species_reviewers",
+    Base.metadata,
+    Column("species_id", Integer, ForeignKey("species.id"), primary_key=True),
+    Column("reviewer_id", Integer, ForeignKey("person.id"), primary_key=True),
+)
 
-np_species_authors = Table('np_species_authors',
-                           Base.metadata,
-                           Column('np_species_id', Integer, ForeignKey('nonphysicalspecies.id'), primary_key=True),
-                           Column('author_id', Integer, ForeignKey('person.id'), primary_key=True),
-                           )
+np_species_authors = Table(
+    "np_species_authors",
+    Base.metadata,
+    Column(
+        "np_species_id", Integer, ForeignKey("nonphysicalspecies.id"), primary_key=True
+    ),
+    Column("author_id", Integer, ForeignKey("person.id"), primary_key=True),
+)
 
-np_species_reviewers = Table('np_species_reviewers',
-                             Base.metadata,
-                             Column('np_species_id', Integer, ForeignKey('nonphysicalspecies.id'), primary_key=True),
-                             Column('reviewer_id', Integer, ForeignKey('person.id'), primary_key=True),
-                             )
+np_species_reviewers = Table(
+    "np_species_reviewers",
+    Base.metadata,
+    Column(
+        "np_species_id", Integer, ForeignKey("nonphysicalspecies.id"), primary_key=True
+    ),
+    Column("reviewer_id", Integer, ForeignKey("person.id"), primary_key=True),
+)
