@@ -3,6 +3,7 @@ import requests
 
 BASE_URL = "https://api.crossref.org/works/"
 
+
 def fetch_doi_metadata(doi: str) -> Optional[Dict[str, any]]:
     """
     Fetches metadata for a given DOI using the CrossRef API.

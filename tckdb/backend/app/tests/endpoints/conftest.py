@@ -100,6 +100,7 @@ def db_session(setup_database):
         transaction.rollback()
     connection.close()
 
+
 @pytest.fixture(scope="class")
 def client(db_session):
     """Provide a TestClient with overridden dependencies."""

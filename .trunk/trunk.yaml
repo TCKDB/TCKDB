@@ -1,6 +1,6 @@
 version: 0.1
 cli:
-  version: 1.22.7
+  version: 1.22.8
 repo:
   trunk_branch: master
 plugins:
@@ -20,7 +20,7 @@ lint:
     - checkov
   enabled:
     - flake8@7.1.1
-    - actionlint@1.7.3
+    - actionlint@1.7.4
     - bandit@1.7.10
     - black@24.10.0
     - git-diff-check
@@ -28,10 +28,10 @@ lint:
     - osv-scanner@1.9.1
     - oxipng@9.1.2
     - prettier@3.3.3
-    - ruff@0.7.1
+    - ruff@0.7.3
     - shellcheck@0.10.0
     - shfmt@3.6.0
-    - trufflehog@3.83.2
+    - trufflehog@3.83.6
     - yamllint@1.35.1
 actions:
   disabled:

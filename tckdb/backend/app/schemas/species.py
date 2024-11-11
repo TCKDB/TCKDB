@@ -717,9 +717,7 @@ class SpeciesBase(BaseModel):
         if graph:
             # If graph is provided, derive smiles and inchi if not provided
             if not smiles or not inchi:
-                smiles, inchi = (
-                    converter.smiles_and_inchi_from_adjlist(graph)
-                )
+                smiles, inchi = converter.smiles_and_inchi_from_adjlist(graph)
                 values["smiles"] = smiles or values.data["smiles"]
                 values["inchi"] = inchi or values.data["inchi"]
         elif inchi:

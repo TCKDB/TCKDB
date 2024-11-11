@@ -158,7 +158,6 @@ def multiplicity_from_adjlist(adjlist: str) -> Optional[int]:
         return None
 
 
-
 def inchi_from_inchi_key(
     inchi_key: str,
     inchi_type: Optional[str] = "standard_inchi",

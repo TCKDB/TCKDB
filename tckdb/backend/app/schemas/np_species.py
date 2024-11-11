@@ -253,7 +253,9 @@ class NonPhysicalSpeciesBase(BaseModel):
         if values["inchi"] is not None:
             # InChI was given, populate other attributes as needed
             if "smiles" not in values.data or not values.data["smiles"]:
-                values.data["smiles"] = converter.smiles_from_inchi(values.data["inchi"])
+                values.data["smiles"] = converter.smiles_from_inchi(
+                    values.data["inchi"]
+                )
             value = value or converter.adjlist_from_smiles(values.data["smiles"])
         if "smiles" in values.data and values.data["smiles"] is not None:
             # SMILES was given, populate other attributes as needed
@@ -264,15 +266,17 @@ class NonPhysicalSpeciesBase(BaseModel):
         # populate the InChI Key if not already set
         if values.data["inchi_key"] is not None and values.data["inchi"] is None:
             # InChI Key was given (and there's no InChI), populate other attributes as needed
-            values.data["inchi"] = converter.inchi_from_inchi_key(values.data["inchi_key"])
+            values.data["inchi"] = converter.inchi_from_inchi_key(
+                values.data["inchi_key"]
+            )
             if values.data["inchi"] is not None:
                 values["smiles"] = values.data["smiles"] or converter.smiles_from_inchi(
                     values.data["inchi"]
                 )
                 value = value or converter.adjlist_from_smiles(values.data["smiles"])
-        values.data["inchi_key"] = values.data["inchi_key"] or converter.inchi_key_from_inchi(
-            values.data["inchi"]
-        )
+        values.data["inchi_key"] = values.data[
+            "inchi_key"
+        ] or converter.inchi_key_from_inchi(values.data["inchi"])
         if (
             values.data is None
             or ("smiles" in values.data and values.data["smiles"] is None)
@@ -338,7 +342,9 @@ class NonPhysicalSpeciesBase(BaseModel):
                 is_valid, err = is_valid_atom_index(
                     index=index,
                     coordinates=(
-                        values.data["coordinates"] if "coordinates" in values.data else None
+                        values.data["coordinates"]
+                        if "coordinates" in values.data
+                        else None
                     ),
                     existing_indices=atom_indices,
                 )
@@ -348,9 +354,9 @@ class NonPhysicalSpeciesBase(BaseModel):
                         f"Got:\n{err}."
                     )
                 atom_indices.append(index)
-        if "coordinates" in values.data and len(values.data["coordinates"]["symbols"]) != len(
-            atom_indices
-        ):
+        if "coordinates" in values.data and len(
+            values.data["coordinates"]["symbols"]
+        ) != len(atom_indices):
             raise ValueError(
                 f'{len(values["coordinates"]["symbols"])} atoms were specified in the fragments{label}, '
                 f"while according to its coordinates it has {len(atom_indices)} atoms."
@@ -432,7 +438,9 @@ class NonPhysicalSpeciesBase(BaseModel):
                 is_valid, err = is_valid_atom_index(
                     index=index,
                     coordinates=(
-                        values.data["coordinates"] if "coordinates" in values.data else None
+                        values.data["coordinates"]
+                        if "coordinates" in values.data
+                        else None
                     ),
                     existing_indices=chiral_atom_indices,
                 )
@@ -444,7 +452,8 @@ class NonPhysicalSpeciesBase(BaseModel):
                 chiral_atom_indices.append(index)
                 if (
                     "coordinates" in values.data
-                    and values.data["coordinates"]["symbols"][index - 1] not in allowed_atoms
+                    and values.data["coordinates"]["symbols"][index - 1]
+                    not in allowed_atoms
                 ):
                     raise ValueError(
                         f'A chiral site cannot include {values.data["coordinates"]["symbols"][index - 1]} '
@@ -587,7 +596,11 @@ class NonPhysicalSpeciesBase(BaseModel):
             if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "irc_trajectories" in values.data and values.data["irc_trajectories"] and value is None:
+        if (
+            "irc_trajectories" in values.data
+            and values.data["irc_trajectories"]
+            and value is None
+        ):
             raise ValueError(f"The irc_paths argument was not given{label}.")
         if value is not None and len(value) not in [1, 2]:
             raise ValueError(
