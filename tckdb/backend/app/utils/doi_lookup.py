@@ -1,9 +1,7 @@
 from typing import Dict, Optional
-
 import requests
 
 BASE_URL = "https://api.crossref.org/works/"
-
 
 def fetch_doi_metadata(doi: str) -> Optional[Dict[str, any]]:
     """
@@ -16,7 +14,7 @@ def fetch_doi_metadata(doi: str) -> Optional[Dict[str, any]]:
         Optional[Dict[str, any]]: A dictionary containing metadata if found, else None.
     """
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+        "User-Agent": "doi_lookup/1.0 (https://github.com/TCKDB/TCKDB; mailto:calvin.p@campus.technion.ac.il)"
     }
     try:
         response = requests.get(f"{BASE_URL}{doi}", headers=headers, timeout=10)
@@ -42,11 +40,18 @@ def fetch_doi_metadata(doi: str) -> Optional[Dict[str, any]]:
             return normalized_metadata
         else:
             return None
-    except requests.exceptions.HTTPError:
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP error occurred: {http_err}")
         return None
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as conn_err:
+        print(f"Connection error occurred: {conn_err}")
         return None
-    except requests.exceptions.RequestException:
+    except requests.exceptions.Timeout as timeout_err:
+        print(f"Timeout error occurred: {timeout_err}")
         return None
-    except Exception:
+    except requests.exceptions.RequestException as req_err:
+        print(f"Request exception occurred: {req_err}")
+        return None
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
         return None

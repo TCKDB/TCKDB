@@ -15,13 +15,6 @@ from typing_extensions import Annotated
 
 import tckdb.backend.app.conversions.converter as converter
 import tckdb.backend.app.schemas.common as common
-from tckdb.backend.app.conversions import adjlist_conversion_process
-
-# from tckdb.backend.app.conversions.converter import is_linear
-# from rmgpy.molecule.adjlist import from_adjacency_list
-from tckdb.backend.app.conversions.adjlist_conversion_process import (
-    multiplicity_from_adjlist,
-)
 from tckdb.backend.app.conversions.converter import is_linear
 from tckdb.backend.app.schemas.common import Coordinates
 from tckdb.backend.app.schemas.connection_schema import ConnectionBase
@@ -725,7 +718,7 @@ class SpeciesBase(BaseModel):
             # If graph is provided, derive smiles and inchi if not provided
             if not smiles or not inchi:
                 smiles, inchi = (
-                    adjlist_conversion_process.smiles_and_inchi_from_adjlist(graph)
+                    converter.smiles_and_inchi_from_adjlist(graph)
                 )
                 values["smiles"] = smiles or values.data["smiles"]
                 values["inchi"] = inchi or values.data["inchi"]
@@ -787,10 +780,7 @@ class SpeciesBase(BaseModel):
                 raise ValueError(
                     f"The RMG adjacency list{label} is invalid:\n{value}\nReason:\n{err}"
                 )
-            multiplicity = multiplicity_from_adjlist(value)
-            print("**************")
-            print(multiplicity)
-            print("**************")
+            multiplicity = converter.multiplicity_from_adjlist(value)
             if multiplicity != values.data.get("multiplicity"):
                 if not (
                     abs(values.data.get("multiplicity") - multiplicity) % 2

@@ -15,6 +15,7 @@ dependencies:
   - psycopg2
   - pydantic
   - pytest
+  - python == 3.12
   - qcelemental
   - rdkit
   - sqlalchemy

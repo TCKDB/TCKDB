@@ -103,7 +103,12 @@ def smiles_and_inchi_from_adjlist(adjlist: str) -> Optional[Tuple[str, str]]:
             inchi = output[1]
             return smiles, inchi
         else:
-            print("Error: Unexpected output format.", file=sys.stderr)
+            error_message = "Error: Unexpected output format."
+            if result.stderr:
+                error_message += f" Subprocess stderr: {result.stderr.strip()}"
+            print(error_message, file=sys.stderr)
+            return None
+
     except subprocess.CalledProcessError as e:
         print(
             f"Subprocess error (exit code {e.returncode}): {e.stderr}", file=sys.stderr
@@ -114,9 +119,49 @@ def smiles_and_inchi_from_adjlist(adjlist: str) -> Optional[Tuple[str, str]]:
         return None
 
 
+def multiplicity_from_adjlist(adjlist: str) -> Optional[int]:
+    """
+    Calculate the multiplicity of a molecule from its adjacency list.
+
+    Args:
+        adjlist (str): The adjacency list.
+
+    Returns:
+        Optional[int]: The multiplicity if successful, else None.
+    """
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        conversion_script = os.path.join(script_dir, "molecule_env_scripts.py")
+        cmd = [MOLECULE_PYTHON, conversion_script, "multiplicity"]
+
+        result = subprocess.run(
+            cmd, input=adjlist, text=True, capture_output=True, check=True
+        )
+
+        # Parse
+        output = result.stdout.strip()
+        if output:
+            multiplicity = int(float(output))
+            return multiplicity
+        else:
+            error_message = "Error: Unexpected output format."
+            if result.stderr:
+                error_message += f" Subprocess stderr: {result.stderr.strip()}"
+            print(error_message, file=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        print(
+            f"Subprocess error (exit code {e.returncode}): {e.stderr}", file=sys.stderr
+        )
+        return None
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        return None
+
+
+
 def inchi_from_inchi_key(
     inchi_key: str,
-    inchi_type: Optional[str] = "standardinchi",
+    inchi_type: Optional[str] = "standard_inchi",
 ) -> Union[str, None]:
     """
     Get an InChI descriptor from an InChI Key descriptor.
@@ -148,7 +193,7 @@ def inchi_from_inchi_key(
         ["molecule_structures"]
     )
     if mol:
-        return mol[0]["molecule_structures"]["standard_inchi"]
+        return mol[0]["molecule_structures"][inchi_type]
     return None
 
 
