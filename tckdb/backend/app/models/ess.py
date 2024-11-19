@@ -57,6 +57,8 @@ class ESS(Base):
         reviewer_flags (Dict[str, str]): Backend flags to assist the review process (not a user input).
     """
 
+    __tablename__ = "ess"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     name = Column(String(100), nullable=False)
     version = Column(String(100), nullable=False)
@@ -90,5 +92,5 @@ class ESS(Base):
             str_ += f", revision='{self.revision}'"
         if self.url is not None:
             str_ += f", url='{self.url}'"
-        str_ += f")>"
+        str_ += ")>"
         return str_

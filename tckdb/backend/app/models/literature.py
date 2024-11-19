@@ -97,6 +97,8 @@ class Literature(Base, AuditMixin):
             Backend flags to assist the review process (not a user input)
     """
 
+    __tablename__ = "literature"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     type = Column(String(10), nullable=False)
     title = Column(String(255), nullable=False)

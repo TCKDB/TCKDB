@@ -421,7 +421,10 @@ def test_encorr_schema(
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
-    assert " Input should be a valid number [type=float_type, input_value=(16.809, 'kJ/mol'), input_type=tuple]" in str(exc_info.value)
+    assert (
+        " Input should be a valid number [type=float_type, input_value=(16.809, 'kJ/mol'), input_type=tuple]"
+        in str(exc_info.value)
+    )
 
     # Test case 22: isodesmic reaction has a wrong key
     with pytest.raises(ValidationError) as exc_info:
@@ -438,7 +441,7 @@ def test_encorr_schema(
             primary_level=primary_level,
         )
     assert (
-        'enthalpy_change_of_reaction\n  Extra inputs are not permitted [type=extra_forbidden, input_value=16.809, input_type=float]'
+        "enthalpy_change_of_reaction\n  Extra inputs are not permitted [type=extra_forbidden, input_value=16.809, input_type=float]"
         in str(exc_info.value)
     )
 
@@ -493,18 +496,23 @@ def test_encorr_schema(
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
-    assert "index\n  Extra inputs are not permitted [type=extra_forbidden, input_value=152, input_type=int]" in str(exc_info.value)
+    assert (
+        "index\n  Extra inputs are not permitted [type=extra_forbidden, input_value=152, input_type=int]"
+        in str(exc_info.value)
+    )
 
     # Test case 26: isodesmic reaction with no isodesmic_high_level_id
     with pytest.raises(ValidationError) as exc_info:
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=[IsodesmicReactionEntry(
-                reactants=["[CH2]CCCC", "[CH]"],
-                products=["[C]C", "[CH2]C(C)C"],
-                stoichiometry=[1, 1, 1, 1],
-                DHrxn298=16.809,)
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=16.809,
+                )
             ],
             # isodesmic_high_level is missing
             primary_level=primary_level,

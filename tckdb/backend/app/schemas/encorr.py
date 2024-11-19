@@ -113,9 +113,7 @@ class EnCorrBase(BaseModel):
         ):
             raise ValueError("Either BAC or isodesmic reactions must be provided.")
         # Either isodesimic reactions or BAC and AEC must be provided
-        if model.bac and (
-            model.isodesmic_reactions is None and model.aec is None
-        ):
+        if model.bac and (model.isodesmic_reactions is None and model.aec is None):
             raise ValueError(
                 "Either isodesmic reactions or BAC and AEC must be provided"
             )
@@ -251,12 +249,12 @@ class EnCorrBase(BaseModel):
                                 isodesmic_reaction.stoichiometry = [
                                     int(v) for v in isodesmic_reaction.stoichiometry
                                 ]
-                            except ValueError:
+                            except ValueError as e:
                                 raise ValueError(
                                     f"The stoichiometry coefficients must be integers, "
                                     f"got {coefficient} which is a {type(coefficient)} in:"
                                     f"\n{isodesmic_reaction}"
-                                )
+                                ) from e
                 if DHrxn298:
                     if not isinstance(DHrxn298, float):
                         raise ValueError(
@@ -295,9 +293,12 @@ class EnCorrBase(BaseModel):
             if (
                 model.primary_level.method == model.isodesmic_high_level.method
                 and model.primary_level.basis == model.isodesmic_high_level.basis
-                and model.primary_level.auxiliary_basis == model.isodesmic_high_level.auxiliary_basis
-                and model.primary_level.level_arguments == model.isodesmic_high_level.level_arguments
-                and model.primary_level.solvation_description == model.isodesmic_high_level.solvation_description
+                and model.primary_level.auxiliary_basis
+                == model.isodesmic_high_level.auxiliary_basis
+                and model.primary_level.level_arguments
+                == model.isodesmic_high_level.level_arguments
+                and model.primary_level.solvation_description
+                == model.isodesmic_high_level.solvation_description
             ):
                 raise ValueError(
                     "The 'isodesmic_high_level' must be different than the 'primary_level' of theory."

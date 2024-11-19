@@ -4,9 +4,9 @@ cd $HOME
 
 # Install Miniconda
 if [ "$TRAVIS_OS_NAME" == "osx" ]; then
-    MINICONDA=Miniconda3-latest-MacOSX-x86_64.sh
+	MINICONDA=Miniconda3-latest-MacOSX-x86_64.sh
 else
-    MINICONDA=Miniconda3-latest-Linux-x86_64.sh
+	MINICONDA=Miniconda3-latest-Linux-x86_64.sh
 fi
 MINICONDA_HOME=$HOME/miniconda
 wget -q https://repo.continuum.io/miniconda/$MINICONDA
@@ -15,7 +15,7 @@ bash $MINICONDA -b -p $MINICONDA_HOME
 # Configure miniconda
 export PIP_ARGS="-U"
 export PATH=$MINICONDA_HOME/bin:$PATH
-    
+
 conda config --set always_yes yes --set changeps1 no
 conda update --q conda
 conda info -a

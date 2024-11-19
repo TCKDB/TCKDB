@@ -3,8 +3,9 @@ TCKDB backend app db base_class module
 allows the creation of classes that include directives to describe the actual database table they will be mapped to
 """
 
+import sqlalchemy
 from sqlalchemy import Column, DateTime, func
-from sqlalchemy.ext.declarative import declarative_base, declared_attr
+from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import Session
 
 
@@ -47,4 +48,4 @@ class AuditMixin:
         db.delete(self)
 
 
-Base = declarative_base(cls=CustomBase)
+Base = sqlalchemy.orm.declarative_base()

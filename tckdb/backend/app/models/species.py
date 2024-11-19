@@ -515,6 +515,8 @@ class Species(Base, AuditMixin):
             Any additional information in the form of a dictionary.
     """
 
+    __tablename__ = "species"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
 
     label = Column(String(255), nullable=True)

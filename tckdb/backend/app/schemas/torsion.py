@@ -49,7 +49,9 @@ class TorsionsBase(BaseModel):
         validate_default=True,
     )
     symmetry: Optional[int] = Field(
-        None, gt=0, title="The internal symmetry number of the scanned mode",
+        None,
+        gt=0,
+        title="The internal symmetry number of the scanned mode",
         validate_default=True,
     )
     treatment: TorsionTreatmentEnum = Field(
@@ -99,7 +101,11 @@ class TorsionsBase(BaseModel):
             if "label" in values.data and values.data["label"] is not None
             else ""
         )
-        if "dimension" in values.data and values.data["dimension"] == 1 and value is None:
+        if (
+            "dimension" in values.data
+            and values.data["dimension"] == 1
+            and value is None
+        ):
             raise ValueError(
                 f'The "symmetry" key is required for a torsion dictionary{label}.\nGot: {values.data}'
             )

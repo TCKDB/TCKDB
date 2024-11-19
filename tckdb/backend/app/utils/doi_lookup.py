@@ -3,6 +3,7 @@ import requests
 
 BASE_URL = "https://api.crossref.org/works/"
 
+
 def fetch_doi_metadata(doi: str) -> Optional[Dict[str, any]]:
     """
     Fetches metadata for a given DOI using the CrossRef API.
@@ -17,7 +18,7 @@ def fetch_doi_metadata(doi: str) -> Optional[Dict[str, any]]:
         "User-Agent": "doi_lookup/1.0 (https://github.com/TCKDB/TCKDB; mailto:calvin.p@campus.technion.ac.il)"
     }
     try:
-        response = requests.get(f"{BASE_URL}{doi}", headers=headers)
+        response = requests.get(f"{BASE_URL}{doi}", headers=headers, timeout=10)
         response.raise_for_status()
         api_data = response.json()
         if "message" in api_data:

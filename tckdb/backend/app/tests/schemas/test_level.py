@@ -12,13 +12,13 @@ def test_level_schema():
     """Test creating an instance of Level"""
     level1 = LevelCreate(method="CBS-QB3", grid="UltraFine")
     assert level1.method == "cbs-qb3"  # lowered
-    assert level1.basis == None
-    assert level1.auxiliary_basis == None
-    assert level1.dispersion == None
+    assert level1.basis is None
+    assert level1.auxiliary_basis is None
+    assert level1.dispersion is None
     assert level1.grid == "UltraFine"
-    assert level1.solvation_method == None
-    assert level1.solvent == None
-    assert level1.solvation_description == None
+    assert level1.solvation_method is None
+    assert level1.solvent is None
+    assert level1.solvation_description is None
 
     level2 = LevelCreate(
         method="DLPNO-CCSD(T)-F12",
@@ -32,9 +32,9 @@ def test_level_schema():
     assert level2.basis == "cc-pvtz-f12"
     assert level2.auxiliary_basis == "aug-cc-pvtz/c cc-pvtz-f12-cabs"
     assert level2.level_arguments == "normal-PNO"
-    assert level2.dispersion == None
-    assert level2.solvation_method == None
-    assert level2.solvent == None
+    assert level2.dispersion is None
+    assert level2.solvation_method is None
+    assert level2.solvent is None
     assert (
         level2.solvation_description == "APFD/6-311+G(2d,p) SMD water "
         "e_elect = e_original + sp_e_sol_corrected - sp_e_uncorrected"

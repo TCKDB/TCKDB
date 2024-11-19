@@ -8,6 +8,8 @@ Todo: Use the ``raise_atomtype_exception`` and ``raise_charge_exception`` argume
 
 import math
 import os
+
+# trunk-ignore(bandit/B404)
 import subprocess
 import sys
 from typing import Dict, Optional, Tuple, Union
@@ -35,7 +37,8 @@ def inchi_from_smiles(smiles: str) -> Union[str, None]:
     """
     try:
         inchi = MolToInchi(MolFromSmiles(smiles))
-    except:
+    except Exception as e:
+        print(f"Failed to convert smiles to inchi {e.args}")
         return None
     return inchi
 
@@ -88,6 +91,7 @@ def smiles_and_inchi_from_adjlist(adjlist: str) -> Optional[Tuple[str, str]]:
         conversion_script = os.path.join(script_dir, "molecule_env_scripts.py")
         cmd = [MOLECULE_PYTHON, conversion_script, "convert"]
 
+        # trunk-ignore(bandit/B603)
         result = subprocess.run(
             cmd, input=adjlist, text=True, capture_output=True, check=True
         )
@@ -130,6 +134,7 @@ def multiplicity_from_adjlist(adjlist: str) -> Optional[int]:
         conversion_script = os.path.join(script_dir, "molecule_env_scripts.py")
         cmd = [MOLECULE_PYTHON, conversion_script, "multiplicity"]
 
+        # trunk-ignore(bandit/B603)
         result = subprocess.run(
             cmd, input=adjlist, text=True, capture_output=True, check=True
         )
@@ -152,7 +157,6 @@ def multiplicity_from_adjlist(adjlist: str) -> Optional[int]:
     except Exception as e:
         print(f"Unexpected error: {e}", file=sys.stderr)
         return None
-
 
 
 def inchi_from_inchi_key(
@@ -185,8 +189,7 @@ def inchi_from_inchi_key(
     # return None
 
     molecule = new_client.molecule
-    mol = molecule.filter(
-        molecule_structures__standard_inchi_key=inchi_key).only(
+    mol = molecule.filter(molecule_structures__standard_inchi_key=inchi_key).only(
         ["molecule_structures"]
     )
     if mol:
@@ -207,7 +210,8 @@ def inchi_key_from_inchi(inchi: str) -> Union[str, None]:
     """
     try:
         inchi_key = InchiToInchiKey(inchi)
-    except:
+    except Exception as e:
+        print(f"Failed to convert inchi to inchi key {e.args}")
         return None
     return inchi_key
 
@@ -232,7 +236,8 @@ def smiles_from_inchi(inchi: str) -> Union[str, None]:
             allBondsExplicit=False,
             allHsExplicit=False,
         )
-    except:
+    except Exception as e:
+        print(f"Failed to convert inchi to smiles {e.args}")
         return None
     return smiles
 

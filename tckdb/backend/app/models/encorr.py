@@ -75,6 +75,8 @@ class EnCorr(Base):
             Backend flags to assist the review process (not a user input).
     """
 
+    __tablename__ = "encorr"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     supported_elements = Column(
         ARRAY(String, as_tuple=False, zero_indexes=True), nullable=False

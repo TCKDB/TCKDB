@@ -4,12 +4,12 @@ from xml.dom import ValidationErr
 from fastapi import APIRouter, Depends, HTTPException
 
 from tckdb.backend.app.db.session import get_db
-from tckdb.backend.app.models import ESS as ESSModel
-from tckdb.backend.app.models import Bot as BotModel
-from tckdb.backend.app.models import FreqScale as FrequencyScaleModel
-from tckdb.backend.app.models import Level as LevelModel
-from tckdb.backend.app.models import Literature as LiteratureModel
-from tckdb.backend.app.models import Species as SpeciesModel
+from tckdb.backend.app.models.ess import ESS as ESSModel
+from tckdb.backend.app.models.bot import Bot as BotModel
+from tckdb.backend.app.models.freqscale import FreqScale as FrequencyScaleModel
+from tckdb.backend.app.models.level import Level as LevelModel
+from tckdb.backend.app.models.literature import Literature as LiteratureModel
+from tckdb.backend.app.models.species import Species as SpeciesModel
 from tckdb.backend.app.schemas.batch import BatchUploadPayload
 from tckdb.backend.app.services.author_service import get_or_create_author
 

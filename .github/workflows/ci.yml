@@ -13,16 +13,16 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Checkout Molecule Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ReactionMechanismGenerator/molecule
           path: ./code/Molecule
 
       - name: Checkout RMG-database Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ReactionMechanismGenerator/RMG-database
           path: ./code/RMG-database
@@ -33,8 +33,8 @@ jobs:
           auto-update-conda: true
           environment-file: environment.yml
           activate-environment: tck_env
-          miniconda-version: "latest"
-          conda-solver: "libmamba"
+          miniconda-version: latest
+          conda-solver: libmamba
 
       - name: Install Molecule
         run: conda env create -f ./code/Molecule/environment.yml
@@ -55,6 +55,9 @@ jobs:
 
       - name: Run Models Tests
         run: make test-models
+
+      - name: Trunk Check
+        uses: trunk-io/trunk-action@v1
 
       - name: Collect Logs on Failure
         if: failure()

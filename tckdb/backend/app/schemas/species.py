@@ -179,11 +179,13 @@ class SpeciesBase(BaseModel):
         None, gt=0, title="Standard entropy of formation", validate_default=True
     )
     Cp_values: Optional[List[Annotated[float, Field(gt=0)]]] = Field(
-        None, title="Constant pressure heat capacity values",
+        None,
+        title="Constant pressure heat capacity values",
         validate_default=True,
     )
     Cp_T_list: Optional[List[Annotated[float, Field(gt=0)]]] = Field(
-        None, title="Constant pressure heat capacity temperature list",
+        None,
+        title="Constant pressure heat capacity temperature list",
         validate_default=True,
     )
     heat_capacity_model: Optional[
@@ -192,10 +194,12 @@ class SpeciesBase(BaseModel):
 
     # Paths
     # Storage requires consideration
-    opt_path: Optional[str] = Field(None, title="The path to the opt output file",
-                                    validate_default=True)
-    freq_path: Optional[str] = Field(None, title="The path to the freq output file",
-                                     validate_default=True)
+    opt_path: Optional[str] = Field(
+        None, title="The path to the opt output file", validate_default=True
+    )
+    freq_path: Optional[str] = Field(
+        None, title="The path to the freq output file", validate_default=True
+    )
     scan_paths: Optional[
         Dict[
             Tuple[
@@ -211,12 +215,13 @@ class SpeciesBase(BaseModel):
         ]
     ] = Field(None, title="Paths to scan log files", validate_default=True)
     irc_paths: Optional[List[Annotated[str, StringConstraints(max_length=5000)]]] = (
-        Field(None, title="Paths to IRC log files",
-              validate_default=True)
+        Field(None, title="Paths to IRC log files", validate_default=True)
     )
     sp_path: Optional[str] = Field(
-        None, max_length=5000, title="Path to single-point energy log file",
-        validate_default=True
+        None,
+        max_length=5000,
+        title="Path to single-point energy log file",
+        validate_default=True,
     )
 
     extras: Optional[Dict[str, Any]] = Field(None, title="Extras")
@@ -451,7 +456,7 @@ class SpeciesBase(BaseModel):
             and len(data.coordinates.symbols) >= 4
         ):
             raise ValueError(
-                f"Must provide a conformation method for species with more than 4 atoms."
+                "Must provide a conformation method for species with more than 4 atoms."
             )
         return data
 
@@ -712,9 +717,7 @@ class SpeciesBase(BaseModel):
         if graph:
             # If graph is provided, derive smiles and inchi if not provided
             if not smiles or not inchi:
-                smiles, inchi = (
-                    converter.smiles_and_inchi_from_adjlist(graph)
-                )
+                smiles, inchi = converter.smiles_and_inchi_from_adjlist(graph)
                 values["smiles"] = smiles or values.data["smiles"]
                 values["inchi"] = inchi or values.data["inchi"]
         elif inchi:
@@ -1144,10 +1147,6 @@ class SpeciesRead(SpeciesBase):
     irc_ess_id: Optional[int] = Field(None, title="The IRC ESS ID")
     sp_ess_id: Optional[int] = Field(None, title="The single point ESS ID")
     model_config = ConfigDict(from_attributes=True)
-
-
-class SpeciesUpdate(SpeciesBase):
-    pass
 
 
 class SpeciesUpdateBatch(SpeciesBase, ConnectionBase):

@@ -1,0 +1,4 @@
+[flake8]
+extend-ignore = 
+    # ignore line length errors - black formatter will auto-fix them 
+    E501

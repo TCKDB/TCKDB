@@ -17,10 +17,12 @@ from sqlalchemy.types import TypeDecorator, VARCHAR
 # Inspired by:
 # https://docs.sqlalchemy.org/en/13/orm/extensions/mutable.html#establishing-mutability-on-scalar-column-values
 
+
 class JSONEncodedDict(TypeDecorator):
     """
     Represents an immutable structure as a json-encoded string.
     """
+
     impl = VARCHAR
 
     def process_bind_param(self, value, dialect):
@@ -85,7 +87,11 @@ def msgpackext_encode(obj: Any) -> Any:
 
     if isinstance(obj, np.ndarray):
         if obj.shape:
-            data = {b"_nd_": True, b"dtype": obj.dtype.str, b"data": np.ascontiguousarray(obj).tobytes()}
+            data = {
+                b"_nd_": True,
+                b"dtype": obj.dtype.str,
+                b"data": np.ascontiguousarray(obj).tobytes(),
+            }
             if len(obj.shape) > 1:
                 data[b"shape"] = obj.shape
             return data
@@ -144,6 +150,7 @@ class MsgpackExt(TypeDecorator):
     """
     Converts JSON-like data to msgpack with full NumPy Array support.
     """
+
     impl = BYTEA
 
     def process_bind_param(self, value, dialect):

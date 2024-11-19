@@ -27,6 +27,8 @@ class LJ(Base):
             Backend flags to assist the review process (not a user input)
     """
 
+    __tablename__ = "lj"
+
     id = Column(Integer, primary_key=True, index=True, nullable=False)
     sigma = Column(MsgpackExt, nullable=False)
     epsilon = Column(MsgpackExt, nullable=False)

@@ -22,7 +22,8 @@ def test_freq_model():
         "J. Chem. Phys. 1999, 110, 2822–2827, DOI: 10.1063/1.477924')>"
     )
     assert (
-        str(freq1) == "<FreqScale(factor=1.00386, level_id=None, source='J.A. Montgomery, "
+        str(freq1)
+        == "<FreqScale(factor=1.00386, level_id=None, source='J.A. Montgomery, "
         "M.J. Frisch, J. Chem. Phys. 1999, 110, 2822–2827, DOI: 10.1063/1.477924')>"
     )
 

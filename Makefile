@@ -56,3 +56,7 @@ test-models:
 test-endpoints:
 	@echo "Running endpoints tests in Conda environment"
 	@TESTING=true conda run -n tck_env pytest -ra -vv ./tckdb/backend/app/tests/endpoints
+
+test-lint:
+	@echo "Running lint tests in Conda environment"
+	@conda run -n tck_env trunk check
