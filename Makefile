@@ -41,9 +41,9 @@ down:
 # Non-Docker (Conda-based) targets
 test-all:
 	@echo "Running all tests in Conda environment"
-	@TESTING=true conda run -n tck_env pytest -ra -vv ./tckdb/backend/app/tests/schemas
-	@TESTING=true conda run -n tck_env pytest -ra -vv ./tckdb/backend/app/tests/models
-	@TESTING=true conda run -n tck_env pytest -ra -vv ./tckdb/backend/app/tests/endpoints
+	@TESTING=true conda run -n tck_env pytest --cov=./tckdb/backend/app --cov-report=xml ./tckdb/backend/app/tests/schemas
+	@TESTING=true conda run -n tck_env pytest --cov=./tckdb/backend/app --cov-report=xml ./tckdb/backend/app/tests/models
+	@TESTING=true conda run -n tck_env pytest --cov=./tckdb/backend/app --cov-report=xml ./tckdb/backend/app/tests/endpoints
 
 test-schemas:
 	@echo "Running schema tests in Conda environment"
