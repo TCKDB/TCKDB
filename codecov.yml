@@ -1,8 +1,6 @@
 codecov:
   token: 62d527a2-32da-49f4-ac7a-8c5d7b193e57
   bot: codecov-io
-  ci:
-    - travis.org
   require_ci_to_pass: yes
 coverage:
   range: 0..100

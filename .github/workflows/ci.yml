@@ -50,14 +50,21 @@ jobs:
         run: |
           echo "PATH=${{ github.workspace }}/code/Molecule:${{ github.workspace }}/code/RMG-database:${{ github.workspace }}/tckdb:$PATH" >> $GITHUB_ENV
 
-      - name: Run Schema Tests
-        run: make test-schemas
-
-      - name: Run Models Tests
-        run: make test-models
+      - name: Run All Tests with Coverage
+        run: make test-all
 
       - name: Trunk Check
         uses: trunk-io/trunk-action@v1
+
+      - name: Codecov Coverage
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: false
+          files: ./coverage.xml
+          flags: unittests # optional
+          name: codecov-umbrella # optional
+          verbose: true # optional (default = false)
+          token: 62d527a2-32da-49f4-ac7a-8c5d7b193e57
 
       - name: Collect Logs on Failure
         if: failure()
