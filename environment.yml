@@ -15,6 +15,7 @@ dependencies:
   - psycopg2
   - pydantic
   - pytest
+  - pytest-cov
   - python == 3.12
   - qcelemental
   - rdkit
