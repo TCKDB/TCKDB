@@ -279,12 +279,14 @@ def test_encorr_schema(
             supported_elements=supported_elements,
             energy_unit="hartree",
             bac=valid_bac,
-            isodesmic_reactions=IsodesmicReactionEntry(
-                reactants=["[CH2]CCCC", "[CH]"],
-                products=["[C]C", "[CH2]C(C)C"],
-                stoichiometry=[1, 1, 1, 1],
-                DHrxn298=16.809,
-            ),
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=16.809,
+                )
+            ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -300,12 +302,14 @@ def test_encorr_schema(
             energy_unit="hartree",
             aec=valid_aec,
             bac=valid_bac,
-            isodesmic_reactions=IsodesmicReactionEntry(
-                reactants=["[CH2]CCCC", "[CH]"],
-                products=["[C]C", "[CH2]C(C)C"],
-                stoichiometry=[1, 1, 1, 1],
-                DHrxn298=16.809,
-            ),
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=16.809,
+                )
+            ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -319,12 +323,14 @@ def test_encorr_schema(
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=IsodesmicReactionEntry(
-                reactants="[CH2]CCCC+[CH]",
-                products=["[C]C", "[CH2]C(C)C"],
-                stoichiometry=[1, 1, 1, 1],
-                DHrxn298=16.809,
-            ),
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    reactants="[CH2]CCCC+[CH]",
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=16.809,
+                )
+            ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -339,12 +345,14 @@ def test_encorr_schema(
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=IsodesmicReactionEntry(
-                reactants=["[CH2]CCCC", "[CH]"],
-                products="[C]C+[CH2]C(C)C",
-                stoichiometry=[1, 1, 1, 1],
-                DHrxn298=16.809,
-            ),
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products="[C]C+[CH2]C(C)C",
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=16.809,
+                )
+            ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -358,12 +366,14 @@ def test_encorr_schema(
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=IsodesmicReactionEntry(
-                reactants=["[CH2]CCCC", "[CH]"],
-                products=["[C]C++++f151_invalid", "[CH2]C(C)C"],
-                stoichiometry=[1, 1, 1, 1],
-                DHrxn298=16.809,
-            ),
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products=["[C]C++++f151_invalid", "[CH2]C(C)C"],
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=16.809,
+                )
+            ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -431,12 +441,14 @@ def test_encorr_schema(
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=IsodesmicReactionEntry(
-                reactants=["[CH2]CCCC", "[CH]"],
-                products=["[C]C", "[CH2]C(C)C"],
-                stoichiometry=[1, 1, 1, 1],
-                enthalpy_change_of_reaction=16.809,  # Incorrect key
-            ),
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry=[1, 1, 1, 1],
+                    enthalpy_change_of_reaction=16.809,  # Incorrect key
+                )
+            ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -450,11 +462,13 @@ def test_encorr_schema(
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=IsodesmicReactionEntry(
-                reactants=["[CH2]CCCC", "[CH]"],
-                stoichiometry=[1, 1, 1, 1],
-                DHrxn298=16.809,  # Missing 'products'
-            ),
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=16.809,  # Missing 'products'
+                )
+            ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -468,11 +482,13 @@ def test_encorr_schema(
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=IsodesmicReactionEntry(
-                products=["[C]C", "[CH2]C(C)C"],
-                stoichiometry=[1, 1, 1, 1],
-                DHrxn298=16.809,  # Missing 'reactants'
-            ),
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=16.809,  # Missing 'reactants'
+                )
+            ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
@@ -486,13 +502,15 @@ def test_encorr_schema(
         EnCorrCreate(
             supported_elements=supported_elements,
             energy_unit="kcal/mol",
-            isodesmic_reactions=IsodesmicReactionEntry(
-                reactants=["[CH2]CCCC", "[CH]"],
-                products=["[C]C", "[CH2]C(C)C"],
-                stoichiometry=[1, 1, 1, 1],
-                DHrxn298=16.809,
-                index=152,  # Extra key
-            ),
+            isodesmic_reactions=[
+                IsodesmicReactionEntry(
+                    reactants=["[CH2]CCCC", "[CH]"],
+                    products=["[C]C", "[CH2]C(C)C"],
+                    stoichiometry=[1, 1, 1, 1],
+                    DHrxn298=16.809,
+                    index=152,  # Extra key
+                )
+            ],
             isodesmic_high_level=isodesmic_high_level,
             primary_level=primary_level,
         )
