@@ -80,6 +80,6 @@ USERS_OPEN_REGISTRATION = getenv_boolean("USERS_OPEN_REGISTRATION")
 
 EMAIL_TEST_USER = "test@example.com"
 
-FAST_API_PORT = os.getenv("FAST_API_PORT")
+FAST_API_PORT = os.getenv("FAST_API_PORT", "8000")
 
 ENV = os.getenv("ENV")
