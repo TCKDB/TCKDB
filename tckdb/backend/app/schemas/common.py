@@ -2,8 +2,8 @@
 TCKDB backend app schemas common module
 """
 
-import os
 import re
+from pathlib import Path
 
 # trunk-ignore(bandit/B404)
 import subprocess
@@ -260,10 +260,14 @@ def is_valid_adjlist(adjlist: str) -> Tuple[bool, str]:
             - A reason for invalidating the argument.
     """
     try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        conversion_script = os.path.abspath(
-            os.path.join(script_dir, "..", "conversions", "molecule_env_scripts.py")
-        )
+        script_dir = Path(__file__).resolve().parent
+        utils_dir = script_dir.parent / "utils"
+        conversion_script = utils_dir / "molecule_env_scripts.py"
+        if not conversion_script.is_file():
+            raise FileNotFoundError(
+                f"Conversion script not found at: {conversion_script}"
+            )
+
         cmd = [MOLECULE_PYTHON, conversion_script, "validate"]
 
         # trunk-ignore(bandit/B603)
