@@ -195,7 +195,7 @@ class EnCorrBase(BaseModel):
                     )
         return value
 
-    @field_validator("isodesmic_reactions", mode="before")
+    @field_validator("isodesmic_reactions", mode="after")
     @classmethod
     def validate_isodesmic_reactions(cls, value, values: ValidationInfo):
         """EnCorr.isodesmic_reactions validator"""
@@ -271,6 +271,28 @@ class EnCorrBase(BaseModel):
                     )
         return value
 
+
+class EnCorrCreate(EnCorrBase):
+    """
+    An EnCorrCreate class (inherited from EnCorrBase)
+
+    Allows for the creation of Primary Level and Isodesmic Level without requiring the connection ID.
+
+    """
+
+    supported_elements: List[str] = Field(
+        ..., title="The chemical elements supported by this energy correction object"
+    )
+    energy_unit: str = Field(
+        ..., max_length=255, title="The energy units the corrections are given in"
+    )
+
+    primary_level: LevelCreate = Field(
+        ..., title="The primary level of theory for the energy correction"
+    )
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
     @model_validator(mode="after")
     def validate_cross_fields(cls, model: "EnCorrBase") -> "EnCorrBase":
         """
@@ -310,28 +332,6 @@ class EnCorrBase(BaseModel):
                     "Either BAC and AEC or isodesmic reactions must be provided."
                 )
         return model
-
-
-class EnCorrCreate(EnCorrBase):
-    """
-    An EnCorrCreate class (inherited from EnCorrBase)
-
-    Allows for the creation of Primary Level and Isodesmic Level without requiring the connection ID.
-
-    """
-
-    supported_elements: List[str] = Field(
-        ..., title="The chemical elements supported by this energy correction object"
-    )
-    energy_unit: str = Field(
-        ..., max_length=255, title="The energy units the corrections are given in"
-    )
-
-    primary_level: LevelCreate = Field(
-        ..., title="The primary level of theory for the energy correction"
-    )
-
-    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
 
 class EnCorrCreateBatch(EnCorrBase, ConnectionBase):
