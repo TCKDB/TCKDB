@@ -6,7 +6,7 @@ repo:
 plugins:
   sources:
     - id: trunk
-      ref: v1.6.4
+      ref: v1.6.5
       uri: https://github.com/trunk-io/plugins
 runtimes:
   enabled:
@@ -28,10 +28,10 @@ lint:
     - osv-scanner@1.9.1
     - oxipng@9.1.2
     - prettier@3.3.3
-    - ruff@0.7.3
+    - ruff@0.7.4
     - shellcheck@0.10.0
     - shfmt@3.6.0
-    - trufflehog@3.83.6
+    - trufflehog@3.84.0
     - yamllint@1.35.1
 actions:
   disabled:
