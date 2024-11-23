@@ -62,12 +62,7 @@ def batch_upload(payload: BatchUploadPayload, db=Depends(get_db)):
                     # # Process Authors
                     authors = literature_data.authors or []
                     for author_data in authors:
-                        author = get_or_create_author(
-                            db,
-                            first_name=author_data.first_name,
-                            last_name=author_data.last_name,
-                            orcid=author_data.orcid,
-                        )
+                        author = get_or_create_author(db, author_data)
                         new_literature.authors.append(author)
 
             # 2. Process Levels

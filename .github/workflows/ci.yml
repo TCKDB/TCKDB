@@ -11,6 +11,27 @@ jobs:
     name: Conda Tests
     runs-on: ubuntu-latest
 
+    services:
+      test-db:
+        image: postgres:13
+        ports:
+          - 5434:5432
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5434
+      TESTING: true
+      FAST_API_PORT: 8001
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -26,6 +47,31 @@ jobs:
         with:
           repository: ReactionMechanismGenerator/RMG-database
           path: ./code/RMG-database
+
+      - name: Set Environment Variables
+        run: |
+          echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}" >> $GITHUB_ENV
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> $GITHUB_ENV
+          echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}" >> $GITHUB_ENV
+          echo "POSTGRES_HOST=localhost" >> $GITHUB_ENV
+          echo "POSTGRES_PORT=5434" >> $GITHUB_ENV
+          echo "TESTING=true" >> $GITHUB_ENV
+          echo "FAST_API_PORT=8001" >> $GITHUB_ENV
+
+      # 3. Wait for test-db Service to Be Ready
+      - name: Wait for test-db to be Ready
+        run: |
+          echo "Waiting for test-db to be ready..."
+          for i in {1..30}; do
+            if pg_isready -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER; then
+              echo "test-db is ready!"
+              exit 0
+            fi
+            echo "Waiting for test-db..."
+            sleep 2
+          done
+          echo "test-db did not become ready in time."
+          exit 1
 
       - name: Set up miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -55,6 +101,9 @@ jobs:
 
       - name: Run Models Tests
         run: make test-models
+
+      - name: Run Endpoints Tests
+        run: make test-endpoints
 
       - name: Trunk Check
         uses: trunk-io/trunk-action@v1

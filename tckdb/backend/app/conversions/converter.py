@@ -7,7 +7,7 @@ Todo: Use the ``raise_atomtype_exception`` and ``raise_charge_exception`` argume
 """
 
 import math
-import os
+from pathlib import Path
 
 # trunk-ignore(bandit/B404)
 import subprocess
@@ -87,8 +87,14 @@ def smiles_and_inchi_from_adjlist(adjlist: str) -> Optional[Tuple[str, str]]:
             Returns None if conversion fails
     """
     try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        conversion_script = os.path.join(script_dir, "molecule_env_scripts.py")
+        script_dir = Path(__file__).resolve().parent
+        utils_dir = script_dir.parent / "utils"
+        conversion_script = utils_dir / "molecule_env_scripts.py"
+        if not conversion_script.is_file():
+            raise FileNotFoundError(
+                f"Conversion script not found at: {conversion_script}"
+            )
+
         cmd = [MOLECULE_PYTHON, conversion_script, "convert"]
 
         # trunk-ignore(bandit/B603)
@@ -130,8 +136,14 @@ def multiplicity_from_adjlist(adjlist: str) -> Optional[int]:
         Optional[int]: The multiplicity if successful, else None.
     """
     try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        conversion_script = os.path.join(script_dir, "molecule_env_scripts.py")
+        script_dir = Path(__file__).resolve().parent
+        utils_dir = script_dir.parent / "utils"
+        conversion_script = utils_dir / "molecule_env_scripts.py"
+        if not conversion_script.is_file():
+            raise FileNotFoundError(
+                f"Conversion script not found at: {conversion_script}"
+            )
+
         cmd = [MOLECULE_PYTHON, conversion_script, "multiplicity"]
 
         # trunk-ignore(bandit/B603)
