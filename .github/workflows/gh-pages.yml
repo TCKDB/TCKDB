@@ -3,35 +3,33 @@ name: Deploy Documentation
 on:
   push:
     branches:
-      - master
-      - docs
+      - master # Updated branch name
   pull_request:
     branches:
-      - master
-      - docs
+      - master # Updated branch name
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      CONDA_PKGS_DIRS: ~/conda_pkgs_dir
+      CONDA_PKGS_DIRS: $HOME/conda_pkgs_dir
 
     steps:
       # Step 1: Checkout the repository
       - uses: actions/checkout@v4
 
-      # Step 2: Cache Conda Packages
+      # Step 2: Create Conda Package Directory
+      - name: Create Conda Package Directory
+        run: mkdir -p $HOME/conda_pkgs_dir
+
+      # Step 3: Cache Conda Packages
       - name: Cache Conda Packages
         uses: actions/cache@v4
         with:
-          path: ~/conda_pkgs_dir
+          path: $HOME/conda_pkgs_dir
           key: ${{ runner.os }}-conda-${{ hashFiles('docs/environment.yml') }}
           restore-keys: |
             ${{ runner.os }}-conda-
-
-      # Step 3: Create Conda Package Directory
-      - name: Create Conda Package Directory
-        run: mkdir -p ~/conda_pkgs_dir
 
       # Step 4: Set up Miniconda
       - name: Set up miniconda
@@ -52,17 +50,13 @@ jobs:
       - name: Build Documentation
         shell: bash -l {0}
         run: |
-          # Source the Conda initialization script
-          source /home/runner/miniconda3/etc/profile.d/conda.sh
-          # Activate the Conda environment
           conda activate docs_env
-          # Navigate to the docs directory and build the HTML documentation
           cd docs
           make html
 
       # Step 7: Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' # Updated branch name
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
