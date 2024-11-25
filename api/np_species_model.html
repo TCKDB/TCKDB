@@ -1,96 +1,47 @@
 
 
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
+<html class="writer-html5" lang="en" data-content_root="../">
 <head>
-  <meta charset="utf-8" />
-  
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  
   <title>Non-physical species model &mdash; TCKDB 0.1.0 Documentation</title>
-  
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
 
   
-  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
-
-  
-  
-
-  
-  
-
-  
-
-  
-  <!--[if lt IE 9]>
-    <script src="../_static/js/html5shiv.min.js"></script>
-  <![endif]-->
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
-        <script src="../_static/jquery.js"></script>
-        <script src="../_static/underscore.js"></script>
-        <script src="../_static/doctools.js"></script>
-    
-    <script type="text/javascript" src="../_static/js/theme.js"></script>
-
-    
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Non-physical species schema" href="np_species_schema.html" />
     <link rel="prev" title="Species schema" href="species_schema.html" /> 
 </head>
 
-<body class="wy-body-for-nav">
-
-   
+<body class="wy-body-for-nav"> 
   <div class="wy-grid-for-nav">
-    
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-          
 
           
-            <a href="../index.html" class="icon icon-home"> TCKDB
           
-
-          
+          <a href="../index.html" class="icon icon-home">
+            TCKDB
           </a>
-
-          
-            
-            
-              <div class="version">
-                0.1
-              </div>
-            
-          
-
-          
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
 </div>
-
-          
-        </div>
-
-        
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../contribute.html">Contribute</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../licence.html">Licence</a></li>
@@ -123,842 +74,64 @@
 <li class="toctree-l1"><a class="reference internal" href="../release.html">Release notes</a></li>
 </ul>
 
-            
-          
         </div>
-        
       </div>
     </nav>
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-
-      
-      <nav class="wy-nav-top" aria-label="top navigation">
-        
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href="../index.html">TCKDB</a>
-        
       </nav>
 
-
       <div class="wy-nav-content">
-        
         <div class="rst-content">
-        
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
+          <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-    
-      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
-        
-          <li><a href="index.html">TCKDB’s API</a> &raquo;</li>
-        
-      <li>Non-physical species model</li>
-    
-    
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">TCKDB’s API</a></li>
+      <li class="breadcrumb-item active">Non-physical species model</li>
       <li class="wy-breadcrumbs-aside">
-        
-          
             <a href="../_sources/api/np_species_model.rst.txt" rel="nofollow"> View page source</a>
-          
-        
       </li>
-    
   </ul>
-
-  
   <hr/>
 </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
-            
-  <div class="section" id="module-tckdb.backend.app.models.np_species">
-<span id="non-physical-species-model"></span><span id="np-species-model"></span><h1>Non-physical species model<a class="headerlink" href="#module-tckdb.backend.app.models.np_species" title="Permalink to this headline">¶</a></h1>
-<p>TCKDB backend app models non-physical species (np_species) module</p>
-<dl class="py class">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies">
-<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">tckdb.backend.app.models.np_species.</span></span><span class="sig-name descname"><span class="pre">NonPhysicalSpecies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/tckdb/backend/app/models/np_species.html#NonPhysicalSpecies"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies" title="Permalink to this definition">¶</a></dt>
-<dd><p>A class for representing a TCKDB NonPhysicalSpecies item.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>All atom indices in these arguments are 1-indexed unless explicitly stated otherwise.</p>
-</div>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.id">
-<span class="sig-name descname"><span class="pre">id</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The primary key (not a user input).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>int</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.label">
-<span class="sig-name descname"><span class="pre">label</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.label" title="Permalink to this definition">¶</a></dt>
-<dd><p>A free user label for the species (maximum 255 characters).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">provenance</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.timestamp">
-<span class="sig-name descname"><span class="pre">timestamp</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.timestamp" title="Permalink to this definition">¶</a></dt>
-<dd><p>The UTC timestamp of uploading the data to TCKDB (not a user input).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>float</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.retracted">
-<span class="sig-name descname"><span class="pre">retracted</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.retracted" title="Permalink to this definition">¶</a></dt>
-<dd><p>A reason for retracting this object. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code> (not a user input).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">review</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.reviewed">
-<span class="sig-name descname"><span class="pre">reviewed</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.reviewed" title="Permalink to this definition">¶</a></dt>
-<dd><p>Whether this entry was reviewed (not a user input).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.approved">
-<span class="sig-name descname"><span class="pre">approved</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.approved" title="Permalink to this definition">¶</a></dt>
-<dd><p>If reviewed, whether it was approved (not a user input).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.reviewer_flags">
-<span class="sig-name descname"><span class="pre">reviewer_flags</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.reviewer_flags" title="Permalink to this definition">¶</a></dt>
-<dd><p>Backend flags to assist the review process (automatically determined, but users may add notes to flag
-items for the reviewer).</p>
-<p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;general&#39;</span><span class="p">:</span> <span class="s1">&#39;This species has a shallow (1.5 kJ/mol) well along the 4-8-7-10 torsional mode.&#39;</span><span class="p">}</span>
-</pre></div>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Dict[str, str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">chemical</span> <span class="pre">identifiers</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.smiles">
-<span class="sig-name descname"><span class="pre">smiles</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.smiles" title="Permalink to this definition">¶</a></dt>
-<dd><p>The canonical SMILES descriptor with chirality information.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Either <code class="docutils literal notranslate"><span class="pre">smiles</span></code>, <code class="docutils literal notranslate"><span class="pre">inchi</span></code>, or <code class="docutils literal notranslate"><span class="pre">graph</span></code> must be specified.</p>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.inchi">
-<span class="sig-name descname"><span class="pre">inchi</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.inchi" title="Permalink to this definition">¶</a></dt>
-<dd><p>The InChI descriptor with an explicit H layer and chirality information.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Either <code class="docutils literal notranslate"><span class="pre">smiles</span></code>, <code class="docutils literal notranslate"><span class="pre">inchi</span></code>, or <code class="docutils literal notranslate"><span class="pre">graph</span></code> must be specified.</p>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.inchi_key">
-<span class="sig-name descname"><span class="pre">inchi_key</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.inchi_key" title="Permalink to this definition">¶</a></dt>
-<dd><p>The InChI key descriptor. Automatically assigned if not given by the user.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.charge">
-<span class="sig-name descname"><span class="pre">charge</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.charge" title="Permalink to this definition">¶</a></dt>
-<dd><p>The net molecular charge.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>int</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.multiplicity">
-<span class="sig-name descname"><span class="pre">multiplicity</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.multiplicity" title="Permalink to this definition">¶</a></dt>
-<dd><p>The spin multiplicity.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>int</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.electronic_state">
-<span class="sig-name descname"><span class="pre">electronic_state</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.electronic_state" title="Permalink to this definition">¶</a></dt>
-<dd><p>The species electronic state at CIS level. Default: <code class="docutils literal notranslate"><span class="pre">'X'</span></code> (denoting ground state).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">geometry</span> <span class="pre">and</span> <span class="pre">connectivity</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.coordinates">
-<span class="sig-name descname"><span class="pre">coordinates</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.coordinates" title="Permalink to this definition">¶</a></dt>
-<dd><p>Cartesian coordinates in standard orientation. Keys (values) are:</p>
-<ul class="simple">
-<li><dl class="simple">
-<dt>‘symbols’ (Tuple[str])</dt><dd><p>Chemical element symbols</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘isotopes’ (Tuple[int])</dt><dd><p>The respective isotopes</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘coords’ (Tuple[Tuple[float]])</dt><dd><p>The respective coordinates</p>
-</dd>
-</dl>
-</li>
-</ul>
-<p>Example for methane:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;symbols&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">),</span>
- <span class="s1">&#39;isotopes&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
- <span class="s1">&#39;coords&#39;</span><span class="p">:</span> <span class="p">((</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
-            <span class="p">(</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="mf">0.6300326</span><span class="p">,</span> <span class="mf">0.6300326</span><span class="p">),</span>
-            <span class="p">(</span><span class="o">-</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="mf">0.6300326</span><span class="p">),</span>
-            <span class="p">(</span><span class="o">-</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="mf">0.6300326</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6300326</span><span class="p">),</span>
-            <span class="p">(</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6300326</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6300326</span><span class="p">))}</span>
-</pre></div>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Dict[str, Union[Tuple[Tuple[float, float, float], …], Tuple[int, …], Tuple[str, …]]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.graph">
-<span class="sig-name descname"><span class="pre">graph</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.graph" title="Permalink to this definition">¶</a></dt>
-<dd><p>A 2D connectivity graph in an RMG adjacency list format. Note that this graph represents a single
-Lewis structure (resonance structure). These graphs can be generated using RMG’s API or online at
-<a class="reference external" href="https://rmg.mit.edu/molecule_search">https://rmg.mit.edu/molecule_search</a>.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Either <code class="docutils literal notranslate"><span class="pre">smiles</span></code>, <code class="docutils literal notranslate"><span class="pre">inchi</span></code>, or <code class="docutils literal notranslate"><span class="pre">graph</span></code> must be specified.</p>
-</div>
-<p>Example for methane:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">multiplicity</span> <span class="mi">1</span>
-<span class="mi">1</span> <span class="n">C</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="n">S</span><span class="p">}</span> <span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="n">S</span><span class="p">}</span> <span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="n">S</span><span class="p">}</span> <span class="p">{</span><span class="mi">5</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
-<span class="mi">2</span> <span class="n">H</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
-<span class="mi">3</span> <span class="n">H</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
-<span class="mi">4</span> <span class="n">H</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
-<span class="mi">5</span> <span class="n">H</span> <span class="n">u0</span> <span class="n">p0</span> <span class="n">c0</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span><span class="n">S</span><span class="p">}</span>
-</pre></div>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.fragments">
-<span class="sig-name descname"><span class="pre">fragments</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.fragments" title="Permalink to this definition">¶</a></dt>
-<dd><p>Fragments represented by this species, e.g., VdW wells. Entries are atom index lists of all atoms in a
-fragment. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code> (denoting there’s only one fragment).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[List[List[int]]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.fragment_orientation">
-<span class="sig-name descname"><span class="pre">fragment_orientation</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.fragment_orientation" title="Permalink to this definition">¶</a></dt>
-<dd><p>Relative orientation of fragments, starting from the heaviest one. All fragments must be in standard
-Cartesian orientation prior to determining the following parameters. Entries are dictionaries with the
-following keys (values):</p>
-<blockquote>
-<div><ul>
-<li><dl>
-<dt>‘cm’ (List[float])</dt><dd><p>A vector pointing from a fragment’s center to the center of mass of the next fragment.</p>
-<dl class="simple">
-<dt>Units:</dt><dd><p>Angstrom</p>
-</dd>
-</dl>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘x’ (float)</dt><dd><p>The X axis rotational angle in degrees.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘y’ (float)</dt><dd><p>The Y axis rotational angle in degrees.</p>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘z’ (float)</dt><dd><p>The Z axis rotational angle in degrees.</p>
-</dd>
-</dl>
-</li>
-</ul>
-</div></blockquote>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[List[Dict[str, Union[float, List[float]]]]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.chirality">
-<span class="sig-name descname"><span class="pre">chirality</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.chirality" title="Permalink to this definition">¶</a></dt>
-<dd><p>The species’ chiral centers, following the Cahn–Ingold–Prelog (CIP) notation (<code class="docutils literal notranslate"><span class="pre">'R'</span></code> or <code class="docutils literal notranslate"><span class="pre">'S'</span></code> for atom
-centers, <code class="docutils literal notranslate"><span class="pre">'E'</span></code> or <code class="docutils literal notranslate"><span class="pre">'Z'</span></code> for double bond centers). Keys are tuples of atom indices of a chiral center,
-values are string representations of the respective chiral center.</p>
-<p>Note: Non-radical valance 3 nitrogen atoms are also considered chiral if connected to three different groups
-(considering the lone pair to always be a unique fourth group). In such cases, use a <code class="docutils literal notranslate"><span class="pre">'NR'</span></code> or <code class="docutils literal notranslate"><span class="pre">'NS'</span></code>
-notation.</p>
-<p class="rubric">Example</p>
-<p>A double bond with chirality <code class="docutils literal notranslate"><span class="pre">'E'</span></code> between atoms 1-2, an <code class="docutils literal notranslate"><span class="pre">'S'</span></code> chiral center on atom 3,
-and an <code class="docutils literal notranslate"><span class="pre">'S'</span></code> chiral center on atom 6 which is a nitrogen are represented as:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span> <span class="s1">&#39;E&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,):</span> <span class="s1">&#39;S&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">6</span><span class="p">,):</span> <span class="s1">&#39;NS&#39;</span><span class="p">})</span>
-</pre></div>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[Dict[Tuple[int], str]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.conformation_method">
-<span class="sig-name descname"><span class="pre">conformation_method</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.conformation_method" title="Permalink to this definition">¶</a></dt>
-<dd><p>The method used to determine the lowest energy conformer. Required if the species has 4 or more atoms.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.is_well">
-<span class="sig-name descname"><span class="pre">is_well</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.is_well" title="Permalink to this definition">¶</a></dt>
-<dd><p>Whether this conformer represents a local well (at the opt level used).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.is_global_min">
-<span class="sig-name descname"><span class="pre">is_global_min</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.is_global_min" title="Permalink to this definition">¶</a></dt>
-<dd><p>If this conformer is a well, whether it is meant to represents the <strong>global</strong> minimum energy well.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.global_min_geometry">
-<span class="sig-name descname"><span class="pre">global_min_geometry</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.global_min_geometry" title="Permalink to this definition">¶</a></dt>
-<dd><p>If this species does not represent the global minimum well, this argument must contain the coordinates of
-the global minimum energy conformer at the same opt level.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[Dict[str, tuple]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">TS</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.is_ts">
-<span class="sig-name descname"><span class="pre">is_ts</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.is_ts" title="Permalink to this definition">¶</a></dt>
-<dd><p>Whether this species represents a transition state. Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.irc_trajectories">
-<span class="sig-name descname"><span class="pre">irc_trajectories</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.irc_trajectories" title="Permalink to this definition">¶</a></dt>
-<dd><p>The two IRC trajectories. Each trajectory is a list of coordinates dictionaries.
-Required if the species is a transition state. Cannot be specified for non-TS species.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[List[List[Dict[str, tuple]]]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">relationships</span> <span class="pre">-</span> <span class="pre">Many</span> <span class="pre">to</span> <span class="pre">One</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.literature_id">
-<span class="sig-name descname"><span class="pre">literature_id</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.literature_id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The literature reference from the <a class="reference internal" href="literature_model.html#literature-model"><span class="std std-ref">Literature table</span></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>int</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.literature">
-<span class="sig-name descname"><span class="pre">literature</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.literature" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="literature_model.html#literature-model"><span class="std std-ref">Literature table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>relationship</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.bot_id">
-<span class="sig-name descname"><span class="pre">bot_id</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.bot_id" title="Permalink to this definition">¶</a></dt>
-<dd><p>The bot used to generate the object from the <a class="reference internal" href="bot_model.html#bot-model"><span class="std std-ref">Bot table</span></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>int</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.bot">
-<span class="sig-name descname"><span class="pre">bot</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.bot" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="bot_model.html#bot-model"><span class="std std-ref">Bot table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>relationship</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.opt_level">
-<span class="sig-name descname"><span class="pre">opt_level</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.opt_level" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.freq_level">
-<span class="sig-name descname"><span class="pre">freq_level</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.freq_level" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.scan_level">
-<span class="sig-name descname"><span class="pre">scan_level</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.scan_level" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.irc_level">
-<span class="sig-name descname"><span class="pre">irc_level</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.irc_level" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.sp_level">
-<span class="sig-name descname"><span class="pre">sp_level</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.sp_level" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="level_model.html#level-model"><span class="std std-ref">Level table</span></a>,
-where the “reverse” side is a Many to One data model. Required.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.opt_ess">
-<span class="sig-name descname"><span class="pre">opt_ess</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.opt_ess" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.freq_ess">
-<span class="sig-name descname"><span class="pre">freq_ess</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.freq_ess" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.scan_ess">
-<span class="sig-name descname"><span class="pre">scan_ess</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.scan_ess" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.irc_ess">
-<span class="sig-name descname"><span class="pre">irc_ess</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.irc_ess" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
-where the “reverse” side is a Many to One data model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.sp_ess">
-<span class="sig-name descname"><span class="pre">sp_ess</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.sp_ess" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a One to Many data model
-with the <a class="reference internal" href="ess_model.html#ess-model"><span class="std std-ref">ESS table</span></a>,
-where the “reverse” side is a Many to One data model. Required.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[relationship]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">relationships</span> <span class="pre">-</span> <span class="pre">Many</span> <span class="pre">to</span> <span class="pre">Many</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.authors">
-<span class="sig-name descname"><span class="pre">authors</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.authors" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a Many to Many data model
-with the <a class="reference internal" href="person_model.html#person-model"><span class="std std-ref">Person table</span></a> representing authors of this object.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>relationship</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.reviewers">
-<span class="sig-name descname"><span class="pre">reviewers</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.reviewers" title="Permalink to this definition">¶</a></dt>
-<dd><p>An attribute that establishes a bidirectional relationship in a Many to Many data model
-with the <a class="reference internal" href="person_model.html#person-model"><span class="std std-ref">Person table</span></a> representing reviewers of this object.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>relationship</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">paths</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.opt_path">
-<span class="sig-name descname"><span class="pre">opt_path</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.opt_path" title="Permalink to this definition">¶</a></dt>
-<dd><p>The path to the optimization output file. Required for polyatomic species (with 2 or more atoms).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.freq_path">
-<span class="sig-name descname"><span class="pre">freq_path</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.freq_path" title="Permalink to this definition">¶</a></dt>
-<dd><p>The path to the frequencies calculation output file. Required for polyatomic species (with 2 or more atoms).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.scan_paths">
-<span class="sig-name descname"><span class="pre">scan_paths</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.scan_paths" title="Permalink to this definition">¶</a></dt>
-<dd><p>Paths to the torsion scan calculation output files.
-Keys are tuples of tuples. The number of inner-level tuples corresponds to the torsion dimension. Entries of
-the inner-level tuple are torsion atom indices. Values are paths to the respective scan calculation log file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[Dict[Tuple[Tuple[int, int, int, int], …], str]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.irc_paths">
-<span class="sig-name descname"><span class="pre">irc_paths</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.irc_paths" title="Permalink to this definition">¶</a></dt>
-<dd><p>Entries are paths to the IRC calculation output files. Required for transition states.
-Either a single path to a forward+reverse IRC, or two respective paths.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[List[str]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.sp_path">
-<span class="sig-name descname"><span class="pre">sp_path</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.sp_path" title="Permalink to this definition">¶</a></dt>
-<dd><p>The path to the single point energy output file.
-Unlike the <code class="docutils literal notranslate"><span class="pre">Species</span></code> object, here <code class="docutils literal notranslate"><span class="pre">sp_path</span></code> is optional.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[str]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">unconverged</span> <span class="pre">jobs</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.unconverged_jobs">
-<span class="sig-name descname"><span class="pre">unconverged_jobs</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.unconverged_jobs" title="Permalink to this definition">¶</a></dt>
-<dd><p>Any relevant unconverged jobs that were troubleshooted while calculating this Species.
-Entries are dictionaries, keys (values) are:</p>
-<blockquote>
-<div><ul class="simple">
-<li><p>‘job type’ (str): <code class="docutils literal notranslate"><span class="pre">'opt'</span></code>, <code class="docutils literal notranslate"><span class="pre">'freq'</span></code>, <code class="docutils literal notranslate"><span class="pre">'scan'</span></code>, <code class="docutils literal notranslate"><span class="pre">'irc'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'sp'</span></code></p></li>
-<li><p>‘issue’ (str): The identified issue</p></li>
-<li><p>‘troubleshooting’ (str): Description of the troubleshooting method(s) that solved the issue</p></li>
-<li><p>‘comment’ (str): An optional comment explaining the troubleshooting approach</p></li>
-<li><p>‘path’ (str): The path to the relevant unconverged ESS log file</p></li>
-</ul>
-</div></blockquote>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Optional[List[Dict[str, str]]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">#</span> <span class="pre">misc</span></span></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="tckdb.backend.app.models.np_species.NonPhysicalSpecies.extras">
-<span class="sig-name descname"><span class="pre">extras</span></span><a class="headerlink" href="#tckdb.backend.app.models.np_species.NonPhysicalSpecies.extras" title="Permalink to this definition">¶</a></dt>
-<dd><p>Any additional information in the form of a dictionary
-Unlike the <code class="docutils literal notranslate"><span class="pre">Species</span></code> object, here <code class="docutils literal notranslate"><span class="pre">extras</span></code> is required and should at least contain a reason
-for declaring this species non-physical.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>Dict[str, Any]</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-</div>
+             
+  <section id="non-physical-species-model">
+<span id="np-species-model"></span><h1>Non-physical species model<a class="headerlink" href="#non-physical-species-model" title="Link to this heading"></a></h1>
+</section>
 
 
            </div>
-           
           </div>
-          <footer>
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-        <a href="np_species_schema.html" class="btn btn-neutral float-right" title="Non-physical species schema" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="species_schema.html" class="btn btn-neutral float-left" title="Species schema" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="np_species_schema.html" class="btn btn-neutral float-right" title="Non-physical species schema" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
 
   <div role="contentinfo">
-    <p>
-        &#169; Copyright 2018-2021, Dana Research Group.
-
-    </p>
+    <p>&#169; Copyright 2018-2024, Dana Research Group.</p>
   </div>
-    
-    
-    
-    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
-    
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
     <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
-    
-    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
 
 </footer>
         </div>
       </div>
-
     </section>
-
   </div>
-  
-
-  <script type="text/javascript">
+  <script>
       jQuery(function () {
           SphinxRtdTheme.Navigation.enable(true);
       });
-  </script>
-
-  
-  
-    
-   
+  </script> 
 
 </body>
 </html>
