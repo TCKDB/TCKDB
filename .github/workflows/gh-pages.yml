@@ -1,50 +1,63 @@
-permissions: read-all
-
-name: github pages
+name: Deploy Documentation
 
 on:
   push:
     branches:
-      - master
-      - docs
+      - master # Updated branch name
+  pull_request:
+    branches:
+      - master # Updated branch name
 
 jobs:
   deploy:
-    # trunk-ignore(actionlint/runner-label)
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
+    env:
+      CONDA_PKGS_DIRS: $HOME/conda_pkgs_dir
+
     steps:
+      # Step 1: Checkout the repository
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
+      # Step 2: Create Conda Package Directory
+      - name: Create Conda Package Directory
+        run: mkdir -p $HOME/conda_pkgs_dir
 
-      - name: Upgrade pip
-        run: |
-          # install pip=>20.1 to use "pip cache dir"
-          python3 -m pip install --upgrade pip
-
-      - name: Get pip cache dir
-        id: pip-cache
-        run: echo "dir=$(pip cache dir)"" >> $GITHUB_OUTPUT
-
-      - name: Cache dependencies
+      # Step 3: Cache Conda Packages
+      - name: Cache Conda Packages
         uses: actions/cache@v4
         with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          path: $HOME/conda_pkgs_dir
+          key: ${{ runner.os }}-conda-${{ hashFiles('docs/environment.yml') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-conda-
 
-      - name: Install dependencies
-        run: python3 -m pip install -r ./requirements.txt
+      # Step 4: Set up Miniconda
+      - name: Set up miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          environment-file: docs/environment.yml
+          activate-environment: docs_env
+          miniconda-version: latest
+          conda-solver: libmamba
 
-      - run: export PYTHONPATH=$PYTHONPATH:$(pwd); cd docs; make html
+      # Step 5: Set PYTHONPATH
+      - name: Set PYTHONPATH
+        run: |
+          echo "PYTHONPATH=${{ github.workspace }}/tckdb:${{ github.workspace }}" >> $GITHUB_ENV
 
-      - name: Deploy
+      # Step 6: Build Documentation
+      - name: Build Documentation
+        shell: bash -l {0}
+        run: |
+          conda activate docs_env
+          cd docs
+          make html
+
+      # Step 7: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' # Updated branch name
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs/build/html/
-# https://github.com/marketplace/actions/github-pages-action
