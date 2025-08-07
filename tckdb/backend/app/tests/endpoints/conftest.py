@@ -40,9 +40,7 @@ def setup_database():
     It runs automatically for the module.
     """
     # Construct the absolute path to alembic.ini
-    BASE_DIR = (
-        Path(__file__).resolve().parent.parent.parent.parent
-    )  # Adjust based on your directory structure
+    BASE_DIR = Path(__file__).resolve().parents[5]
     ALEMBIC_INI = BASE_DIR / "alembic.ini"
     print(BASE_DIR)
     # Ensure the alembic.ini file exists

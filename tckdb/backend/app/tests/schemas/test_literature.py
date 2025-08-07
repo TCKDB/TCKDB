@@ -64,7 +64,7 @@ def test_literature_type_enum_invalid(invalid_type):
             "input": {
                 "type": "book",
                 "authors": [create_author("Takao", "Tsuneda")],
-                "title": "Density Functional Theory in Quantum Chemistry",
+                "title": "Density Functional Theory In Quantum Chemistry",
                 "year": 2014,
                 "publisher": "Wee-Ly",
                 "editors": "E.D. Torr",
@@ -77,9 +77,9 @@ def test_literature_type_enum_invalid(invalid_type):
             "expected": {
                 "type": "book",
                 "authors": [create_author("Takao", "Tsuneda")],
-                "title": "Density Functional Theory in Quantum Chemistry",
+                "title": "Density Functional Theory In Quantum Chemistry",
                 "year": 2014,
-                "publisher": "Wee-Ly",
+                "publisher": "Springer Science & Business Media",  # Expected the publisher to be updated via backend lookup
                 "editors": "E.D. Torr",
                 "edition": "2nd Edn.",
                 "chapter_title": "These are Updated Rates",

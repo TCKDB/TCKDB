@@ -29,10 +29,12 @@ services:
 
   app:
     build: .
+    user: "${UID:-1000}:${GID:-1000}"
     platform: linux/amd64 # Forces the use of amd64 architecture
     container_name: tckdb_app
     environment:
       - RUNNING_IN_DOCKER=true
+      - SQLALCHEMY_DATABASE_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}:5432/${POSTGRES_DB}
     env_file:
       - ./tckdb/backend/app/core/.env
     volumes:

@@ -1,4 +1,4 @@
-# /code/tckdb/backend/app/alembic/env.py
+# /code/alembic/env.py
 from tckdb.backend.app.db.base_class import Base
 from tckdb.backend.app.models.common import MsgpackExt
 
@@ -20,9 +20,15 @@ config = context.config
 # Interpret the config file for Python logging.
 fileConfig(config.config_file_name)
 
-# Set the SQLAlchemy URL from environment variables if not already set
-if not config.get_main_option("sqlalchemy.url"):
-    config.set_main_option("sqlalchemy.url", os.getenv("SQLALCHEMY_DATABASE_URI"))
+# Set the SQLAlchemy URL from an environment variable. This avoids
+# storing credentials in the alembic.ini file and makes the connection
+# configurable at runtime.
+database_url = os.getenv("SQLALCHEMY_DATABASE_URI")
+if not database_url:
+    raise EnvironmentError(
+        "The SQLALCHEMY_DATABASE_URI environment variable is not set."
+    )
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Set target_metadata to your models' metadata
 target_metadata = Base.metadata

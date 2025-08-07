@@ -15,6 +15,13 @@ from tckdb.backend.app.models.ess import ESS
 from tckdb.backend.app.models.freqscale import FreqScale
 from tckdb.backend.app.models.level import Level
 from tckdb.backend.app.models.LJ import LJ
+from tckdb.backend.app.models.VDW import VDW, VDWEntry
+from tckdb.backend.app.models.reaction import (
+    Reaction,
+    ReactionEntry,
+    ReactionProduct,
+    ReactionReactant,
+)
 from tckdb.backend.app.models.person import Person
 from tckdb.backend.app.models.trans import Trans
 
@@ -30,6 +37,12 @@ __all__ = [
     "FreqScale",
     "Level",
     "LJ",
+    "VDW",
+    "VDWEntry",
+    "Reaction",
+    "ReactionEntry",
+    "ReactionReactant",
+    "ReactionProduct",
     "Person",
     "Trans",
 ]

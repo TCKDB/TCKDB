@@ -12,6 +12,7 @@ from pathlib import Path
 # trunk-ignore(bandit/B404)
 import subprocess
 import sys
+import time
 from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
@@ -22,6 +23,12 @@ from rdkit.Chem import MolFromSmiles, MolToSmiles
 from rdkit.Chem.inchi import InchiToInchiKey, MolFromInchi, MolToInchi
 
 from tckdb.backend.app.utils.python_paths import MOLECULE_PYTHON
+
+
+class ServiceUnavailableError(Exception):
+    """Raised when an external service is unavailable or times out."""
+
+    pass
 
 
 def inchi_from_smiles(smiles: str) -> Union[str, None]:
@@ -43,8 +50,24 @@ def inchi_from_smiles(smiles: str) -> Union[str, None]:
     return inchi
 
 
-def adjlist_from_smiles(smiles: str) -> Union[str, None]:
+def adjlist_from_smiles(
+    smiles: str, max_retries: int = 3, timeout: int = 10
+) -> Union[str, None]:
+    """
+    Get an RMG adjacency list from a SMILES descriptor.
+    Uses the RMG MIT web service for the conversion.
 
+    Args:
+        smiles (str): The SMILES descriptor.
+        max_retries (int): Maximum number of retry attempts (default: 3).
+        timeout (int): Request timeout in seconds (default: 10).
+
+    Returns:
+        str: The corresponding adjacency list.
+
+    Raises:
+        ServiceUnavailableError: If the RMG MIT service is unavailable after retries.
+    """
     url = f"https://rmg.mit.edu/adjacencylist/{smiles}"
 
     headers = {
@@ -55,21 +78,81 @@ def adjlist_from_smiles(smiles: str) -> Union[str, None]:
         "Connection": "keep-alive",
     }
 
-    try:
-        # Send the GET request
-        response = requests.get(url, headers=headers, timeout=10)
+    last_exception = None
 
-        if response.status_code == 200:
-            adjacency_list = response.text
-            return adjacency_list
-        else:
-            print(f"Error: Received status code {response.status_code}")
-            print(f"Response: {response.text}")
+    for attempt in range(max_retries):
+        try:
+            # Send the GET request
+            response = requests.get(url, headers=headers, timeout=timeout)
+
+            if response.status_code == 200:
+                adjacency_list = response.text
+                return adjacency_list
+            elif response.status_code in [429, 502, 503, 504]:
+                # Rate limited or server error - retry after delay
+                if attempt < max_retries - 1:
+                    wait_time = 2**attempt  # Exponential backoff
+                    print(
+                        f"RMG service returned {response.status_code}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})"
+                    )
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise ServiceUnavailableError(
+                        f"RMG MIT service unavailable: HTTP {response.status_code} after {max_retries} attempts"
+                    )
+            else:
+                print(f"Error: Received status code {response.status_code}")
+                print(f"Response: {response.text}")
+                return None
+
+        except requests.exceptions.Timeout as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                wait_time = 2**attempt
+                print(
+                    f"Request timeout, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})"
+                )
+                time.sleep(wait_time)
+                continue
+            else:
+                raise ServiceUnavailableError(
+                    f"RMG MIT service timeout after {max_retries} attempts: {str(e)}"
+                ) from e
+        except requests.exceptions.ConnectionError as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                wait_time = 2**attempt
+                print(
+                    f"Connection error, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})"
+                )
+                time.sleep(wait_time)
+                continue
+            else:
+                raise ServiceUnavailableError(
+                    f"RMG MIT service connection failed after {max_retries} attempts: {str(e)}"
+                ) from e
+        except requests.exceptions.RequestException as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                wait_time = 2**attempt
+                print(
+                    f"Request error, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})"
+                )
+                time.sleep(wait_time)
+                continue
+            else:
+                raise ServiceUnavailableError(
+                    f"RMG MIT service request failed after {max_retries} attempts: {str(e)}"
+                ) from e
+        except Exception as e:
+            print(f"Unexpected error occurred: {e}")
             return None
 
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
+    # This should not be reached, but just in case
+    raise ServiceUnavailableError(
+        f"RMG MIT service unavailable after {max_retries} attempts: {str(last_exception)}"
+    )
 
 
 def smiles_and_inchi_from_adjlist(adjlist: str) -> Optional[Tuple[str, str]]:
@@ -258,7 +341,7 @@ def add_common_isotopes_to_coords(
     xyz: Dict[
         str,
         Union[Tuple[Tuple[float, float, float], ...], Tuple[int, ...], Tuple[str, ...]],
-    ]
+    ],
 ):
     """
     Add the common isotopes to the coordinates dictionary if it's missing.
