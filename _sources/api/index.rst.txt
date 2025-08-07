@@ -23,9 +23,13 @@ TCKDB's API
    LJ_schema
    person_model
    person_schema
+   reaction_model
+   reaction_schema
    species_model
    species_schema
    np_species_model
    np_species_schema
    trans_model
    trans_schema
+   VDW_model
+   VDW_schema
