@@ -3,7 +3,7 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import AllChem, inchi
 
-from app.db.models.common import MoleculeKind, SpeciesEntryStereoKind
+from app.db.models.common import MoleculeKind, StereoKind
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 
 
@@ -66,7 +66,7 @@ def derive_unmapped_smiles(smiles: str) -> str:
 
 def classify_stereo_kind(
     mol: Chem.Mol,
-) -> tuple[SpeciesEntryStereoKind, str | None]:
+) -> tuple[StereoKind, str | None]:
     """Classify stereochemistry kind from molecular graph topology.
 
     Uses RDKit's ``FindPotentialStereo`` to detect stereocenters and E/Z bonds
@@ -89,24 +89,24 @@ def classify_stereo_kind(
     ]
 
     if not chiral_atoms and not ez_bonds:
-        return SpeciesEntryStereoKind.achiral, None
+        return StereoKind.achiral, None
 
     # Both chiral centres and E/Z bonds → diastereomer
     if chiral_atoms and ez_bonds:
-        return SpeciesEntryStereoKind.diastereomer, None
+        return StereoKind.diastereomer, None
 
     if chiral_atoms:
         if len(chiral_atoms) >= 2:
-            return SpeciesEntryStereoKind.diastereomer, None
+            return StereoKind.diastereomer, None
         # Single chiral centre → enantiomer pair
         chiral_centres = Chem.FindMolChiralCenters(mol, includeUnassigned=True)
         label = chiral_centres[0][1] if chiral_centres else None
         if label == "?":
             label = None
-        return SpeciesEntryStereoKind.enantiomer, label
+        return StereoKind.enantiomer, label
 
     # E/Z only
-    return SpeciesEntryStereoKind.ez_isomer, None
+    return StereoKind.ez_isomer, None
 
 
 def _xyz_text_to_xyz_block(xyz_text: str) -> str:

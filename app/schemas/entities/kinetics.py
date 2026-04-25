@@ -83,9 +83,9 @@ class KineticsBase(BaseModel):
     n: float | None = None
     ea_kj_mol: float | None = None
 
-    d_a: float | None = None
-    d_n: float | None = None
-    d_ea_kj_mol: float | None = None
+    a_uncertainty: float | None = None
+    n_uncertainty: float | None = None
+    ea_uncertainty_kj_mol: float | None = None
 
     tmin_k: float | None = Field(default=None, gt=0)
     tmax_k: float | None = Field(default=None, gt=0)
@@ -145,9 +145,9 @@ class KineticsUpdate(SchemaBase):
     n: float | None = None
     ea_kj_mol: float | None = None
 
-    d_a: float | None = None
-    d_n: float | None = None
-    d_ea_kj_mol: float | None = None
+    a_uncertainty: float | None = None
+    n_uncertainty: float | None = None
+    ea_uncertainty_kj_mol: float | None = None
 
     tmin_k: float | None = Field(default=None, gt=0)
     tmax_k: float | None = Field(default=None, gt=0)

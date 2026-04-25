@@ -6,7 +6,7 @@ Covers: WorkflowTool (stable identity) and WorkflowToolRelease
 
 from datetime import date
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.common import SchemaBase, TimestampedReadSchema
 from app.schemas.utils import normalize_optional_text, normalize_required_text
@@ -106,3 +106,38 @@ class WorkflowToolReleaseUpdate(SchemaBase):
 
 class WorkflowToolReleaseRead(WorkflowToolReleaseBase, TimestampedReadSchema):
     """Read schema for a workflow tool release."""
+
+
+# ---------------------------------------------------------------------------
+# Nested read shapes (tool detail + release with tool summary)
+# ---------------------------------------------------------------------------
+
+
+class WorkflowToolSummary(BaseModel):
+    """Compact workflow tool view used when nested under a release."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str | None = None
+
+
+class WorkflowToolReleaseSummary(WorkflowToolReleaseBase, TimestampedReadSchema):
+    """Compact release view used when nested under a tool detail.
+
+    Field-wise identical to :class:`WorkflowToolReleaseRead`; named separately
+    so the nested shape can evolve independently of the top-level read.
+    """
+
+
+class WorkflowToolDetailRead(WorkflowToolBase, TimestampedReadSchema):
+    """Detail view for a workflow tool, including its releases."""
+
+    releases: list[WorkflowToolReleaseSummary] = Field(default_factory=list)
+
+
+class WorkflowToolReleaseDetailRead(WorkflowToolReleaseBase, TimestampedReadSchema):
+    """Release view that embeds a parent workflow tool summary."""
+
+    workflow_tool: WorkflowToolSummary

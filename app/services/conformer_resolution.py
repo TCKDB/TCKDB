@@ -94,6 +94,9 @@ def resolve_conformer_group(
 
     Uses torsional basin matching (DR-0005) when geometry data is available.
     Falls back to label matching when torsion data cannot be computed.
+    This function resolves only the basin-level ``ConformerGroup``; callers
+    must still create a fresh ``ConformerObservation`` row for each distinct
+    provenance-bearing upload event.
 
     :param session: Active SQLAlchemy session.
     :param species_entry: Resolved species entry that owns the conformer group.

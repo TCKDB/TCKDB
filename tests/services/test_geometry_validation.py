@@ -261,6 +261,7 @@ class TestValidationPersistence:
             CalculationQuality,
             CalculationType,
             MoleculeKind,
+            StereoKind,
         )
         from app.db.models.species import Species, SpeciesEntry
 
@@ -271,6 +272,7 @@ class TestValidationPersistence:
                 charge=0,
                 multiplicity=2,
                 kind=MoleculeKind.molecule,
+                stereo_kind=StereoKind.achiral,
             )
             session.add(species)
             session.flush()
@@ -323,6 +325,7 @@ class TestValidationPersistence:
             CalculationQuality,
             CalculationType,
             MoleculeKind,
+            StereoKind,
         )
         from app.db.models.species import Species, SpeciesEntry
 
@@ -333,6 +336,7 @@ class TestValidationPersistence:
                 charge=0,
                 multiplicity=1,
                 kind=MoleculeKind.molecule,
+                stereo_kind=StereoKind.achiral,
             )
             session.add(species)
             session.flush()

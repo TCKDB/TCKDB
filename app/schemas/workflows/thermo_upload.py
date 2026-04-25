@@ -9,9 +9,10 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from app.db.models.common import ScientificOriginKind
+from app.db.models.common import ScientificOriginKind, ThermoCalculationRole
 from app.schemas.common import SchemaBase
 from app.schemas.entities.thermo import ThermoNASACreate, ThermoPointCreate
+from app.schemas.fragments.calculation import CalculationWithResultsPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
 from app.schemas.utils import normalize_optional_text
@@ -19,6 +20,33 @@ from app.schemas.workflows.energy_correction_upload import (
     AppliedEnergyCorrectionUploadPayload,
 )
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
+
+
+class ThermoCalculationIn(SchemaBase):
+    """An inline supporting calculation declared within a thermo upload.
+
+    :param key: Local string key used to reference this calculation from
+        ``source_calculations`` and from applied-correction
+        ``source_calculation_key`` fields. Must be unique within the upload.
+    :param calculation: Scientific content for the calculation. Resolved and
+        persisted by the workflow, attached to the same species entry as
+        the parent thermo record.
+    """
+
+    key: str = Field(min_length=1)
+    calculation: CalculationWithResultsPayload
+
+
+class ThermoSourceCalculationIn(SchemaBase):
+    """Link between a thermo upload and a supporting calculation by local key.
+
+    :param calculation_key: Local key of a calculation declared in
+        ``ThermoUploadRequest.calculations``.
+    :param role: The scientific role the calculation plays for this thermo.
+    """
+
+    calculation_key: str = Field(min_length=1)
+    role: ThermoCalculationRole
 
 
 class ThermoUploadRequest(SchemaBase):
@@ -52,6 +80,12 @@ class ThermoUploadRequest(SchemaBase):
     points: list[ThermoPointCreate] = Field(default_factory=list)
     nasa: ThermoNASACreate | None = None
 
+    # Supporting calculations declared inline, addressed by local string keys
+    calculations: list[ThermoCalculationIn] = Field(default_factory=list)
+
+    # Thermo -> supporting-calculation links, by local key and role
+    source_calculations: list[ThermoSourceCalculationIn] = Field(default_factory=list)
+
     # Applied energy corrections for this thermo record
     applied_energy_corrections: list[AppliedEnergyCorrectionUploadPayload] = Field(
         default_factory=list
@@ -77,4 +111,70 @@ class ThermoUploadRequest(SchemaBase):
         temps = [p.temperature_k for p in self.points]
         if len(set(temps)) != len(temps):
             raise ValueError("Thermo points must be unique by temperature_k.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_calculation_keys(self) -> Self:
+        keys = [c.key for c in self.calculations]
+        if len(set(keys)) != len(keys):
+            raise ValueError("Thermo calculations must have unique keys.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_source_calculation_keys_exist(self) -> Self:
+        """Every source_calculations[*].calculation_key must reference a
+        calculation declared in this upload."""
+        defined = {c.key for c in self.calculations}
+        for sc in self.source_calculations:
+            if sc.calculation_key not in defined:
+                raise ValueError(
+                    f"source_calculations references undefined "
+                    f"calculation_key '{sc.calculation_key}'."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_source_calculation_pairs(self) -> Self:
+        pairs = [(sc.calculation_key, sc.role) for sc in self.source_calculations]
+        if len(set(pairs)) != len(pairs):
+            raise ValueError(
+                "source_calculations must be unique by (calculation_key, role)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_applied_correction_source_calc_keys(self) -> Self:
+        """Every applied_energy_corrections[*].source_calculation_key, when
+        provided, must reference a calculation declared in this upload. This
+        prevents silent provenance loss where a correction would otherwise
+        persist with a NULL source_calculation_id."""
+        defined = {c.key for c in self.calculations}
+        for i, correction in enumerate(self.applied_energy_corrections):
+            key = correction.source_calculation_key
+            if key is not None and key not in defined:
+                raise ValueError(
+                    f"applied_energy_corrections[{i}].source_calculation_key "
+                    f"'{key}' does not reference a declared calculation."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_has_scientific_content(self) -> Self:
+        """Reject uploads that carry only identity/provenance and no thermo data.
+
+        At least one of: a scalar thermo value (``h298_kj_mol`` or
+        ``s298_j_mol_k``), a NASA polynomial block, or one or more
+        tabulated thermo points must be present. Provenance-only fields
+        such as ``literature``, ``software_release``,
+        ``workflow_tool_release``, and ``note`` do not count.
+        """
+        has_scalar = self.h298_kj_mol is not None or self.s298_j_mol_k is not None
+        has_nasa = self.nasa is not None
+        has_points = bool(self.points)
+        if not (has_scalar or has_nasa or has_points):
+            raise ValueError(
+                "Thermo upload must include at least one of: a scalar "
+                "thermo value (h298_kj_mol or s298_j_mol_k), a NASA block, "
+                "or one or more thermo points."
+            )
         return self

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from app.db.models.author import Author
 from app.db.models.calculation import CalculationConstraint
-from app.db.models.common import ConstraintKind
+from app.db.models.common import ConformerSelectionKind, ConstraintKind
 from app.db.models.energy_correction import (
     EnergyCorrectionScheme,
     FrequencyScaleFactor,
@@ -16,6 +16,7 @@ from sqlalchemy import select
 
 from app.db.models.literature import Literature
 from app.db.models.literature_author import LiteratureAuthor
+from app.db.models.species import ConformerGroup, ConformerObservation
 from app.db.models.transport import Transport
 
 
@@ -871,6 +872,257 @@ class TestConformerGroupReads:
     def test_not_found(self, client):
         resp = client.get("/api/v1/conformer-groups/999999")
         assert resp.status_code == 404
+
+
+class TestSpeciesEntryConformerGroupsListing:
+    """Tests for GET /api/v1/species-entries/{id}/conformer-groups (basin-first)."""
+
+    def _seed_multi_group_entry(
+        self, client, db_session
+    ) -> tuple[int, list[int], int]:
+        """Upload a conformer (creating a species entry + one group + one obs),
+        then add two more groups with 2 and 1 observations directly via ORM.
+
+        Returns (entry_id, [group_ids], total_observation_count).
+        """
+        upload = client.post(
+            "/api/v1/uploads/conformers", json=_hydrogen_conformer_payload()
+        ).json()
+        entry_id = upload["species_entry_id"]
+        first_group_id = upload["conformer_group_id"]
+
+        group_b = ConformerGroup(
+            species_entry_id=entry_id,
+            label="basin-b",
+            representative_fingerprint_json={"quantized_bins": [4]},
+        )
+        group_c = ConformerGroup(species_entry_id=entry_id, label="basin-c")
+        db_session.add_all([group_b, group_c])
+        db_session.flush()
+
+        db_session.add_all(
+            [
+                ConformerObservation(
+                    conformer_group_id=group_b.id,
+                    scientific_origin="computed",
+                ),
+                ConformerObservation(
+                    conformer_group_id=group_b.id,
+                    scientific_origin="computed",
+                ),
+                ConformerObservation(
+                    conformer_group_id=group_c.id,
+                    scientific_origin="computed",
+                ),
+            ]
+        )
+        db_session.flush()
+
+        return entry_id, [first_group_id, group_b.id, group_c.id], 4
+
+    def test_returns_grouped_response(self, client, db_session):
+        entry_id, group_ids, _ = self._seed_multi_group_entry(client, db_session)
+
+        resp = client.get(f"/api/v1/species-entries/{entry_id}/conformer-groups")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["species_entry_id"] == entry_id
+        assert {g["id"] for g in body["groups"]} == set(group_ids)
+        assert all(g["species_entry_id"] == entry_id for g in body["groups"])
+
+    def test_conformer_group_count_is_correct(self, client, db_session):
+        entry_id, group_ids, _ = self._seed_multi_group_entry(client, db_session)
+
+        body = client.get(
+            f"/api/v1/species-entries/{entry_id}/conformer-groups"
+        ).json()
+        assert body["conformer_group_count"] == len(group_ids) == 3
+
+    def test_conformer_observation_count_is_correct(self, client, db_session):
+        entry_id, _, total_obs = self._seed_multi_group_entry(client, db_session)
+
+        body = client.get(
+            f"/api/v1/species-entries/{entry_id}/conformer-groups"
+        ).json()
+        assert body["conformer_observation_count"] == total_obs
+
+    def test_each_group_has_observation_count(self, client, db_session):
+        entry_id, group_ids, _ = self._seed_multi_group_entry(client, db_session)
+
+        body = client.get(
+            f"/api/v1/species-entries/{entry_id}/conformer-groups"
+        ).json()
+        counts_by_id = {g["id"]: g["observation_count"] for g in body["groups"]}
+        # first group (from upload) has 1 observation, group_b has 2, group_c has 1
+        assert counts_by_id[group_ids[0]] == 1
+        assert counts_by_id[group_ids[1]] == 2
+        assert counts_by_id[group_ids[2]] == 1
+        assert sum(counts_by_id.values()) == body["conformer_observation_count"]
+
+    def test_includes_representative_fields(self, client, db_session):
+        entry_id, group_ids, _ = self._seed_multi_group_entry(client, db_session)
+
+        body = client.get(
+            f"/api/v1/species-entries/{entry_id}/conformer-groups"
+        ).json()
+        for group in body["groups"]:
+            assert "representative_fingerprint_json" in group
+            assert "representative_coords_json" in group
+            assert "selections" in group
+
+    def test_nonexistent_species_entry_returns_404(self, client):
+        resp = client.get("/api/v1/species-entries/999999/conformer-groups")
+        assert resp.status_code == 404
+
+
+class TestConformerGroupDetail:
+    """Tests for GET /api/v1/conformer-groups/{id} (basin drill-down)."""
+
+    def test_existing_group_returns_nested_observations(self, client, db_session):
+        upload = client.post(
+            "/api/v1/uploads/conformers", json=_hydrogen_conformer_payload("obs-a")
+        ).json()
+        group_id = upload["conformer_group_id"]
+        # Attach a second observation via ORM so we can assert nesting of >1.
+        db_session.add(
+            ConformerObservation(
+                conformer_group_id=group_id, scientific_origin="computed"
+            )
+        )
+        db_session.flush()
+
+        resp = client.get(f"/api/v1/conformer-groups/{group_id}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["id"] == group_id
+        assert body["observation_count"] == 2
+        assert len(body["observations"]) == 2
+
+    def test_nested_observations_belong_to_requested_group(self, client, db_session):
+        # Upload two conformers; they dedupe into one group for [H]. Add a second
+        # group with a distinct observation to verify isolation between groups.
+        upload = client.post(
+            "/api/v1/uploads/conformers", json=_hydrogen_conformer_payload("iso")
+        ).json()
+        entry_id = upload["species_entry_id"]
+        other_group = ConformerGroup(species_entry_id=entry_id, label="other-basin")
+        db_session.add(other_group)
+        db_session.flush()
+        db_session.add(
+            ConformerObservation(
+                conformer_group_id=other_group.id, scientific_origin="computed"
+            )
+        )
+        db_session.flush()
+
+        body = client.get(f"/api/v1/conformer-groups/{other_group.id}").json()
+        assert body["id"] == other_group.id
+        assert len(body["observations"]) == 1
+        assert all(
+            obs["conformer_group_id"] == other_group.id
+            for obs in body["observations"]
+        )
+
+    def test_representative_fields_present(self, client):
+        upload = client.post(
+            "/api/v1/uploads/conformers", json=_hydrogen_conformer_payload()
+        ).json()
+        group_id = upload["conformer_group_id"]
+
+        body = client.get(f"/api/v1/conformer-groups/{group_id}").json()
+        # Fields must appear in the schema even if their values are null for
+        # single-atom species (no fingerprint computed).
+        assert "representative_fingerprint_json" in body
+        assert "representative_coords_json" in body
+        assert "selections" in body
+        assert "observations" in body
+
+    def test_includes_group_selections(self, client, db_session):
+        # Selection creation is now curator/admin-only; the default
+        # test user is role=``user``, so elevate for this one POST.
+        from app.db.models.app_user import AppUser
+        from app.db.models.common import AppUserRole
+
+        test_user = db_session.scalar(
+            select(AppUser).where(AppUser.username == "testuser")
+        )
+        test_user.role = AppUserRole.curator
+        db_session.flush()
+
+        upload = client.post(
+            "/api/v1/uploads/conformers", json=_hydrogen_conformer_payload()
+        ).json()
+        group_id = upload["conformer_group_id"]
+        client.post(
+            f"/api/v1/conformer-groups/{group_id}/selections",
+            json={"selection_kind": ConformerSelectionKind.display_default.value},
+        )
+
+        body = client.get(f"/api/v1/conformer-groups/{group_id}").json()
+        assert len(body["selections"]) == 1
+        assert body["selections"][0]["selection_kind"] == "display_default"
+
+    def test_nonexistent_group_returns_404(self, client):
+        resp = client.get("/api/v1/conformer-groups/999999")
+        assert resp.status_code == 404
+
+
+class TestSpeciesEntryConformerSummary:
+    """Tests for the compact conformer summary embedded in SpeciesEntryRead."""
+
+    def test_summary_present_after_upload(self, client):
+        upload = client.post(
+            "/api/v1/uploads/conformers", json=_hydrogen_conformer_payload()
+        ).json()
+        entry_id = upload["species_entry_id"]
+
+        body = client.get(f"/api/v1/species-entries/{entry_id}").json()
+        summary = body.get("conformer_summary")
+        assert summary is not None
+        assert summary["conformer_group_count"] == 1
+        assert summary["conformer_observation_count"] == 1
+
+    def test_summary_counts_match_listing(self, client, db_session):
+        upload = client.post(
+            "/api/v1/uploads/conformers", json=_hydrogen_conformer_payload()
+        ).json()
+        entry_id = upload["species_entry_id"]
+
+        extra = ConformerGroup(species_entry_id=entry_id, label="extra")
+        db_session.add(extra)
+        db_session.flush()
+        db_session.add(
+            ConformerObservation(
+                conformer_group_id=extra.id, scientific_origin="computed"
+            )
+        )
+        db_session.flush()
+
+        entry_body = client.get(f"/api/v1/species-entries/{entry_id}").json()
+        listing_body = client.get(
+            f"/api/v1/species-entries/{entry_id}/conformer-groups"
+        ).json()
+        summary = entry_body["conformer_summary"]
+        assert summary["conformer_group_count"] == listing_body["conformer_group_count"]
+        assert (
+            summary["conformer_observation_count"]
+            == listing_body["conformer_observation_count"]
+        )
+
+    def test_top_level_read_does_not_inline_groups(self, client, db_session):
+        upload = client.post(
+            "/api/v1/uploads/conformers", json=_hydrogen_conformer_payload()
+        ).json()
+        entry_id = upload["species_entry_id"]
+        extra = ConformerGroup(species_entry_id=entry_id, label="extra")
+        db_session.add(extra)
+        db_session.flush()
+
+        body = client.get(f"/api/v1/species-entries/{entry_id}").json()
+        # Summary is present, but the full groups/observations lists are not.
+        assert "conformer_summary" in body
+        assert "groups" not in body
+        assert "observations" not in body
 
 
 class TestConformerObservationReads:

@@ -12,6 +12,18 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_write_db
 from app.db.models.app_user import AppUser
+from app.schemas.upload_warning import UploadWarning
+from app.services.provenance_warnings import (
+    collect_kinetics_provenance_warnings,
+    collect_statmech_provenance_warnings,
+    collect_thermo_provenance_warnings,
+    collect_transport_provenance_warnings,
+)
+from app.services.upload_reconciliation import (
+    extract_freq_n_imag,
+    reconcile_species_entry,
+    reconcile_species_entry_full,
+)
 
 # -- Workflow imports --------------------------------------------------------
 from app.workflows.conformer import persist_conformer_upload
@@ -20,8 +32,10 @@ from app.workflows.computed_reaction import persist_computed_reaction_upload
 from app.workflows.network import persist_network_upload
 from app.workflows.network_pdep import persist_network_pdep_upload
 from app.workflows.reaction import persist_reaction_upload
+from app.workflows.statmech import persist_statmech_upload
 from app.workflows.thermo import persist_thermo_upload
 from app.workflows.transition_state import persist_transition_state_upload
+from app.workflows.transport import persist_transport_upload
 
 # -- Request schema imports --------------------------------------------------
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
@@ -30,10 +44,12 @@ from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 from app.schemas.workflows.network_upload import NetworkUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
+from app.schemas.workflows.statmech_upload import StatmechUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
+from app.schemas.workflows.transport_upload import TransportUploadRequest
 
 router = APIRouter()
 
@@ -48,35 +64,48 @@ class ConformerUploadResult(BaseModel):
     type: str = "conformer_observation"
     species_entry_id: int
     conformer_group_id: int
+    warnings: list[UploadWarning] = []
 
 
 class ReactionUploadResult(BaseModel):
     id: int
     type: str = "reaction_entry"
     reaction_id: int
+    warnings: list[UploadWarning] = []
 
 
 class KineticsUploadResult(BaseModel):
     id: int
     type: str = "kinetics"
     reaction_entry_id: int
+    warnings: list[UploadWarning] = []
 
 
 class NetworkUploadResult(BaseModel):
     id: int
     type: str = "network"
+    warnings: list[UploadWarning] = []
 
 
 class NetworkPDepUploadResult(BaseModel):
     id: int
     type: str = "network_pdep"
     solve_id: int | None = None
+    warnings: list[UploadWarning] = []
+
+
+class StatmechUploadResult(BaseModel):
+    id: int
+    type: str = "statmech"
+    species_entry_id: int
+    warnings: list[UploadWarning] = []
 
 
 class ThermoUploadResult(BaseModel):
     id: int
     type: str = "thermo"
     species_entry_id: int
+    warnings: list[UploadWarning] = []
 
 
 class TransitionStateUploadResult(BaseModel):
@@ -84,6 +113,14 @@ class TransitionStateUploadResult(BaseModel):
     type: str = "transition_state_entry"
     transition_state_id: int
     reaction_entry_id: int
+    warnings: list[UploadWarning] = []
+
+
+class TransportUploadResult(BaseModel):
+    id: int
+    type: str = "transport"
+    species_entry_id: int
+    warnings: list[UploadWarning] = []
 
 
 class ComputedReactionUploadResult(BaseModel):
@@ -95,6 +132,7 @@ class ComputedReactionUploadResult(BaseModel):
     thermo_ids: list[int]
     species_entry_ids: list[int]
     species_count: int
+    warnings: list[UploadWarning] = []
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +150,12 @@ def upload_conformer(
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
 ):
+    warnings = reconcile_species_entry_full(
+        request.species_entry,
+        primary_calc=request.calculation,
+        additional_calcs=request.additional_calculations,
+        statmech=request.statmech,
+    )
     observation = persist_conformer_upload(
         session, request, created_by=current_user.id
     )
@@ -119,6 +163,7 @@ def upload_conformer(
         id=observation.id,
         species_entry_id=observation.conformer_group.species_entry_id,
         conformer_group_id=observation.conformer_group_id,
+        warnings=warnings,
     )
 
 
@@ -132,12 +177,24 @@ def upload_reaction(
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
 ):
+    warnings: list[UploadWarning] = []
+    for i, p in enumerate(request.reactants):
+        if p.species_entry is not None:
+            ws = reconcile_species_entry(p.species_entry)
+            for w in ws:
+                warnings.append(w.model_copy(update={"field": f"reactants[{i}].{w.field}"}))
+    for i, p in enumerate(request.products):
+        if p.species_entry is not None:
+            ws = reconcile_species_entry(p.species_entry)
+            for w in ws:
+                warnings.append(w.model_copy(update={"field": f"products[{i}].{w.field}"}))
     reaction_entry = persist_reaction_upload(
         session, request, created_by=current_user.id
     )
     return ReactionUploadResult(
         id=reaction_entry.id,
         reaction_id=reaction_entry.reaction_id,
+        warnings=warnings,
     )
 
 
@@ -151,12 +208,23 @@ def upload_kinetics(
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
 ):
+    warnings: list[UploadWarning] = []
+    for i, p in enumerate(request.reaction.reactants):
+        ws = reconcile_species_entry(p.species_entry)
+        for w in ws:
+            warnings.append(w.model_copy(update={"field": f"reaction.reactants[{i}].{w.field}"}))
+    for i, p in enumerate(request.reaction.products):
+        ws = reconcile_species_entry(p.species_entry)
+        for w in ws:
+            warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
+    warnings.extend(collect_kinetics_provenance_warnings(request))
     kinetics = persist_kinetics_upload(
         session, request, created_by=current_user.id
     )
     return KineticsUploadResult(
         id=kinetics.id,
         reaction_entry_id=kinetics.reaction_entry_id,
+        warnings=warnings,
     )
 
 
@@ -194,6 +262,36 @@ def upload_network_pdep(
 
 
 @router.post(
+    "/statmech",
+    response_model=StatmechUploadResult,
+    status_code=201,
+)
+def upload_statmech(
+    request: StatmechUploadRequest,
+    session: Session = Depends(get_write_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """Create a standalone statmech record for a resolvable species entry.
+
+    The request carries the target species-entry identity, statmech
+    scientific fields, provenance references, optional inline
+    supporting calculations keyed by local string, and optional
+    torsions. Statmech is append-only — repeated uploads against the
+    same species entry create independent rows.
+    """
+    warnings = reconcile_species_entry(request.species_entry)
+    warnings.extend(collect_statmech_provenance_warnings(request))
+    statmech = persist_statmech_upload(
+        session, request, created_by=current_user.id
+    )
+    return StatmechUploadResult(
+        id=statmech.id,
+        species_entry_id=statmech.species_entry_id,
+        warnings=warnings,
+    )
+
+
+@router.post(
     "/thermo",
     response_model=ThermoUploadResult,
     status_code=201,
@@ -203,12 +301,15 @@ def upload_thermo(
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
 ):
+    warnings = reconcile_species_entry(request.species_entry)
+    warnings.extend(collect_thermo_provenance_warnings(request))
     thermo = persist_thermo_upload(
         session, request, created_by=current_user.id
     )
     return ThermoUploadResult(
         id=thermo.id,
         species_entry_id=thermo.species_entry_id,
+        warnings=warnings,
     )
 
 
@@ -222,6 +323,15 @@ def upload_transition_state(
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
 ):
+    warnings: list[UploadWarning] = []
+    for i, p in enumerate(request.reaction.reactants):
+        ws = reconcile_species_entry(p.species_entry)
+        for w in ws:
+            warnings.append(w.model_copy(update={"field": f"reaction.reactants[{i}].{w.field}"}))
+    for i, p in enumerate(request.reaction.products):
+        ws = reconcile_species_entry(p.species_entry)
+        for w in ws:
+            warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
     ts_entry = persist_transition_state_upload(
         session, request, created_by=current_user.id
     )
@@ -229,6 +339,36 @@ def upload_transition_state(
         id=ts_entry.id,
         transition_state_id=ts_entry.transition_state_id,
         reaction_entry_id=ts_entry.transition_state.reaction_entry_id,
+        warnings=warnings,
+    )
+
+
+@router.post(
+    "/transport",
+    response_model=TransportUploadResult,
+    status_code=201,
+)
+def upload_transport(
+    request: TransportUploadRequest,
+    session: Session = Depends(get_write_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    """Create a standalone transport record for a resolvable species entry.
+
+    The request carries the target species-entry identity, transport
+    properties, provenance references, and optional inline supporting
+    calculations with role links. Transport is append-only — repeated
+    uploads against the same species entry create independent rows.
+    """
+    warnings = reconcile_species_entry(request.species_entry)
+    warnings.extend(collect_transport_provenance_warnings(request))
+    transport = persist_transport_upload(
+        session, request, created_by=current_user.id
+    )
+    return TransportUploadResult(
+        id=transport.id,
+        species_entry_id=transport.species_entry_id,
+        warnings=warnings,
     )
 
 

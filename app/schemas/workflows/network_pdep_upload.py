@@ -21,18 +21,27 @@ are rejected when channels are explicitly provided.
 See DR-0001 for design rationale.
 """
 
+from datetime import datetime
 from typing import Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
 from app.db.models.common import (
     ArtifactKind,
+    CalculationQuality,
     CalculationType,
     NetworkChannelKind,
     NetworkSolveCalculationRole,
     ScientificOriginKind,
 )
 from app.schemas.common import SchemaBase
+from app.schemas.fragments.calculation import (
+    CalculationParameterObservation,
+    CalculationWithResultsPayload,
+    FreqResultPayload,
+    OptResultPayload,
+    SPResultPayload,
+)
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.reaction_family import find_canonical_reaction_family
@@ -85,12 +94,14 @@ class CalculationIn(SchemaBase):
 
     :param key: Globally unique local key for this calculation.
     :param type: Calculation type (opt, freq, sp, irc, scan).
+    :param quality: Curation quality flag.
     :param geometry_key: Local key referencing a geometry defined elsewhere
         in the payload. For species calculations, typically points to a
         conformer's geometry. For TS calculations, defaults to the TS geometry.
     :param software_release: Required software provenance reference.
     :param level_of_theory: Required level-of-theory reference.
     :param workflow_tool_release: Optional workflow-tool provenance reference.
+    :param literature_id: Optional literature provenance id.
     :param sp_electronic_energy_hartree: SP result (if type=sp).
     :param opt_converged: Opt result (if type=opt).
     :param opt_n_steps: Opt result (if type=opt).
@@ -98,17 +109,24 @@ class CalculationIn(SchemaBase):
     :param freq_n_imag: Freq result (if type=freq).
     :param freq_imag_freq_cm1: Freq result (if type=freq).
     :param freq_zpe_hartree: Freq result (if type=freq).
+    :param parameters: Optional parsed execution-control parameter observations,
+        routed through the shared calculation persistence seam.
+    :param parameters_json: Optional JSON snapshot from the parser.
+    :param parameters_parser_version: Optional parser version tag.
+    :param parameters_extracted_at: Optional extraction timestamp.
     :param artifacts: Optional list of file artifacts (logs, inputs, etc.).
     """
 
     key: str = Field(min_length=1)
     type: CalculationType
+    quality: CalculationQuality = CalculationQuality.raw
 
     geometry_key: str | None = Field(default=None, min_length=1)
 
     software_release: SoftwareReleaseRef
     level_of_theory: LevelOfTheoryRef
     workflow_tool_release: WorkflowToolReleaseRef | None = None
+    literature_id: int | None = None
 
     # Optional inline results (avoids separate result upload)
     sp_electronic_energy_hartree: float | None = None
@@ -121,8 +139,76 @@ class CalculationIn(SchemaBase):
     freq_imag_freq_cm1: float | None = None
     freq_zpe_hartree: float | None = None
 
+    # Parsed execution-control parameters (routed through the shared seam).
+    parameters: list[CalculationParameterObservation] | None = None
+    parameters_json: dict | None = None
+    parameters_parser_version: str | None = None
+    parameters_extracted_at: datetime | None = None
+
     # Optional file artifacts
     artifacts: list[ArtifactIn] = Field(default_factory=list)
+
+
+def calculation_in_to_with_results_payload(
+    calc_in: "CalculationIn",
+) -> CalculationWithResultsPayload:
+    """Adapt a bundle-local ``CalculationIn`` to the shared upload shape.
+
+    Translates the flat per-type result fields (``sp_electronic_energy_hartree``,
+    ``opt_converged``, ...) into the typed result blocks used by the shared
+    calculation persistence seam, and forwards provenance, parameters, and
+    parameter-snapshot metadata unchanged. Bundle-only fields (``key``,
+    ``geometry_key``, ``artifacts``) are consumed by the workflow directly and
+    are not part of the shared payload.
+    """
+
+    opt_result: OptResultPayload | None = None
+    freq_result: FreqResultPayload | None = None
+    sp_result: SPResultPayload | None = None
+
+    if calc_in.type == CalculationType.opt and (
+        calc_in.opt_converged is not None
+        or calc_in.opt_n_steps is not None
+        or calc_in.opt_final_energy_hartree is not None
+    ):
+        opt_result = OptResultPayload(
+            converged=calc_in.opt_converged,
+            n_steps=calc_in.opt_n_steps,
+            final_energy_hartree=calc_in.opt_final_energy_hartree,
+        )
+    if calc_in.type == CalculationType.freq and (
+        calc_in.freq_n_imag is not None
+        or calc_in.freq_imag_freq_cm1 is not None
+        or calc_in.freq_zpe_hartree is not None
+    ):
+        freq_result = FreqResultPayload(
+            n_imag=calc_in.freq_n_imag,
+            imag_freq_cm1=calc_in.freq_imag_freq_cm1,
+            zpe_hartree=calc_in.freq_zpe_hartree,
+        )
+    if (
+        calc_in.type == CalculationType.sp
+        and calc_in.sp_electronic_energy_hartree is not None
+    ):
+        sp_result = SPResultPayload(
+            electronic_energy_hartree=calc_in.sp_electronic_energy_hartree,
+        )
+
+    return CalculationWithResultsPayload(
+        type=calc_in.type,
+        quality=calc_in.quality,
+        software_release=calc_in.software_release,
+        workflow_tool_release=calc_in.workflow_tool_release,
+        level_of_theory=calc_in.level_of_theory,
+        literature_id=calc_in.literature_id,
+        opt_result=opt_result,
+        freq_result=freq_result,
+        sp_result=sp_result,
+        parameters=calc_in.parameters,
+        parameters_json=calc_in.parameters_json,
+        parameters_parser_version=calc_in.parameters_parser_version,
+        parameters_extracted_at=calc_in.parameters_extracted_at,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -159,8 +245,12 @@ class ConformerIn(SchemaBase):
     :param calculation: The optimization calculation that produced this conformer.
         Must have ``type == "opt"``.
     :param scientific_origin: Scientific origin for the conformer observation.
-    :param label: Optional conformer group label.
+    :param label: Optional user hint carried with the upload; basin dedupe still
+        happens at the conformer-group layer.
     :param note: Optional note on the conformer observation.
+
+    Each payload item creates one new ``conformer_observation`` row. Matching an
+    existing basin reuses the ``conformer_group`` only.
     """
 
     key: str = Field(min_length=1)
@@ -194,6 +284,9 @@ class NetworkSpeciesIn(SchemaBase):
     :param label: Optional human-readable display label.
     :param conformers: Optional conformer uploads (geometry + opt calculation).
     :param calculations: Additional calculations on this species (sp, freq, etc.).
+        Their ``geometry_key`` must point to one of this species's conformer
+        geometries so the backend can anchor each calculation to the correct
+        conformer observation.
     """
 
     key: str = Field(min_length=1)
@@ -216,6 +309,20 @@ class NetworkSpeciesIn(SchemaBase):
                 raise ValueError(
                     f"Species '{self.key}' calculation '{calc.key}' "
                     f"(type={calc.type.value}) requires geometry_key."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_species_calc_geometry_belongs_to_conformer(self) -> Self:
+        """Require species-side calculations to reference one of this species's conformers."""
+        conformer_geometry_keys = {conf.geometry.key for conf in self.conformers}
+        for calc in self.calculations:
+            if calc.geometry_key is None:
+                continue
+            if calc.geometry_key not in conformer_geometry_keys:
+                raise ValueError(
+                    f"Species '{self.key}' calculation '{calc.key}' geometry_key "
+                    f"must reference one of that species's conformer geometries."
                 )
         return self
 

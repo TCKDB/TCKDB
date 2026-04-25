@@ -45,13 +45,37 @@ def upgrade() -> None:
     sa.Column('full_name', sa.Text(), nullable=True),
     sa.Column('affiliation', sa.Text(), nullable=True),
     sa.Column('orcid', sa.CHAR(length=19), nullable=True),
-    sa.Column('api_key_hash', sa.String(length=64), nullable=True),
+    sa.Column('password_hash', sa.Text(), nullable=True),
+    sa.Column('is_active', sa.Boolean(), server_default=sa.text('true'), nullable=False),
     sa.Column('role', sa.Enum('user', 'curator', 'admin', name='app_user_role'), server_default='user', nullable=False),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_app_user')),
     sa.UniqueConstraint('email', name=op.f('uq_app_user_email')),
     sa.UniqueConstraint('orcid', name=op.f('uq_app_user_orcid')),
     sa.UniqueConstraint('username', name=op.f('uq_app_user_username'))
+    )
+    op.create_table('api_key',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('user_id', sa.BigInteger(), nullable=False),
+    sa.Column('key_hash', sa.CHAR(length=64), nullable=False),
+    sa.Column('label', sa.Text(), nullable=True),
+    sa.Column('last_used_at', sa.DateTime(), nullable=True),
+    sa.Column('revoked_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['app_user.id'], name=op.f('fk_api_key_user_id_app_user'), initially='IMMEDIATE', deferrable=True),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_api_key')),
+    sa.UniqueConstraint('key_hash', name=op.f('uq_api_key_key_hash'))
+    )
+    op.create_table('user_session',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('user_id', sa.BigInteger(), nullable=False),
+    sa.Column('token_hash', sa.CHAR(length=64), nullable=False),
+    sa.Column('expires_at', sa.DateTime(), nullable=False),
+    sa.Column('revoked_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['app_user.id'], name=op.f('fk_user_session_user_id_app_user'), initially='IMMEDIATE', deferrable=True),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_user_session')),
+    sa.UniqueConstraint('token_hash', name=op.f('uq_user_session_token_hash'))
     )
     op.create_table('author',
     sa.Column('id', sa.BigInteger(), nullable=False),
@@ -151,6 +175,7 @@ def upgrade() -> None:
     sa.Column('inchi_key', sa.CHAR(length=27), nullable=False),
     sa.Column('charge', sa.SmallInteger(), nullable=False),
     sa.Column('multiplicity', sa.SmallInteger(), nullable=False),
+    sa.Column('stereo_kind', sa.Enum('unspecified', 'achiral', 'enantiomer', 'diastereomer', 'ez_isomer', name='stereo_kind'), nullable=False),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.CheckConstraint('multiplicity >= 1', name=op.f('ck_species_multiplicity_ge_1')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_species')),
@@ -199,7 +224,7 @@ def upgrade() -> None:
     sa.Column('level_of_theory_id', sa.BigInteger(), nullable=True),
     sa.Column('source_literature_id', sa.BigInteger(), nullable=True),
     sa.Column('version', sa.Text(), nullable=True),
-    sa.Column('units', sa.Text(), nullable=True),
+    sa.Column('units', sa.Enum('hartree', 'kj_mol', 'kcal_mol', name='energy_unit'), nullable=True),
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('created_by', sa.BigInteger(), nullable=True),
@@ -248,7 +273,6 @@ def upgrade() -> None:
     sa.Column('kind', sa.Enum('minimum', 'vdw_complex', name='stationary_point_kind'), server_default='minimum', nullable=False),
     sa.Column('mol', app.db.types.RDKitMol(), nullable=True),
     sa.Column('unmapped_smiles', sa.Text(), nullable=True),
-    sa.Column('stereo_kind', sa.Enum('unspecified', 'achiral', 'enantiomer', 'diastereomer', 'ez_isomer', name='species_entry_stereo_kind'), server_default='unspecified', nullable=False),
     sa.Column('stereo_label', sa.String(length=64), nullable=True),
     sa.Column('electronic_state_kind', sa.Enum('ground', 'excited', name='species_entry_state_kind'), server_default='ground', nullable=False),
     sa.Column('electronic_state_label', sa.String(length=8), nullable=True),
@@ -260,7 +284,7 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['created_by'], ['app_user.id'], name=op.f('fk_species_entry_created_by_app_user'), initially='IMMEDIATE', deferrable=True),
     sa.ForeignKeyConstraint(['species_id'], ['species.id'], name=op.f('fk_species_entry_species_id_species'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_species_entry')),
-    sa.UniqueConstraint('species_id', 'stereo_kind', 'stereo_label', 'electronic_state_kind', 'electronic_state_label', 'term_symbol', 'isotopologue_label', name='uq_species_entry_species_id', postgresql_nulls_not_distinct=True)
+    sa.UniqueConstraint('species_id', 'stereo_label', 'electronic_state_kind', 'electronic_state_label', 'term_symbol', 'isotopologue_label', name='uq_species_entry_species_id', postgresql_nulls_not_distinct=True)
     )
     op.create_index('ix_species_entry_species_id', 'species_entry', ['species_id'], unique=False)
     op.create_table('workflow_tool_release',
@@ -484,9 +508,9 @@ def upgrade() -> None:
     sa.Column('a_units', sa.Enum('per_s', 'cm3_mol_s', 'cm3_molecule_s', 'm3_mol_s', 'cm6_mol2_s', 'cm6_molecule2_s', 'm6_mol2_s', name='arrhenius_a_units'), nullable=True),
     sa.Column('n', sa.Double(), nullable=True),
     sa.Column('ea_kj_mol', sa.Double(), nullable=True),
-    sa.Column('d_a', sa.Double(), nullable=True),
-    sa.Column('d_n', sa.Double(), nullable=True),
-    sa.Column('d_ea_kj_mol', sa.Double(), nullable=True),
+    sa.Column('a_uncertainty', sa.Double(), nullable=True),
+    sa.Column('n_uncertainty', sa.Double(), nullable=True),
+    sa.Column('ea_uncertainty_kj_mol', sa.Double(), nullable=True),
     sa.Column('tmin_k', sa.Double(), nullable=True),
     sa.Column('tmax_k', sa.Double(), nullable=True),
     sa.Column('degeneracy', sa.Double(), nullable=True),
@@ -717,9 +741,9 @@ def upgrade() -> None:
     sa.Column('tmax_k', sa.Double(), nullable=True),
     sa.Column('pmin_bar', sa.Double(), nullable=True),
     sa.Column('pmax_bar', sa.Double(), nullable=True),
-    sa.Column('rate_units', sa.Text(), nullable=True),
-    sa.Column('pressure_units', sa.Text(), nullable=True),
-    sa.Column('temperature_units', sa.Text(), nullable=True),
+    sa.Column('rate_units', sa.Enum('per_s', 'cm3_mol_s', 'cm3_molecule_s', 'm3_mol_s', 'cm6_mol2_s', 'cm6_molecule2_s', 'm6_mol2_s', name='arrhenius_a_units'), nullable=True),
+    sa.Column('pressure_units', sa.Enum('bar', 'atm', name='pressure_unit'), nullable=True),
+    sa.Column('temperature_units', sa.Enum('kelvin', name='temperature_unit'), nullable=True),
     sa.Column('stores_log10_k', sa.Boolean(), nullable=True),
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
@@ -753,6 +777,7 @@ def upgrade() -> None:
     sa.Column('n_imag', sa.Integer(), nullable=True),
     sa.Column('imag_freq_cm1', sa.Float(), nullable=True),
     sa.Column('zpe_hartree', sa.Float(), nullable=True),
+    sa.Column('zpe_uncertainty_hartree', sa.Float(), nullable=True),
     sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calc_freq_result_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('calculation_id', name=op.f('pk_calc_freq_result'))
     )
@@ -795,7 +820,7 @@ def upgrade() -> None:
     sa.Column('step_size', sa.Float(), nullable=True),
     sa.Column('start_value', sa.Float(), nullable=True),
     sa.Column('end_value', sa.Float(), nullable=True),
-    sa.Column('value_unit', sa.Text(), nullable=True),
+    sa.Column('value_unit', sa.Enum('angstrom', 'degree', name='coordinate_unit'), nullable=True),
     sa.Column('resolution_degrees', sa.Integer(), nullable=True),
     sa.Column('symmetry_number', sa.SmallInteger(), nullable=True),
     sa.CheckConstraint('atom1_index >= 1', name=op.f('ck_calc_scan_coordinate_atom1_index_ge_1')),
@@ -878,6 +903,7 @@ def upgrade() -> None:
     op.create_table('calc_sp_result',
     sa.Column('calculation_id', sa.BigInteger(), nullable=False),
     sa.Column('electronic_energy_hartree', sa.Float(), nullable=True),
+    sa.Column('electronic_energy_uncertainty_hartree', sa.Float(), nullable=True),
     sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calc_sp_result_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('calculation_id', name=op.f('pk_calc_sp_result'))
     )
@@ -1091,7 +1117,7 @@ def upgrade() -> None:
     sa.Column('frequency_scale_factor_id', sa.BigInteger(), nullable=True),
     sa.Column('application_role', sa.Enum('zpe', 'thermal_correction_energy', 'thermal_correction_enthalpy', 'thermal_correction_gibbs', 'entropy_contribution', 'bac_total', 'aec_total', 'soc_total', 'atomization_reference_adjustment', 'composite_delta', 'custom', name='energy_correction_application_role'), nullable=False),
     sa.Column('value', sa.Double(), nullable=False),
-    sa.Column('value_unit', sa.Text(), nullable=False),
+    sa.Column('value_unit', sa.Enum('hartree', 'kj_mol', 'kcal_mol', name='energy_unit'), nullable=False),
     sa.Column('temperature_k', sa.Double(), nullable=True),
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
@@ -1114,7 +1140,7 @@ def upgrade() -> None:
     sa.Column('point_index', sa.Integer(), nullable=False),
     sa.Column('coordinate_index', sa.Integer(), nullable=False),
     sa.Column('coordinate_value', sa.Float(), nullable=False),
-    sa.Column('value_unit', sa.Text(), nullable=True),
+    sa.Column('value_unit', sa.Enum('angstrom', 'degree', name='coordinate_unit'), nullable=True),
     sa.CheckConstraint('coordinate_index >= 1', name=op.f('ck_calc_scan_point_coordinate_value_coordinate_index_ge_1')),
     sa.CheckConstraint('point_index >= 1', name=op.f('ck_calc_scan_point_coordinate_value_point_index_ge_1')),
     sa.ForeignKeyConstraint(['calculation_id', 'coordinate_index'], ['calc_scan_coordinate.calculation_id', 'calc_scan_coordinate.coordinate_index'], name=op.f('fk_calc_scan_point_coordinate_value_calculation_id_calc_scan_coordinate'), initially='IMMEDIATE', deferrable=True),
@@ -1153,7 +1179,7 @@ def upgrade() -> None:
         'upload_job',
         sa.Column('id', postgresql.UUID(as_uuid=False), server_default=sa.text('gen_random_uuid()'), nullable=False),
         sa.Column('status', sa.Enum('queued', 'processing', 'complete', 'failed', name='upload_job_status'), server_default='queued', nullable=False),
-        sa.Column('kind', sa.Enum('computed_reaction', 'conformer', 'reaction', 'kinetics', 'network', 'network_pdep', 'thermo', 'transition_state', name='upload_job_kind'), nullable=False),
+        sa.Column('kind', sa.Enum('computed_reaction', 'conformer', 'reaction', 'kinetics', 'network', 'network_pdep', 'thermo', 'transition_state', 'transport', name='upload_job_kind'), nullable=False),
         sa.Column('payload', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column('created_by', sa.BigInteger(), nullable=True),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
@@ -1167,6 +1193,188 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id', name=op.f('pk_upload_job')),
     )
     op.create_index('ix_upload_job_status_created_at', 'upload_job', ['status', 'created_at'], unique=False)
+
+    # ------------------------------------------------------------------
+    # Submission moderation layer
+    # ------------------------------------------------------------------
+    submission_status_enum = postgresql.ENUM(
+        'pending', 'precheck_passed', 'auto_flagged', 'approved', 'rejected', 'superseded',
+        name='submission_status',
+        create_type=True,
+    )
+    submission_status_enum.create(op.get_bind(), checkfirst=True)
+
+    op.create_table(
+        'submission',
+        sa.Column('id', sa.BigInteger(), nullable=False),
+        sa.Column('created_by', sa.BigInteger(), nullable=False),
+        sa.Column(
+            'submission_kind',
+            sa.Enum(
+                'computed_reaction', 'conformer', 'reaction', 'kinetics', 'network',
+                'network_pdep', 'thermo', 'transition_state', 'transport', 'other',
+                name='submission_kind',
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            'source_kind',
+            sa.Enum(
+                'api', 'web', 'bulk_import', 'system', 'migration',
+                name='submission_source_kind',
+            ),
+            server_default='api',
+            nullable=False,
+        ),
+        sa.Column('upload_job_id', postgresql.UUID(as_uuid=False), nullable=True),
+        sa.Column(
+            'status',
+            postgresql.ENUM(name='submission_status', create_type=False),
+            server_default='pending',
+            nullable=False,
+        ),
+        sa.Column('title', sa.String(length=200), nullable=True),
+        sa.Column('summary', sa.Text(), nullable=True),
+        sa.Column('submitted_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+        sa.Column('approved_at', sa.DateTime(), nullable=True),
+        sa.Column('approved_by', sa.BigInteger(), nullable=True),
+        sa.Column('rejected_at', sa.DateTime(), nullable=True),
+        sa.Column('rejected_by', sa.BigInteger(), nullable=True),
+        sa.Column('rejection_reason', sa.Text(), nullable=True),
+        sa.Column('correction_due_at', sa.DateTime(), nullable=True),
+        sa.Column('supersedes_submission_id', sa.BigInteger(), nullable=True),
+        sa.Column(
+            'llm_precheck_label',
+            sa.Enum('passed', 'flagged', name='submission_precheck_label'),
+            nullable=True,
+        ),
+        sa.Column('llm_precheck_summary', sa.Text(), nullable=True),
+        sa.Column('llm_precheck_model', sa.String(length=128), nullable=True),
+        sa.Column('llm_precheck_at', sa.DateTime(), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+        sa.CheckConstraint(
+            "(status <> 'rejected') OR (rejection_reason IS NOT NULL)",
+            name=op.f('ck_submission_submission_rejected_requires_reason'),
+        ),
+        sa.CheckConstraint(
+            "(status <> 'approved') OR (approved_by IS NOT NULL AND approved_by <> created_by)",
+            name=op.f('ck_submission_submission_approver_not_creator'),
+        ),
+        sa.CheckConstraint(
+            "(status <> 'rejected') OR (rejected_by IS NOT NULL AND rejected_by <> created_by)",
+            name=op.f('ck_submission_submission_rejecter_not_creator'),
+        ),
+        sa.ForeignKeyConstraint(
+            ['created_by'], ['app_user.id'],
+            name=op.f('fk_submission_created_by_app_user'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.ForeignKeyConstraint(
+            ['approved_by'], ['app_user.id'],
+            name=op.f('fk_submission_approved_by_app_user'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.ForeignKeyConstraint(
+            ['rejected_by'], ['app_user.id'],
+            name=op.f('fk_submission_rejected_by_app_user'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.ForeignKeyConstraint(
+            ['upload_job_id'], ['upload_job.id'],
+            name=op.f('fk_submission_upload_job_id_upload_job'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.ForeignKeyConstraint(
+            ['supersedes_submission_id'], ['submission.id'],
+            name=op.f('fk_submission_supersedes_submission_id_submission'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.PrimaryKeyConstraint('id', name=op.f('pk_submission')),
+    )
+    op.create_index('ix_submission_status_created_at', 'submission', ['status', 'created_at'], unique=False)
+    op.create_index('ix_submission_created_by', 'submission', ['created_by'], unique=False)
+    op.create_index('ix_submission_upload_job_id', 'submission', ['upload_job_id'], unique=False)
+
+    op.create_table(
+        'submission_audit_event',
+        sa.Column('id', sa.BigInteger(), nullable=False),
+        sa.Column('submission_id', sa.BigInteger(), nullable=False),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+        sa.Column('actor_user_id', sa.BigInteger(), nullable=True),
+        sa.Column(
+            'actor_kind',
+            sa.Enum('user', 'curator', 'admin', 'llm', 'system', name='submission_actor_kind'),
+            nullable=False,
+        ),
+        sa.Column(
+            'event_kind',
+            sa.Enum(
+                'submission_created', 'ingestion_succeeded', 'ingestion_failed',
+                'llm_precheck_passed', 'llm_precheck_flagged', 'curator_approved',
+                'curator_rejected', 'correction_window_opened', 'correction_uploaded',
+                'submission_superseded', 'status_changed', 'public_visibility_changed',
+                name='submission_audit_event_kind',
+            ),
+            nullable=False,
+        ),
+        sa.Column('from_status', postgresql.ENUM(name='submission_status', create_type=False), nullable=True),
+        sa.Column('to_status', postgresql.ENUM(name='submission_status', create_type=False), nullable=True),
+        sa.Column('reason', sa.Text(), nullable=True),
+        sa.Column('summary', sa.Text(), nullable=True),
+        sa.Column('details_json', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('related_submission_id', sa.BigInteger(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ['submission_id'], ['submission.id'],
+            name=op.f('fk_submission_audit_event_submission_id_submission'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.ForeignKeyConstraint(
+            ['actor_user_id'], ['app_user.id'],
+            name=op.f('fk_submission_audit_event_actor_user_id_app_user'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.ForeignKeyConstraint(
+            ['related_submission_id'], ['submission.id'],
+            name=op.f('fk_submission_audit_event_related_submission_id_submission'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.PrimaryKeyConstraint('id', name=op.f('pk_submission_audit_event')),
+    )
+    op.create_index('ix_submission_audit_event_submission_id', 'submission_audit_event', ['submission_id'], unique=False)
+    op.create_index('ix_submission_audit_event_event_kind', 'submission_audit_event', ['event_kind'], unique=False)
+
+    op.create_table(
+        'submission_record_link',
+        sa.Column('id', sa.BigInteger(), nullable=False),
+        sa.Column('submission_id', sa.BigInteger(), nullable=False),
+        sa.Column(
+            'record_type',
+            sa.Enum(
+                'species', 'species_entry', 'conformer_group', 'conformer_observation',
+                'reaction', 'reaction_entry', 'transition_state', 'transition_state_entry',
+                'calculation', 'statmech', 'thermo', 'kinetics', 'transport',
+                'network', 'network_solve',
+                name='submission_record_type',
+            ),
+            nullable=False,
+        ),
+        sa.Column('record_id', sa.BigInteger(), nullable=False),
+        sa.Column('role', sa.String(length=64), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+        sa.ForeignKeyConstraint(
+            ['submission_id'], ['submission.id'],
+            name=op.f('fk_submission_record_link_submission_id_submission'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.PrimaryKeyConstraint('id', name=op.f('pk_submission_record_link')),
+        sa.UniqueConstraint(
+            'submission_id', 'record_type', 'record_id', 'role',
+            name=op.f('uq_submission_record_link_identity'),
+            postgresql_nulls_not_distinct=True,
+        ),
+    )
+    op.create_index('ix_submission_record_link_submission_id', 'submission_record_link', ['submission_id'], unique=False)
+    op.create_index('ix_submission_record_link_record', 'submission_record_link', ['record_type', 'record_id'], unique=False)
 
     _seed_reaction_families()
 
@@ -1186,6 +1394,26 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_index('ix_submission_record_link_record', table_name='submission_record_link')
+    op.drop_index('ix_submission_record_link_submission_id', table_name='submission_record_link')
+    op.drop_table('submission_record_link')
+    op.execute("DROP TYPE IF EXISTS submission_record_type")
+
+    op.drop_index('ix_submission_audit_event_event_kind', table_name='submission_audit_event')
+    op.drop_index('ix_submission_audit_event_submission_id', table_name='submission_audit_event')
+    op.drop_table('submission_audit_event')
+    op.execute("DROP TYPE IF EXISTS submission_audit_event_kind")
+    op.execute("DROP TYPE IF EXISTS submission_actor_kind")
+
+    op.drop_index('ix_submission_upload_job_id', table_name='submission')
+    op.drop_index('ix_submission_created_by', table_name='submission')
+    op.drop_index('ix_submission_status_created_at', table_name='submission')
+    op.drop_table('submission')
+    op.execute("DROP TYPE IF EXISTS submission_precheck_label")
+    op.execute("DROP TYPE IF EXISTS submission_status")
+    op.execute("DROP TYPE IF EXISTS submission_source_kind")
+    op.execute("DROP TYPE IF EXISTS submission_kind")
+
     op.drop_table('applied_energy_correction_component')
     op.drop_table('statmech_torsion_definition')
     op.drop_table('calc_scan_point_coordinate_value')
@@ -1229,12 +1457,15 @@ def downgrade() -> None:
     op.drop_table('calc_scan_point')
     op.drop_table('calc_scan_coordinate')
     op.execute("DROP TYPE IF EXISTS scan_coordinate_kind")
+    op.execute("DROP TYPE IF EXISTS coordinate_unit")
     op.drop_table('calculation_constraint')
     op.execute("DROP TYPE IF EXISTS constraint_kind")
     op.drop_table('calc_opt_result')
     op.drop_table('calc_freq_result')
     op.drop_table('transition_state_selection')
     op.drop_table('network_kinetics')
+    op.execute("DROP TYPE IF EXISTS pressure_unit")
+    op.execute("DROP TYPE IF EXISTS temperature_unit")
     op.drop_table('calculation')
     op.drop_table('transition_state_entry')
     op.drop_table('network_state_participant')
@@ -1275,6 +1506,7 @@ def downgrade() -> None:
     op.drop_table('geometry_atom')
     op.drop_index('uq_energy_correction_scheme_kind_name_lot_version', table_name='energy_correction_scheme', postgresql_nulls_not_distinct=True)
     op.drop_table('energy_correction_scheme')
+    op.execute("DROP TYPE IF EXISTS energy_unit")
     op.drop_table('conformer_assignment_scheme')
     op.drop_table('chem_reaction')
     op.drop_table('workflow_tool')
@@ -1291,4 +1523,6 @@ def downgrade() -> None:
     op.drop_table('upload_job')
     op.execute("DROP TYPE IF EXISTS upload_job_status")
     op.execute("DROP TYPE IF EXISTS upload_job_kind")
+    op.drop_table('user_session')
+    op.drop_table('api_key')
     op.drop_table('app_user')

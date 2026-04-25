@@ -10,6 +10,7 @@ from app.db.models.common import (
     CalculationQuality,
     CalculationType,
     ConstraintKind,
+    CoordinateUnit,
     IRCDirection,
     ValidationStatus,
 )
@@ -180,6 +181,7 @@ class CalculationArtifactRead(CalculationArtifactBase, TimestampedReadSchema):
 class CalculationSPResultBase(BaseModel):
     calculation_id: int
     electronic_energy_hartree: float | None = None
+    electronic_energy_uncertainty_hartree: float | None = None
 
 
 class CalculationSPResultCreate(CalculationSPResultBase, SchemaBase):
@@ -188,6 +190,7 @@ class CalculationSPResultCreate(CalculationSPResultBase, SchemaBase):
 
 class CalculationSPResultUpdate(SchemaBase):
     electronic_energy_hartree: float | None = None
+    electronic_energy_uncertainty_hartree: float | None = None
 
 
 class CalculationSPResultRead(CalculationSPResultBase, ORMBaseSchema):
@@ -220,6 +223,7 @@ class CalculationFreqResultBase(BaseModel):
     n_imag: int | None = None
     imag_freq_cm1: float | None = None
     zpe_hartree: float | None = None
+    zpe_uncertainty_hartree: float | None = None
 
 
 class CalculationFreqResultCreate(CalculationFreqResultBase, SchemaBase):
@@ -230,6 +234,7 @@ class CalculationFreqResultUpdate(SchemaBase):
     n_imag: int | None = None
     imag_freq_cm1: float | None = None
     zpe_hartree: float | None = None
+    zpe_uncertainty_hartree: float | None = None
 
 
 class CalculationFreqResultRead(CalculationFreqResultBase, ORMBaseSchema):
@@ -247,7 +252,7 @@ class CalculationScanCoordinatePayload(BaseModel):
     step_size: float | None = None
     start_value: float | None = None
     end_value: float | None = None
-    value_unit: str | None = None
+    value_unit: CoordinateUnit | None = None
     resolution_degrees: float | None = None
     symmetry_number: int | None = Field(default=None, ge=1)
 
@@ -286,7 +291,7 @@ class CalculationScanCoordinateUpdate(SchemaBase):
     step_size: float | None = None
     start_value: float | None = None
     end_value: float | None = None
-    value_unit: str | None = None
+    value_unit: CoordinateUnit | None = None
     resolution_degrees: float | None = None
     symmetry_number: int | None = Field(default=None, ge=1)
 
@@ -326,7 +331,7 @@ class CalculationConstraintRead(CalculationConstraintPayload, ORMBaseSchema):
 class CalculationScanPointCoordinateValuePayload(BaseModel):
     coordinate_index: int = Field(ge=1)
     coordinate_value: float
-    value_unit: str | None = None
+    value_unit: CoordinateUnit | None = None
 
 
 class CalculationScanPointCoordinateValueCreate(
@@ -339,7 +344,7 @@ class CalculationScanPointCoordinateValueCreate(
 class CalculationScanPointCoordinateValueUpdate(SchemaBase):
     coordinate_index: int | None = Field(default=None, ge=1)
     coordinate_value: float | None = None
-    value_unit: str | None = None
+    value_unit: CoordinateUnit | None = None
 
 
 class CalculationScanPointCoordinateValueRead(
@@ -484,6 +489,8 @@ class CalculationIRCResultRead(ORMBaseSchema):
     points: list[CalculationIRCPointRead] = Field(default_factory=list)
 
 
+
+
 # ---------------------------------------------------------------------------
 # NEB image results (Phase 2)
 # ---------------------------------------------------------------------------
@@ -498,6 +505,8 @@ class CalculationNEBImageResultRead(ORMBaseSchema):
     max_force: float | None = None
     rms_force: float | None = None
     is_climbing_image: bool
+
+
 
 
 # ---------------------------------------------------------------------------

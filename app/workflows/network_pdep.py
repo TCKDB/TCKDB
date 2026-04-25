@@ -3,7 +3,8 @@
 Pipeline (single transaction):
 1. Resolve species (local key → species_entry)
 2. Process conformers (geometry + opt calc + conformer group/observation)
-3. Process species-level additional calculations (sp, freq — with geometry_key lookups)
+3. Process species-level additional calculations (sp, freq — with geometry_key
+   lookups that anchor each calculation to the matching conformer observation)
 3b. Process species-level transport (if provided)
 4. Resolve micro reactions (local key → reaction_entry)
 5. Process transition states (TS → TS entry → geometry → calcs)
@@ -21,10 +22,8 @@ from sqlalchemy.orm import Session
 import app.db.models  # noqa: F401
 from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import (
-    CalculationFreqResult,
-    CalculationOptResult,
+    Calculation,
     CalculationOutputGeometry,
-    CalculationSPResult,
 )
 from app.db.models.common import (
     CalculationGeometryRole,
@@ -45,19 +44,18 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.species_resolution import resolve_species_entry
-from app.schemas.fragments.calculation import CalculationCreateRequest
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.network_pdep_upload import (
     CalculationIn,
     NetworkPDepUploadRequest,
+    calculation_in_to_with_results_payload,
 )
 from app.schemas.workflows.reaction_upload import (
     ReactionParticipantUpload,
     ReactionUploadRequest,
 )
 from app.services.calculation_resolution import (
-    persist_calculation,
-    resolve_calculation_create_request,
+    resolve_and_persist_calculation_with_results,
     resolve_workflow_tool_release_ref,
 )
 from app.services.literature_resolution import resolve_or_create_literature
@@ -82,29 +80,29 @@ def _persist_calculation(
     geometry_id: int | None = None,
     geometry_key_map: dict[str, int],
     created_by: int | None = None,
-) -> "app.db.models.calculation.Calculation":
-    """Resolve and persist one calculation from the upload payload.
+) -> Calculation:
+    """Persist one bundle-local calculation through the shared calculation seam.
 
-    Handles geometry_key lookup, provenance resolution, and inline results.
+    Routes provenance resolution, typed-result persistence, and parameter
+    persistence through ``resolve_and_persist_calculation_with_results`` so
+    bundle uploads inherit all shared-seam behavior. Bundle-specific
+    orchestration (``geometry_key`` → ``geometry_id`` lookup and the
+    ``CalculationOutputGeometry`` link with role=final) stays here.
     """
-    # Determine geometry_id
+
     effective_geometry_id = geometry_id
     if calc_in.geometry_key is not None:
         effective_geometry_id = geometry_key_map[calc_in.geometry_key]
 
-    # Resolve provenance and create calculation
-    calc_request = CalculationCreateRequest(
-        type=calc_in.type,
+    shared_payload = calculation_in_to_with_results_payload(calc_in)
+    calculation = resolve_and_persist_calculation_with_results(
+        session,
+        shared_payload,
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
-        software_release=calc_in.software_release,
-        workflow_tool_release=calc_in.workflow_tool_release,
-        level_of_theory=calc_in.level_of_theory,
+        created_by=created_by,
     )
-    calc_resolved = resolve_calculation_create_request(session, calc_request)
-    calculation = persist_calculation(session, calc_resolved, created_by=created_by)
 
-    # Link geometry as output if available
     if effective_geometry_id is not None:
         session.add(
             CalculationOutputGeometry(
@@ -115,41 +113,26 @@ def _persist_calculation(
             )
         )
 
-    # Persist inline results
-    if calc_in.type.value == "sp" and calc_in.sp_electronic_energy_hartree is not None:
-        session.add(
-            CalculationSPResult(
-                calculation_id=calculation.id,
-                electronic_energy_hartree=calc_in.sp_electronic_energy_hartree,
-            )
-        )
-    if calc_in.type.value == "opt" and any(
-        v is not None
-        for v in (calc_in.opt_converged, calc_in.opt_n_steps, calc_in.opt_final_energy_hartree)
-    ):
-        session.add(
-            CalculationOptResult(
-                calculation_id=calculation.id,
-                converged=calc_in.opt_converged,
-                n_steps=calc_in.opt_n_steps,
-                final_energy_hartree=calc_in.opt_final_energy_hartree,
-            )
-        )
-    if calc_in.type.value == "freq" and any(
-        v is not None
-        for v in (calc_in.freq_n_imag, calc_in.freq_imag_freq_cm1, calc_in.freq_zpe_hartree)
-    ):
-        session.add(
-            CalculationFreqResult(
-                calculation_id=calculation.id,
-                n_imag=calc_in.freq_n_imag,
-                imag_freq_cm1=calc_in.freq_imag_freq_cm1,
-                zpe_hartree=calc_in.freq_zpe_hartree,
-            )
-        )
-
     session.flush()
     return calculation
+
+
+def _anchor_species_calculation_to_observation(
+    calculation: Calculation,
+    calc_in: CalculationIn,
+    observation_id_by_geometry_key: dict[str, int],
+) -> None:
+    """Anchor a species-owned calculation to the conformer observation for its geometry key."""
+    if calc_in.geometry_key is None:
+        return
+
+    observation_id = observation_id_by_geometry_key.get(calc_in.geometry_key)
+    if observation_id is None:
+        raise ValueError(
+            f"Species calculation '{calc_in.key}' geometry_key "
+            f"'{calc_in.geometry_key}' does not resolve to a conformer observation."
+        )
+    calculation.conformer_observation_id = observation_id
 
 
 def _infer_species_role(
@@ -186,6 +169,7 @@ def persist_network_pdep_upload(
     geometry_key_to_id: dict[str, int] = {}
     calculation_key_to_id: dict[str, int] = {}
     reaction_key_to_entry: dict[str, object] = {}
+    observation_id_by_geometry_key: dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # 1. Resolve species
@@ -242,6 +226,7 @@ def persist_network_pdep_upload(
             )
             session.add(observation)
             session.flush()
+            observation_id_by_geometry_key[conf.geometry.key] = observation.id
 
             # Anchor the calculation to this conformer observation
             calculation.conformer_observation_id = observation.id
@@ -260,6 +245,11 @@ def persist_network_pdep_upload(
                 created_by=created_by,
             )
             calculation_key_to_id[calc_in.key] = calculation.id
+            _anchor_species_calculation_to_observation(
+                calculation,
+                calc_in,
+                observation_id_by_geometry_key,
+            )
 
     # ------------------------------------------------------------------
     # 3b. Process species-level transport

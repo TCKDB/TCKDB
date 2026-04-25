@@ -86,7 +86,12 @@ class TSReactionUpload(SchemaBase):
 # ---------------------------------------------------------------------------
 
 _ALLOWED_ADDITIONAL_TYPES = frozenset(
-    {CalculationType.freq, CalculationType.sp, CalculationType.irc}
+    {
+        CalculationType.freq,
+        CalculationType.sp,
+        CalculationType.irc,
+        CalculationType.neb,
+    }
 )
 
 

@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     db_name: str = "tckdb_dev"
     db_client_encoding: str = "utf8"
 
+    # Registration policy. Local/dev defaults to open self-service so the
+    # API stays usable out of the box; hosted deployments set
+    # ``AUTH_ALLOW_OPEN_REGISTRATION=false`` and seed accounts via admin
+    # tooling.
+    auth_allow_open_registration: bool = True
+
     @property
     def database_url(self) -> str:
         return (

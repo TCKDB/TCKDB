@@ -3,6 +3,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.db.models.common import (
+    CalculationQuality,
     ConformerAssignmentScopeKind,
     ConformerSelectionKind,
     ScientificOriginKind,
@@ -32,7 +33,74 @@ class ConformerGroupUpdate(SchemaBase):
 
 
 class ConformerGroupRead(ConformerGroupBase, TimestampedCreatedByReadSchema):
-    pass
+    """Read schema for one conformer group (basin)."""
+
+    representative_fingerprint_json: dict[str, Any] | None = None
+    representative_coords_json: list[Any] | None = None
+    selections: list["ConformerSelectionRead"] = Field(default_factory=list)
+
+
+class ConformerGroupSummaryRead(ConformerGroupRead):
+    """Conformer-group summary including the count of attached observations.
+
+    Used by the species-entry conformer-group listing so clients can see how many
+    observations back each basin without eager-loading the full observations list.
+    """
+
+    observation_count: int = 0
+
+
+class ConformerGroupDetailRead(ConformerGroupSummaryRead):
+    """Conformer-group detail read including nested observations."""
+
+    observations: list["ConformerObservationRead"] = Field(default_factory=list)
+
+
+class SpeciesEntryConformerGroupsRead(BaseModel):
+    """Basin-first conformer listing for one species entry.
+
+    Groups are the primary browse unit; observations are reached by drilling into
+    an individual conformer group via `/conformer-groups/{id}`.
+    """
+
+    species_entry_id: int
+    conformer_group_count: int
+    conformer_observation_count: int
+    groups: list[ConformerGroupSummaryRead] = Field(default_factory=list)
+
+
+class LowestSPConformerObservationRead(BaseModel):
+    """Lowest qualifying SP conformer observation at a specified LoT.
+
+    This is an explicitly contextual result, not a universal best-conformer
+    claim. It only asserts that under the supplied `lot_id` (and optional
+    `calculation_quality`), this observation had the lowest qualifying SP
+    electronic energy among the species entry's conformer observations.
+    """
+
+    species_entry_id: int
+    lot_id: int
+
+    conformer_group_id: int
+    conformer_observation_id: int
+    calculation_id: int
+
+    electronic_energy_hartree: float
+    calculation_quality: CalculationQuality
+
+
+class LowestSPConformerObservationResultRead(BaseModel):
+    """Result wrapper for the lowest-SP conformer observation query.
+
+    `result` is `None` when no qualifying SP calculation exists under the
+    requested comparison context. This is a normal `200` response, not an
+    error: the question is well-formed but simply has no answer yet.
+    """
+
+    species_entry_id: int
+    lot_id: int
+    calculation_quality: CalculationQuality | None = None
+    result: LowestSPConformerObservationRead | None = None
 
 
 # Conformer Observation
@@ -59,7 +127,9 @@ class ConformerObservationUpdate(SchemaBase):
 class ConformerObservationRead(
     ConformerObservationBase, TimestampedCreatedByReadSchema
 ):
-    pass
+    """Read schema for one conformer observation within a basin."""
+
+    torsion_fingerprint_json: dict[str, Any] | None = None
 
 
 # Conformer Selection

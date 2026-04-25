@@ -22,8 +22,10 @@ Internal match taxonomy (grounded in three axes):
 - lot: exact / partial / none (per-field: method, basis, dispersion, solvent, ...)
 
 Endpoint families:
-- **Identity**: ``/lookup/species``, ``/lookup/reaction``
-- **Result**: ``/lookup/calculations``, ``/lookup/thermo``, ``/lookup/kinetics``
+- **Identity**: ``/lookup/species``, ``/lookup/reaction``, ``/lookup/geometry``
+- **Result**: ``/lookup/calculations``, ``/lookup/thermo``, ``/lookup/kinetics``,
+  ``/lookup/statmech``, ``/lookup/transport``
+- **Membership**: ``/lookup/network``
 - **Composed**: ``/lookup/species-calculation``, ``/lookup/reaction-kinetics``
 """
 
@@ -50,6 +52,7 @@ from app.db.models.common import CalculationGeometryRole
 from app.db.models.geometry import Geometry
 from app.db.models.kinetics import Kinetics
 from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.network import Network, NetworkSpecies
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
@@ -57,7 +60,9 @@ from app.db.models.reaction import (
     ReactionParticipant,
 )
 from app.db.models.species import Species, SpeciesEntry
+from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
+from app.db.models.transport import Transport
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.services.reaction_resolution import reaction_stoichiometry_hash
 
@@ -91,6 +96,20 @@ THERMO_EXISTS = "thermo_exists"
 THERMO_NONE = "thermo_none"
 KINETICS_EXISTS = "kinetics_exists"
 KINETICS_NONE = "kinetics_none"
+STATMECH_EXISTS = "statmech_exists"
+STATMECH_NONE = "statmech_none"
+TRANSPORT_EXISTS = "transport_exists"
+TRANSPORT_NONE = "transport_none"
+
+# Geometry identity
+GEOMETRY_IDENTITY_EXACT = "geometry_identity_exact"
+GEOMETRY_IDENTITY_NONE = "geometry_identity_none"
+
+# Network membership
+NETWORK_EXISTS = "network_exists"
+NETWORK_NONE = "network_none"
+NETWORK_MEMBERSHIP_CONTAINS_ALL = "network_membership_contains_all"
+SPECIES_ENTRY_NOT_FOUND = "species_entry_not_found"
 
 # LOT field-level codes
 LOT_NONE = "lot_none"
@@ -179,17 +198,23 @@ class _MatchBuilder:
         has_identity_exact = (
             SPECIES_IDENTITY_EXACT in self.codes
             or REACTION_IDENTITY_EXACT in self.codes
+            or GEOMETRY_IDENTITY_EXACT in self.codes
         )
         has_identity_none = (
             SPECIES_IDENTITY_NONE in self.codes
             or REACTION_IDENTITY_NONE in self.codes
+            or GEOMETRY_IDENTITY_NONE in self.codes
             or REACTANT_NOT_FOUND in self.codes
             or PRODUCT_NOT_FOUND in self.codes
+            or SPECIES_ENTRY_NOT_FOUND in self.codes
         )
         has_result_none = (
             CALCULATION_NONE in self.codes
             or THERMO_NONE in self.codes
             or KINETICS_NONE in self.codes
+            or STATMECH_NONE in self.codes
+            or TRANSPORT_NONE in self.codes
+            or NETWORK_NONE in self.codes
         )
         has_entry_none = (
             SPECIES_ENTRY_NONE in self.codes
@@ -1134,5 +1159,305 @@ def lookup_reaction_kinetics(
                 ),
                 summary=_kinetics_summary(kin),
             ))
+
+    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+
+
+# ---------------------------------------------------------------------------
+# 8. Identity lookup: /lookup/geometry
+# ---------------------------------------------------------------------------
+
+
+@router.get("/geometry", response_model=LookupResponse)
+def lookup_geometry(
+    geom_hash: str = Query(..., description="Stored geometry identity hash"),
+    session: Session = Depends(get_db),
+):
+    """Discover whether a geometry already exists, by exact hash.
+
+    First-pass matching semantics: exact hash only. Optional geometry-payload
+    canonicalization may be added later; see ``lookup-expansion-spec.md``.
+    """
+    query_echo = LookupQuery(kind="geometry", inputs={"geom_hash": geom_hash})
+    mb = _MatchBuilder()
+
+    geom = session.scalar(
+        select(Geometry).where(Geometry.geom_hash == geom_hash)
+    )
+    if geom is None:
+        mb.add(GEOMETRY_IDENTITY_NONE, "no geometry with this hash exists")
+        return LookupResponse(query=query_echo, match=mb.build())
+
+    mb.add(GEOMETRY_IDENTITY_EXACT, "geometry identity matched exactly by hash")
+
+    calc_count = session.scalar(
+        select(func.count(CalculationOutputGeometry.calculation_id))
+        .where(CalculationOutputGeometry.geometry_id == geom.id)
+    ) or 0
+
+    result = LookupResultItem(
+        resource_type="geometry",
+        id=geom.id,
+        links=ResourceLink(self=f"/api/v1/geometries/{geom.id}"),
+        summary={
+            "geom_hash": geom.geom_hash,
+            "natoms": geom.natoms,
+            "calculation_output_count": calc_count,
+        },
+    )
+    return LookupResponse(query=query_echo, match=mb.build(), results=[result])
+
+
+# ---------------------------------------------------------------------------
+# 9. Result lookup: /lookup/statmech
+# ---------------------------------------------------------------------------
+
+
+def _statmech_summary(row: Statmech) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "scientific_origin": (
+            row.scientific_origin.value
+            if hasattr(row.scientific_origin, "value")
+            else str(row.scientific_origin)
+        ),
+    }
+    if row.statmech_treatment is not None:
+        summary["statmech_treatment"] = (
+            row.statmech_treatment.value
+            if hasattr(row.statmech_treatment, "value")
+            else str(row.statmech_treatment)
+        )
+    if row.rigid_rotor_kind is not None:
+        summary["rigid_rotor_kind"] = (
+            row.rigid_rotor_kind.value
+            if hasattr(row.rigid_rotor_kind, "value")
+            else str(row.rigid_rotor_kind)
+        )
+    if row.point_group is not None:
+        summary["point_group"] = row.point_group
+    if row.is_linear is not None:
+        summary["is_linear"] = row.is_linear
+    if row.external_symmetry is not None:
+        summary["external_symmetry"] = row.external_symmetry
+    if row.software_release_id is not None:
+        summary["software_release_id"] = row.software_release_id
+    if row.workflow_tool_release_id is not None:
+        summary["workflow_tool_release_id"] = row.workflow_tool_release_id
+    if row.literature_id is not None:
+        summary["literature_id"] = row.literature_id
+    return summary
+
+
+@router.get("/statmech", response_model=LookupResponse)
+def lookup_statmech(
+    species_entry_id: int = Query(..., description="Species entry to search"),
+    session: Session = Depends(get_db),
+):
+    """Discover statmech records attached to a species entry.
+
+    Append-only: multiple records for the same species entry are all
+    returned, not collapsed into one ``preferred`` row.
+    """
+    query_echo = LookupQuery(
+        kind="statmech",
+        inputs={"species_entry_id": species_entry_id},
+    )
+    mb = _MatchBuilder()
+
+    entry = session.get(SpeciesEntry, species_entry_id)
+    if entry is None:
+        raise NotFoundError(f"SpeciesEntry {species_entry_id} not found")
+
+    rows = session.scalars(
+        select(Statmech)
+        .where(Statmech.species_entry_id == species_entry_id)
+        .order_by(Statmech.id)
+    ).all()
+
+    results: list[LookupResultItem] = []
+
+    if not rows:
+        mb.add(STATMECH_NONE, "no statmech records found for this species entry")
+    else:
+        mb.add(STATMECH_EXISTS, f"{len(rows)} statmech record(s) found")
+        for row in rows:
+            results.append(LookupResultItem(
+                resource_type="statmech",
+                id=row.id,
+                links=ResourceLink(
+                    self=f"/api/v1/statmech/{row.id}",
+                    owner=f"/api/v1/species-entries/{species_entry_id}",
+                ),
+                summary=_statmech_summary(row),
+            ))
+
+    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+
+
+# ---------------------------------------------------------------------------
+# 10. Result lookup: /lookup/transport
+# ---------------------------------------------------------------------------
+
+
+def _transport_summary(row: Transport) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "scientific_origin": (
+            row.scientific_origin.value
+            if hasattr(row.scientific_origin, "value")
+            else str(row.scientific_origin)
+        ),
+    }
+    if row.sigma_angstrom is not None:
+        summary["sigma_angstrom"] = row.sigma_angstrom
+    if row.epsilon_over_k_k is not None:
+        summary["epsilon_over_k_k"] = row.epsilon_over_k_k
+    if row.dipole_debye is not None:
+        summary["dipole_debye"] = row.dipole_debye
+    if row.polarizability_angstrom3 is not None:
+        summary["polarizability_angstrom3"] = row.polarizability_angstrom3
+    if row.rotational_relaxation is not None:
+        summary["rotational_relaxation"] = row.rotational_relaxation
+    if row.software_release_id is not None:
+        summary["software_release_id"] = row.software_release_id
+    if row.workflow_tool_release_id is not None:
+        summary["workflow_tool_release_id"] = row.workflow_tool_release_id
+    if row.literature_id is not None:
+        summary["literature_id"] = row.literature_id
+    return summary
+
+
+@router.get("/transport", response_model=LookupResponse)
+def lookup_transport(
+    species_entry_id: int = Query(..., description="Species entry to search"),
+    session: Session = Depends(get_db),
+):
+    """Discover transport records attached to a species entry.
+
+    Append-only: multiple records for the same species entry are all
+    returned, not collapsed into one ``preferred`` row.
+    """
+    query_echo = LookupQuery(
+        kind="transport",
+        inputs={"species_entry_id": species_entry_id},
+    )
+    mb = _MatchBuilder()
+
+    entry = session.get(SpeciesEntry, species_entry_id)
+    if entry is None:
+        raise NotFoundError(f"SpeciesEntry {species_entry_id} not found")
+
+    rows = session.scalars(
+        select(Transport)
+        .where(Transport.species_entry_id == species_entry_id)
+        .order_by(Transport.id)
+    ).all()
+
+    results: list[LookupResultItem] = []
+
+    if not rows:
+        mb.add(TRANSPORT_NONE, "no transport records found for this species entry")
+    else:
+        mb.add(TRANSPORT_EXISTS, f"{len(rows)} transport record(s) found")
+        for row in rows:
+            results.append(LookupResultItem(
+                resource_type="transport",
+                id=row.id,
+                links=ResourceLink(
+                    self=f"/api/v1/transport/{row.id}",
+                    owner=f"/api/v1/species-entries/{species_entry_id}",
+                ),
+                summary=_transport_summary(row),
+            ))
+
+    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+
+
+# ---------------------------------------------------------------------------
+# 11. Membership lookup: /lookup/network
+# ---------------------------------------------------------------------------
+
+
+@router.get("/network", response_model=LookupResponse)
+def lookup_network(
+    species_entry_ids: list[int] = Query(
+        ...,
+        description=(
+            "Species-entry IDs participating in the network. Matching is "
+            "contains-all: returned networks contain every requested ID."
+        ),
+    ),
+    session: Session = Depends(get_db),
+):
+    """Discover networks by participating species-entry membership.
+
+    First-pass matching semantics: **contains-all**. A network is returned
+    only if it lists every requested ``species_entry_id`` in
+    ``network_species`` (any role). This matches how network identity is
+    experienced scientifically and avoids the noisiness of contains-any.
+    """
+    inputs: dict[str, Any] = {"species_entry_ids": list(species_entry_ids)}
+    query_echo = LookupQuery(kind="network", inputs=inputs)
+    mb = _MatchBuilder()
+
+    requested = list(dict.fromkeys(species_entry_ids))
+    missing: list[int] = []
+    for se_id in requested:
+        if session.get(SpeciesEntry, se_id) is None:
+            missing.append(se_id)
+    if missing:
+        mb.add(
+            SPECIES_ENTRY_NOT_FOUND,
+            f"species_entry_id(s) not found: {missing}",
+        )
+        return LookupResponse(query=query_echo, match=mb.build())
+
+    mb.add(
+        NETWORK_MEMBERSHIP_CONTAINS_ALL,
+        f"matching networks must contain all of {requested}",
+    )
+
+    # contains-all: group by network_id, count distinct requested species-entries
+    # present, keep networks whose count equals len(requested).
+    n_requested = len(requested)
+    network_id_rows = session.execute(
+        select(NetworkSpecies.network_id)
+        .where(NetworkSpecies.species_entry_id.in_(requested))
+        .group_by(NetworkSpecies.network_id)
+        .having(
+            func.count(func.distinct(NetworkSpecies.species_entry_id)) == n_requested
+        )
+        .order_by(NetworkSpecies.network_id)
+    ).all()
+    network_ids = [row[0] for row in network_id_rows]
+
+    results: list[LookupResultItem] = []
+
+    if not network_ids:
+        mb.add(NETWORK_NONE, "no networks contain all requested species entries")
+        return LookupResponse(query=query_echo, match=mb.build(), results=results)
+
+    mb.add(NETWORK_EXISTS, f"{len(network_ids)} network(s) contain all requested species")
+
+    for network_id in network_ids:
+        net = session.get(Network, network_id)
+        if net is None:
+            continue
+        species_count = session.scalar(
+            select(func.count(func.distinct(NetworkSpecies.species_entry_id)))
+            .where(NetworkSpecies.network_id == network_id)
+        ) or 0
+        summary: dict[str, Any] = {
+            "name": net.name,
+            "species_count": species_count,
+            "matched_species_entry_ids": requested,
+        }
+        if net.description is not None:
+            summary["description"] = net.description
+        results.append(LookupResultItem(
+            resource_type="network",
+            id=net.id,
+            links=ResourceLink(self=f"/api/v1/networks/{net.id}"),
+            summary=summary,
+        ))
 
     return LookupResponse(query=query_echo, match=mb.build(), results=results)

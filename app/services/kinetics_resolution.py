@@ -60,9 +60,9 @@ def resolve_kinetics_upload(
             if request.reported_ea is not None
             else None
         ),
-        d_a=request.d_a,
-        d_n=request.d_n,
-        d_ea_kj_mol=(
+        a_uncertainty=request.a_uncertainty,
+        n_uncertainty=request.n_uncertainty,
+        ea_uncertainty_kj_mol=(
             convert_ea_to_kj_mol(request.d_reported_ea, request.reported_ea_units)
             if request.d_reported_ea is not None
             else None
@@ -101,9 +101,9 @@ def persist_kinetics(
         a_units=kinetics_create.a_units,
         n=kinetics_create.n,
         ea_kj_mol=kinetics_create.ea_kj_mol,
-        d_a=kinetics_create.d_a,
-        d_n=kinetics_create.d_n,
-        d_ea_kj_mol=kinetics_create.d_ea_kj_mol,
+        a_uncertainty=kinetics_create.a_uncertainty,
+        n_uncertainty=kinetics_create.n_uncertainty,
+        ea_uncertainty_kj_mol=kinetics_create.ea_uncertainty_kj_mol,
         tmin_k=kinetics_create.tmin_k,
         tmax_k=kinetics_create.tmax_k,
         degeneracy=kinetics_create.degeneracy,

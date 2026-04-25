@@ -159,6 +159,19 @@ def _run_transition_state(session: Session, job: UploadJob) -> dict:
     }
 
 
+def _run_transport(session: Session, job: UploadJob) -> dict:
+    from app.schemas.workflows.transport_upload import TransportUploadRequest
+    from app.workflows.transport import persist_transport_upload
+
+    request = TransportUploadRequest.model_validate(job.payload)
+    transport = persist_transport_upload(session, request, created_by=job.created_by)
+    return {
+        "type": "transport",
+        "id": transport.id,
+        "species_entry_id": transport.species_entry_id,
+    }
+
+
 _DISPATCH: dict[UploadJobKind, callable] = {
     UploadJobKind.computed_reaction: _run_computed_reaction,
     UploadJobKind.conformer:         _run_conformer,
@@ -168,6 +181,7 @@ _DISPATCH: dict[UploadJobKind, callable] = {
     UploadJobKind.network_pdep:      _run_network_pdep,
     UploadJobKind.thermo:            _run_thermo,
     UploadJobKind.transition_state:  _run_transition_state,
+    UploadJobKind.transport:         _run_transport,
 }
 
 

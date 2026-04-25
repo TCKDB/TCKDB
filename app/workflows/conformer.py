@@ -32,7 +32,8 @@ def persist_conformer_upload(
     :param session: Active SQLAlchemy session.
     :param request: Upload-facing conformer payload.
     :param created_by: Optional application user id for newly created rows.
-    :returns: Newly created ``ConformerObservation`` row.
+    :returns: Newly created ``ConformerObservation`` row. The upload always
+        creates a new observation row; only the basin-level group may be reused.
     :raises ValueError:
         If species identity or geometry parsing fails during upload resolution.
     """

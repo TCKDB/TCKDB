@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from app.db.models.common import MoleculeKind
+from app.db.models.common import MoleculeKind, StereoKind
 from app.schemas.common import SchemaBase, TimestampedReadSchema
 
 
@@ -10,6 +10,7 @@ class SpeciesBase(BaseModel):
     inchi_key: str = Field(min_length=27, max_length=27)
     charge: int
     multiplicity: int = Field(ge=1)
+    stereo_kind: StereoKind
 
 
 class SpeciesCreate(SpeciesBase, SchemaBase):
@@ -22,6 +23,7 @@ class SpeciesUpdate(SchemaBase):
     inchi_key: str | None = Field(default=None, min_length=27, max_length=27)
     charge: int | None = None
     multiplicity: int | None = Field(default=None, ge=1)
+    stereo_kind: StereoKind | None = None
 
 
 class SpeciesRead(SpeciesBase, TimestampedReadSchema):

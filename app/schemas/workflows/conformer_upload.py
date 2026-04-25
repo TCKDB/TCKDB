@@ -25,6 +25,7 @@ from app.schemas.utils import normalize_optional_text
 from app.schemas.workflows.energy_correction_upload import (
     AppliedEnergyCorrectionUploadPayload,
 )
+from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.schemas.workflows.transport_upload import TransportUploadPayload
 
 
@@ -38,7 +39,7 @@ class ConformerUploadStatmechPayload(SchemaBase):
 
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
 
-    literature_id: int | None = None
+    literature: LiteratureUploadRequest | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     software_release: SoftwareReleaseRef | None = None
 
@@ -75,9 +76,12 @@ class ConformerUploadRequest(SchemaBase):
     """Workflow-facing conformer upload payload.
 
     The backend resolves the species, species entry, geometry, and calculation
-    provenance, then assigns or creates a conformer group and observation row.
-    Optionally, additional calculations (freq, sp) can be attached alongside
-    the primary calculation.
+    provenance, then assigns or creates a conformer group and creates one new
+    provenance-bearing observation row for this upload. If the geometry matches
+    an existing basin, the group is reused but the observation is not silently
+    deduplicated. Optionally, additional calculations (freq, sp) can be
+    attached alongside the primary calculation, and they anchor to that same
+    observation.
     """
 
     species_entry: SpeciesEntryIdentityPayload

@@ -112,12 +112,21 @@ def test_persist_conformer_upload_reuses_species_entry_and_labeled_group(
 
             assert first_group is not None
             assert second_group is not None
+            assert first.id != second.id
             assert first_group.id == second_group.id
 
             assert first_calc is not None
             assert second_calc is not None
             assert first_calc.id != second_calc.id
             assert first_calc.species_entry_id == second_calc.species_entry_id
+
+            grouped_observations = session.scalars(
+                select(ConformerObservation).where(
+                    ConformerObservation.conformer_group_id == first_group.id
+                )
+            ).all()
+            grouped_ids = {obs.id for obs in grouped_observations}
+            assert {first.id, second.id}.issubset(grouped_ids)
 
 
 def test_persist_conformer_upload_creates_linked_statmech_record(db_engine) -> None:
@@ -244,6 +253,8 @@ def test_conformer_upload_with_additional_calculations(db_engine) -> None:
 
         # Primary calc is the opt (linked to the observation)
         assert opt_calc.conformer_observation_id == observation.id
+        assert freq_calc.conformer_observation_id == observation.id
+        assert sp_calc.conformer_observation_id == observation.id
 
         # Freq result
         freq_result = session.get(CalculationFreqResult, freq_calc.id)
@@ -277,6 +288,63 @@ def test_conformer_upload_with_additional_calculations(db_engine) -> None:
         ).all()
         assert len(geo_links) == 3
         assert len({g.geometry_id for g in geo_links}) == 1
+
+
+def test_conformer_upload_statmech_resolves_literature_from_payload(
+    db_engine, monkeypatch,
+) -> None:
+    """Nested literature payload on statmech must resolve into a Literature row,
+    without the upload ever exposing a raw ``literature_id`` FK.
+    """
+    from app.db.models.literature import Literature
+
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata",
+        lambda doi: {
+            "title": "Statmech study on hydrogen",
+            "container-title": ["J. Chem. Phys."],
+            "issued": 2010,
+            "URL": f"https://doi.org/{doi}",
+        },
+    )
+
+    request = ConformerUploadRequest(
+        species_entry={"smiles": "[H]", "charge": 0, "multiplicity": 2},
+        geometry={"xyz_text": "1\nH atom\nH 0.0 0.0 0.0"},
+        calculation={
+            "type": "sp",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+        },
+        label="conf-lit-doi",
+        statmech={
+            "scientific_origin": "computed",
+            "statmech_treatment": "rrho",
+            "note": "statmech-with-literature-payload",
+            "literature": {
+                "doi": "10.1063/conformer-statmech",
+                "title": "fallback if DOI lookup fails",
+            },
+        },
+    )
+
+    with Session(db_engine) as session, session.begin():
+        observation = persist_conformer_upload(session, request)
+        calculation = observation.calculations[0]
+
+        statmech = session.scalar(
+            select(Statmech).where(
+                Statmech.species_entry_id == calculation.species_entry_id,
+                Statmech.note == "statmech-with-literature-payload",
+            )
+        )
+        assert statmech is not None
+        assert statmech.literature_id is not None
+
+        lit = session.get(Literature, statmech.literature_id)
+        assert lit is not None
+        assert lit.title == "Statmech study on hydrogen"
+        assert lit.doi == "10.1063/conformer-statmech"
 
 
 def test_conformer_upload_rejects_irc_additional() -> None:

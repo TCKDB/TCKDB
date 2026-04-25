@@ -20,12 +20,10 @@ from pathlib import Path
 _CALMOLK_TO_JMOLK = 4.184
 _KJMOL_TO_HARTREE = 1.0 / 2625.5
 
-# Default paths
-_SDF_DIR = Path("/home/calvin/code/chemprop_cmpnn/DATA/SDF")
-_CSV_PATH = Path(
-    "/home/calvin/code/chemprop_phd_customised/habnet/data/processed/"
-    "target_data/kinetics_summary_dlnpo.csv"
-)
+# Default paths — data is vendored into the repo at tests/fixtures/sdf/
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_SDF_DIR = _REPO_ROOT / "tests" / "fixtures" / "sdf"
+_CSV_PATH = _SDF_DIR / "kinetics_summary_dlnpo.csv"
 
 # Role mapping: r1h, r2 → reactant; r2h, r1 → product
 _REACTANT_TYPES = {"r1h", "r2"}

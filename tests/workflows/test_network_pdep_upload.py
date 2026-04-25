@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+import pytest
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
@@ -13,6 +14,7 @@ from app.db.models.calculation import (
     CalculationOutputGeometry,
     CalculationSPResult,
 )
+from app.db.models.common import CalculationType
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
     NetworkChannel,
@@ -24,7 +26,10 @@ from app.db.models.network_pdep import (
     NetworkStateParticipant,
 )
 from app.db.models.reaction import ReactionEntry
-from app.db.models.species import ConformerObservation
+from app.db.models.species import (
+    ConformerGroup,
+    ConformerObservation,
+)
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 from app.workflows.network_pdep import persist_network_pdep_upload
@@ -90,7 +95,7 @@ def _full_payload(*, include_solve: bool = True) -> dict:
         },
         {
             "key": "ethylperoxy",
-            "species_entry": {"smiles": "CCOO", "charge": 0, "multiplicity": 1},
+            "species_entry": {"smiles": "CCO[O]", "charge": 0, "multiplicity": 2},
             "label": "C2H5OO",
             "conformers": [{
                 "key": "etoo_conf1",
@@ -395,3 +400,349 @@ def test_geometry_reuse_via_key(db_engine) -> None:
                 f"Species entry {se_id} has calcs pointing to {len(geom_ids)} "
                 f"different geometries — expected 1"
             )
+
+
+def test_same_basin_species_conformers_keep_distinct_observations_and_calc_anchors(
+    db_engine,
+) -> None:
+    """Species-side calculations should anchor to the observation for their geometry key."""
+    payload = _full_payload(include_solve=False)
+    payload["species"][1]["conformers"] = [
+        {
+            "key": "o2_conf_a",
+            "geometry": {"key": "o2_geom_a", "xyz_text": _XYZ_O2},
+            "calculation": {
+                "key": "o2_opt_a",
+                "type": "opt",
+                "software_release": _SOFTWARE,
+                "level_of_theory": _LOT_DFT,
+                "opt_converged": True,
+            },
+            "note": "observation a",
+        },
+        {
+            "key": "o2_conf_b",
+            "geometry": {"key": "o2_geom_b", "xyz_text": _XYZ_O2},
+            "calculation": {
+                "key": "o2_opt_b",
+                "type": "opt",
+                "software_release": _SOFTWARE,
+                "level_of_theory": _LOT_DFT,
+                "opt_converged": True,
+            },
+            "note": "observation b",
+        },
+    ]
+    payload["species"][1]["calculations"] = [
+        {
+            "key": "o2_freq_a",
+            "type": "freq",
+            "geometry_key": "o2_geom_a",
+            "software_release": _SOFTWARE,
+            "level_of_theory": _LOT_DFT,
+            "freq_n_imag": 0,
+            "freq_zpe_hartree": 0.05,
+        },
+        {
+            "key": "o2_sp_b",
+            "type": "sp",
+            "geometry_key": "o2_geom_b",
+            "software_release": _SOFTWARE,
+            "level_of_theory": _LOT_CC,
+            "sp_electronic_energy_hartree": -150.2,
+        },
+    ]
+
+    with Session(db_engine) as session, session.begin():
+        session.add(AppUser(id=31, username="anchor_tester"))
+        session.flush()
+        request = NetworkPDepUploadRequest(**payload)
+        persist_network_pdep_upload(session, request, created_by=31)
+
+        target_entry_id = session.execute(
+            select(Calculation.species_entry_id)
+            .where(
+                Calculation.created_by == 31,
+                Calculation.type == CalculationType.opt,
+                Calculation.species_entry_id.is_not(None),
+            )
+            .group_by(Calculation.species_entry_id)
+            .having(func.count(Calculation.id) == 2)
+        ).scalar_one()
+
+        ethyl_observations = session.scalars(
+            select(ConformerObservation)
+            .join(
+                ConformerGroup,
+                ConformerGroup.id == ConformerObservation.conformer_group_id,
+            )
+            .where(
+                ConformerGroup.species_entry_id == target_entry_id,
+                ConformerObservation.created_by == 31,
+            )
+        ).all()
+        assert len(ethyl_observations) == 2
+        observation_ids = {obs.id for obs in ethyl_observations}
+        assert len({obs.conformer_group_id for obs in ethyl_observations}) == 1
+
+        anchored_calcs = session.scalars(
+            select(Calculation).where(
+                Calculation.conformer_observation_id.in_(observation_ids),
+                Calculation.type.in_([CalculationType.freq, CalculationType.sp]),
+                Calculation.species_entry_id == target_entry_id,
+                Calculation.created_by == 31,
+            )
+        ).all()
+        assert len(anchored_calcs) == 2
+        assert {calc.conformer_observation_id for calc in anchored_calcs} == observation_ids
+
+
+# ---------------------------------------------------------------------------
+# Bundle-to-shared-seam convergence regressions
+# ---------------------------------------------------------------------------
+
+
+from contextlib import contextmanager
+from typing import Iterator as _Iterator
+
+
+@contextmanager
+def _rolled_back_session(db_engine) -> _Iterator[Session]:
+    """Connection-bound session that always rolls back, to isolate tests
+    that exercise the bundle workflow without committing to the shared DB."""
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
+
+
+def test_bundle_calculation_parameters_persist_via_shared_seam(db_engine) -> None:
+    """Parsed parameters on a bundle CalculationIn now flow through the shared
+    seam and land as ``calculation_parameter`` rows plus snapshot metadata."""
+    from datetime import datetime, timezone
+
+    from app.db.models.calculation import (
+        CalculationParameter,
+        CalculationParameterVocab,
+    )
+
+    extracted_at = datetime(2026, 4, 23, 12, 0, 0, tzinfo=timezone.utc)
+    canonical_key = "bundle_network_pdep_opt_convergence"
+
+    payload = _full_payload(include_solve=False)
+    # Attach parameters + snapshot to the first conformer's opt calculation.
+    payload["species"][0]["conformers"][0]["calculation"].update(
+        {
+            "parameters": [
+                {
+                    "raw_key": "tight",
+                    "raw_value": "tight",
+                    "canonical_key": canonical_key,
+                    "canonical_value": "tight",
+                    "section": "opt",
+                    "value_type": "enum",
+                },
+                {
+                    "raw_key": "%mem",
+                    "raw_value": "8GB",
+                    "section": "resource",
+                    "value_type": "string",
+                    "unit": "GB",
+                },
+            ],
+            "parameters_json": {"route": "# B3LYP/6-31G(d) opt=tight"},
+            "parameters_parser_version": "bundle-test-1",
+            "parameters_extracted_at": extracted_at.isoformat(),
+        }
+    )
+
+    with _rolled_back_session(db_engine) as session:
+        session.add(CalculationParameterVocab(canonical_key=canonical_key))
+        session.flush()
+
+        request = NetworkPDepUploadRequest(**payload)
+        persist_network_pdep_upload(session, request, created_by=None)
+
+        # Scope the query to the distinctive parser_version set by this test
+        # so earlier committed test data does not interfere with counts.
+        with_params = session.scalars(
+            select(Calculation).where(
+                Calculation.parameters_parser_version == "bundle-test-1"
+            )
+        ).all()
+        assert len(with_params) == 1
+        calc = with_params[0]
+        assert calc.parameters_json == {"route": "# B3LYP/6-31G(d) opt=tight"}
+        assert calc.parameters_extracted_at is not None
+
+        rows = session.scalars(
+            select(CalculationParameter)
+            .where(CalculationParameter.calculation_id == calc.id)
+            .order_by(CalculationParameter.id)
+        ).all()
+        assert len(rows) == 2
+
+        first, second = rows
+        assert first.raw_key == "tight"
+        assert first.canonical_key == canonical_key
+        assert first.canonical_value == "tight"
+
+        assert second.raw_key == "%mem"
+        # Unknown canonical key is silently demoted by the shared seam.
+        assert second.canonical_key is None
+        assert second.canonical_value is None
+        assert second.unit == "GB"
+
+
+def test_bundle_unknown_canonical_key_demoted_through_shared_seam(db_engine) -> None:
+    """Unknown canonical_key observations still persist (with canonical_key=NULL)
+    — shared-seam vocab demotion applies through the bundle path."""
+    from app.db.models.calculation import CalculationParameter
+
+    payload = _full_payload(include_solve=False)
+    payload["species"][0]["conformers"][0]["calculation"]["parameters"] = [
+        {
+            "raw_key": "madeup_option",
+            "raw_value": "on",
+            "canonical_key": "this_does_not_exist",
+            "canonical_value": "on",
+        }
+    ]
+
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**payload)
+        persist_network_pdep_upload(session, request, created_by=None)
+
+        rows = session.scalars(
+            select(CalculationParameter).where(
+                CalculationParameter.raw_key == "madeup_option"
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].canonical_key is None
+        assert rows[0].canonical_value is None
+
+
+def test_bundle_owner_semantics_preserved_after_convergence(db_engine) -> None:
+    """Species-owned and TS-owned calculations keep their exclusive-owner FKs
+    after routing through the shared seam."""
+    with _rolled_back_session(db_engine) as session:
+        baseline_calc_id = session.scalar(select(func.max(Calculation.id))) or 0
+
+        request = NetworkPDepUploadRequest(**_full_payload(include_solve=False))
+        persist_network_pdep_upload(session, request, created_by=None)
+
+        new_calcs = session.scalars(
+            select(Calculation).where(Calculation.id > baseline_calc_id)
+        ).all()
+        assert len(new_calcs) > 0
+        for c in new_calcs:
+            owner_count = (
+                (1 if c.species_entry_id is not None else 0)
+                + (1 if c.transition_state_entry_id is not None else 0)
+            )
+            assert owner_count == 1, (
+                f"calc {c.id} type={c.type} has {owner_count} owners"
+            )
+
+        # TS calculations in this payload are owned by the TS entry only.
+        ts_calcs = [
+            c for c in new_calcs if c.transition_state_entry_id is not None
+        ]
+        assert len(ts_calcs) >= 1
+        assert all(c.species_entry_id is None for c in ts_calcs)
+
+
+def test_bundle_inline_results_and_geometry_links_preserved(db_engine) -> None:
+    """Inline opt/freq/sp results and the CalculationOutputGeometry link still
+    persist correctly after routing through the shared seam."""
+    with _rolled_back_session(db_engine) as session:
+        # Record the highest calculation.id before the upload so we can scope
+        # subsequent queries to just-created rows and ignore any state that
+        # prior committed tests may have left behind.
+        baseline_calc_id = session.scalar(select(func.max(Calculation.id))) or 0
+
+        request = NetworkPDepUploadRequest(**_full_payload(include_solve=False))
+        persist_network_pdep_upload(session, request, created_by=None)
+
+        new_calc_ids = {
+            c.id
+            for c in session.scalars(
+                select(Calculation).where(Calculation.id > baseline_calc_id)
+            ).all()
+        }
+        assert len(new_calc_ids) > 0
+
+        # Opt result for the ethyl conformer, scoped to this test's calcs.
+        opt_rows = session.scalars(
+            select(CalculationOptResult).where(
+                CalculationOptResult.calculation_id.in_(new_calc_ids)
+            )
+        ).all()
+        assert any(r.converged is True for r in opt_rows)
+
+        # SP results: one per species (ethyl, O2, ethylperoxy).
+        sp_rows = session.scalars(
+            select(CalculationSPResult).where(
+                CalculationSPResult.calculation_id.in_(new_calc_ids)
+            )
+        ).all()
+        assert len(sp_rows) >= 3
+
+        # Freq results: ethyl_freq and ts_assoc_freq.
+        freq_rows = session.scalars(
+            select(CalculationFreqResult).where(
+                CalculationFreqResult.calculation_id.in_(new_calc_ids)
+            )
+        ).all()
+        assert len(freq_rows) >= 2
+
+        linked_calc_ids = {
+            row[0]
+            for row in session.execute(
+                select(CalculationOutputGeometry.calculation_id)
+                .where(CalculationOutputGeometry.calculation_id.in_(new_calc_ids))
+                .distinct()
+            ).all()
+        }
+        # Every calculation in this payload has a geometry (directly or via
+        # geometry_key), so every new calc should be linked.
+        assert linked_calc_ids == new_calc_ids
+
+
+# ---------------------------------------------------------------------------
+# Strict elemental-balance policy also applies inside PDep workflows
+# ---------------------------------------------------------------------------
+
+
+def test_pdep_workflow_rejects_imbalanced_micro_reaction(db_engine) -> None:
+    """PDep uploads reuse the shared reaction seam and must enforce
+    strict elemental balance on their micro reactions.
+
+    Construct an otherwise-valid payload but drop ``O2`` from the
+    association reactants so that ``ethyl -> ethylperoxy`` is no longer
+    element-balanced (2 O atoms appear on the product side with no
+    matching source on the reactant side).
+    """
+    payload = _full_payload(include_solve=False)
+    payload["micro_reactions"][0]["reactants"] = [{"species_key": "ethyl"}]
+
+    with Session(db_engine) as session, session.begin():
+        request = NetworkPDepUploadRequest(**payload)
+        with pytest.raises(ValueError, match="not element-balanced"):
+            persist_network_pdep_upload(session, request)
+
+
+def test_pdep_workflow_allows_balanced_micro_reaction(db_engine) -> None:
+    """Regression guard: the canonical balanced PDep payload
+    (``ethyl + O2 -> ethylperoxy``) must still succeed under the strict
+    elemental-balance rule."""
+    with Session(db_engine) as session, session.begin():
+        request = NetworkPDepUploadRequest(**_full_payload(include_solve=False))
+        network = persist_network_pdep_upload(session, request)
+        assert network.id is not None

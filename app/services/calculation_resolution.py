@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
+from typing import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -13,26 +15,36 @@ from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
     CalculationFreqResult,
+    CalculationIRCPoint,
+    CalculationIRCResult,
+    CalculationNEBImageResult,
     CalculationOptResult,
     CalculationOutputGeometry,
+    CalculationParameter,
+    CalculationParameterVocab,
     CalculationSPResult,
 )
 from app.db.models.common import (
     CalculationDependencyRole,
     CalculationGeometryRole,
     CalculationType,
+    IRCDirection,
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.entities.calculation import CalculationCreateResolved
 from app.schemas.fragments.calculation import (
     CalculationCreateRequest,
+    CalculationParameterObservation,
     CalculationWithResultsPayload,
+    IRCResultPayload,
+    NEBResultPayload,
 )
 from app.schemas.fragments.refs import (
     LevelOfTheoryRef,
     WorkflowToolReleaseRef,
 )
+from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.software_resolution import resolve_software_release_ref
 
 
@@ -233,6 +245,170 @@ def persist_calculation(
 # ---------------------------------------------------------------------------
 
 
+_IRC_POINT_DIRECTION_TO_ROLE: dict[IRCDirection, CalculationGeometryRole] = {
+    IRCDirection.forward: CalculationGeometryRole.irc_forward,
+    IRCDirection.reverse: CalculationGeometryRole.irc_reverse,
+}
+
+
+def _pending_output_geometry_ids(
+    session: Session, calculation_id: int
+) -> set[int]:
+    """Collect geometry ids already linked to a calculation in this session.
+
+    Inspects both newly-added pending rows and any persisted rows for the
+    calculation so callers can skip rows that would violate the
+    ``(calculation_id, geometry_id)`` uniqueness constraint.
+
+    :param session: Active SQLAlchemy session.
+    :param calculation_id: The calculation being inspected.
+    :returns: Set of geometry ids already linked (pending or persisted).
+    """
+
+    linked: set[int] = set()
+    for obj in session.new:
+        if (
+            isinstance(obj, CalculationOutputGeometry)
+            and obj.calculation_id == calculation_id
+            and obj.geometry_id is not None
+        ):
+            linked.add(obj.geometry_id)
+
+    persisted = session.scalars(
+        select(CalculationOutputGeometry.geometry_id).where(
+            CalculationOutputGeometry.calculation_id == calculation_id
+        )
+    ).all()
+    linked.update(persisted)
+    return linked
+
+
+def _persist_irc_result(
+    session: Session,
+    calculation: Calculation,
+    payload: IRCResultPayload,
+) -> None:
+    """Persist an IRC result bundle and its sampled points.
+
+    Resolves optional inline point geometries via the shared geometry
+    resolution service. Forward- and reverse-direction points additionally
+    produce a ``CalculationOutputGeometry`` row with the matching role;
+    the TS-marker point is intentionally not linked through
+    ``calculation_output_geometry`` since there is no clean role mapping
+    (the geometry is still preserved on ``calc_irc_point.geometry_id``).
+
+    :param session: Active SQLAlchemy session.
+    :param calculation: The owning IRC calculation row.
+    :param payload: Upload-facing IRC result bundle.
+    """
+
+    session.add(
+        CalculationIRCResult(
+            calculation_id=calculation.id,
+            direction=payload.direction,
+            has_forward=payload.has_forward,
+            has_reverse=payload.has_reverse,
+            ts_point_index=payload.ts_point_index,
+            point_count=(
+                payload.point_count
+                if payload.point_count is not None
+                else (len(payload.points) if payload.points else None)
+            ),
+            zero_energy_reference_hartree=payload.zero_energy_reference_hartree,
+            note=payload.note,
+        )
+    )
+
+    linked_geometry_ids = _pending_output_geometry_ids(session, calculation.id)
+
+    for point in sorted(payload.points, key=lambda p: p.point_index):
+        geometry_id: int | None = None
+        if point.geometry is not None:
+            geometry_id = resolve_geometry_payload(session, point.geometry).id
+
+        session.add(
+            CalculationIRCPoint(
+                calculation_id=calculation.id,
+                point_index=point.point_index,
+                direction=point.direction,
+                is_ts=point.is_ts,
+                reaction_coordinate=point.reaction_coordinate,
+                electronic_energy_hartree=point.electronic_energy_hartree,
+                relative_energy_kj_mol=point.relative_energy_kj_mol,
+                max_gradient=point.max_gradient,
+                rms_gradient=point.rms_gradient,
+                geometry_id=geometry_id,
+                note=point.note,
+            )
+        )
+
+        role = _IRC_POINT_DIRECTION_TO_ROLE.get(point.direction) if point.direction else None
+        if (
+            geometry_id is not None
+            and role is not None
+            and geometry_id not in linked_geometry_ids
+        ):
+            session.add(
+                CalculationOutputGeometry(
+                    calculation_id=calculation.id,
+                    geometry_id=geometry_id,
+                    output_order=point.point_index + 2,
+                    role=role,
+                )
+            )
+            linked_geometry_ids.add(geometry_id)
+
+
+def _persist_neb_result(
+    session: Session,
+    calculation: Calculation,
+    payload: NEBResultPayload,
+) -> None:
+    """Persist a NEB result bundle and its per-image rows.
+
+    Resolves optional inline image geometries via the shared geometry
+    resolution service and links each resolved geometry through
+    ``calculation_output_geometry`` with role ``neb_image``. Duplicate
+    ``(calculation_id, geometry_id)`` pairs are silently collapsed to a
+    single link to honour the table uniqueness constraint.
+
+    :param session: Active SQLAlchemy session.
+    :param calculation: The owning NEB calculation row.
+    :param payload: Upload-facing NEB result bundle.
+    """
+
+    linked_geometry_ids = _pending_output_geometry_ids(session, calculation.id)
+
+    for image in sorted(payload.images, key=lambda img: img.image_index):
+        geometry_id: int | None = None
+        if image.geometry is not None:
+            geometry_id = resolve_geometry_payload(session, image.geometry).id
+
+        session.add(
+            CalculationNEBImageResult(
+                calculation_id=calculation.id,
+                image_index=image.image_index,
+                electronic_energy_hartree=image.electronic_energy_hartree,
+                relative_energy_kj_mol=image.relative_energy_kj_mol,
+                path_distance_angstrom=image.path_distance_angstrom,
+                max_force=image.max_force,
+                rms_force=image.rms_force,
+                is_climbing_image=image.is_climbing_image,
+            )
+        )
+
+        if geometry_id is not None and geometry_id not in linked_geometry_ids:
+            session.add(
+                CalculationOutputGeometry(
+                    calculation_id=calculation.id,
+                    geometry_id=geometry_id,
+                    output_order=image.image_index + 2,
+                    role=CalculationGeometryRole.neb_image,
+                )
+            )
+            linked_geometry_ids.add(geometry_id)
+
+
 def persist_calculation_result(
     session: Session,
     calculation: Calculation,
@@ -243,6 +419,9 @@ def persist_calculation_result(
     :param session: Active SQLAlchemy session.
     :param calculation: The owning calculation row.
     :param calc_upload: Upload payload (may have one result block set).
+    :raises ValueError: If a result block's type does not match the
+        calculation's ``type`` — a defensive check that mirrors the
+        schema-layer validator.
     """
 
     if calc_upload.opt_result is not None:
@@ -273,6 +452,119 @@ def persist_calculation_result(
             )
         )
 
+    if calc_upload.irc_result is not None:
+        if calculation.type != CalculationType.irc:
+            raise ValueError(
+                f"irc_result is only allowed on irc calculations "
+                f"(got type '{calculation.type.value}')."
+            )
+        _persist_irc_result(session, calculation, calc_upload.irc_result)
+
+    if calc_upload.neb_result is not None:
+        if calculation.type != CalculationType.neb:
+            raise ValueError(
+                f"neb_result is only allowed on neb calculations "
+                f"(got type '{calculation.type.value}')."
+            )
+        _persist_neb_result(session, calculation, calc_upload.neb_result)
+
+
+def _resolve_canonical_keys(
+    session: Session, candidate_keys: set[str]
+) -> set[str]:
+    """Return the subset of candidate canonical keys present in the vocab.
+
+    Used to decide whether a parsed parameter's ``canonical_key`` can be
+    written through the FK or must be demoted to ``NULL``. The vocab is
+    intentionally not auto-populated: missing keys yield ``NULL`` so the
+    raw observation still persists.
+
+    :param session: Active SQLAlchemy session.
+    :param candidate_keys: Canonical-key strings emitted by the parser.
+    :returns: Subset of ``candidate_keys`` that already exist in vocab.
+    """
+
+    if not candidate_keys:
+        return set()
+
+    return set(
+        session.scalars(
+            select(CalculationParameterVocab.canonical_key).where(
+                CalculationParameterVocab.canonical_key.in_(candidate_keys)
+            )
+        ).all()
+    )
+
+
+def persist_calculation_parameters(
+    session: Session,
+    calculation: Calculation,
+    observations: Iterable[CalculationParameterObservation] | None,
+    *,
+    parameters_json: dict | None = None,
+    parameters_parser_version: str | None = None,
+    parameters_extracted_at: datetime | None = None,
+) -> list[CalculationParameter]:
+    """Persist parsed execution-control parameters for a calculation.
+
+    Writes one ``CalculationParameter`` row per supplied observation and,
+    when provided, mirrors the parser snapshot/version/extracted-at fields
+    onto the ``Calculation`` row. Canonical keys not present in
+    ``calculation_parameter_vocab`` are silently demoted to ``NULL`` so the
+    upload never fails on unmapped parameters; the raw key/value pair is
+    always preserved.
+
+    :param session: Active SQLAlchemy session.
+    :param calculation: The owning calculation row.
+    :param observations: Parsed parameter observations (may be ``None`` or empty).
+    :param parameters_json: Optional JSON snapshot from the parser to mirror onto
+        ``calculation.parameters_json``.
+    :param parameters_parser_version: Optional parser version tag.
+    :param parameters_extracted_at: Optional extraction timestamp.
+    :returns: Newly created parameter rows in the order they were supplied.
+    """
+
+    if parameters_json is not None:
+        calculation.parameters_json = parameters_json
+    if parameters_parser_version is not None:
+        calculation.parameters_parser_version = parameters_parser_version
+    if parameters_extracted_at is not None:
+        calculation.parameters_extracted_at = parameters_extracted_at
+
+    if not observations:
+        return []
+
+    obs_list = list(observations)
+    candidate_keys = {
+        obs.canonical_key for obs in obs_list if obs.canonical_key is not None
+    }
+    known_keys = _resolve_canonical_keys(session, candidate_keys)
+
+    rows: list[CalculationParameter] = []
+    for obs in obs_list:
+        canonical_key = (
+            obs.canonical_key
+            if obs.canonical_key is not None and obs.canonical_key in known_keys
+            else None
+        )
+        canonical_value = obs.canonical_value if canonical_key is not None else None
+
+        row = CalculationParameter(
+            calculation_id=calculation.id,
+            raw_key=obs.raw_key,
+            raw_value=obs.raw_value,
+            canonical_key=canonical_key,
+            canonical_value=canonical_value,
+            section=obs.section,
+            value_type=obs.value_type,
+            unit=obs.unit,
+            parameter_index=obs.parameter_index,
+        )
+        session.add(row)
+        rows.append(row)
+
+    return rows
+
 
 # Mapping from calculation type to the dependency role when the child
 # depends on the primary calculation.
@@ -280,6 +572,7 @@ _DEPENDENCY_ROLE_FOR_TYPE: dict[CalculationType, CalculationDependencyRole] = {
     CalculationType.freq: CalculationDependencyRole.freq_on,
     CalculationType.sp: CalculationDependencyRole.single_point_on,
     CalculationType.irc: CalculationDependencyRole.irc_start,
+    CalculationType.neb: CalculationDependencyRole.neb_parent,
 }
 
 
@@ -314,6 +607,14 @@ def resolve_and_persist_calculation_with_results(
     resolved = resolve_calculation_create_request(session, request)
     calculation = persist_calculation(session, resolved, created_by=created_by)
     persist_calculation_result(session, calculation, calc_upload)
+    persist_calculation_parameters(
+        session,
+        calculation,
+        calc_upload.parameters,
+        parameters_json=calc_upload.parameters_json,
+        parameters_parser_version=calc_upload.parameters_parser_version,
+        parameters_extracted_at=calc_upload.parameters_extracted_at,
+    )
     return calculation
 
 
@@ -353,14 +654,19 @@ def persist_additional_calculations(
             created_by=created_by,
         )
 
-        session.add(
-            CalculationOutputGeometry(
-                calculation_id=child_calc.id,
-                geometry_id=geometry_id,
-                output_order=1,
-                role=CalculationGeometryRole.final,
+        # Result persistence (e.g. NEB climbing image on the TS geometry) may
+        # have already linked the shared geometry. Skip the role=final row
+        # when that happens to honour the (calculation_id, geometry_id)
+        # uniqueness constraint.
+        if geometry_id not in _pending_output_geometry_ids(session, child_calc.id):
+            session.add(
+                CalculationOutputGeometry(
+                    calculation_id=child_calc.id,
+                    geometry_id=geometry_id,
+                    output_order=1,
+                    role=CalculationGeometryRole.final,
+                )
             )
-        )
 
         dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)
         if dep_role is not None:

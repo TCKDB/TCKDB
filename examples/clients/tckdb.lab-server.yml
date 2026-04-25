@@ -1,0 +1,12 @@
+# Example client config for a lab-server TCKDB instance.
+#
+# Replace the host with the URL the lab-server is reachable at on your
+# network, and the api_key with a key minted on THAT instance. Lab-server
+# instances typically run with AUTH_ALLOW_OPEN_REGISTRATION=false; ask your
+# lab administrator to seed your account before minting a key.
+#
+# Do NOT commit a real key.
+
+tckdb:
+  base_url: "http://lab-tckdb.internal:8000/api/v1"
+  api_key: "tck_lab_replace_me"

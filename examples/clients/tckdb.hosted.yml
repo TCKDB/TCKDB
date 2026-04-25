@@ -1,0 +1,11 @@
+# Example client config for the hosted TCKDB community instance.
+#
+# Replace the host with the actual hosted URL, and the api_key with a key
+# minted on the HOSTED instance. Hosted API keys are separate credentials
+# from local or lab-server keys — they do not interoperate.
+#
+# Do NOT commit a real key.
+
+tckdb:
+  base_url: "https://tckdb.example.org/api/v1"
+  api_key: "tck_hosted_replace_me"

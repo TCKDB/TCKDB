@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     SpeciesEntryStateKind,
-    SpeciesEntryStereoKind,
     StationaryPointKind,
 )
 from app.schemas.common import SchemaBase, TimestampedCreatedByReadSchema
@@ -41,7 +40,6 @@ class SpeciesEntryBase(SpeciesEntryIdentityValidatorMixin, BaseModel):
 
     unmapped_smiles: str | None = None
 
-    stereo_kind: SpeciesEntryStereoKind = SpeciesEntryStereoKind.unspecified
     stereo_label: str | None = Field(default=None, max_length=64)
 
     electronic_state_kind: SpeciesEntryStateKind = SpeciesEntryStateKind.ground
@@ -62,7 +60,6 @@ class SpeciesEntryUpdate(SpeciesEntryIdentityValidatorMixin, SchemaBase):
 
     unmapped_smiles: str | None = None
 
-    stereo_kind: SpeciesEntryStereoKind | None = None
     stereo_label: str | None = Field(default=None, max_length=64)
 
     electronic_state_kind: SpeciesEntryStateKind | None = None
@@ -73,5 +70,16 @@ class SpeciesEntryUpdate(SpeciesEntryIdentityValidatorMixin, SchemaBase):
     isotopologue_label: str | None = Field(default=None, max_length=64)
 
 
+class SpeciesEntryConformerSummaryRead(BaseModel):
+    """Compact conformer summary embedded in species-entry reads.
+
+    Counts are computed by the route, not read from an ORM attribute, so this
+    schema is populated explicitly rather than via `model_validate(entry)`.
+    """
+
+    conformer_group_count: int
+    conformer_observation_count: int
+
+
 class SpeciesEntryRead(SpeciesEntryBase, TimestampedCreatedByReadSchema):
-    pass
+    conformer_summary: SpeciesEntryConformerSummaryRead | None = None

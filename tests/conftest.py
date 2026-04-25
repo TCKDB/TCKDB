@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.app import create_app
 from app.api.deps import get_current_user, get_db, get_write_db
+from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 
@@ -114,9 +115,16 @@ def _api_test_user(db_engine) -> int:
             user = AppUser(
                 username="testuser",
                 role=AppUserRole.user,
-                api_key_hash=_TEST_API_KEY_HASH,
             )
             session.add(user)
+            session.flush()
+            session.add(
+                ApiKey(
+                    user_id=user.id,
+                    key_hash=_TEST_API_KEY_HASH,
+                    label="pytest session key",
+                )
+            )
             session.flush()
             user_id = user.id
     return user_id
@@ -133,7 +141,16 @@ def client(db_engine, _api_test_user) -> Iterator[TestClient]:
 
     connection = db_engine.connect()
     transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+    # Savepoint mode: a flush/commit error inside the session releases its
+    # SAVEPOINT instead of rolling back the outer transaction. Without this,
+    # an IntegrityError in any test would deassociate the outer transaction
+    # and leak the test user (and anything else committed in this run) once
+    # the connection was returned to the pool.
+    session = Session(
+        bind=connection,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
 
     # Override both DB dependencies to use our transactional session
     app.dependency_overrides[get_db] = lambda: session

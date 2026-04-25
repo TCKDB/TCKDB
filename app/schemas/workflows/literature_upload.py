@@ -1,3 +1,16 @@
+"""Literature upload fragment — nested inside other upload requests.
+
+This module intentionally has **no standalone ``/uploads/literature`` route**.
+``LiteratureUploadRequest`` is a nested payload consumed by the thermo,
+kinetics, conformer, network, transport, transition-state, computed-reaction,
+and energy-correction upload flows. Literature rows are created/resolved by
+``app.services.literature_resolution`` when a parent upload embeds one.
+
+The ``Request`` suffix is retained for naming symmetry with the rest of
+``app/schemas/workflows/``; see the module docstring above when wondering why
+no upload route exists for this schema.
+"""
+
 from typing import Self
 
 from pydantic import Field, HttpUrl, field_validator, model_validator
@@ -8,8 +21,9 @@ from app.schemas.utils import normalize_optional_text, normalize_required_text
 
 
 class LiteratureUploadRequest(SchemaBase):
-    """Workflow-facing literature upload payload.
+    """Literature fragment embedded in other upload requests.
 
+    Not a standalone upload body — there is no ``/uploads/literature`` route.
     A request may be identifier-driven (DOI and/or ISBN) or manual. Identifier
     lookup can enrich missing metadata before a canonical literature row is
     created.

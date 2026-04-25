@@ -144,8 +144,12 @@ class BundleSpeciesIn(SchemaBase):
 
     :param key: Local key for referencing this species in the reaction.
     :param species_entry: Species identity (SMILES, charge, multiplicity).
-    :param conformers: Conformer observations (geometry + opt calculation).
-    :param calculations: Additional calculations (freq, sp at higher LOT).
+    :param conformers: Conformer observations (geometry + opt calculation). Each
+        list item creates a distinct observation row, even when multiple items
+        land in the same conformer group.
+    :param calculations: Additional calculations (freq, sp at higher LOT). Their
+        ``geometry_key`` must reference one of this species's conformer
+        geometries so the backend can anchor them to the correct observation.
     :param thermo: Optional thermochemistry data.
     """
 
@@ -163,6 +167,20 @@ class BundleSpeciesIn(SchemaBase):
                 raise ValueError(
                     f"Species '{self.key}' calculation '{calc.key}' "
                     f"(type={calc.type.value}) requires geometry_key."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_calc_geometry_belongs_to_conformer(self) -> Self:
+        """Require species-side calculations to reference one of this species's conformers."""
+        conformer_geometry_keys = {conf.geometry.key for conf in self.conformers}
+        for calc in self.calculations:
+            if calc.geometry_key is None:
+                continue
+            if calc.geometry_key not in conformer_geometry_keys:
+                raise ValueError(
+                    f"Species '{self.key}' calculation '{calc.key}' geometry_key "
+                    f"must reference one of that species's conformer geometries."
                 )
         return self
 
@@ -271,8 +289,8 @@ class BundleKineticsIn(SchemaBase):
     reported_ea: float | None = None
     reported_ea_units: ActivationEnergyUnits | None = None
 
-    d_a: float | None = None
-    d_n: float | None = None
+    a_uncertainty: float | None = None
+    n_uncertainty: float | None = None
     d_reported_ea: float | None = None
 
     tmin_k: float | None = Field(default=None, gt=0)

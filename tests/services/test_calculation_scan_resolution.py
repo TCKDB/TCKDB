@@ -12,8 +12,8 @@ from app.services.calculation_scan_resolution import persist_calculation_scan
 def _create_species(connection, *, inchi_key: str, smiles: str = "[H]") -> int:
     return connection.execute(
         text("""
-            INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity)
-            VALUES ('molecule', :smiles, :inchi_key, 0, 1)
+            INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind)
+            VALUES ('molecule', :smiles, :inchi_key, 0, 1, 'achiral')
             RETURNING id
             """),
         {"smiles": smiles, "inchi_key": inchi_key},

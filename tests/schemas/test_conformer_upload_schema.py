@@ -43,3 +43,51 @@ def test_conformer_upload_request_requires_calculation_provenance() -> None:
                 "level_of_theory": {"method": "B3LYP"},
             },
         )
+
+
+def _minimal_statmech_payload(**overrides) -> dict:
+    """Minimal valid statmech payload kwargs, plus overrides for drift tests."""
+    base = {"statmech_treatment": "rrho"}
+    base.update(overrides)
+    return base
+
+
+def _minimal_conformer_request(**statmech_overrides) -> dict:
+    return {
+        "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+        "geometry": {"xyz_text": "1\ncomment\nH 0.0 0.0 0.0"},
+        "calculation": {
+            "type": "sp",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+        },
+        "statmech": _minimal_statmech_payload(**statmech_overrides),
+    }
+
+
+def test_conformer_upload_statmech_rejects_raw_literature_id() -> None:
+    """Regression: the conformer statmech payload must not accept a raw DB FK.
+
+    If ``literature_id`` is reintroduced on ``ConformerUploadStatmechPayload``
+    this test will silently pass — so we assert the strict Pydantic
+    ``extra='forbid'`` rejection path that SchemaBase enforces.
+    """
+    payload = _minimal_conformer_request(literature_id=42)
+    with pytest.raises(ValidationError) as exc_info:
+        ConformerUploadRequest(**payload)
+    assert "literature_id" in str(exc_info.value)
+
+
+def test_conformer_upload_statmech_accepts_literature_submission_payload() -> None:
+    """The canonical replacement is a nested ``LiteratureUploadRequest``."""
+    payload = _minimal_conformer_request(
+        literature={
+            "kind": "article",
+            "title": "Hydrogen atom energetics",
+            "doi": "10.1234/h-atom",
+        }
+    )
+    request = ConformerUploadRequest(**payload)
+    assert request.statmech is not None
+    assert request.statmech.literature is not None
+    assert request.statmech.literature.doi == "10.1234/h-atom"

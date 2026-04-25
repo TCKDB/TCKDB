@@ -1,6 +1,7 @@
 """Eagerly import ORM model modules so mapper configuration sees the full graph."""
 
 from . import (
+    api_key,
     app_user,
     author,
     calculation,
@@ -16,14 +17,17 @@ from . import (
     software,
     species,
     statmech,
+    submission,
     thermo,
     transition_state,
     transport,
     upload_job,
+    user_session,
     workflow,
 )
 
 __all__ = [
+    "api_key",
     "app_user",
     "author",
     "calculation",
@@ -39,9 +43,11 @@ __all__ = [
     "software",
     "species",
     "statmech",
+    "submission",
     "thermo",
     "transition_state",
     "transport",
     "upload_job",
+    "user_session",
     "workflow",
 ]

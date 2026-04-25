@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-import hashlib
 from typing import Iterator
 
-from fastapi import Depends, Header, HTTPException, Query
-from sqlalchemy import create_engine, select
+from fastapi import Cookie, Depends, Header, HTTPException, Query
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.config import settings
 from app.db.models.app_user import AppUser
+from app.db.models.common import AppUserRole
+from app.services.auth import (
+    API_KEY_HEADER,
+    SESSION_COOKIE_NAME,
+    authenticate_api_key,
+    resolve_session,
+)
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
@@ -45,37 +51,72 @@ def get_write_db() -> Iterator[Session]:
         session.close()
 
 
-def _hash_api_key(raw_key: str) -> str:
-    """SHA-256 hash of the raw API key."""
-    return hashlib.sha256(raw_key.encode()).hexdigest()
-
-
 def get_current_user(
-    x_api_key: str | None = Header(None),
+    x_api_key: str | None = Header(None, alias=API_KEY_HEADER),
+    tckdb_session: str | None = Cookie(None, alias=SESSION_COOKIE_NAME),
     session: Session = Depends(get_db),
 ) -> AppUser:
-    """Look up the authenticated user via ``X-API-Key`` header."""
-    if x_api_key is None:
-        raise HTTPException(status_code=401, detail="Missing X-API-Key header")
+    """Resolve the request actor from an API key header or session cookie.
 
-    key_hash = _hash_api_key(x_api_key)
-    user = session.scalar(
-        select(AppUser).where(AppUser.api_key_hash == key_hash)
-    )
+    Machines authenticate with ``X-API-Key``; humans authenticate with the
+    session cookie set by ``POST /auth/login``.  Missing/invalid/revoked
+    credentials return 401 — anonymous callers are rejected before any
+    upload-side logic runs.
+    """
+    if x_api_key:
+        user = authenticate_api_key(session, x_api_key)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        return user
+
+    if tckdb_session:
+        user = resolve_session(session, tckdb_session)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        return user
+
+    raise HTTPException(status_code=401, detail="Authentication required")
+
+
+def require_session_user(
+    tckdb_session: str | None = Cookie(None, alias=SESSION_COOKIE_NAME),
+    session: Session = Depends(get_db),
+) -> AppUser:
+    """Require a logged-in human user (session cookie only, no API keys).
+
+    Used for endpoints that issue/revoke credentials — we never want an
+    API-key bearer to spawn more keys for its owner.
+    """
+    if not tckdb_session:
+        raise HTTPException(status_code=401, detail="Session authentication required")
+    user = resolve_session(session, tckdb_session)
     if user is None:
-        raise HTTPException(status_code=401, detail="Invalid API key")
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
     return user
 
 
-def get_current_user_optional(
-    x_api_key: str | None = Header(None),
-    session: Session = Depends(get_db),
-) -> AppUser | None:
-    """Same as :func:`get_current_user` but returns ``None`` when no key is
-    provided.  Useful during development."""
-    if x_api_key is None:
-        return None
-    return get_current_user(x_api_key=x_api_key, session=session)
+_CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
+
+
+def require_curator_or_admin(
+    current_user: AppUser = Depends(get_current_user),
+) -> AppUser:
+    """Gate an endpoint behind curator/admin roles."""
+    if current_user.role not in _CURATION_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail="Curator or admin role required.",
+        )
+    return current_user
+
+
+def require_admin(
+    current_user: AppUser = Depends(get_current_user),
+) -> AppUser:
+    """Gate an endpoint behind the admin role."""
+    if current_user.role is not AppUserRole.admin:
+        raise HTTPException(status_code=403, detail="Admin role required.")
+    return current_user
 
 
 class PaginationParams:

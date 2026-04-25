@@ -8,6 +8,7 @@ POST /api/v1/jobs/network
 POST /api/v1/jobs/network/pdep
 POST /api/v1/jobs/thermo
 POST /api/v1/jobs/transition-state
+POST /api/v1/jobs/transport
 
 GET  /api/v1/jobs/{job_id}
 """
@@ -30,6 +31,7 @@ from app.schemas.workflows.network_upload import NetworkUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.schemas.workflows.transition_state_upload import TransitionStateUploadRequest
+from app.schemas.workflows.transport_upload import TransportUploadRequest
 
 router = APIRouter()
 
@@ -121,6 +123,15 @@ def enqueue_transition_state(
     current_user: AppUser = Depends(get_current_user),
 ):
     return _enqueue(session, UploadJobKind.transition_state, request, current_user.id)
+
+
+@router.post("/transport", response_model=JobEnqueueResponse, status_code=202)
+def enqueue_transport(
+    request: TransportUploadRequest,
+    session: Session = Depends(get_write_db),
+    current_user: AppUser = Depends(get_current_user),
+):
+    return _enqueue(session, UploadJobKind.transport, request, current_user.id)
 
 
 # ---------------------------------------------------------------------------

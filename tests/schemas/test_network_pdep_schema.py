@@ -6,10 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from app.db.models.common import (
+    ArrheniusAUnits,
     NetworkChannelKind,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkStateKind,
+    PressureUnit,
+    TemperatureUnit,
 )
 from app.schemas.entities.network_pdep import (
     NetworkChannelCreate,
@@ -446,8 +449,8 @@ class TestNetworkKineticsRead:
             id=1, channel_id=10, solve_id=20,
             model_kind=NetworkKineticsModelKind.chebyshev,
             tmin_k=300, tmax_k=2000, pmin_bar=0.01, pmax_bar=100,
-            rate_units="cm^3/(mol*s)", pressure_units="bar",
-            temperature_units="K", stores_log10_k=False, note=None,
+            rate_units=ArrheniusAUnits.cm3_mol_s, pressure_units=PressureUnit.bar,
+            temperature_units=TemperatureUnit.kelvin, stores_log10_k=False, note=None,
             created_at="2024-01-01T00:00:00",
             chebyshev=cheb, plog_entries=[], points=[],
         )

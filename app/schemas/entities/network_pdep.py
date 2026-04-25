@@ -19,6 +19,8 @@ from app.db.models.common import (
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkStateKind,
+    PressureUnit,
+    TemperatureUnit,
 )
 from app.schemas.common import (
     ORMBaseSchema,
@@ -564,9 +566,9 @@ class NetworkKineticsBase(BaseModel):
     pmin_bar: float | None = Field(default=None, gt=0)
     pmax_bar: float | None = Field(default=None, gt=0)
 
-    rate_units: str | None = None
-    pressure_units: str | None = None
-    temperature_units: str | None = None
+    rate_units: ArrheniusAUnits | None = None
+    pressure_units: PressureUnit | None = None
+    temperature_units: TemperatureUnit | None = None
     stores_log10_k: bool | None = None
 
     note: str | None = None
@@ -658,9 +660,9 @@ class NetworkKineticsUpdate(SchemaBase):
     pmin_bar: float | None = Field(default=None, gt=0)
     pmax_bar: float | None = Field(default=None, gt=0)
 
-    rate_units: str | None = None
-    pressure_units: str | None = None
-    temperature_units: str | None = None
+    rate_units: ArrheniusAUnits | None = None
+    pressure_units: PressureUnit | None = None
+    temperature_units: TemperatureUnit | None = None
     stores_log10_k: bool | None = None
 
     note: str | None = None

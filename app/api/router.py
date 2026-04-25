@@ -5,6 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.routes import (
+    admin,
+    auth,
+    bundles,
     calculations,
     conformers,
     energy_corrections,
@@ -15,6 +18,7 @@ from app.api.routes import (
     levels_of_theory,
     literature,
     lookup,
+    networks,
     reactions,
     software,
     species,
@@ -23,13 +27,17 @@ from app.api.routes import (
     transition_states,
     transport,
     uploads,
+    workflow_tools,
 )
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(lookup.router, prefix="/lookup", tags=["lookup"])
 api_router.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
+api_router.include_router(bundles.router, prefix="/bundles", tags=["bundles"])
 api_router.include_router(
     calculations.router, prefix="/calculations", tags=["calculations"]
 )
@@ -88,5 +96,14 @@ api_router.include_router(
     prefix="/applied-energy-corrections",
     tags=["applied-energy-corrections"],
 )
+api_router.include_router(
+    workflow_tools.router, prefix="/workflow-tools", tags=["workflow-tools"]
+)
+api_router.include_router(
+    workflow_tools.releases_router,
+    prefix="/workflow-tool-releases",
+    tags=["workflow-tool-releases"],
+)
 api_router.include_router(statmech.router, prefix="/statmech", tags=["statmech"])
 api_router.include_router(transport.router, prefix="/transport", tags=["transport"])
+api_router.include_router(networks.router, prefix="/networks", tags=["networks"])

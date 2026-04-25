@@ -1,10 +1,10 @@
-enum app_user_role {
+enum AppUserRole {
   user
   curator
   admin
 }
 
-enum applied_correction_component_kind {
+enum AppliedCorrectionComponentKind {
   atom
   bond
   molecular
@@ -13,7 +13,7 @@ enum applied_correction_component_kind {
   other
 }
 
-enum arrhenius_a_units {
+enum ArrheniusAUnits {
   per_s
   cm3_mol_s
   cm3_molecule_s
@@ -23,7 +23,7 @@ enum arrhenius_a_units {
   m6_mol2_s
 }
 
-enum artifact_kind {
+enum ArtifactKind {
   input
   output_log
   checkpoint
@@ -31,23 +31,7 @@ enum artifact_kind {
   ancillary
 }
 
-enum calc_quality {
-  raw
-  curated
-  rejected
-}
-
-enum calc_type {
-  opt
-  freq
-  sp
-  irc
-  scan
-  neb
-  conf
-}
-
-enum calculation_dependency_role {
+enum CalculationDependencyRole {
   optimized_from
   freq_on
   single_point_on
@@ -58,7 +42,7 @@ enum calculation_dependency_role {
   neb_parent
 }
 
-enum calculation_geometry_role {
+enum CalculationGeometryRole {
   final
   initial
   scan_point
@@ -67,14 +51,30 @@ enum calculation_geometry_role {
   neb_image
 }
 
-enum conformer_assignment_scope_kind {
+enum CalculationQuality {
+  raw
+  curated
+  rejected
+}
+
+enum CalculationType {
+  opt
+  freq
+  sp
+  irc
+  scan
+  neb
+  conf
+}
+
+enum ConformerAssignmentScopeKind {
   canonical
   imported
   experimental
   custom
 }
 
-enum conformer_selection_kind {
+enum ConformerSelectionKind {
   display_default
   curator_pick
   lowest_energy
@@ -84,7 +84,7 @@ enum conformer_selection_kind {
   representative_geometry
 }
 
-enum constraint_kind {
+enum ConstraintKind {
   cartesian_atom
   bond
   angle
@@ -92,7 +92,12 @@ enum constraint_kind {
   improper
 }
 
-enum energy_correction_application_role {
+enum CoordinateUnit {
+  angstrom
+  degree
+}
+
+enum EnergyCorrectionApplicationRole {
   zpe
   thermal_correction_energy
   thermal_correction_enthalpy
@@ -106,7 +111,7 @@ enum energy_correction_application_role {
   custom
 }
 
-enum energy_correction_scheme_kind {
+enum EnergyCorrectionSchemeKind {
   atom_energy
   atom_hf
   atom_thermal
@@ -117,7 +122,13 @@ enum energy_correction_scheme_kind {
   other
 }
 
-enum frequency_scale_kind {
+enum EnergyUnit {
+  hartree
+  kj_mol
+  kcal_mol
+}
+
+enum FrequencyScaleKind {
   fundamental
   zpe
   enthalpy
@@ -125,13 +136,13 @@ enum frequency_scale_kind {
   heat_capacity
 }
 
-enum irc_direction {
+enum IRCDirection {
   forward
   reverse
   both
 }
 
-enum kinetics_calc_role {
+enum KineticsCalculationRole {
   reactant_energy
   product_energy
   ts_energy
@@ -141,12 +152,12 @@ enum kinetics_calc_role {
   fit_source
 }
 
-enum kinetics_model_kind {
+enum KineticsModelKind {
   arrhenius
   modified_arrhenius
 }
 
-enum literature_kind {
+enum LiteratureKind {
   article
   book
   thesis
@@ -155,19 +166,19 @@ enum literature_kind {
   webpage
 }
 
-enum melius_bac_component_kind {
+enum MeliusBacComponentKind {
   atom_corr
   bond_corr_length
   bond_corr_neighbor
   mol_corr
 }
 
-enum molecule_kind {
+enum MoleculeKind {
   molecule
   pseudo
 }
 
-enum network_channel_kind {
+enum NetworkChannelKind {
   isomerization
   association
   dissociation
@@ -175,13 +186,13 @@ enum network_channel_kind {
   exchange
 }
 
-enum network_kinetics_model_kind {
+enum NetworkKineticsModelKind {
   chebyshev
   plog
   tabulated
 }
 
-enum network_solve_calc_role {
+enum NetworkSolveCalculationRole {
   well_energy
   barrier_energy
   well_freq
@@ -190,25 +201,30 @@ enum network_solve_calc_role {
   fit_source
 }
 
-enum network_species_role {
+enum NetworkSpeciesRole {
   well
   reactant
   product
   bath_gas
 }
 
-enum network_state_kind {
+enum NetworkStateKind {
   well
   bimolecular
   termolecular
 }
 
-enum reaction_role {
+enum PressureUnit {
+  bar
+  atm
+}
+
+enum ReactionRole {
   reactant
   product
 }
 
-enum rigid_rotor_kind {
+enum RigidRotorKind {
   atom
   linear
   spherical_top
@@ -216,45 +232,37 @@ enum rigid_rotor_kind {
   asymmetric_top
 }
 
-enum scan_coordinate_kind {
+enum ScanCoordinateKind {
   bond
   angle
   dihedral
   improper
 }
 
-enum scientific_origin_kind {
+enum ScientificOriginKind {
   computed
   experimental
   estimated
 }
 
-enum species_entry_review_role {
+enum SpeciesEntryReviewRole {
   curator
   reviewer
   validator
   linker
 }
 
-enum species_entry_state_kind {
+enum SpeciesEntryStateKind {
   ground
   excited
 }
 
-enum species_entry_stereo_kind {
-  unspecified
-  achiral
-  enantiomer
-  diastereomer
-  ez_isomer
-}
-
-enum stationary_point_kind {
+enum StationaryPointKind {
   minimum
   vdw_complex
 }
 
-enum statmech_calc_role {
+enum StatmechCalculationRole {
   opt
   freq
   sp
@@ -263,7 +271,7 @@ enum statmech_calc_role {
   imported
 }
 
-enum statmech_treatment_kind {
+enum StatmechTreatmentKind {
   rrho
   rrho_1d
   rrho_nd
@@ -272,7 +280,87 @@ enum statmech_treatment_kind {
   rrao
 }
 
-enum thermo_calc_role {
+enum SubmissionActorKind {
+  user
+  curator
+  admin
+  llm
+  system
+}
+
+enum SubmissionAuditEventKind {
+  submission_created
+  ingestion_succeeded
+  ingestion_failed
+  llm_precheck_passed
+  llm_precheck_flagged
+  curator_approved
+  curator_rejected
+  correction_window_opened
+  correction_uploaded
+  submission_superseded
+  status_changed
+  public_visibility_changed
+}
+
+enum SubmissionKind {
+  computed_reaction
+  conformer
+  reaction
+  kinetics
+  network
+  network_pdep
+  thermo
+  transition_state
+  transport
+  other
+}
+
+enum SubmissionPrecheckLabel {
+  passed
+  flagged
+}
+
+enum SubmissionRecordType {
+  species
+  species_entry
+  conformer_group
+  conformer_observation
+  reaction
+  reaction_entry
+  transition_state
+  transition_state_entry
+  calculation
+  statmech
+  thermo
+  kinetics
+  transport
+  network
+  network_solve
+}
+
+enum SubmissionSourceKind {
+  api
+  web
+  bulk_import
+  system
+  migration
+}
+
+enum SubmissionStatus {
+  pending
+  precheck_passed
+  auto_flagged
+  approved
+  rejected
+  superseded
+}
+
+enum TemperatureUnit {
+  kelvin
+}
+
+enum ThermoCalculationRole {
   opt
   freq
   sp
@@ -280,21 +368,21 @@ enum thermo_calc_role {
   imported
 }
 
-enum torsion_treatment_kind {
+enum TorsionTreatmentKind {
   hindered_rotor
   free_rotor
   rigid_top
   hindered_rotor_dos
 }
 
-enum transition_state_entry_status {
+enum TransitionStateEntryStatus {
   guess
   optimized
   validated
   rejected
 }
 
-enum transition_state_selection_kind {
+enum TransitionStateSelectionKind {
   display_default
   curator_pick
   validated_reference
@@ -303,14 +391,14 @@ enum transition_state_selection_kind {
   representative_geometry
 }
 
-enum transport_calc_role {
+enum TransportCalculationRole {
   full_transport
   dipole
   polarizability
   supporting_geometry
 }
 
-enum upload_job_kind {
+enum UploadJobKind {
   computed_reaction
   conformer
   reaction
@@ -321,17 +409,25 @@ enum upload_job_kind {
   transition_state
 }
 
-enum upload_job_status {
+enum UploadJobStatus {
   queued
   processing
   complete
   failed
 }
 
-enum validation_status {
+enum ValidationStatus {
   passed
   warning
   fail
+}
+
+enum stereo_kind {
+  unspecified
+  achiral
+  enantiomer
+  diastereomer
+  ez_isomer
 }
 
 Table app_user {
@@ -341,13 +437,13 @@ Table app_user {
   full_name text
   affiliation text
   orcid varchar(19)
-  api_key_hash varchar(64)
-  role app_user_role [not null, default: 'user']
+  api_key_hash string
+  role AppUserRole [not null, default: 'user']
   created_at timestamp [not null, default: 'now']
 
   indexes {
-    email [unique, name: 'uq_app_user_email']
     orcid [unique, name: 'uq_app_user_orcid']
+    email [unique, name: 'uq_app_user_email']
     username [unique, name: 'uq_app_user_username']
   }
 
@@ -367,76 +463,29 @@ Table author {
   }
 }
 
-Table calculation {
-  id bigint [pk, not null]
-  type calc_type [not null]
-  quality calc_quality [not null, default: 'raw']
-  species_entry_id bigint [ref: > species_entry.id]
-  transition_state_entry_id bigint [ref: > transition_state_entry.id]
-  software_release_id bigint [ref: > software_release.id]
-  workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
-  lot_id bigint [ref: > level_of_theory.id]
-  literature_id bigint [ref: > literature.id]
-  conformer_observation_id bigint [ref: > conformer_observation.id]
-  parameters_json jsonb
-  parameters_parser_version text
-  parameters_extracted_at timestamp
-  created_at timestamp [not null, default: 'now']
-  created_by bigint [ref: > app_user.id]
-
-  checks {
-    `(
-                    transition_state_entry_id IS NOT NULL
-                    AND species_entry_id IS NULL
-                )
-                OR
-                (
-                    transition_state_entry_id IS NULL
-                    AND species_entry_id IS NOT NULL
-                )` [name: 'ck_calculation_one_owner']
-  }
-
-  Note: 'Computational record owned by exactly one species or transition-state entry.'
-}
-
 Table calculation_parameter_vocab {
   canonical_key text [pk, not null]
   description text
   expected_value_type text
-  affects_scientific_result bool
-  affects_numerics bool
-  affects_resources bool
+  affects_scientific_result boolean
+  affects_numerics boolean
+  affects_resources boolean
   note text
   created_at timestamp [not null, default: 'now']
 
-  Note: 'Ontology seed for canonical parameter keys. Keyed by canonical_key (not a surrogate ID) — the key itself is the stable semantic handle.  Classification flags enable filtering: e.g. ``affects_scientific_result = true`` selects only parameters that matter for "same setup" comparisons.'
-}
-
-Table conformer_observation {
-  id bigint [pk, not null]
-  conformer_group_id bigint [not null, ref: > conformer_group.id]
-  calculation_id bigint [not null, ref: > calculation.id]
-  assignment_scheme_id bigint [ref: > conformer_assignment_scheme.id]
-  scientific_origin scientific_origin_kind [not null, default: 'computed']
-  note text
-  torsion_fingerprint_json jsonb
-  created_at timestamp [not null, default: 'now']
-  created_by bigint [ref: > app_user.id]
-
-  indexes {
-    calculation_id [unique, name: 'uq_conformer_observation_calculation_id']
-    conformer_group_id [name: 'ix_conformer_observation_conformer_group_id']
-  }
-
-  Note: 'Store one uploaded or imported conformer observation assigned to a group.'
+  Note: 'Ontology seed for canonical parameter keys.'
 }
 
 Table geometry {
   id bigint [pk, not null]
   natoms int [not null]
-  geom_hash varchar(64) [not null, unique]
+  geom_hash varchar(64) [not null]
   xyz_text text
   created_at timestamp [not null, default: 'now']
+
+  indexes {
+    geom_hash [unique, name: 'uq_geometry_geom_hash']
+  }
 
   checks {
     `natoms >= 1` [name: 'ck_geometry_natoms_ge_1']
@@ -467,7 +516,7 @@ Table level_of_theory {
 
 Table literature {
   id bigint [pk, not null]
-  kind literature_kind [not null]
+  kind LiteratureKind [not null]
   title text [not null]
   journal text
   year int
@@ -480,12 +529,21 @@ Table literature {
   publisher text
   institution text
   created_at timestamp [not null, default: 'now']
+
+  indexes {
+    () [name: 'ix_literature_doi_normalized']
+    () [name: 'ix_literature_isbn_normalized']
+  }
 }
 
 Table reaction_family {
   id bigint [pk, not null]
-  name text [not null, unique]
+  name text [not null]
   created_at timestamp [not null, default: 'now']
+
+  indexes {
+    name [unique, name: 'uq_reaction_family_name']
+  }
 }
 
 Table software {
@@ -504,11 +562,12 @@ Table software {
 
 Table species {
   id bigint [pk, not null]
-  kind molecule_kind [not null]
+  kind MoleculeKind [not null]
   smiles text [not null]
   inchi_key varchar(27) [not null]
-  charge smallint [not null]
-  multiplicity smallint [not null]
+  charge int [not null]
+  multiplicity int [not null]
+  stereo_kind stereo_kind [not null]
   created_at timestamp [not null, default: 'now']
 
   indexes {
@@ -535,310 +594,18 @@ Table workflow_tool {
   Note: 'Stable identity for a workflow or orchestration tool.'
 }
 
-Table calc_freq_result {
-  calculation_id bigint [pk, not null, ref: > calculation.id]
-  n_imag int
-  imag_freq_cm1 double
-  zpe_hartree double
-}
-
-Table calc_geometry_validation {
-  calculation_id bigint [pk, not null, ref: > calculation.id]
-  input_geometry_id bigint [ref: > geometry.id]
-  output_geometry_id bigint [ref: > geometry.id]
-  species_smiles text [not null]
-  is_isomorphic bool [not null]
-  rmsd double
-  atom_mapping jsonb
-  n_mappings int
-  validation_status validation_status [not null]
-  validation_reason text
-  rmsd_warning_threshold double
-  created_at timestamp [not null, default: 'now']
-
-  Note: 'Result of validating a calculation\'s output geometry against species identity. Stores graph isomorphism check, Kabsch-aligned RMSD, and the policy decision. One row per calculation (PK = calculation_id).'
-}
-
-Table calc_irc_point {
-  calculation_id bigint [not null, ref: > calculation.id]
-  point_index int [not null]
-  direction irc_direction
-  is_ts bool [not null, default: false]
-  reaction_coordinate double
-  electronic_energy_hartree double
-  relative_energy_kj_mol double
-  max_gradient double
-  rms_gradient double
-  geometry_id bigint [ref: > geometry.id]
-  note text
-
-  indexes {
-    (calculation_id, point_index) [pk]
-  }
-
-  checks {
-    `point_index >= 0` [name: 'ck_calc_irc_point_point_index_ge_0']
-  }
-
-  Note: 'One sampled point on an IRC path. PK is ``(calculation_id, point_index)``.  ``point_index`` preserves the source step number from the log file. ``direction`` is set per-point to support both: - Gaussian (all points in one direction per log) - ORCA (both directions in one log, TS point has direction NULL) ``is_ts`` marks the transition-state point (ORCA ``<= TS`` marker, or Gaussian point 0).'
-}
-
-Table calc_irc_result {
-  calculation_id bigint [pk, not null, ref: > calculation.id]
-  direction irc_direction [not null]
-  has_forward bool [not null, default: false]
-  has_reverse bool [not null, default: false]
-  ts_point_index int
-  point_count int
-  zero_energy_reference_hartree double
-  note text
-
-  checks {
-    `point_count IS NULL OR point_count >= 0` [name: 'ck_calc_irc_result_point_count_ge_0']
-  }
-
-  Note: 'IRC-level metadata for an IRC calculation. Supports both single-direction (Gaussian: one log = one direction) and both-directions (ORCA: one log = forward + reverse) IRC runs. ``direction`` indicates the overall run mode: - ``forward`` / ``reverse`` for single-direction jobs - ``both`` for ORCA-style bidirectional IRC Per-point direction is on ``CalculationIRCPoint.direction``.'
-}
-
-Table calc_neb_image_result {
-  calculation_id bigint [not null, ref: > calculation.id]
-  image_index int [not null]
-  electronic_energy_hartree double
-  relative_energy_kj_mol double
-  path_distance_angstrom double
-  max_force double
-  rms_force double
-  is_climbing_image bool [not null, default: false]
-
-  indexes {
-    (calculation_id, image_index) [pk]
-  }
-
-  checks {
-    `image_index >= 0` [name: 'ck_calc_neb_image_result_image_index_ge_0']
-  }
-
-  Note: 'Per-image result from a NEB calculation. Stores the converged energy profile along the NEB path. PK is ``(calculation_id, image_index)``.  Image 0 is the reactant endpoint, image N is the product endpoint. The ``is_climbing_image`` flag marks the image that was promoted to a climbing image in NEB-CI — typically the highest-energy image, which approximates the transition state.'
-}
-
-Table calc_opt_result {
-  calculation_id bigint [pk, not null, ref: > calculation.id]
-  converged bool
-  n_steps int
-  final_energy_hartree double
-
-  checks {
-    `n_steps IS NULL OR n_steps >= 0` [name: 'ck_calc_opt_result_n_steps_ge_0']
-  }
-}
-
-Table calc_scan_coordinate {
-  calculation_id bigint [not null, ref: > calculation.id]
-  coordinate_index int [not null]
-  coordinate_kind scan_coordinate_kind [not null]
-  atom1_index int [not null]
-  atom2_index int [not null]
-  atom3_index int
-  atom4_index int
-  step_count int
-  step_size double
-  start_value double
-  end_value double
-  value_unit text
-  resolution_degrees int
-  symmetry_number smallint
-
-  indexes {
-    (calculation_id, coordinate_index) [pk]
-  }
-
-  checks {
-    `atom1_index >= 1` [name: 'ck_calc_scan_coordinate_atom1_index_ge_1']
-    `atom2_index >= 1` [name: 'ck_calc_scan_coordinate_atom2_index_ge_1']
-    `atom3_index IS NULL OR atom3_index >= 1` [name: 'ck_calc_scan_coordinate_atom3_index_ge_1']
-    `atom4_index IS NULL OR atom4_index >= 1` [name: 'ck_calc_scan_coordinate_atom4_index_ge_1']
-    `CASE coordinate_kind
-                WHEN 'bond' THEN atom3_index IS NULL AND atom4_index IS NULL
-                WHEN 'angle' THEN atom3_index IS NOT NULL AND atom4_index IS NULL
-                ELSE atom3_index IS NOT NULL AND atom4_index IS NOT NULL
-            END` [name: 'ck_calc_scan_coordinate_coordinate_arity_matches_kind']
-    `coordinate_index >= 1` [name: 'ck_calc_scan_coordinate_coordinate_index_ge_1']
-    `resolution_degrees IS NULL OR resolution_degrees >= 1` [name: 'ck_calc_scan_coordinate_resolution_degrees_ge_1']
-    `step_count IS NULL OR step_count >= 1` [name: 'ck_calc_scan_coordinate_step_count_ge_1']
-    `symmetry_number IS NULL OR symmetry_number >= 1` [name: 'ck_calc_scan_coordinate_symmetry_number_ge_1']
-  }
-
-  Note: 'Definition of one scanned internal coordinate. Supports variable-arity coordinates: bond (2 atoms), angle (3), dihedral/improper (4).  ``atom3_index`` and ``atom4_index`` are nullable; check constraints enforce correct arity per ``coordinate_kind``.'
-}
-
-Table calc_scan_point {
-  calculation_id bigint [not null, ref: > calculation.id]
-  point_index int [not null]
-  electronic_energy_hartree double
-  relative_energy_kj_mol double
-  geometry_id bigint [ref: > geometry.id]
-  note text
-
-  indexes {
-    (calculation_id, point_index) [pk]
-  }
-
-  checks {
-    `point_index >= 1` [name: 'ck_calc_scan_point_point_index_ge_1']
-  }
-
-  Note: 'One sampled point on a scan surface.'
-}
-
-Table calc_scan_result {
-  calculation_id bigint [pk, not null, ref: > calculation.id]
-  dimension int [not null]
-  is_relaxed bool
-  zero_energy_reference_hartree double
-  note text
-
-  checks {
-    `dimension >= 1` [name: 'ck_calc_scan_result_dimension_ge_1']
-  }
-
-  Note: 'Scan-level metadata for a scan calculation.'
-}
-
-Table calc_sp_result {
-  calculation_id bigint [pk, not null, ref: > calculation.id]
-  electronic_energy_hartree double
-}
-
-Table calculation_artifact {
-  id bigint [pk, not null]
-  calculation_id bigint [not null, ref: > calculation.id]
-  kind artifact_kind [not null]
-  uri text [not null]
-  sha256 varchar(64)
-  bytes bigint
-  created_at timestamp [not null, default: 'now']
-}
-
-Table calculation_constraint {
-  calculation_id bigint [not null, ref: > calculation.id]
-  constraint_index int [not null]
-  constraint_kind constraint_kind [not null]
-  atom1_index int [not null]
-  atom2_index int
-  atom3_index int
-  atom4_index int
-  target_value double
-
-  indexes {
-    (calculation_id, constraint_index) [pk]
-  }
-
-  checks {
-    `atom1_index >= 1` [name: 'ck_calculation_constraint_atom1_index_ge_1']
-    `atom2_index IS NULL OR atom2_index >= 1` [name: 'ck_calculation_constraint_atom2_index_ge_1']
-    `atom3_index IS NULL OR atom3_index >= 1` [name: 'ck_calculation_constraint_atom3_index_ge_1']
-    `atom4_index IS NULL OR atom4_index >= 1` [name: 'ck_calculation_constraint_atom4_index_ge_1']
-    `CASE constraint_kind
-                WHEN 'cartesian_atom' THEN atom2_index IS NULL AND atom3_index IS NULL AND atom4_index IS NULL
-                WHEN 'bond' THEN atom2_index IS NOT NULL AND atom3_index IS NULL AND atom4_index IS NULL
-                WHEN 'angle' THEN atom2_index IS NOT NULL AND atom3_index IS NOT NULL AND atom4_index IS NULL
-                ELSE atom2_index IS NOT NULL AND atom3_index IS NOT NULL AND atom4_index IS NOT NULL
-            END` [name: 'ck_calculation_constraint_constraint_arity_matches_kind']
-    `constraint_index >= 1` [name: 'ck_calculation_constraint_constraint_index_ge_1']
-  }
-
-  Note: 'Geometric constraint applied to a calculation. Generalizes beyond scan-only constraints: supports constrained optimizations, TS searches, scans, and IRC setups.  Constraint kinds include internal coordinates (bond, angle, dihedral, improper) and Cartesian freezes (cartesian_atom). Arity by kind: - ``cartesian_atom``: 1 atom (atom2/3/4 = NULL) - ``bond``: 2 atoms - ``angle``: 3 atoms - ``dihedral``/``improper``: 4 atoms'
-}
-
-Table calculation_dependency {
-  parent_calculation_id bigint [not null, ref: > calculation.id]
-  child_calculation_id bigint [not null, ref: > calculation.id]
-  dependency_role calculation_dependency_role [not null]
-
-  indexes {
-    (parent_calculation_id, child_calculation_id) [pk]
-    child_calculation_id [name: 'uq_calculation_dependency_child_calculation_id_freq_on', note: 'Partial index WHERE dependency_role = \'freq_on\'']
-    child_calculation_id [name: 'uq_calculation_dependency_child_calculation_id_neb_parent', note: 'Partial index WHERE dependency_role = \'neb_parent\'']
-    child_calculation_id [name: 'uq_calculation_dependency_child_calculation_id_optimized_from', note: 'Partial index WHERE dependency_role = \'optimized_from\'']
-    child_calculation_id [name: 'uq_calculation_dependency_child_calculation_id_scan_parent', note: 'Partial index WHERE dependency_role = \'scan_parent\'']
-    child_calculation_id [name: 'uq_calculation_dependency_child_calculation_id_single_point_on', note: 'Partial index WHERE dependency_role = \'single_point_on\'']
-  }
-
-  checks {
-    `parent_calculation_id <> child_calculation_id` [name: 'ck_calculation_dependency_not_self']
-  }
-
-  Note: 'Directed dependency edge between two calculations. Self-edges are forbidden in the schema. Stronger role-specific parent-count rules or full DAG validation belong in application logic unless the policy is narrowed enough for partial unique indexes. Selected roles currently enforce at most one parent per child: `optimized_from`, `freq_on`, `single_point_on`, `scan_parent`, and `neb_parent`.'
-}
-
-Table calculation_input_geometry {
-  calculation_id bigint [not null, ref: > calculation.id]
-  geometry_id bigint [not null, ref: > geometry.id]
-  input_order int [not null, default: 1]
-
-  indexes {
-    (calculation_id, input_order) [pk]
-    (calculation_id, geometry_id) [unique, name: 'uq_calculation_input_geometry_calculation_id']
-  }
-
-  checks {
-    `input_order >= 1` [name: 'ck_calculation_input_geometry_input_order_ge_1']
-  }
-
-  Note: 'Ordered input-geometry link table for a calculation.'
-}
-
-Table calculation_output_geometry {
-  calculation_id bigint [not null, ref: > calculation.id]
-  geometry_id bigint [not null, ref: > geometry.id]
-  output_order int [not null, default: 1]
-  role calculation_geometry_role
-
-  indexes {
-    (calculation_id, output_order) [pk]
-    (calculation_id, geometry_id) [unique, name: 'uq_calculation_output_geometry_calculation_id']
-  }
-
-  checks {
-    `output_order >= 1` [name: 'ck_calculation_output_geometry_output_order_ge_1']
-  }
-}
-
-Table calculation_parameter {
-  id bigint [pk, not null]
-  calculation_id bigint [not null, ref: > calculation.id]
-  raw_key text [not null]
-  canonical_key text [ref: > calculation_parameter_vocab.canonical_key]
-  raw_value text [not null]
-  canonical_value text
-  section text
-  value_type text
-  unit text
-  parameter_index int
-  created_at timestamp [not null, default: 'now']
-
-  indexes {
-    calculation_id [name: 'ix_calculation_parameter_calculation_id']
-    canonical_key [name: 'ix_calculation_parameter_canonical_key']
-    (canonical_key, canonical_value) [name: 'ix_calculation_parameter_canonical_key_value']
-    (raw_key, section) [name: 'ix_calculation_parameter_raw_key_section']
-  }
-
-  checks {
-    `parameter_index IS NULL OR parameter_index >= 0` [name: 'ck_calculation_parameter_parameter_index_ge_0']
-  }
-
-  Note: 'EAV-style parsed parameter from an ESS calculation. Stores both raw (software-specific) and canonical (normalized) key/value pairs.  Software identity is derived via calculation → software_release → software, not duplicated here.'
-}
-
 Table chem_reaction {
   id bigint [pk, not null]
-  stoichiometry_hash varchar(64) [unique]
-  reversible bool [not null]
+  stoichiometry_hash varchar(64)
+  reversible boolean [not null]
   reaction_family_id bigint [ref: > reaction_family.id]
   reaction_family_raw text
   reaction_family_source_note text
   created_at timestamp [not null, default: 'now']
+
+  indexes {
+    stoichiometry_hash [unique, name: 'uq_chem_reaction_stoichiometry_hash']
+  }
 
   checks {
     `reaction_family_raw IS NULL OR reaction_family_source_note IS NOT NULL` [name: 'ck_chem_reaction_reaction_family_raw_requires_source_note']
@@ -847,13 +614,13 @@ Table chem_reaction {
 
 Table conformer_assignment_scheme {
   id bigint [pk, not null]
-  name varchar(128) [not null]
-  version varchar(64) [not null]
-  scope conformer_assignment_scope_kind [not null, default: 'canonical']
+  name string [not null]
+  version string [not null]
+  scope ConformerAssignmentScopeKind [not null, default: 'canonical']
   description text
   parameters_json jsonb
-  code_commit varchar(64)
-  is_default bool [not null, default: false]
+  code_commit string
+  is_default boolean [not null, default: 'false']
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
 
@@ -861,26 +628,26 @@ Table conformer_assignment_scheme {
     (name, version) [unique, name: 'uq_conformer_assignment_scheme_name']
   }
 
-  Note: 'Store versioned metadata about conformer-assignment or selection logic. This table is optional in the simplified design. It is useful when the application wants to preserve provenance for how conformers were assigned or how selections such as lowest-energy/display-default were determined.'
+  Note: 'Store versioned metadata about conformer-assignment or selection logic.'
 }
 
 Table energy_correction_scheme {
   id bigint [pk, not null]
-  kind energy_correction_scheme_kind [not null]
+  kind EnergyCorrectionSchemeKind [not null]
   name text [not null]
   level_of_theory_id bigint [ref: > level_of_theory.id]
   source_literature_id bigint [ref: > literature.id]
   version text
-  units text
+  units EnergyUnit
   note text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
 
   indexes {
-    (kind, name, level_of_theory_id, version) [name: 'uq_energy_correction_scheme_kind_name_lot_version', unique]
+    (kind, name, level_of_theory_id, version) [unique, name: 'uq_energy_correction_scheme_kind_name_lot_version']
   }
 
-  Note: 'Reusable energy-correction parameter set. Examples: atom energies, atom enthalpy-of-formation references, Petersson BAC, Melius BAC, spin-orbit coupling constants.'
+  Note: 'Reusable energy-correction parameter set.'
 }
 
 Table geometry_atom {
@@ -892,7 +659,7 @@ Table geometry_atom {
   z double [not null]
 
   indexes {
-    (geometry_id, atom_index) [pk]
+    (atom_index, geometry_id) [pk]
   }
 
   checks {
@@ -908,7 +675,7 @@ Table literature_author {
   author_order int [not null]
 
   indexes {
-    (literature_id, author_id) [pk]
+    (author_id, literature_id) [pk]
     (literature_id, author_order) [unique, name: 'uq_literature_author_literature_id']
   }
 }
@@ -924,40 +691,39 @@ Table software_release {
   created_at timestamp [not null, default: 'now']
 
   indexes {
-    (software_id, version, revision, build) [name: 'uq_software_release_software_id', unique]
+    (software_id, version, revision, build) [unique, name: 'uq_software_release_software_id']
   }
 
-  Note: 'Exact release metadata for a software package. Dedupe uses `(software_id, version, revision, build)` with PostgreSQL `NULLS NOT DISTINCT`.'
+  Note: 'Exact release metadata for a software package.'
 }
 
 Table species_entry {
   id bigint [pk, not null]
   species_id bigint [not null, ref: > species.id]
-  kind stationary_point_kind [not null, default: 'minimum']
+  kind StationaryPointKind [not null, default: 'minimum']
   mol mol
   unmapped_smiles text
-  stereo_kind species_entry_stereo_kind [not null, default: 'unspecified']
-  stereo_label varchar(64)
-  electronic_state_kind species_entry_state_kind [not null, default: 'ground']
-  electronic_state_label varchar(8)
-  term_symbol_raw varchar(64)
-  term_symbol varchar(64)
-  isotopologue_label varchar(64)
+  stereo_label string
+  electronic_state_kind SpeciesEntryStateKind [not null, default: 'ground']
+  electronic_state_label string
+  term_symbol_raw string
+  term_symbol string
+  isotopologue_label string
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
 
   indexes {
-    (species_id, stereo_kind, stereo_label, electronic_state_kind, electronic_state_label, term_symbol, isotopologue_label) [unique, name: 'uq_species_entry_species_id']
     species_id [name: 'ix_species_entry_species_id']
+    (species_id, stereo_label, electronic_state_kind, electronic_state_label, term_symbol, isotopologue_label) [unique, name: 'uq_species_entry_species_id']
   }
 
-  Note: 'Store one stereochemically, electronically, or isotopically resolved species form. The resolved identity tuple is unique, with nullable identity components deduped in PostgreSQL using `NULLS NOT DISTINCT`.'
+  Note: 'Store one stereochemically, electronically, or isotopically resolved species form.'
 }
 
 Table upload_job {
-  id uuid [pk, not null, default: 'gen_random_uuid']
-  status upload_job_status [not null, default: 'queued']
-  kind upload_job_kind [not null]
+  id uuid [pk, not null, default: 'gen_random_uuid()']
+  status UploadJobStatus [not null, default: 'queued']
+  kind UploadJobKind [not null]
   payload jsonb [not null]
   created_by bigint [ref: > app_user.id]
   created_at timestamp [not null, default: 'now']
@@ -965,14 +731,14 @@ Table upload_job {
   completed_at timestamp
   result jsonb
   error text
-  attempts int [not null, default: 0]
-  max_attempts int [not null, default: 3]
+  attempts int [not null, default: '0']
+  max_attempts int [not null, default: '3']
 
   indexes {
     (status, created_at) [name: 'ix_upload_job_status_created_at']
   }
 
-  Note: 'Async upload job queue backed by PostgreSQL. Each row represents one pending, in-flight, or completed upload. Workers claim rows using ``SELECT … FOR UPDATE SKIP LOCKED`` so multiple workers can run safely without double-processing.'
+  Note: 'Async upload job queue backed by PostgreSQL.'
 }
 
 Table workflow_tool_release {
@@ -985,35 +751,16 @@ Table workflow_tool_release {
   created_at timestamp [not null, default: 'now']
 
   indexes {
-    (workflow_tool_id, version, git_commit) [name: 'uq_workflow_tool_release_workflow_tool_id', unique]
+    (workflow_tool_id, version, git_commit) [unique, name: 'uq_workflow_tool_release_workflow_tool_id']
   }
 
-  Note: 'Exact provenance for a workflow tool code state. Dedupe uses `(workflow_tool_id, version, git_commit)` with PostgreSQL `NULLS NOT DISTINCT`.'
-}
-
-Table calc_scan_point_coordinate_value {
-  calculation_id bigint [not null]
-  point_index int [not null, ref: > calc_scan_point.point_index]
-  coordinate_index int [not null, ref: > calc_scan_coordinate.coordinate_index]
-  coordinate_value double [not null]
-  value_unit text
-
-  indexes {
-    (calculation_id, point_index, coordinate_index) [pk]
-  }
-
-  checks {
-    `coordinate_index >= 1` [name: 'ck_calc_scan_point_coordinate_value_coordinate_index_ge_1']
-    `point_index >= 1` [name: 'ck_calc_scan_point_coordinate_value_point_index_ge_1']
-  }
-
-  Note: 'Coordinate values for one sampled scan point.'
+  Note: 'Exact provenance for a workflow tool code state.'
 }
 
 Table conformer_group {
   id bigint [pk, not null]
   species_entry_id bigint [not null, ref: > species_entry.id]
-  label varchar(64)
+  label string
   note text
   representative_fingerprint_json jsonb
   representative_coords_json jsonb
@@ -1021,11 +768,11 @@ Table conformer_group {
   created_by bigint [ref: > app_user.id]
 
   indexes {
-    (species_entry_id, label) [unique, name: 'uq_conformer_group_species_entry_id']
     species_entry_id [name: 'ix_conformer_group_species_entry_id']
+    (species_entry_id, label) [unique, name: 'uq_conformer_group_species_entry_id']
   }
 
-  Note: 'Store one deduplicated conformational basin for a species entry.'
+  Note: 'Store one deduplicated conformational-basin identity for a species entry.'
 }
 
 Table energy_correction_scheme_atom_param {
@@ -1034,10 +781,10 @@ Table energy_correction_scheme_atom_param {
   value double [not null]
 
   indexes {
-    (scheme_id, element) [pk]
+    (element, scheme_id) [pk]
   }
 
-  Note: 'Element-keyed scalar parameter within a correction scheme. Used for atom_hf, atom_thermal, SOC, atom_energies.'
+  Note: 'Element-keyed scalar parameter within a correction scheme.'
 }
 
 Table energy_correction_scheme_bond_param {
@@ -1046,30 +793,30 @@ Table energy_correction_scheme_bond_param {
   value double [not null]
 
   indexes {
-    (scheme_id, bond_key) [pk]
+    (bond_key, scheme_id) [pk]
   }
 
-  Note: 'Bond-type keyed scalar parameter within a correction scheme. Used for Petersson BAC: C-H, C=C, O=S, etc.'
+  Note: 'Bond-type keyed scalar parameter within a correction scheme.'
 }
 
 Table energy_correction_scheme_component_param {
   scheme_id bigint [not null, ref: > energy_correction_scheme.id]
-  component_kind melius_bac_component_kind [not null]
+  component_kind MeliusBacComponentKind [not null]
   key text [not null]
   value double [not null]
 
   indexes {
-    (scheme_id, component_kind, key) [pk]
+    (component_kind, key, scheme_id) [pk]
   }
 
-  Note: 'Multi-component parameter within a correction scheme. Used for Melius BAC: atom_corr, bond_corr_length, bond_corr_neighbor, mol_corr.'
+  Note: 'Multi-component parameter within a correction scheme.'
 }
 
 Table frequency_scale_factor {
   id bigint [pk, not null]
   level_of_theory_id bigint [not null, ref: > level_of_theory.id]
   software_id bigint [ref: > software.id]
-  scale_kind frequency_scale_kind [not null]
+  scale_kind FrequencyScaleKind [not null]
   value double [not null]
   source_literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
@@ -1078,14 +825,14 @@ Table frequency_scale_factor {
   created_by bigint [ref: > app_user.id]
 
   indexes {
-    (level_of_theory_id, software_id, scale_kind, value, source_literature_id, workflow_tool_release_id) [name: 'uq_frequency_scale_factor_identity', unique]
+    (level_of_theory_id, software_id, scale_kind, value, source_literature_id, workflow_tool_release_id) [unique, name: 'uq_frequency_scale_factor_identity']
   }
 
   checks {
     `value > 0` [name: 'ck_frequency_scale_factor_value_gt_0']
   }
 
-  Note: 'Immutable registry row for one frequency scale factor definition. Uniqueness is based on the full identity of the definition — LOT, software, scale kind, value, and provenance source — so two rows can legitimately have the same (LOT, software, scale_kind) with different values if they come from different sources. Null ``frequency_scale_factor_id`` on a statmech row means "unknown/not recorded".  A row with ``value = 1.0`` represents explicitly unscaled.'
+  Note: 'Immutable registry row for one frequency scale factor definition.'
 }
 
 Table network {
@@ -1111,25 +858,25 @@ Table reaction_entry {
 Table reaction_participant {
   reaction_id bigint [not null, ref: > chem_reaction.id]
   species_id bigint [not null, ref: > species.id]
-  role reaction_role [not null]
-  stoichiometry smallint [not null]
+  role ReactionRole [not null]
+  stoichiometry int [not null]
 
   indexes {
-    (reaction_id, species_id, role) [pk]
+    (reaction_id, role, species_id) [pk]
   }
 
   checks {
     `stoichiometry >= 1` [name: 'ck_reaction_participant_stoichiometry_ge_1']
   }
 
-  Note: 'Compressed stoichiometric summary for a reaction graph identity. This is not an ordered participant-slot table. Repeated species on one side of a reaction are represented with `stoichiometry`.'
+  Note: 'Compressed stoichiometric summary for a reaction graph identity.'
 }
 
 Table species_entry_review {
   id bigint [pk, not null]
   species_entry_id bigint [not null, ref: > species_entry.id]
   user_id bigint [not null, ref: > app_user.id]
-  role species_entry_review_role [not null]
+  role SpeciesEntryReviewRole [not null]
   note text
   created_at timestamp [not null, default: 'now']
 
@@ -1140,10 +887,48 @@ Table species_entry_review {
   Note: 'Store explicit human review or curation events for species entries.'
 }
 
+Table submission {
+  id bigint [pk, not null]
+  created_by bigint [not null, ref: > app_user.id]
+  submission_kind SubmissionKind [not null]
+  source_kind SubmissionSourceKind [not null, default: 'api']
+  upload_job_id uuid [ref: > upload_job.id]
+  status SubmissionStatus [not null, default: 'pending']
+  title string
+  summary text
+  submitted_at timestamp [not null, default: 'now']
+  approved_at timestamp
+  approved_by bigint [ref: > app_user.id]
+  rejected_at timestamp
+  rejected_by bigint [ref: > app_user.id]
+  rejection_reason text
+  correction_due_at timestamp
+  supersedes_submission_id bigint [ref: > submission.id]
+  llm_precheck_label SubmissionPrecheckLabel
+  llm_precheck_summary text
+  llm_precheck_model string
+  llm_precheck_at timestamp
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    created_by [name: 'ix_submission_created_by']
+    upload_job_id [name: 'ix_submission_upload_job_id']
+    (status, created_at) [name: 'ix_submission_status_created_at']
+  }
+
+  checks {
+    `(status <> 'rejected') OR (rejected_by IS NOT NULL AND rejected_by <> created_by)` [name: 'ck_submission_submission_rejecter_not_creator']
+    `(status <> 'approved') OR (approved_by IS NOT NULL AND approved_by <> created_by)` [name: 'ck_submission_submission_approver_not_creator']
+    `(status <> 'rejected') OR (rejection_reason IS NOT NULL)` [name: 'ck_submission_submission_rejected_requires_reason']
+  }
+
+  Note: 'One user contribution event tracked for moderation and publication.'
+}
+
 Table thermo {
   id bigint [pk, not null]
   species_entry_id bigint [not null, ref: > species_entry.id]
-  scientific_origin scientific_origin_kind [not null]
+  scientific_origin ScientificOriginKind [not null]
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
@@ -1159,19 +944,19 @@ Table thermo {
 
   checks {
     `h298_uncertainty_kj_mol IS NULL OR h298_uncertainty_kj_mol >= 0` [name: 'ck_thermo_h298_uncertainty_ge_0']
-    `s298_uncertainty_j_mol_k IS NULL OR s298_uncertainty_j_mol_k >= 0` [name: 'ck_thermo_s298_uncertainty_ge_0']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_thermo_tmax_k_gt_0']
+    `s298_uncertainty_j_mol_k IS NULL OR s298_uncertainty_j_mol_k >= 0` [name: 'ck_thermo_s298_uncertainty_ge_0']
     `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_thermo_tmin_k_gt_0']
     `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k` [name: 'ck_thermo_tmin_le_tmax']
   }
 
-  Note: 'Thermochemistry records for a species entry. Dedupe uses the provenance tuple with PostgreSQL `NULLS NOT DISTINCT`.'
+  Note: 'Thermochemistry records for a species entry.'
 }
 
 Table transport {
   id bigint [pk, not null]
   species_entry_id bigint [not null, ref: > species_entry.id]
-  scientific_origin scientific_origin_kind [not null]
+  scientific_origin ScientificOriginKind [not null]
   literature_id bigint [ref: > literature.id]
   software_release_id bigint [ref: > software_release.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
@@ -1185,49 +970,37 @@ Table transport {
   created_by bigint [ref: > app_user.id]
 
   checks {
-    `epsilon_over_k_k IS NULL OR epsilon_over_k_k > 0` [name: 'ck_transport_epsilon_over_k_k_gt_0']
-    `(sigma_angstrom IS NULL AND epsilon_over_k_k IS NULL) OR (sigma_angstrom IS NOT NULL AND epsilon_over_k_k IS NOT NULL)` [name: 'ck_transport_lj_pair_both_or_neither']
-    `rotational_relaxation IS NULL OR rotational_relaxation >= 0` [name: 'ck_transport_rotational_relaxation_ge_0']
     `sigma_angstrom IS NULL OR sigma_angstrom > 0` [name: 'ck_transport_sigma_angstrom_gt_0']
+    `rotational_relaxation IS NULL OR rotational_relaxation >= 0` [name: 'ck_transport_rotational_relaxation_ge_0']
+    `(sigma_angstrom IS NULL AND epsilon_over_k_k IS NULL) OR (sigma_angstrom IS NOT NULL AND epsilon_over_k_k IS NOT NULL)` [name: 'ck_transport_lj_pair_both_or_neither']
+    `epsilon_over_k_k IS NULL OR epsilon_over_k_k > 0` [name: 'ck_transport_epsilon_over_k_k_gt_0']
   }
 
   Note: 'Transport properties attached to a species entry.'
 }
 
-Table applied_energy_correction {
+Table conformer_observation {
   id bigint [pk, not null]
-  target_species_entry_id bigint [ref: > species_entry.id]
-  target_reaction_entry_id bigint [ref: > reaction_entry.id]
-  source_conformer_observation_id bigint [ref: > conformer_observation.id]
-  source_calculation_id bigint [ref: > calculation.id]
-  scheme_id bigint [ref: > energy_correction_scheme.id]
-  frequency_scale_factor_id bigint [ref: > frequency_scale_factor.id]
-  application_role energy_correction_application_role [not null]
-  value double [not null]
-  value_unit text [not null]
-  temperature_k double
+  conformer_group_id bigint [not null, ref: > conformer_group.id]
+  assignment_scheme_id bigint [ref: > conformer_assignment_scheme.id]
+  scientific_origin ScientificOriginKind [not null, default: 'computed']
   note text
+  torsion_fingerprint_json jsonb
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
 
   indexes {
-    (target_species_entry_id, target_reaction_entry_id, source_conformer_observation_id, scheme_id, frequency_scale_factor_id, application_role, temperature_k, source_calculation_id) [name: 'uq_applied_energy_correction_dedup', unique]
+    conformer_group_id [name: 'ix_conformer_observation_conformer_group_id']
   }
 
-  checks {
-    `num_nonnulls(scheme_id, frequency_scale_factor_id) = 1` [name: 'ck_applied_energy_correction_exactly_one_provenance_source']
-    `num_nonnulls(target_species_entry_id, target_reaction_entry_id) = 1` [name: 'ck_applied_energy_correction_exactly_one_target']
-    `temperature_k IS NULL OR temperature_k > 0` [name: 'ck_applied_energy_correction_temperature_k_gt_0']
-  }
-
-  Note: 'One energy correction applied to a specific entry. Links exactly one provenance source (scheme XOR frequency scale factor) and exactly one target (species entry XOR reaction entry) to an applied result with a semantic application role.'
+  Note: 'Store one provenance-bearing conformer observation assigned to a basin. Multiple observations per group are expected and valid; matching an existing basin reuses the group, not the observation row.'
 }
 
 Table conformer_selection {
   id bigint [pk, not null]
   conformer_group_id bigint [not null, ref: > conformer_group.id]
   assignment_scheme_id bigint [ref: > conformer_assignment_scheme.id]
-  selection_kind conformer_selection_kind [not null]
+  selection_kind ConformerSelectionKind [not null]
   note text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
@@ -1236,24 +1009,24 @@ Table conformer_selection {
     (conformer_group_id, assignment_scheme_id, selection_kind) [unique, name: 'uq_conformer_selection_conformer_group_id']
   }
 
-  Note: 'Store explicit workflow, curation, or UI selections for conformer groups. `NULL` assignment-scheme references are treated as identical for dedupe.'
+  Note: 'Store explicit workflow, curation, or UI selections for conformer groups.'
 }
 
 Table kinetics {
   id bigint [pk, not null]
   reaction_entry_id bigint [not null, ref: > reaction_entry.id]
-  scientific_origin scientific_origin_kind [not null]
-  model_kind kinetics_model_kind [not null, default: 'modified_arrhenius']
+  scientific_origin ScientificOriginKind [not null]
+  model_kind KineticsModelKind [not null, default: 'modified_arrhenius']
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
   a double
-  a_units arrhenius_a_units
+  a_units ArrheniusAUnits
   n double
   ea_kj_mol double
-  d_a double
-  d_n double
-  d_ea_kj_mol double
+  a_uncertainty double
+  n_uncertainty double
+  ea_uncertainty_kj_mol double
   tmin_k double
   tmax_k double
   degeneracy double
@@ -1302,13 +1075,13 @@ Table network_solve {
   created_by bigint [ref: > app_user.id]
 
   checks {
-    `grain_count IS NULL OR grain_count >= 1` [name: 'ck_network_solve_grain_count_ge_1']
-    `pmax_bar IS NULL OR pmax_bar > 0` [name: 'ck_network_solve_pmax_bar_gt_0']
-    `pmin_bar IS NULL OR pmin_bar > 0` [name: 'ck_network_solve_pmin_bar_gt_0']
-    `pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar` [name: 'ck_network_solve_pmin_le_pmax']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_network_solve_tmax_k_gt_0']
-    `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_network_solve_tmin_k_gt_0']
     `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k` [name: 'ck_network_solve_tmin_le_tmax']
+    `pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar` [name: 'ck_network_solve_pmin_le_pmax']
+    `pmin_bar IS NULL OR pmin_bar > 0` [name: 'ck_network_solve_pmin_bar_gt_0']
+    `grain_count IS NULL OR grain_count >= 1` [name: 'ck_network_solve_grain_count_ge_1']
+    `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_network_solve_tmin_k_gt_0']
+    `pmax_bar IS NULL OR pmax_bar > 0` [name: 'ck_network_solve_pmax_bar_gt_0']
   }
 
   Note: 'One master-equation solution for a reaction network.'
@@ -1317,10 +1090,10 @@ Table network_solve {
 Table network_species {
   network_id bigint [not null, ref: > network.id]
   species_entry_id bigint [not null, ref: > species_entry.id]
-  role network_species_role [not null]
+  role NetworkSpeciesRole [not null]
 
   indexes {
-    (network_id, species_entry_id, role) [pk]
+    (network_id, role, species_entry_id) [pk]
   }
 
   Note: 'Links a network to a species entry with a role.'
@@ -1329,7 +1102,7 @@ Table network_species {
 Table network_state {
   id bigint [pk, not null]
   network_id bigint [not null, ref: > network.id]
-  kind network_state_kind [not null]
+  kind NetworkStateKind [not null]
   composition_hash varchar(64) [not null]
   label text
 
@@ -1344,7 +1117,7 @@ Table reaction_entry_structure_participant {
   id bigint [pk, not null]
   reaction_entry_id bigint [not null, ref: > reaction_entry.id]
   species_entry_id bigint [not null, ref: > species_entry.id]
-  role reaction_role [not null]
+  role ReactionRole [not null]
   participant_index int [not null]
   note text
   created_at timestamp [not null, default: 'now']
@@ -1362,17 +1135,17 @@ Table reaction_entry_structure_participant {
 Table statmech {
   id bigint [pk, not null]
   species_entry_id bigint [not null, ref: > species_entry.id]
-  scientific_origin scientific_origin_kind [not null]
+  scientific_origin ScientificOriginKind [not null]
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
-  external_symmetry smallint
+  external_symmetry int
   point_group text
-  is_linear bool
-  rigid_rotor_kind rigid_rotor_kind
-  statmech_treatment statmech_treatment_kind
+  is_linear boolean
+  rigid_rotor_kind RigidRotorKind
+  statmech_treatment StatmechTreatmentKind
   frequency_scale_factor_id bigint [ref: > frequency_scale_factor.id]
-  uses_projected_frequencies bool
+  uses_projected_frequencies boolean
   note text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
@@ -1381,7 +1154,46 @@ Table statmech {
     `external_symmetry IS NULL OR external_symmetry >= 1` [name: 'ck_statmech_external_symmetry_ge_1']
   }
 
-  Note: 'Statistical mechanics interpretation layer for a species entry. Dedupe uses the provenance/treatment tuple with PostgreSQL `NULLS NOT DISTINCT`.'
+  Note: 'Statistical mechanics interpretation layer for a species entry.'
+}
+
+Table submission_audit_event {
+  id bigint [pk, not null]
+  submission_id bigint [not null, ref: > submission.id]
+  created_at timestamp [not null, default: 'now']
+  actor_user_id bigint [ref: > app_user.id]
+  actor_kind SubmissionActorKind [not null]
+  event_kind SubmissionAuditEventKind [not null]
+  from_status SubmissionStatus
+  to_status SubmissionStatus
+  reason text
+  summary text
+  details_json jsonb
+  related_submission_id bigint [ref: > submission.id]
+
+  indexes {
+    submission_id [name: 'ix_submission_audit_event_submission_id']
+    event_kind [name: 'ix_submission_audit_event_event_kind']
+  }
+
+  Note: 'Append-only moderation/lifecycle event for a submission.'
+}
+
+Table submission_record_link {
+  id bigint [pk, not null]
+  submission_id bigint [not null, ref: > submission.id]
+  record_type SubmissionRecordType [not null]
+  record_id bigint [not null]
+  role string
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    (record_type, record_id) [name: 'ix_submission_record_link_record']
+    submission_id [name: 'ix_submission_record_link_submission_id']
+    (submission_id, record_type, record_id, role) [unique, name: 'uq_submission_record_link_identity']
+  }
+
+  Note: 'Lightweight mapping from a submission to one scientific record it'
 }
 
 Table thermo_nasa {
@@ -1405,10 +1217,8 @@ Table thermo_nasa {
   b7 double
 
   checks {
-    `t_mid IS NULL OR t_high IS NULL OR t_high > t_mid` [name: 'ck_thermo_nasa_t_high_gt_t_mid']
-    `t_low IS NULL OR t_low > 0` [name: 'ck_thermo_nasa_t_low_gt_0']
-    `t_low IS NULL OR t_mid IS NULL OR t_mid > t_low` [name: 'ck_thermo_nasa_t_mid_gt_t_low']
-    `(
+    `
+            (
                 t_low IS NULL
                 AND t_mid IS NULL
                 AND t_high IS NULL
@@ -1418,7 +1228,11 @@ Table thermo_nasa {
                 t_low IS NOT NULL
                 AND t_mid IS NOT NULL
                 AND t_high IS NOT NULL
-            )` [name: 'ck_thermo_nasa_temperature_bounds_all_or_none']
+            )
+            ` [name: 'ck_thermo_nasa_temperature_bounds_all_or_none']
+    `t_low IS NULL OR t_mid IS NULL OR t_mid > t_low` [name: 'ck_thermo_nasa_t_mid_gt_t_low']
+    `t_mid IS NULL OR t_high IS NULL OR t_high > t_mid` [name: 'ck_thermo_nasa_t_high_gt_t_mid']
+    `t_low IS NULL OR t_low > 0` [name: 'ck_thermo_nasa_t_low_gt_0']
   }
 
   Note: 'NASA polynomial coefficients for a thermo record.'
@@ -1433,22 +1247,10 @@ Table thermo_point {
   g_kj_mol double
 
   indexes {
-    (thermo_id, temperature_k) [pk]
+    (temperature_k, thermo_id) [pk]
   }
 
   Note: 'Tabulated thermo values at a specific temperature.'
-}
-
-Table thermo_source_calculation {
-  thermo_id bigint [not null, ref: > thermo.id]
-  calculation_id bigint [not null, ref: > calculation.id]
-  role thermo_calc_role [not null]
-
-  indexes {
-    (thermo_id, calculation_id, role) [pk]
-  }
-
-  Note: 'Links thermo records to supporting calculations by role.'
 }
 
 Table transition_state {
@@ -1459,47 +1261,7 @@ Table transition_state {
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
 
-  Note: 'Reaction-channel-level transition-state concept. This groups candidate saddle-point structures that belong to the same reaction-channel interpretation.'
-}
-
-Table transport_source_calculation {
-  transport_id bigint [not null, ref: > transport.id]
-  calculation_id bigint [not null, ref: > calculation.id]
-  role transport_calc_role [not null]
-
-  indexes {
-    (transport_id, calculation_id, role) [pk]
-  }
-
-  Note: 'Links transport records to supporting calculations by role.'
-}
-
-Table applied_energy_correction_component {
-  id bigint [pk, not null]
-  applied_correction_id bigint [not null, ref: > applied_energy_correction.id]
-  component_kind applied_correction_component_kind [not null]
-  key text [not null]
-  multiplicity int [not null, default: 1]
-  parameter_value double [not null]
-  contribution_value double [not null]
-
-  checks {
-    `multiplicity >= 1` [name: 'ck_applied_energy_correction_component_multiplicity_ge_1']
-  }
-
-  Note: 'Per-component breakdown of an applied energy correction. Records e.g. \'6 x C-H bond using parameter -0.11, contribution -0.66\'.'
-}
-
-Table kinetics_source_calculation {
-  kinetics_id bigint [not null, ref: > kinetics.id]
-  calculation_id bigint [not null, ref: > calculation.id]
-  role kinetics_calc_role [not null]
-
-  indexes {
-    (kinetics_id, calculation_id, role) [pk]
-  }
-
-  Note: 'Links kinetics records to supporting calculations by role.'
+  Note: 'Reaction-channel-level transition-state concept.'
 }
 
 Table network_channel {
@@ -1507,7 +1269,7 @@ Table network_channel {
   network_id bigint [not null, ref: > network.id]
   source_state_id bigint [not null, ref: > network_state.id]
   sink_state_id bigint [not null, ref: > network_state.id]
-  kind network_channel_kind [not null]
+  kind NetworkChannelKind [not null]
 
   indexes {
     (network_id, source_state_id, sink_state_id) [unique, name: 'uq_network_channel_network_id']
@@ -1548,25 +1310,13 @@ Table network_solve_energy_transfer {
   Note: 'Energy transfer model parameters for one network solve.'
 }
 
-Table network_solve_source_calculation {
-  solve_id bigint [not null, ref: > network_solve.id]
-  calculation_id bigint [not null, ref: > calculation.id]
-  role network_solve_calc_role [not null]
-
-  indexes {
-    (solve_id, calculation_id, role) [pk]
-  }
-
-  Note: 'Links a network solve to supporting calculations by role.'
-}
-
 Table network_state_participant {
   state_id bigint [not null, ref: > network_state.id]
   species_entry_id bigint [not null, ref: > species_entry.id]
-  stoichiometry smallint [not null, default: 1]
+  stoichiometry int [not null, default: '1']
 
   indexes {
-    (state_id, species_entry_id) [pk]
+    (species_entry_id, state_id) [pk]
   }
 
   checks {
@@ -1576,51 +1326,14 @@ Table network_state_participant {
   Note: 'Species composition of a network state.'
 }
 
-Table statmech_source_calculation {
-  statmech_id bigint [not null, ref: > statmech.id]
-  calculation_id bigint [not null, ref: > calculation.id]
-  role statmech_calc_role [not null]
-
-  indexes {
-    (statmech_id, calculation_id, role) [pk]
-  }
-
-  Note: 'Links statmech records to source calculations by role.'
-}
-
-Table statmech_torsion {
-  id bigint [pk, not null]
-  statmech_id bigint [not null, ref: > statmech.id]
-  torsion_index int [not null]
-  symmetry_number smallint
-  treatment_kind torsion_treatment_kind
-  dimension int [not null, default: 1]
-  top_description text
-  invalidated_reason text
-  note text
-  source_scan_calculation_id bigint [ref: > calculation.id]
-
-  indexes {
-    (statmech_id, torsion_index) [name: 'uq_statmech_torsion_statmech_id', unique]
-  }
-
-  checks {
-    `dimension >= 1` [name: 'ck_statmech_torsion_dimension_ge_1']
-    `symmetry_number IS NULL OR symmetry_number >= 1` [name: 'ck_statmech_torsion_symmetry_number_ge_1']
-    `torsion_index >= 1` [name: 'ck_statmech_torsion_torsion_index_ge_1']
-  }
-
-  Note: 'Stores one torsion associated with a statmech record.'
-}
-
 Table transition_state_entry {
   id bigint [pk, not null]
   transition_state_id bigint [not null, ref: > transition_state.id]
-  charge smallint [not null]
-  multiplicity smallint [not null]
+  charge int [not null]
+  multiplicity int [not null]
   mol mol
   unmapped_smiles text
-  status transition_state_entry_status [not null, default: 'optimized']
+  status TransitionStateEntryStatus [not null, default: 'optimized']
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
 
@@ -1632,65 +1345,76 @@ Table transition_state_entry {
     `multiplicity >= 1` [name: 'ck_transition_state_entry_multiplicity_ge_1']
   }
 
-  Note: 'One candidate transition-state geometry family member under a TS concept. Calculations refine or validate this candidate, and selection rows can mark which entry is preferred for kinetics or display.'
+  Note: 'One candidate transition-state geometry family member under a TS concept.'
+}
+
+Table calculation {
+  id bigint [pk, not null]
+  type CalculationType [not null]
+  quality CalculationQuality [not null, default: 'raw']
+  species_entry_id bigint [ref: > species_entry.id]
+  transition_state_entry_id bigint [ref: > transition_state_entry.id]
+  software_release_id bigint [ref: > software_release.id]
+  workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
+  lot_id bigint [ref: > level_of_theory.id]
+  literature_id bigint [ref: > literature.id]
+  conformer_observation_id bigint [ref: > conformer_observation.id, note: 'Optional anchor to the specific conformer observation this calculation came with. Not unique; one observation may have many calculations.']
+  parameters_json jsonb
+  parameters_parser_version text
+  parameters_extracted_at timestamp
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+
+  checks {
+    `
+                (
+                    transition_state_entry_id IS NOT NULL
+                    AND species_entry_id IS NULL
+                )
+                OR
+                (
+                    transition_state_entry_id IS NULL
+                    AND species_entry_id IS NOT NULL
+                )
+                ` [name: 'ck_calculation_one_owner']
+  }
+
+  Note: 'Computational record with exactly one scientific owner and an optional conformer-observation anchor.'
 }
 
 Table network_kinetics {
   id bigint [pk, not null]
   channel_id bigint [not null, ref: > network_channel.id]
   solve_id bigint [not null, ref: > network_solve.id]
-  model_kind network_kinetics_model_kind [not null]
+  model_kind NetworkKineticsModelKind [not null]
   tmin_k double
   tmax_k double
   pmin_bar double
   pmax_bar double
-  rate_units text
-  pressure_units text
-  temperature_units text
-  stores_log10_k bool
+  rate_units ArrheniusAUnits
+  pressure_units PressureUnit
+  temperature_units TemperatureUnit
+  stores_log10_k boolean
   note text
   created_at timestamp [not null, default: 'now']
 
   checks {
-    `pmax_bar IS NULL OR pmax_bar > 0` [name: 'ck_network_kinetics_pmax_bar_gt_0']
     `pmin_bar IS NULL OR pmin_bar > 0` [name: 'ck_network_kinetics_pmin_bar_gt_0']
-    `pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar` [name: 'ck_network_kinetics_pmin_le_pmax']
-    `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_network_kinetics_tmax_k_gt_0']
     `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_network_kinetics_tmin_k_gt_0']
+    `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_network_kinetics_tmax_k_gt_0']
+    `pmax_bar IS NULL OR pmax_bar > 0` [name: 'ck_network_kinetics_pmax_bar_gt_0']
     `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k` [name: 'ck_network_kinetics_tmin_le_tmax']
+    `pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar` [name: 'ck_network_kinetics_pmin_le_pmax']
   }
 
   Note: 'One fitted phenomenological k(T,P) for a channel from a specific solve.'
-}
-
-Table statmech_torsion_definition {
-  torsion_id bigint [not null, ref: > statmech_torsion.id]
-  coordinate_index int [not null]
-  atom1_index int [not null]
-  atom2_index int [not null]
-  atom3_index int [not null]
-  atom4_index int [not null]
-
-  indexes {
-    (torsion_id, coordinate_index) [pk]
-  }
-
-  checks {
-    `atom1_index >= 1` [name: 'ck_statmech_torsion_definition_atom1_index_ge_1']
-    `atom2_index >= 1` [name: 'ck_statmech_torsion_definition_atom2_index_ge_1']
-    `atom3_index >= 1` [name: 'ck_statmech_torsion_definition_atom3_index_ge_1']
-    `atom4_index >= 1` [name: 'ck_statmech_torsion_definition_atom4_index_ge_1']
-    `coordinate_index >= 1` [name: 'ck_statmech_torsion_definition_coordinate_index_ge_1']
-  }
-
-  Note: 'Atom indices for a torsional coordinate.'
 }
 
 Table transition_state_selection {
   id bigint [pk, not null]
   transition_state_id bigint [not null, ref: > transition_state.id]
   transition_state_entry_id bigint [not null, ref: > transition_state_entry.id]
-  selection_kind transition_state_selection_kind [not null]
+  selection_kind TransitionStateSelectionKind [not null]
   note text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
@@ -1699,13 +1423,356 @@ Table transition_state_selection {
     (transition_state_id, selection_kind) [unique, name: 'uq_transition_state_selection_transition_state_id']
   }
 
-  Note: 'Selection and curation layer for transition-state entries. The selected entry must belong to the same transition-state concept as the `transition_state_id` on this row.'
+  Note: 'Selection and curation layer for transition-state entries.'
+}
+
+Table applied_energy_correction {
+  id bigint [pk, not null]
+  target_species_entry_id bigint [ref: > species_entry.id]
+  target_reaction_entry_id bigint [ref: > reaction_entry.id]
+  source_conformer_observation_id bigint [ref: > conformer_observation.id]
+  source_calculation_id bigint [ref: > calculation.id]
+  scheme_id bigint [ref: > energy_correction_scheme.id]
+  frequency_scale_factor_id bigint [ref: > frequency_scale_factor.id]
+  application_role EnergyCorrectionApplicationRole [not null]
+  value double [not null]
+  value_unit EnergyUnit [not null]
+  temperature_k double
+  note text
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+
+  indexes {
+    (target_species_entry_id, target_reaction_entry_id, source_conformer_observation_id, scheme_id, frequency_scale_factor_id, application_role, temperature_k, source_calculation_id) [unique, name: 'uq_applied_energy_correction_dedup']
+  }
+
+  checks {
+    `num_nonnulls(target_species_entry_id, target_reaction_entry_id) = 1` [name: 'ck_applied_energy_correction_exactly_one_target']
+    `num_nonnulls(scheme_id, frequency_scale_factor_id) = 1` [name: 'ck_applied_energy_correction_exactly_one_provenance_source']
+    `temperature_k IS NULL OR temperature_k > 0` [name: 'ck_applied_energy_correction_temperature_k_gt_0']
+  }
+
+  Note: 'One energy correction applied to a specific entry.'
+}
+
+Table calc_freq_result {
+  calculation_id bigint [pk, not null, ref: > calculation.id]
+  n_imag int
+  imag_freq_cm1 double
+  zpe_hartree double
+  zpe_uncertainty_hartree double
+}
+
+Table calc_geometry_validation {
+  calculation_id bigint [pk, not null, ref: > calculation.id]
+  input_geometry_id bigint [ref: > geometry.id]
+  output_geometry_id bigint [ref: > geometry.id]
+  species_smiles text [not null]
+  is_isomorphic boolean [not null]
+  rmsd double
+  atom_mapping jsonb
+  n_mappings int
+  validation_status ValidationStatus [not null]
+  validation_reason text
+  rmsd_warning_threshold double
+  created_at timestamp [not null, default: 'now']
+
+  Note: 'Result of validating a calculation\'s output geometry against species identity.'
+}
+
+Table calc_irc_point {
+  calculation_id bigint [not null, ref: > calculation.id]
+  point_index int [not null]
+  direction IRCDirection
+  is_ts boolean [not null]
+  reaction_coordinate double
+  electronic_energy_hartree double
+  relative_energy_kj_mol double
+  max_gradient double
+  rms_gradient double
+  geometry_id bigint [ref: > geometry.id]
+  note text
+
+  indexes {
+    (calculation_id, point_index) [pk]
+  }
+
+  checks {
+    `point_index >= 0` [name: 'ck_calc_irc_point_point_index_ge_0']
+  }
+
+  Note: 'One sampled point on an IRC path.'
+}
+
+Table calc_irc_result {
+  calculation_id bigint [pk, not null, ref: > calculation.id]
+  direction IRCDirection [not null]
+  has_forward boolean [not null]
+  has_reverse boolean [not null]
+  ts_point_index int
+  point_count int
+  zero_energy_reference_hartree double
+  note text
+
+  checks {
+    `point_count IS NULL OR point_count >= 0` [name: 'ck_calc_irc_result_point_count_ge_0']
+  }
+
+  Note: 'IRC-level metadata for an IRC calculation.'
+}
+
+Table calc_neb_image_result {
+  calculation_id bigint [not null, ref: > calculation.id]
+  image_index int [not null]
+  electronic_energy_hartree double
+  relative_energy_kj_mol double
+  path_distance_angstrom double
+  max_force double
+  rms_force double
+  is_climbing_image boolean [not null]
+
+  indexes {
+    (calculation_id, image_index) [pk]
+  }
+
+  checks {
+    `image_index >= 0` [name: 'ck_calc_neb_image_result_image_index_ge_0']
+  }
+
+  Note: 'Per-image result from a NEB calculation.'
+}
+
+Table calc_opt_result {
+  calculation_id bigint [pk, not null, ref: > calculation.id]
+  converged boolean
+  n_steps int
+  final_energy_hartree double
+
+  checks {
+    `n_steps IS NULL OR n_steps >= 0` [name: 'ck_calc_opt_result_n_steps_ge_0']
+  }
+}
+
+Table calc_scan_coordinate {
+  calculation_id bigint [not null, ref: > calculation.id]
+  coordinate_index int [not null]
+  coordinate_kind ScanCoordinateKind [not null]
+  atom1_index int [not null]
+  atom2_index int [not null]
+  atom3_index int
+  atom4_index int
+  step_count int
+  step_size double
+  start_value double
+  end_value double
+  value_unit CoordinateUnit
+  resolution_degrees int
+  symmetry_number int
+
+  indexes {
+    (calculation_id, coordinate_index) [pk]
+  }
+
+  checks {
+    `
+            CASE coordinate_kind
+                WHEN 'bond' THEN atom3_index IS NULL AND atom4_index IS NULL
+                WHEN 'angle' THEN atom3_index IS NOT NULL AND atom4_index IS NULL
+                ELSE atom3_index IS NOT NULL AND atom4_index IS NOT NULL
+            END
+            ` [name: 'ck_calc_scan_coordinate_coordinate_arity_matches_kind']
+    `resolution_degrees IS NULL OR resolution_degrees >= 1` [name: 'ck_calc_scan_coordinate_resolution_degrees_ge_1']
+    `atom1_index >= 1` [name: 'ck_calc_scan_coordinate_atom1_index_ge_1']
+    `step_count IS NULL OR step_count >= 1` [name: 'ck_calc_scan_coordinate_step_count_ge_1']
+    `symmetry_number IS NULL OR symmetry_number >= 1` [name: 'ck_calc_scan_coordinate_symmetry_number_ge_1']
+    `atom2_index >= 1` [name: 'ck_calc_scan_coordinate_atom2_index_ge_1']
+    `coordinate_index >= 1` [name: 'ck_calc_scan_coordinate_coordinate_index_ge_1']
+    `atom3_index IS NULL OR atom3_index >= 1` [name: 'ck_calc_scan_coordinate_atom3_index_ge_1']
+    `atom4_index IS NULL OR atom4_index >= 1` [name: 'ck_calc_scan_coordinate_atom4_index_ge_1']
+  }
+
+  Note: 'Definition of one scanned internal coordinate.'
+}
+
+Table calc_scan_point {
+  calculation_id bigint [not null, ref: > calculation.id]
+  point_index int [not null]
+  electronic_energy_hartree double
+  relative_energy_kj_mol double
+  geometry_id bigint [ref: > geometry.id]
+  note text
+
+  indexes {
+    (calculation_id, point_index) [pk]
+  }
+
+  checks {
+    `point_index >= 1` [name: 'ck_calc_scan_point_point_index_ge_1']
+  }
+
+  Note: 'One sampled point on a scan surface.'
+}
+
+Table calc_scan_result {
+  calculation_id bigint [pk, not null, ref: > calculation.id]
+  dimension int [not null]
+  is_relaxed boolean
+  zero_energy_reference_hartree double
+  note text
+
+  checks {
+    `dimension >= 1` [name: 'ck_calc_scan_result_dimension_ge_1']
+  }
+
+  Note: 'Scan-level metadata for a scan calculation.'
+}
+
+Table calc_sp_result {
+  calculation_id bigint [pk, not null, ref: > calculation.id]
+  electronic_energy_hartree double
+  electronic_energy_uncertainty_hartree double
+}
+
+Table calculation_artifact {
+  id bigint [pk, not null]
+  calculation_id bigint [not null, ref: > calculation.id]
+  kind ArtifactKind [not null]
+  uri text [not null]
+  sha256 varchar(64)
+  bytes bigint
+  created_at timestamp [not null, default: 'now']
+}
+
+Table calculation_constraint {
+  calculation_id bigint [not null, ref: > calculation.id]
+  constraint_index int [not null]
+  constraint_kind ConstraintKind [not null]
+  atom1_index int [not null]
+  atom2_index int
+  atom3_index int
+  atom4_index int
+  target_value double
+
+  indexes {
+    (calculation_id, constraint_index) [pk]
+  }
+
+  checks {
+    `atom2_index IS NULL OR atom2_index >= 1` [name: 'ck_calculation_constraint_atom2_index_ge_1']
+    `
+            CASE constraint_kind
+                WHEN 'cartesian_atom' THEN atom2_index IS NULL AND atom3_index IS NULL AND atom4_index IS NULL
+                WHEN 'bond' THEN atom2_index IS NOT NULL AND atom3_index IS NULL AND atom4_index IS NULL
+                WHEN 'angle' THEN atom2_index IS NOT NULL AND atom3_index IS NOT NULL AND atom4_index IS NULL
+                ELSE atom2_index IS NOT NULL AND atom3_index IS NOT NULL AND atom4_index IS NOT NULL
+            END
+            ` [name: 'ck_calculation_constraint_constraint_arity_matches_kind']
+    `constraint_index >= 1` [name: 'ck_calculation_constraint_constraint_index_ge_1']
+    `atom3_index IS NULL OR atom3_index >= 1` [name: 'ck_calculation_constraint_atom3_index_ge_1']
+    `atom1_index >= 1` [name: 'ck_calculation_constraint_atom1_index_ge_1']
+    `atom4_index IS NULL OR atom4_index >= 1` [name: 'ck_calculation_constraint_atom4_index_ge_1']
+  }
+
+  Note: 'Geometric constraint applied to a calculation.'
+}
+
+Table calculation_dependency {
+  parent_calculation_id bigint [not null, ref: > calculation.id]
+  child_calculation_id bigint [not null, ref: > calculation.id]
+  dependency_role CalculationDependencyRole [not null]
+
+  indexes {
+    (child_calculation_id, parent_calculation_id) [pk]
+    child_calculation_id [unique, name: 'uq_calculation_dependency_child_calculation_id_freq_on']
+    child_calculation_id [unique, name: 'uq_calculation_dependency_child_calculation_id_single_point_on']
+    child_calculation_id [unique, name: 'uq_calculation_dependency_child_calculation_id_scan_parent']
+    child_calculation_id [unique, name: 'uq_calculation_dependency_child_calculation_id_optimized_from']
+    child_calculation_id [unique, name: 'uq_calculation_dependency_child_calculation_id_neb_parent']
+  }
+
+  checks {
+    `parent_calculation_id <> child_calculation_id` [name: 'ck_calculation_dependency_not_self']
+  }
+
+  Note: 'Directed dependency edge between two calculations.'
+}
+
+Table calculation_input_geometry {
+  calculation_id bigint [not null, ref: > calculation.id]
+  geometry_id bigint [not null, ref: > geometry.id]
+  input_order int [not null, default: '1']
+
+  indexes {
+    (calculation_id, input_order) [pk]
+    (calculation_id, geometry_id) [unique, name: 'uq_calculation_input_geometry_calculation_id']
+  }
+
+  checks {
+    `input_order >= 1` [name: 'ck_calculation_input_geometry_input_order_ge_1']
+  }
+
+  Note: 'Ordered input-geometry link table for a calculation.'
+}
+
+Table calculation_output_geometry {
+  calculation_id bigint [not null, ref: > calculation.id]
+  geometry_id bigint [not null, ref: > geometry.id]
+  output_order int [not null]
+  role CalculationGeometryRole
+
+  indexes {
+    (calculation_id, output_order) [pk]
+    (calculation_id, geometry_id) [unique, name: 'uq_calculation_output_geometry_calculation_id']
+  }
+
+  checks {
+    `output_order >= 1` [name: 'ck_calculation_output_geometry_output_order_ge_1']
+  }
+}
+
+Table calculation_parameter {
+  id bigint [pk, not null]
+  calculation_id bigint [not null, ref: > calculation.id]
+  raw_key text [not null]
+  canonical_key text [ref: > calculation_parameter_vocab.canonical_key]
+  raw_value text [not null]
+  canonical_value text
+  section text
+  value_type text
+  unit text
+  parameter_index int
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    (raw_key, section) [name: 'ix_calculation_parameter_raw_key_section']
+    (canonical_key, canonical_value) [name: 'ix_calculation_parameter_canonical_key_value']
+    calculation_id [name: 'ix_calculation_parameter_calculation_id']
+    canonical_key [name: 'ix_calculation_parameter_canonical_key']
+  }
+
+  checks {
+    `parameter_index IS NULL OR parameter_index >= 0` [name: 'ck_calculation_parameter_parameter_index_ge_0']
+  }
+
+  Note: 'EAV-style parsed parameter from an ESS calculation.'
+}
+
+Table kinetics_source_calculation {
+  kinetics_id bigint [not null, ref: > kinetics.id]
+  calculation_id bigint [not null, ref: > calculation.id]
+  role KineticsCalculationRole [not null]
+
+  indexes {
+    (calculation_id, kinetics_id, role) [pk]
+  }
+
+  Note: 'Links kinetics records to supporting calculations by role.'
 }
 
 Table network_kinetics_chebyshev {
   network_kinetics_id bigint [pk, not null, ref: > network_kinetics.id]
-  n_temperature smallint [not null]
-  n_pressure smallint [not null]
+  n_temperature int [not null]
+  n_pressure int [not null]
   coefficients jsonb [not null]
 
   checks {
@@ -1719,19 +1786,19 @@ Table network_kinetics_chebyshev {
 Table network_kinetics_plog {
   network_kinetics_id bigint [not null, ref: > network_kinetics.id]
   pressure_bar double [not null]
-  entry_index smallint [not null, default: 1]
+  entry_index int [not null, default: '1']
   a double [not null]
-  a_units arrhenius_a_units
+  a_units ArrheniusAUnits
   n double [not null]
   ea_kj_mol double [not null]
 
   indexes {
-    (network_kinetics_id, pressure_bar, entry_index) [pk]
+    (entry_index, network_kinetics_id, pressure_bar) [pk]
   }
 
   checks {
-    `entry_index >= 1` [name: 'ck_network_kinetics_plog_entry_index_ge_1']
     `pressure_bar > 0` [name: 'ck_network_kinetics_plog_pressure_bar_gt_0']
+    `entry_index >= 1` [name: 'ck_network_kinetics_plog_entry_index_ge_1']
   }
 
   Note: 'One PLOG entry: Arrhenius parameters at a discrete pressure.'
@@ -1744,7 +1811,7 @@ Table network_kinetics_point {
   rate_value double [not null]
 
   indexes {
-    (network_kinetics_id, temperature_k, pressure_bar) [pk]
+    (network_kinetics_id, pressure_bar, temperature_k) [pk]
   }
 
   checks {
@@ -1755,8 +1822,139 @@ Table network_kinetics_point {
   Note: 'One tabulated k(T,P) data point.'
 }
 
+Table network_solve_source_calculation {
+  solve_id bigint [not null, ref: > network_solve.id]
+  calculation_id bigint [not null, ref: > calculation.id]
+  role NetworkSolveCalculationRole [not null]
+
+  indexes {
+    (calculation_id, role, solve_id) [pk]
+  }
+
+  Note: 'Links a network solve to supporting calculations by role.'
+}
+
+Table statmech_source_calculation {
+  statmech_id bigint [not null, ref: > statmech.id]
+  calculation_id bigint [not null, ref: > calculation.id]
+  role StatmechCalculationRole [not null]
+
+  indexes {
+    (calculation_id, role, statmech_id) [pk]
+  }
+
+  Note: 'Links statmech records to source calculations by role.'
+}
+
+Table statmech_torsion {
+  id bigint [pk, not null]
+  statmech_id bigint [not null, ref: > statmech.id]
+  torsion_index int [not null]
+  symmetry_number int
+  treatment_kind TorsionTreatmentKind
+  dimension int [not null]
+  top_description text
+  invalidated_reason text
+  note text
+  source_scan_calculation_id bigint [ref: > calculation.id]
+
+  indexes {
+    (statmech_id, torsion_index) [unique, name: 'uq_statmech_torsion_statmech_id']
+  }
+
+  checks {
+    `symmetry_number IS NULL OR symmetry_number >= 1` [name: 'ck_statmech_torsion_symmetry_number_ge_1']
+    `torsion_index >= 1` [name: 'ck_statmech_torsion_torsion_index_ge_1']
+    `dimension >= 1` [name: 'ck_statmech_torsion_dimension_ge_1']
+  }
+
+  Note: 'Stores one torsion associated with a statmech record.'
+}
+
+Table thermo_source_calculation {
+  thermo_id bigint [not null, ref: > thermo.id]
+  calculation_id bigint [not null, ref: > calculation.id]
+  role ThermoCalculationRole [not null]
+
+  indexes {
+    (calculation_id, role, thermo_id) [pk]
+  }
+
+  Note: 'Links thermo records to supporting calculations by role.'
+}
+
+Table transport_source_calculation {
+  transport_id bigint [not null, ref: > transport.id]
+  calculation_id bigint [not null, ref: > calculation.id]
+  role TransportCalculationRole [not null]
+
+  indexes {
+    (calculation_id, role, transport_id) [pk]
+  }
+
+  Note: 'Links transport records to supporting calculations by role.'
+}
+
+Table applied_energy_correction_component {
+  id bigint [pk, not null]
+  applied_correction_id bigint [not null, ref: > applied_energy_correction.id]
+  component_kind AppliedCorrectionComponentKind [not null]
+  key text [not null]
+  multiplicity int [not null, default: '1']
+  parameter_value double [not null]
+  contribution_value double [not null]
+
+  checks {
+    `multiplicity >= 1` [name: 'ck_applied_energy_correction_component_multiplicity_ge_1']
+  }
+
+  Note: 'Per-component breakdown of an applied energy correction.'
+}
+
+Table calc_scan_point_coordinate_value {
+  calculation_id bigint [not null, ref: > calc_scan_coordinate.calculation_id]
+  point_index int [not null, ref: > calc_scan_point.point_index]
+  coordinate_index int [not null, ref: > calc_scan_coordinate.coordinate_index]
+  coordinate_value double [not null]
+  value_unit CoordinateUnit
+
+  indexes {
+    (calculation_id, coordinate_index, point_index) [pk]
+  }
+
+  checks {
+    `coordinate_index >= 1` [name: 'ck_calc_scan_point_coordinate_value_coordinate_index_ge_1']
+    `point_index >= 1` [name: 'ck_calc_scan_point_coordinate_value_point_index_ge_1']
+  }
+
+  Note: 'Coordinate values for one sampled scan point.'
+}
+
+Table statmech_torsion_definition {
+  torsion_id bigint [not null, ref: > statmech_torsion.id]
+  coordinate_index int [not null]
+  atom1_index int [not null]
+  atom2_index int [not null]
+  atom3_index int [not null]
+  atom4_index int [not null]
+
+  indexes {
+    (coordinate_index, torsion_id) [pk]
+  }
+
+  checks {
+    `atom3_index >= 1` [name: 'ck_statmech_torsion_definition_atom3_index_ge_1']
+    `coordinate_index >= 1` [name: 'ck_statmech_torsion_definition_coordinate_index_ge_1']
+    `atom4_index >= 1` [name: 'ck_statmech_torsion_definition_atom4_index_ge_1']
+    `atom1_index >= 1` [name: 'ck_statmech_torsion_definition_atom1_index_ge_1']
+    `atom2_index >= 1` [name: 'ck_statmech_torsion_definition_atom2_index_ge_1']
+  }
+
+  Note: 'Atom indices for a torsional coordinate.'
+}
+
+Ref fk_transition_state_selection_entry_with_parent: transition_state_selection.(transition_state_entry_id, transition_state_id) > transition_state_entry.(id, transition_state_id)
+
 Ref fk_calc_scan_point_coordinate_value_calculation_id_calc_scan_coordinate: calc_scan_point_coordinate_value.(calculation_id, coordinate_index) > calc_scan_coordinate.(calculation_id, coordinate_index)
 
 Ref fk_calc_scan_point_coordinate_value_calculation_id_calc_scan_point: calc_scan_point_coordinate_value.(calculation_id, point_index) > calc_scan_point.(calculation_id, point_index)
-
-Ref fk_transition_state_selection_entry_with_parent: transition_state_selection.(transition_state_entry_id, transition_state_id) > transition_state_entry.(id, transition_state_id)

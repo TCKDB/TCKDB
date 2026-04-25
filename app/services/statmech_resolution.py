@@ -18,6 +18,7 @@ from app.db.models.statmech import (
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.energy_correction_resolution import resolve_or_create_freq_scale_factor_ref
+from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_resolution import resolve_software_release_ref
 
 
@@ -26,7 +27,7 @@ def resolve_or_create_statmech(
     payload: ConformerUploadStatmechPayload,
     *,
     species_entry_id: int,
-    uploaded_calculation_id: int,
+    uploaded_calculation_id: int | None = None,
     created_by: int | None = None,
 ) -> Statmech:
     """Create a statmech record and attach nested provenance.
@@ -34,14 +35,28 @@ def resolve_or_create_statmech(
     Always creates a new row — statmech records are provenance-bearing
     scientific results and multiple records per species entry are valid.
 
+    The ``uploaded_calculation_id`` is only used when
+    ``payload.uploaded_calculation_role`` is set (nested conformer upload
+    path). Standalone statmech uploads leave both unset and declare any
+    supporting calculations explicitly via ``payload.source_calculations``.
+
     :param session: Active SQLAlchemy session.
-    :param payload: Workflow-facing statmech payload from conformer upload.
+    :param payload: Workflow-facing statmech payload.
     :param species_entry_id: Resolved owner species-entry id.
-    :param uploaded_calculation_id: Newly created calculation id from the upload workflow.
+    :param uploaded_calculation_id: Optional calculation id produced by
+        the caller workflow; linked as a source calculation only when
+        ``payload.uploaded_calculation_role`` is also set.
     :param created_by: Optional application user id for newly created rows.
     :returns: Newly created ``Statmech`` row with linked sources/torsions.
+    :raises ValueError: If ``uploaded_calculation_role`` is set but
+        ``uploaded_calculation_id`` is not supplied.
     """
 
+    literature = (
+        resolve_or_create_literature(session, payload.literature)
+        if payload.literature is not None
+        else None
+    )
     software_release = (
         resolve_software_release_ref(session, payload.software_release)
         if payload.software_release is not None
@@ -61,7 +76,7 @@ def resolve_or_create_statmech(
     statmech = Statmech(
         species_entry_id=species_entry_id,
         scientific_origin=payload.scientific_origin,
-        literature_id=payload.literature_id,
+        literature_id=literature.id if literature is not None else None,
         workflow_tool_release_id=(
             workflow_tool_release.id if workflow_tool_release is not None else None
         ),
@@ -83,6 +98,11 @@ def resolve_or_create_statmech(
 
     # Attach source calculations
     if payload.uploaded_calculation_role is not None:
+        if uploaded_calculation_id is None:
+            raise ValueError(
+                "uploaded_calculation_role is set but no uploaded_calculation_id "
+                "was provided to resolve_or_create_statmech."
+            )
         session.add(
             StatmechSourceCalculation(
                 statmech_id=statmech.id,

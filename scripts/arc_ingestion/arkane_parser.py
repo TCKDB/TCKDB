@@ -23,9 +23,9 @@ class ArkaneKinetics:
     ea_units: str  # e.g. "kJ/mol"
     tmin_k: float
     tmax_k: float
-    d_a: float | None = None    # multiplicative uncertainty: A *|/ d_a
-    d_n: float | None = None    # additive uncertainty: n +/- d_n
-    d_ea: float | None = None   # additive uncertainty: Ea +/- d_ea (same units as ea_units)
+    a_uncertainty: float | None = None    # multiplicative uncertainty: A *|/ a_uncertainty
+    n_uncertainty: float | None = None    # additive uncertainty: n +/- n_uncertainty
+    ea_uncertainty: float | None = None   # additive uncertainty: Ea +/- ea_uncertainty (same units as ea_units)
     comment: str | None = None
 
 
@@ -122,17 +122,17 @@ def parse_arkane_kinetics(text: str) -> ArkaneKinetics:
 
     # Extract uncertainties from comment string
     # Format: "dA = *|/ 1.13881, dn = +|- 0.016931, dEa = +|- 0.0968239 kJ/mol"
-    d_a = d_n = d_ea = None
+    a_unc = n_unc = ea_unc = None
     if comment:
         da_m = re.search(r"dA\s*=\s*\*\|/\s*([\d.eE+-]+)", comment)
         dn_m = re.search(r"dn\s*=\s*\+\|-\s*([\d.eE+-]+)", comment)
         dea_m = re.search(r"dEa\s*=\s*\+\|-\s*([\d.eE+-]+)", comment)
         if da_m:
-            d_a = float(da_m.group(1))
+            a_unc = float(da_m.group(1))
         if dn_m:
-            d_n = float(dn_m.group(1))
+            n_unc = float(dn_m.group(1))
         if dea_m:
-            d_ea = float(dea_m.group(1))
+            ea_unc = float(dea_m.group(1))
 
     return ArkaneKinetics(
         label=label,
@@ -143,9 +143,9 @@ def parse_arkane_kinetics(text: str) -> ArkaneKinetics:
         ea_units=ea_units,
         tmin_k=tmin_k,
         tmax_k=tmax_k,
-        d_a=d_a,
-        d_n=d_n,
-        d_ea=d_ea,
+        a_uncertainty=a_unc,
+        n_uncertainty=n_unc,
+        ea_uncertainty=ea_unc,
         comment=comment,
     )
 

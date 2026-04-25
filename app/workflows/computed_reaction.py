@@ -33,7 +33,11 @@ from app.db.models.species import ConformerObservation
 from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
-from app.schemas.workflows.network_pdep_upload import ArtifactIn, CalculationIn
+from app.schemas.workflows.network_pdep_upload import (
+    ArtifactIn,
+    CalculationIn,
+    calculation_in_to_with_results_payload,
+)
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.services.artifact_storage import (
     store_artifact,
@@ -41,7 +45,7 @@ from app.services.artifact_storage import (
     validate_total_upload_size,
 )
 from app.services.calculation_resolution import (
-    resolve_level_of_theory_ref,
+    resolve_and_persist_calculation_with_results,
     resolve_software_release_ref,
     resolve_workflow_tool_release_ref,
 )
@@ -109,68 +113,27 @@ def _persist_calculation(
     geometry_key_map: dict[str, int],
     created_by: int | None = None,
 ) -> Calculation:
-    """Create a calculation row with optional result and geometry link.
+    """Persist one bundle-local calculation through the shared calculation seam.
 
-    Reuses the same pattern as the network_pdep workflow.
+    Routes provenance resolution, typed-result persistence, and parameter
+    persistence through ``resolve_and_persist_calculation_with_results``.
+    Bundle-specific concerns (local-key geometry resolution, the
+    ``CalculationOutputGeometry`` link, and artifact persistence) remain
+    here as orchestration.
     """
-    software_release = resolve_software_release_ref(session, calc_in.software_release)
-    lot = resolve_level_of_theory_ref(session, calc_in.level_of_theory)
-    workflow_tool_release = resolve_workflow_tool_release_ref(
-        session, calc_in.workflow_tool_release
-    )
 
-    calculation = Calculation(
-        type=calc_in.type,
+    shared_payload = calculation_in_to_with_results_payload(calc_in)
+    calculation = resolve_and_persist_calculation_with_results(
+        session,
+        shared_payload,
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
-        software_release_id=software_release.id,
-        lot_id=lot.id,
-        workflow_tool_release_id=(
-            workflow_tool_release.id if workflow_tool_release else None
-        ),
         created_by=created_by,
     )
-    session.add(calculation)
-    session.flush()
 
-    # Inline results
-    from app.db.models.calculation import (
-        CalculationFreqResult,
-        CalculationOptResult,
-        CalculationSPResult,
-    )
-
-    if calc_in.sp_electronic_energy_hartree is not None:
-        session.add(
-            CalculationSPResult(
-                calculation_id=calculation.id,
-                electronic_energy_hartree=calc_in.sp_electronic_energy_hartree,
-            )
-        )
-    if calc_in.opt_converged is not None or calc_in.opt_final_energy_hartree is not None:
-        session.add(
-            CalculationOptResult(
-                calculation_id=calculation.id,
-                converged=calc_in.opt_converged,
-                n_steps=calc_in.opt_n_steps,
-                final_energy_hartree=calc_in.opt_final_energy_hartree,
-            )
-        )
-    if calc_in.freq_n_imag is not None or calc_in.freq_imag_freq_cm1 is not None:
-        session.add(
-            CalculationFreqResult(
-                calculation_id=calculation.id,
-                n_imag=calc_in.freq_n_imag,
-                imag_freq_cm1=calc_in.freq_imag_freq_cm1,
-                zpe_hartree=calc_in.freq_zpe_hartree,
-            )
-        )
-
-    # Artifacts (log files, input files, etc.)
     for artifact_in in calc_in.artifacts:
         _persist_artifact(session, calculation.id, artifact_in)
 
-    # Geometry link
     resolved_geom_id = geometry_id
     if calc_in.geometry_key is not None:
         resolved_geom_id = geometry_key_map.get(calc_in.geometry_key, geometry_id)
@@ -188,6 +151,24 @@ def _persist_calculation(
     return calculation
 
 
+def _anchor_species_calculation_to_observation(
+    calculation: Calculation,
+    calc_in: CalculationIn,
+    observation_id_by_geometry_key: dict[str, int],
+) -> None:
+    """Anchor a species-owned calculation to the conformer observation for its geometry key."""
+    if calc_in.geometry_key is None:
+        return
+
+    observation_id = observation_id_by_geometry_key.get(calc_in.geometry_key)
+    if observation_id is None:
+        raise ValueError(
+            f"Species calculation '{calc_in.key}' geometry_key "
+            f"'{calc_in.geometry_key}' does not resolve to a conformer observation."
+        )
+    calculation.conformer_observation_id = observation_id
+
+
 def persist_computed_reaction_upload(
     session: Session,
     request: ComputedReactionUploadRequest,
@@ -203,6 +184,7 @@ def persist_computed_reaction_upload(
     species_key_to_entry: dict[str, object] = {}
     geometry_key_to_id: dict[str, int] = {}
     calculation_key_to_id: dict[str, int] = {}
+    observation_id_by_geometry_key: dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # 1. Resolve species + conformers + calculations
@@ -249,6 +231,7 @@ def persist_computed_reaction_upload(
             )
             session.add(observation)
             session.flush()
+            observation_id_by_geometry_key[conf.geometry.key] = observation.id
 
             # Anchor primary calc to this conformer observation
             calculation.conformer_observation_id = observation.id
@@ -264,11 +247,11 @@ def persist_computed_reaction_upload(
             )
             calculation_key_to_id[calc_in.key] = calculation.id
 
-            # Anchor additional calcs to the conformer observation too
-            # (auto-resolve if exactly one exists for this species entry)
-            if sp.conformers:
-                # The last conformer observation created for this species
-                calculation.conformer_observation_id = observation.id
+            _anchor_species_calculation_to_observation(
+                calculation,
+                calc_in,
+                observation_id_by_geometry_key,
+            )
 
     session.flush()
 
@@ -526,7 +509,7 @@ def persist_computed_reaction_upload(
             if kin.reported_ea is not None
             else None
         )
-        d_ea_kj_mol = (
+        ea_uncertainty_kj_mol = (
             convert_ea_to_kj_mol(kin.d_reported_ea, kin.reported_ea_units)
             if kin.d_reported_ea is not None
             else None
@@ -559,9 +542,9 @@ def persist_computed_reaction_upload(
             a_units=kin.a_units,
             n=kin.n,
             ea_kj_mol=ea_kj_mol,
-            d_a=kin.d_a,
-            d_n=kin.d_n,
-            d_ea_kj_mol=d_ea_kj_mol,
+            a_uncertainty=kin.a_uncertainty,
+            n_uncertainty=kin.n_uncertainty,
+            ea_uncertainty_kj_mol=ea_uncertainty_kj_mol,
             tmin_k=kin.tmin_k,
             tmax_k=kin.tmax_k,
             tunneling_model=kin.tunneling_model,

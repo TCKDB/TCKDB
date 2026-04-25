@@ -76,9 +76,9 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin):
     n: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     ea_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
-    d_a: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
-    d_n: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
-    d_ea_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    a_uncertainty: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    n_uncertainty: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    ea_uncertainty_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
     tmin_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     tmax_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)

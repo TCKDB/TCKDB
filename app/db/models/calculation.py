@@ -30,6 +30,7 @@ from app.db.models.common import (
     CalculationQuality,
     CalculationType,
     ConstraintKind,
+    CoordinateUnit,
     IRCDirection,
     ScanCoordinateKind,
     ValidationStatus,
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
 
 
 class Calculation(Base, TimestampMixin, CreatedByMixin):
-    """Computational record owned by exactly one species or transition-state entry."""
+    """Computational record with one scientific owner and an optional observation anchor."""
 
     __tablename__ = "calculation"
 
@@ -98,6 +99,7 @@ class Calculation(Base, TimestampMixin, CreatedByMixin):
             "conformer_observation.id", deferrable=True, initially="IMMEDIATE"
         ),
         nullable=True,
+        doc="Optional anchor to the specific conformer observation this calculation belongs to.",
     )
 
     parameters_json: Mapped[Optional[dict]] = mapped_column(
@@ -377,6 +379,9 @@ class CalculationSPResult(Base):
         primary_key=True,
     )
     electronic_energy_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
+    electronic_energy_uncertainty_hartree: Mapped[Optional[float]] = mapped_column(
+        nullable=True
+    )
 
     calculation: Mapped["Calculation"] = relationship(back_populates="sp_result")
 
@@ -411,6 +416,7 @@ class CalculationFreqResult(Base):
     n_imag: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     imag_freq_cm1: Mapped[Optional[float]] = mapped_column(nullable=True)
     zpe_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
+    zpe_uncertainty_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
 
     calculation: Mapped["Calculation"] = relationship(back_populates="freq_result")
 
@@ -492,7 +498,10 @@ class CalculationScanCoordinate(Base):
     step_size: Mapped[Optional[float]] = mapped_column(nullable=True)
     start_value: Mapped[Optional[float]] = mapped_column(nullable=True)
     end_value: Mapped[Optional[float]] = mapped_column(nullable=True)
-    value_unit: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    value_unit: Mapped[Optional[CoordinateUnit]] = mapped_column(
+        SAEnum(CoordinateUnit, name="coordinate_unit"),
+        nullable=True,
+    )
     resolution_degrees: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     symmetry_number: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
 
@@ -655,7 +664,10 @@ class CalculationScanPointCoordinateValue(Base):
     point_index: Mapped[int] = mapped_column(Integer, primary_key=True)
     coordinate_index: Mapped[int] = mapped_column(Integer, primary_key=True)
     coordinate_value: Mapped[float] = mapped_column(nullable=False)
-    value_unit: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    value_unit: Mapped[Optional[CoordinateUnit]] = mapped_column(
+        SAEnum(CoordinateUnit, name="coordinate_unit", create_type=False),
+        nullable=True,
+    )
 
     scan_point: Mapped["CalculationScanPoint"] = relationship(
         back_populates="coordinate_values",

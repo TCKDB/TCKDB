@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -7,8 +8,8 @@ from app.db.models.common import (
     MoleculeKind,
     ReactionRole,
     SpeciesEntryStateKind,
-    SpeciesEntryStereoKind,
     StationaryPointKind,
+    StereoKind,
 )
 from app.db.models.reaction import (
     ChemReaction,
@@ -37,6 +38,7 @@ def _make_species_entry(
         inchi_key=inchi_key,
         charge=charge,
         multiplicity=multiplicity,
+        stereo_kind=StereoKind.achiral,
     )
     session.add(species)
     session.flush()
@@ -44,7 +46,6 @@ def _make_species_entry(
     species_entry = SpeciesEntry(
         species_id=species.id,
         kind=StationaryPointKind.minimum,
-        stereo_kind=SpeciesEntryStereoKind.unspecified,
         electronic_state_kind=SpeciesEntryStateKind.ground,
     )
     session.add(species_entry)
@@ -100,11 +101,11 @@ def test_persist_reaction_upload_creates_graph_and_entry_layers(db_engine) -> No
         products=[
             {
                 "species_entry": {
-                    "smiles": "[He]",
+                    "smiles": "[H][H]",
                     "charge": 0,
                     "multiplicity": 1,
                 },
-                "note": "helium product",
+                "note": "hydrogen product",
             }
         ],
     )
@@ -172,7 +173,7 @@ def test_persist_reaction_upload_reuses_graph_layer_for_matching_submission(
             )
             product_entry = _make_species_entry(
                 session,
-                smiles="[Ne]",
+                smiles="[He]",
                 inchi_key="REACTIONUPLD000000000000002",
                 charge=0,
                 multiplicity=1,
@@ -214,17 +215,17 @@ def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
                     charge=0,
                     multiplicity=2,
                     xyz_text="1\nH atom\nH 0.0 0.0 0.0\n",
-                    label="h-conf",
+                    label="h-conf-a",
                 ),
             )
             product_observation = persist_conformer_upload(
                 session,
                 _conformer_request(
-                    smiles="[He]",
+                    smiles="[H]",
                     charge=0,
-                    multiplicity=1,
-                    xyz_text="1\nHe atom\nHe 0.0 0.0 0.0\n",
-                    label="he-conf",
+                    multiplicity=2,
+                    xyz_text="1\nH atom\nH 0.0 0.0 0.0\n",
+                    label="h-conf-b",
                 ),
             )
 
@@ -271,3 +272,94 @@ def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
                 reactant_group.species_entry_id,
                 product_group.species_entry_id,
             }
+
+
+# ---------------------------------------------------------------------------
+# Strict elemental-balance policy
+# ---------------------------------------------------------------------------
+#
+# Ordinary reactions must be element-balanced at the shared reaction-resolution
+# seam (``resolve_chem_reaction``). Pseudo-species are the only first-pass
+# exception. See ``docs/strict-reaction-balance-policy-spec.md``.
+
+
+def test_balanced_ordinary_reaction_persists(db_engine) -> None:
+    """Balanced ordinary reactions must continue to upload successfully."""
+    request = ReactionUploadRequest(
+        reversible=False,
+        reactants=[
+            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+        ],
+        products=[
+            {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
+        ],
+    )
+
+    with Session(db_engine) as session:
+        with session.begin():
+            reaction_entry = persist_reaction_upload(session, request)
+            assert reaction_entry.id is not None
+            assert session.get(ChemReaction, reaction_entry.reaction_id) is not None
+
+
+def test_imbalanced_ordinary_reaction_is_rejected(db_engine) -> None:
+    """Imbalanced ordinary reactions must fail with a stable error and
+    leave no reaction rows persisted."""
+    request = ReactionUploadRequest(
+        reversible=False,
+        reactants=[{"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}],
+        products=[{"species_entry": {"smiles": "[He]", "charge": 0, "multiplicity": 1}}],
+    )
+
+    with Session(db_engine) as session:
+        with session.begin():
+            chem_reaction_count_before = session.scalar(
+                select(func.count()).select_from(ChemReaction)
+            )
+            with pytest.raises(ValueError, match="not element-balanced"):
+                persist_reaction_upload(session, request)
+
+            chem_reaction_count_after = session.scalar(
+                select(func.count()).select_from(ChemReaction)
+            )
+            assert chem_reaction_count_after == chem_reaction_count_before
+
+
+def test_pseudo_species_participant_skips_elemental_balance(db_engine) -> None:
+    """A reaction participant with ``species.kind == pseudo`` exempts the
+    reaction from strict elemental-balance rejection in this first pass."""
+    with Session(db_engine) as session:
+        with session.begin():
+            ordinary_entry = _make_species_entry(
+                session,
+                smiles="[H]",
+                inchi_key="PSEUDOBALANCE0000000000001",
+                charge=0,
+                multiplicity=2,
+            )
+            pseudo_species = Species(
+                kind=MoleculeKind.pseudo,
+                smiles="lumped_sink",
+                inchi_key="PSEUDOBALANCE0000000000002",
+                charge=0,
+                multiplicity=1,
+                stereo_kind=StereoKind.achiral,
+            )
+            session.add(pseudo_species)
+            session.flush()
+            pseudo_entry = SpeciesEntry(
+                species_id=pseudo_species.id,
+                kind=StationaryPointKind.minimum,
+                electronic_state_kind=SpeciesEntryStateKind.ground,
+            )
+            session.add(pseudo_entry)
+            session.flush()
+
+            request = ReactionUploadRequest(
+                reversible=False,
+                reactants=[{"species_entry_id": ordinary_entry.id}],
+                products=[{"species_entry_id": pseudo_entry.id}],
+            )
+            reaction_entry = persist_reaction_upload(session, request)
+            assert reaction_entry.id is not None

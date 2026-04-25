@@ -20,6 +20,7 @@ from app.db.models.common import (
     AppliedCorrectionComponentKind,
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
+    EnergyUnit,
     FrequencyScaleKind,
     MeliusBacComponentKind,
 )
@@ -68,7 +69,10 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin):
     )
 
     version: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    units: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    units: Mapped[Optional[EnergyUnit]] = mapped_column(
+        SAEnum(EnergyUnit, name="energy_unit"),
+        nullable=True,
+    )
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
@@ -310,7 +314,10 @@ class AppliedEnergyCorrection(Base, TimestampMixin, CreatedByMixin):
     )
 
     value: Mapped[float] = mapped_column(Double, nullable=False)
-    value_unit: Mapped[str] = mapped_column(Text, nullable=False)
+    value_unit: Mapped[EnergyUnit] = mapped_column(
+        SAEnum(EnergyUnit, name="energy_unit", create_type=False),
+        nullable=False,
+    )
     temperature_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

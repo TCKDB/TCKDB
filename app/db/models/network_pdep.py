@@ -25,6 +25,8 @@ from app.db.models.common import (
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkStateKind,
+    PressureUnit,
+    TemperatureUnit,
 )
 
 if TYPE_CHECKING:
@@ -364,9 +366,18 @@ class NetworkKinetics(Base, TimestampMixin):
     tmax_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     pmin_bar: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     pmax_bar: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
-    rate_units: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    pressure_units: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    temperature_units: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    rate_units: Mapped[Optional[ArrheniusAUnits]] = mapped_column(
+        SAEnum(ArrheniusAUnits, name="arrhenius_a_units", create_type=False),
+        nullable=True,
+    )
+    pressure_units: Mapped[Optional[PressureUnit]] = mapped_column(
+        SAEnum(PressureUnit, name="pressure_unit"),
+        nullable=True,
+    )
+    temperature_units: Mapped[Optional[TemperatureUnit]] = mapped_column(
+        SAEnum(TemperatureUnit, name="temperature_unit"),
+        nullable=True,
+    )
     stores_log10_k: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

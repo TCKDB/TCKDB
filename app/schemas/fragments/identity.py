@@ -3,8 +3,8 @@ from pydantic import Field, field_validator
 from app.db.models.common import (
     MoleculeKind,
     SpeciesEntryStateKind,
-    SpeciesEntryStereoKind,
     StationaryPointKind,
+    StereoKind,
 )
 from app.schemas.common import SchemaBase
 from app.schemas.entities.species_entry import SpeciesEntryIdentityValidatorMixin
@@ -51,7 +51,7 @@ class SpeciesEntryIdentityPayload(
     species_entry_kind: StationaryPointKind = StationaryPointKind.minimum
     unmapped_smiles: str | None = None
 
-    stereo_kind: SpeciesEntryStereoKind = SpeciesEntryStereoKind.unspecified
+    stereo_kind: StereoKind = StereoKind.unspecified
     stereo_label: str | None = Field(default=None, max_length=64)
 
     electronic_state_kind: SpeciesEntryStateKind = SpeciesEntryStateKind.ground

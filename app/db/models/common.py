@@ -230,7 +230,7 @@ class AppUserRole(str, Enum):
     admin = "admin"
 
 
-class SpeciesEntryStereoKind(str, Enum):
+class StereoKind(str, Enum):
     unspecified = "unspecified"
     achiral = "achiral"
     enantiomer = "enantiomer"
@@ -339,6 +339,26 @@ class EnergyCorrectionApplicationRole(str, Enum):
     custom = "custom"
 
 
+class CoordinateUnit(str, Enum):
+    angstrom = "angstrom"
+    degree = "degree"
+
+
+class EnergyUnit(str, Enum):
+    hartree = "hartree"
+    kj_mol = "kj_mol"
+    kcal_mol = "kcal_mol"
+
+
+class PressureUnit(str, Enum):
+    bar = "bar"
+    atm = "atm"
+
+
+class TemperatureUnit(str, Enum):
+    kelvin = "kelvin"
+
+
 class UploadJobStatus(str, Enum):
     queued = "queued"
     processing = "processing"
@@ -355,3 +375,117 @@ class UploadJobKind(str, Enum):
     network_pdep = "network_pdep"
     thermo = "thermo"
     transition_state = "transition_state"
+    transport = "transport"
+
+
+# ---------------------------------------------------------------------------
+# Submission moderation
+# ---------------------------------------------------------------------------
+
+
+class SubmissionStatus(str, Enum):
+    """Lifecycle state of a user submission in the moderation system."""
+
+    pending = "pending"
+    precheck_passed = "precheck_passed"
+    auto_flagged = "auto_flagged"
+    approved = "approved"
+    rejected = "rejected"
+    superseded = "superseded"
+
+
+class SubmissionActorKind(str, Enum):
+    """Category of actor recorded on an audit event.
+
+    Human curator/admin actions must remain distinguishable from automated
+    (llm/system) actions — only ``curator`` and ``admin`` events count as
+    human approval.
+    """
+
+    user = "user"
+    curator = "curator"
+    admin = "admin"
+    llm = "llm"
+    system = "system"
+
+
+class SubmissionAuditEventKind(str, Enum):
+    """Kind of moderation/lifecycle event appended to the audit log."""
+
+    submission_created = "submission_created"
+    ingestion_succeeded = "ingestion_succeeded"
+    ingestion_failed = "ingestion_failed"
+    llm_precheck_passed = "llm_precheck_passed"
+    llm_precheck_flagged = "llm_precheck_flagged"
+    curator_approved = "curator_approved"
+    curator_rejected = "curator_rejected"
+    correction_window_opened = "correction_window_opened"
+    correction_uploaded = "correction_uploaded"
+    submission_superseded = "submission_superseded"
+    status_changed = "status_changed"
+    public_visibility_changed = "public_visibility_changed"
+
+
+class SubmissionSourceKind(str, Enum):
+    """How the submission entered the system."""
+
+    api = "api"
+    web = "web"
+    bulk_import = "bulk_import"
+    system = "system"
+    migration = "migration"
+
+
+class SubmissionKind(str, Enum):
+    """Family/category of a submission (thermo, reaction, network, …).
+
+    This is the submission-layer classification of the contribution itself
+    — it is *not* provenance-tool identity; see ``workflow_tool`` /
+    ``workflow_tool_release`` for that. Values are intentionally aligned
+    with :class:`UploadJobKind` so the same token may be persisted in both
+    places; ``other`` is added to cover submissions that do not map onto
+    the async upload pipeline.
+    """
+
+    computed_reaction = "computed_reaction"
+    conformer = "conformer"
+    reaction = "reaction"
+    kinetics = "kinetics"
+    network = "network"
+    network_pdep = "network_pdep"
+    thermo = "thermo"
+    transition_state = "transition_state"
+    transport = "transport"
+    other = "other"
+
+
+class SubmissionPrecheckLabel(str, Enum):
+    """Result label for an automated LLM/system precheck pass."""
+
+    passed = "passed"
+    flagged = "flagged"
+
+
+class SubmissionRecordType(str, Enum):
+    """Domain tables a submission may create records in.
+
+    Kept as a controlled vocabulary so ``submission_record_link`` stays
+    lightweight — it is a traceability index, not a substitute for real FKs
+    inside the domain model.
+    """
+
+    species = "species"
+    species_entry = "species_entry"
+    conformer_group = "conformer_group"
+    conformer_observation = "conformer_observation"
+    reaction = "reaction"
+    reaction_entry = "reaction_entry"
+    transition_state = "transition_state"
+    transition_state_entry = "transition_state_entry"
+    calculation = "calculation"
+    statmech = "statmech"
+    thermo = "thermo"
+    kinetics = "kinetics"
+    transport = "transport"
+    network = "network"
+    network_solve = "network_solve"

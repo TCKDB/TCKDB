@@ -6,6 +6,7 @@ from app.db.models.common import (
     AppliedCorrectionComponentKind,
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
+    EnergyUnit,
     FrequencyScaleKind,
     MeliusBacComponentKind,
 )
@@ -93,7 +94,7 @@ class EnergyCorrectionSchemeBase(BaseModel):
     level_of_theory_id: int | None = None
     source_literature_id: int | None = None
     version: str | None = None
-    units: str | None = None
+    units: EnergyUnit | None = None
     note: str | None = None
 
 
@@ -138,7 +139,7 @@ class EnergyCorrectionSchemeUpdate(SchemaBase):
     level_of_theory_id: int | None = None
     source_literature_id: int | None = None
     version: str | None = None
-    units: str | None = None
+    units: EnergyUnit | None = None
     note: str | None = None
 
 
@@ -255,7 +256,7 @@ class AppliedEnergyCorrectionBase(BaseModel):
     application_role: EnergyCorrectionApplicationRole
 
     value: float
-    value_unit: str
+    value_unit: EnergyUnit
     temperature_k: float | None = Field(default=None, gt=0)
     note: str | None = None
 
@@ -335,7 +336,7 @@ class AppliedEnergyCorrectionUpdate(SchemaBase):
     application_role: EnergyCorrectionApplicationRole | None = None
 
     value: float | None = None
-    value_unit: str | None = None
+    value_unit: EnergyUnit | None = None
     temperature_k: float | None = Field(default=None, gt=0)
     note: str | None = None
 

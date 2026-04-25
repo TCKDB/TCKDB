@@ -120,8 +120,8 @@ class KineticsUploadRequest(SchemaBase):
     reported_ea: float | None = None
     reported_ea_units: ActivationEnergyUnits | None = None
 
-    d_a: float | None = None
-    d_n: float | None = None
+    a_uncertainty: float | None = None
+    n_uncertainty: float | None = None
     d_reported_ea: float | None = None
 
     tmin_k: float | None = Field(default=None, gt=0)

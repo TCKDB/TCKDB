@@ -476,12 +476,12 @@ def _build_kinetics_payload(
         "tmin_k": kinetics.tmin_k,
         "tmax_k": kinetics.tmax_k,
     }
-    if kinetics.d_a is not None:
-        payload["d_a"] = kinetics.d_a
-    if kinetics.d_n is not None:
-        payload["d_n"] = kinetics.d_n
-    if kinetics.d_ea is not None:
-        payload["d_reported_ea"] = kinetics.d_ea
+    if kinetics.a_uncertainty is not None:
+        payload["a_uncertainty"] = kinetics.a_uncertainty
+    if kinetics.n_uncertainty is not None:
+        payload["n_uncertainty"] = kinetics.n_uncertainty
+    if kinetics.ea_uncertainty is not None:
+        payload["d_reported_ea"] = kinetics.ea_uncertainty
     if kinetics.comment:
         payload["note"] = kinetics.comment
     return payload

@@ -14,7 +14,7 @@ from app.db.models.calculation import (
     CalculationParameter,
     CalculationParameterVocab,
 )
-from app.db.models.common import CalculationType
+from app.db.models.common import CalculationType, StereoKind
 from app.db.models.species import Species, SpeciesEntry
 from app.services.gaussian_parameter_parser import (
     PARSER_VERSION,
@@ -253,6 +253,7 @@ class TestParameterDBStorage:
             inchi_key="IJGRMHOSHXDMSA-UHFFFAOYSA-N",
             charge=0,
             multiplicity=2,
+            stereo_kind=StereoKind.ez_isomer,
         )
         db_session.add(species)
         db_session.flush()

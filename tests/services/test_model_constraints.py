@@ -8,8 +8,8 @@ from sqlalchemy.exc import IntegrityError
 def _create_species(connection, *, inchi_key: str, smiles: str = "[H]") -> int:
     return connection.execute(
         text("""
-            INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity)
-            VALUES ('molecule', :smiles, :inchi_key, 0, 1)
+            INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind)
+            VALUES ('molecule', :smiles, :inchi_key, 0, 1, 'achiral')
             RETURNING id
             """),
         {"smiles": smiles, "inchi_key": inchi_key},
@@ -333,6 +333,58 @@ def test_conformer_selection_treats_null_assignment_scheme_as_duplicate(
     )
 
 
+def test_calculation_allows_multiple_rows_per_conformer_observation(db_conn) -> None:
+    species_id = _create_species(db_conn, inchi_key=_next_inchi_key("CONFOBS"))
+    species_entry_id = _create_species_entry(db_conn, species_id)
+    conformer_group_id = db_conn.execute(
+        text("""
+            INSERT INTO conformer_group (species_entry_id)
+            VALUES (:species_entry_id)
+            RETURNING id
+            """),
+        {"species_entry_id": species_entry_id},
+    ).scalar_one()
+    conformer_observation_id = db_conn.execute(
+        text("""
+            INSERT INTO conformer_observation (conformer_group_id, scientific_origin)
+            VALUES (:conformer_group_id, 'computed')
+            RETURNING id
+            """),
+        {"conformer_group_id": conformer_group_id},
+    ).scalar_one()
+
+    db_conn.execute(
+        text("""
+            INSERT INTO calculation (type, species_entry_id, conformer_observation_id)
+            VALUES ('opt', :species_entry_id, :conformer_observation_id)
+            """),
+        {
+            "species_entry_id": species_entry_id,
+            "conformer_observation_id": conformer_observation_id,
+        },
+    )
+    db_conn.execute(
+        text("""
+            INSERT INTO calculation (type, species_entry_id, conformer_observation_id)
+            VALUES ('sp', :species_entry_id, :conformer_observation_id)
+            """),
+        {
+            "species_entry_id": species_entry_id,
+            "conformer_observation_id": conformer_observation_id,
+        },
+    )
+
+    count = db_conn.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM calculation
+            WHERE conformer_observation_id = :conformer_observation_id
+            """),
+        {"conformer_observation_id": conformer_observation_id},
+    ).scalar_one()
+    assert count == 2
+
+
 def test_transition_state_selection_requires_entry_from_same_transition_state(
     db_conn,
 ) -> None:
@@ -423,8 +475,8 @@ def test_basic_positive_count_checks_reject_nonsense_rows(db_conn) -> None:
     _assert_integrity_error(
         db_conn,
         """
-        INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity)
-        VALUES ('molecule', '[H]', :inchi_key, 0, 0)
+        INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind)
+        VALUES ('molecule', '[H]', :inchi_key, 0, 0, 'achiral')
         """,
         {"inchi_key": _next_inchi_key("BADMULT")},
     )

@@ -26,8 +26,8 @@ from app.db.models.common import (
     ScientificOriginKind,
     SpeciesEntryReviewRole,
     SpeciesEntryStateKind,
-    SpeciesEntryStereoKind,
     StationaryPointKind,
+    StereoKind,
 )
 from app.db.types import RDKitMol
 
@@ -54,6 +54,10 @@ class Species(Base, TimestampMixin):
     inchi_key: Mapped[str] = mapped_column(CHAR(27), nullable=False)
     charge: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     multiplicity: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    stereo_kind: Mapped[StereoKind] = mapped_column(
+        SAEnum(StereoKind, name="stereo_kind"),
+        nullable=False,
+    )
 
     entries: Mapped[list["SpeciesEntry"]] = relationship(
         back_populates="species",
@@ -111,12 +115,6 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin):
     mol: Mapped[Optional[str]] = mapped_column(RDKitMol(), nullable=True)
     unmapped_smiles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    stereo_kind: Mapped[SpeciesEntryStereoKind] = mapped_column(
-        SAEnum(SpeciesEntryStereoKind, name="species_entry_stereo_kind"),
-        nullable=False,
-        default=SpeciesEntryStereoKind.unspecified,
-        server_default=SpeciesEntryStereoKind.unspecified.value,
-    )
     stereo_label: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     electronic_state_kind: Mapped[SpeciesEntryStateKind] = mapped_column(
@@ -177,7 +175,6 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin):
         Index("ix_species_entry_species_id", "species_id"),
         UniqueConstraint(
             "species_id",
-            "stereo_kind",
             "stereo_label",
             "electronic_state_kind",
             "electronic_state_label",
@@ -190,7 +187,7 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin):
 
 
 class ConformerGroup(Base, TimestampMixin, CreatedByMixin):
-    """Store one deduplicated conformational basin for a species entry."""
+    """Store one deduplicated conformational-basin identity for a species entry."""
 
     __tablename__ = "conformer_group"
 
@@ -236,7 +233,7 @@ class ConformerGroup(Base, TimestampMixin, CreatedByMixin):
 
 
 class ConformerObservation(Base, TimestampMixin, CreatedByMixin):
-    """Store one uploaded or imported conformer observation assigned to a group."""
+    """Store one provenance-bearing conformer observation assigned to a basin."""
 
     __tablename__ = "conformer_observation"
 

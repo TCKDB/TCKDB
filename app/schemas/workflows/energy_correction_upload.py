@@ -1,8 +1,17 @@
-"""Upload payloads for energy corrections applied to a species entry.
+"""Energy-correction upload fragments — nested inside other upload requests.
 
-Used by ``ConformerUploadRequest`` and potentially other upload workflows.
-The backend resolves scheme/FSF references, creates ``AppliedEnergyCorrection``
-rows, and attaches them to the resolved species entry.
+This module intentionally has **no standalone ``/uploads/energy-corrections``
+route**. Every class here (``AppliedEnergyCorrectionUploadPayload``,
+``EnergyCorrectionSchemeRef``, ``FrequencyScaleFactorRef``, and component
+payloads) is consumed as a nested fragment by the conformer, thermo, and
+computed-reaction upload flows. Scheme/FSF references are resolved and applied
+corrections are persisted by ``app.services.energy_correction_resolution``
+when a parent upload embeds them.
+
+If standalone ingestion becomes a product requirement, wire a dedicated route
+at ``app/api/routes/uploads.py`` and a workflow orchestrator alongside the
+existing per-kind handlers; see ``docs/audits/backend_audit_2026-04-22.md``
+for the product context.
 """
 
 from typing import Self
@@ -13,6 +22,7 @@ from app.db.models.common import (
     AppliedCorrectionComponentKind,
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
+    EnergyUnit,
     FrequencyScaleKind,
     MeliusBacComponentKind,
 )
@@ -38,7 +48,7 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     level_of_theory: LevelOfTheoryRef | None = None
     source_literature: LiteratureUploadRequest | None = None
     version: str | None = None
-    units: str | None = None
+    units: EnergyUnit | None = None
     note: str | None = None
 
     # Optional inline parameter definitions (used when creating a new scheme)
@@ -50,7 +60,6 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     def normalize_text_fields(self) -> Self:
         self.name = normalize_required_text(self.name)
         self.version = normalize_optional_text(self.version)
-        self.units = normalize_optional_text(self.units)
         self.note = normalize_optional_text(self.note)
         return self
 
@@ -168,7 +177,7 @@ class AppliedEnergyCorrectionUploadPayload(SchemaBase):
     application_role: EnergyCorrectionApplicationRole
 
     value: float
-    value_unit: str = Field(min_length=1)
+    value_unit: EnergyUnit
     temperature_k: float | None = Field(default=None, gt=0)
     note: str | None = None
 

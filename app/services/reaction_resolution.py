@@ -5,13 +5,14 @@ import json
 from collections import Counter
 from typing import Mapping, Sequence
 
+from rdkit import Chem
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models.common import ReactionRole
+from app.db.models.common import MoleculeKind, ReactionRole
 from app.db.models.reaction import ChemReaction, ReactionFamily, ReactionParticipant
-from app.db.models.species import SpeciesEntry
+from app.db.models.species import Species, SpeciesEntry
 from app.schemas.reaction_family import find_canonical_reaction_family
 from app.schemas.utils import normalize_optional_text
 
@@ -49,6 +50,78 @@ def reaction_stoichiometry_hash(
     }
     encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _element_counts_for_species(species: Species) -> Counter[str]:
+    """Count element occurrences for one ordinary (molecule-kind) species.
+
+    :raises ValueError: If the stored SMILES cannot be parsed by RDKit.
+    """
+
+    mol = Chem.MolFromSmiles(species.smiles)
+    if mol is None:
+        raise ValueError(
+            f"Cannot parse stored SMILES for species_id={species.id} "
+            "while validating reaction elemental balance."
+        )
+    mol = Chem.AddHs(mol)
+    counts: Counter[str] = Counter()
+    for atom in mol.GetAtoms():
+        counts[atom.GetSymbol()] += 1
+    return counts
+
+
+def validate_reaction_elemental_balance(
+    session: Session,
+    *,
+    reactant_stoichiometry: Mapping[int, int],
+    product_stoichiometry: Mapping[int, int],
+) -> None:
+    """Enforce strict elemental balance for ordinary reactions.
+
+    Fetches the referenced ``Species`` rows and compares element totals
+    on the reactant and product sides. Reactions with any pseudo-species
+    participant are exempted in this first-pass policy (pseudo species
+    may represent lumped or phenomenological constructs rather than
+    atom-resolved chemistry).
+
+    :raises ValueError: If all participants are ordinary molecule species
+        and the reactant/product element totals disagree.
+    """
+
+    species_ids = set(reactant_stoichiometry) | set(product_stoichiometry)
+    if not species_ids:
+        return
+
+    species_rows = session.scalars(
+        select(Species).where(Species.id.in_(species_ids))
+    ).all()
+    species_by_id = {species.id: species for species in species_rows}
+
+    if any(
+        species_by_id[species_id].kind == MoleculeKind.pseudo
+        for species_id in species_ids
+    ):
+        return
+
+    reactant_totals: Counter[str] = Counter()
+    for species_id, coefficient in reactant_stoichiometry.items():
+        for element, count in _element_counts_for_species(
+            species_by_id[species_id]
+        ).items():
+            reactant_totals[element] += coefficient * count
+
+    product_totals: Counter[str] = Counter()
+    for species_id, coefficient in product_stoichiometry.items():
+        for element, count in _element_counts_for_species(
+            species_by_id[species_id]
+        ).items():
+            product_totals[element] += coefficient * count
+
+    if reactant_totals != product_totals:
+        raise ValueError(
+            "Reaction is not element-balanced (reaction_mass_balance_failed)."
+        )
 
 
 def resolve_reaction_family(
@@ -91,6 +164,12 @@ def resolve_chem_reaction(
     :param product_stoichiometry: Compressed product stoichiometry keyed by ``species_id``.
     :returns: Existing or newly created ``ChemReaction`` row.
     """
+
+    validate_reaction_elemental_balance(
+        session,
+        reactant_stoichiometry=reactant_stoichiometry,
+        product_stoichiometry=product_stoichiometry,
+    )
 
     resolved_reaction_family = resolve_reaction_family(session, reaction_family)
     reaction_family_raw = (

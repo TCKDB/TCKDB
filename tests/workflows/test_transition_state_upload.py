@@ -18,16 +18,27 @@ from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
     CalculationFreqResult,
+    CalculationIRCPoint,
+    CalculationIRCResult,
+    CalculationNEBImageResult,
     CalculationOptResult,
     CalculationOutputGeometry,
     CalculationSPResult,
 )
 from app.db.models.common import (
     CalculationDependencyRole,
+    CalculationGeometryRole,
     CalculationType,
+    IRCDirection,
 )
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
-from app.schemas.fragments.calculation import CalculationWithResultsPayload
+from app.schemas.fragments.calculation import (
+    CalculationWithResultsPayload,
+    IRCPointPayload,
+    IRCResultPayload,
+    NEBImageResultPayload,
+    NEBResultPayload,
+)
 from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
@@ -339,3 +350,196 @@ def test_schema_allows_irc_additional():
     )
     assert len(request.additional_calculations) == 1
     assert request.additional_calculations[0].type == CalculationType.irc
+
+
+# ---------------------------------------------------------------------------
+# End-to-end IRC/NEB write-path tests
+# ---------------------------------------------------------------------------
+
+
+_XYZ_IRC_F = "1\nF1\nH  0.0  0.0  1.2\n"
+_XYZ_IRC_R = "1\nR1\nH  0.0  0.0  0.8\n"
+_XYZ_NEB_0 = "1\nI0\nH  0.0  0.0  0.0\n"
+_XYZ_NEB_2 = "1\nI2\nH  0.0  0.0  1.5\n"
+
+
+def test_ts_upload_with_irc_additional_persists_irc_result(db_engine) -> None:
+    """TS upload carrying an IRC additional calc persists IRC structured rows."""
+
+    with Session(db_engine) as session, session.begin():
+        session.add(AppUser(id=60, username="ts_irc_writer"))
+        session.flush()
+
+        request = TransitionStateUploadRequest(
+            reaction=_REACTION,
+            charge=0,
+            multiplicity=2,
+            geometry={"xyz_text": _XYZ_TS},
+            primary_opt=CalculationWithResultsPayload(
+                type="opt",
+                software_release=_SOFTWARE,
+                level_of_theory=_LOT,
+            ),
+            additional_calculations=[
+                CalculationWithResultsPayload(
+                    type="irc",
+                    software_release=_SOFTWARE,
+                    level_of_theory=_LOT,
+                    irc_result=IRCResultPayload(
+                        direction=IRCDirection.both,
+                        has_forward=True,
+                        has_reverse=True,
+                        ts_point_index=0,
+                        points=[
+                            IRCPointPayload(
+                                point_index=0,
+                                direction=None,
+                                is_ts=True,
+                                geometry={"xyz_text": _XYZ_TS},
+                            ),
+                            IRCPointPayload(
+                                point_index=1,
+                                direction=IRCDirection.forward,
+                                geometry={"xyz_text": _XYZ_IRC_F},
+                            ),
+                            IRCPointPayload(
+                                point_index=2,
+                                direction=IRCDirection.reverse,
+                                geometry={"xyz_text": _XYZ_IRC_R},
+                            ),
+                        ],
+                    ),
+                ),
+            ],
+        )
+        ts_entry = persist_transition_state_upload(
+            session, request, created_by=60
+        )
+
+        irc_calc = session.scalar(
+            select(Calculation).where(
+                Calculation.transition_state_entry_id == ts_entry.id,
+                Calculation.type == CalculationType.irc,
+            )
+        )
+        assert irc_calc is not None
+
+        irc_result = session.get(CalculationIRCResult, irc_calc.id)
+        assert irc_result is not None
+        assert irc_result.direction == IRCDirection.both
+        assert irc_result.point_count == 3
+
+        points = session.scalars(
+            select(CalculationIRCPoint).where(
+                CalculationIRCPoint.calculation_id == irc_calc.id
+            )
+        ).all()
+        assert {p.point_index for p in points} == {0, 1, 2}
+
+        # Dependency edge back to the primary opt
+        deps = session.scalars(
+            select(CalculationDependency).where(
+                CalculationDependency.child_calculation_id == irc_calc.id,
+                CalculationDependency.dependency_role
+                == CalculationDependencyRole.irc_start,
+            )
+        ).all()
+        assert len(deps) == 1
+
+        # Output geometry roles: role=final (shared TS saddle) + irc_forward/irc_reverse
+        irc_links = session.scalars(
+            select(CalculationOutputGeometry).where(
+                CalculationOutputGeometry.calculation_id == irc_calc.id
+            )
+        ).all()
+        roles = {link.role for link in irc_links}
+        assert CalculationGeometryRole.final in roles
+        assert CalculationGeometryRole.irc_forward in roles
+        assert CalculationGeometryRole.irc_reverse in roles
+
+
+def test_ts_upload_with_neb_additional_persists_neb_images(db_engine) -> None:
+    """TS upload carrying a NEB additional calc persists NEB image rows."""
+
+    with Session(db_engine) as session, session.begin():
+        session.add(AppUser(id=61, username="ts_neb_writer"))
+        session.flush()
+
+        request = TransitionStateUploadRequest(
+            reaction=_REACTION,
+            charge=0,
+            multiplicity=2,
+            geometry={"xyz_text": _XYZ_TS},
+            primary_opt=CalculationWithResultsPayload(
+                type="opt",
+                software_release=_SOFTWARE,
+                level_of_theory=_LOT,
+            ),
+            additional_calculations=[
+                CalculationWithResultsPayload(
+                    type="neb",
+                    software_release=_SOFTWARE,
+                    level_of_theory=_LOT,
+                    neb_result=NEBResultPayload(
+                        images=[
+                            NEBImageResultPayload(
+                                image_index=0,
+                                electronic_energy_hartree=-1.0,
+                                geometry={"xyz_text": _XYZ_NEB_0},
+                            ),
+                            NEBImageResultPayload(
+                                image_index=1,
+                                electronic_energy_hartree=-0.9,
+                                is_climbing_image=True,
+                                geometry={"xyz_text": _XYZ_TS},
+                            ),
+                            NEBImageResultPayload(
+                                image_index=2,
+                                electronic_energy_hartree=-1.05,
+                                geometry={"xyz_text": _XYZ_NEB_2},
+                            ),
+                        ],
+                    ),
+                ),
+            ],
+        )
+        ts_entry = persist_transition_state_upload(
+            session, request, created_by=61
+        )
+
+        neb_calc = session.scalar(
+            select(Calculation).where(
+                Calculation.transition_state_entry_id == ts_entry.id,
+                Calculation.type == CalculationType.neb,
+            )
+        )
+        assert neb_calc is not None
+
+        images = session.scalars(
+            select(CalculationNEBImageResult).where(
+                CalculationNEBImageResult.calculation_id == neb_calc.id
+            )
+        ).all()
+        assert {img.image_index for img in images} == {0, 1, 2}
+
+        # Dependency edge back to the primary opt with role=neb_parent
+        deps = session.scalars(
+            select(CalculationDependency).where(
+                CalculationDependency.child_calculation_id == neb_calc.id,
+                CalculationDependency.dependency_role
+                == CalculationDependencyRole.neb_parent,
+            )
+        ).all()
+        assert len(deps) == 1
+
+        # Climbing image reuses the shared TS saddle geometry — the role=final
+        # shortcut and the role=neb_image link must not double-insert that pair.
+        links = session.scalars(
+            select(CalculationOutputGeometry).where(
+                CalculationOutputGeometry.calculation_id == neb_calc.id
+            )
+        ).all()
+        geom_ids = [link.geometry_id for link in links]
+        assert len(geom_ids) == len(set(geom_ids))  # no dupes on (calc, geom)
+        roles = {link.role for link in links}
+        assert CalculationGeometryRole.neb_image in roles

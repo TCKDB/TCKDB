@@ -1,0 +1,63 @@
+{
+  "bundle_format": "tckdb-contribution-bundle",
+  "bundle_version": "0.1",
+  "bundle_kind": "thermo",
+  "created_at": "2026-04-25T00:00:00Z",
+  "source_instance": {
+    "instance_kind": "local",
+    "instance_name": "example-local",
+    "schema_version": "d861dfd60891",
+    "software_version": "0.0.0-example",
+    "created_by_local_user": "example-user",
+    "notes": "Illustrative bundle; not real data."
+  },
+  "exporter": {
+    "local_user_label": "example-user",
+    "orcid": null,
+    "affiliation": null,
+    "email": null,
+    "notes": null
+  },
+  "submission": {
+    "title": "Example thermo contribution",
+    "summary": "Selected local thermo record for hosted review.",
+    "source_kind": "local_bundle"
+  },
+  "records": {
+    "thermo_uploads": [
+      {
+        "species_entry": {
+          "smiles": "O",
+          "charge": 0,
+          "multiplicity": 1
+        },
+        "scientific_origin": "computed",
+        "h298_kj_mol": -241.8,
+        "s298_j_mol_k": 188.8,
+        "h298_uncertainty_kj_mol": 0.5,
+        "s298_uncertainty_j_mol_k": 0.2,
+        "tmin_k": 200.0,
+        "tmax_k": 3000.0,
+        "note": "water reference (illustrative)"
+      }
+    ],
+    "kinetics_uploads": []
+  },
+  "local_refs": {
+    "species:water": {
+      "record_type": "species",
+      "label": "water",
+      "note": "Illustrative species local ref."
+    },
+    "thermo:water_h298_001": {
+      "record_type": "thermo",
+      "label": "water_h298_001"
+    }
+  },
+  "manifest": {
+    "sha256": null,
+    "files": [],
+    "created_by_tool": "example-exporter@0.0.0",
+    "notes": "No artifacts shipped in this illustrative bundle."
+  }
+}

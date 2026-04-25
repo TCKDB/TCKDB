@@ -1,0 +1,11 @@
+# Example client config for a local TCKDB instance.
+#
+# Replace the placeholder api_key with a key minted on the LOCAL instance
+# (POST /auth/api-keys, while authenticated with a session cookie).
+#
+# Do NOT commit a real key. Prefer environment variables or a gitignored
+# config file for real credentials.
+
+tckdb:
+  base_url: "http://localhost:8000/api/v1"
+  api_key: "tck_local_replace_me"

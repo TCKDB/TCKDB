@@ -1,0 +1,81 @@
+{
+  "bundle_format": "tckdb-contribution-bundle",
+  "bundle_version": "0.1",
+  "bundle_kind": "kinetics",
+  "created_at": "2026-04-25T00:00:00Z",
+  "source_instance": {
+    "instance_kind": "lab_server",
+    "instance_name": "example-lab-server",
+    "schema_version": "d861dfd60891",
+    "software_version": "0.0.0-example",
+    "created_by_local_user": null,
+    "notes": "Illustrative bundle; not real data."
+  },
+  "exporter": {
+    "local_user_label": "example-user",
+    "orcid": null,
+    "affiliation": "Example University",
+    "email": null,
+    "notes": null
+  },
+  "submission": {
+    "title": "Example kinetics contribution",
+    "summary": "Selected H + H -> H2 rate for hosted review (illustrative).",
+    "source_kind": "local_bundle"
+  },
+  "records": {
+    "thermo_uploads": [],
+    "kinetics_uploads": [
+      {
+        "reaction": {
+          "reversible": false,
+          "reactants": [
+            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}
+          ],
+          "products": [
+            {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}}
+          ]
+        },
+        "scientific_origin": "computed",
+        "model_kind": "modified_arrhenius",
+        "software_release": {"name": "gaussian", "version": "09", "revision": "D.01"},
+        "workflow_tool_release": {"name": "ARC", "version": "1.0.0"},
+        "a": 1.23e12,
+        "a_units": "cm3_mol_s",
+        "n": 0.5,
+        "reported_ea": 12.3,
+        "reported_ea_units": "kj_mol",
+        "tmin_k": 300.0,
+        "tmax_k": 2000.0,
+        "degeneracy": 2.0,
+        "tunneling_model": "eckart",
+        "note": "Illustrative kinetics record."
+      }
+    ]
+  },
+  "local_refs": {
+    "species:H": {
+      "record_type": "species",
+      "label": "H"
+    },
+    "species:H2": {
+      "record_type": "species",
+      "label": "H2"
+    },
+    "reaction:h_recombination_001": {
+      "record_type": "reaction",
+      "label": "h_recombination_001"
+    },
+    "kinetics:h_recombination_rate_001": {
+      "record_type": "kinetics",
+      "label": "h_recombination_rate_001"
+    }
+  },
+  "manifest": {
+    "sha256": null,
+    "files": [],
+    "created_by_tool": "example-exporter@0.0.0",
+    "notes": "No artifacts shipped in this illustrative bundle."
+  }
+}
