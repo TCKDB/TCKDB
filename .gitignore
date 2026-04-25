@@ -242,3 +242,8 @@ docs/roadmaps/
 
 # LibreOffice/OpenOffice lock files
 .~lock.*#
+
+# Codex CLI / assistant scratch files (e.g. .codex, .codex_dbml_probe.txt).
+# Covers both bare ``.codex`` and any ``.codex_*`` companion files.
+.codex
+.codex*
