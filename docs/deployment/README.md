@@ -11,8 +11,8 @@ that talk to it. They are not separate products, modes, or editions.
 
 ```text
 TCKDB
-  one schema      (app/db/models/, single Alembic chain)
-  one API         (app/api/, FastAPI)
+  one schema      (backend/app/db/models/, single Alembic chain)
+  one API         (backend/app/api/, FastAPI)
   one auth model  (DR-0022: sessions for humans, API keys for clients)
 
 deployment scenarios               client environments

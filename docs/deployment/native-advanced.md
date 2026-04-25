@@ -35,10 +35,10 @@ A native install brings TCKDB up by:
 3. Providing **object/artifact storage** (MinIO, AWS S3, or another
    S3-compatible service).
 4. Running the standard Alembic migrations against the host DB.
-5. Bootstrapping the first admin via `scripts/bootstrap_admin.py`.
-6. Starting the API (`uvicorn`) and, optionally, the upload worker
-   (`python -m app.workers.upload_worker`) under a service manager
-   you choose.
+5. Bootstrapping the first admin via `backend/scripts/bootstrap_admin.py`.
+6. Starting the API (`uvicorn main:app`) and, optionally, the upload
+   worker (`python -m app.workers.upload_worker`) under a service
+   manager you choose. Both are launched from `backend/`.
 
 Everything above the database and storage layer is identical to a
 Docker-based deployment ([single-machine](local-v0.md) or
@@ -178,9 +178,10 @@ outside the database. Plan artifact backups too — see
 ## Migrations
 
 Alembic migrations are run identically to every other infrastructure
-strategy:
+strategy. From `backend/`:
 
 ```bash
+cd backend
 conda run -n tckdb_env alembic upgrade head
 ```
 
@@ -192,8 +193,8 @@ the database to exist and the RDKit cartridge to be loaded.
 
 ## Bootstrap admin
 
-`scripts/bootstrap_admin.py` is the supported account-seeding tool
-on any deployment, including native:
+`backend/scripts/bootstrap_admin.py` is the supported account-seeding
+tool on any deployment, including native. Run from `backend/`:
 
 ```bash
 TCKDB_BOOTSTRAP_PASSWORD='change-me' \
@@ -217,6 +218,9 @@ failure.
 
 ### API
 
+> Run from `backend/` (or set `WorkingDirectory=…/backend` in your
+> service unit) so `main:app` resolves.
+
 ```bash
 conda run -n tckdb_env uvicorn main:app \
   --host 127.0.0.1 --port 8000
@@ -230,7 +234,7 @@ terminates TLS and forwards `X-API-Key` and session cookies — see
 
 If you want the worker to run separately from the API process (for
 isolation), set `TCKDB_INLINE_WORKER=false` in the environment and
-start it with:
+start it from `backend/`:
 
 ```bash
 conda run -n tckdb_env python -m app.workers.upload_worker
@@ -249,6 +253,7 @@ After=network.target postgresql.service
 [Service]
 Type=simple
 User=tckdb
+WorkingDirectory=/opt/tckdb/backend
 EnvironmentFile=/etc/tckdb/lab-server.env
 ExecStart=/opt/conda/bin/conda run -n tckdb_env \
   uvicorn main:app --host 127.0.0.1 --port 8000

@@ -14,7 +14,7 @@ TCKDB instance.
 
 This document defines bundle **v0** (`bundle_version == "0.1"`) and the
 schemas implemented in
-[`app/schemas/workflows/contribution_bundle.py`](../../app/schemas/workflows/contribution_bundle.py).
+[`backend/app/schemas/workflows/contribution_bundle.py`](../../backend/app/schemas/workflows/contribution_bundle.py).
 
 ## What v0 is
 
@@ -127,7 +127,7 @@ Bundle-level submission metadata. The hosted instance maps this to its own
 > **Note on `local_bundle` and the database enum.** The
 > `submission.source_kind` field on the *bundle* uses a format-level enum
 > (`BundleSubmissionSourceKind`). The database enum `SubmissionSourceKind`
-> in `app/db/models/common.py` does **not** yet include `local_bundle`.
+> in `backend/app/db/models/common.py` does **not** yet include `local_bundle`.
 > Adding it is deferred to the hosted-import milestone — the bundle format
 > only states "this submission came from a local bundle", and the hosted
 > importer will be responsible for translating that to its own submission

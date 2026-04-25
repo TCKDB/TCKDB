@@ -8,13 +8,13 @@ See: [Bundle v0 format](v0-format.md),
 ## What this milestone does
 
 Local export v0 turns selected local database rows into validated
-[`ContributionBundleV0`](../../app/schemas/workflows/contribution_bundle.py)
+[`ContributionBundleV0`](../../backend/app/schemas/workflows/contribution_bundle.py)
 JSON files.
 
 This is a **service + CLI** milestone. The service
-([`app/services/contribution_bundle_export.py`](../../app/services/contribution_bundle_export.py))
+([`backend/app/services/contribution_bundle_export.py`](../../backend/app/services/contribution_bundle_export.py))
 owns the conversion and validation logic; the CLI wrapper
-([`scripts/export_contribution_bundle.py`](../../scripts/export_contribution_bundle.py))
+([`backend/scripts/export_contribution_bundle.py`](../../backend/scripts/export_contribution_bundle.py))
 handles argument parsing, database session setup, and writing JSON to
 disk.
 
@@ -50,6 +50,10 @@ Future bundle families (`statmech`, `transport`, `network`,
 
 ## Quick start
 
+> Run from `backend/` (`cd backend` once). The CLI lives at
+> `backend/scripts/export_contribution_bundle.py` and is invoked by
+> path below.
+
 Thermo:
 
 ```bash
@@ -73,7 +77,7 @@ conda run -n tckdb_env python scripts/export_contribution_bundle.py \
 ```
 
 The CLI uses the same `DB_*` environment variables as the rest of the
-project (see `CLAUDE.md` and `app/api/config.py`).
+project (see `backend/app/api/config.py`).
 
 ## CLI options
 
@@ -221,12 +225,12 @@ family/local-ref/manifest rules.
 ## Testing
 
 Service + CLI tests live in
-[`tests/services/test_contribution_bundle_export.py`](../../tests/services/test_contribution_bundle_export.py)
+[`backend/tests/services/test_contribution_bundle_export.py`](../../backend/tests/services/test_contribution_bundle_export.py)
 and cover thermo export, kinetics export, missing-root failures,
 incomplete-dependency failures, CLI smoke output, and a credential-leak
 guard.
 
-Run them with:
+Run them from `backend/`:
 
 ```bash
 conda run -n tckdb_env pytest tests/services/test_contribution_bundle_export.py -v

@@ -46,12 +46,27 @@ packaging) serve the same scenario.
 The host-side commands all use `conda run -n tckdb_env ...`; if your
 shell already has the env activated you can drop the prefix.
 
+### Working directories
+
+The repo is split into `backend/` (Python/FastAPI) and `frontend/`
+(Vite/TS). Two cwd contexts in this guide:
+
+- **Project root** — `docker compose ...` commands. The compose files
+  live at the root.
+- **`backend/`** — every other host-side command (`alembic`,
+  `uvicorn`, `python -m app.workers.upload_worker`, anything under
+  `scripts/`). Get there once with `cd backend` and stay there.
+
+Each section below states which context it assumes.
+
 ---
 
 ## 1. Start the local stack
 
+> Run from the **project root**.
+
 ```bash
-cp .env.local.example .env
+cp backend/.env.local.example backend/.env
 docker compose -f docker-compose.local.yml up -d
 ```
 
@@ -72,7 +87,10 @@ The backend API and upload worker are **not** containerized in Local v0
 
 ## 2. Initialize the schema
 
+> Run from `backend/`.
+
 ```bash
+cd backend
 set -a; source .env; set +a
 conda run -n tckdb_env alembic upgrade head
 ```
@@ -84,9 +102,12 @@ This applies the single initial migration and seeds reference data
 
 ## 3. Bootstrap the first admin
 
-`scripts/bootstrap_admin.py` is **idempotent**: it creates a new admin
-if no matching account exists, and promotes (and reactivates) an
-existing one if it does. Run it once after the schema is up.
+> Run from `backend/`.
+
+`backend/scripts/bootstrap_admin.py` is **idempotent**: it creates a
+new admin if no matching account exists, and promotes (and
+reactivates) an existing one if it does. Run it once after the schema
+is up.
 
 ```bash
 conda run -n tckdb_env python scripts/bootstrap_admin.py \
@@ -114,15 +135,17 @@ TCKDB_BOOTSTRAP_PASSWORD='change-me' \
 
 ## 4. Start the backend API
 
+> Run from `backend/`.
+
 ```bash
 conda run -n tckdb_env uvicorn main:app \
   --host 127.0.0.1 --port 8000 --reload
 ```
 
-By default `TCKDB_INLINE_WORKER=true` (in `.env.local.example`) so the
-upload worker runs as a thread inside the API process. To run it
-separately for isolation, set `TCKDB_INLINE_WORKER=false` and start a
-second terminal:
+By default `TCKDB_INLINE_WORKER=true` (in `backend/.env.local.example`)
+so the upload worker runs as a thread inside the API process. To run
+it separately for isolation, set `TCKDB_INLINE_WORKER=false` and start
+a second terminal (also in `backend/`):
 
 ```bash
 conda run -n tckdb_env python -m app.workers.upload_worker
@@ -224,7 +247,8 @@ account-creation backdoor. Disable it:
 AUTH_ALLOW_OPEN_REGISTRATION=false
 ```
 
-…and seed every account explicitly with `scripts/bootstrap_admin.py`:
+…and seed every account explicitly with
+`backend/scripts/bootstrap_admin.py` (run from `backend/`):
 
 ```bash
 conda run -n tckdb_env python scripts/bootstrap_admin.py \

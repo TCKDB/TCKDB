@@ -55,7 +55,7 @@ Before starting:
 |------|---------|
 | **Local instance** | A private/laptop/lab TCKDB deployment that holds the records you want to contribute. |
 | **Hosted instance** | The community TCKDB deployment that receives contributions. |
-| **Contribution bundle** | A self-contained `.tckdb.json` v0 file produced by `scripts/export_contribution_bundle.py`. |
+| **Contribution bundle** | A self-contained `.tckdb.json` v0 file produced by `backend/scripts/export_contribution_bundle.py`. |
 | **Dry-run** | Authenticated read-only preview against hosted: `POST /bundles/dry-run`. |
 | **Submit / import** | Authenticated write call against hosted: `POST /bundles/submit`. |
 | **Submission** | A hosted DB row created at submit time that links to imported scientific rows; tracked by status. |
@@ -92,6 +92,11 @@ Bundle export is a service + CLI documented in detail in
 [`local-export-v0.md`](local-export-v0.md). The CLI converts selected
 local rows into a validated `ContributionBundleV0` JSON file. Nothing is
 sent anywhere at this stage.
+
+> The export script lives at `backend/scripts/export_contribution_bundle.py`.
+> Run the commands below from `backend/` (`cd backend` once); the
+> `--output` path is interpreted relative to your shell, so leading
+> `./` writes the bundle next to wherever you `cd`'d.
 
 ### Thermo bundle
 

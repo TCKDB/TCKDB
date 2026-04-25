@@ -164,11 +164,12 @@ A starter set of policies for shared deployments:
 ## Bootstrap admin
 
 The first account on a closed instance is created with the same
-`scripts/bootstrap_admin.py` used everywhere else. The script is
-idempotent — running it again with the same username promotes (and
-reactivates) the existing account.
+`backend/scripts/bootstrap_admin.py` used everywhere else. The script
+is idempotent — running it again with the same username promotes (and
+reactivates) the existing account. Run it from `backend/`:
 
 ```bash
+cd backend
 TCKDB_BOOTSTRAP_PASSWORD='change-me' \
   conda run -n tckdb_env python scripts/bootstrap_admin.py \
     --username admin \
