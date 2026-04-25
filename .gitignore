@@ -225,7 +225,7 @@ clean_run_log.md
 
 presentations/
 
-tests/fixtures/orca/ORCA_Examples/
+**/tests/fixtures/orca/ORCA_Examples/
 
 .bulk_load_progress.json
 presentation
