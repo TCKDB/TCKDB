@@ -182,9 +182,9 @@ cython_debug/
 .abstra/
 
 # Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#  and can be added to the global gitignore or merged into this file. However, if you prefer,
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 
@@ -228,3 +228,17 @@ presentations/
 tests/fixtures/orca/ORCA_Examples/
 
 .bulk_load_progress.json
+presentation
+node_modules
+
+# Internal docs — specs, decision records, policy notes, design rationale,
+# roadmaps, audits, and one-off internal write-ups. Not distributed publicly.
+# Public-facing docs live under docs/clients/, docs/contribution-bundles/,
+# and docs/deployment/ — anything else under docs/ is internal.
+docs/*.md
+docs/audits/
+docs/decisions/
+docs/roadmaps/
+
+# LibreOffice/OpenOffice lock files
+.~lock.*#
