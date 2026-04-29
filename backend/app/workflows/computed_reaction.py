@@ -8,18 +8,12 @@ Follows the same key-resolution pattern as the network PDep workflow.
 
 from __future__ import annotations
 
-import base64
-
 from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
 from app.chemistry.geometry import parse_xyz
 from app.chemistry.units import convert_ea_to_kj_mol
-from app.db.models.calculation import (
-    Calculation,
-    CalculationArtifact,
-    CalculationOutputGeometry,
-)
+from app.db.models.calculation import Calculation, CalculationOutputGeometry
 from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
@@ -34,16 +28,11 @@ from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
 from app.schemas.workflows.network_pdep_upload import (
-    ArtifactIn,
     CalculationIn,
     calculation_in_to_with_results_payload,
 )
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
-from app.services.artifact_storage import (
-    store_artifact,
-    validate_artifact,
-    validate_total_upload_size,
-)
+from app.services.artifact_persistence import persist_artifact
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_software_release_ref,
@@ -67,40 +56,6 @@ from app.schemas.workflows.kinetics_upload import (
     KineticsReactionUpload,
     KineticsUploadRequest,
 )
-
-
-def _persist_artifact(
-    session: Session,
-    calculation_id: int,
-    artifact_in: ArtifactIn,
-) -> CalculationArtifact:
-    """Decode, validate, store, and record one artifact.
-
-    1. Decode base64 content.
-    2. Validate (signature, size, integrity).
-    3. Write to content-addressed store.
-    4. Create CalculationArtifact row with the final URI.
-    """
-    content = base64.b64decode(artifact_in.content_base64)
-
-    computed_sha = validate_artifact(
-        content,
-        artifact_in.kind,
-        declared_sha256=artifact_in.sha256,
-        declared_bytes=artifact_in.bytes,
-    )
-
-    uri = store_artifact(content, computed_sha)
-
-    artifact = CalculationArtifact(
-        calculation_id=calculation_id,
-        kind=artifact_in.kind,
-        uri=uri,
-        sha256=computed_sha,
-        bytes=len(content),
-    )
-    session.add(artifact)
-    return artifact
 
 
 def _persist_calculation(
@@ -132,7 +87,12 @@ def _persist_calculation(
     )
 
     for artifact_in in calc_in.artifacts:
-        _persist_artifact(session, calculation.id, artifact_in)
+        persist_artifact(
+            session,
+            calculation_id=calculation.id,
+            artifact_in=artifact_in,
+            created_by=created_by,
+        )
 
     resolved_geom_id = geometry_id
     if calc_in.geometry_key is not None:

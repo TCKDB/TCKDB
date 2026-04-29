@@ -217,7 +217,7 @@ def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
                     xyz_text="1\nH atom\nH 0.0 0.0 0.0\n",
                     label="h-conf-a",
                 ),
-            )
+            ).observation
             product_observation = persist_conformer_upload(
                 session,
                 _conformer_request(
@@ -227,7 +227,7 @@ def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
                     xyz_text="1\nH atom\nH 0.0 0.0 0.0\n",
                     label="h-conf-b",
                 ),
-            )
+            ).observation
 
             reactant_group = session.get(
                 ConformerGroup, reactant_observation.conformer_group_id

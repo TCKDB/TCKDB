@@ -236,6 +236,100 @@ body change.
 
 ---
 
+## Retry safety with `Idempotency-Key`
+
+TCKDB supports the conventional `Idempotency-Key` HTTP header on
+mutation endpoints (`POST /api/v1/uploads/*` and
+`POST /api/v1/bundles/submit`). Sending it makes a write *retry-safe*:
+an exact retry of the same request returns the stored response without
+re-executing the write.
+
+Use it whenever a client may retry a request after a network glitch,
+process restart, queued HPC job re-submission, or operator-driven
+replay of a saved payload. The behavior is contractual — see
+[DR-0024 — Upload Idempotency Keys](../decisions/0024-upload-idempotency-keys.md).
+
+### Sending the header
+
+```bash
+curl -X POST "$TCKDB_BASE_URL/uploads/thermo" \
+  -H "X-API-Key: $TCKDB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: arc:job-12345:thermo:ethanol" \
+  --data @payload.json
+```
+
+Inline Python:
+
+```python
+resp = requests.post(
+    f"{base_url}/uploads/thermo",
+    headers={
+        "X-API-Key": api_key,
+        "Idempotency-Key": "arc:job-12345:thermo:ethanol",
+    },
+    json=payload,
+    timeout=30,
+)
+```
+
+### Choosing a stable key
+
+The server treats keys as opaque (16–200 chars, `[A-Za-z0-9._:-]`) and
+never parses them, but a good client key is:
+
+- **Stable** — the same logical upload, retried, must produce the
+  same key. Random per-attempt keys defeat the whole feature.
+- **Unique per logical request** — derive from identifiers the client
+  already has (e.g. `<tool>:<job-id>:<output-kind>:<species-or-reaction-label>`).
+- **Scoped to the producer** — different ARC jobs, notebooks, or runs
+  should produce different keys; reusing a key across distinct logical
+  requests will cause `409 idempotency_conflict` rather than overwrite.
+
+Idempotency records are scoped server-side by
+`(authenticated_user_id, HTTP_method, endpoint, idempotency_key)` —
+the same key may safely be used by different users or on different
+endpoints without colliding.
+
+### Write the payload to disk *before* sending
+
+The retry contract requires resending the **exact same payload bytes**
+(after JSON canonicalization) under the same key. The recommended
+pattern is:
+
+1. Build the upload payload.
+2. Write it to disk (`tckdb_payloads/<id>.payload.json`).
+3. Write a sidecar with status `pending` plus the chosen
+   `Idempotency-Key`.
+4. POST the on-disk payload.
+5. On success, mark the sidecar `uploaded`. On failure, leave it for
+   later retry.
+
+This pattern is what makes Track-B-style HPC post-processing replay
+safe: a separate process can re-read the on-disk payload and re-POST
+it under the original key, and the server will replay the original
+response if the first attempt did succeed but the response was lost.
+
+### Response semantics
+
+- First request with a key: processed normally; the server stores the
+  response under the key for 30 days.
+- Exact retry (same key, same payload): server replays the stored
+  response. Look for the `Idempotency-Replayed: true` response header
+  to distinguish replay from re-execution.
+- Same key with a different payload: `409 Conflict` with body
+  `{"code": "idempotency_conflict", ...}`. Either pick a new key or
+  resend the original payload bytes.
+- Invalid key shape: `400 Bad Request` with body
+  `{"code": "invalid_idempotency_key", ...}`.
+- Validation/auth/server failures and rolled-back writes: nothing is
+  stored. The same key may be reused once the underlying problem is
+  fixed.
+- Records older than 30 days are treated as if the key had never been
+  used.
+
+---
+
 ## API-key safety
 
 API keys are bearer credentials. Anyone holding a valid key can act as the

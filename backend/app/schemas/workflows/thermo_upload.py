@@ -38,15 +38,54 @@ class ThermoCalculationIn(SchemaBase):
 
 
 class ThermoSourceCalculationIn(SchemaBase):
-    """Link between a thermo upload and a supporting calculation by local key.
+    """Link between a thermo upload and a supporting calculation.
+
+    Exactly one of ``calculation_key`` (inline reference into the same
+    upload's ``calculations`` list) or ``existing_calculation_id`` (FK
+    reference to a row already persisted in the ``calculation`` table)
+    must be provided. See DR-0028 for the rationale: ARC's typical
+    pipeline uploads opt/freq/sp during conformer upload, so the thermo
+    upload should reference those existing rows rather than re-declare
+    duplicate calculations.
+
+    Audience guidance:
+
+    * ``calculation_key`` is the **contributor-facing** path. Web uploads,
+      community contributors, and general workflow tools should use local
+      string keys so users never need to know database IDs. The future
+      computed-species bundle endpoint will resolve calculations,
+      artifacts, thermo, and thermo source links together server-side
+      using these keys.
+    * ``existing_calculation_id`` is an **advanced / programmatic**
+      mechanism for clients that are chaining from a prior TCKDB upload
+      response (e.g. ARC's adapter using IDs returned by the conformer
+      upload, or replay/admin/repair tooling). It is not intended as the
+      primary public upload UX.
 
     :param calculation_key: Local key of a calculation declared in
         ``ThermoUploadRequest.calculations``.
+    :param existing_calculation_id: Database id of a calculation row that
+        already exists. Intended for programmatic workflows that are
+        chaining from a prior TCKDB upload response; contributor-facing
+        bundle uploads should prefer ``calculation_key`` so users do not
+        need to know database IDs. The workflow validates
+        owner-consistency and role/type compatibility before linking.
     :param role: The scientific role the calculation plays for this thermo.
     """
 
-    calculation_key: str = Field(min_length=1)
+    calculation_key: str | None = Field(default=None, min_length=1)
+    existing_calculation_id: int | None = Field(default=None, gt=0)
     role: ThermoCalculationRole
+
+    @model_validator(mode="after")
+    def validate_exactly_one_reference(self) -> Self:
+        """Require exactly one of calculation_key or existing_calculation_id."""
+        if (self.calculation_key is None) == (self.existing_calculation_id is None):
+            raise ValueError(
+                "source_calculations entry must specify exactly one of "
+                "calculation_key or existing_calculation_id."
+            )
+        return self
 
 
 class ThermoUploadRequest(SchemaBase):
@@ -122,11 +161,13 @@ class ThermoUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_source_calculation_keys_exist(self) -> Self:
-        """Every source_calculations[*].calculation_key must reference a
-        calculation declared in this upload."""
+        """Every source_calculations[*].calculation_key, when provided, must
+        reference a calculation declared in this upload. Entries that use
+        ``existing_calculation_id`` instead are skipped — those are resolved
+        against the database in the workflow layer."""
         defined = {c.key for c in self.calculations}
         for sc in self.source_calculations:
-            if sc.calculation_key not in defined:
+            if sc.calculation_key is not None and sc.calculation_key not in defined:
                 raise ValueError(
                     f"source_calculations references undefined "
                     f"calculation_key '{sc.calculation_key}'."
@@ -135,10 +176,14 @@ class ThermoUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_unique_source_calculation_pairs(self) -> Self:
-        pairs = [(sc.calculation_key, sc.role) for sc in self.source_calculations]
+        pairs = [
+            (sc.calculation_key, sc.existing_calculation_id, sc.role)
+            for sc in self.source_calculations
+        ]
         if len(set(pairs)) != len(pairs):
             raise ValueError(
-                "source_calculations must be unique by (calculation_key, role)."
+                "source_calculations must be unique by "
+                "(calculation_key, existing_calculation_id, role)."
             )
         return self
 

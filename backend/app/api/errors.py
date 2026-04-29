@@ -9,6 +9,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
+from app.services.artifact_storage import ArtifactStorageUnavailable
+from app.services.idempotency import (
+    IDEMPOTENCY_UNIQUE_CONSTRAINT,
+    IdempotencyConflict,
+    InvalidIdempotencyKey,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -107,6 +114,11 @@ def _integrity_error_handler(
     constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
     if constraint:
         diag["constraint"] = constraint
+    if constraint == IDEMPOTENCY_UNIQUE_CONSTRAINT:
+        code = "idempotency_conflict"
+        message = (
+            "Idempotency key was used concurrently for a different request."
+        )
     logger.warning(
         "IntegrityError on %s %s: code=%s diag=%s orig=%r",
         request.method,
@@ -123,6 +135,41 @@ def _integrity_error_handler(
     )
 
 
+def _invalid_idempotency_key_handler(
+    _request: Request, exc: InvalidIdempotencyKey
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc), "code": "invalid_idempotency_key"},
+    )
+
+
+def _artifact_storage_unavailable_handler(
+    _request: Request, exc: ArtifactStorageUnavailable
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Artifact storage is temporarily unavailable. Retry later.",
+            "code": "artifact_storage_unavailable",
+        },
+    )
+
+
+def _idempotency_conflict_handler(
+    _request: Request, exc: IdempotencyConflict
+) -> JSONResponse:
+    body = {
+        "detail": "Idempotency key was already used with a different request payload.",
+        "code": (
+            "idempotency_in_progress" if exc.in_progress else "idempotency_conflict"
+        ),
+        "endpoint": exc.endpoint,
+        "created_at": exc.created_at.isoformat(),
+    }
+    return JSONResponse(status_code=409, content=body)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach all custom exception handlers to *app*."""
     app.add_exception_handler(ValueError, _value_error_handler)  # type: ignore[arg-type]
@@ -131,3 +178,6 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(DataIntegrityError, _data_integrity_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NoResultFound, _no_result_found_handler)  # type: ignore[arg-type]
     app.add_exception_handler(IntegrityError, _integrity_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(InvalidIdempotencyKey, _invalid_idempotency_key_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(IdempotencyConflict, _idempotency_conflict_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ArtifactStorageUnavailable, _artifact_storage_unavailable_handler)  # type: ignore[arg-type]

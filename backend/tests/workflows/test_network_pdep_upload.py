@@ -746,3 +746,59 @@ def test_pdep_workflow_allows_balanced_micro_reaction(db_engine) -> None:
         request = NetworkPDepUploadRequest(**_full_payload(include_solve=False))
         network = persist_network_pdep_upload(session, request)
         assert network.id is not None
+
+
+def test_pdep_workflow_persists_calculation_artifacts(
+    db_engine, monkeypatch,
+) -> None:
+    """Inline ``calc_in.artifacts`` on a PDep calculation must produce
+    a real ``CalculationArtifact`` row.
+
+    Before the shared persistence refactor the network-pdep workflow
+    silently dropped this field; this test pins the new behaviour.
+    """
+    import base64
+
+    from app.db.models.calculation import CalculationArtifact
+
+    written: list[str] = []
+
+    def _fake_store(content: bytes, sha256: str) -> str:
+        uri = f"s3://test-bucket/{sha256[:2]}/{sha256}"
+        written.append(uri)
+        return uri
+
+    monkeypatch.setattr(
+        "app.services.artifact_persistence.store_artifact", _fake_store
+    )
+
+    payload = _full_payload(include_solve=False)
+    payload["species"][0]["conformers"][0]["calculation"]["artifacts"] = [
+        {
+            "kind": "ancillary",
+            "filename": "note.txt",
+            "content_base64": base64.b64encode(b"hello-pdep-art").decode("ascii"),
+        }
+    ]
+
+    # Use a connection-bound rollback so this artifact row does not leak
+    # into other workflow tests sharing the session-scoped ``db_engine``.
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    try:
+        session = Session(bind=connection, expire_on_commit=False)
+        try:
+            request = NetworkPDepUploadRequest(**payload)
+            persist_network_pdep_upload(session, request)
+            session.flush()
+            rows = session.scalars(
+                select(CalculationArtifact).where(
+                    CalculationArtifact.uri.like("s3://test-bucket/%")
+                )
+            ).all()
+            assert len(rows) == 1
+        finally:
+            session.close()
+    finally:
+        transaction.rollback()
+        connection.close()

@@ -55,6 +55,17 @@ MAX_ARTIFACT_BYTES = 50 * 1024 * 1024
 #: Maximum total upload size across all artifacts in one request (bytes). 200 MB.
 MAX_TOTAL_UPLOAD_BYTES = 200 * 1024 * 1024
 
+#: Maximum base64-encoded length for a single artifact.  Rejects oversized
+#: payloads BEFORE base64 decoding so a client cannot force the server to
+#: allocate 50 MB+ of memory by claiming a small ``bytes`` value while
+#: sending a much larger ``content_base64`` string. Sized at the encoded
+#: ceiling for ``MAX_ARTIFACT_BYTES`` plus padding slack.
+MAX_ENCODED_ARTIFACT_LEN = ((MAX_ARTIFACT_BYTES + 2) // 3) * 4 + 4
+
+#: Aggregate encoded-length cap for one upload request — same intent as
+#: above, applied before any artifact in the batch is decoded.
+MAX_TOTAL_ENCODED_UPLOAD_LEN = ((MAX_TOTAL_UPLOAD_BYTES + 2) // 3) * 4 + 4
+
 # ---------------------------------------------------------------------------
 # ESS output signatures — first ~4 KB of a legitimate log must contain one.
 # ---------------------------------------------------------------------------
@@ -91,6 +102,16 @@ _TEXT_KINDS = {
 
 class ArtifactValidationError(ValueError):
     """Raised when an artifact fails validation."""
+
+
+class ArtifactStorageUnavailable(Exception):
+    """Raised when the object store cannot accept a write that has already
+    passed validation.
+
+    Distinct from :class:`ArtifactValidationError` so the API layer can
+    map it to a 503 Service Unavailable response while validation
+    failures stay 422.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +207,29 @@ def validate_total_upload_size(artifacts_bytes: list[int]) -> None:
         )
 
 
+def validate_encoded_lengths(encoded_lengths: list[int]) -> None:
+    """Reject oversized base64 payloads BEFORE any decode allocation.
+
+    Takes the encoded ``len(content_base64)`` for each artifact in the
+    batch and enforces both per-artifact and aggregate caps. This runs
+    against client-provided strings only, so it is cheap and safe to call
+    before allocating decoded buffers — the ``bytes`` field on the
+    upload schema is *not* trusted at this stage.
+    """
+    for i, encoded_len in enumerate(encoded_lengths):
+        if encoded_len > MAX_ENCODED_ARTIFACT_LEN:
+            raise ArtifactValidationError(
+                f"Artifact {i} encoded payload is {encoded_len:,} chars; "
+                f"limit is {MAX_ENCODED_ARTIFACT_LEN:,} chars."
+            )
+    total = sum(encoded_lengths)
+    if total > MAX_TOTAL_ENCODED_UPLOAD_LEN:
+        raise ArtifactValidationError(
+            f"Total encoded artifact payload is {total:,} chars; "
+            f"limit is {MAX_TOTAL_ENCODED_UPLOAD_LEN:,} chars."
+        )
+
+
 # ---------------------------------------------------------------------------
 # S3 client
 # ---------------------------------------------------------------------------
@@ -267,3 +311,27 @@ def store_artifact(
     )
 
     return f"s3://{bucket}/{key}"
+
+
+def delete_artifact_object(
+    sha256: str,
+    *,
+    client=None,
+    bucket: str | None = None,
+) -> None:
+    """Delete an object previously written by :func:`store_artifact`.
+
+    Used as a compensating action when a batch upload fails partway
+    through pass-2 storage writes — the API layer must clean up bytes
+    that have no DB row pointing at them. Best-effort: any error is
+    swallowed (logged by the caller) because compensation is already a
+    cleanup path and re-raising would mask the root cause.
+    """
+    if client is None:
+        client = _get_s3_client()
+    bucket = bucket or S3_BUCKET
+    key = content_addressed_key(sha256)
+    try:
+        client.delete_object(Bucket=bucket, Key=key)
+    except ClientError:
+        pass

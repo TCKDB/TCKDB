@@ -281,6 +281,51 @@ mid-import rolls back the submission, audit events, record links, and
 every scientific row. There are no partial imports. Either all the
 records land or none of them do.
 
+### Retry-safe submit with `Idempotency-Key`
+
+If a network glitch or process restart leaves you unsure whether an
+earlier `submit` call actually landed, sending an `Idempotency-Key`
+header lets you safely retry the same bundle without risking a
+duplicate submission:
+
+```bash
+curl -X POST "$HOSTED_TCKDB_BASE_URL/bundles/submit" \
+  -H "X-API-Key: $HOSTED_TCKDB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: lab:run-2026-04-26:thermo-bundle" \
+  --data @./thermo-bundle.tckdb.json
+```
+
+Behavior under retry:
+
+- **First call:** processed normally. The hosted server records the
+  response under `(your_user_id, POST, /api/v1/bundles/submit, your_key)`
+  for 30 days.
+- **Exact retry (same key + same bundle bytes):** the server replays the
+  original `201` response without re-importing the bundle. The reply
+  carries the header `Idempotency-Replayed: true` so you can tell. No
+  duplicate submission, audit events, links, or scientific rows are
+  created.
+- **Same key but a different bundle:** `409 Conflict` with body
+  `{"code": "idempotency_conflict", ...}`. Pick a new key for the new
+  bundle.
+- **Validation/auth/server failure:** nothing is stored. The same key
+  may be reused once the underlying problem is fixed.
+
+The retry contract requires resending the **exact same bundle bytes**
+(canonicalized JSON), so always submit the on-disk
+`*-bundle.tckdb.json` file you exported in Step 1 — never a
+re-serialized in-memory copy.
+
+Choose stable, unique-per-logical-bundle keys derived from identifiers
+you already have, e.g.
+`<lab>:<run-id>:<bundle-kind>` or
+`<arc-job-id>:<bundle-export-timestamp>`. Random per-attempt keys
+defeat retry safety. The full contract lives in
+[DR-0024 — Upload Idempotency Keys](../decisions/0024-upload-idempotency-keys.md);
+client-side guidance in
+[Generic client targeting → Retry safety with `Idempotency-Key`](../clients/generic-client-targeting.md#retry-safety-with-idempotency-key).
+
 ## Step 4: Interpret pending / unreviewed status
 
 This is the central policy of submit/import v0.

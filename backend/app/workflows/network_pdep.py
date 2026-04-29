@@ -54,6 +54,7 @@ from app.schemas.workflows.reaction_upload import (
     ReactionParticipantUpload,
     ReactionUploadRequest,
 )
+from app.services.artifact_persistence import persist_artifact
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_workflow_tool_release_ref,
@@ -111,6 +112,14 @@ def _persist_calculation(
                 output_order=1,
                 role=CalculationGeometryRole.final,
             )
+        )
+
+    for artifact_in in calc_in.artifacts:
+        persist_artifact(
+            session,
+            calculation_id=calculation.id,
+            artifact_in=artifact_in,
+            created_by=created_by,
         )
 
     session.flush()

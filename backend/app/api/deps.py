@@ -5,12 +5,18 @@ from __future__ import annotations
 from typing import Iterator
 
 from fastapi import Cookie, Depends, Header, HTTPException, Query
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.config import settings
 from app.db.models.app_user import AppUser
-from app.db.models.common import AppUserRole
+from app.db.models.calculation import Calculation
+from app.db.models.common import (
+    AppUserRole,
+    SubmissionRecordType,
+    SubmissionStatus,
+)
+from app.db.models.submission import Submission, SubmissionRecordLink
 from app.services.auth import (
     API_KEY_HEADER,
     SESSION_COOKIE_NAME,
@@ -96,6 +102,67 @@ def require_session_user(
 
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
+
+#: Submission lifecycle states that count as live ownership for authorization.
+#: Rejected and superseded submissions explicitly do *not* grant the
+#: contributor permission to attach artifacts to the calculations they once
+#: produced — those calculations are no longer in that submission's lineage.
+_ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES = frozenset(
+    {
+        SubmissionStatus.pending,
+        SubmissionStatus.precheck_passed,
+        SubmissionStatus.auto_flagged,
+        SubmissionStatus.approved,
+    }
+)
+
+
+def can_modify_calculation_artifacts(
+    session: Session,
+    calculation: Calculation,
+    user: AppUser,
+) -> bool:
+    """Return True if *user* may attach or modify artifacts on *calculation*.
+
+    Three accept paths, evaluated in order; first match wins:
+
+    1. Direct creation — ``calculation.created_by == user.id``.
+    2. Submission ownership — there exists a ``submission_record_link``
+       with ``record_type='calculation'`` and ``record_id=calculation.id``,
+       joined to a :class:`Submission` whose ``created_by == user.id`` and
+       whose ``status`` is in
+       :data:`_ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES` (pending,
+       precheck_passed, auto_flagged, approved). Rejected and superseded
+       submissions intentionally do not authorize uploads.
+    3. Curator/admin override — ``user.role`` in :data:`_CURATION_ROLES`.
+
+    Caller is responsible for raising HTTP 403 on False; this function
+    does not raise. The 403 detail must not leak any internal id.
+    """
+    if calculation.created_by is not None and calculation.created_by == user.id:
+        return True
+
+    submission_owner = session.scalar(
+        select(Submission.id)
+        .join(
+            SubmissionRecordLink,
+            SubmissionRecordLink.submission_id == Submission.id,
+        )
+        .where(
+            SubmissionRecordLink.record_type == SubmissionRecordType.calculation,
+            SubmissionRecordLink.record_id == calculation.id,
+            Submission.created_by == user.id,
+            Submission.status.in_(_ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES),
+        )
+        .limit(1)
+    )
+    if submission_owner is not None:
+        return True
+
+    if user.role in _CURATION_ROLES:
+        return True
+
+    return False
 
 
 def require_curator_or_admin(

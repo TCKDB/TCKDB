@@ -11,7 +11,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_write_db
+from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
+from app.schemas.entities.calculation import CalculationUploadRef
 from app.schemas.upload_warning import UploadWarning
 from app.services.provenance_warnings import (
     collect_kinetics_provenance_warnings,
@@ -26,6 +28,7 @@ from app.services.upload_reconciliation import (
 )
 
 # -- Workflow imports --------------------------------------------------------
+from app.workflows.computed_species import persist_computed_species_upload
 from app.workflows.conformer import persist_conformer_upload
 from app.workflows.kinetics import persist_kinetics_upload
 from app.workflows.computed_reaction import persist_computed_reaction_upload
@@ -38,6 +41,13 @@ from app.workflows.transition_state import persist_transition_state_upload
 from app.workflows.transport import persist_transport_upload
 
 # -- Request schema imports --------------------------------------------------
+from app.schemas.workflows.computed_species_upload import (
+    CalculationUploadRefInBundle,
+    ComputedSpeciesUploadRequest,
+    ComputedSpeciesUploadResult,
+    ConformerUploadRefInBundle,
+    ThermoUploadRefInBundle,
+)
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
 from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
@@ -64,6 +74,8 @@ class ConformerUploadResult(BaseModel):
     type: str = "conformer_observation"
     species_entry_id: int
     conformer_group_id: int
+    primary_calculation: CalculationUploadRef
+    additional_calculations: list[CalculationUploadRef] = []
     warnings: list[UploadWarning] = []
 
 
@@ -149,22 +161,43 @@ def upload_conformer(
     request: ConformerUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
     warnings = reconcile_species_entry_full(
         request.species_entry,
         primary_calc=request.calculation,
         additional_calcs=request.additional_calculations,
         statmech=request.statmech,
     )
-    observation = persist_conformer_upload(
+    outcome = persist_conformer_upload(
         session, request, created_by=current_user.id
     )
-    return ConformerUploadResult(
+    observation = outcome.observation
+    result = ConformerUploadResult(
         id=observation.id,
         species_entry_id=observation.conformer_group.species_entry_id,
         conformer_group_id=observation.conformer_group_id,
+        primary_calculation=CalculationUploadRef(
+            request_index=outcome.primary_calculation.request_index,
+            calculation_id=outcome.primary_calculation.calculation_id,
+            type=outcome.primary_calculation.type,
+            role=outcome.primary_calculation.role,
+        ),
+        additional_calculations=[
+            CalculationUploadRef(
+                request_index=ref.request_index,
+                calculation_id=ref.calculation_id,
+                type=ref.type,
+                role=ref.role,
+            )
+            for ref in outcome.additional_calculations
+        ],
         warnings=warnings,
     )
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.post(
@@ -176,7 +209,10 @@ def upload_reaction(
     request: ReactionUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
     warnings: list[UploadWarning] = []
     for i, p in enumerate(request.reactants):
         if p.species_entry is not None:
@@ -191,11 +227,13 @@ def upload_reaction(
     reaction_entry = persist_reaction_upload(
         session, request, created_by=current_user.id
     )
-    return ReactionUploadResult(
+    result = ReactionUploadResult(
         id=reaction_entry.id,
         reaction_id=reaction_entry.reaction_id,
         warnings=warnings,
     )
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.post(
@@ -207,7 +245,10 @@ def upload_kinetics(
     request: KineticsUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
     warnings: list[UploadWarning] = []
     for i, p in enumerate(request.reaction.reactants):
         ws = reconcile_species_entry(p.species_entry)
@@ -221,11 +262,13 @@ def upload_kinetics(
     kinetics = persist_kinetics_upload(
         session, request, created_by=current_user.id
     )
-    return KineticsUploadResult(
+    result = KineticsUploadResult(
         id=kinetics.id,
         reaction_entry_id=kinetics.reaction_entry_id,
         warnings=warnings,
     )
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.post(
@@ -237,11 +280,16 @@ def upload_network(
     request: NetworkUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
     network = persist_network_upload(
         session, request, created_by=current_user.id
     )
-    return NetworkUploadResult(id=network.id)
+    result = NetworkUploadResult(id=network.id)
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.post(
@@ -253,12 +301,17 @@ def upload_network_pdep(
     request: NetworkPDepUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
     network = persist_network_pdep_upload(
         session, request, created_by=current_user.id
     )
     solve_id = network.solves[0].id if network.solves else None
-    return NetworkPDepUploadResult(id=network.id, solve_id=solve_id)
+    result = NetworkPDepUploadResult(id=network.id, solve_id=solve_id)
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.post(
@@ -270,6 +323,7 @@ def upload_statmech(
     request: StatmechUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
     """Create a standalone statmech record for a resolvable species entry.
 
@@ -279,16 +333,20 @@ def upload_statmech(
     torsions. Statmech is append-only — repeated uploads against the
     same species entry create independent rows.
     """
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(collect_statmech_provenance_warnings(request))
     statmech = persist_statmech_upload(
         session, request, created_by=current_user.id
     )
-    return StatmechUploadResult(
+    result = StatmechUploadResult(
         id=statmech.id,
         species_entry_id=statmech.species_entry_id,
         warnings=warnings,
     )
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.post(
@@ -300,17 +358,22 @@ def upload_thermo(
     request: ThermoUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(collect_thermo_provenance_warnings(request))
     thermo = persist_thermo_upload(
         session, request, created_by=current_user.id
     )
-    return ThermoUploadResult(
+    result = ThermoUploadResult(
         id=thermo.id,
         species_entry_id=thermo.species_entry_id,
         warnings=warnings,
     )
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.post(
@@ -322,7 +385,10 @@ def upload_transition_state(
     request: TransitionStateUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
     warnings: list[UploadWarning] = []
     for i, p in enumerate(request.reaction.reactants):
         ws = reconcile_species_entry(p.species_entry)
@@ -335,12 +401,14 @@ def upload_transition_state(
     ts_entry = persist_transition_state_upload(
         session, request, created_by=current_user.id
     )
-    return TransitionStateUploadResult(
+    result = TransitionStateUploadResult(
         id=ts_entry.id,
         transition_state_id=ts_entry.transition_state_id,
         reaction_entry_id=ts_entry.transition_state.reaction_entry_id,
         warnings=warnings,
     )
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.post(
@@ -352,6 +420,7 @@ def upload_transport(
     request: TransportUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
     """Create a standalone transport record for a resolvable species entry.
 
@@ -360,16 +429,81 @@ def upload_transport(
     calculations with role links. Transport is append-only — repeated
     uploads against the same species entry create independent rows.
     """
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(collect_transport_provenance_warnings(request))
     transport = persist_transport_upload(
         session, request, created_by=current_user.id
     )
-    return TransportUploadResult(
+    result = TransportUploadResult(
         id=transport.id,
         species_entry_id=transport.species_entry_id,
         warnings=warnings,
     )
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
+
+
+@router.post(
+    "/computed-species",
+    response_model=ComputedSpeciesUploadResult,
+    status_code=201,
+)
+def upload_computed_species(
+    request: ComputedSpeciesUploadRequest,
+    session: Session = Depends(get_write_db),
+    current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
+):
+    """Bundle upload: identity + conformers + per-conformer calcs +
+    artifacts + optional thermo, atomic in one transaction (DR-0029)."""
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
+    warnings = reconcile_species_entry(request.species_entry)
+    outcome = persist_computed_species_upload(
+        session, request, created_by=current_user.id
+    )
+    conformer_refs = [
+        ConformerUploadRefInBundle(
+            key=co.conformer_in_bundle.key,
+            conformer_group_id=co.group_id,
+            conformer_observation_id=co.observation.id,
+            primary_calculation=CalculationUploadRefInBundle(
+                key=co.conformer_in_bundle.primary_calculation.key,
+                calculation_id=co.primary_calculation.id,
+                type=co.primary_calculation.type,
+                role="primary",
+            ),
+            additional_calculations=[
+                CalculationUploadRefInBundle(
+                    key=add_in.key,
+                    calculation_id=add_calc.id,
+                    type=add_calc.type,
+                    role="additional",
+                )
+                for add_in, add_calc in zip(
+                    co.conformer_in_bundle.additional_calculations,
+                    co.additional_calculations,
+                    strict=True,
+                )
+            ],
+        )
+        for co in outcome.conformers
+    ]
+    thermo_ref = (
+        ThermoUploadRefInBundle(thermo_id=outcome.thermo.id)
+        if outcome.thermo is not None
+        else None
+    )
+    result = ComputedSpeciesUploadResult(
+        species_entry_id=outcome.species_entry_id,
+        conformers=conformer_refs,
+        thermo=thermo_ref,
+        warnings=warnings,
+    )
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.post(
@@ -381,8 +515,13 @@ def upload_computed_reaction(
     request: ComputedReactionUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
-    result = persist_computed_reaction_upload(
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
+    result_dict = persist_computed_reaction_upload(
         session, request, created_by=current_user.id
     )
-    return ComputedReactionUploadResult(**result)
+    result = ComputedReactionUploadResult(**result_dict)
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result

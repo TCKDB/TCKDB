@@ -27,7 +27,6 @@ from typing import Literal, Self
 from pydantic import Field, field_validator, model_validator
 
 from app.db.models.common import (
-    ArtifactKind,
     CalculationQuality,
     CalculationType,
     NetworkChannelKind,
@@ -35,6 +34,7 @@ from app.db.models.common import (
     ScientificOriginKind,
 )
 from app.schemas.common import SchemaBase
+from app.schemas.fragments.artifact import ArtifactIn
 from app.schemas.fragments.calculation import (
     CalculationParameterObservation,
     CalculationWithResultsPayload,
@@ -50,6 +50,10 @@ from app.schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+
+# Re-exported for backwards compatibility — ArtifactIn now lives in
+# app/schemas/fragments/artifact.py.
+__all__ = ("ArtifactIn",)
 from app.schemas.utils import normalize_optional_text
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.schemas.workflows.transport_upload import TransportUploadPayload
@@ -58,35 +62,6 @@ from app.schemas.workflows.transport_upload import TransportUploadPayload
 # ---------------------------------------------------------------------------
 # Reusable calculation payload (shared between species and TS)
 # ---------------------------------------------------------------------------
-
-
-class ArtifactIn(SchemaBase):
-    """An artifact (file) attached to a calculation — upload transport only.
-
-    Provide ``content_base64`` to upload file content inline.  The server
-    validates the content (ESS signature, size limits, SHA-256 integrity),
-    writes it to a content-addressed store, and creates a
-    ``CalculationArtifact`` row with the final URI.
-
-    This schema is strictly upload-facing.  The DB model
-    (``CalculationArtifact``) stores ``uri``, ``sha256``, ``bytes``, and
-    ``kind`` — no inline content.
-
-    :param kind: Artifact type (input, output_log, checkpoint, etc.).
-    :param filename: Original filename (provenance metadata, not used for
-        storage path).  E.g. ``"input.log"``.
-    :param content_base64: Base64-encoded file content.
-    :param sha256: Optional SHA-256 hash declared by the uploader.
-        If provided, the server verifies it matches the content.
-    :param bytes: Optional declared file size.  If provided, the server
-        verifies it matches the decoded content length.
-    """
-
-    kind: ArtifactKind
-    filename: str = Field(min_length=1)
-    content_base64: str = Field(min_length=1)
-    sha256: str | None = Field(default=None, min_length=64, max_length=64)
-    bytes: int | None = Field(default=None, ge=0)
 
 
 class CalculationIn(SchemaBase):

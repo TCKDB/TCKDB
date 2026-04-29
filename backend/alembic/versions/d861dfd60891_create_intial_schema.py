@@ -77,6 +77,22 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id', name=op.f('pk_user_session')),
     sa.UniqueConstraint('token_hash', name=op.f('uq_user_session_token_hash'))
     )
+    op.create_table('idempotency_record',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('user_id', sa.BigInteger(), nullable=False),
+    sa.Column('request_method', sa.String(length=8), nullable=False),
+    sa.Column('endpoint', sa.Text(), nullable=False),
+    sa.Column('idempotency_key', sa.String(length=200), nullable=False),
+    sa.Column('payload_hash', sa.CHAR(length=64), nullable=False),
+    sa.Column('status_code', sa.Integer(), nullable=False),
+    sa.Column('response_body_json', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+    sa.Column('expires_at', sa.DateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['app_user.id'], name=op.f('fk_idempotency_record_user_id_app_user'), initially='IMMEDIATE', deferrable=True),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_idempotency_record')),
+    sa.UniqueConstraint('user_id', 'request_method', 'endpoint', 'idempotency_key', name='uq_idempotency_record_user_method_endpoint_key')
+    )
+    op.create_index('ix_idempotency_record_expires_at', 'idempotency_record', ['expires_at'], unique=False)
     op.create_table('author',
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('given_name', sa.Text(), nullable=True),
@@ -932,8 +948,12 @@ def upgrade() -> None:
     sa.Column('uri', sa.Text(), nullable=False),
     sa.Column('sha256', sa.CHAR(length=64), nullable=True),
     sa.Column('bytes', sa.BigInteger(), nullable=True),
+    sa.Column('filename', sa.Text(), nullable=False),
+    sa.Column('note', sa.Text(), nullable=True),
+    sa.Column('created_by', sa.BigInteger(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calculation_artifact_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
+    sa.ForeignKeyConstraint(['created_by'], ['app_user.id'], name=op.f('fk_calculation_artifact_created_by_app_user'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_calculation_artifact'))
     )
     op.create_table('calculation_parameter',
@@ -1523,6 +1543,8 @@ def downgrade() -> None:
     op.drop_table('upload_job')
     op.execute("DROP TYPE IF EXISTS upload_job_status")
     op.execute("DROP TYPE IF EXISTS upload_job_kind")
+    op.drop_index('ix_idempotency_record_expires_at', table_name='idempotency_record')
+    op.drop_table('idempotency_record')
     op.drop_table('user_session')
     op.drop_table('api_key')
     op.drop_table('app_user')

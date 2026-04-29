@@ -20,7 +20,7 @@ from app.schemas.workflows.contribution_bundle import (
     ContributionBundleV0,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
 
 

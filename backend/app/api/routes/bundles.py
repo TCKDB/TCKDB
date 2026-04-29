@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, get_write_db
+from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
 from app.schemas.contribution_bundle_dry_run import ContributionBundleDryRunResult
 from app.schemas.contribution_bundle_submit import ContributionBundleSubmitResult
@@ -52,7 +53,8 @@ def submit_bundle(
     bundle: ContributionBundleV0,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
-) -> ContributionBundleSubmitResult:
+    idem: IdempotencyContext = Depends(idempotency_dependency),
+):
     """Import a contribution bundle into the hosted database.
 
     Requires authentication (session cookie or API key). Runs the dry-run
@@ -64,6 +66,12 @@ def submit_bundle(
     Imported rows are publicly visible by default but explicitly
     ``unreviewed``: validation means importable, not curated/approved.
     Transaction management lives in ``get_write_db`` — any failure rolls
-    back the whole bundle (no partial imports).
+    back the whole bundle (no partial imports). Sending an
+    ``Idempotency-Key`` header makes the submit retry-safe; an exact retry
+    replays the stored response without re-importing the bundle.
     """
-    return submit_contribution_bundle(session, bundle, actor=current_user)
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
+    result = submit_contribution_bundle(session, bundle, actor=current_user)
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result

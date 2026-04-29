@@ -1,13 +1,26 @@
-"""Calculation read endpoints — Phase 1 (Tier A + B) and Phase 2 (Tier C)."""
+"""Calculation read endpoints — Phase 1 (Tier A + B) and Phase 2 (Tier C),
+plus the calculation-targeted artifact upload endpoint."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.api.deps import PaginationParams, get_db
+from app.api.deps import (
+    PaginationParams,
+    can_modify_calculation_artifacts,
+    get_current_user,
+    get_db,
+    get_write_db,
+)
 from app.api.errors import NotFoundError
+from app.api.idempotency import IdempotencyContext, idempotency_dependency
+from app.db.models.app_user import AppUser
+from app.schemas.fragments.artifact import ArtifactIn
+from app.schemas.upload_warning import UploadWarning
+from app.services.artifact_persistence import persist_artifact_batch
 from app.api.routes._pagination import PaginatedResponse
 from app.db.models.calculation import (
     Calculation,
@@ -481,6 +494,106 @@ def list_artifacts(
         .order_by(CalculationArtifact.id.asc())
     ).all()
     return [CalculationArtifactRead.model_validate(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Artifact upload — POST /calculations/{calculation_id}/artifacts
+# ---------------------------------------------------------------------------
+
+
+class ArtifactsUploadRequest(BaseModel):
+    """Inline batch artifact upload payload.
+
+    All artifacts in the batch are validated end-to-end before any
+    storage write fires. A single per-artifact failure rejects the
+    whole batch with no DB rows and no S3 writes.
+    """
+
+    artifacts: list[ArtifactIn] = Field(min_length=1)
+
+
+class ArtifactsUploadResult(BaseModel):
+    calculation_id: int
+    artifacts: list[CalculationArtifactRead]
+    warnings: list[UploadWarning] = []
+
+
+@router.post(
+    "/{calculation_id}/artifacts",
+    response_model=ArtifactsUploadResult,
+    status_code=201,
+)
+def upload_calculation_artifacts(
+    calculation_id: int,
+    request: ArtifactsUploadRequest,
+    session: Session = Depends(get_write_db),
+    current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
+):
+    """Attach one or more artifacts (logs, inputs, checkpoints) to a
+    calculation.
+
+    Second-phase upload: the calculation must already exist (typically
+    created via ``POST /uploads/conformers`` or a contribution bundle).
+    The upload is batch-atomic — any per-artifact validation failure in
+    the request rejects the entire batch with 422 and no DB rows or S3
+    writes are produced. If a storage write fails partway through pass-2,
+    earlier objects in the batch are best-effort deleted and the route
+    returns 503.
+
+    Authorization (any one of):
+
+    - the caller created the calculation (``calculation.created_by ==
+      current_user.id``);
+    - the caller owns a live submission linked to this calculation
+      through ``submission_record_link`` (rejected/superseded
+      submissions do not qualify);
+    - the caller has the ``curator`` or ``admin`` role.
+
+    Notes for future maintainers:
+
+    - This endpoint assumes calculations are non-deletable. There is no
+      ``DELETE /calculations/{id}`` route today; if one is added later
+      it must hold a row lock on the calculation before deletion to
+      avoid a TOCTOU race against in-flight artifact uploads.
+    - ``CalculationArtifact`` rows are append-only artifact-metadata
+      records. They intentionally do not deduplicate rows by content
+      hash; same-bytes uploads from different events produce two rows
+      pointing at one content-addressed object. Each row records
+      ``filename`` and ``created_by`` so the audit trail is meaningful
+      even when the bytes are opaque (e.g. binary checkpoints).
+    """
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
+
+    calculation = session.get(Calculation, calculation_id)
+    if calculation is None:
+        raise HTTPException(
+            status_code=404, detail="Calculation not found."
+        )
+
+    if not can_modify_calculation_artifacts(session, calculation, current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to attach artifacts to this calculation.",
+        )
+
+    # persist_artifact_batch flushes internally so SQL-layer errors are
+    # caught by its compensation block (deletes already-stored S3 objects).
+    # If it returns, rows are flushed; if it raises, no S3 leak.
+    rows = persist_artifact_batch(
+        session,
+        calculation_id=calculation_id,
+        artifacts=request.artifacts,
+        created_by=current_user.id,
+    )
+
+    result = ArtifactsUploadResult(
+        calculation_id=calculation_id,
+        artifacts=[CalculationArtifactRead.model_validate(r) for r in rows],
+    )
+    idem.record(session, status_code=201, body=result.model_dump(mode="json"))
+    return result
 
 
 @router.get(

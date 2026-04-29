@@ -108,6 +108,123 @@ class TestThermoUpload:
         assert data["type"] == "thermo"
         assert "species_entry_id" in data
 
+    def _seed_calc(self, client, *, calc_type: str = "sp") -> tuple[int, int]:
+        """Insert a Calculation directly into the test session and return
+        (species_entry_id, calculation_id). Mirrors the conformer-upload
+        pre-state that DR-0028's existing_calculation_id path consumes."""
+        from app.db.models.calculation import Calculation
+        from app.db.models.common import CalculationType
+        from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
+        from app.services.species_resolution import resolve_species_entry
+
+        session = client._db_session
+        entry = resolve_species_entry(
+            session,
+            SpeciesEntryIdentityPayload(
+                smiles="CC", charge=0, multiplicity=1,
+            ),
+        )
+        calc = Calculation(
+            type=CalculationType(calc_type),
+            species_entry_id=entry.id,
+        )
+        session.add(calc)
+        session.flush()
+        return entry.id, calc.id
+
+    def test_existing_calculation_id_links_thermo_to_existing_row(self, client):
+        """DR-0028: existing_calculation_id wired through the API produces a
+        201, with the thermo attached to the same species entry."""
+        species_entry_id, calc_id = self._seed_calc(client, calc_type="sp")
+        payload = {
+            "species_entry": {"smiles": "CC", "charge": 0, "multiplicity": 1},
+            "scientific_origin": "computed",
+            "h298_kj_mol": -83.7,
+            "source_calculations": [
+                {"existing_calculation_id": calc_id, "role": "sp"},
+            ],
+        }
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert data["species_entry_id"] == species_entry_id
+
+    def test_existing_calculation_id_not_found_returns_404(self, client):
+        payload = {
+            "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+            "scientific_origin": "computed",
+            "h298_kj_mol": 217.998,
+            "source_calculations": [
+                {"existing_calculation_id": 999_999_999, "role": "sp"},
+            ],
+        }
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        assert resp.status_code == 404, resp.text
+        assert "does not exist" in resp.json()["detail"]
+
+    def test_existing_calc_wrong_species_entry_returns_422(self, client):
+        # Seed a calc owned by a CC species, then upload thermo for a
+        # different species (H) that references it.
+        _, calc_id = self._seed_calc(client, calc_type="sp")
+        payload = {
+            "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+            "scientific_origin": "computed",
+            "h298_kj_mol": 217.998,
+            "source_calculations": [
+                {"existing_calculation_id": calc_id, "role": "sp"},
+            ],
+        }
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        assert resp.status_code == 422, resp.text
+        detail = resp.json()["detail"]
+        assert "different species entry" in detail
+        # No internal id values leaked.
+        assert str(calc_id) not in detail
+        assert "species_entry_id=" not in detail
+
+    def test_existing_calc_role_type_mismatch_returns_422(self, client):
+        _, freq_calc_id = self._seed_calc(client, calc_type="freq")
+        payload = {
+            "species_entry": {"smiles": "CC", "charge": 0, "multiplicity": 1},
+            "scientific_origin": "computed",
+            "h298_kj_mol": -83.7,
+            "source_calculations": [
+                # Role=sp pointing at a freq calc
+                {"existing_calculation_id": freq_calc_id, "role": "sp"},
+            ],
+        }
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        assert resp.status_code == 422, resp.text
+        assert "incompatible" in resp.json()["detail"]
+
+    def test_both_reference_fields_set_returns_422(self, client):
+        payload = {
+            "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+            "scientific_origin": "computed",
+            "h298_kj_mol": 217.998,
+            "source_calculations": [
+                {
+                    "calculation_key": "ghost",
+                    "existing_calculation_id": 1,
+                    "role": "sp",
+                }
+            ],
+        }
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        assert resp.status_code == 422
+
+    def test_neither_reference_field_set_returns_422(self, client):
+        payload = {
+            "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+            "scientific_origin": "computed",
+            "h298_kj_mol": 217.998,
+            "source_calculations": [
+                {"role": "sp"},
+            ],
+        }
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        assert resp.status_code == 422
+
 
 # ---------------------------------------------------------------------------
 # Idempotency and deduplication

@@ -43,7 +43,7 @@ from app.workflows.contribution_bundle_submit import (
 from sqlalchemy import select
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
 
 

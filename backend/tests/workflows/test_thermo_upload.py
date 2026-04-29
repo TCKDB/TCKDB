@@ -827,7 +827,7 @@ def test_schema_rejects_duplicate_calculation_keys() -> None:
 
 def test_schema_rejects_duplicate_source_calculation_pairs_on_upload() -> None:
     """Duplicate (calculation_key, role) pairs are rejected on upload."""
-    with pytest.raises(ValidationError, match=r"unique by .calculation_key, role"):
+    with pytest.raises(ValidationError, match=r"unique by .calculation_key"):
         ThermoUploadRequest(
             species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="computed",
@@ -882,7 +882,7 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_engine) -> None:
         )
         calc_a = _make_calculation(session, species_entry_id=species_a.id)
         # Guard runs on the still-attached ORM instance inside the session.
-        with pytest.raises(ValueError, match="not to the thermo target"):
+        with pytest.raises(ValueError, match="different species entry"):
             _assert_calculation_owned_by(
                 calc_a,
                 species_entry_id=calc_a.species_entry_id + 1,
@@ -1023,3 +1023,393 @@ def session_scalar_count(session: Session, model, **filters) -> int:
     for field, value in filters.items():
         stmt = stmt.where(getattr(model, field) == value)
     return len(session.scalars(stmt).all())
+
+
+# ---------------------------------------------------------------------------
+# DR-0028: existing_calculation_id source-calculation references
+# ---------------------------------------------------------------------------
+#
+# Thermo uploads may reference calcs that were already persisted by a prior
+# upload (e.g. ARC's conformer step uploads opt/freq/sp; thermo links to
+# those rows rather than re-declaring them inline). The schema accepts
+# either calculation_key (inline) or existing_calculation_id (DB row) per
+# entry, with exactly-one-of validation.
+
+
+def _make_persisted_calc(
+    session: Session,
+    *,
+    species_entry_id: int,
+    calc_type: CalculationType,
+) -> Calculation:
+    """Insert a calculation row in its own committed state, like a prior upload."""
+    return _make_calculation(
+        session, species_entry_id=species_entry_id, calc_type=calc_type,
+    )
+
+
+def test_thermo_upload_links_existing_calculation_ids_for_opt_freq_sp(
+    db_engine,
+) -> None:
+    """DR-0028: existing_calculation_id references for opt/freq/sp produce
+    thermo_source_calculation rows that point at those exact calc ids."""
+    distinct = {"smiles": "CC", "charge": 0, "multiplicity": 1}
+    with Session(db_engine) as session, session.begin():
+        species_entry = resolve_species_entry(
+            session, SpeciesEntryIdentityPayload(**distinct),
+        )
+        calc_opt = _make_persisted_calc(
+            session, species_entry_id=species_entry.id,
+            calc_type=CalculationType.opt,
+        )
+        calc_freq = _make_persisted_calc(
+            session, species_entry_id=species_entry.id,
+            calc_type=CalculationType.freq,
+        )
+        calc_sp = _make_persisted_calc(
+            session, species_entry_id=species_entry.id,
+            calc_type=CalculationType.sp,
+        )
+
+        request = ThermoUploadRequest(
+            species_entry=dict(distinct),
+            scientific_origin="computed",
+            h298_kj_mol=-83.7,
+            source_calculations=[
+                {"existing_calculation_id": calc_opt.id, "role": "opt"},
+                {"existing_calculation_id": calc_freq.id, "role": "freq"},
+                {"existing_calculation_id": calc_sp.id, "role": "sp"},
+            ],
+        )
+
+        thermo = persist_thermo_upload(session, request)
+
+        links = session.scalars(
+            select(ThermoSourceCalculation).where(
+                ThermoSourceCalculation.thermo_id == thermo.id
+            )
+        ).all()
+        assert len(links) == 3
+        by_role = {lk.role: lk.calculation_id for lk in links}
+        assert by_role == {
+            ThermoCalculationRole.opt: calc_opt.id,
+            ThermoCalculationRole.freq: calc_freq.id,
+            ThermoCalculationRole.sp: calc_sp.id,
+        }
+
+
+def test_thermo_upload_with_existing_calc_id_creates_no_duplicate_calc(
+    db_engine,
+) -> None:
+    """DR-0028: linking an existing calc must NOT insert a new calculation
+    row — the whole point is to avoid row explosion."""
+    distinct = {"smiles": "CCN", "charge": 0, "multiplicity": 1}
+    with Session(db_engine) as session, session.begin():
+        species_entry = resolve_species_entry(
+            session, SpeciesEntryIdentityPayload(**distinct),
+        )
+        calc = _make_persisted_calc(
+            session, species_entry_id=species_entry.id,
+            calc_type=CalculationType.sp,
+        )
+        before = session.scalars(
+            select(Calculation).where(
+                Calculation.species_entry_id == species_entry.id
+            )
+        ).all()
+        assert len(before) == 1
+
+        persist_thermo_upload(
+            session,
+            ThermoUploadRequest(
+                species_entry=dict(distinct),
+                scientific_origin="computed",
+                h298_kj_mol=-47.5,
+                source_calculations=[
+                    {"existing_calculation_id": calc.id, "role": "sp"},
+                ],
+            ),
+        )
+
+        after = session.scalars(
+            select(Calculation).where(
+                Calculation.species_entry_id == species_entry.id
+            )
+        ).all()
+        assert {row.id for row in after} == {calc.id}
+
+
+def test_thermo_upload_mixed_inline_and_existing_calc_references(db_engine) -> None:
+    """DR-0028: a single source_calculations list may mix inline keys with
+    existing-id references. Both produce link rows; inline calcs are
+    inserted as new calc rows, existing references reuse prior rows."""
+    distinct = {"smiles": "CCO", "charge": 0, "multiplicity": 1}
+    with Session(db_engine) as session, session.begin():
+        species_entry = resolve_species_entry(
+            session, SpeciesEntryIdentityPayload(**distinct),
+        )
+        existing_freq = _make_persisted_calc(
+            session, species_entry_id=species_entry.id,
+            calc_type=CalculationType.freq,
+        )
+        existing_calc_count_before = len(session.scalars(
+            select(Calculation).where(
+                Calculation.species_entry_id == species_entry.id
+            )
+        ).all())
+
+        request = ThermoUploadRequest(
+            species_entry=dict(distinct),
+            scientific_origin="computed",
+            h298_kj_mol=-235.3,
+            calculations=[
+                {"key": "sp_inline", "calculation": _sp_calc_payload()},
+            ],
+            source_calculations=[
+                {"calculation_key": "sp_inline", "role": "sp"},
+                {"existing_calculation_id": existing_freq.id, "role": "freq"},
+            ],
+        )
+
+        thermo = persist_thermo_upload(session, request)
+
+        links = session.scalars(
+            select(ThermoSourceCalculation).where(
+                ThermoSourceCalculation.thermo_id == thermo.id
+            )
+        ).all()
+        assert len(links) == 2
+        roles = {lk.role for lk in links}
+        assert roles == {ThermoCalculationRole.sp, ThermoCalculationRole.freq}
+
+        all_calcs = session.scalars(
+            select(Calculation).where(
+                Calculation.species_entry_id == species_entry.id
+            )
+        ).all()
+        # One new inline calc was added; the existing freq calc is reused.
+        assert len(all_calcs) == existing_calc_count_before + 1
+        assert existing_freq.id in {c.id for c in all_calcs}
+        # The freq link points at the pre-existing row, not a new one.
+        freq_link = next(
+            lk for lk in links if lk.role == ThermoCalculationRole.freq
+        )
+        assert freq_link.calculation_id == existing_freq.id
+
+
+def test_thermo_upload_existing_calc_id_not_found_raises_not_found(
+    db_engine,
+) -> None:
+    """DR-0028 Req 2: a missing existing_calculation_id must surface as 404
+    via NotFoundError (mapped to HTTP 404 by the API exception handler)."""
+    from app.api.errors import NotFoundError
+
+    distinct = {"smiles": "CN", "charge": 0, "multiplicity": 1}
+    request = ThermoUploadRequest(
+        species_entry=dict(distinct),
+        scientific_origin="computed",
+        h298_kj_mol=-30.0,
+        source_calculations=[
+            {"existing_calculation_id": 999_999_999, "role": "sp"},
+        ],
+    )
+
+    with pytest.raises(NotFoundError, match="does not exist"):
+        with Session(db_engine) as session, session.begin():
+            persist_thermo_upload(session, request)
+
+
+def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
+    db_engine,
+) -> None:
+    """DR-0028 Req 2: an existing_calculation_id whose species_entry_id
+    differs from the thermo target's must surface as 422 (ValueError) and
+    must NOT leak the conflicting species_entry_id in the message."""
+    species_a = {"smiles": "[OH]", "charge": 0, "multiplicity": 2}
+    species_b = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
+
+    with pytest.raises(ValueError, match="different species entry") as exc_info:
+        with Session(db_engine) as session, session.begin():
+            entry_a = resolve_species_entry(
+                session, SpeciesEntryIdentityPayload(**species_a),
+            )
+            calc_a = _make_persisted_calc(
+                session, species_entry_id=entry_a.id,
+                calc_type=CalculationType.sp,
+            )
+
+            request = ThermoUploadRequest(
+                species_entry=dict(species_b),
+                scientific_origin="computed",
+                h298_kj_mol=217.998,
+                source_calculations=[
+                    {"existing_calculation_id": calc_a.id, "role": "sp"},
+                ],
+            )
+            persist_thermo_upload(session, request)
+
+    # The error must not leak any internal id (DR-0028 Req 2).
+    detail = str(exc_info.value)
+    assert "species_entry_id=" not in detail
+    assert "id=" not in detail
+
+
+def test_thermo_upload_role_freq_with_opt_calc_raises_422(db_engine) -> None:
+    """DR-0028 Req 1: role=freq pointing at a calc whose type=opt is rejected."""
+    distinct = {"smiles": "CCC", "charge": 0, "multiplicity": 1}
+    with pytest.raises(ValueError, match="incompatible"):
+        with Session(db_engine) as session, session.begin():
+            species_entry = resolve_species_entry(
+                session, SpeciesEntryIdentityPayload(**distinct),
+            )
+            calc_opt = _make_persisted_calc(
+                session, species_entry_id=species_entry.id,
+                calc_type=CalculationType.opt,
+            )
+            persist_thermo_upload(
+                session,
+                ThermoUploadRequest(
+                    species_entry=dict(distinct),
+                    scientific_origin="computed",
+                    h298_kj_mol=-104.0,
+                    source_calculations=[
+                        {"existing_calculation_id": calc_opt.id, "role": "freq"},
+                    ],
+                ),
+            )
+
+
+def test_thermo_upload_role_sp_with_freq_calc_raises_422(db_engine) -> None:
+    """DR-0028 Req 1: role=sp pointing at a calc whose type=freq is rejected."""
+    distinct = {"smiles": "CCCO", "charge": 0, "multiplicity": 1}
+    with pytest.raises(ValueError, match="incompatible"):
+        with Session(db_engine) as session, session.begin():
+            species_entry = resolve_species_entry(
+                session, SpeciesEntryIdentityPayload(**distinct),
+            )
+            calc_freq = _make_persisted_calc(
+                session, species_entry_id=species_entry.id,
+                calc_type=CalculationType.freq,
+            )
+            persist_thermo_upload(
+                session,
+                ThermoUploadRequest(
+                    species_entry=dict(distinct),
+                    scientific_origin="computed",
+                    h298_kj_mol=-272.6,
+                    source_calculations=[
+                        {"existing_calculation_id": calc_freq.id, "role": "sp"},
+                    ],
+                ),
+            )
+
+
+def test_thermo_upload_inline_calc_role_type_mismatch_raises_422(db_engine) -> None:
+    """DR-0028 Req 1: the role/type compatibility check applies to inline
+    calcs too. Declaring a freq inline and tagging it role=opt is the same
+    error class as a typo'd existing_calculation_id."""
+    distinct = {"smiles": "CCCN", "charge": 0, "multiplicity": 1}
+    with pytest.raises(ValueError, match="incompatible"):
+        with Session(db_engine) as session, session.begin():
+            persist_thermo_upload(
+                session,
+                ThermoUploadRequest(
+                    species_entry=dict(distinct),
+                    scientific_origin="computed",
+                    h298_kj_mol=-90.0,
+                    calculations=[
+                        {"key": "freq1", "calculation": _freq_calc_payload()},
+                    ],
+                    source_calculations=[
+                        {"calculation_key": "freq1", "role": "opt"},
+                    ],
+                ),
+            )
+
+
+def test_schema_rejects_both_calculation_key_and_existing_id_set() -> None:
+    """DR-0028 Req 2: both reference fields set on one entry is rejected
+    at the Pydantic layer (422)."""
+    with pytest.raises(
+        ValidationError, match="exactly one of calculation_key or "
+    ):
+        ThermoUploadRequest(
+            species_entry=dict(_SPECIES_ENTRY),
+            scientific_origin="computed",
+            h298_kj_mol=-100.0,
+            calculations=[
+                {"key": "sp1", "calculation": _sp_calc_payload()},
+            ],
+            source_calculations=[
+                {
+                    "calculation_key": "sp1",
+                    "existing_calculation_id": 1,
+                    "role": "sp",
+                }
+            ],
+        )
+
+
+def test_schema_rejects_neither_calculation_key_nor_existing_id_set() -> None:
+    """DR-0028 Req 2: an entry with neither reference is rejected (422)."""
+    with pytest.raises(
+        ValidationError, match="exactly one of calculation_key or "
+    ):
+        ThermoUploadRequest(
+            species_entry=dict(_SPECIES_ENTRY),
+            scientific_origin="computed",
+            h298_kj_mol=-100.0,
+            source_calculations=[
+                {"role": "sp"},
+            ],
+        )
+
+
+def test_schema_rejects_existing_calculation_id_zero_or_negative() -> None:
+    """existing_calculation_id must be a positive integer (gt=0)."""
+    with pytest.raises(ValidationError):
+        ThermoUploadRequest(
+            species_entry=dict(_SPECIES_ENTRY),
+            scientific_origin="computed",
+            h298_kj_mol=-100.0,
+            source_calculations=[
+                {"existing_calculation_id": 0, "role": "sp"},
+            ],
+        )
+
+
+def test_schema_allows_role_composite_with_any_calc_type(db_engine) -> None:
+    """DR-0028 Req 1: role=composite has no strict type check at v0 — it
+    describes a scientific origin rather than a specific job type."""
+    distinct = {"smiles": "CCCC=O", "charge": 0, "multiplicity": 1}
+    with Session(db_engine) as session, session.begin():
+        species_entry = resolve_species_entry(
+            session, SpeciesEntryIdentityPayload(**distinct),
+        )
+        # A freq calc tagged as role=composite is accepted.
+        calc = _make_persisted_calc(
+            session, species_entry_id=species_entry.id,
+            calc_type=CalculationType.freq,
+        )
+        thermo = persist_thermo_upload(
+            session,
+            ThermoUploadRequest(
+                species_entry=dict(distinct),
+                scientific_origin="computed",
+                h298_kj_mol=-205.0,
+                source_calculations=[
+                    {
+                        "existing_calculation_id": calc.id,
+                        "role": "composite",
+                    },
+                ],
+            ),
+        )
+        links = session.scalars(
+            select(ThermoSourceCalculation).where(
+                ThermoSourceCalculation.thermo_id == thermo.id
+            )
+        ).all()
+        assert len(links) == 1
+        assert links[0].role == ThermoCalculationRole.composite
+        assert links[0].calculation_id == calc.id

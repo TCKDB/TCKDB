@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from typing import Literal
+
 from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
 from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import CalculationOutputGeometry
-from app.db.models.common import CalculationGeometryRole
+from app.db.models.common import CalculationGeometryRole, CalculationType
 from app.db.models.species import ConformerObservation
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
@@ -21,19 +24,54 @@ from app.services.statmech_resolution import resolve_or_create_statmech
 from app.services.transport_resolution import resolve_and_create_transport
 
 
+@dataclass(frozen=True)
+class ConformerUploadCalculationRef:
+    """Internal handle to a calculation created by the conformer workflow.
+
+    The route maps each ref onto the API's ``CalculationUploadRef``
+    Pydantic model. ``request_index`` is left ``None`` for the primary
+    calculation and populated with the original
+    ``additional_calculations[]`` index for additional refs.
+    """
+
+    calculation_id: int
+    type: CalculationType
+    role: Literal["primary", "additional"]
+    request_index: int | None = None
+
+
+@dataclass
+class ConformerUploadOutcome:
+    """Structured return value of :func:`persist_conformer_upload`.
+
+    Carries the freshly-created ``ConformerObservation`` plus structured
+    refs to every ``Calculation`` row produced by the workflow so that
+    callers (route handler, async worker) can return calc IDs to clients
+    for second-phase artifact upload.
+    """
+
+    observation: ConformerObservation
+    primary_calculation: ConformerUploadCalculationRef
+    additional_calculations: list[ConformerUploadCalculationRef] = field(
+        default_factory=list
+    )
+
+
 def persist_conformer_upload(
     session: Session,
     request: ConformerUploadRequest,
     *,
     created_by: int | None = None,
-) -> ConformerObservation:
+) -> ConformerUploadOutcome:
     """Persist a complete conformer upload workflow.
 
     :param session: Active SQLAlchemy session.
     :param request: Upload-facing conformer payload.
     :param created_by: Optional application user id for newly created rows.
-    :returns: Newly created ``ConformerObservation`` row. The upload always
-        creates a new observation row; only the basin-level group may be reused.
+    :returns: :class:`ConformerUploadOutcome` carrying the new observation
+        row and structured refs for every calculation created by the
+        workflow. The upload always creates a new observation row; only
+        the basin-level group may be reused.
     :raises ValueError:
         If species identity or geometry parsing fails during upload resolution.
     """
@@ -140,4 +178,22 @@ def persist_conformer_upload(
         )
 
     session.flush()
-    return observation
+
+    return ConformerUploadOutcome(
+        observation=observation,
+        primary_calculation=ConformerUploadCalculationRef(
+            calculation_id=calculation.id,
+            type=calculation.type,
+            role="primary",
+            request_index=None,
+        ),
+        additional_calculations=[
+            ConformerUploadCalculationRef(
+                calculation_id=child.id,
+                type=child.type,
+                role="additional",
+                request_index=i,
+            )
+            for i, child in enumerate(additional_calcs)
+        ],
+    )

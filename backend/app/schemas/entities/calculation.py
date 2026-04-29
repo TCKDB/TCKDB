@@ -24,6 +24,26 @@ from app.schemas.entities.geometry import GeometryRead
 from app.schemas.fragments.calculation import CalculationOwnerRequiredMixin
 
 
+class CalculationUploadRef(BaseModel):
+    """Handle to a calculation created by a workflow upload.
+
+    Returned in upload result schemas so clients can target second-phase
+    requests (e.g. ``POST /calculations/{id}/artifacts``) at specific
+    calculations without re-reading the original request payload.
+
+    The ``role`` field is the primary signal for clients: ``"primary"``
+    for the upload's main calculation, ``"additional"`` for any
+    secondary calculation. ``request_index`` pins the correspondence to
+    the original request's ``additional_calculations[]`` ordering for
+    additional refs and is left ``None`` on the primary ref.
+    """
+
+    request_index: int | None = None
+    calculation_id: int
+    type: CalculationType
+    role: Literal["primary", "additional"]
+
+
 class CalculationCreateResolved(CalculationOwnerRequiredMixin, SchemaBase):
     """Internal calculation payload after scientific references are resolved to ids."""
 
@@ -161,6 +181,8 @@ class CalculationArtifactBase(BaseModel):
     uri: str = Field(min_length=1)
     sha256: str | None = Field(default=None, min_length=64, max_length=64)
     bytes: int | None = Field(default=None, ge=0)
+    filename: str = Field(min_length=1)
+    note: str | None = None
 
 
 class CalculationArtifactCreate(CalculationArtifactBase, SchemaBase):
@@ -172,10 +194,12 @@ class CalculationArtifactUpdate(SchemaBase):
     uri: str | None = Field(default=None, min_length=1)
     sha256: str | None = Field(default=None, min_length=64, max_length=64)
     bytes: int | None = Field(default=None, ge=0)
+    filename: str | None = Field(default=None, min_length=1)
+    note: str | None = None
 
 
 class CalculationArtifactRead(CalculationArtifactBase, TimestampedReadSchema):
-    pass
+    created_by: int | None = None
 
 
 class CalculationSPResultBase(BaseModel):

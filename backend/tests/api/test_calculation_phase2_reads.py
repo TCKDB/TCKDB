@@ -316,10 +316,12 @@ class TestArtifacts:
         db_session.add(CalculationArtifact(
             calculation_id=calc_id, kind=ArtifactKind.input,
             uri="s3://bucket/input.gjf",
+            filename="input.gjf",
         ))
         db_session.add(CalculationArtifact(
             calculation_id=calc_id, kind=ArtifactKind.output_log,
             uri="s3://bucket/output.log", sha256="a" * 64, bytes=12345,
+            filename="output.log",
         ))
         db_session.flush()
 

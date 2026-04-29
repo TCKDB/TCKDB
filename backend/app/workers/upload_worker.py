@@ -78,12 +78,30 @@ def _run_conformer(session: Session, job: UploadJob) -> dict:
     from app.workflows.conformer import persist_conformer_upload
 
     request = ConformerUploadRequest.model_validate(job.payload)
-    obs = persist_conformer_upload(session, request, created_by=job.created_by)
+    outcome = persist_conformer_upload(
+        session, request, created_by=job.created_by
+    )
+    obs = outcome.observation
     return {
         "type": "conformer_observation",
         "id": obs.id,
         "species_entry_id": obs.conformer_group.species_entry_id,
         "conformer_group_id": obs.conformer_group_id,
+        "primary_calculation": {
+            "request_index": outcome.primary_calculation.request_index,
+            "calculation_id": outcome.primary_calculation.calculation_id,
+            "type": outcome.primary_calculation.type.value,
+            "role": outcome.primary_calculation.role,
+        },
+        "additional_calculations": [
+            {
+                "request_index": ref.request_index,
+                "calculation_id": ref.calculation_id,
+                "type": ref.type.value,
+                "role": ref.role,
+            }
+            for ref in outcome.additional_calculations
+        ],
     }
 
 

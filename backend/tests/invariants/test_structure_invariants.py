@@ -187,7 +187,7 @@ def test_thermo_workflow_rejects_calculation_owned_by_other_species() -> None:
     )
 
     # Different owner → raise.
-    with pytest.raises(ValueError, match="not to the thermo target"):
+    with pytest.raises(ValueError, match="different species entry"):
         _assert_calculation_owned_by(
             calc,
             species_entry_id=8,  # type: ignore[arg-type]

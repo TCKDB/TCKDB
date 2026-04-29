@@ -47,9 +47,12 @@ def _hydrogen_request(*, label: str | None = None) -> ConformerUploadRequest:
 def test_persist_conformer_upload_creates_expected_rows(db_engine) -> None:
     with Session(db_engine) as session:
         with session.begin():
-            observation = persist_conformer_upload(
+            outcome = persist_conformer_upload(
                 session, _hydrogen_request(label="conf-a")
             )
+            observation = outcome.observation
+            assert outcome.primary_calculation.calculation_id == observation.calculations[0].id
+            assert outcome.primary_calculation.role == "primary"
 
             stored_observation = session.scalar(
                 select(ConformerObservation).where(
@@ -92,10 +95,14 @@ def test_persist_conformer_upload_reuses_species_entry_and_labeled_group(
 ) -> None:
     with Session(db_engine) as session:
         with session.begin():
-            first = persist_conformer_upload(session, _hydrogen_request(label="conf-a"))
-            second = persist_conformer_upload(
+            first_outcome = persist_conformer_upload(
                 session, _hydrogen_request(label="conf-a")
             )
+            second_outcome = persist_conformer_upload(
+                session, _hydrogen_request(label="conf-a")
+            )
+            first = first_outcome.observation
+            second = second_outcome.observation
 
             first_group = session.scalar(
                 select(ConformerGroup).where(
@@ -170,7 +177,7 @@ def test_persist_conformer_upload_creates_linked_statmech_record(db_engine) -> N
 
     with Session(db_engine) as session:
         with session.begin():
-            observation = persist_conformer_upload(session, request)
+            observation = persist_conformer_upload(session, request).observation
 
             assert len(observation.calculations) >= 1
             calculation = observation.calculations[0]
@@ -234,7 +241,7 @@ def test_conformer_upload_with_additional_calculations(db_engine) -> None:
     )
 
     with Session(db_engine) as session, session.begin():
-        observation = persist_conformer_upload(session, request)
+        observation = persist_conformer_upload(session, request).observation
 
         primary_calc = observation.calculations[0]
         species_entry_id = primary_calc.species_entry_id
@@ -329,7 +336,7 @@ def test_conformer_upload_statmech_resolves_literature_from_payload(
     )
 
     with Session(db_engine) as session, session.begin():
-        observation = persist_conformer_upload(session, request)
+        observation = persist_conformer_upload(session, request).observation
         calculation = observation.calculations[0]
 
         statmech = session.scalar(

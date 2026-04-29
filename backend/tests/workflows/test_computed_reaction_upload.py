@@ -267,7 +267,7 @@ def _patch_artifact_storage(monkeypatch) -> list[str]:
         return uri
 
     monkeypatch.setattr(
-        "app.workflows.computed_reaction.store_artifact", _fake_store
+        "app.services.artifact_persistence.store_artifact", _fake_store
     )
     return written
 

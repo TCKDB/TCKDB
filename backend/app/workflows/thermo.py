@@ -5,16 +5,28 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
+from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
+from app.db.models.common import CalculationType, ThermoCalculationRole
 from app.db.models.thermo import Thermo
 from app.schemas.entities.thermo import ThermoSourceCalculationCreate
-from app.schemas.workflows.thermo_upload import ThermoUploadRequest
+from app.schemas.workflows.thermo_upload import (
+    ThermoSourceCalculationIn,
+    ThermoUploadRequest,
+)
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
 from app.services.energy_correction_resolution import create_applied_energy_correction
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
+
+
+_THERMO_ROLE_TO_CALC_TYPE: dict[ThermoCalculationRole, CalculationType] = {
+    ThermoCalculationRole.opt: CalculationType.opt,
+    ThermoCalculationRole.freq: CalculationType.freq,
+    ThermoCalculationRole.sp: CalculationType.sp,
+}
 
 
 def _assert_calculation_owned_by(
@@ -30,14 +42,85 @@ def _assert_calculation_owned_by(
     would be scientifically meaningless.
 
     :raises ValueError: if the calculation does not belong to
-        ``species_entry_id``.
+        ``species_entry_id``. The error detail names the field that was
+        wrong but does not leak internal row identifiers (DR-0028 Req 2).
     """
     if calculation.species_entry_id != species_entry_id:
         raise ValueError(
-            f"{context}: calculation id={calculation.id} belongs to "
-            f"species_entry_id={calculation.species_entry_id}, not to the "
-            f"thermo target species_entry_id={species_entry_id}."
+            f"{context}: refers to a calculation owned by a different "
+            f"species entry."
         )
+
+
+def _assert_calculation_role_compatible(
+    calculation: Calculation,
+    *,
+    role: ThermoCalculationRole,
+    context: str,
+) -> None:
+    """Verify resolved ``Calculation.type`` is compatible with declared role.
+
+    DR-0028 Requirement 1: a single typo in ``existing_calculation_id`` (or
+    a mis-keyed inline calc) would otherwise silently link thermo to the
+    wrong supporting calc within the same species. ``opt``/``freq``/``sp``
+    require exact ``CalculationType`` match. ``composite`` and ``imported``
+    accept any type for v0 — those roles describe a scientific origin
+    rather than a specific job type, and the existing test/usage corpus
+    has no precedent constraining them.
+
+    :raises ValueError: if ``role`` is one of opt/freq/sp and the
+        calculation's type does not match.
+    """
+    expected = _THERMO_ROLE_TO_CALC_TYPE.get(role)
+    if expected is None:
+        return
+    if calculation.type != expected:
+        raise ValueError(
+            f"{context}: role='{role.value}' is incompatible with the "
+            f"resolved calculation type."
+        )
+
+
+def _resolve_source_calculation(
+    session: Session,
+    entry: ThermoSourceCalculationIn,
+    *,
+    index: int,
+    calculations_by_key: dict[str, Calculation],
+    species_entry_id: int,
+) -> Calculation:
+    """Resolve a ``source_calculations`` entry to a ``Calculation`` row.
+
+    Schema validation guarantees exactly one of ``calculation_key`` or
+    ``existing_calculation_id`` is set. Inline keys are looked up in the
+    map of just-persisted calculations. Existing ids are loaded from the
+    database; missing rows produce 404, cross-species or role/type
+    mismatches produce 422 (DR-0028 Requirement 2).
+    """
+    field_path = f"source_calculations[{index}]"
+    if entry.calculation_key is not None:
+        calc_row = calculations_by_key[entry.calculation_key]
+        context = f"{field_path}.calculation_key='{entry.calculation_key}'"
+    else:
+        calc_row = session.get(Calculation, entry.existing_calculation_id)
+        if calc_row is None:
+            raise NotFoundError(
+                f"{field_path}.existing_calculation_id refers to a "
+                f"calculation that does not exist."
+            )
+        context = f"{field_path}.existing_calculation_id"
+        _assert_calculation_owned_by(
+            calc_row,
+            species_entry_id=species_entry_id,
+            context=context,
+        )
+
+    _assert_calculation_role_compatible(
+        calc_row,
+        role=entry.role,
+        context=context,
+    )
+    return calc_row
 
 
 def persist_thermo_upload(
@@ -85,14 +168,26 @@ def persist_thermo_upload(
         )
         calculations_by_key[calc_in.key] = calc_row
 
-    # Resolve source_calculation links from local keys to real (id, role).
-    resolved_source_calcs = [
-        ThermoSourceCalculationCreate(
-            calculation_id=calculations_by_key[sc.calculation_key].id,
-            role=sc.role,
+    # Resolve source_calculation links. Each entry uses either a local
+    # calculation_key (inline path) or an existing_calculation_id (DR-0028
+    # path that lets ARC link thermo to calcs already uploaded by the
+    # conformer step). Both paths run owner-consistency and role/type
+    # compatibility checks before becoming a thermo_source_calculation row.
+    resolved_source_calcs: list[ThermoSourceCalculationCreate] = []
+    for index, sc in enumerate(request.source_calculations):
+        calc_row = _resolve_source_calculation(
+            session,
+            sc,
+            index=index,
+            calculations_by_key=calculations_by_key,
+            species_entry_id=species_entry.id,
         )
-        for sc in request.source_calculations
-    ]
+        resolved_source_calcs.append(
+            ThermoSourceCalculationCreate(
+                calculation_id=calc_row.id,
+                role=sc.role,
+            )
+        )
 
     thermo_create = resolve_thermo_upload(
         session,

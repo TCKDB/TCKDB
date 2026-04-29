@@ -11,7 +11,9 @@ import json
 import re
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 import pytest
 from sqlalchemy.orm import Session
@@ -36,6 +38,26 @@ from app.workflows.thermo import persist_thermo_upload
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CLI_SCRIPT = REPO_ROOT / "scripts" / "export_contribution_bundle.py"
+
+
+@contextmanager
+def _isolated_session(db_engine) -> Iterator[Session]:
+    """Open a connection-bound session that always rolls back on exit.
+
+    Tests in this module call persist_thermo_upload / persist_kinetics_upload
+    which create real species rows. Without an outer rollback those rows
+    commit to the shared session-scoped test DB and pollute later tests
+    (e.g. species_entry_review tests that recreate the hydrogen species).
+    """
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +133,7 @@ def _seed_kinetics(session: Session, *, note: str) -> int:
 
 
 def test_export_thermo_bundle_validates_and_carries_thermo_only(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         thermo_id = _seed_thermo(session, smiles="O", note="export-thermo-1")
 
         bundle = export_thermo_bundle(
@@ -151,7 +173,7 @@ def test_export_thermo_bundle_validates_and_carries_thermo_only(db_engine) -> No
 
 def test_export_thermo_bundle_carries_provenance_when_present(db_engine) -> None:
     """Provenance refs reconstructed when the source row carries them."""
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         request = ThermoUploadRequest(
             species_entry={"smiles": "CO", "charge": 0, "multiplicity": 1},
             scientific_origin="computed",
@@ -188,7 +210,7 @@ def test_export_thermo_bundle_carries_provenance_when_present(db_engine) -> None
 def test_export_kinetics_bundle_validates_and_carries_kinetics_only(
     db_engine,
 ) -> None:
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         kinetics_id = _seed_kinetics(session, note="export-kinetics-1")
 
         bundle = export_kinetics_bundle(
@@ -238,7 +260,7 @@ def test_export_kinetics_bundle_validates_and_carries_kinetics_only(
 
 
 def test_export_thermo_bundle_missing_id_fails_clearly(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         with pytest.raises(
             ContributionBundleExportError,
             match=r"thermo_id=999999999.*no such thermo row",
@@ -253,7 +275,7 @@ def test_export_thermo_bundle_missing_id_fails_clearly(db_engine) -> None:
 
 
 def test_export_kinetics_bundle_missing_id_fails_clearly(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         with pytest.raises(
             ContributionBundleExportError,
             match=r"kinetics_id=999999999.*no such kinetics row",
@@ -268,7 +290,7 @@ def test_export_kinetics_bundle_missing_id_fails_clearly(db_engine) -> None:
 
 
 def test_export_thermo_bundle_rejects_empty_id_list(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         with pytest.raises(
             ContributionBundleExportError,
             match="At least one thermo_id is required",
@@ -297,7 +319,7 @@ def test_export_kinetics_bundle_fails_when_structure_participants_missing(
     """
     from app.db.models.reaction import ReactionEntryStructureParticipant
 
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         kinetics_id = _seed_kinetics(session, note="missing-deps")
         # Refresh and surgically remove all structure participants for this
         # reaction entry, simulating an incomplete dependency closure.
@@ -348,6 +370,10 @@ def _seeded_thermo_for_cli(db_engine) -> int:
 
     yield thermo_id
 
+    # Cleanup must actually commit because the CLI's subprocess holds a
+    # separate connection that has already committed; an isolated/rolled-
+    # back session here would leave the seed row in the test DB and
+    # pollute later tests.
     with Session(db_engine) as session, session.begin():
         thermo = session.get(Thermo, thermo_id)
         if thermo is None:
@@ -429,7 +455,7 @@ _SECRET_FIELD_PATTERNS = [
 
 
 def test_exported_bundle_has_no_raw_secrets(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         thermo_id = _seed_thermo(session, smiles="N#N", note="leak-check")
         kinetics_id = _seed_kinetics(session, note="leak-check-kin")
 

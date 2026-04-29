@@ -836,7 +836,24 @@ class CalculationNEBImageResult(Base):
     )
 
 
-class CalculationArtifact(Base, TimestampMixin):
+class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
+    """Append-only artifact metadata: bytes-on-S3 plus minimal upload context.
+
+    Each row records ONE upload event for ONE file attached to ONE
+    calculation. Rows are intentionally append-only — duplicate uploads
+    of the same content (same sha256) produce two rows pointing at the
+    same content-addressed object. The row carries the original
+    ``filename`` and uploading ``created_by`` so the audit trail is
+    meaningful even when the bytes alone are opaque (e.g. binary
+    checkpoints).
+
+    Note: ``checkpoint`` and ``formatted_checkpoint`` are supported
+    artifact kinds, but they are opt-in and expensive. Producers (e.g.
+    ARC) should default to ``output_log`` only. Checkpoint-class
+    artifacts are mainly useful for curated reanalysis, restart/debug
+    scenarios, or exact binary audit trails — not routine bulk upload.
+    """
+
     __tablename__ = "calculation_artifact"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -852,6 +869,10 @@ class CalculationArtifact(Base, TimestampMixin):
     uri: Mapped[str] = mapped_column(Text, nullable=False)
     sha256: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True)
     bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # created_by from CreatedByMixin (nullable FK to app_user.id)
+    # created_at from TimestampMixin
 
     calculation: Mapped["Calculation"] = relationship(back_populates="artifacts")
 

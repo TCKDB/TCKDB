@@ -7,7 +7,9 @@ and conservative behavior when participant species are missing for kinetics.
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 import pytest
 from sqlalchemy import func, select
@@ -35,7 +37,7 @@ from app.workflows.kinetics import persist_kinetics_upload
 from app.workflows.thermo import persist_thermo_upload
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
 
 
@@ -47,6 +49,26 @@ EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
 def _load_bundle(filename: str) -> ContributionBundleV0:
     raw = (EXAMPLES_DIR / filename).read_text()
     return ContributionBundleV0.model_validate_json(raw)
+
+
+@contextmanager
+def _isolated_session(db_engine) -> Iterator[Session]:
+    """Open a session on a connection-bound transaction that always rolls back.
+
+    The dry-run reuse tests seed real rows via persist_*_upload(...) — without
+    an outer rollback those rows commit to the shared session-scoped test DB
+    and pollute later tests (notably the hydrogen species inchi_key collides
+    with later species_entry_review tests).
+    """
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, expire_on_commit=False)
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
 
 
 def _table_counts(session: Session) -> dict[str, int]:
@@ -86,7 +108,7 @@ def test_dry_run_thermo_clean_db_classifies_dependencies_as_create(db_engine) ->
     and the thermo row as ``would_append``."""
     bundle = _load_bundle("thermo-bundle-v0.json")
 
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         before = _table_counts(session)
         result = dry_run_contribution_bundle(session, bundle)
         after = _table_counts(session)
@@ -121,7 +143,7 @@ def test_dry_run_thermo_existing_species_classifies_as_reuse(db_engine) -> None:
     """If the same species already exists on hosted, dry-run must say reuse."""
     bundle = _load_bundle("thermo-bundle-v0.json")
 
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         # Seed the same water species via a real upload — this creates the
         # species, species_entry, and one thermo row.
         seed = ThermoUploadRequest(
@@ -152,7 +174,7 @@ def test_dry_run_thermo_existing_species_classifies_as_reuse(db_engine) -> None:
 def test_dry_run_kinetics_clean_db(db_engine) -> None:
     bundle = _load_bundle("kinetics-bundle-v0.json")
 
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         before = _table_counts(session)
         result = dry_run_contribution_bundle(session, bundle)
         after = _table_counts(session)
@@ -190,7 +212,7 @@ def test_dry_run_kinetics_existing_reaction_and_provenance_classifies_as_reuse(
     confirm the reaction graph + provenance both light up as would_reuse."""
     bundle = _load_bundle("kinetics-bundle-v0.json")
 
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         seed = KineticsUploadRequest(
             reaction={
                 "reversible": False,
@@ -259,7 +281,7 @@ def test_dry_run_thermo_with_literature_provenance_creates_item(db_engine) -> No
     }
     bundle = ContributionBundleV0.model_validate(bundle_dict)
 
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         before = _table_counts(session)
         result = dry_run_contribution_bundle(session, bundle)
         after = _table_counts(session)
@@ -274,7 +296,7 @@ def test_dry_run_thermo_with_literature_provenance_creates_item(db_engine) -> No
 def test_summary_counts_match_items(db_engine) -> None:
     bundle = _load_bundle("kinetics-bundle-v0.json")
 
-    with Session(db_engine) as session, session.begin():
+    with _isolated_session(db_engine) as session:
         result = dry_run_contribution_bundle(session, bundle)
 
     actions = [it.action for it in result.items]

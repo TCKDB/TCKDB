@@ -5,6 +5,7 @@ from pydantic import Field, model_validator
 
 from app.db.models.common import CalculationQuality, CalculationType, IRCDirection
 from app.schemas.common import SchemaBase
+from app.schemas.fragments.calculation_origin import CalculationOriginMetadata
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.refs import (
     LevelOfTheoryRef,
@@ -306,6 +307,24 @@ class CalculationWithResultsPayload(CalculationPayload):
                     f"calculation type '{self.type.value}'. "
                     f"Expected '{allowed_field}' or no result."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_tckdb_origin_metadata(self) -> Self:
+        """If ``parameters_json["tckdb_origin"]`` is present, validate
+        its shape against :class:`CalculationOriginMetadata`. Absence is
+        allowed and means "executed" by default. See DR-0026 for the
+        full convention.
+        """
+        if not self.parameters_json or not isinstance(self.parameters_json, dict):
+            return self
+        origin_block = self.parameters_json.get("tckdb_origin")
+        if origin_block is None:
+            return self
+        # Raises pydantic.ValidationError on shape failure or cross-field
+        # constraint violations (e.g. reused_result without reused_from);
+        # FastAPI maps that to 422 at the API boundary.
+        CalculationOriginMetadata.model_validate(origin_block)
         return self
 
 
