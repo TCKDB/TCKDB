@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
+from app.db.models.common import KineticsUncertaintyKind
 from app.db.models.kinetics import Kinetics
 from app.db.models.literature import Literature
 from app.db.models.reaction import ReactionEntryStructureParticipant
@@ -81,13 +84,16 @@ def test_persist_kinetics_upload_resolves_reaction_and_provenance(
     )
 
     with Session(db_engine) as session, session.begin():
-        session.add(AppUser(id=7, username="kinetics_tester"))
+        user = AppUser(username="kinetics_tester")
+        session.add(user)
         session.flush()
-        kinetics = persist_kinetics_upload(session, _kinetics_request(), created_by=7)
+        kinetics = persist_kinetics_upload(
+            session, _kinetics_request(), created_by=user.id
+        )
 
         assert kinetics.id is not None
         assert kinetics.reaction_entry_id is not None
-        assert kinetics.created_by == 7
+        assert kinetics.created_by == user.id
         assert kinetics.software_release is not None
         assert kinetics.software_release.software.name == "Gaussian"
         assert kinetics.workflow_tool_release is not None
@@ -128,3 +134,53 @@ def test_persist_kinetics_upload_reuses_existing_literature_by_doi(
 
         kinetics_rows = session.scalars(select(Kinetics)).all()
         assert len(kinetics_rows) == before_kinetics + 2
+
+
+def test_a_uncertainty_requires_kind() -> None:
+    payload = _kinetics_request().model_dump()
+    payload["a_uncertainty"] = 2.0  # multiplicative factor, but kind omitted
+    with pytest.raises(ValidationError, match="a_uncertainty_kind"):
+        KineticsUploadRequest.model_validate(payload)
+
+
+def test_a_uncertainty_kind_requires_value() -> None:
+    payload = _kinetics_request().model_dump()
+    payload["a_uncertainty_kind"] = "multiplicative"  # kind without value
+    with pytest.raises(ValidationError, match="a_uncertainty_kind"):
+        KineticsUploadRequest.model_validate(payload)
+
+
+def test_multiplicative_a_uncertainty_must_be_ge_1() -> None:
+    payload = _kinetics_request().model_dump()
+    payload["a_uncertainty"] = 0.5
+    payload["a_uncertainty_kind"] = "multiplicative"
+    with pytest.raises(ValidationError, match=">= 1.0"):
+        KineticsUploadRequest.model_validate(payload)
+
+
+def test_additive_a_uncertainty_accepts_small_values() -> None:
+    payload = _kinetics_request().model_dump()
+    payload["a_uncertainty"] = 1e10  # absolute, same units as A
+    payload["a_uncertainty_kind"] = "additive"
+    request = KineticsUploadRequest.model_validate(payload)
+    assert request.a_uncertainty_kind == KineticsUncertaintyKind.additive
+
+
+def test_persist_kinetics_upload_carries_multiplicative_uncertainty(
+    db_engine,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata",
+        lambda doi: {"title": "stub", "URL": f"https://doi.org/{doi}"},
+    )
+
+    payload = _kinetics_request().model_dump()
+    payload["a_uncertainty"] = 2.0
+    payload["a_uncertainty_kind"] = "multiplicative"
+    request = KineticsUploadRequest.model_validate(payload)
+
+    with Session(db_engine) as session, session.begin():
+        kinetics = persist_kinetics_upload(session, request)
+        assert kinetics.a_uncertainty == 2.0
+        assert kinetics.a_uncertainty_kind == KineticsUncertaintyKind.multiplicative

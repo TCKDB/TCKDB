@@ -6,11 +6,17 @@ from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
 from app.db.models.calculation import Calculation
+from app.db.models.common import SubmissionRecordType
 from app.db.models.transport import Transport
 from app.schemas.entities.transport import TransportSourceCalculationCreate
 from app.schemas.workflows.transport_upload import TransportUploadRequest
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
+)
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry
 from app.services.transport_resolution import resolve_and_create_transport
@@ -44,6 +50,7 @@ def persist_transport_upload(
     request: TransportUploadRequest,
     *,
     created_by: int | None = None,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
 ) -> Transport:
     """Persist a complete standalone transport upload workflow.
 
@@ -103,4 +110,17 @@ def persist_transport_upload(
     )
 
     session.flush()
+
+    targets = [
+        RecordRef(SubmissionRecordType.transport, transport.id),
+        RecordRef(SubmissionRecordType.species_entry, species_entry.id),
+    ]
+    targets.extend(
+        RecordRef(SubmissionRecordType.calculation, c.id)
+        for c in calculations_by_key.values()
+    )
+    apply_review_policy(
+        session, targets=targets, policy=review_policy, created_by=created_by
+    )
+
     return transport

@@ -637,6 +637,83 @@ class TestCalculationReads:
         assert constraints[0]["constraint_index"] == 1
         assert constraints[0]["constraint_kind"] == "bond"
 
+    def test_constraints_via_conformer_upload_round_trip(self, client):
+        """Constraints declared on a non-scan calc upload round-trip
+        via the read endpoint without raw ORM injection."""
+        payload = {
+            "species_entry": {
+                "smiles": "[H]",
+                "charge": 0,
+                "multiplicity": 2,
+            },
+            "geometry": {"xyz_text": "1\nH atom\nH 0.0 0.0 0.0"},
+            "calculation": {
+                "type": "sp",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+                "constraints": [
+                    {
+                        "constraint_index": 1,
+                        "constraint_kind": "bond",
+                        "atom1_index": 1,
+                        "atom2_index": 2,
+                        "target_value": 1.20,
+                    },
+                    {
+                        "constraint_index": 2,
+                        "constraint_kind": "dihedral",
+                        "atom1_index": 1,
+                        "atom2_index": 2,
+                        "atom3_index": 3,
+                        "atom4_index": 4,
+                        "target_value": 60.0,
+                    },
+                ],
+            },
+            "label": "constrained-sp",
+        }
+        post = client.post("/api/v1/uploads/conformers", json=payload)
+        assert post.status_code in (200, 201), post.json()
+
+        # The primary calc is the only one for this minimal upload.
+        calcs = client.get("/api/v1/calculations").json()["items"]
+        primary_id = calcs[0]["id"]
+
+        resp = client.get(f"/api/v1/calculations/{primary_id}/constraints")
+        assert resp.status_code == 200
+        constraints = resp.json()
+        assert len(constraints) == 2
+        kinds = {c["constraint_kind"] for c in constraints}
+        assert kinds == {"bond", "dihedral"}
+
+    def test_constraint_arity_mismatch_rejected_at_upload(self, client):
+        """Schema-layer arity validation rejects malformed constraints
+        before they reach the database."""
+        payload = {
+            "species_entry": {
+                "smiles": "[H]",
+                "charge": 0,
+                "multiplicity": 2,
+            },
+            "geometry": {"xyz_text": "1\nH atom\nH 0.0 0.0 0.0"},
+            "calculation": {
+                "type": "sp",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+                "constraints": [
+                    {
+                        # bond requires atom2 — omitted on purpose
+                        "constraint_index": 1,
+                        "constraint_kind": "bond",
+                        "atom1_index": 1,
+                    }
+                ],
+            },
+            "label": "bad-arity",
+        }
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 422, resp.json()
+
 
 # ---------------------------------------------------------------------------
 # Geometry reads

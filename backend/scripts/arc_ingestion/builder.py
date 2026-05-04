@@ -478,6 +478,9 @@ def _build_kinetics_payload(
     }
     if kinetics.a_uncertainty is not None:
         payload["a_uncertainty"] = kinetics.a_uncertainty
+        # ARC/Arkane reports A-uncertainty as a multiplicative factor f
+        # (true A within [A/f, A*f]); see arkane_parser.ParsedKineticsRow.
+        payload["a_uncertainty_kind"] = "multiplicative"
     if kinetics.n_uncertainty is not None:
         payload["n_uncertainty"] = kinetics.n_uncertainty
     if kinetics.ea_uncertainty is not None:

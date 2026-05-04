@@ -74,7 +74,7 @@ def persist_ts_calculations(
     transition_state_entry_id: int,
     geometry_id: int,
     created_by: int | None = None,
-) -> Calculation:
+) -> tuple[Calculation, list[Calculation]]:
     """Persist the primary opt and all additional calculations for a TS entry.
 
     :param session: Active SQLAlchemy session.
@@ -83,7 +83,8 @@ def persist_ts_calculations(
     :param transition_state_entry_id: Owner TS entry id.
     :param geometry_id: Resolved geometry id for the TS saddle point.
     :param created_by: Optional application user id.
-    :returns: The primary ``Calculation`` row.
+    :returns: ``(primary_calc, additional_calcs)`` so callers can record
+        review state for each created calculation row.
     """
 
     primary_calc = resolve_and_persist_calculation_with_results(
@@ -102,7 +103,7 @@ def persist_ts_calculations(
     )
     session.flush()
 
-    persist_additional_calculations(
+    additional_calcs = persist_additional_calculations(
         session,
         primary_calc=primary_calc,
         additional_uploads=additional_uploads,
@@ -111,4 +112,4 @@ def persist_ts_calculations(
         created_by=created_by,
     )
 
-    return primary_calc
+    return primary_calc, additional_calcs

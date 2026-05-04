@@ -1,10 +1,12 @@
 """Pydantic schemas for submission moderation records.
 
-These are the minimal read/write shapes needed so service-layer helpers,
-tests, and future API routes share a consistent contract. They
-intentionally omit the full moderation action surface (approve, reject,
-supersede) — those are invoked through the service helpers and may grow
-their own request schemas once the moderation API is implemented.
+Read/write shapes for the curator-driven moderation flow exposed by
+``app/api/routes/submissions.py``. The active moderation actions are
+human curator decisions: approve, reject, supersede.
+
+``SubmissionPrecheckRequest`` is included for completeness but is
+reserved for a possible future automated-review feature — no HTTP route
+currently accepts it.
 """
 
 from __future__ import annotations
@@ -64,6 +66,9 @@ class SubmissionRead(TimestampedReadSchema):
     rejection_reason: str | None = None
     correction_due_at: datetime | None = None
     supersedes_submission_id: int | None = None
+    # llm_precheck_* are reserved for future optional automated review.
+    # No current route or background process populates them; current
+    # moderation is curator-driven.
     llm_precheck_label: SubmissionPrecheckLabel | None = None
     llm_precheck_summary: str | None = None
     llm_precheck_model: str | None = None
@@ -129,9 +134,26 @@ class SubmissionApproveRequest(SchemaBase):
 
 
 class SubmissionPrecheckRequest(SchemaBase):
-    """Payload for recording an automated precheck result."""
+    """Payload shape for recording an automated precheck result.
+
+    Reserved for a possible future automated-review feature. No HTTP
+    route currently accepts this payload — current moderation is
+    curator-driven (see ``SubmissionApproveRequest`` /
+    ``SubmissionRejectRequest``).
+    """
 
     label: SubmissionPrecheckLabel
     model: str | None = Field(default=None, max_length=128)
     summary: str | None = None
     details_json: dict[str, Any] | None = None
+
+
+class SubmissionSupersedeRequest(SchemaBase):
+    """Payload for marking a submission as superseded by a newer one.
+
+    The replacing submission must have been created with
+    ``supersedes_submission_id`` pointing back at the old id; the service
+    enforces that link rather than mutating it here.
+    """
+
+    new_submission_id: int

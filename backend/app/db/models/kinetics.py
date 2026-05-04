@@ -18,6 +18,7 @@ from app.db.models.common import (
     ArrheniusAUnits,
     KineticsCalculationRole,
     KineticsModelKind,
+    KineticsUncertaintyKind,
     ScientificOriginKind,
 )
 
@@ -77,6 +78,10 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin):
     ea_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
     a_uncertainty: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    a_uncertainty_kind: Mapped[Optional[KineticsUncertaintyKind]] = mapped_column(
+        SAEnum(KineticsUncertaintyKind, name="kinetics_uncertainty_kind"),
+        nullable=True,
+    )
     n_uncertainty: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     ea_uncertainty_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
@@ -108,6 +113,14 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin):
         CheckConstraint(
             "tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k",
             name="tmin_le_tmax",
+        ),
+        CheckConstraint(
+            "(a_uncertainty IS NULL) = (a_uncertainty_kind IS NULL)",
+            name="a_uncertainty_kind_required_with_value",
+        ),
+        CheckConstraint(
+            "a_uncertainty_kind <> 'multiplicative' OR a_uncertainty >= 1.0",
+            name="a_uncertainty_multiplicative_ge_1",
         ),
     )
 

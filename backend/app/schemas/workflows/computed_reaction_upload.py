@@ -21,14 +21,25 @@ from app.db.models.common import (
     ActivationEnergyUnits,
     ArrheniusAUnits,
     CalculationType,
+    KineticsCalculationRole,
     KineticsModelKind,
+    KineticsUncertaintyKind,
     RigidRotorKind,
     ScientificOriginKind,
     StatmechTreatmentKind,
     TorsionTreatmentKind,
 )
 from app.schemas.common import SchemaBase
+from app.schemas.entities.calculation import CalculationScanResultCreate
 from app.schemas.entities.thermo import ThermoNASACreate, ThermoPointCreate
+from app.schemas.fragments.calculation import (
+    CalculationConstraintCreate,
+    CalculationWithResultsPayload,
+    IRCResultPayload,
+    NEBResultPayload,
+    OutputGeometryEntry,
+)
+from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.reaction_family import find_canonical_reaction_family
 from app.schemas.fragments.refs import (
@@ -38,14 +49,201 @@ from app.schemas.fragments.refs import (
     WorkflowToolReleaseRef,
 )
 from app.schemas.utils import normalize_optional_text
-from app.schemas.workflows.literature_upload import LiteratureUploadRequest
-
-# Reuse the PDep upload building blocks for calculations and geometries
-from app.schemas.workflows.network_pdep_upload import (
-    CalculationIn,
-    ConformerIn,
-    GeometryIn,
+from app.schemas.workflows.computed_species_upload import (
+    AppliedEnergyCorrectionInBundle,
+    CalculationDependencyInBundle,
+    StatmechSourceCalcInBundle,
 )
+from app.schemas.workflows.literature_upload import LiteratureUploadRequest
+from app.schemas.workflows.statmech_upload import StatmechTorsionCoordinateIn
+
+# Reuse the PDep upload building blocks for geometry and the base
+# calculation shape. ``ComputedReactionCalculationIn`` (defined below)
+# extends the base with input/output geometries and depends_on; computed
+# reaction's conformers and TS use that extended shape so producers can
+# declare full provenance directly on every calc.
+from app.schemas.workflows.network_pdep_upload import (
+    CalculationIn as _BaseCalculationIn,
+    GeometryIn,
+    calculation_in_to_with_results_payload as _base_calc_to_payload,
+)
+
+
+# ---------------------------------------------------------------------------
+# Calculation payload (computed-reaction-specific extension)
+# ---------------------------------------------------------------------------
+
+
+class ComputedReactionCalculationIn(_BaseCalculationIn):
+    """Bundle-local calculation block for the computed-reaction endpoint.
+
+    Extends the shared network_pdep ``CalculationIn`` with three
+    producer-controlled provenance fields:
+
+    * ``input_geometries`` — geometries this calculation actually ran on.
+    * ``output_geometries`` — geometries this calculation produced or
+      reported, each tagged with its scientific role.
+    * ``depends_on`` — explicit local-key dependency edges (in addition
+      to the workflow's auto-edges from additional calcs to their primary
+      opt).
+
+    The fields are not part of the shared ``CalculationIn`` because the
+    network-PDep workflow does not currently honor them; accepting them
+    there would silently drop producer-declared data. Lift into the
+    shared shape only after network-PDep persists them too.
+    """
+
+    input_geometries: list[GeometryPayload] = Field(default_factory=list)
+    output_geometries: list[OutputGeometryEntry] = Field(default_factory=list)
+    depends_on: list[CalculationDependencyInBundle] = Field(default_factory=list)
+
+    irc_result: IRCResultPayload | None = None
+    neb_result: NEBResultPayload | None = None
+    scan_result: CalculationScanResultCreate | None = None
+
+    constraints: list[CalculationConstraintCreate] = Field(
+        default_factory=list,
+        description=(
+            "Coordinate constraints held fixed during this calculation. "
+            "Generic across opt, freq, sp, irc, neb, scan — input/provenance "
+            "metadata that does not require a result block. For scan calcs, "
+            "frozen coordinates may be declared here while the stepped "
+            "coordinate is declared on scan_result.coordinates. The two "
+            "lists must not duplicate the same constraint_index."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_result_matches_type(self) -> Self:
+        """Mirror ``CalculationWithResultsPayload.validate_result_matches_type``
+        for the ``irc_result`` / ``neb_result`` / ``scan_result`` fields.
+        The base ``CalculationIn`` has no result-block matrix to validate,
+        and the adapter uses ``model_copy(update=...)`` which bypasses
+        pydantic validators — so this is the only place where mismatched
+        ``(type, irc_result|neb_result|scan_result)`` pairs reject as 422
+        before hitting the persistence seam.
+
+        ``scan_result`` is bundle-only and persisted by the workflow via
+        ``persist_calculation_scan`` after the calculation row is created;
+        the primitive payload does not carry it.
+        """
+        if self.irc_result is not None and self.type != CalculationType.irc:
+            raise ValueError(
+                f"irc_result is only allowed for calculation type 'irc', "
+                f"got '{self.type.value}'."
+            )
+        if self.neb_result is not None and self.type != CalculationType.neb:
+            raise ValueError(
+                f"neb_result is only allowed for calculation type 'neb', "
+                f"got '{self.type.value}'."
+            )
+        if self.scan_result is not None and self.type != CalculationType.scan:
+            raise ValueError(
+                f"scan_result is only allowed for calculation type 'scan', "
+                f"got '{self.type.value}'."
+            )
+        if self.type == CalculationType.scan:
+            for forbidden in (
+                "sp_electronic_energy_hartree",
+                "opt_converged",
+                "opt_n_steps",
+                "opt_final_energy_hartree",
+                "freq_n_imag",
+                "freq_imag_freq_cm1",
+                "freq_zpe_hartree",
+            ):
+                if getattr(self, forbidden) is not None:
+                    raise ValueError(
+                        f"Field '{forbidden}' is not allowed for "
+                        f"calculation type 'scan'. Use 'scan_result' "
+                        f"to carry scan data."
+                    )
+            if self.irc_result is not None or self.neb_result is not None:
+                raise ValueError(
+                    "irc_result/neb_result are not allowed for "
+                    "calculation type 'scan'. Use 'scan_result' instead."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_constraint_indices_union_unique(self) -> Self:
+        """Enforce constraint_index uniqueness across the union of
+        top-level ``constraints`` and ``scan_result.constraints``.
+
+        Both lists land in the same ``calculation_constraint`` table and
+        share the ``(calculation_id, constraint_index)`` composite PK,
+        so a duplicate would otherwise surface as an opaque DB error at
+        flush time.
+        """
+        seen: set[int] = set()
+        for items in (
+            self.constraints,
+            self.scan_result.constraints if self.scan_result else [],
+        ):
+            for c in items:
+                if c.constraint_index in seen:
+                    raise ValueError(
+                        f"constraint_index {c.constraint_index} is "
+                        f"declared more than once across constraints + "
+                        f"scan_result.constraints."
+                    )
+                seen.add(c.constraint_index)
+        return self
+
+
+def calculation_in_to_with_results_payload(
+    calc_in: ComputedReactionCalculationIn,
+) -> CalculationWithResultsPayload:
+    """Adapt a computed-reaction ``ComputedReactionCalculationIn`` to the
+    shared upload shape.
+
+    Forwards the three producer-declared provenance fields onto the
+    shared ``CalculationWithResultsPayload`` so the existing calculation
+    persistence seam writes the corresponding rows. The base converter
+    handles type/result/parameter mapping unchanged.
+    """
+    base = _base_calc_to_payload(calc_in)
+    return base.model_copy(
+        update={
+            "input_geometries": list(calc_in.input_geometries),
+            "output_geometries": list(calc_in.output_geometries),
+            "irc_result": calc_in.irc_result,
+            "neb_result": calc_in.neb_result,
+            "constraints": list(calc_in.constraints),
+        }
+    )
+
+
+class ConformerIn(SchemaBase):
+    """A conformer in a computed-reaction bundle.
+
+    Mirrors the network_pdep ``ConformerIn`` but binds the primary
+    calculation to ``ComputedReactionCalculationIn`` so the producer can
+    declare ``input_geometries``, ``output_geometries``, and
+    ``depends_on`` on the primary opt as well.
+    """
+
+    key: str = Field(min_length=1)
+    geometry: GeometryIn
+    calculation: ComputedReactionCalculationIn
+    scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
+    label: str | None = None
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def normalize_text(self) -> Self:
+        self.label = normalize_optional_text(self.label)
+        self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def validate_primary_calc_is_opt(self) -> Self:
+        if self.calculation.type != CalculationType.opt:
+            raise ValueError(
+                f"Conformer '{self.key}' primary calculation must be type 'opt', "
+                f"got '{self.calculation.type.value}'."
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -99,14 +297,53 @@ class BundleThermoIn(SchemaBase):
 class BundleStatmechTorsionIn(SchemaBase):
     """One torsional mode in a statmech record.
 
+    Carries the slim metadata (index, symmetry, treatment kind) plus
+    optional structured coordinate definitions so producers can persist
+    rotor atom quartets through the bundle endpoint without falling back
+    to ``/uploads/statmech``. ``coordinates`` is optional: omit it to
+    keep current behavior (no ``statmech_torsion_definition`` rows).
+
     :param torsion_index: One-based torsion index.
     :param symmetry_number: Optional torsional symmetry number.
     :param treatment_kind: Optional torsion treatment.
+    :param dimension: Number of coupled torsional coordinates.
+    :param top_description: Optional description of the rotating top.
+    :param source_scan_calculation_key: Optional bundle-local calc key
+        that produced the rotor scan. Must resolve to a calc of type
+        ``scan`` declared elsewhere in the bundle.
+    :param coordinates: Atom-quartet definitions for each coordinate.
+        When non-empty, ``len(coordinates)`` must equal ``dimension``
+        and ``coordinate_index`` values must run contiguously
+        ``1..dimension``.
     """
 
     torsion_index: int = Field(ge=1)
     symmetry_number: int | None = Field(default=None, ge=1)
     treatment_kind: TorsionTreatmentKind | None = None
+
+    dimension: int = Field(default=1, ge=1)
+    top_description: str | None = None
+    source_scan_calculation_key: str | None = None
+
+    coordinates: list[StatmechTorsionCoordinateIn] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_coordinates(self) -> Self:
+        if not self.coordinates:
+            return self
+        if len(self.coordinates) != self.dimension:
+            raise ValueError(
+                "Number of torsion coordinates must equal dimension."
+            )
+        indices = [c.coordinate_index for c in self.coordinates]
+        if len(set(indices)) != len(indices):
+            raise ValueError("Torsion coordinate_index values must be unique.")
+        if sorted(indices) != list(range(1, self.dimension + 1)):
+            raise ValueError(
+                "Torsion coordinate_index values must run contiguously "
+                "from 1..dimension."
+            )
+        return self
 
 
 class BundleStatmechIn(SchemaBase):
@@ -116,9 +353,14 @@ class BundleStatmechIn(SchemaBase):
     :param is_linear: Whether the molecule is linear.
     :param rigid_rotor_kind: Rotational treatment classification.
     :param external_symmetry: External symmetry number.
+    :param point_group: Optional point-group label (e.g. ``"C2v"``).
     :param statmech_treatment: Overall statmech treatment classification.
     :param freq_scale_factor: Frequency scale factor applied.
     :param uses_projected_frequencies: Whether projected frequencies were used.
+    :param source_calculations: Statmech → calc links by bundle-local
+        calculation key. Each referenced key must resolve into the
+        bundle's global calc-key namespace and must be owned by this
+        species entry (workflow-layer ownership check).
     :param torsions: Torsional modes.
     :param note: Optional note.
     """
@@ -127,11 +369,37 @@ class BundleStatmechIn(SchemaBase):
     is_linear: bool | None = None
     rigid_rotor_kind: RigidRotorKind | None = None
     external_symmetry: int | None = Field(default=None, ge=1)
+    point_group: str | None = None
     statmech_treatment: StatmechTreatmentKind | None = None
     freq_scale_factor: FreqScaleFactorRef | None = None
     uses_projected_frequencies: bool | None = None
+    source_calculations: list[StatmechSourceCalcInBundle] = Field(default_factory=list)
     torsions: list[BundleStatmechTorsionIn] = Field(default_factory=list)
     note: str | None = None
+
+    @model_validator(mode="after")
+    def normalize_point_group(self) -> Self:
+        self.point_group = normalize_optional_text(self.point_group)
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_source_calculation_pairs(self) -> Self:
+        pairs = [(sc.calculation_key, sc.role) for sc in self.source_calculations]
+        if len(set(pairs)) != len(pairs):
+            raise ValueError(
+                "statmech.source_calculations must be unique by "
+                "(calculation_key, role)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_torsion_indices(self) -> Self:
+        indices = [t.torsion_index for t in self.torsions]
+        if len(set(indices)) != len(indices):
+            raise ValueError(
+                "Statmech torsion_index values must be unique within a species."
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -156,9 +424,21 @@ class BundleSpeciesIn(SchemaBase):
     key: str = Field(min_length=1)
     species_entry: SpeciesEntryIdentityPayload
     conformers: list[ConformerIn] = Field(default_factory=list)
-    calculations: list[CalculationIn] = Field(default_factory=list)
+    calculations: list[ComputedReactionCalculationIn] = Field(default_factory=list)
     thermo: BundleThermoIn | None = None
     statmech: BundleStatmechIn | None = None
+    applied_energy_corrections: list[AppliedEnergyCorrectionInBundle] = Field(
+        default_factory=list,
+        description=(
+            "Applied energy corrections targeting this species's resolved "
+            "species_entry. Use for scheme-backed corrections such as AEC "
+            "totals (application_role=aec_total) and BAC totals "
+            "(application_role=bac_total). ``source_calculation_key`` "
+            "resolves against the bundle's global calculation namespace; "
+            "the workflow rejects 422 when the referenced calc is not "
+            "owned by this species."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_calc_geometry_keys(self) -> Self:
@@ -228,8 +508,20 @@ class BundleTransitionStateIn(SchemaBase):
     multiplicity: int = Field(ge=1)
     unmapped_smiles: str | None = None
     geometry: GeometryIn
-    calculation: CalculationIn
-    calculations: list[CalculationIn] = Field(default_factory=list)
+    calculation: ComputedReactionCalculationIn
+    calculations: list[ComputedReactionCalculationIn] = Field(default_factory=list)
+    applied_energy_corrections: list[AppliedEnergyCorrectionInBundle] = Field(
+        default_factory=list,
+        description=(
+            "Applied energy corrections targeting the resolved "
+            "transition_state_entry directly. TS-side corrections are "
+            "never stored as reaction-entry corrections. "
+            "``source_calculation_key`` resolves against the bundle's "
+            "global calculation namespace; the workflow rejects 422 "
+            "when the referenced calc is not owned by this transition "
+            "state."
+        ),
+    )
     label: str | None = None
     note: str | None = None
 
@@ -253,6 +545,20 @@ class BundleTransitionStateIn(SchemaBase):
 # ---------------------------------------------------------------------------
 # Kinetics fit
 # ---------------------------------------------------------------------------
+
+
+class KineticsSourceCalculationIn(SchemaBase):
+    """A producer-declared link from a kinetics fit to a supporting calc.
+
+    The calculation is identified by its bundle-local key. ``role`` ties
+    the calculation to the scientific role it plays in supporting the
+    fit (reactant_energy, ts_energy, freq, irc, master_equation,
+    fit_source, ...). Role/type/owner compatibility is enforced at the
+    workflow layer; see ``app.services.kinetics_resolution``.
+    """
+
+    calculation_key: str = Field(min_length=1)
+    role: KineticsCalculationRole
 
 
 class BundleKineticsIn(SchemaBase):
@@ -290,6 +596,7 @@ class BundleKineticsIn(SchemaBase):
     reported_ea_units: ActivationEnergyUnits | None = None
 
     a_uncertainty: float | None = None
+    a_uncertainty_kind: KineticsUncertaintyKind | None = None
     n_uncertainty: float | None = None
     d_reported_ea: float | None = None
 
@@ -299,6 +606,19 @@ class BundleKineticsIn(SchemaBase):
     tunneling_model: str | None = None
     note: str | None = None
 
+    source_calculations: list[KineticsSourceCalculationIn] = Field(
+        default_factory=list,
+        description=(
+            "Producer-declared kinetics provenance: each entry references "
+            "a calculation by bundle-local key with a scientific role. "
+            "When non-empty, the workflow writes exactly these "
+            "kinetics_source_calculation rows and skips the legacy "
+            "auto-link fallback. When empty, the workflow falls back to "
+            "auto-linking species-owned SP calculations as "
+            "reactant_energy / product_energy (legacy convenience)."
+        ),
+    )
+
     @model_validator(mode="after")
     def normalize_text(self) -> Self:
         self.tunneling_model = normalize_optional_text(self.tunneling_model)
@@ -306,10 +626,46 @@ class BundleKineticsIn(SchemaBase):
         return self
 
     @model_validator(mode="after")
+    def validate_unique_source_calculation_pairs(self) -> Self:
+        seen: set[tuple[str, KineticsCalculationRole]] = set()
+        for entry in self.source_calculations:
+            pair = (entry.calculation_key, entry.role)
+            if pair in seen:
+                raise ValueError(
+                    f"Duplicate kinetics source_calculations entry "
+                    f"(calculation_key='{entry.calculation_key}', "
+                    f"role='{entry.role.value}'). Each "
+                    f"(calculation_key, role) pair must be declared at "
+                    f"most once per kinetics fit."
+                )
+            seen.add(pair)
+        return self
+
+    @model_validator(mode="after")
     def validate_ea_pair(self) -> Self:
         if (self.reported_ea is None) != (self.reported_ea_units is None):
             raise ValueError(
                 "reported_ea and reported_ea_units must both be provided or both omitted."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_a_uncertainty_kind(self) -> Self:
+        has_value = self.a_uncertainty is not None
+        has_kind = self.a_uncertainty_kind is not None
+        if has_value != has_kind:
+            raise ValueError(
+                "a_uncertainty and a_uncertainty_kind must both be provided "
+                "or both omitted."
+            )
+        if (
+            self.a_uncertainty_kind == KineticsUncertaintyKind.multiplicative
+            and self.a_uncertainty is not None
+            and self.a_uncertainty < 1.0
+        ):
+            raise ValueError(
+                "Multiplicative a_uncertainty must be >= 1.0 (factor f, "
+                "with the true value within [A/f, A*f])."
             )
         return self
 
@@ -426,5 +782,144 @@ class ComputedReactionUploadRequest(SchemaBase):
                     raise ValueError(
                         f"Kinetics fit references species key '{key}' which "
                         f"is not defined in the species list."
+                    )
+        return self
+
+    @model_validator(mode="after")
+    def validate_calculation_key_refs(self) -> Self:
+        """Validate every local-key reference to a calculation resolves.
+
+        Covers the three cross-reference surfaces introduced for the
+        producer-controlled provenance work:
+
+        * ``CalculationIn.depends_on[].parent_calculation_key`` — must
+          name a calculation defined elsewhere in the bundle, and must
+          not equal the calculation it sits on (no self-edges).
+        * ``BundleKineticsIn.source_calculations[].calculation_key`` —
+          must name a calculation defined in the bundle.
+
+        Per-key uniqueness is enforced separately by
+        ``validate_unique_keys``; this validator only checks that every
+        reference resolves into the bundle's calc namespace.
+        """
+        all_calc_keys: set[str] = set()
+        for sp in self.species:
+            for conf in sp.conformers:
+                all_calc_keys.add(conf.calculation.key)
+            for calc in sp.calculations:
+                all_calc_keys.add(calc.key)
+        if self.transition_state:
+            all_calc_keys.add(self.transition_state.calculation.key)
+            for calc in self.transition_state.calculations:
+                all_calc_keys.add(calc.key)
+
+        # depends_on edges: parent must exist; child cannot equal parent.
+        def _check_depends_on(calc: ComputedReactionCalculationIn) -> None:
+            for dep in calc.depends_on:
+                if dep.parent_calculation_key not in all_calc_keys:
+                    raise ValueError(
+                        f"Calculation '{calc.key}' depends_on references "
+                        f"unknown parent_calculation_key="
+                        f"'{dep.parent_calculation_key}'."
+                    )
+                if dep.parent_calculation_key == calc.key:
+                    raise ValueError(
+                        f"Calculation '{calc.key}' depends_on cannot "
+                        f"reference itself."
+                    )
+
+        for sp in self.species:
+            for conf in sp.conformers:
+                _check_depends_on(conf.calculation)
+            for calc in sp.calculations:
+                _check_depends_on(calc)
+        if self.transition_state:
+            _check_depends_on(self.transition_state.calculation)
+            for calc in self.transition_state.calculations:
+                _check_depends_on(calc)
+
+        for kin in self.kinetics:
+            for entry in kin.source_calculations:
+                if entry.calculation_key not in all_calc_keys:
+                    raise ValueError(
+                        f"Kinetics source_calculations references "
+                        f"unknown calculation_key="
+                        f"'{entry.calculation_key}'."
+                    )
+
+        # Per-species statmech source_calculation keys must resolve into
+        # the bundle's calc namespace. Owner-consistency (same species
+        # entry) is enforced at the workflow layer where calc → species
+        # entry mapping is known; here we only catch typos / undefined
+        # keys so producers get a clean schema-level 422.
+        all_calc_keys_to_types: dict[str, CalculationType] = {}
+        for sp in self.species:
+            for conf in sp.conformers:
+                all_calc_keys_to_types[conf.calculation.key] = conf.calculation.type
+            for calc in sp.calculations:
+                all_calc_keys_to_types[calc.key] = calc.type
+        if self.transition_state:
+            all_calc_keys_to_types[self.transition_state.calculation.key] = (
+                self.transition_state.calculation.type
+            )
+            for calc in self.transition_state.calculations:
+                all_calc_keys_to_types[calc.key] = calc.type
+
+        for sp in self.species:
+            if sp.statmech is None:
+                continue
+            for i, sc in enumerate(sp.statmech.source_calculations):
+                if sc.calculation_key not in all_calc_keys:
+                    raise ValueError(
+                        f"species[{sp.key!r}].statmech.source_calculations[{i}]."
+                        f"calculation_key references undefined "
+                        f"calculation_key '{sc.calculation_key}'."
+                    )
+            for i, t in enumerate(sp.statmech.torsions):
+                key = t.source_scan_calculation_key
+                if key is None:
+                    continue
+                if key not in all_calc_keys_to_types:
+                    raise ValueError(
+                        f"species[{sp.key!r}].statmech.torsions[{i}]."
+                        f"source_scan_calculation_key '{key}' references "
+                        f"undefined calculation_key."
+                    )
+                if all_calc_keys_to_types[key] != CalculationType.scan:
+                    raise ValueError(
+                        f"species[{sp.key!r}].statmech.torsions[{i}]."
+                        f"source_scan_calculation_key '{key}' must reference "
+                        f"a scan-type calculation."
+                    )
+
+        # Applied-correction source_calculation_key references must
+        # resolve into the bundle's calc namespace. The workflow layer
+        # also enforces owner-consistency (species correction → species-
+        # owned calc; TS correction → TS-owned calc); here we only check
+        # the key exists at all so producers get a clean schema-level
+        # 422 for typos before the workflow runs.
+        for sp in self.species:
+            for i, ac in enumerate(sp.applied_energy_corrections):
+                if (
+                    ac.source_calculation_key is not None
+                    and ac.source_calculation_key not in all_calc_keys
+                ):
+                    raise ValueError(
+                        f"species[{sp.key!r}].applied_energy_corrections[{i}]."
+                        f"source_calculation_key references undefined "
+                        f"calculation_key '{ac.source_calculation_key}'."
+                    )
+        if self.transition_state is not None:
+            for i, ac in enumerate(
+                self.transition_state.applied_energy_corrections
+            ):
+                if (
+                    ac.source_calculation_key is not None
+                    and ac.source_calculation_key not in all_calc_keys
+                ):
+                    raise ValueError(
+                        f"transition_state.applied_energy_corrections[{i}]."
+                        f"source_calculation_key references undefined "
+                        f"calculation_key '{ac.source_calculation_key}'."
                     )
         return self

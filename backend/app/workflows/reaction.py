@@ -3,11 +3,16 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
-from app.db.models.common import ReactionRole
+from app.db.models.common import ReactionRole, SubmissionRecordType
 from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
     resolve_chem_reaction,
+)
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry_reference
 from app.schemas.workflows.reaction_upload import (
@@ -44,6 +49,7 @@ def persist_reaction_upload(
     request: ReactionUploadRequest,
     *,
     created_by: int | None = None,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
 ) -> ReactionEntry:
     """Persist a complete reaction upload workflow.
 
@@ -106,4 +112,16 @@ def persist_reaction_upload(
         )
 
     session.flush()
+
+    targets: list[RecordRef] = [
+        RecordRef(SubmissionRecordType.reaction_entry, reaction_entry.id),
+    ]
+    targets.extend(
+        RecordRef(SubmissionRecordType.species_entry, e.id)
+        for e in (*reactant_entries, *product_entries)
+    )
+    apply_review_policy(
+        session, targets=targets, policy=review_policy, created_by=created_by
+    )
+
     return reaction_entry

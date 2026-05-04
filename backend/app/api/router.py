@@ -20,9 +20,11 @@ from app.api.routes import (
     lookup,
     networks,
     reactions,
+    record_reviews,
     software,
     species,
     statmech,
+    submissions,
     thermo,
     transition_states,
     transport,
@@ -38,6 +40,12 @@ api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(lookup.router, prefix="/lookup", tags=["lookup"])
 api_router.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
 api_router.include_router(bundles.router, prefix="/bundles", tags=["bundles"])
+api_router.include_router(
+    submissions.router, prefix="/submissions", tags=["submissions"]
+)
+api_router.include_router(
+    record_reviews.router, prefix="/record-reviews", tags=["record-reviews"]
+)
 api_router.include_router(
     calculations.router, prefix="/calculations", tags=["calculations"]
 )

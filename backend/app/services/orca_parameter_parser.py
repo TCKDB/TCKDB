@@ -24,32 +24,35 @@ from pathlib import Path
 #: semantics overlap (e.g. scf_convergence, nproc).
 _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     # SCF convergence keywords (from ! line, section="scf")
-    ("scf", "tightscf"): ("scf_convergence", "tight"),
-    ("scf", "verytightscf"): ("scf_convergence", "very_tight"),
-    ("scf", "loosescf"): ("scf_convergence", "loose"),
-    ("scf", "normalscf"): ("scf_convergence", "normal"),
-    ("scf", "scfconv"): ("scf_convergence", None),
-    ("scf", "maxiter"): ("scf_max_cycles", None),
+    ("scf", "tightscf"): ("scf.convergence", "tight"),
+    ("scf", "verytightscf"): ("scf.convergence", "very_tight"),
+    ("scf", "loosescf"): ("scf.convergence", "loose"),
+    ("scf", "normalscf"): ("scf.convergence", "normal"),
+    ("scf", "scfconv"): ("scf.convergence", None),
+    # ORCA's MaxIter maps to scf.max_cycles (the vocab does not currently
+    # define scf.max_iter — canonical_key is FK-constrained against
+    # calculation_parameter_vocab).
+    ("scf", "maxiter"): ("scf.max_cycles", None),
     # Optimization convergence (from ! line, section="opt")
-    ("opt", "tightopt"): ("opt_convergence", "tight"),
-    ("opt", "verytightopt"): ("opt_convergence", "very_tight"),
-    ("opt", "looseopt"): ("opt_convergence", "loose"),
-    ("opt", "normalopt"): ("opt_convergence", "normal"),
+    ("opt", "tightopt"): ("opt.convergence", "tight"),
+    ("opt", "verytightopt"): ("opt.convergence", "very_tight"),
+    ("opt", "looseopt"): ("opt.convergence", "loose"),
+    ("opt", "normalopt"): ("opt.convergence", "normal"),
     # PNO truncation (from ! line, section="pno")
-    ("pno", "tightpno"): ("pno_truncation", "tight"),
-    ("pno", "normalpno"): ("pno_truncation", "normal"),
-    ("pno", "loosepno"): ("pno_truncation", "loose"),
+    ("pno", "tightpno"): ("pno.truncation", "tight"),
+    ("pno", "normalpno"): ("pno.truncation", "normal"),
+    ("pno", "loosepno"): ("pno.truncation", "loose"),
     # Grid keywords (from ! line, section="grid")
-    ("grid", "defgrid1"): ("grid_quality", "defgrid1"),
-    ("grid", "defgrid2"): ("grid_quality", "defgrid2"),
-    ("grid", "defgrid3"): ("grid_quality", "defgrid3"),
-    ("grid", "grid4"): ("grid_quality", "grid4"),
-    ("grid", "grid5"): ("grid_quality", "grid5"),
-    ("grid", "grid6"): ("grid_quality", "grid6"),
-    ("grid", "grid7"): ("grid_quality", "grid7"),
-    # Resource (from %maxcore, %pal)
-    ("resource", "maxcore"): ("maxcore_mb", None),
-    ("resource", "nprocs"): ("nproc", None),
+    ("grid", "defgrid1"): ("grid.quality", "defgrid1"),
+    ("grid", "defgrid2"): ("grid.quality", "defgrid2"),
+    ("grid", "defgrid3"): ("grid.quality", "defgrid3"),
+    ("grid", "grid4"): ("grid.quality", "grid4"),
+    ("grid", "grid5"): ("grid.quality", "grid5"),
+    ("grid", "grid6"): ("grid.quality", "grid6"),
+    ("grid", "grid7"): ("grid.quality", "grid7"),
+    # Resource blocks: %maxcore → section="memory"; %pal → section="parallel".
+    ("memory", "maxcore"): ("memory.maxcore_mb", None),
+    ("parallel", "nprocs"): ("parallel.nproc", None),
 }
 
 
@@ -74,6 +77,10 @@ _JOB_TYPES = frozenset({
 })
 
 #: Known method keywords — belong in level_of_theory, not parameters.
+#: Matched as **prefixes**, so ``dlpno-ccsd(t)-f12`` is recognised
+#: through the ``dlpno-ccsd(t)`` entry, ``b3lyp-d3`` through ``b3lyp``,
+#: etc. Without prefix matching, F12/dispersion-tagged variants leak
+#: through and turn into spurious parameter rows.
 _METHOD_PREFIXES = (
     "hf", "uhf", "rhf", "rohf",
     "dft", "b3lyp", "pbe", "pbe0", "bp86", "tpss", "m06",
@@ -83,6 +90,11 @@ _METHOD_PREFIXES = (
     "wb97x", "wb97x-d3", "wb97x-d3bj", "cam-b3lyp",
     "r2scan", "r2scan-3c",
 )
+
+
+def _is_method_token(kw_lower: str) -> bool:
+    """True when ``kw_lower`` starts with a known method prefix."""
+    return kw_lower.startswith(_METHOD_PREFIXES)
 
 #: Dispersion correction keywords — belong in level_of_theory.dispersion.
 _DISPERSION_KEYWORDS = frozenset({
@@ -143,7 +155,7 @@ def _classify_keyword(kw: str) -> str | None:
         return None
 
     # Method → skip (LoT territory)
-    if kw_lower in _METHOD_PREFIXES:
+    if _is_method_token(kw_lower):
         return None
 
     # Basis → skip
@@ -183,16 +195,41 @@ _INPUT_LINE = re.compile(r"^\|\s*\d+>\s*(.*)$")
 
 
 def _extract_input_block(text: str) -> list[str]:
-    """Extract the echoed ORCA input from the log file.
+    """Return the ORCA input lines, from a log echo or a raw ``.in`` file.
 
-    ORCA echoes the input between ``INPUT FILE`` and ``****END OF INPUT****``
-    markers.  Each line has the format: ``|  N> content``.
+    Two layouts are supported:
+
+    * **Log echo**: ORCA echoes the input between ``INPUT FILE`` and
+      ``****END OF INPUT****`` markers, with each line prefixed
+      ``|  N> ``.
+    * **Raw input**: a ``.in`` / ``.inp`` artifact uploaded directly,
+      with no log markers and no line prefixes. Detected by the
+      presence of ORCA-style ``!`` keyword or ``%`` block lines.
+
+    The coordinate block (``* xyz ... *``) is filtered out so atom
+    rows can never reach the keyword/block parsers.
     """
     lines = text.splitlines()
+
+    log_echo = _extract_log_echo_input(lines)
+    if log_echo:
+        return log_echo
+
+    if any(_looks_like_orca_input_line(line) for line in lines):
+        return lines
+
+    return []
+
+
+def _extract_log_echo_input(lines: list[str]) -> list[str]:
+    """Extract the ``|  N> content`` lines from a log file echo.
+
+    Returns ``[]`` when no ``INPUT FILE`` block is present.
+    """
     in_input = False
     input_lines: list[str] = []
 
-    for i, line in enumerate(lines):
+    for line in lines:
         stripped = line.strip()
 
         if "INPUT FILE" in stripped:
@@ -210,6 +247,38 @@ def _extract_input_block(text: str) -> list[str]:
     return input_lines
 
 
+def _looks_like_orca_input_line(line: str) -> bool:
+    """Best-effort signal that a raw line is ORCA input syntax."""
+    stripped = line.lstrip()
+    return stripped.startswith(("!", "%"))
+
+
+def _strip_coordinate_block(lines: list[str]) -> list[str]:
+    """Drop the ``* xyz ... *`` (or ``* int ... *``) coordinate block.
+
+    The opening line starts with ``*`` and contains ``xyz`` or ``int``;
+    the block ends at the next bare ``*`` line. Atom rows in between
+    must never be passed to the keyword/block parsers.
+    """
+    out: list[str] = []
+    in_coord = False
+    for line in lines:
+        stripped = line.strip()
+        if not in_coord:
+            if stripped.startswith("*") and (
+                "xyz" in stripped.lower() or "int" in stripped.lower()
+            ):
+                in_coord = True
+                continue
+            out.append(line)
+        else:
+            if stripped == "*":
+                in_coord = False
+                continue
+            # Atom row inside the coordinate block — drop.
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Keyword line parsing
 # ---------------------------------------------------------------------------
@@ -219,10 +288,12 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
     """Parse all ``! keyword ...`` lines from the ORCA input.
 
     Returns parameter dicts for keywords that are not LoT or job types.
+    The coordinate block (``* xyz ... *``) is filtered out so atom-row
+    content can never be misread as keywords.
     """
     params: list[dict] = []
 
-    for line in input_lines:
+    for line in _strip_coordinate_block(input_lines):
         stripped = line.strip()
         if not stripped.startswith("!"):
             continue
@@ -241,13 +312,18 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
                 continue
 
             ck, cv = _lookup_canonical(section, kw)
+            # When a normalised canonical_value comes back, the keyword
+            # encodes a discrete choice (``tightscf`` → ``tight``);
+            # value_type=enum lines this up with the vocab's
+            # expected_value_type. Otherwise it's a presence flag.
+            value_type = "enum" if cv is not None else "bool"
             params.append({
                 "raw_key": kw,
                 "canonical_key": ck,
                 "raw_value": "true",
                 "canonical_value": cv,
                 "section": section,
-                "value_type": "bool",
+                "value_type": value_type,
             })
 
     return params
@@ -269,6 +345,7 @@ def _parse_block_sections(input_lines: list[str]) -> list[dict]:
     - Comments: ``# ...`` stripped
     """
     params: list[dict] = []
+    input_lines = _strip_coordinate_block(input_lines)
     i = 0
 
     while i < len(input_lines):
@@ -352,8 +429,8 @@ def _parse_block_content(
     params: list[dict] = []
 
     section_map = {
-        "maxcore": "resource",
-        "pal": "resource",
+        "maxcore": "memory",
+        "pal": "parallel",
         "scf": "scf",
         "mdci": "correlation",
         "method": "general",
@@ -369,7 +446,10 @@ def _parse_block_content(
         if block_name == "geom" and line.strip().upper().startswith(("SCAN", "CONSTRAINTS")):
             continue
 
-        # Special case: %maxcore has the value directly (no key)
+        # Special case: %maxcore has the value directly (no key).
+        # ORCA documents %maxcore in MB, so we tag the unit explicitly
+        # alongside memory.maxcore_mb for downstream consumers that read
+        # canonical_key + unit instead of memorising the convention.
         if block_name == "maxcore":
             raw_value = line.strip()
             ck, cv = _lookup_canonical(section, "maxcore")
@@ -377,9 +457,10 @@ def _parse_block_content(
                 "raw_key": "maxcore",
                 "canonical_key": ck,
                 "raw_value": raw_value,
-                "canonical_value": cv,
+                "canonical_value": _canonicalize(ck, cv, raw_value),
                 "section": section,
                 "value_type": _guess_value_type(raw_value),
+                "unit": "MB",
             })
             continue
 
@@ -402,7 +483,7 @@ def _parse_block_content(
                     "raw_key": raw_key,
                     "canonical_key": ck,
                     "raw_value": raw_value,
-                    "canonical_value": cv,
+                    "canonical_value": _canonicalize(ck, cv, raw_value),
                     "section": section,
                     "value_type": _guess_value_type(raw_value),
                 })
@@ -419,12 +500,35 @@ def _parse_block_content(
                 "raw_key": raw_key,
                 "canonical_key": ck,
                 "raw_value": raw_value,
-                "canonical_value": cv,
+                "canonical_value": _canonicalize(ck, cv, raw_value),
                 "section": section,
                 "value_type": _guess_value_type(raw_value),
             })
 
     return params
+
+
+def _canonicalize(
+    canonical_key: str | None,
+    mapped_value: str | None,
+    raw_value: str,
+) -> str | None:
+    """Pick the canonical_value emitted alongside a canonical_key.
+
+    Three cases:
+
+    * No canonical_key — leave canonical_value ``None``; we have not
+      claimed the row is normalised.
+    * Mapped enum (e.g. ``tightscf`` → ``tight``) — use the mapped value.
+    * Recognised key with a free-form value (e.g. ``MaxIter 999``,
+      ``nprocs 12``) — mirror ``raw_value`` so consumers reading
+      ``canonical_*`` exclusively see the value too.
+    """
+    if canonical_key is None:
+        return None
+    if mapped_value is not None:
+        return mapped_value
+    return raw_value
 
 
 def _looks_like_value(token: str) -> bool:
@@ -902,7 +1006,7 @@ def parse_method_basis(text: str) -> dict | None:
             kw_lower = kw.lower()
 
             # Method detection
-            if kw_lower in _METHOD_PREFIXES:
+            if _is_method_token(kw_lower):
                 method = kw
 
             # Basis detection
@@ -1002,5 +1106,5 @@ def parse_orca_log(
         "software": parse_software_version(text),
         "charge_multiplicity": parse_charge_multiplicity(text),
         "method_basis": parse_method_basis(text),
-        "parser_version": "orca_v1",
+        "parser_version": "orca_v2",
     }

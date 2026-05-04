@@ -223,7 +223,9 @@ def test_ts_upload_with_additional_calcs_and_results(db_engine) -> None:
         assert CalculationDependencyRole.freq_on in dep_roles
         assert CalculationDependencyRole.single_point_on in dep_roles
 
-        # All 3 calcs share the same geometry
+        # Under the narrowed fallback only opt auto-claims the saddle
+        # geometry. Freq and sp produce zero output_geometry rows unless
+        # the producer declares them explicitly.
         geo_links = session.scalars(
             select(CalculationOutputGeometry).where(
                 CalculationOutputGeometry.calculation_id.in_(
@@ -231,9 +233,8 @@ def test_ts_upload_with_additional_calcs_and_results(db_engine) -> None:
                 )
             )
         ).all()
-        assert len(geo_links) == 3
-        geometry_ids = {g.geometry_id for g in geo_links}
-        assert len(geometry_ids) == 1  # all point to the same geometry
+        assert len(geo_links) == 1
+        assert geo_links[0].calculation_id == opt_calc.id
 
 
 def test_ts_upload_without_results_succeeds(db_engine) -> None:
@@ -446,14 +447,17 @@ def test_ts_upload_with_irc_additional_persists_irc_result(db_engine) -> None:
         ).all()
         assert len(deps) == 1
 
-        # Output geometry roles: role=final (shared TS saddle) + irc_forward/irc_reverse
+        # Output geometry roles: irc_forward + irc_reverse from the
+        # IRC sampled points. No role=final auto-row: the narrowed
+        # fallback only fires for opt; IRC must declare any final-role
+        # output geometry explicitly via ``output_geometries``.
         irc_links = session.scalars(
             select(CalculationOutputGeometry).where(
                 CalculationOutputGeometry.calculation_id == irc_calc.id
             )
         ).all()
         roles = {link.role for link in irc_links}
-        assert CalculationGeometryRole.final in roles
+        assert CalculationGeometryRole.final not in roles
         assert CalculationGeometryRole.irc_forward in roles
         assert CalculationGeometryRole.irc_reverse in roles
 

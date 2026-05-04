@@ -74,17 +74,17 @@ class TestNestedOptionBlocks:
 
         xqc = _find_param(scf, "xqc")
         assert xqc is not None
-        assert xqc["canonical_key"] == "scf_fallback"
+        assert xqc["canonical_key"] == "scf.fallback"
 
         tight = _find_param(scf, "tight")
         assert tight is not None
-        assert tight["canonical_key"] == "scf_convergence"
+        assert tight["canonical_key"] == "scf.convergence"
         assert tight["canonical_value"] == "tight"
 
         mc = _find_param(scf, "maxcycle")
         assert mc is not None
         assert mc["raw_value"] == "512"
-        assert mc["canonical_key"] == "scf_max_cycles"
+        assert mc["canonical_key"] == "scf.max_cycles"
 
     def test_integral_variations(self):
         route = "#P integral=(ultrafinegrid,acc2e=14) uwb97xd/def2tzvp"
@@ -135,8 +135,8 @@ class TestRepeatedKeywords:
 
         assert opt_tight is not None
         assert scf_tight is not None
-        assert opt_tight["canonical_key"] == "opt_convergence"
-        assert scf_tight["canonical_key"] == "scf_convergence"
+        assert opt_tight["canonical_key"] == "opt.convergence"
+        assert scf_tight["canonical_key"] == "scf.convergence"
 
     def test_maxcycle_in_opt_vs_scf(self):
         route = "#P opt=(maxcycle=200) scf=(maxcycle=512) uwb97xd/def2tzvp"
@@ -147,8 +147,8 @@ class TestRepeatedKeywords:
 
         assert opt_mc is not None
         assert scf_mc is not None
-        assert opt_mc["canonical_key"] == "opt_max_cycles"
-        assert scf_mc["canonical_key"] == "scf_max_cycles"
+        assert opt_mc["canonical_key"] == "opt.max_cycles"
+        assert scf_mc["canonical_key"] == "scf.max_cycles"
         assert opt_mc["raw_value"] == "200"
         assert scf_mc["raw_value"] == "512"
 
@@ -159,9 +159,9 @@ class TestRepeatedKeywords:
         opt_vt = _find_param(params, "verytight", section="opt")
         scf_vt = _find_param(params, "verytight", section="scf")
 
-        assert opt_vt["canonical_key"] == "opt_convergence"
+        assert opt_vt["canonical_key"] == "opt.convergence"
         assert opt_vt["canonical_value"] == "very_tight"
-        assert scf_vt["canonical_key"] == "scf_convergence"
+        assert scf_vt["canonical_key"] == "scf.convergence"
         assert scf_vt["canonical_value"] == "very_tight"
 
 
@@ -187,14 +187,14 @@ class TestLink0Directives:
         mem = _find_param(params, "%mem")
         assert mem is not None
         assert mem["raw_value"] == "32768mb"
-        assert mem["canonical_key"] == "memory"
+        assert mem["canonical_key"] == "memory.raw"
 
     def test_nprocshared_included(self):
         params = _extract_link0(self.LINK0_BLOCK)
         nproc = _find_param(params, "%NProcShared")
         assert nproc is not None
         assert nproc["raw_value"] == "8"
-        assert nproc["canonical_key"] == "nproc_shared"
+        assert nproc["canonical_key"] == "parallel.nproc_shared"
 
     def test_nproc_included(self):
         params = _extract_link0(self.LINK0_BLOCK)
@@ -269,7 +269,7 @@ class TestRouteLineWrapping:
         params = _parse_route_tokens(route)
         tight = _find_param(params, "tight", section="opt")
         assert tight is not None
-        assert tight["canonical_key"] == "opt_convergence"
+        assert tight["canonical_key"] == "opt.convergence"
 
     def test_closing_paren_on_own_line(self):
         """Closing paren for scf=(...) on its own line (as in real input.log)."""
@@ -299,7 +299,9 @@ class TestBareKeywords:
         nosymm = _find_param(params, "nosymm")
         assert nosymm is not None
         assert nosymm["raw_value"] == "true"
-        assert nosymm["section"] == "general"
+        # Symmetry-control flags live in their own section, not "general".
+        assert nosymm["section"] == "symmetry"
+        assert nosymm["canonical_key"] == "symmetry.disabled"
 
     def test_force(self):
         route = "#P opt=(tight) force uwb97xd/def2tzvp"

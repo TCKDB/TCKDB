@@ -21,6 +21,9 @@ from app.db.models.app_user import AppUser
 from app.schemas.fragments.artifact import ArtifactIn
 from app.schemas.upload_warning import UploadWarning
 from app.services.artifact_persistence import persist_artifact_batch
+from app.services.calculation_parameter_extraction import (
+    try_extract_parameters_from_input_upload,
+)
 from app.api.routes._pagination import PaginatedResponse
 from app.db.models.calculation import (
     Calculation,
@@ -587,6 +590,12 @@ def upload_calculation_artifacts(
         artifacts=request.artifacts,
         created_by=current_user.id,
     )
+
+    # Opportunistic calculation_parameter extraction for input artifacts.
+    # The helper filters by ArtifactKind.input and is best-effort —
+    # never aborts the upload.
+    for art_in in request.artifacts:
+        try_extract_parameters_from_input_upload(session, calculation, art_in)
 
     result = ArtifactsUploadResult(
         calculation_id=calculation_id,

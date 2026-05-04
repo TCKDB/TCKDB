@@ -1,9 +1,15 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
-from app.db.models.common import CalculationQuality, CalculationType, IRCDirection
+from app.db.models.common import (
+    CalculationGeometryRole,
+    CalculationQuality,
+    CalculationType,
+    ConstraintKind,
+    IRCDirection,
+)
 from app.schemas.common import SchemaBase
 from app.schemas.fragments.calculation_origin import CalculationOriginMetadata
 from app.schemas.fragments.geometry import GeometryPayload
@@ -12,6 +18,69 @@ from app.schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+
+
+# ---------------------------------------------------------------------------
+# Constraint payload (lives in fragments so calculation upload payloads can
+# reuse it without an entities → fragments cycle).
+# ---------------------------------------------------------------------------
+
+
+class CalculationConstraintPayload(BaseModel):
+    """Geometric constraint applied to a calculation.
+
+    Mirrors the ``calculation_constraint`` row shape and arity check
+    enforced by the database. Generic across opt, TS, scan, IRC, NEB,
+    and any other constrained run — for scans the held-fixed
+    coordinates land here while the stepped coordinate lives in
+    ``calc_scan_coordinate``.
+
+    Arity by ``constraint_kind``:
+
+    * ``cartesian_atom`` — one atom (atom2/3/4 must be null)
+    * ``bond`` — two atoms
+    * ``angle`` — three atoms
+    * ``dihedral`` / ``improper`` — four atoms
+    """
+
+    constraint_index: int = Field(ge=1)
+    constraint_kind: ConstraintKind
+    atom1_index: int = Field(ge=1)
+    atom2_index: int | None = Field(default=None, ge=1)
+    atom3_index: int | None = Field(default=None, ge=1)
+    atom4_index: int | None = Field(default=None, ge=1)
+    target_value: float | None = None
+
+    @model_validator(mode="after")
+    def validate_arity_and_distinct_atoms(self) -> Self:
+        atoms = [self.atom1_index]
+        if self.atom2_index is not None:
+            atoms.append(self.atom2_index)
+        if self.atom3_index is not None:
+            atoms.append(self.atom3_index)
+        if self.atom4_index is not None:
+            atoms.append(self.atom4_index)
+
+        expected = {
+            ConstraintKind.cartesian_atom: 1,
+            ConstraintKind.bond: 2,
+            ConstraintKind.angle: 3,
+            ConstraintKind.dihedral: 4,
+            ConstraintKind.improper: 4,
+        }
+        n_expected = expected[self.constraint_kind]
+        if len(atoms) != n_expected:
+            raise ValueError(
+                f"{self.constraint_kind.value} constraint requires "
+                f"{n_expected} atom index(es), got {len(atoms)}."
+            )
+        if len(set(atoms)) != len(atoms):
+            raise ValueError("Constraint atom indices must be distinct.")
+        return self
+
+
+class CalculationConstraintCreate(CalculationConstraintPayload, SchemaBase):
+    pass
 
 
 class CalculationOwnerRequiredMixin:
@@ -250,6 +319,21 @@ class CalculationParameterObservation(SchemaBase):
     parameter_index: int | None = Field(default=None, ge=0)
 
 
+class OutputGeometryEntry(SchemaBase):
+    """One declared output geometry on a calculation upload payload.
+
+    Each entry carries a geometry payload and the role this geometry plays
+    as a calculation output. The list position determines the
+    ``output_order`` written to ``calculation_output_geometry`` (1-indexed).
+    Producers must declare ``role`` explicitly; defaulting to ``final``
+    would silently mis-classify scan iterations, IRC path points, and NEB
+    images.
+    """
+
+    geometry: GeometryPayload
+    role: CalculationGeometryRole
+
+
 class CalculationWithResultsPayload(CalculationPayload):
     """A calculation with optional typed result blocks.
 
@@ -277,10 +361,54 @@ class CalculationWithResultsPayload(CalculationPayload):
     irc_result: IRCResultPayload | None = None
     neb_result: NEBResultPayload | None = None
 
+    input_geometries: list[GeometryPayload] = Field(
+        default_factory=list,
+        description=(
+            "Geometries this calculation was run on. When empty, the "
+            "workflow falls back to the conformer's reference geometry "
+            "for calculation types in {freq, sp}; opt skips. List "
+            "order maps to input_order = 1, 2, 3, ... in the database."
+        ),
+    )
+
+    output_geometries: list[OutputGeometryEntry] = Field(
+        default_factory=list,
+        description=(
+            "Geometries this calculation produced or reported. When "
+            "empty, the workflow falls back to the conformer's "
+            "reference geometry as a single (role=final, output_order=1) "
+            "row for calc types in the narrow set {opt}. Freq, sp, "
+            "and all other types get zero rows when the producer "
+            "leaves this empty. List order maps to output_order = "
+            "1, 2, 3, ... in the database."
+        ),
+    )
+
     parameters: list[CalculationParameterObservation] | None = None
     parameters_json: dict | None = None
     parameters_parser_version: str | None = None
     parameters_extracted_at: datetime | None = None
+
+    constraints: list[CalculationConstraintCreate] = Field(
+        default_factory=list,
+        description=(
+            "Coordinate constraints held fixed during this calculation. "
+            "Generic across opt, freq, sp, irc, neb, scan, and any other "
+            "constrained run — these are input/provenance metadata and do "
+            "not require a result block. For scan calculations, frozen "
+            "coordinates may be declared here while the stepped coordinate "
+            "is declared on the scan_result.coordinates list."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_constraint_indices_unique(self) -> Self:
+        indices = [c.constraint_index for c in self.constraints]
+        if len(set(indices)) != len(indices):
+            raise ValueError(
+                "Calculation constraint_index values must be unique within a calculation."
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_result_matches_type(self) -> Self:

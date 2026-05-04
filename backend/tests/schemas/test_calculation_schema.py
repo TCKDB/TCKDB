@@ -1,13 +1,17 @@
 import pytest
 from pydantic import ValidationError
 
-from app.db.models.common import CalculationQuality, CalculationType
+from app.db.models.common import CalculationQuality, CalculationType, ConstraintKind
 from app.schemas.entities.calculation import (
     CalculationCreateResolved,
     CalculationDependencyCreate,
     CalculationUpdate,
 )
-from app.schemas.fragments.calculation import CalculationCreateRequest
+from app.schemas.fragments.calculation import (
+    CalculationConstraintCreate,
+    CalculationCreateRequest,
+    CalculationWithResultsPayload,
+)
 
 
 def test_calculation_create_request_requires_exactly_one_owner() -> None:
@@ -116,3 +120,187 @@ def test_calculation_dependency_schema_rejects_self_edge() -> None:
             child_calculation_id=7,
             dependency_role="freq_on",
         )
+
+
+# ---------------------------------------------------------------------------
+# CalculationConstraintCreate arity validation
+# ---------------------------------------------------------------------------
+
+
+_CARTESIAN_OK = dict(
+    constraint_index=1,
+    constraint_kind=ConstraintKind.cartesian_atom,
+    atom1_index=3,
+)
+_BOND_OK = dict(
+    constraint_index=2,
+    constraint_kind=ConstraintKind.bond,
+    atom1_index=1,
+    atom2_index=2,
+    target_value=1.45,
+)
+_ANGLE_OK = dict(
+    constraint_index=3,
+    constraint_kind=ConstraintKind.angle,
+    atom1_index=1,
+    atom2_index=2,
+    atom3_index=3,
+)
+_DIHEDRAL_OK = dict(
+    constraint_index=4,
+    constraint_kind=ConstraintKind.dihedral,
+    atom1_index=1,
+    atom2_index=2,
+    atom3_index=3,
+    atom4_index=4,
+)
+_IMPROPER_OK = dict(
+    constraint_index=5,
+    constraint_kind=ConstraintKind.improper,
+    atom1_index=1,
+    atom2_index=2,
+    atom3_index=3,
+    atom4_index=4,
+)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [_CARTESIAN_OK, _BOND_OK, _ANGLE_OK, _DIHEDRAL_OK, _IMPROPER_OK],
+)
+def test_calculation_constraint_accepts_valid_arity(payload: dict) -> None:
+    constraint = CalculationConstraintCreate(**payload)
+    assert constraint.constraint_kind == ConstraintKind(payload["constraint_kind"])
+
+
+def test_calculation_constraint_cartesian_rejects_extra_atoms() -> None:
+    with pytest.raises(ValidationError, match="cartesian_atom"):
+        CalculationConstraintCreate(
+            constraint_index=1,
+            constraint_kind=ConstraintKind.cartesian_atom,
+            atom1_index=1,
+            atom2_index=2,
+        )
+
+
+def test_calculation_constraint_bond_rejects_missing_atom2() -> None:
+    with pytest.raises(ValidationError, match="bond"):
+        CalculationConstraintCreate(
+            constraint_index=1,
+            constraint_kind=ConstraintKind.bond,
+            atom1_index=1,
+        )
+
+
+def test_calculation_constraint_bond_rejects_extra_atoms() -> None:
+    with pytest.raises(ValidationError, match="bond"):
+        CalculationConstraintCreate(
+            constraint_index=1,
+            constraint_kind=ConstraintKind.bond,
+            atom1_index=1,
+            atom2_index=2,
+            atom3_index=3,
+        )
+
+
+def test_calculation_constraint_angle_rejects_missing_atom3() -> None:
+    with pytest.raises(ValidationError, match="angle"):
+        CalculationConstraintCreate(
+            constraint_index=1,
+            constraint_kind=ConstraintKind.angle,
+            atom1_index=1,
+            atom2_index=2,
+        )
+
+
+def test_calculation_constraint_dihedral_rejects_missing_atom4() -> None:
+    with pytest.raises(ValidationError, match="dihedral"):
+        CalculationConstraintCreate(
+            constraint_index=1,
+            constraint_kind=ConstraintKind.dihedral,
+            atom1_index=1,
+            atom2_index=2,
+            atom3_index=3,
+        )
+
+
+def test_calculation_constraint_improper_rejects_missing_atom4() -> None:
+    with pytest.raises(ValidationError, match="improper"):
+        CalculationConstraintCreate(
+            constraint_index=1,
+            constraint_kind=ConstraintKind.improper,
+            atom1_index=1,
+            atom2_index=2,
+            atom3_index=3,
+        )
+
+
+def test_calculation_constraint_rejects_duplicate_atom_indices() -> None:
+    with pytest.raises(ValidationError, match="distinct"):
+        CalculationConstraintCreate(
+            constraint_index=1,
+            constraint_kind=ConstraintKind.bond,
+            atom1_index=1,
+            atom2_index=1,
+        )
+
+
+def test_calculation_constraint_rejects_constraint_index_below_1() -> None:
+    with pytest.raises(ValidationError):
+        CalculationConstraintCreate(
+            constraint_index=0,
+            constraint_kind=ConstraintKind.cartesian_atom,
+            atom1_index=1,
+        )
+
+
+def test_calculation_constraint_rejects_atom_index_below_1() -> None:
+    with pytest.raises(ValidationError):
+        CalculationConstraintCreate(
+            constraint_index=1,
+            constraint_kind=ConstraintKind.cartesian_atom,
+            atom1_index=0,
+        )
+
+
+# ---------------------------------------------------------------------------
+# CalculationWithResultsPayload constraints field
+# ---------------------------------------------------------------------------
+
+
+def _minimal_calc_payload(**overrides) -> dict:
+    base = dict(
+        type=CalculationType.opt,
+        software_release={"name": "Gaussian"},
+        level_of_theory={"method": "wB97X-D"},
+    )
+    base.update(overrides)
+    return base
+
+
+def test_calc_with_results_payload_accepts_constraints_for_non_scan_type() -> None:
+    payload = CalculationWithResultsPayload(
+        **_minimal_calc_payload(
+            type=CalculationType.opt,
+            constraints=[_BOND_OK, _DIHEDRAL_OK],
+        )
+    )
+    assert len(payload.constraints) == 2
+    assert payload.constraints[0].constraint_kind == ConstraintKind.bond
+    assert payload.constraints[1].constraint_kind == ConstraintKind.dihedral
+
+
+def test_calc_with_results_payload_rejects_duplicate_constraint_index() -> None:
+    duplicate = dict(_BOND_OK)
+    duplicate["constraint_index"] = _BOND_OK["constraint_index"]
+    with pytest.raises(ValidationError, match="constraint_index"):
+        CalculationWithResultsPayload(
+            **_minimal_calc_payload(
+                constraints=[_BOND_OK, duplicate],
+            )
+        )
+
+
+def test_calc_with_results_payload_constraints_default_empty() -> None:
+    payload = CalculationWithResultsPayload(**_minimal_calc_payload())
+    assert payload.constraints == []

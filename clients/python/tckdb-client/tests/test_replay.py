@@ -850,3 +850,444 @@ def test_supported_payload_kinds_includes_computed_species() -> None:
     # The two pre-existing kinds remain present.
     assert "conformer_calculation" in SUPPORTED_PAYLOAD_KINDS
     assert "calculation_artifact" in SUPPORTED_PAYLOAD_KINDS
+
+
+# ---------------------------------------------------------------------------
+# Tests — computed_reaction (mirror current backend contract)
+# ---------------------------------------------------------------------------
+
+
+def _write_computed_reaction_sidecar(
+    bundle_dir: Path,
+    *,
+    name: str = "rxn0.computed_reaction",
+    status: str = "pending",
+    base_url: str | None = "http://producer.example/api/v1",
+    bundle_format_version: str | None = "0",
+    endpoint: str = "/api/v1/uploads/computed-reaction",
+    idempotency_key: str = "tckdb_cr_v0_0123456789abcdef",
+    payload: dict | None = None,
+    payload_file_override: str | None = None,
+    extra_sidecar: dict | None = None,
+) -> tuple[Path, Path]:
+    """Lay down a minimal computed_reaction bundle: payload JSON + sidecar.
+
+    The replay engine must POST whatever JSON it finds, unchanged. The
+    payload contents are intentionally opaque to the engine — adapters
+    decide what to put in; the client just transports it.
+    """
+    sub = bundle_dir / "computed_reaction"
+    sub.mkdir(parents=True, exist_ok=True)
+    payload_path = sub / f"{name}.payload.json"
+    if payload_file_override is None:
+        _write_json(
+            payload_path,
+            payload or {"species": [], "reactant_keys": [], "product_keys": []},
+        )
+        payload_file_value = payload_path.name
+    else:
+        if payload is not None:
+            _write_json(payload_path, payload)
+        payload_file_value = payload_file_override
+
+    sidecar = {
+        "payload_kind": "computed_reaction",
+        "endpoint": endpoint,
+        "idempotency_key": idempotency_key,
+        "status": status,
+        "payload_file": payload_file_value,
+    }
+    if bundle_format_version is not None:
+        sidecar["bundle_format_version"] = bundle_format_version
+    if base_url is not None:
+        sidecar["base_url"] = base_url
+    if extra_sidecar:
+        sidecar.update(extra_sidecar)
+
+    sidecar_path = sub / f"{name}.meta.json"
+    _write_json(sidecar_path, sidecar)
+    return sidecar_path, payload_path
+
+
+def test_supported_payload_kinds_includes_computed_reaction() -> None:
+    """Replay engine advertises computed_reaction so CLI help/docs see it."""
+    assert "computed_reaction" in SUPPORTED_PAYLOAD_KINDS
+
+
+def test_computed_reaction_legacy_payload_replays_unchanged(tmp_path: Path) -> None:
+    """Backward-compat: a computed_reaction payload that omits the new
+    fields (input_geometries, output_geometries, depends_on,
+    source_calculations) still discovers, dispatches, and POSTs unchanged.
+    """
+    payload = {
+        "species": [
+            {
+                "key": "r0",
+                "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+                "conformers": [],
+                "calculations": [],
+            }
+        ],
+        "reactant_keys": ["r0"],
+        "product_keys": ["r0"],
+        "kinetics": [
+            {
+                "reactant_keys": ["r0"],
+                "product_keys": ["r0"],
+                "model_kind": "modified_arrhenius",
+                "a": 1.2e6,
+                "a_units": "cm3_mol_s",
+                "n": 1.5,
+                "reported_ea": 42.0,
+                "reported_ea_units": "kj_mol",
+            }
+        ],
+    }
+    sp, _ = _write_computed_reaction_sidecar(tmp_path, payload=payload)
+
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(tmp_path, client_factory=_make_factory(recorder))
+
+    assert summary.uploaded == 1
+    assert summary.by_kind["computed_reaction"]["uploaded"] == 1
+    call = recorder.calls[0]
+    assert call.method == "POST"
+    assert call.path == "/api/v1/uploads/computed-reaction"
+    assert call.json == payload
+    assert call.idempotency_key == "tckdb_cr_v0_0123456789abcdef"
+
+    updated = _read_sidecar(sp)
+    assert updated["status"] == "uploaded"
+    assert updated["response_status_code"] == 201
+    assert updated["last_error"] is None
+
+
+def test_computed_reaction_calc_provenance_fields_replay_unchanged(
+    tmp_path: Path,
+) -> None:
+    """A computed_reaction payload carrying input_geometries,
+    output_geometries, and depends_on on a calculation must round-trip
+    through replay byte-for-byte. The client is dict-passthrough; this
+    test pins that contract.
+    """
+    payload = {
+        "species": [],
+        "reactant_keys": ["r0"],
+        "product_keys": ["p0"],
+        "transition_state": {
+            "charge": 0,
+            "multiplicity": 2,
+            "geometry": {"key": "ts-geom", "xyz_text": "1\n\nH 0 0 0"},
+            "calculation": {
+                "key": "ts_opt",
+                "type": "opt",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "wb97xd", "basis": "def2tzvp"},
+            },
+            "calculations": [
+                {
+                    "key": "ts_freq",
+                    "type": "freq",
+                    "geometry_key": "ts-geom",
+                    "software_release": {"name": "Gaussian", "version": "16"},
+                    "level_of_theory": {"method": "wb97xd", "basis": "def2tzvp"},
+                    "input_geometries": [
+                        {"xyz_text": "1\n\nH 0 0 0"},
+                    ],
+                    "output_geometries": [
+                        {
+                            "geometry": {"xyz_text": "1\n\nH 0 0 0"},
+                            "role": "final",
+                        }
+                    ],
+                    "depends_on": [
+                        {
+                            "parent_calculation_key": "ts_opt",
+                            "role": "freq_on",
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+    sp, _ = _write_computed_reaction_sidecar(tmp_path, payload=payload)
+
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(tmp_path, client_factory=_make_factory(recorder))
+
+    assert summary.uploaded == 1
+    posted = recorder.calls[0].json
+    # The dict reaches the wire identical to what was on disk.
+    assert posted == payload
+    # Spot-check the new fields specifically — sanity guard against
+    # accidental key normalization in the engine.
+    ts_freq = posted["transition_state"]["calculations"][0]
+    assert ts_freq["input_geometries"] == [{"xyz_text": "1\n\nH 0 0 0"}]
+    assert ts_freq["output_geometries"] == [
+        {"geometry": {"xyz_text": "1\n\nH 0 0 0"}, "role": "final"}
+    ]
+    assert ts_freq["depends_on"] == [
+        {"parent_calculation_key": "ts_opt", "role": "freq_on"}
+    ]
+
+
+def test_computed_reaction_kinetics_source_calculations_replay_unchanged(
+    tmp_path: Path,
+) -> None:
+    """A computed_reaction kinetics block carrying source_calculations
+    must round-trip through replay byte-for-byte (calculation_key + role
+    pairs preserved in declared order).
+    """
+    payload = {
+        "species": [],
+        "reactant_keys": ["r0"],
+        "product_keys": ["p0"],
+        "kinetics": [
+            {
+                "reactant_keys": ["r0"],
+                "product_keys": ["p0"],
+                "model_kind": "modified_arrhenius",
+                "a": 1200000.0,
+                "a_units": "cm3_mol_s",
+                "n": 1.5,
+                "reported_ea": 42.0,
+                "reported_ea_units": "kj_mol",
+                "source_calculations": [
+                    {"calculation_key": "reactant0_sp", "role": "reactant_energy"},
+                    {"calculation_key": "product0_sp", "role": "product_energy"},
+                    {"calculation_key": "ts_sp", "role": "ts_energy"},
+                    {"calculation_key": "ts_freq", "role": "freq"},
+                ],
+            }
+        ],
+    }
+    sp, _ = _write_computed_reaction_sidecar(tmp_path, payload=payload)
+
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(tmp_path, client_factory=_make_factory(recorder))
+
+    assert summary.uploaded == 1
+    posted = recorder.calls[0].json
+    assert posted == payload
+    # Order and contents of source_calculations preserved exactly.
+    sources = posted["kinetics"][0]["source_calculations"]
+    assert [(s["calculation_key"], s["role"]) for s in sources] == [
+        ("reactant0_sp", "reactant_energy"),
+        ("product0_sp", "product_energy"),
+        ("ts_sp", "ts_energy"),
+        ("ts_freq", "freq"),
+    ]
+
+
+def test_computed_reaction_saved_payload_preserves_new_fields_on_disk(
+    tmp_path: Path,
+) -> None:
+    """Sidecar + payload bundle written via the test helper round-trips
+    through json.dumps/json.loads with the new fields intact. The
+    'producer wrote, replay reads, replay POSTs' chain only works if
+    on-disk JSON is preserving these keys verbatim.
+    """
+    payload = {
+        "species": [],
+        "transition_state": {
+            "calculations": [
+                {
+                    "key": "ts_freq",
+                    "type": "freq",
+                    "input_geometries": [{"xyz_text": "1\n\nH 0 0 0"}],
+                    "output_geometries": [
+                        {"geometry": {"xyz_text": "1\n\nH 0 0 0"}, "role": "final"}
+                    ],
+                    "depends_on": [
+                        {"parent_calculation_key": "ts_opt", "role": "freq_on"}
+                    ],
+                }
+            ],
+        },
+        "kinetics": [
+            {
+                "source_calculations": [
+                    {"calculation_key": "ts_sp", "role": "ts_energy"},
+                ],
+            }
+        ],
+    }
+    _, payload_path = _write_computed_reaction_sidecar(tmp_path, payload=payload)
+
+    on_disk = json.loads(payload_path.read_text())
+    assert on_disk == payload
+    # New fields are present on disk under the exact keys the backend expects.
+    assert "input_geometries" in on_disk["transition_state"]["calculations"][0]
+    assert "output_geometries" in on_disk["transition_state"]["calculations"][0]
+    assert "depends_on" in on_disk["transition_state"]["calculations"][0]
+    assert "source_calculations" in on_disk["kinetics"][0]
+
+
+def test_computed_reaction_http_failure_marks_failed(tmp_path: Path) -> None:
+    """A 500 from the server flips the sidecar to ``failed`` with the
+    error captured — same semantics as computed_species."""
+    sp, _ = _write_computed_reaction_sidecar(tmp_path)
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(
+        tmp_path,
+        client_factory=_make_factory(recorder, responder=_raise_500),
+    )
+    assert summary.failed == 1
+    updated = _read_sidecar(sp)
+    assert updated["status"] == "failed"
+    assert updated["response_status_code"] == 500
+    assert "HTTP 500" in updated["last_error"]
+
+
+def test_computed_reaction_dry_run_no_post(tmp_path: Path) -> None:
+    """Dry-run discovers the sidecar but neither POSTs nor mutates it."""
+    sp, _ = _write_computed_reaction_sidecar(tmp_path)
+    pre = _read_sidecar(sp)
+
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(
+        tmp_path,
+        client_factory=_make_factory(recorder),
+        dry_run=True,
+    )
+
+    assert summary.dry_run == 1
+    assert summary.by_kind["computed_reaction"]["dry_run"] == 1
+    assert recorder.calls == []
+    assert _read_sidecar(sp) == pre
+
+
+# ---------------------------------------------------------------------------
+# Tests — needs_regeneration terminal status for stale calculation_artifact 404
+# ---------------------------------------------------------------------------
+
+
+def _raise_404_calc_not_found(client, method, path, body, idempotency_key):
+    """Stub responder that mimics the server when the parent calc id
+    no longer exists — exactly the error the operator hit after a DB
+    reset/re-upload of a bundle."""
+    raise TCKDBHTTPError(
+        "not found",
+        status_code=404,
+        code="not_found",
+        detail="Calculation not found.",
+        response_json={"detail": "Calculation not found."},
+        response_text=None,
+        headers={},
+    )
+
+
+def _raise_500_server_error(client, method, path, body, idempotency_key):
+    """5xx variant: should NOT be promoted to needs_regeneration. The
+    contrast guards the dispatch so a transient server bug doesn't
+    silently retire valid sidecars."""
+    raise TCKDBHTTPError(
+        "internal server error",
+        status_code=500,
+        code="server_error",
+        detail="boom",
+        response_json={"detail": "boom"},
+        response_text=None,
+        headers={},
+    )
+
+
+def test_artifact_404_marks_needs_regeneration(tmp_path: Path) -> None:
+    """A 404 on calculation_artifact replay → terminal needs_regeneration
+    status, persisted on the sidecar, counted under the new bucket. The
+    sidecar's calculation_id is stale and only regeneration from
+    output.yml can fix it; retrying the POST would just produce another
+    404 forever."""
+    from tckdb_client.replay import STATUS_NEEDS_REGENERATION
+
+    sp, _ = _write_artifact_sidecar(tmp_path)
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(
+        tmp_path,
+        client_factory=_make_factory(recorder, responder=_raise_404_calc_not_found),
+    )
+    # New terminal status persisted on the sidecar.
+    sidecar = _read_sidecar(sp)
+    assert sidecar["status"] == STATUS_NEEDS_REGENERATION
+    assert sidecar["response_status_code"] == 404
+    # The body detail lands in response_body (subject to bounded-storage);
+    # the formatted last_error captures the HTTP status + code line.
+    assert "404" in (sidecar.get("last_error") or "")
+    assert sidecar.get("response_body") == {"detail": "Calculation not found."}
+    # Counted under the new skipped_needs_regeneration bucket — NOT under
+    # failed (which would re-surface every replay).
+    assert summary.skipped_needs_regeneration == 1
+    assert summary.failed == 0
+    assert summary.by_kind["calculation_artifact"]["skipped_needs_regeneration"] == 1
+
+
+def test_artifact_404_does_not_record_failure_for_breakdown(tmp_path: Path) -> None:
+    """The terminal status replaces the failure row — we don't want a
+    permanent red line in the failure breakdown for a sidecar the
+    operator has been told to regenerate. Subsequent runs would skip it
+    silently anyway, so the breakdown should match that."""
+    _write_artifact_sidecar(tmp_path)
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(
+        tmp_path,
+        client_factory=_make_factory(recorder, responder=_raise_404_calc_not_found),
+    )
+    assert summary.failures == ()
+
+
+def test_needs_regeneration_skipped_silently_on_subsequent_walk(
+    tmp_path: Path,
+) -> None:
+    """After the first walk marks the sidecar terminal, the next walk
+    must skip without an HTTP call. This is the core of the fix — no
+    more 404 cascades on every replay."""
+    from tckdb_client.replay import STATUS_NEEDS_REGENERATION
+
+    sp, _ = _write_artifact_sidecar(tmp_path, status=STATUS_NEEDS_REGENERATION)
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(
+        tmp_path,
+        client_factory=_make_factory(recorder, responder=_raise_404_calc_not_found),
+    )
+    assert recorder.calls == []  # no HTTP traffic for terminal sidecars
+    assert summary.skipped_needs_regeneration == 1
+    assert summary.failed == 0
+    assert summary.uploaded == 0
+    # Sidecar untouched (timestamps, last_error, etc. all preserved).
+    assert _read_sidecar(sp)["status"] == STATUS_NEEDS_REGENERATION
+
+
+def test_artifact_non_404_failure_does_not_promote_to_needs_regeneration(
+    tmp_path: Path,
+) -> None:
+    """5xx must stay as ``failed``. A transient backend bug should leave
+    the sidecar retryable; only a 404-style "parent calc gone" warrants
+    the terminal demotion."""
+    sp, _ = _write_artifact_sidecar(tmp_path)
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(
+        tmp_path,
+        client_factory=_make_factory(recorder, responder=_raise_500_server_error),
+    )
+    sidecar = _read_sidecar(sp)
+    assert sidecar["status"] == "failed"
+    assert summary.skipped_needs_regeneration == 0
+    assert summary.failed == 1
+
+
+def test_bundle_404_does_not_promote_to_needs_regeneration(tmp_path: Path) -> None:
+    """Only ``calculation_artifact`` 404s are terminal. A 404 from a
+    bundle endpoint (computed_species / computed_reaction / conformer)
+    is just a real upload failure — usually a server-side route
+    mismatch — and must stay retryable so the operator can investigate
+    or fix the deployment."""
+    sp, _ = _write_conformer_sidecar(tmp_path)
+    recorder = _FactoryRecorder()
+    summary = replay_bundle(
+        tmp_path,
+        client_factory=_make_factory(recorder, responder=_raise_404_calc_not_found),
+    )
+    sidecar = _read_sidecar(sp)
+    assert sidecar["status"] == "failed"
+    assert summary.skipped_needs_regeneration == 0
+    assert summary.failed == 1

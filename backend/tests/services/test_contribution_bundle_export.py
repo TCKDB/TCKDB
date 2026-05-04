@@ -414,6 +414,15 @@ def test_cli_writes_valid_bundle_json(tmp_path, _seeded_thermo_for_cli) -> None:
     env.setdefault("DB_HOST", "127.0.0.1")
     env.setdefault("DB_PORT", "5432")
     env["DB_NAME"] = os.environ.get("DB_TEST_NAME", "tckdb_test")
+    # After the backend/frontend split, the script lives under backend/scripts/
+    # but is invoked by absolute path, so Python won't auto-add backend/ to
+    # sys.path. Pin PYTHONPATH so `import app...` resolves.
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        f"{REPO_ROOT}{os.pathsep}{existing_pythonpath}"
+        if existing_pythonpath
+        else str(REPO_ROOT)
+    )
 
     result = subprocess.run(
         cmd,

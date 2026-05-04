@@ -148,14 +148,21 @@ def _make_calculation(
 def test_persist_thermo_upload_creates_row_with_scalar_fields(db_engine) -> None:
     """A1: scalar thermo fields persist and link to the resolved species entry."""
     with Session(db_engine) as session, session.begin():
-        session.add(AppUser(id=101, username="thermo_tester_a1"))
+        # Let Postgres assign the id rather than pinning a specific value:
+        # other tests in the session-scoped DB create app_user rows via API
+        # endpoints (auto-increment) that can advance the sequence past any
+        # hardcoded id, causing a UniqueViolation on later runs.
+        user = AppUser(username="thermo_tester_a1")
+        session.add(user)
         session.flush()
 
-        thermo = persist_thermo_upload(session, _thermo_request(), created_by=101)
+        thermo = persist_thermo_upload(
+            session, _thermo_request(), created_by=user.id
+        )
 
         assert thermo.id is not None
         assert thermo.species_entry_id is not None
-        assert thermo.created_by == 101
+        assert thermo.created_by == user.id
         assert thermo.scientific_origin == ScientificOriginKind.computed
         assert thermo.h298_kj_mol == pytest.approx(-241.8)
         assert thermo.s298_j_mol_k == pytest.approx(188.8)

@@ -21,7 +21,12 @@ from app.schemas.common import (
     TimestampedReadSchema,
 )
 from app.schemas.entities.geometry import GeometryRead
-from app.schemas.fragments.calculation import CalculationOwnerRequiredMixin
+from app.schemas.fragments.calculation import (
+    CalculationConstraintCreate,
+    CalculationConstraintPayload,
+    CalculationOwnerRequiredMixin,
+)
+from app.schemas.fragments.geometry import GeometryPayload
 
 
 class CalculationUploadRef(BaseModel):
@@ -324,20 +329,6 @@ class CalculationScanCoordinateRead(CalculationScanCoordinatePayload, ORMBaseSch
     calculation_id: int
 
 
-class CalculationConstraintPayload(BaseModel):
-    constraint_index: int = Field(ge=1)
-    constraint_kind: ConstraintKind
-    atom1_index: int = Field(ge=1)
-    atom2_index: int | None = Field(default=None, ge=1)
-    atom3_index: int | None = Field(default=None, ge=1)
-    atom4_index: int | None = Field(default=None, ge=1)
-    target_value: float | None = None
-
-
-class CalculationConstraintCreate(CalculationConstraintPayload, SchemaBase):
-    pass
-
-
 class CalculationConstraintUpdate(SchemaBase):
     constraint_index: int | None = Field(default=None, ge=1)
     constraint_kind: ConstraintKind | None = None
@@ -380,11 +371,30 @@ class CalculationScanPointCoordinateValueRead(
 
 
 class CalculationScanPointPayload(BaseModel):
+    """One sampled point on a scan surface.
+
+    Bundle producers should set ``geometry`` (inline ``GeometryPayload``);
+    the workflow resolves and dedupes it via the geometry hash and
+    populates ``calc_scan_point.geometry_id``. ``geometry_id`` is kept for
+    primitive/internal callers that already hold a resolved geometry row.
+    The two are mutually exclusive.
+    """
+
     point_index: int = Field(ge=1)
     electronic_energy_hartree: float | None = None
     relative_energy_kj_mol: float | None = None
     geometry_id: int | None = None
+    geometry: GeometryPayload | None = None
     note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_geometry_exclusive(self) -> Self:
+        if self.geometry is not None and self.geometry_id is not None:
+            raise ValueError(
+                "Scan point may set either 'geometry' (inline) or 'geometry_id' "
+                "(resolved row), not both."
+            )
+        return self
 
 
 class CalculationScanPointCreate(CalculationScanPointPayload, SchemaBase):

@@ -25,7 +25,6 @@ from app.schemas.fragments.refs import FreqScaleFactorRef
 from app.schemas.workflows.energy_correction_upload import (
     AppliedEnergyCorrectionUploadPayload,
     EnergyCorrectionSchemeRef,
-    FrequencyScaleFactorRef as LegacyFrequencyScaleFactorRef,
 )
 from app.services.calculation_resolution import (
     resolve_level_of_theory_ref,
@@ -78,95 +77,169 @@ def resolve_or_create_scheme(
         )
     )
     if existing is not None:
-        return existing
-
-    literature = (
-        resolve_or_create_literature(session, ref.source_literature)
-        if ref.source_literature is not None
-        else None
-    )
-
-    scheme = EnergyCorrectionScheme(
-        kind=ref.kind,
-        name=ref.name,
-        level_of_theory_id=lot_id,
-        source_literature_id=literature.id if literature else None,
-        version=ref.version,
-        units=ref.units,
-        note=ref.note,
-        created_by=created_by,
-    )
-    session.add(scheme)
-    session.flush()
-
-    for p in ref.atom_params:
-        session.add(
-            EnergyCorrectionSchemeAtomParam(
-                scheme_id=scheme.id, element=p.element, value=p.value
-            )
-        )
-    for p in ref.bond_params:
-        session.add(
-            EnergyCorrectionSchemeBondParam(
-                scheme_id=scheme.id, bond_key=p.bond_key, value=p.value
-            )
-        )
-    for p in ref.component_params:
-        session.add(
-            EnergyCorrectionSchemeComponentParam(
-                scheme_id=scheme.id,
-                component_kind=p.component_kind,
-                key=p.key,
-                value=p.value,
-            )
+        scheme = existing
+    else:
+        literature = (
+            resolve_or_create_literature(session, ref.source_literature)
+            if ref.source_literature is not None
+            else None
         )
 
-    if ref.atom_params or ref.bond_params or ref.component_params:
+        scheme = EnergyCorrectionScheme(
+            kind=ref.kind,
+            name=ref.name,
+            level_of_theory_id=lot_id,
+            source_literature_id=literature.id if literature else None,
+            version=ref.version,
+            units=ref.units,
+            note=ref.note,
+            created_by=created_by,
+        )
+        session.add(scheme)
         session.flush()
 
+    _merge_scheme_params(session, scheme, ref)
+
     return scheme
+
+
+# Absolute tolerance for comparing scheme parameter values. Scheme params
+# are stored reference constants; a relative tolerance would be too
+# forgiving for large Hartree-valued AEC params. A producer that sends a
+# value differing by more than serialization noise should either match
+# the existing scheme or use a distinct scheme identity / version.
+_PARAM_VALUE_ABS_TOL = 1e-10
+
+
+def _assert_param_value_compatible(
+    *,
+    table_name: str,
+    key: str,
+    existing_value: float,
+    supplied_value: float,
+) -> None:
+    """Raise if an existing scheme parameter conflicts with a supplied value.
+
+    Energy-correction scheme parameters are reference-library values.
+    Reusing a scheme identity with a different value for the same parameter
+    key would make the scheme row scientifically ambiguous, so conflicts
+    are rejected instead of silently overwriting or ignoring the new value.
+    """
+    if abs(existing_value - supplied_value) <= _PARAM_VALUE_ABS_TOL:
+        return
+
+    raise ValueError(
+        f"Conflicting {table_name} value for key='{key}': "
+        f"existing={existing_value!r}, supplied={supplied_value!r}. "
+        "Use a distinct energy_correction_scheme identity if these parameters "
+        "represent a different correction library."
+    )
+
+
+def _merge_scheme_params(
+    session: Session,
+    scheme: EnergyCorrectionScheme,
+    ref: EnergyCorrectionSchemeRef,
+) -> None:
+    """Idempotently persist scheme parameter rows from an upload ref.
+
+    For each param in ``ref``:
+
+    * if no row exists for the param's key, insert one;
+    * if a row exists with the same value (within float tolerance), no-op;
+    * if a row exists with a different value, raise ``ValueError`` so the
+      API surfaces a 422 rather than silently overwriting reference data.
+    """
+    added = False
+
+    if ref.atom_params:
+        existing_atoms = {
+            row.element: row
+            for row in session.scalars(
+                select(EnergyCorrectionSchemeAtomParam).where(
+                    EnergyCorrectionSchemeAtomParam.scheme_id == scheme.id
+                )
+            ).all()
+        }
+        for p in ref.atom_params:
+            cur = existing_atoms.get(p.element)
+            if cur is None:
+                session.add(
+                    EnergyCorrectionSchemeAtomParam(
+                        scheme_id=scheme.id, element=p.element, value=p.value
+                    )
+                )
+                added = True
+            else:
+                _assert_param_value_compatible(
+                    table_name="energy_correction_scheme_atom_param",
+                    key=p.element,
+                    existing_value=cur.value,
+                    supplied_value=p.value,
+                )
+
+    if ref.bond_params:
+        existing_bonds = {
+            row.bond_key: row
+            for row in session.scalars(
+                select(EnergyCorrectionSchemeBondParam).where(
+                    EnergyCorrectionSchemeBondParam.scheme_id == scheme.id
+                )
+            ).all()
+        }
+        for p in ref.bond_params:
+            cur = existing_bonds.get(p.bond_key)
+            if cur is None:
+                session.add(
+                    EnergyCorrectionSchemeBondParam(
+                        scheme_id=scheme.id, bond_key=p.bond_key, value=p.value
+                    )
+                )
+                added = True
+            else:
+                _assert_param_value_compatible(
+                    table_name="energy_correction_scheme_bond_param",
+                    key=p.bond_key,
+                    existing_value=cur.value,
+                    supplied_value=p.value,
+                )
+
+    if ref.component_params:
+        existing_components = {
+            (row.component_kind, row.key): row
+            for row in session.scalars(
+                select(EnergyCorrectionSchemeComponentParam).where(
+                    EnergyCorrectionSchemeComponentParam.scheme_id == scheme.id
+                )
+            ).all()
+        }
+        for p in ref.component_params:
+            cur = existing_components.get((p.component_kind, p.key))
+            if cur is None:
+                session.add(
+                    EnergyCorrectionSchemeComponentParam(
+                        scheme_id=scheme.id,
+                        component_kind=p.component_kind,
+                        key=p.key,
+                        value=p.value,
+                    )
+                )
+                added = True
+            else:
+                _assert_param_value_compatible(
+                    table_name="energy_correction_scheme_component_param",
+                    key=f"{p.component_kind.value}:{p.key}",
+                    existing_value=cur.value,
+                    supplied_value=p.value,
+                )
+
+    if added:
+        session.flush()
 
 
 # ---------------------------------------------------------------------------
 # Frequency scale factor resolution
 # ---------------------------------------------------------------------------
-
-
-def resolve_or_create_frequency_scale_factor(
-    session: Session,
-    ref: LegacyFrequencyScaleFactorRef,
-    *,
-    created_by: int | None = None,
-) -> FrequencyScaleFactor:
-    """Resolve or create a frequency scale factor (energy-correction upload path).
-
-    Dedup key: full identity (lot, software=null, scale_kind, value, lit, wtr=null).
-
-    :param session: Active SQLAlchemy session.
-    :param ref: Upload-facing frequency scale factor reference.
-    :param created_by: Optional application user id.
-    :returns: Existing or newly created FSF row.
-    """
-    lot = resolve_level_of_theory_ref(session, ref.level_of_theory)
-
-    literature = (
-        resolve_or_create_literature(session, ref.source_literature)
-        if ref.source_literature is not None
-        else None
-    )
-    lit_id = literature.id if literature else None
-
-    return _resolve_or_create_fsf_row(
-        session,
-        level_of_theory_id=lot.id,
-        software_id=None,
-        scale_kind=ref.scale_kind,
-        value=ref.value,
-        source_literature_id=lit_id,
-        workflow_tool_release_id=None,
-        note=ref.note,
-        created_by=created_by,
-    )
 
 
 def resolve_or_create_freq_scale_factor_ref(
@@ -175,14 +248,18 @@ def resolve_or_create_freq_scale_factor_ref(
     *,
     created_by: int | None = None,
 ) -> FrequencyScaleFactor:
-    """Resolve or create a frequency scale factor from a statmech upload ref.
+    """Resolve or create a frequency scale factor from the unified FSF ref.
 
-    Dedup key: full identity (lot, software, scale_kind, value, lit, workflow_tool_release).
+    Dedup key: the full DB identity tuple
+    ``(level_of_theory, software, scale_kind, value, source_literature,
+    workflow_tool_release)``. ``note`` is descriptive and never used for
+    matching — when the identity collides with an existing row, the row
+    is reused and the incoming ``note`` is ignored.
 
     :param session: Active SQLAlchemy session.
-    :param ref: Upload-facing freq scale factor ref (from refs.py).
-    :param created_by: Optional application user id.
-    :returns: Existing or newly created FSF row.
+    :param ref: Unified upload-facing frequency scale factor reference.
+    :param created_by: Optional application user id for newly created rows.
+    :returns: Existing or newly created ``FrequencyScaleFactor`` row.
     """
     lot = resolve_level_of_theory_ref(session, ref.level_of_theory)
 
@@ -190,6 +267,13 @@ def resolve_or_create_freq_scale_factor_ref(
     if ref.software is not None:
         sw = resolve_software(session, ref.software.name)
         software_id = sw.id
+
+    literature = (
+        resolve_or_create_literature(session, ref.source_literature)
+        if ref.source_literature is not None
+        else None
+    )
+    lit_id = literature.id if literature else None
 
     wtr_id = None
     if ref.workflow_tool_release is not None:
@@ -202,7 +286,7 @@ def resolve_or_create_freq_scale_factor_ref(
         software_id=software_id,
         scale_kind=ref.scale_kind,
         value=ref.value,
-        source_literature_id=None,
+        source_literature_id=lit_id,
         workflow_tool_release_id=wtr_id,
         note=ref.note,
         created_by=created_by,
@@ -285,6 +369,7 @@ def create_applied_energy_correction(
     *,
     target_species_entry_id: int | None = None,
     target_reaction_entry_id: int | None = None,
+    target_transition_state_entry_id: int | None = None,
     source_conformer_observation_id: int | None = None,
     source_calculation_id: int | None = None,
     created_by: int | None = None,
@@ -299,6 +384,9 @@ def create_applied_energy_correction(
     :param payload: Upload-facing applied correction payload.
     :param target_species_entry_id: Resolved target species entry id.
     :param target_reaction_entry_id: Resolved target reaction entry id.
+    :param target_transition_state_entry_id: Resolved target transition-state
+        entry id. Exactly one of the three target ids must be set; this is
+        enforced by the table's CHECK constraint.
     :param source_conformer_observation_id: Resolved source conformer id.
     :param source_calculation_id: Resolved source calculation id.
     :param created_by: Optional application user id.
@@ -314,7 +402,7 @@ def create_applied_energy_correction(
         scheme_id = scheme.id
 
     if payload.frequency_scale_factor is not None:
-        fsf = resolve_or_create_frequency_scale_factor(
+        fsf = resolve_or_create_freq_scale_factor_ref(
             session, payload.frequency_scale_factor, created_by=created_by
         )
         fsf_id = fsf.id
@@ -322,6 +410,7 @@ def create_applied_energy_correction(
     applied = AppliedEnergyCorrection(
         target_species_entry_id=target_species_entry_id,
         target_reaction_entry_id=target_reaction_entry_id,
+        target_transition_state_entry_id=target_transition_state_entry_id,
         source_conformer_observation_id=source_conformer_observation_id,
         source_calculation_id=source_calculation_id,
         scheme_id=scheme_id,

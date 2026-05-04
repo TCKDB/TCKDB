@@ -100,6 +100,8 @@ def _format_summary(
         f"  skipped (marked skipped)           : {summary.skipped_marked_skipped}",
         f"  skipped (failed; --only-pending set): "
         f"{summary.skipped_failed_due_to_only_pending}",
+        f"  skipped (needs regeneration)       : "
+        f"{summary.skipped_needs_regeneration}",
         f"  failed                             : {summary.failed}",
         f"  dry_run                            : {summary.dry_run}",
     ]

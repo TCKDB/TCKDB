@@ -106,7 +106,7 @@ _TEST_API_KEY_HASH = hashlib.sha256(_TEST_API_KEY.encode()).hexdigest()
 
 @pytest.fixture(scope="session")
 def _api_test_user(db_engine) -> int:
-    """Create a test user with an API key once per session.
+    """Create a regular-role test user with an API key once per session.
 
     Committed so it's visible to all test-scoped sessions.
     """
@@ -128,6 +128,43 @@ def _api_test_user(db_engine) -> int:
             session.flush()
             user_id = user.id
     return user_id
+
+
+def _create_user_in_session(session: Session, *, username: str, role: AppUserRole) -> int:
+    """Create an AppUser inside the per-test transaction and return its id.
+
+    Function-scoped so the user is rolled back at end-of-test — avoids
+    leaking curator/admin rows into tests like ``bootstrap_admin`` that
+    assert on the absence of any admin user.
+    """
+    user = AppUser(username=username, role=role)
+    session.add(user)
+    session.flush()
+    return user.id
+
+
+@pytest.fixture
+def _api_curator_user(db_session) -> int:
+    """Curator-role user, created per-test in the rollback transaction."""
+    return _create_user_in_session(
+        db_session, username="testcurator", role=AppUserRole.curator
+    )
+
+
+@pytest.fixture
+def _api_admin_user(db_session) -> int:
+    """Admin-role user, created per-test in the rollback transaction."""
+    return _create_user_in_session(
+        db_session, username="testadmin", role=AppUserRole.admin
+    )
+
+
+@pytest.fixture
+def _api_other_user(db_session) -> int:
+    """A second regular-role user, created per-test for cross-user 403 checks."""
+    return _create_user_in_session(
+        db_session, username="testother", role=AppUserRole.user
+    )
 
 
 @pytest.fixture
@@ -174,3 +211,20 @@ def db_session(client) -> Session:
     """The same DB session used by the TestClient, for raw ORM inserts
     that need to be visible to the API endpoints in the same transaction."""
     return client._db_session
+
+
+@pytest.fixture
+def login_as(client, db_session):
+    """Helper to swap ``get_current_user`` mid-test on the shared client.
+
+    Returns a callable ``login_as(user_id)`` that re-overrides the auth
+    dependency so subsequent requests run as the given user. Useful for
+    tests that need to act as multiple roles (e.g. user creates a
+    submission, curator approves it) within one transaction.
+    """
+    def _login_as(user_id: int) -> AppUser:
+        user = db_session.get(AppUser, user_id)
+        client.app.dependency_overrides[get_current_user] = lambda: user
+        return user
+
+    return _login_as

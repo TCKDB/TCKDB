@@ -32,6 +32,7 @@ from app.db.models.common import (
     ConstraintKind,
     CoordinateUnit,
     IRCDirection,
+    ParameterSource,
     ScanCoordinateKind,
     ValidationStatus,
 )
@@ -950,6 +951,18 @@ class CalculationParameter(Base, TimestampMixin):
     unit: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     parameter_index: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True, doc="Ordering for repeated/positional options"
+    )
+    source: Mapped[ParameterSource] = mapped_column(
+        SAEnum(ParameterSource, name="calculation_parameter_source"),
+        nullable=False,
+        default=ParameterSource.upload,
+        server_default=ParameterSource.upload.value,
+        doc="Row provenance: parser-extracted, upload-supplied, or curated.",
+    )
+    parser_version: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Parser version that produced this row, when source='parser'.",
     )
 
     calculation: Mapped["Calculation"] = relationship(back_populates="parameters")

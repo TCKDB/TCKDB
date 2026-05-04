@@ -28,6 +28,7 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationGeometryRole,
     NetworkSpeciesRole,
+    SubmissionRecordType,
 )
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
@@ -60,6 +61,11 @@ from app.services.calculation_resolution import (
     resolve_workflow_tool_release_ref,
 )
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
+)
 from app.services.software_resolution import resolve_software_release_ref
 from app.services.transport_resolution import resolve_and_create_transport
 from app.workflows.reaction import persist_reaction_upload
@@ -166,6 +172,7 @@ def persist_network_pdep_upload(
     request: NetworkPDepUploadRequest,
     *,
     created_by: int | None = None,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
 ) -> Network:
     """Persist a complete pressure-dependent network upload workflow.
 
@@ -179,6 +186,9 @@ def persist_network_pdep_upload(
     calculation_key_to_id: dict[str, int] = {}
     reaction_key_to_entry: dict[str, object] = {}
     observation_id_by_geometry_key: dict[str, int] = {}
+    # Review-row targets accumulated as records are written; used at the end
+    # of the workflow to apply the caller's ReviewPolicy to all of them.
+    review_targets: list[RecordRef] = []
 
     # ------------------------------------------------------------------
     # 1. Resolve species
@@ -190,6 +200,9 @@ def persist_network_pdep_upload(
             xyz_text=first_xyz,
         )
         species_key_to_entry[sp.key] = species_entry
+        review_targets.append(
+            RecordRef(SubmissionRecordType.species_entry, species_entry.id)
+        )
 
     # ------------------------------------------------------------------
     # 2. Process conformers (geometry + opt calc + conformer observation)
@@ -212,6 +225,9 @@ def persist_network_pdep_upload(
                 created_by=created_by,
             )
             calculation_key_to_id[conf.calculation.key] = calculation.id
+            review_targets.append(
+                RecordRef(SubmissionRecordType.calculation, calculation.id)
+            )
 
             # Create conformer group + observation (with torsion matching)
             parsed = parse_xyz(GeometryPayload(xyz_text=conf.geometry.xyz_text))
@@ -236,6 +252,14 @@ def persist_network_pdep_upload(
             session.add(observation)
             session.flush()
             observation_id_by_geometry_key[conf.geometry.key] = observation.id
+            review_targets.append(
+                RecordRef(SubmissionRecordType.conformer_group, conformer_group.id)
+            )
+            review_targets.append(
+                RecordRef(
+                    SubmissionRecordType.conformer_observation, observation.id
+                )
+            )
 
             # Anchor the calculation to this conformer observation
             calculation.conformer_observation_id = observation.id
@@ -254,6 +278,9 @@ def persist_network_pdep_upload(
                 created_by=created_by,
             )
             calculation_key_to_id[calc_in.key] = calculation.id
+            review_targets.append(
+                RecordRef(SubmissionRecordType.calculation, calculation.id)
+            )
             _anchor_species_calculation_to_observation(
                 calculation,
                 calc_in,
@@ -265,11 +292,14 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     for sp in request.species:
         if sp.transport is not None:
-            resolve_and_create_transport(
+            transport_row = resolve_and_create_transport(
                 session,
                 sp.transport,
                 species_entry_id=species_key_to_entry[sp.key].id,
                 created_by=created_by,
+            )
+            review_targets.append(
+                RecordRef(SubmissionRecordType.transport, transport_row.id)
             )
 
     # ------------------------------------------------------------------
@@ -296,7 +326,10 @@ def persist_network_pdep_upload(
             ],
         )
         reaction_entry = persist_reaction_upload(
-            session, reaction_upload, created_by=created_by
+            session,
+            reaction_upload,
+            created_by=created_by,
+            review_policy=review_policy,
         )
         reaction_key_to_entry[rxn.key] = reaction_entry
 
@@ -325,6 +358,12 @@ def persist_network_pdep_upload(
         )
         session.add(ts_entry)
         session.flush()
+        review_targets.append(
+            RecordRef(SubmissionRecordType.transition_state, ts.id)
+        )
+        review_targets.append(
+            RecordRef(SubmissionRecordType.transition_state_entry, ts_entry.id)
+        )
 
         # Resolve TS geometry
         ts_geom_payload = GeometryPayload(xyz_text=ts_in.geometry.xyz_text)
@@ -341,6 +380,9 @@ def persist_network_pdep_upload(
             created_by=created_by,
         )
         calculation_key_to_id[ts_in.calculation.key] = ts_calc.id
+        review_targets.append(
+            RecordRef(SubmissionRecordType.calculation, ts_calc.id)
+        )
 
         # Additional TS calculations (freq, sp, irc)
         for calc_in in ts_in.calculations:
@@ -352,6 +394,9 @@ def persist_network_pdep_upload(
                 created_by=created_by,
             )
             calculation_key_to_id[calc_in.key] = calc.id
+            review_targets.append(
+                RecordRef(SubmissionRecordType.calculation, calc.id)
+            )
 
     # ------------------------------------------------------------------
     # 6. Resolve network-level provenance and create network
@@ -382,6 +427,7 @@ def persist_network_pdep_upload(
     )
     session.add(network)
     session.flush()
+    review_targets.append(RecordRef(SubmissionRecordType.network, network.id))
 
     # ------------------------------------------------------------------
     # 7. Create network states + participants
@@ -523,6 +569,9 @@ def persist_network_pdep_upload(
         )
         session.add(solve)
         session.flush()
+        review_targets.append(
+            RecordRef(SubmissionRecordType.network_solve, solve.id)
+        )
 
         # Bath gas
         for bg in solve_in.bath_gas:
@@ -559,5 +608,12 @@ def persist_network_pdep_upload(
             )
 
         session.flush()
+
+    apply_review_policy(
+        session,
+        targets=review_targets,
+        policy=review_policy,
+        created_by=created_by,
+    )
 
     return network

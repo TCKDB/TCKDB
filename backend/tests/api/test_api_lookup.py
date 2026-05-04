@@ -313,8 +313,11 @@ class TestSpeciesCalculationLookup:
         assert "source_calculation_id" in geom
         assert "geometry_id" in geom
 
-    def test_include_geometry_on_freq_returns_linked_geometry(self, client):
-        """Freq calcs have a linked geometry (the geometry they were performed at)."""
+    def test_include_geometry_on_freq_returns_not_applicable(self, client):
+        """Freq calcs do not auto-claim an output geometry under the
+        narrowed fallback (only opt qualifies). Without an explicit
+        producer-declared output geometry, freq returns
+        ``geometry: null`` with status ``not_applicable``."""
         client.post("/api/v1/uploads/conformers", json=_h2_conformer_payload())
         resp = client.get(
             "/api/v1/lookup/species-calculation",
@@ -326,11 +329,8 @@ class TestSpeciesCalculationLookup:
         )
         data = resp.json()
         calc = [r for r in data["results"] if r["resource_type"] == "calculation"][0]
-        # Freq calc was performed at this geometry, so it's linked
-        geom = calc["summary"]["geometry"]
-        assert geom is not None
-        assert geom["role"] == "final"
-        assert "source_calculation_id" in geom
+        assert calc["summary"]["geometry"] is None
+        assert calc["summary"]["geometry_status"] == "not_applicable"
 
     def test_no_include_omits_geometry(self, client):
         """Without include=geometry, geometry key is absent entirely."""

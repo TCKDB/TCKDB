@@ -75,3 +75,79 @@ def test_re_export_from_network_pdep_upload() -> None:
     )
 
     assert LegacyArtifactIn is ArtifactIn
+
+
+# ---------------------------------------------------------------------------
+# Filename validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "kind,filename",
+    [
+        ("input", "geom.gjf"),
+        ("input", "geom.in"),
+        ("output_log", "opt.log"),
+        ("output_log", "opt.out"),
+        ("output_log", "opt.orca"),
+        ("output_log", "OPT.LOG"),  # case-insensitive
+        ("checkpoint", "wfn.chk"),
+        ("checkpoint", "wfn.gbw"),
+        ("formatted_checkpoint", "wfn.fchk"),
+        ("ancillary", "note.txt"),
+        ("ancillary", "x.dat"),
+    ],
+)
+def test_filename_extension_allowed_per_kind(kind: str, filename: str) -> None:
+    a = ArtifactIn(**_valid_kwargs(kind=kind, filename=filename))
+    assert a.filename == filename if filename.islower() else a.filename
+
+
+@pytest.mark.parametrize(
+    "kind,filename",
+    [
+        # Wrong-kind extension
+        ("input", "geom.log"),
+        ("output_log", "geom.gjf"),
+        ("checkpoint", "wfn.fchk"),
+        ("ancillary", "note.exe"),
+        # Double extension (real ext is .exe)
+        ("output_log", "opt.log.exe"),
+        # No extension
+        ("output_log", "opt"),
+    ],
+)
+def test_filename_extension_rejected(kind: str, filename: str) -> None:
+    with pytest.raises(ValidationError):
+        ArtifactIn(**_valid_kwargs(kind=kind, filename=filename))
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "../etc/passwd.log",          # directory traversal
+        "sub/dir/opt.log",            # forward slash
+        "sub\\dir\\opt.log",          # backslash
+        ".hidden.log",                # leading dot
+        "-rf.log",                    # leading hyphen (shell flag injection)
+        "opt\x00.log",                # NUL
+        "opt\n.log",                  # control char
+    ],
+)
+def test_filename_unsafe_chars_rejected(filename: str) -> None:
+    with pytest.raises(ValidationError):
+        ArtifactIn(**_valid_kwargs(kind="output_log", filename=filename))
+
+
+def test_filename_too_long_rejected() -> None:
+    long_name = ("a" * 260) + ".log"
+    with pytest.raises(ValidationError):
+        ArtifactIn(**_valid_kwargs(kind="output_log", filename=long_name))
+
+
+def test_filename_nfc_normalized() -> None:
+    # "é" as NFD: U+0065 U+0301; should normalize to NFC U+00E9 before
+    # length and content checks.
+    decomposed = "café.log"
+    a = ArtifactIn(**_valid_kwargs(kind="output_log", filename=decomposed))
+    assert a.filename == "café.log"

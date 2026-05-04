@@ -36,6 +36,58 @@ def _seed_reaction_families() -> None:
     )
 
 
+def _seed_calculation_parameter_vocab() -> None:
+    """Insert Phase 1 canonical parameter keys.
+
+    Dotted namespaces (``scf.convergence``, ``parallel.nproc``, ...) make
+    the vocabulary read as paths rather than Python identifiers and let
+    related settings group visibly under a shared prefix. The Gaussian
+    and ORCA parser ``_CANONICAL_MAP`` tables emit these same dotted
+    keys so parsed canonical_keys link through the FK instead of being
+    silently demoted to NULL.
+    """
+    vocab_table = sa.table(
+        "calculation_parameter_vocab",
+        sa.column("canonical_key", sa.Text()),
+        sa.column("description", sa.Text()),
+        sa.column("expected_value_type", sa.Text()),
+        sa.column("affects_scientific_result", sa.Boolean()),
+        sa.column("affects_numerics", sa.Boolean()),
+        sa.column("affects_resources", sa.Boolean()),
+        sa.column("note", sa.Text()),
+    )
+    rows = [
+        # SCF block
+        {"canonical_key": "scf.convergence", "description": "SCF energy/density convergence target.", "expected_value_type": "enum", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": False, "note": None},
+        {"canonical_key": "scf.max_cycles", "description": "Maximum SCF iterations before fallback.", "expected_value_type": "int", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
+        {"canonical_key": "scf.direct", "description": "SCF integral handling: direct/incore.", "expected_value_type": "enum", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
+        {"canonical_key": "scf.fallback", "description": "SCF fallback algorithm (e.g. xqc, qc).", "expected_value_type": "enum", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
+        # Optimisation block
+        {"canonical_key": "opt.convergence", "description": "Geometry optimisation convergence target.", "expected_value_type": "enum", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": False, "note": None},
+        {"canonical_key": "opt.max_cycles", "description": "Maximum optimisation steps.", "expected_value_type": "int", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
+        {"canonical_key": "opt.max_step", "description": "Maximum trust-radius / step size.", "expected_value_type": "float", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
+        {"canonical_key": "opt.initial_hessian", "description": "Initial Hessian source: calcfc / calcall / readfc.", "expected_value_type": "enum", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": False, "note": "calcall changes converged path, not just speed."},
+        {"canonical_key": "opt.saddle_order", "description": "Saddle-point order for transition-state search.", "expected_value_type": "int", "affects_scientific_result": True, "affects_numerics": False, "affects_resources": False, "note": None},
+        {"canonical_key": "opt.eigen_test", "description": "Eigenvalue test toggle for opt steps.", "expected_value_type": "enum", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
+        # Numerics
+        {"canonical_key": "grid.quality", "description": "DFT integration grid quality.", "expected_value_type": "string", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": True, "note": None},
+        {"canonical_key": "integral.accuracy", "description": "Two-electron integral accuracy threshold.", "expected_value_type": "int", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": True, "note": None},
+        {"canonical_key": "guess.strategy", "description": "Initial-guess strategy: harris/mix/read/INDO/etc.", "expected_value_type": "string", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": False, "note": "Affects converged electronic state and convergence success."},
+        {"canonical_key": "symmetry.disabled", "description": "Disables use of molecular symmetry in the electronic-structure calculation.", "expected_value_type": "bool", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": False, "note": None},
+        # PNO (post-HF)
+        {"canonical_key": "pno.truncation", "description": "PNO truncation level for DLPNO methods.", "expected_value_type": "enum", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": True, "note": None},
+        # Bookkeeping
+        {"canonical_key": "output.verbosity", "description": "Output verbosity tier.", "expected_value_type": "enum", "affects_scientific_result": False, "affects_numerics": False, "affects_resources": False, "note": None},
+        {"canonical_key": "internal_option.iop", "description": "Gaussian IOp(overlay/option=value) internal option. Raw key carries the overlay/option coordinate; raw value carries the assigned value.", "expected_value_type": "string", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": False, "note": "Generic catch-all for IOp(...) directives. Behavior depends on the specific overlay/option."},
+        # Resources
+        {"canonical_key": "parallel.nproc", "description": "Total processor count requested.", "expected_value_type": "int", "affects_scientific_result": False, "affects_numerics": False, "affects_resources": True, "note": None},
+        {"canonical_key": "parallel.nproc_shared", "description": "Shared-memory processor count.", "expected_value_type": "int", "affects_scientific_result": False, "affects_numerics": False, "affects_resources": True, "note": None},
+        {"canonical_key": "memory.raw", "description": "Memory request as software-emitted string (units in row).", "expected_value_type": "string", "affects_scientific_result": False, "affects_numerics": False, "affects_resources": True, "note": None},
+        {"canonical_key": "memory.maxcore_mb", "description": "Per-process memory cap in megabytes (ORCA %maxcore).", "expected_value_type": "int", "affects_scientific_result": False, "affects_numerics": False, "affects_resources": True, "note": None},
+    ]
+    op.bulk_insert(vocab_table, rows)
+
+
 def upgrade() -> None:
     """Upgrade schema."""
     op.create_table('app_user',
@@ -525,6 +577,7 @@ def upgrade() -> None:
     sa.Column('n', sa.Double(), nullable=True),
     sa.Column('ea_kj_mol', sa.Double(), nullable=True),
     sa.Column('a_uncertainty', sa.Double(), nullable=True),
+    sa.Column('a_uncertainty_kind', sa.Enum('additive', 'multiplicative', name='kinetics_uncertainty_kind'), nullable=True),
     sa.Column('n_uncertainty', sa.Double(), nullable=True),
     sa.Column('ea_uncertainty_kj_mol', sa.Double(), nullable=True),
     sa.Column('tmin_k', sa.Double(), nullable=True),
@@ -534,6 +587,8 @@ def upgrade() -> None:
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('created_by', sa.BigInteger(), nullable=True),
+    sa.CheckConstraint('(a_uncertainty IS NULL) = (a_uncertainty_kind IS NULL)', name=op.f('ck_kinetics_a_uncertainty_kind_required_with_value')),
+    sa.CheckConstraint("a_uncertainty_kind <> 'multiplicative' OR a_uncertainty >= 1.0", name=op.f('ck_kinetics_a_uncertainty_multiplicative_ge_1')),
     sa.CheckConstraint('tmax_k IS NULL OR tmax_k > 0', name=op.f('ck_kinetics_tmax_k_gt_0')),
     sa.CheckConstraint('tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k', name=op.f('ck_kinetics_tmin_le_tmax')),
     sa.CheckConstraint('tmin_k IS NULL OR tmin_k > 0', name=op.f('ck_kinetics_tmin_k_gt_0')),
@@ -719,8 +774,7 @@ def upgrade() -> None:
     sa.CheckConstraint('multiplicity >= 1', name=op.f('ck_transition_state_entry_multiplicity_ge_1')),
     sa.ForeignKeyConstraint(['created_by'], ['app_user.id'], name=op.f('fk_transition_state_entry_created_by_app_user'), initially='IMMEDIATE', deferrable=True),
     sa.ForeignKeyConstraint(['transition_state_id'], ['transition_state.id'], name=op.f('fk_transition_state_entry_transition_state_id_transition_state'), initially='IMMEDIATE', deferrable=True),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_transition_state_entry')),
-    sa.UniqueConstraint('id', 'transition_state_id', name='uq_transition_state_entry_id')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_transition_state_entry'))
     )
     op.create_table('calculation',
     sa.Column('id', sa.BigInteger(), nullable=False),
@@ -772,21 +826,6 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['channel_id'], ['network_channel.id'], name=op.f('fk_network_kinetics_channel_id_network_channel'), initially='IMMEDIATE', deferrable=True),
     sa.ForeignKeyConstraint(['solve_id'], ['network_solve.id'], name=op.f('fk_network_kinetics_solve_id_network_solve'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_network_kinetics'))
-    )
-    op.create_table('transition_state_selection',
-    sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('transition_state_id', sa.BigInteger(), nullable=False),
-    sa.Column('transition_state_entry_id', sa.BigInteger(), nullable=False),
-    sa.Column('selection_kind', sa.Enum('display_default', 'curator_pick', 'validated_reference', 'preferred_for_kinetics', 'benchmark_reference', 'representative_geometry', name='transition_state_selection_kind'), nullable=False),
-    sa.Column('note', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('created_by', sa.BigInteger(), nullable=True),
-    sa.ForeignKeyConstraint(['created_by'], ['app_user.id'], name=op.f('fk_transition_state_selection_created_by_app_user'), initially='IMMEDIATE', deferrable=True),
-    sa.ForeignKeyConstraint(['transition_state_entry_id', 'transition_state_id'], ['transition_state_entry.id', 'transition_state_entry.transition_state_id'], name='fk_transition_state_selection_entry_with_parent', initially='IMMEDIATE', deferrable=True),
-    sa.ForeignKeyConstraint(['transition_state_entry_id'], ['transition_state_entry.id'], name=op.f('fk_transition_state_selection_transition_state_entry_id_transition_state_entry'), initially='IMMEDIATE', deferrable=True),
-    sa.ForeignKeyConstraint(['transition_state_id'], ['transition_state.id'], name=op.f('fk_transition_state_selection_transition_state_id_transition_state'), initially='IMMEDIATE', deferrable=True),
-    sa.PrimaryKeyConstraint('id', name=op.f('pk_transition_state_selection')),
-    sa.UniqueConstraint('transition_state_id', 'selection_kind', name='uq_transition_state_selection_transition_state_id')
     )
     op.create_table('calc_freq_result',
     sa.Column('calculation_id', sa.BigInteger(), nullable=False),
@@ -967,6 +1006,8 @@ def upgrade() -> None:
     sa.Column('value_type', sa.Text(), nullable=True),
     sa.Column('unit', sa.Text(), nullable=True),
     sa.Column('parameter_index', sa.Integer(), nullable=True),
+    sa.Column('source', sa.Enum('parser', 'upload', 'curated', name='calculation_parameter_source'), server_default='upload', nullable=False),
+    sa.Column('parser_version', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.CheckConstraint('parameter_index IS NULL OR parameter_index >= 0', name=op.f('ck_calculation_parameter_parameter_index_ge_0')),
     sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calculation_parameter_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
@@ -977,6 +1018,7 @@ def upgrade() -> None:
     op.create_index('ix_calculation_parameter_canonical_key', 'calculation_parameter', ['canonical_key'], unique=False)
     op.create_index('ix_calculation_parameter_raw_key_section', 'calculation_parameter', ['raw_key', 'section'], unique=False)
     op.create_index('ix_calculation_parameter_canonical_key_value', 'calculation_parameter', ['canonical_key', 'canonical_value'], unique=False)
+    op.create_index('ix_calculation_parameter_source', 'calculation_parameter', ['calculation_id', 'source'], unique=False)
     op.create_table('calculation_dependency',
     sa.Column('parent_calculation_id', sa.BigInteger(), nullable=False),
     sa.Column('child_calculation_id', sa.BigInteger(), nullable=False),
@@ -1131,6 +1173,7 @@ def upgrade() -> None:
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('target_species_entry_id', sa.BigInteger(), nullable=True),
     sa.Column('target_reaction_entry_id', sa.BigInteger(), nullable=True),
+    sa.Column('target_transition_state_entry_id', sa.BigInteger(), nullable=True),
     sa.Column('source_conformer_observation_id', sa.BigInteger(), nullable=True),
     sa.Column('source_calculation_id', sa.BigInteger(), nullable=True),
     sa.Column('scheme_id', sa.BigInteger(), nullable=True),
@@ -1143,7 +1186,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('created_by', sa.BigInteger(), nullable=True),
     sa.CheckConstraint('num_nonnulls(scheme_id, frequency_scale_factor_id) = 1', name=op.f('ck_applied_energy_correction_exactly_one_provenance_source')),
-    sa.CheckConstraint('num_nonnulls(target_species_entry_id, target_reaction_entry_id) = 1', name=op.f('ck_applied_energy_correction_exactly_one_target')),
+    sa.CheckConstraint('num_nonnulls(target_species_entry_id, target_reaction_entry_id, target_transition_state_entry_id) = 1', name=op.f('ck_applied_energy_correction_exactly_one_target')),
     sa.CheckConstraint('temperature_k IS NULL OR temperature_k > 0', name=op.f('ck_applied_energy_correction_temperature_k_gt_0')),
     sa.ForeignKeyConstraint(['created_by'], ['app_user.id'], name=op.f('fk_applied_energy_correction_created_by_app_user'), initially='IMMEDIATE', deferrable=True),
     sa.ForeignKeyConstraint(['frequency_scale_factor_id'], ['frequency_scale_factor.id'], name=op.f('fk_applied_energy_correction_frequency_scale_factor_id_frequency_scale_factor'), initially='IMMEDIATE', deferrable=True),
@@ -1152,9 +1195,10 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['source_conformer_observation_id'], ['conformer_observation.id'], name=op.f('fk_applied_energy_correction_source_conformer_observation_id_conformer_observation'), initially='IMMEDIATE', deferrable=True),
     sa.ForeignKeyConstraint(['target_reaction_entry_id'], ['reaction_entry.id'], name=op.f('fk_applied_energy_correction_target_reaction_entry_id_reaction_entry'), initially='IMMEDIATE', deferrable=True),
     sa.ForeignKeyConstraint(['target_species_entry_id'], ['species_entry.id'], name=op.f('fk_applied_energy_correction_target_species_entry_id_species_entry'), initially='IMMEDIATE', deferrable=True),
+    sa.ForeignKeyConstraint(['target_transition_state_entry_id'], ['transition_state_entry.id'], name=op.f('fk_applied_energy_correction_target_transition_state_entry_id_transition_state_entry'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_applied_energy_correction'))
     )
-    op.create_index('uq_applied_energy_correction_dedup', 'applied_energy_correction', ['target_species_entry_id', 'target_reaction_entry_id', 'source_conformer_observation_id', 'scheme_id', 'frequency_scale_factor_id', 'application_role', 'temperature_k', 'source_calculation_id'], unique=True, postgresql_nulls_not_distinct=True)
+    op.create_index('uq_applied_energy_correction_dedup', 'applied_energy_correction', ['target_species_entry_id', 'target_reaction_entry_id', 'target_transition_state_entry_id', 'source_conformer_observation_id', 'scheme_id', 'frequency_scale_factor_id', 'application_role', 'temperature_k', 'source_calculation_id'], unique=True, postgresql_nulls_not_distinct=True)
     op.create_table('calc_scan_point_coordinate_value',
     sa.Column('calculation_id', sa.BigInteger(), nullable=False),
     sa.Column('point_index', sa.Integer(), nullable=False),
@@ -1373,7 +1417,7 @@ def upgrade() -> None:
                 'species', 'species_entry', 'conformer_group', 'conformer_observation',
                 'reaction', 'reaction_entry', 'transition_state', 'transition_state_entry',
                 'calculation', 'statmech', 'thermo', 'kinetics', 'transport',
-                'network', 'network_solve',
+                'network', 'network_solve', 'applied_energy_correction',
                 name='submission_record_type',
             ),
             nullable=False,
@@ -1396,7 +1440,61 @@ def upgrade() -> None:
     op.create_index('ix_submission_record_link_submission_id', 'submission_record_link', ['submission_id'], unique=False)
     op.create_index('ix_submission_record_link_record', 'submission_record_link', ['record_type', 'record_id'], unique=False)
 
+    op.create_table(
+        'record_review',
+        sa.Column('id', sa.BigInteger(), nullable=False),
+        sa.Column(
+            'record_type',
+            postgresql.ENUM(name='submission_record_type', create_type=False),
+            nullable=False,
+        ),
+        sa.Column('record_id', sa.BigInteger(), nullable=False),
+        sa.Column(
+            'status',
+            sa.Enum(
+                'not_reviewed', 'under_review', 'approved', 'rejected', 'deprecated',
+                name='record_review_status',
+            ),
+            server_default='not_reviewed',
+            nullable=False,
+        ),
+        sa.Column('submission_id', sa.BigInteger(), nullable=True),
+        sa.Column('reviewed_by', sa.BigInteger(), nullable=True),
+        sa.Column('reviewed_at', sa.DateTime(), nullable=True),
+        sa.Column('note', sa.Text(), nullable=True),
+        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_by', sa.BigInteger(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ['submission_id'], ['submission.id'],
+            name=op.f('fk_record_review_submission_id_submission'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.ForeignKeyConstraint(
+            ['reviewed_by'], ['app_user.id'],
+            name=op.f('fk_record_review_reviewed_by_app_user'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.ForeignKeyConstraint(
+            ['created_by'], ['app_user.id'],
+            name=op.f('fk_record_review_created_by_app_user'),
+            deferrable=True, initially='IMMEDIATE',
+        ),
+        sa.PrimaryKeyConstraint('id', name=op.f('pk_record_review')),
+        sa.UniqueConstraint(
+            'record_type', 'record_id',
+            name='uq_record_review_record',
+        ),
+        sa.CheckConstraint(
+            "(status NOT IN ('approved', 'rejected', 'deprecated')) "
+            "OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL)",
+            name=op.f('ck_record_review_record_review_terminal_requires_reviewer'),
+        ),
+    )
+    op.create_index('ix_record_review_status_record_type', 'record_review', ['status', 'record_type'], unique=False)
+    op.create_index('ix_record_review_submission_id', 'record_review', ['submission_id'], unique=False)
+
     _seed_reaction_families()
+    _seed_calculation_parameter_vocab()
 
     # Seed default conformer assignment scheme
     op.execute(sa.text("""
@@ -1414,6 +1512,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_index('ix_record_review_submission_id', table_name='record_review')
+    op.drop_index('ix_record_review_status_record_type', table_name='record_review')
+    op.drop_table('record_review')
+    op.execute("DROP TYPE IF EXISTS record_review_status")
+
     op.drop_index('ix_submission_record_link_record', table_name='submission_record_link')
     op.drop_index('ix_submission_record_link_submission_id', table_name='submission_record_link')
     op.drop_table('submission_record_link')
@@ -1460,11 +1563,13 @@ def downgrade() -> None:
     op.drop_index('uq_calculation_dependency_child_calculation_id_freq_on', table_name='calculation_dependency', postgresql_where=sa.text("dependency_role = 'freq_on'"))
     op.drop_table('calculation_dependency')
     op.drop_table('calculation_artifact')
+    op.drop_index('ix_calculation_parameter_source', table_name='calculation_parameter')
     op.drop_index('ix_calculation_parameter_canonical_key_value', table_name='calculation_parameter')
     op.drop_index('ix_calculation_parameter_raw_key_section', table_name='calculation_parameter')
     op.drop_index('ix_calculation_parameter_canonical_key', table_name='calculation_parameter')
     op.drop_index('ix_calculation_parameter_calculation_id', table_name='calculation_parameter')
     op.drop_table('calculation_parameter')
+    op.execute("DROP TYPE IF EXISTS calculation_parameter_source")
     op.drop_table('calculation_parameter_vocab')
     op.drop_table('calc_geometry_validation')
     op.execute("DROP TYPE IF EXISTS validation_status")
@@ -1482,7 +1587,6 @@ def downgrade() -> None:
     op.execute("DROP TYPE IF EXISTS constraint_kind")
     op.drop_table('calc_opt_result')
     op.drop_table('calc_freq_result')
-    op.drop_table('transition_state_selection')
     op.drop_table('network_kinetics')
     op.execute("DROP TYPE IF EXISTS pressure_unit")
     op.execute("DROP TYPE IF EXISTS temperature_unit")
@@ -1493,6 +1597,7 @@ def downgrade() -> None:
     op.drop_table('network_solve_bath_gas')
     op.drop_table('network_channel')
     op.drop_table('transition_state')
+    op.execute("DROP TYPE IF EXISTS transition_state_selection_kind")
     op.drop_table('thermo_point')
     op.drop_table('thermo_nasa')
     op.drop_table('reaction_entry_structure_participant')
@@ -1501,6 +1606,7 @@ def downgrade() -> None:
     op.drop_table('network_solve')
     op.drop_table('network_reaction')
     op.drop_table('kinetics')
+    op.execute("DROP TYPE IF EXISTS kinetics_uncertainty_kind")
     op.drop_table('conformer_selection')
     op.drop_table('transport')
     op.drop_table('thermo')

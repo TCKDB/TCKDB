@@ -8,10 +8,15 @@ from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
     CalculationFreqResult,
+    CalculationInputGeometry,
     CalculationOutputGeometry,
     CalculationSPResult,
 )
-from app.db.models.common import CalculationDependencyRole, CalculationType
+from app.db.models.common import (
+    CalculationDependencyRole,
+    CalculationGeometryRole,
+    CalculationType,
+)
 from app.db.models.geometry import Geometry
 from app.db.models.species import (
     ConformerGroup,
@@ -65,16 +70,20 @@ def test_persist_conformer_upload_creates_expected_rows(db_engine) -> None:
             calculation = observation.calculations[0]
             assert calculation.species_entry_id is not None
 
+            # Primary calc here is type=sp; under the narrowed fallback,
+            # only opt gets an auto-created calculation_output_geometry
+            # row. Sp claims no output geometry unless declared.
             geometry_link = session.scalar(
                 select(CalculationOutputGeometry).where(
                     CalculationOutputGeometry.calculation_id == calculation.id
                 )
             )
-            assert geometry_link is not None
+            assert geometry_link is None
 
-            geometry = session.scalar(
-                select(Geometry).where(Geometry.id == geometry_link.geometry_id)
-            )
+            # The conformer geometry is still resolved as a Geometry row
+            # via the upload's top-level ``geometry`` field, even when no
+            # per-calc output_geometry row is written.
+            geometry = session.scalar(select(Geometry).order_by(Geometry.id))
             assert geometry is not None
             assert geometry.natoms == 1
 
@@ -285,7 +294,10 @@ def test_conformer_upload_with_additional_calculations(db_engine) -> None:
         assert CalculationDependencyRole.freq_on in dep_roles
         assert CalculationDependencyRole.single_point_on in dep_roles
 
-        # All 3 calcs share the same geometry
+        # Under the narrowed fallback, only opt auto-claims the conformer
+        # geometry as a (role=final, output_order=1) output. Freq and sp
+        # produce zero output_geometry rows unless the producer declares
+        # them explicitly.
         geo_links = session.scalars(
             select(CalculationOutputGeometry).where(
                 CalculationOutputGeometry.calculation_id.in_(
@@ -293,8 +305,77 @@ def test_conformer_upload_with_additional_calculations(db_engine) -> None:
                 )
             )
         ).all()
-        assert len(geo_links) == 3
-        assert len({g.geometry_id for g in geo_links}) == 1
+        assert len(geo_links) == 1
+        assert geo_links[0].calculation_id == opt_calc.id
+        assert geo_links[0].role == CalculationGeometryRole.final
+
+        # opt has no input_geometry row (its true input is the pre-opt
+        # xyz which the producer doesn't currently surface). freq and sp
+        # each get exactly one row pointing at the conformer geometry.
+        opt_inputs = session.scalars(
+            select(CalculationInputGeometry).where(
+                CalculationInputGeometry.calculation_id == opt_calc.id
+            )
+        ).all()
+        assert opt_inputs == []
+
+        freq_inputs = session.scalars(
+            select(CalculationInputGeometry).where(
+                CalculationInputGeometry.calculation_id == freq_calc.id
+            )
+        ).all()
+        assert len(freq_inputs) == 1
+        assert freq_inputs[0].input_order == 1
+
+        sp_inputs = session.scalars(
+            select(CalculationInputGeometry).where(
+                CalculationInputGeometry.calculation_id == sp_calc.id
+            )
+        ).all()
+        assert len(sp_inputs) == 1
+        assert sp_inputs[0].input_order == 1
+
+        shared_geo_id = geo_links[0].geometry_id
+        assert freq_inputs[0].geometry_id == shared_geo_id
+        assert sp_inputs[0].geometry_id == shared_geo_id
+
+
+def test_conformer_upload_opt_primary_has_no_input_geometry(db_engine) -> None:
+    """An opt-primary upload yields one output_geometry row (final) and
+    zero input_geometry rows — opt's true input is the pre-opt xyz, which
+    the producer doesn't surface."""
+    request = ConformerUploadRequest(
+        species_entry={
+            "smiles": "[H][H]",
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        geometry={"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74"},
+        calculation={
+            "type": "opt",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "opt_result": {"converged": True},
+        },
+        label="opt-only",
+    )
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_conformer_upload(session, request)
+        opt_id = outcome.primary_calculation.calculation_id
+
+        outputs = session.scalars(
+            select(CalculationOutputGeometry).where(
+                CalculationOutputGeometry.calculation_id == opt_id
+            )
+        ).all()
+        assert len(outputs) == 1
+
+        inputs = session.scalars(
+            select(CalculationInputGeometry).where(
+                CalculationInputGeometry.calculation_id == opt_id
+            )
+        ).all()
+        assert inputs == []
 
 
 def test_conformer_upload_statmech_resolves_literature_from_payload(
@@ -352,6 +433,203 @@ def test_conformer_upload_statmech_resolves_literature_from_payload(
         assert lit is not None
         assert lit.title == "Statmech study on hydrogen"
         assert lit.doi == "10.1063/conformer-statmech"
+
+
+def test_primitive_conformer_explicit_input_geometries_for_opt(
+    db_engine,
+) -> None:
+    """Primitive ``/uploads/conformers``: a primary opt that declares
+    ``input_geometries`` lands a row, distinct from opt's converged
+    output geometry."""
+    pre_opt_xyz = "2\npre-opt H2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.80"
+    request = ConformerUploadRequest(
+        species_entry={
+            "smiles": "[H][H]",
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        geometry={"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74"},
+        calculation={
+            "type": "opt",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "opt_result": {"converged": True},
+            "input_geometries": [{"xyz_text": pre_opt_xyz}],
+        },
+        label="opt-explicit-input",
+    )
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_conformer_upload(session, request)
+        opt_id = outcome.primary_calculation.calculation_id
+
+        inputs = session.scalars(
+            select(CalculationInputGeometry).where(
+                CalculationInputGeometry.calculation_id == opt_id
+            )
+        ).all()
+        assert len(inputs) == 1
+        assert inputs[0].input_order == 1
+
+        outputs = session.scalars(
+            select(CalculationOutputGeometry).where(
+                CalculationOutputGeometry.calculation_id == opt_id
+            )
+        ).all()
+        assert len(outputs) == 1
+        assert inputs[0].geometry_id != outputs[0].geometry_id
+
+
+def test_primitive_conformer_empty_input_geometries_uses_fallback(
+    db_engine,
+) -> None:
+    """With no ``input_geometries`` declared, the prior PR's freq fallback
+    still fires for an additional freq calc and skips the primary opt."""
+    request = ConformerUploadRequest(
+        species_entry={
+            "smiles": "[H][H]",
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        geometry={"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74"},
+        calculation={
+            "type": "opt",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "opt_result": {"converged": True},
+        },
+        additional_calculations=[
+            {
+                "type": "freq",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+                "freq_result": {"n_imag": 0},
+            },
+        ],
+        label="primitive-fallback",
+    )
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_conformer_upload(session, request)
+        opt_id = outcome.primary_calculation.calculation_id
+        freq_id = outcome.additional_calculations[0].calculation_id
+
+        opt_inputs = session.scalars(
+            select(CalculationInputGeometry).where(
+                CalculationInputGeometry.calculation_id == opt_id
+            )
+        ).all()
+        assert opt_inputs == []
+
+        freq_inputs = session.scalars(
+            select(CalculationInputGeometry).where(
+                CalculationInputGeometry.calculation_id == freq_id
+            )
+        ).all()
+        assert len(freq_inputs) == 1
+
+
+def test_primitive_conformer_explicit_output_geometries_for_opt(
+    db_engine,
+) -> None:
+    """Primitive ``/uploads/conformers``: a primary opt that declares
+    ``output_geometries`` lands a row with the producer-declared role,
+    and the narrowed fallback does NOT also fire."""
+    declared_xyz = "2\ndeclared-final\nH 0.0 0.0 0.0\nH 0.0 0.0 0.99"
+    request = ConformerUploadRequest(
+        species_entry={
+            "smiles": "[H][H]",
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        geometry={"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74"},
+        calculation={
+            "type": "opt",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "opt_result": {"converged": True},
+            "output_geometries": [
+                {
+                    "geometry": {"xyz_text": declared_xyz},
+                    "role": "final",
+                },
+            ],
+        },
+        label="opt-explicit-output",
+    )
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_conformer_upload(session, request)
+        opt_id = outcome.primary_calculation.calculation_id
+
+        rows = session.scalars(
+            select(CalculationOutputGeometry).where(
+                CalculationOutputGeometry.calculation_id == opt_id
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].role == CalculationGeometryRole.final
+        assert rows[0].output_order == 1
+
+
+def test_primitive_conformer_empty_output_geometries_freq_sp(db_engine) -> None:
+    """Primitive ``/uploads/conformers``: with no ``output_geometries``
+    declared on the additional freq calc, the narrowed fallback skips
+    freq (not in the {opt} set), so freq gets ZERO rows."""
+    request = ConformerUploadRequest(
+        species_entry={
+            "smiles": "[H][H]",
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        geometry={"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74"},
+        calculation={
+            "type": "opt",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "opt_result": {"converged": True},
+        },
+        additional_calculations=[
+            {
+                "type": "freq",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+                "freq_result": {"n_imag": 0},
+            },
+            {
+                "type": "sp",
+                "software_release": {"name": "Orca", "version": "5.0"},
+                "level_of_theory": {"method": "CCSD(T)", "basis": "cc-pVTZ"},
+                "sp_result": {"electronic_energy_hartree": -1.195},
+            },
+        ],
+        label="primitive-output-fallback",
+    )
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_conformer_upload(session, request)
+        opt_id = outcome.primary_calculation.calculation_id
+        freq_id = outcome.additional_calculations[0].calculation_id
+        sp_id = outcome.additional_calculations[1].calculation_id
+
+        opt_outputs = session.scalars(
+            select(CalculationOutputGeometry).where(
+                CalculationOutputGeometry.calculation_id == opt_id
+            )
+        ).all()
+        # opt still gets the fallback row.
+        assert len(opt_outputs) == 1
+        assert opt_outputs[0].role == CalculationGeometryRole.final
+
+        freq_outputs = session.scalars(
+            select(CalculationOutputGeometry).where(
+                CalculationOutputGeometry.calculation_id == freq_id
+            )
+        ).all()
+        sp_outputs = session.scalars(
+            select(CalculationOutputGeometry).where(
+                CalculationOutputGeometry.calculation_id == sp_id
+            )
+        ).all()
+        # Behavior change: freq and sp produce zero rows.
+        assert freq_outputs == []
+        assert sp_outputs == []
 
 
 def test_conformer_upload_rejects_irc_additional() -> None:

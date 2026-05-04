@@ -13,8 +13,10 @@ from sqlalchemy.sql import ColumnElement
 import app.db.models  # noqa: F401
 from app.db.models.calculation import (
     Calculation,
+    CalculationConstraint,
     CalculationDependency,
     CalculationFreqResult,
+    CalculationInputGeometry,
     CalculationIRCPoint,
     CalculationIRCResult,
     CalculationNEBImageResult,
@@ -29,6 +31,7 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
     IRCDirection,
+    ParameterSource,
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
@@ -39,7 +42,9 @@ from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     IRCResultPayload,
     NEBResultPayload,
+    OutputGeometryEntry,
 )
+from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.refs import (
     LevelOfTheoryRef,
     WorkflowToolReleaseRef,
@@ -468,6 +473,20 @@ def persist_calculation_result(
             )
         _persist_neb_result(session, calculation, calc_upload.neb_result)
 
+    for constraint in calc_upload.constraints:
+        session.add(
+            CalculationConstraint(
+                calculation_id=calculation.id,
+                constraint_index=constraint.constraint_index,
+                constraint_kind=constraint.constraint_kind,
+                atom1_index=constraint.atom1_index,
+                atom2_index=constraint.atom2_index,
+                atom3_index=constraint.atom3_index,
+                atom4_index=constraint.atom4_index,
+                target_value=constraint.target_value,
+            )
+        )
+
 
 def _resolve_canonical_keys(
     session: Session, candidate_keys: set[str]
@@ -504,6 +523,8 @@ def persist_calculation_parameters(
     parameters_json: dict | None = None,
     parameters_parser_version: str | None = None,
     parameters_extracted_at: datetime | None = None,
+    source: ParameterSource = ParameterSource.upload,
+    parser_version: str | None = None,
 ) -> list[CalculationParameter]:
     """Persist parsed execution-control parameters for a calculation.
 
@@ -514,13 +535,30 @@ def persist_calculation_parameters(
     upload never fails on unmapped parameters; the raw key/value pair is
     always preserved.
 
+    When ``source`` is :data:`ParameterSource.parser` the call performs
+    true replace-all by deleting every existing row on this calculation
+    that has ``source='parser'`` *before* inserting the new batch.
+    Upload-supplied and curated rows are never touched. The deletion is
+    intentionally not scoped by ``parser_version``: the table represents
+    the current parsed snapshot, not parser history, so a new parse
+    fully supersedes whatever the previous parser version wrote.
+
     :param session: Active SQLAlchemy session.
     :param calculation: The owning calculation row.
-    :param observations: Parsed parameter observations (may be ``None`` or empty).
-    :param parameters_json: Optional JSON snapshot from the parser to mirror onto
-        ``calculation.parameters_json``.
-    :param parameters_parser_version: Optional parser version tag.
+    :param observations: Parameter observations (may be ``None`` or empty).
+        With ``source=parser``, an empty/None batch still triggers the
+        replace-all delete so re-parsing a file that yields no recognised
+        parameters clears any stale parser rows.
+    :param parameters_json: Optional JSON snapshot from the parser to mirror
+        onto ``calculation.parameters_json``.
+    :param parameters_parser_version: Optional parser version tag mirrored
+        onto ``calculation.parameters_parser_version``. Distinct from
+        ``parser_version`` (per-row) so callers can record both, but most
+        callers will pass the same string for both.
     :param parameters_extracted_at: Optional extraction timestamp.
+    :param source: Provenance applied to every newly inserted row.
+    :param parser_version: Per-row parser version tag, used only when
+        ``source=parser``.
     :returns: Newly created parameter rows in the order they were supplied.
     """
 
@@ -531,6 +569,11 @@ def persist_calculation_parameters(
     if parameters_extracted_at is not None:
         calculation.parameters_extracted_at = parameters_extracted_at
 
+    # Replace-all is bound to source=parser. Run the delete before the
+    # early-return guard so an empty re-parse still clears stale rows.
+    if source is ParameterSource.parser:
+        _delete_parser_parameter_rows(session, calculation.id)
+
     if not observations:
         return []
 
@@ -539,6 +582,8 @@ def persist_calculation_parameters(
         obs.canonical_key for obs in obs_list if obs.canonical_key is not None
     }
     known_keys = _resolve_canonical_keys(session, candidate_keys)
+
+    row_parser_version = parser_version if source is ParameterSource.parser else None
 
     rows: list[CalculationParameter] = []
     for obs in obs_list:
@@ -559,11 +604,35 @@ def persist_calculation_parameters(
             value_type=obs.value_type,
             unit=obs.unit,
             parameter_index=obs.parameter_index,
+            source=source,
+            parser_version=row_parser_version,
         )
         session.add(row)
         rows.append(row)
 
     return rows
+
+
+def _delete_parser_parameter_rows(session: Session, calculation_id: int) -> None:
+    """Drop every parser-derived parameter row on this calculation.
+
+    Pending in-session parser rows on this same calc are also expunged so
+    a caller that re-parses twice in one transaction does not get a flush
+    ordering surprise where the delete races the previous insert.
+    """
+
+    for obj in list(session.new):
+        if (
+            isinstance(obj, CalculationParameter)
+            and obj.calculation_id == calculation_id
+            and obj.source is ParameterSource.parser
+        ):
+            session.expunge(obj)
+
+    session.query(CalculationParameter).filter(
+        CalculationParameter.calculation_id == calculation_id,
+        CalculationParameter.source == ParameterSource.parser,
+    ).delete(synchronize_session=False)
 
 
 # Mapping from calculation type to the dependency role when the child
@@ -574,6 +643,326 @@ _DEPENDENCY_ROLE_FOR_TYPE: dict[CalculationType, CalculationDependencyRole] = {
     CalculationType.irc: CalculationDependencyRole.irc_start,
     CalculationType.neb: CalculationDependencyRole.neb_parent,
 }
+
+
+# Mapping from dependency role to the parent calculation's required type.
+# Mirrors DR-0028 Requirement 1's compatibility table for the parent-side
+# check on ``calculation_dependency`` rows. Roles not in the table (e.g.
+# ``arkane_source``) are scientific metadata that does not pin a specific
+# parent ``CalculationType`` and pass unconditionally.
+_DEPENDENCY_ROLE_TO_PARENT_TYPE: dict[
+    CalculationDependencyRole, CalculationType
+] = {
+    CalculationDependencyRole.optimized_from: CalculationType.opt,
+    CalculationDependencyRole.freq_on: CalculationType.opt,
+    CalculationDependencyRole.single_point_on: CalculationType.opt,
+    CalculationDependencyRole.irc_start: CalculationType.opt,
+    CalculationDependencyRole.scan_parent: CalculationType.opt,
+    CalculationDependencyRole.neb_parent: CalculationType.opt,
+    CalculationDependencyRole.irc_followup: CalculationType.irc,
+}
+
+
+# Roles that enforce one-parent-per-child via partial unique indexes
+# on ``calculation_dependency`` (see ``app/db/models/calculation.py``).
+# A second edge with the same ``(child, role)`` from a different parent
+# would be rejected by the DB at flush — callers surface it as a clean 422
+# instead of letting the constraint raise ``IntegrityError``.
+_ONE_PARENT_PER_CHILD_ROLES: frozenset[CalculationDependencyRole] = frozenset(
+    {
+        CalculationDependencyRole.optimized_from,
+        CalculationDependencyRole.freq_on,
+        CalculationDependencyRole.single_point_on,
+        CalculationDependencyRole.scan_parent,
+        CalculationDependencyRole.neb_parent,
+    }
+)
+
+
+def assert_dependency_role_type_compatible(
+    parent_calc: Calculation,
+    role: CalculationDependencyRole,
+    *,
+    context: str,
+) -> None:
+    """Verify the parent calculation's type is compatible with ``role``.
+
+    Roles not present in ``_DEPENDENCY_ROLE_TO_PARENT_TYPE`` (e.g.
+    ``arkane_source``) are scientific metadata that does not pin a specific
+    parent ``CalculationType``; those are accepted unconditionally.
+    Bundle workflows surface incompatibilities as 422 to mirror DR-0028
+    error semantics.
+    """
+    expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE.get(role)
+    if expected is None:
+        return
+    if parent_calc.type != expected:
+        raise ValueError(
+            f"{context}: role='{role.value}' is incompatible with the "
+            f"resolved parent calculation type."
+        )
+
+
+def add_dependency_edge_idempotent(
+    session: Session,
+    *,
+    parent_calculation_id: int,
+    child_calculation_id: int,
+    dependency_role: CalculationDependencyRole,
+    context: str,
+) -> CalculationDependency:
+    """Insert a ``CalculationDependency`` edge idempotently.
+
+    Two distinct constraints are checked before the row is added — both
+    in pending-in-session state and against already-persisted rows —
+    so the helper never relies on the database to raise:
+
+    1. **Composite PK** ``(parent_calculation_id, child_calculation_id)``:
+       * same role → no-op, return the existing row.
+       * different role → ``ValueError``.
+
+    2. **Per-role child uniqueness** for the roles in
+       ``_ONE_PARENT_PER_CHILD_ROLES``:
+       * same parent (caught above as the PK case) → no-op.
+       * different parent → ``ValueError``.
+
+    Self-edges (``parent == child``) are rejected with ``ValueError`` — the
+    DB also rejects them via a CHECK constraint, but this gives a clean 422.
+
+    ``no_autoflush`` is used around the DB lookups so unrelated pending
+    edges are not flushed mid-check and racing the duplicate-insert
+    this helper exists to prevent.
+    """
+    if parent_calculation_id == child_calculation_id:
+        raise ValueError(
+            f"{context}: a calculation cannot depend on itself."
+        )
+
+    for obj in session.new:
+        if not isinstance(obj, CalculationDependency):
+            continue
+        if (
+            obj.parent_calculation_id == parent_calculation_id
+            and obj.child_calculation_id == child_calculation_id
+        ):
+            if obj.dependency_role == dependency_role:
+                return obj
+            raise ValueError(
+                f"{context}: a dependency edge between the same parent "
+                f"and child is already pending in this transaction with "
+                f"a different role='{obj.dependency_role.value}' "
+                f"(requested role='{dependency_role.value}')."
+            )
+        if (
+            dependency_role in _ONE_PARENT_PER_CHILD_ROLES
+            and obj.dependency_role == dependency_role
+            and obj.child_calculation_id == child_calculation_id
+        ):
+            raise ValueError(
+                f"{context}: another dependency edge with role="
+                f"'{dependency_role.value}' targeting the same child "
+                f"calculation is already pending in this transaction "
+                f"from a different parent. The schema permits at most "
+                f"one '{dependency_role.value}' parent per child."
+            )
+
+    with session.no_autoflush:
+        existing_pair = session.get(
+            CalculationDependency,
+            {
+                "parent_calculation_id": parent_calculation_id,
+                "child_calculation_id": child_calculation_id,
+            },
+        )
+        existing_other_parent: CalculationDependency | None = None
+        if (
+            existing_pair is None
+            and dependency_role in _ONE_PARENT_PER_CHILD_ROLES
+        ):
+            existing_other_parent = session.scalar(
+                select(CalculationDependency).where(
+                    CalculationDependency.child_calculation_id
+                    == child_calculation_id,
+                    CalculationDependency.dependency_role == dependency_role,
+                )
+            )
+
+    if existing_pair is not None:
+        if existing_pair.dependency_role == dependency_role:
+            return existing_pair
+        raise ValueError(
+            f"{context}: a dependency edge between the same parent and "
+            f"child already exists with a different role="
+            f"'{existing_pair.dependency_role.value}' "
+            f"(requested role='{dependency_role.value}')."
+        )
+
+    if existing_other_parent is not None:
+        raise ValueError(
+            f"{context}: another dependency edge with role="
+            f"'{dependency_role.value}' targeting the same child "
+            f"calculation already exists from a different parent. The "
+            f"schema permits at most one '{dependency_role.value}' "
+            f"parent per child."
+        )
+
+    edge = CalculationDependency(
+        parent_calculation_id=parent_calculation_id,
+        child_calculation_id=child_calculation_id,
+        dependency_role=dependency_role,
+    )
+    session.add(edge)
+    return edge
+
+# Calculation types whose input geometry equals the conformer's optimized
+# geometry (i.e. the geometry the calc actually ran on). For ``opt``, the
+# true input is the pre-opt xyz (RDKit guess, restart-from, etc.), which
+# the producer does not currently surface; populating opt's input row with
+# the conformer geometry would be wrong (that's opt's output). Skipped here
+# until the producer exposes the pre-opt geometry.
+_INPUT_GEOMETRY_TYPES: frozenset[CalculationType] = frozenset(
+    {CalculationType.freq, CalculationType.sp}
+)
+
+# Calculation types whose converged output IS the conformer geometry. Only
+# ``opt`` qualifies: by construction the conformer geometry is opt's
+# ``final`` output, so when a producer omits ``output_geometries`` we can
+# safely synthesize that single row. Freq, sp, scan, irc, neb and conf do
+# NOT have a producer-agnostic universal mapping from calc type to a
+# specific output geometry/role — the producer must declare explicitly.
+_OUTPUT_GEOMETRY_TYPES: frozenset[CalculationType] = frozenset(
+    {CalculationType.opt}
+)
+
+
+def attach_calculation_input_geometries(
+    session: Session,
+    *,
+    calc: Calculation,
+    explicit_input_geometries: list[GeometryPayload],
+    fallback_geometry_id: int | None,
+    context: str,
+) -> None:
+    """Attach ``calculation_input_geometry`` rows for one calc.
+
+    Producer-explicit path: when ``explicit_input_geometries`` is
+    non-empty, each payload is resolved and linked at
+    ``input_order = 1, 2, 3, ...`` in list order. Two payloads that
+    canonicalize to the same Geometry row would violate the table's
+    ``UNIQUE (calculation_id, geometry_id)`` constraint; we surface
+    that as a 422 (``ValueError``) before the insert rather than
+    letting it bubble out as a generic ``IntegrityError``.
+
+    Fallback path: when the list is empty, ``calc.type`` is in
+    ``_INPUT_GEOMETRY_TYPES``, and ``fallback_geometry_id`` is provided,
+    one row is added at ``input_order = 1`` pointing at that geometry
+    (preserves the prior PR's freq+sp default).
+
+    The two paths are mutually exclusive — declaring even one explicit
+    geometry suppresses the fallback for that calc.
+    """
+    if explicit_input_geometries:
+        seen_geometry_ids: set[int] = set()
+        for input_order, geom_payload in enumerate(
+            explicit_input_geometries, start=1
+        ):
+            geom = resolve_geometry_payload(session, geom_payload)
+            if geom.id in seen_geometry_ids:
+                raise ValueError(
+                    f"{context}: input_geometries declares the same "
+                    f"geometry more than once. The "
+                    f"calculation_input_geometry table requires unique "
+                    f"(calculation_id, geometry_id) pairs; declare each "
+                    f"geometry at most once per calculation."
+                )
+            seen_geometry_ids.add(geom.id)
+            session.add(
+                CalculationInputGeometry(
+                    calculation_id=calc.id,
+                    geometry_id=geom.id,
+                    input_order=input_order,
+                )
+            )
+        return
+
+    if fallback_geometry_id is not None and calc.type in _INPUT_GEOMETRY_TYPES:
+        session.add(
+            CalculationInputGeometry(
+                calculation_id=calc.id,
+                geometry_id=fallback_geometry_id,
+                input_order=1,
+            )
+        )
+
+
+def attach_calculation_output_geometries(
+    session: Session,
+    *,
+    calc: Calculation,
+    explicit_output_geometries: list[OutputGeometryEntry],
+    fallback_geometry_id: int | None,
+    context: str,
+) -> None:
+    """Attach ``calculation_output_geometry`` rows for one calc.
+
+    Producer-explicit path: when ``explicit_output_geometries`` is
+    non-empty, each entry is resolved and linked at
+    ``output_order = 1, 2, 3, ...`` in list order with the
+    producer-declared role. Two payloads that canonicalize to the same
+    Geometry row would violate the table's
+    ``UNIQUE (calculation_id, geometry_id)`` constraint; we surface that
+    as a 422 (``ValueError``) before the insert rather than letting it
+    bubble out as a generic ``IntegrityError``. Geometries already linked
+    in the same session (e.g. by ``_persist_irc_result`` or
+    ``_persist_neb_result``) are also rejected with the same error.
+
+    Fallback path: when the list is empty, ``calc.type`` is in
+    ``_OUTPUT_GEOMETRY_TYPES``, and ``fallback_geometry_id`` is provided,
+    one row is added at ``output_order = 1`` with role ``final``. Only
+    ``opt`` qualifies — the conformer geometry IS opt's converged output
+    by construction; any other type's output role would be a guess.
+
+    The two paths are mutually exclusive — declaring even one explicit
+    output geometry suppresses the fallback for that calc.
+    """
+    if explicit_output_geometries:
+        already_linked = _pending_output_geometry_ids(session, calc.id)
+        seen_geometry_ids: set[int] = set()
+        for output_order, entry in enumerate(
+            explicit_output_geometries, start=1
+        ):
+            geom = resolve_geometry_payload(session, entry.geometry)
+            if geom.id in seen_geometry_ids or geom.id in already_linked:
+                raise ValueError(
+                    f"{context}: output_geometries declares the same "
+                    f"geometry more than once. The "
+                    f"calculation_output_geometry table requires unique "
+                    f"(calculation_id, geometry_id) pairs; declare each "
+                    f"geometry at most once per calculation."
+                )
+            seen_geometry_ids.add(geom.id)
+            session.add(
+                CalculationOutputGeometry(
+                    calculation_id=calc.id,
+                    geometry_id=geom.id,
+                    output_order=output_order,
+                    role=entry.role,
+                )
+            )
+        return
+
+    if fallback_geometry_id is not None and calc.type in _OUTPUT_GEOMETRY_TYPES:
+        if fallback_geometry_id not in _pending_output_geometry_ids(
+            session, calc.id
+        ):
+            session.add(
+                CalculationOutputGeometry(
+                    calculation_id=calc.id,
+                    geometry_id=fallback_geometry_id,
+                    output_order=1,
+                    role=CalculationGeometryRole.final,
+                )
+            )
 
 
 def resolve_and_persist_calculation_with_results(
@@ -654,19 +1043,32 @@ def persist_additional_calculations(
             created_by=created_by,
         )
 
-        # Result persistence (e.g. NEB climbing image on the TS geometry) may
-        # have already linked the shared geometry. Skip the role=final row
-        # when that happens to honour the (calculation_id, geometry_id)
-        # uniqueness constraint.
-        if geometry_id not in _pending_output_geometry_ids(session, child_calc.id):
-            session.add(
-                CalculationOutputGeometry(
-                    calculation_id=child_calc.id,
-                    geometry_id=geometry_id,
-                    output_order=1,
-                    role=CalculationGeometryRole.final,
-                )
-            )
+        # Producer-explicit output_geometries take precedence. Otherwise
+        # the narrowed fallback only fires for opt (the one calc type
+        # whose converged output IS the conformer geometry); freq, sp,
+        # and all other types now produce zero output_geometry rows
+        # unless the producer declares them explicitly.
+        attach_calculation_output_geometries(
+            session,
+            calc=child_calc,
+            explicit_output_geometries=calc_upload.output_geometries,
+            fallback_geometry_id=geometry_id,
+            context=(
+                f"additional calculation (type='{calc_upload.type.value}', "
+                f"id={child_calc.id})"
+            ),
+        )
+
+        attach_calculation_input_geometries(
+            session,
+            calc=child_calc,
+            explicit_input_geometries=calc_upload.input_geometries,
+            fallback_geometry_id=geometry_id,
+            context=(
+                f"additional calculation (type='{calc_upload.type.value}', "
+                f"id={child_calc.id})"
+            ),
+        )
 
         dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)
         if dep_role is not None:

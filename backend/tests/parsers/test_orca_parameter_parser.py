@@ -132,7 +132,7 @@ class TestKeywordLineParsing:
         params = _parse_keyword_lines(input_lines)
         p = _find_param(params, "tightscf")
         assert p is not None
-        assert p["canonical_key"] == "scf_convergence"
+        assert p["canonical_key"] == "scf.convergence"
         assert p["canonical_value"] == "tight"
         assert p["section"] == "scf"
 
@@ -140,7 +140,7 @@ class TestKeywordLineParsing:
         params = _parse_keyword_lines(input_lines)
         p = _find_param(params, "normalpno")
         assert p is not None
-        assert p["canonical_key"] == "pno_truncation"
+        assert p["canonical_key"] == "pno.truncation"
         assert p["canonical_value"] == "normal"
 
     def test_method_not_stored_as_parameter(self, input_lines):
@@ -177,23 +177,24 @@ class TestBlockSectionParsing:
         p = _find_param(params, "maxcore")
         assert p is not None
         assert p["raw_value"] == "4096"
-        assert p["canonical_key"] == "maxcore_mb"
-        assert p["section"] == "resource"
+        assert p["canonical_key"] == "memory.maxcore_mb"
+        assert p["section"] == "memory"
+        assert p["unit"] == "MB"
 
     def test_nprocs_parsed(self, input_lines):
         params = _parse_block_sections(input_lines)
         p = _find_param(params, "nprocs")
         assert p is not None
         assert p["raw_value"] == "8"
-        assert p["canonical_key"] == "nproc"
-        assert p["section"] == "resource"
+        assert p["canonical_key"] == "parallel.nproc"
+        assert p["section"] == "parallel"
 
     def test_scf_maxiter_parsed(self, input_lines):
         params = _parse_block_sections(input_lines)
         p = _find_param(params, "MaxIter", section="scf")
         assert p is not None
         assert p["raw_value"] == "500"
-        assert p["canonical_key"] == "scf_max_cycles"
+        assert p["canonical_key"] == "scf.max_cycles"
 
     def test_comments_stripped(self, input_lines):
         """Inline comments (# ...) should not appear in parameter values."""
@@ -210,7 +211,7 @@ class TestBlockSectionParsing:
 class TestFullParse:
     def test_parser_version(self):
         result = parse_orca_log(path=SP_LOG)
-        assert result["parser_version"] == "orca_v1"
+        assert result["parser_version"] == "orca_v2"
 
     def test_total_parameter_count(self):
         result = parse_orca_log(path=SP_LOG)
@@ -241,11 +242,11 @@ class TestCrossSoftwareConsistency:
         o_result = parse_orca_log(path=SP_LOG)
 
         g_scf = next(
-            (p for p in g_params if p.get("canonical_key") == "scf_convergence"),
+            (p for p in g_params if p.get("canonical_key") == "scf.convergence"),
             None,
         )
         o_scf = next(
-            (p for p in o_result["parameters"] if p.get("canonical_key") == "scf_convergence"),
+            (p for p in o_result["parameters"] if p.get("canonical_key") == "scf.convergence"),
             None,
         )
 
@@ -258,7 +259,7 @@ class TestCrossSoftwareConsistency:
         assert o_scf["raw_key"] == "tightscf"
 
     def test_scf_max_cycles_shared(self):
-        """Both parsers map SCF max iterations to scf_max_cycles."""
+        """Both parsers map SCF max iterations to scf.max_cycles."""
         from app.services.gaussian_parameter_parser import (
             _parse_route_tokens as gaussian_parse,
         )
@@ -267,14 +268,221 @@ class TestCrossSoftwareConsistency:
         o_result = parse_orca_log(path=SP_LOG)
 
         g_mc = next(
-            (p for p in g_params if p.get("canonical_key") == "scf_max_cycles"),
+            (p for p in g_params if p.get("canonical_key") == "scf.max_cycles"),
             None,
         )
         o_mc = next(
-            (p for p in o_result["parameters"] if p.get("canonical_key") == "scf_max_cycles"),
+            (p for p in o_result["parameters"] if p.get("canonical_key") == "scf.max_cycles"),
             None,
         )
 
         assert g_mc is not None
         assert o_mc is not None
-        assert g_mc["canonical_key"] == o_mc["canonical_key"] == "scf_max_cycles"
+        assert g_mc["canonical_key"] == o_mc["canonical_key"] == "scf.max_cycles"
+
+
+# ---------------------------------------------------------------------------
+# Raw .in input artifact parsing (no log echo markers, no `|N>` prefix)
+# ---------------------------------------------------------------------------
+
+
+RAW_INPUT_EXAMPLE = """\
+!uHF dlpno-ccsd(t)-f12 cc-pvtz-f12 aug-cc-pvtz/c cc-pvtz-f12-cabs tightscf normalpno
+!sp
+
+%maxcore 3158
+%pal nprocs 12 end
+
+* xyz 0 3
+C       1.07668300   -1.68376800    1.29309400
+C       1.00200500   -0.36648300    0.91631200
+H       0.74480000   -2.47051200    0.62998700
+*
+
+%scf
+MaxIter 999
+end
+"""
+
+
+def _by_canonical(params: list[dict], canonical_key: str) -> dict | None:
+    for p in params:
+        if p.get("canonical_key") == canonical_key:
+            return p
+    return None
+
+
+class TestRawInputArtifact:
+    """Parse a raw ORCA ``.in`` artifact (no INPUT FILE echo markers)."""
+
+    def test_input_lines_extracted(self):
+        # _extract_input_block must fall back to raw layout when the
+        # log echo markers are absent.
+        lines = _extract_input_block(RAW_INPUT_EXAMPLE)
+        assert any(line.lstrip().startswith("!") for line in lines)
+        assert any(line.lstrip().startswith("%maxcore") for line in lines)
+
+    def test_tightscf_parsed(self):
+        result = parse_orca_log(text=RAW_INPUT_EXAMPLE)
+        p = _by_canonical(result["parameters"], "scf.convergence")
+        assert p is not None
+        assert p["raw_key"].lower() == "tightscf"
+        assert p["canonical_value"] == "tight"
+        assert p["section"] == "scf"
+        assert p["value_type"] == "enum"
+
+    def test_normalpno_parsed(self):
+        result = parse_orca_log(text=RAW_INPUT_EXAMPLE)
+        p = _by_canonical(result["parameters"], "pno.truncation")
+        assert p is not None
+        assert p["raw_key"].lower() == "normalpno"
+        assert p["canonical_value"] == "normal"
+        assert p["section"] == "pno"
+        assert p["value_type"] == "enum"
+
+    def test_sp_jobtype_not_a_parameter(self):
+        # `!sp` is a job type, not a parameter row.
+        result = parse_orca_log(text=RAW_INPUT_EXAMPLE)
+        for p in result["parameters"]:
+            assert p["raw_key"].lower() != "sp"
+
+    def test_method_basis_tokens_not_parameters(self):
+        # Method/basis tokens belong in level_of_theory, not parameters.
+        result = parse_orca_log(text=RAW_INPUT_EXAMPLE)
+        forbidden = {
+            "dlpno-ccsd(t)-f12",
+            "cc-pvtz-f12",
+            "aug-cc-pvtz/c",
+            "cc-pvtz-f12-cabs",
+            "uhf",
+        }
+        present = {p["raw_key"].lower() for p in result["parameters"]}
+        assert forbidden.isdisjoint(present)
+
+    def test_maxcore_block(self):
+        result = parse_orca_log(text=RAW_INPUT_EXAMPLE)
+        p = _by_canonical(result["parameters"], "memory.maxcore_mb")
+        assert p is not None
+        assert p["raw_value"] == "3158"
+        assert p["canonical_value"] == "3158"
+        assert p["section"] == "memory"
+        assert p["value_type"] == "int"
+        assert p["unit"] == "MB"
+
+    def test_pal_single_line(self):
+        result = parse_orca_log(text=RAW_INPUT_EXAMPLE)
+        p = _by_canonical(result["parameters"], "parallel.nproc")
+        assert p is not None
+        assert p["raw_key"].lower() == "nprocs"
+        assert p["raw_value"] == "12"
+        assert p["canonical_value"] == "12"
+        assert p["section"] == "parallel"
+        assert p["value_type"] == "int"
+
+    def test_scf_maxiter_multiline(self):
+        result = parse_orca_log(text=RAW_INPUT_EXAMPLE)
+        p = _by_canonical(result["parameters"], "scf.max_cycles")
+        assert p is not None
+        assert p["raw_key"] == "MaxIter"
+        assert p["raw_value"] == "999"
+        assert p["canonical_value"] == "999"
+        assert p["section"] == "scf"
+        assert p["value_type"] == "int"
+
+    def test_coordinate_block_ignored(self):
+        # No carbon/hydrogen atom rows from the `* xyz` block should
+        # surface as parameter raw_keys.
+        result = parse_orca_log(text=RAW_INPUT_EXAMPLE)
+        raw_keys = {p["raw_key"] for p in result["parameters"]}
+        # Atom symbols would only show up if the coord block leaked.
+        assert "C" not in raw_keys
+        assert "H" not in raw_keys
+
+    def test_charge_multiplicity_from_raw_input(self):
+        # Charge/mult still readable from the raw `* xyz 0 3` header.
+        cm = parse_charge_multiplicity(RAW_INPUT_EXAMPLE)
+        assert cm == {"charge": 0, "multiplicity": 3}
+
+    def test_method_basis_from_raw_input(self):
+        # LoT extraction uses the same input-block scan.
+        mb = parse_method_basis(RAW_INPUT_EXAMPLE)
+        assert mb is not None
+        assert mb["method"].lower() == "dlpno-ccsd(t)-f12"
+        assert mb["basis"].lower() == "cc-pvtz-f12"
+        assert mb["aux_basis"].lower() == "aug-cc-pvtz/c"
+        assert mb["cabs_basis"].lower() == "cc-pvtz-f12-cabs"
+
+    def test_full_expected_parameter_set(self):
+        # Exactly the five parameter rows the task expects.
+        result = parse_orca_log(text=RAW_INPUT_EXAMPLE)
+        canonical_keys = sorted(
+            p["canonical_key"]
+            for p in result["parameters"]
+            if p["canonical_key"] is not None
+        )
+        assert canonical_keys == sorted([
+            "scf.convergence",
+            "pno.truncation",
+            "memory.maxcore_mb",
+            "parallel.nproc",
+            "scf.max_cycles",
+        ])
+
+
+class TestPalSingleLineSection:
+    """Single-line ``%pal nprocs N end`` syntax — separate fixture."""
+
+    def test_pal_single_line_no_other_content(self):
+        text = (
+            "!sp hf/sto-3g\n"
+            "%pal nprocs 16 end\n"
+            "* xyz 0 1\n"
+            "H 0 0 0\n"
+            "H 0 0 0.74\n"
+            "*\n"
+        )
+        result = parse_orca_log(text=text)
+        p = _by_canonical(result["parameters"], "parallel.nproc")
+        assert p is not None
+        assert p["raw_value"] == "16"
+        assert p["section"] == "parallel"
+
+
+class TestScfBlockSingleLine:
+    """Single-line ``%scf MaxIter N end`` syntax."""
+
+    def test_scf_single_line(self):
+        text = (
+            "!sp hf/sto-3g\n"
+            "%scf MaxIter 777 end\n"
+            "* xyz 0 1\n"
+            "H 0 0 0\n"
+            "H 0 0 0.74\n"
+            "*\n"
+        )
+        result = parse_orca_log(text=text)
+        p = _by_canonical(result["parameters"], "scf.max_cycles")
+        assert p is not None
+        assert p["raw_key"] == "MaxIter"
+        assert p["raw_value"] == "777"
+        assert p["section"] == "scf"
+
+
+class TestPalMultiLine:
+    """Multi-line ``%pal\\n  nprocs N\\nend`` syntax."""
+
+    def test_pal_multi_line(self):
+        text = (
+            "!sp hf/sto-3g\n"
+            "%pal\n"
+            "  nprocs 24\n"
+            "end\n"
+            "* xyz 0 1\n"
+            "H 0 0 0\n"
+            "*\n"
+        )
+        result = parse_orca_log(text=text)
+        p = _by_canonical(result["parameters"], "parallel.nproc")
+        assert p is not None
+        assert p["raw_value"] == "24"
+        assert p["section"] == "parallel"

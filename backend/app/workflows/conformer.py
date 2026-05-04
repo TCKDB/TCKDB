@@ -7,18 +7,24 @@ from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
 from app.chemistry.geometry import parse_xyz
-from app.db.models.calculation import CalculationOutputGeometry
-from app.db.models.common import CalculationGeometryRole, CalculationType
+from app.db.models.common import CalculationType, SubmissionRecordType
 from app.db.models.species import ConformerObservation
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
 from app.services.calculation_resolution import (
+    attach_calculation_input_geometries,
+    attach_calculation_output_geometries,
     persist_additional_calculations,
     resolve_and_persist_calculation_with_results,
 )
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import create_applied_energy_correction
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
+)
 from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import resolve_or_create_statmech
 from app.services.transport_resolution import resolve_and_create_transport
@@ -62,6 +68,7 @@ def persist_conformer_upload(
     request: ConformerUploadRequest,
     *,
     created_by: int | None = None,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
 ) -> ConformerUploadOutcome:
     """Persist a complete conformer upload workflow.
 
@@ -89,13 +96,34 @@ def persist_conformer_upload(
         created_by=created_by,
     )
 
-    session.add(
-        CalculationOutputGeometry(
-            calculation_id=calculation.id,
-            geometry_id=geometry.id,
-            output_order=1,
-            role=CalculationGeometryRole.final,
-        )
+    # Producer-explicit output_geometries take precedence. Otherwise the
+    # narrowed fallback only fires for opt (the one calc type whose
+    # converged output IS the conformer geometry); freq, sp, and all
+    # other types now produce zero output_geometry rows unless the
+    # producer declares them explicitly.
+    attach_calculation_output_geometries(
+        session,
+        calc=calculation,
+        explicit_output_geometries=request.calculation.output_geometries,
+        fallback_geometry_id=geometry.id,
+        context=(
+            f"primary calculation (type='{calculation.type.value}', "
+            f"id={calculation.id})"
+        ),
+    )
+    # Producer-explicit input_geometries take precedence; otherwise the
+    # freq/sp fallback links the conformer geometry. opt skips the
+    # fallback (its real input is the pre-opt xyz, not the conformer
+    # geometry) and only gets a row when the producer declares one.
+    attach_calculation_input_geometries(
+        session,
+        calc=calculation,
+        explicit_input_geometries=request.calculation.input_geometries,
+        fallback_geometry_id=geometry.id,
+        context=(
+            f"primary calculation (type='{calculation.type.value}', "
+            f"id={calculation.id})"
+        ),
     )
 
     additional_calcs = []
@@ -138,8 +166,9 @@ def persist_conformer_upload(
     for child_calc in additional_calcs:
         child_calc.conformer_observation_id = observation.id
 
+    statmech_row = None
     if request.statmech is not None:
-        resolve_or_create_statmech(
+        statmech_row = resolve_or_create_statmech(
             session,
             request.statmech,
             species_entry_id=species_entry.id,
@@ -147,14 +176,16 @@ def persist_conformer_upload(
             created_by=created_by,
         )
 
+    transport_row = None
     if request.transport is not None:
-        resolve_and_create_transport(
+        transport_row = resolve_and_create_transport(
             session,
             request.transport,
             species_entry_id=species_entry.id,
             created_by=created_by,
         )
 
+    applied_corrections: list = []
     for correction_payload in request.applied_energy_corrections:
         # Resolve local string keys to IDs.
         # source_conformer_key always resolves to the observation just created.
@@ -168,16 +199,46 @@ def persist_conformer_upload(
             if correction_payload.source_calculation_key is not None
             else None
         )
-        create_applied_energy_correction(
-            session,
-            correction_payload,
-            target_species_entry_id=species_entry.id,
-            source_conformer_observation_id=source_conf_id,
-            source_calculation_id=source_calc_id,
-            created_by=created_by,
+        applied_corrections.append(
+            create_applied_energy_correction(
+                session,
+                correction_payload,
+                target_species_entry_id=species_entry.id,
+                source_conformer_observation_id=source_conf_id,
+                source_calculation_id=source_calc_id,
+                created_by=created_by,
+            )
         )
 
     session.flush()
+
+    review_targets: list[RecordRef] = [
+        RecordRef(SubmissionRecordType.species_entry, species_entry.id),
+        RecordRef(SubmissionRecordType.conformer_group, conformer_group.id),
+        RecordRef(SubmissionRecordType.conformer_observation, observation.id),
+        RecordRef(SubmissionRecordType.calculation, calculation.id),
+    ]
+    review_targets.extend(
+        RecordRef(SubmissionRecordType.calculation, c.id) for c in additional_calcs
+    )
+    if statmech_row is not None:
+        review_targets.append(
+            RecordRef(SubmissionRecordType.statmech, statmech_row.id)
+        )
+    if transport_row is not None:
+        review_targets.append(
+            RecordRef(SubmissionRecordType.transport, transport_row.id)
+        )
+    review_targets.extend(
+        RecordRef(SubmissionRecordType.applied_energy_correction, aec.id)
+        for aec in applied_corrections
+    )
+    apply_review_policy(
+        session,
+        targets=review_targets,
+        policy=review_policy,
+        created_by=created_by,
+    )
 
     return ConformerUploadOutcome(
         observation=observation,

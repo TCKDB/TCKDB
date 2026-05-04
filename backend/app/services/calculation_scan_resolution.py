@@ -12,6 +12,7 @@ from app.db.models.calculation import (
     CalculationScanResult,
 )
 from app.schemas.entities.calculation import CalculationScanResultCreate
+from app.services.geometry_resolution import resolve_geometry_payload
 
 
 def persist_calculation_scan(
@@ -78,13 +79,18 @@ def persist_calculation_scan(
         )
 
     for point in payload.points:
+        if point.geometry is not None:
+            geometry_id = resolve_geometry_payload(session, point.geometry).id
+        else:
+            geometry_id = point.geometry_id
+
         session.add(
             CalculationScanPoint(
                 calculation_id=calculation_id,
                 point_index=point.point_index,
                 electronic_energy_hartree=point.electronic_energy_hartree,
                 relative_energy_kj_mol=point.relative_energy_kj_mol,
-                geometry_id=point.geometry_id,
+                geometry_id=geometry_id,
                 note=point.note,
             )
         )

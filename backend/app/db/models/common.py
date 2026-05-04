@@ -152,20 +152,23 @@ class ArtifactKind(str, Enum):
     ancillary = "ancillary"
 
 
+class ParameterSource(str, Enum):
+    """Provenance of a ``calculation_parameter`` row.
+
+    Replace-all on re-parse only deletes ``parser`` rows; ``upload`` and
+    ``curated`` rows are preserved.
+    """
+
+    parser = "parser"
+    upload = "upload"
+    curated = "curated"
+
+
 class TransitionStateEntryStatus(str, Enum):
     guess = "guess"
     optimized = "optimized"
     validated = "validated"
     rejected = "rejected"
-
-
-class TransitionStateSelectionKind(str, Enum):
-    display_default = "display_default"
-    curator_pick = "curator_pick"
-    validated_reference = "validated_reference"
-    preferred_for_kinetics = "preferred_for_kinetics"
-    benchmark_reference = "benchmark_reference"
-    representative_geometry = "representative_geometry"
 
 
 class ThermoCalculationRole(str, Enum):
@@ -196,6 +199,20 @@ class ArrheniusAUnits(str, Enum):
 class KineticsModelKind(str, Enum):
     arrhenius = "arrhenius"
     modified_arrhenius = "modified_arrhenius"
+
+
+class KineticsUncertaintyKind(str, Enum):
+    """Interpretation of a kinetics scalar uncertainty.
+
+    ``multiplicative``: factor f, where the true value lies in
+    ``[value/f, value*f]`` (must be >= 1). The convention for Arrhenius A.
+
+    ``additive``: same units as the value; symmetric ±delta. Rare for A
+    but supported for completeness.
+    """
+
+    additive = "additive"
+    multiplicative = "multiplicative"
 
 
 class KineticsCalculationRole(str, Enum):
@@ -471,7 +488,8 @@ class SubmissionRecordType(str, Enum):
 
     Kept as a controlled vocabulary so ``submission_record_link`` stays
     lightweight — it is a traceability index, not a substitute for real FKs
-    inside the domain model.
+    inside the domain model. The same vocabulary is reused by
+    ``record_review`` so the two tables share one shape.
     """
 
     species = "species"
@@ -489,3 +507,19 @@ class SubmissionRecordType(str, Enum):
     transport = "transport"
     network = "network"
     network_solve = "network_solve"
+    applied_energy_correction = "applied_energy_correction"
+
+
+class RecordReviewStatus(str, Enum):
+    """Consumer-facing trust/review state of one scientific record.
+
+    Distinct from :class:`SubmissionStatus` (lifecycle of a contribution
+    event). One ``record_review`` row per ``(record_type, record_id)``
+    holds the current state.
+    """
+
+    not_reviewed = "not_reviewed"
+    under_review = "under_review"
+    approved = "approved"
+    rejected = "rejected"
+    deprecated = "deprecated"

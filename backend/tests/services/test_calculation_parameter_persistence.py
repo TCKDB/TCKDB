@@ -128,13 +128,13 @@ def test_parameters_persist_through_resolve_and_persist(db_engine) -> None:
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PARAMS")
         )
-        _seed_vocab(session, ["opt_convergence"])
+        _seed_vocab(session, ["opt.convergence"])
 
         observations = [
             CalculationParameterObservation(
                 raw_key="tight",
                 raw_value="tight",
-                canonical_key="opt_convergence",
+                canonical_key="opt.convergence",
                 canonical_value="tight",
                 section="opt",
                 value_type="enum",
@@ -164,7 +164,7 @@ def test_parameters_persist_through_resolve_and_persist(db_engine) -> None:
         first, second = rows
         assert first.raw_key == "tight"
         assert first.raw_value == "tight"
-        assert first.canonical_key == "opt_convergence"
+        assert first.canonical_key == "opt.convergence"
         assert first.canonical_value == "tight"
         assert first.section == "opt"
         assert first.value_type == "enum"
@@ -229,13 +229,13 @@ def test_known_canonical_key_links_when_vocab_exists(db_engine) -> None:
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PARAMSKNOWN")
         )
-        _seed_vocab(session, ["scf_convergence"])
+        _seed_vocab(session, ["scf.convergence"])
 
         observations = [
             CalculationParameterObservation(
                 raw_key="tight",
                 raw_value="tight",
-                canonical_key="scf_convergence",
+                canonical_key="scf.convergence",
                 canonical_value="tight",
                 section="scf",
                 value_type="enum",
@@ -252,10 +252,10 @@ def test_known_canonical_key_links_when_vocab_exists(db_engine) -> None:
                 CalculationParameter.calculation_id == calc.id
             )
         ).one()
-        assert row.canonical_key == "scf_convergence"
+        assert row.canonical_key == "scf.convergence"
         assert row.canonical_value == "tight"
         assert row.vocab is not None
-        assert row.vocab.canonical_key == "scf_convergence"
+        assert row.vocab.canonical_key == "scf.convergence"
 
 
 # ---------------------------------------------------------------------------

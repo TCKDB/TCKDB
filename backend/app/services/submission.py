@@ -8,13 +8,20 @@ module so that:
 * append-only behaviour for audit events is enforced in code (no
   update/delete paths exist), and
 * business rules — curator/admin gating, rejection reason required, no
-  uploader self-approval, LLM actors never counting as human approval —
-  live in one place.
+  uploader self-approval — live in one place.
 
 The module deliberately does not handle authentication or authorisation
 itself; the caller (API route or workflow) must pass the acting user and
 this layer validates their :class:`AppUserRole` against the requested
 action.
+
+Current moderation is entirely curator-driven. The ``mark_precheck_result``
+helper and the ``SubmissionActorKind.llm`` actor kind are reserved for a
+possible future automated-review feature; they are not part of the MVP, no
+HTTP route invokes them, and no background process is wired up. If/when
+automated review lands, the only invariant baked into the rest of this
+module is that an automated/LLM actor must never be recorded as a human
+approver.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ from app.api.errors import DomainError, NotFoundError
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
+    RecordReviewStatus,
     SubmissionActorKind,
     SubmissionAuditEventKind,
     SubmissionKind,
@@ -41,6 +49,10 @@ from app.db.models.submission import (
     Submission,
     SubmissionAuditEvent,
     SubmissionRecordLink,
+)
+from app.services.record_review import (
+    RecordRef,
+    bulk_set_record_review_status,
 )
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
@@ -72,6 +84,15 @@ def _require_submission(session: Session, submission_id: int) -> Submission:
     if submission is None:
         raise NotFoundError(f"Submission {submission_id} not found")
     return submission
+
+
+def get_submission(session: Session, submission_id: int) -> Submission:
+    """Return a submission by id or raise :class:`NotFoundError`.
+
+    Public read-one helper for API routes; permission checks are the
+    caller's responsibility.
+    """
+    return _require_submission(session, submission_id)
 
 
 def _require_curator(user: AppUser) -> None:
@@ -244,7 +265,7 @@ def mark_ingestion_failed(
 
 
 # ---------------------------------------------------------------------------
-# Precheck
+# Precheck (reserved for future automated review — not part of the MVP)
 # ---------------------------------------------------------------------------
 
 
@@ -259,9 +280,16 @@ def mark_precheck_result(
 ) -> Submission:
     """Record an automated precheck outcome on the submission.
 
+    Reserved for a possible future automated-review feature. No HTTP route
+    exposes this helper today and no background process invokes it; current
+    moderation is curator-driven. The helper is kept (and tested) so the
+    placeholder columns and audit-event vocabulary stay coherent if such a
+    feature is added later.
+
     Only submissions still in the ``pending`` state advance to
     ``precheck_passed`` or ``auto_flagged``; precheck never overrides a
-    curator decision and LLM/system actors are never recorded as approvers.
+    curator decision and automated/LLM actors are never recorded as
+    approvers.
     """
     submission = _require_submission(session, submission_id)
 
@@ -317,6 +345,18 @@ _APPROVABLE_FROM = frozenset(
 )
 
 
+def _record_links_as_targets(
+    submission: Submission,
+) -> list[RecordRef]:
+    """Project ``submission_record_link`` rows into the ``RecordRef`` shape
+    used by the record-review service.
+    """
+    return [
+        RecordRef(record_type=link.record_type, record_id=link.record_id)
+        for link in submission.record_links
+    ]
+
+
 def approve_submission(
     session: Session,
     *,
@@ -324,7 +364,15 @@ def approve_submission(
     actor: AppUser,
     summary: str | None = None,
 ) -> Submission:
-    """Approve a submission.
+    """Approve a submission and flip its linked records' review state.
+
+    On approval, every ``submission_record_link`` target is moved to
+    ``RecordReviewStatus.approved``. If the submission supersedes a
+    prior one, the prior submission's linked records are *also* moved to
+    ``RecordReviewStatus.deprecated`` here — superseding by itself does
+    not deprecate (so a rejected correction never silently demotes the
+    record it was meant to replace); approval of the replacement is
+    when retirement takes effect.
 
     :raises DomainError: If the actor lacks curator/admin role, if the
         actor is also the uploader (self-approval is disallowed), or if
@@ -347,6 +395,28 @@ def approve_submission(
     submission.approved_by = actor.id
     submission.approved_at = _now_naive_utc()
     session.flush()
+
+    bulk_set_record_review_status(
+        session,
+        targets=_record_links_as_targets(submission),
+        status=RecordReviewStatus.approved,
+        actor=actor,
+        submission_id=submission.id,
+    )
+
+    if submission.supersedes_submission_id is not None:
+        old = _require_submission(session, submission.supersedes_submission_id)
+        bulk_set_record_review_status(
+            session,
+            targets=_record_links_as_targets(old),
+            status=RecordReviewStatus.deprecated,
+            actor=actor,
+            submission_id=submission.id,
+            note=(
+                f"Deprecated by approval of superseding submission "
+                f"#{submission.id}."
+            ),
+        )
 
     append_audit_event(
         session,
@@ -399,6 +469,15 @@ def reject_submission(
     submission.correction_due_at = correction_due_at
     session.flush()
 
+    bulk_set_record_review_status(
+        session,
+        targets=_record_links_as_targets(submission),
+        status=RecordReviewStatus.rejected,
+        actor=actor,
+        submission_id=submission.id,
+        note=reason.strip(),
+    )
+
     append_audit_event(
         session,
         submission=submission,
@@ -436,6 +515,13 @@ def supersede_submission(
     (as the primary target) and the new submission (via
     ``correction_uploaded``) so either end of the lineage exposes the
     relationship in its audit stream.
+
+    Record-review state is *not* changed by supersede alone — the prior
+    submission's ``approved`` records keep their ``approved`` review
+    status until the replacing submission is itself approved, at which
+    point :func:`approve_submission` deprecates them. This avoids
+    silently hiding good data when a correction is uploaded but later
+    rejected.
 
     ``old.supersedes_submission_id`` is not touched; the replacing
     submission's ``supersedes_submission_id`` is (and should already be) set

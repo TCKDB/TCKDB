@@ -43,6 +43,7 @@ from app.workflows.transport import persist_transport_upload
 # -- Request schema imports --------------------------------------------------
 from app.schemas.workflows.computed_species_upload import (
     CalculationUploadRefInBundle,
+    StatmechUploadRefInBundle,
     ComputedSpeciesUploadRequest,
     ComputedSpeciesUploadResult,
     ConformerUploadRefInBundle,
@@ -496,10 +497,16 @@ def upload_computed_species(
         if outcome.thermo is not None
         else None
     )
+    statmech_ref = (
+        StatmechUploadRefInBundle(statmech_id=outcome.statmech.id)
+        if outcome.statmech is not None
+        else None
+    )
     result = ComputedSpeciesUploadResult(
         species_entry_id=outcome.species_entry_id,
         conformers=conformer_refs,
         thermo=thermo_ref,
+        statmech=statmech_ref,
         warnings=warnings,
     )
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))

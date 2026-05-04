@@ -226,6 +226,145 @@ def test_upload_helper_rejects_unknown_short_name() -> None:
     assert recorder.requests == []
 
 
+# -------------------------------------------------------------------- 19a
+# computed_reaction passthrough — mirror the backend contract additions.
+# The client is dict-passthrough; these tests pin that the new optional
+# fields the backend now accepts (input_geometries, output_geometries,
+# depends_on, kinetics.source_calculations) reach the wire byte-for-byte.
+# The client must not validate, infer, or rewrite them.
+
+
+def test_upload_computed_reaction_resolves_short_name_to_path() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _ok()
+
+    client, recorder = make_client(handler)
+    client.upload("computed_reaction", {"species": [], "kinetics": []})
+    assert recorder.last.url.endswith(UPLOAD_ENDPOINTS["computed_reaction"])
+    # Sanity-pin that the endpoint is the computed-reaction route.
+    assert recorder.last.url.endswith("/uploads/computed-reaction")
+
+
+def test_upload_computed_reaction_preserves_calc_provenance_fields() -> None:
+    """input_geometries, output_geometries, depends_on round-trip on the wire."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _ok()
+
+    client, recorder = make_client(handler)
+    payload = {
+        "species": [],
+        "transition_state": {
+            "calculations": [
+                {
+                    "key": "ts_freq",
+                    "type": "freq",
+                    "input_geometries": [{"xyz_text": "1\n\nH 0 0 0"}],
+                    "output_geometries": [
+                        {
+                            "geometry": {"xyz_text": "1\n\nH 0 0 0"},
+                            "role": "final",
+                        }
+                    ],
+                    "depends_on": [
+                        {
+                            "parent_calculation_key": "ts_opt",
+                            "role": "freq_on",
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+    client.upload("computed_reaction", payload)
+
+    sent = recorder.last.json()
+    assert sent == payload
+    ts_freq = sent["transition_state"]["calculations"][0]
+    assert ts_freq["input_geometries"] == [{"xyz_text": "1\n\nH 0 0 0"}]
+    assert ts_freq["output_geometries"][0]["role"] == "final"
+    assert ts_freq["depends_on"][0]["role"] == "freq_on"
+
+
+def test_upload_computed_reaction_preserves_kinetics_source_calculations() -> None:
+    """kinetics.source_calculations entries round-trip on the wire,
+    preserving order and the exact (calculation_key, role) pairs."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _ok()
+
+    client, recorder = make_client(handler)
+    payload = {
+        "species": [],
+        "kinetics": [
+            {
+                "model_kind": "modified_arrhenius",
+                "a": 1200000.0,
+                "a_units": "cm3_mol_s",
+                "n": 1.5,
+                "reported_ea": 42.0,
+                "reported_ea_units": "kj_mol",
+                "source_calculations": [
+                    {"calculation_key": "reactant0_sp", "role": "reactant_energy"},
+                    {"calculation_key": "product0_sp", "role": "product_energy"},
+                    {"calculation_key": "ts_sp", "role": "ts_energy"},
+                    {"calculation_key": "ts_freq", "role": "freq"},
+                ],
+            }
+        ],
+    }
+    client.upload("computed_reaction", payload)
+
+    sent = recorder.last.json()
+    assert sent == payload
+    sources = sent["kinetics"][0]["source_calculations"]
+    assert [(s["calculation_key"], s["role"]) for s in sources] == [
+        ("reactant0_sp", "reactant_energy"),
+        ("product0_sp", "product_energy"),
+        ("ts_sp", "ts_energy"),
+        ("ts_freq", "freq"),
+    ]
+
+
+def test_upload_computed_reaction_legacy_payload_still_accepted() -> None:
+    """A computed_reaction payload that omits all the new fields still
+    posts unchanged. Backward compatibility for producers that haven't
+    migrated yet (and the existing legacy-fallback path on the server)."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _ok()
+
+    client, recorder = make_client(handler)
+    payload = {
+        "species": [
+            {
+                "key": "r0",
+                "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+                "conformers": [],
+                "calculations": [],
+            }
+        ],
+        "reactant_keys": ["r0"],
+        "product_keys": ["r0"],
+        "kinetics": [
+            {
+                "reactant_keys": ["r0"],
+                "product_keys": ["r0"],
+                "model_kind": "modified_arrhenius",
+                "a": 1.2e6,
+                "a_units": "cm3_mol_s",
+                "n": 1.5,
+                "reported_ea": 42.0,
+                "reported_ea_units": "kj_mol",
+            }
+        ],
+    }
+    client.upload("computed_reaction", payload)
+
+    sent = recorder.last.json()
+    assert sent == payload
+    # The client must not have synthesized any of the new fields.
+    assert "input_geometries" not in sent["species"][0]
+    assert "source_calculations" not in sent["kinetics"][0]
+
+
 # -------------------------------------------------------------------- 20
 def test_examples_compile() -> None:
     examples_dir = pathlib.Path(__file__).resolve().parents[1] / "examples"

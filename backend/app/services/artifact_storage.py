@@ -313,6 +313,38 @@ def store_artifact(
     return f"s3://{bucket}/{key}"
 
 
+def load_artifact_bytes(
+    sha256: str,
+    *,
+    client=None,
+    bucket: str | None = None,
+) -> bytes:
+    """Read the raw content of a previously stored artifact by SHA-256.
+
+    Used by paths that need the file content after it has already left
+    the upload pipeline — most notably the calculation-parameter
+    backfill script, which has only the ``CalculationArtifact`` row to
+    work from. The upload hook never calls this; it works from the
+    decoded bytes already in memory to avoid a round-trip.
+
+    :raises ArtifactStorageUnavailable: When the object cannot be read
+        (missing key, network error, etc.). Callers in opportunistic
+        contexts should catch this.
+    """
+    if client is None:
+        client = _get_s3_client()
+    bucket = bucket or S3_BUCKET
+    key = content_addressed_key(sha256)
+    try:
+        response = client.get_object(Bucket=bucket, Key=key)
+        return response["Body"].read()
+    except ClientError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage read failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+
 def delete_artifact_object(
     sha256: str,
     *,

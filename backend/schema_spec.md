@@ -433,6 +433,29 @@ Notes:
 
 ## 6. Submission and Moderation Layer
 
+### 6.0 Two ingest planes
+
+TCKDB has two distinct ingestion paths. They share the same scientific
+schema and both populate `created_by` from the authenticated `app_user`,
+but they differ in moderation lifecycle:
+
+| Plane | Routes | Submission lifecycle | Intended actor |
+|-------|--------|----------------------|----------------|
+| Direct ingest | `/api/v1/uploads/*`, `/api/v1/calculations/{id}/artifacts` | None — `submission*` tables remain empty | Trusted workflow tools (e.g. ARC), curators, admins via API key |
+| Moderated submission | `/api/v1/bundles/submit`, `/api/v1/submissions/*` | `submission` + `submission_audit_event` + `submission_record_link` rows are created | Public/community contributors |
+
+Direct ingest writes scientific records that are immediately live and
+attributed via `created_by`, with no review step. Moderated submission
+wraps the same scientific workflows with a `submission` shell so a
+curator can later approve, reject, or supersede the contribution; the
+scientific rows are still attributed via `created_by` independently of
+the submission's status.
+
+`tckdb-client` currently only targets the direct-ingest plane. The
+moderated plane is consumed by the contribution-bundle endpoint and the
+new `/submissions/*` curator API exposed by
+`backend/app/api/routes/submissions.py`.
+
 ### 6.1 Submission
 
 Fields:
@@ -462,10 +485,14 @@ Fields:
 Notes:
 
 - `submission` represents one moderated user contribution event
-- it links optionally to an `upload_job`
+- it links optionally to an `upload_job` — the column is reserved for a future
+  async-moderated path; no current ingest path populates it
 - indexes support lookup by creator, upload job, and `(status, created_at)`
 - approving or rejecting your own submission is forbidden
 - rejected submissions must include a `rejection_reason`
+- the `llm_precheck_*` columns are reserved for future optional automated
+  review; they are not part of the MVP and no current route or background
+  process populates them. Current moderation is curator-driven.
 
 ### 6.2 Submission Audit Event
 
@@ -505,6 +532,107 @@ Notes:
 - this table maps a submission to created or affected scientific records
 - lookup is indexed both by submission and by `(record_type, record_id)`
 - dedupe is enforced on `(submission_id, record_type, record_id, role)`
+
+### 6.4 Record Review
+
+Per-record consumer-facing trust state. Distinct from `submission.status`
+(lifecycle of a contribution event) and from `species_entry_review`
+(per-species attribution of who reviewed in what role).
+
+Fields:
+
+- `id`
+- `record_type` — `submission_record_type` enum (reused from
+  `submission_record_link` so the link table and review table share one
+  vocabulary)
+- `record_id`
+- `status` — `record_review_status` enum:
+  `not_reviewed | under_review | approved | rejected | deprecated`
+- `submission_id` — nullable; populated for review rows attached to a
+  moderated submission (lifecycle linkage)
+- `reviewed_by` — nullable; set only for terminal statuses
+- `reviewed_at` — nullable; set only for terminal statuses
+- `note`
+- `created_at`
+- `created_by`
+
+Notes:
+
+- exactly one current-state row per `(record_type, record_id)` —
+  enforced by `UNIQUE (record_type, record_id)`
+- terminal statuses (`approved`, `rejected`, `deprecated`) require
+  `reviewed_by` and `reviewed_at` (CHECK constraint)
+- historical state changes are not persisted in this MVP — submission
+  audit events remain the longitudinal record for moderated paths
+- indexes exist on `(status, record_type)` and on `submission_id`
+
+#### Three review/moderation concepts (do not conflate)
+
+| Field | Meaning |
+|-------|---------|
+| `created_by` (on scientific rows) | Uploader/creator attribution |
+| `submission.status` | Lifecycle of a moderated contribution event |
+| `record_review.status` | Consumer-facing trust state of one scientific record |
+| `species_entry_review` | Per-species attribution of who reviewed in what role |
+
+#### Default statuses by ingest path
+
+| Path | Initial `record_review.status` |
+|------|--------------------------------|
+| Direct `/api/v1/uploads/*` (trusted) | `not_reviewed` (no submission row) |
+| Moderated `/api/v1/bundles/submit` | `under_review` (linked to the new submission) |
+
+#### Status transitions on submission lifecycle
+
+| Submission action | Effect on linked records' `record_review.status` |
+|-------------------|--------------------------------------------------|
+| `approve_submission` | linked records → `approved`; if approval is of a *superseding* submission, the prior submission's linked records → `deprecated` |
+| `reject_submission` | linked records → `rejected` |
+| `supersede_submission` | no review-state change — the prior submission's records keep their current status until the replacing submission is itself approved |
+
+This deferred-deprecation policy avoids hiding good data when a
+correction is uploaded but later rejected.
+
+#### Allowed manual status transitions (curator/admin)
+
+`set_record_review_status` (and the `PATCH /record-reviews/...` route
+that wraps it) enforces a small allowed-transition set:
+
+```
+not_reviewed → under_review | approved | rejected | deprecated
+under_review → approved | rejected | not_reviewed
+approved     → under_review | deprecated
+rejected     → under_review | deprecated
+deprecated   → under_review | approved
+```
+
+Disallowed by default (route through `under_review` first):
+
+```
+approved → rejected
+rejected → approved
+deprecated → rejected
+```
+
+A curator/admin who is also `created_by` for a record cannot transition
+that record to `approved` (self-approval guard). Other transitions are
+allowed for the creator if they meet the role check —
+self-deprecation and self-reopening are not the same trust problem.
+
+#### Coverage
+
+Direct uploads create review rows for the primary scientific records
+they produce: `species_entry`, `reaction_entry`, `transition_state`,
+`transition_state_entry`, `conformer_group`, `conformer_observation`,
+`calculation`, `thermo`, `statmech`, `transport`, `kinetics`, `network`,
+`network_solve`, and `applied_energy_correction`.
+
+Calculation artifacts and pure normalized-expansion child tables
+(`thermo_point`, `thermo_nasa`, `thermo_source_calculation`,
+`statmech_source_calculation`, `statmech_torsion_definition`,
+`kinetics_source_calculation`, `calc_scan_point`,
+`calc_scan_point_coordinate_value`) inherit the trust of their parent
+record and do not get their own review rows.
 
 ## 7. Calculation Layer
 
@@ -619,6 +747,13 @@ Notes:
 - constraint-arity checks enforce valid atom usage for cartesian, bond, angle, and dihedral/improper constraints
 - `calculation_dependency` prevents self-edges
 - selected dependency roles enforce one-parent-per-child semantics through filtered unique indexes in PostgreSQL; DBML can only show the named indexes, not their predicates
+
+Ownership of geometric coordinate metadata across calculation tables:
+
+- `calculation_constraint` is the canonical store for input coordinates **held fixed** during a calculation. It is generic across opt, TS, scan, IRC, NEB, and any other constrained run. A scan with one or more frozen coordinates writes both: the stepped coordinate(s) into `calc_scan_coordinate` and the held-fixed coordinate(s) into `calculation_constraint`. The two never duplicate the same coordinate.
+- `calc_scan_coordinate` is the canonical store for the **active scan grid** (which coordinate is stepped, step size, start/end, symmetry hints). Only scan calculations write rows here.
+- `calc_scan_point` plus `calc_scan_point_coordinate_value` are the canonical store for **scan output**: per-point energy/geometry and the observed coordinate values along the scanned grid. They are write-once results, not input metadata.
+- `statmech_torsion` (with `statmech_torsion_definition`) is the canonical store for **thermochemical rotor interpretation** — the fitted treatment kind (hindered, free, rigid top), symmetry number, and dimension. It may reference its source scan via `source_scan_calculation_id` but does not replace scan-grid storage or constraint storage; it is a downstream interpretation, not a copy.
 
 ### 7.4 Direct Calculation Result Tables
 

@@ -74,13 +74,13 @@ class TestRouteLineParsing:
 
         mem = next(p for p in resource_params if p["raw_key"] == "%mem")
         assert mem["raw_value"] == "32768mb"
-        assert mem["canonical_key"] == "memory"
+        assert mem["canonical_key"] == "memory.raw"
 
         nproc = next(
             p for p in resource_params if p["raw_key"] == "%NProcShared"
         )
         assert nproc["raw_value"] == "8"
-        assert nproc["canonical_key"] == "nproc_shared"
+        assert nproc["canonical_key"] == "parallel.nproc_shared"
 
     def test_opt_parameters(self):
         params = self.result["parameters"]
@@ -93,15 +93,15 @@ class TestRouteLineParsing:
         assert "tight" in opt_keys
 
         calcfc = next(p for p in opt_params if p["raw_key"] == "calcfc")
-        assert calcfc["canonical_key"] == "initial_hessian"
+        assert calcfc["canonical_key"] == "opt.initial_hessian"
         assert calcfc["canonical_value"] == "calculate_at_first_point"
 
         maxcycle = next(p for p in opt_params if p["raw_key"] == "maxcycle")
         assert maxcycle["raw_value"] == "100"
-        assert maxcycle["canonical_key"] == "opt_max_cycles"
+        assert maxcycle["canonical_key"] == "opt.max_cycles"
 
         tight = next(p for p in opt_params if p["raw_key"] == "tight")
-        assert tight["canonical_key"] == "opt_convergence"
+        assert tight["canonical_key"] == "opt.convergence"
         assert tight["canonical_value"] == "tight"
 
     def test_scf_parameters(self):
@@ -113,10 +113,10 @@ class TestRouteLineParsing:
         assert "tight" in scf_keys
 
         direct = next(p for p in scf_params if p["raw_key"] == "direct")
-        assert direct["canonical_key"] == "scf_direct"
+        assert direct["canonical_key"] == "scf.direct"
 
         tight = next(p for p in scf_params if p["raw_key"] == "tight")
-        assert tight["canonical_key"] == "scf_convergence"
+        assert tight["canonical_key"] == "scf.convergence"
         assert tight["canonical_value"] == "tight"
 
     def test_integral_parameters(self):
@@ -127,11 +127,11 @@ class TestRouteLineParsing:
             p for p in integral_params if p["raw_key"] == "grid"
         )
         assert grid["raw_value"] == "ultrafine"
-        assert grid["canonical_key"] == "grid_quality"
+        assert grid["canonical_key"] == "grid.quality"
 
         acc = next(p for p in integral_params if p["raw_key"] == "Acc2E")
         assert acc["raw_value"] == "12"
-        assert acc["canonical_key"] == "integral_accuracy"
+        assert acc["canonical_key"] == "integral.accuracy"
 
     def test_iop_parameter(self):
         params = self.result["parameters"]
@@ -142,7 +142,9 @@ class TestRouteLineParsing:
         iop = iop_params[0]
         assert iop["raw_key"] == "IOp(2/9)"
         assert iop["raw_value"] == "2000"
-        assert iop["canonical_key"] is None  # unmapped exotic param
+        # All IOp directives share one canonical key; the overlay/option
+        # coordinate stays in raw_key for queryability.
+        assert iop["canonical_key"] == "internal_option.iop"
 
     def test_guess_parameter(self):
         params = self.result["parameters"]
@@ -153,7 +155,7 @@ class TestRouteLineParsing:
         ]
         assert len(guess_params) == 1
         assert guess_params[0]["raw_value"] == "read"
-        assert guess_params[0]["canonical_key"] == "guess_strategy"
+        assert guess_params[0]["canonical_key"] == "guess.strategy"
 
     def test_parameters_json_snapshot(self):
         pj = self.result["parameters_json"]
@@ -186,7 +188,7 @@ class TestTSRouteLineParsing:
         ts = next((p for p in opt_params if p["raw_key"] == "ts"), None)
         assert ts is not None
         assert ts["raw_value"] == "true"
-        assert ts["canonical_key"] == "saddle_order"
+        assert ts["canonical_key"] == "opt.saddle_order"
 
     def test_noeigentest_parsed(self):
         params = self.result["parameters"]
@@ -195,7 +197,7 @@ class TestTSRouteLineParsing:
             (p for p in opt_params if p["raw_key"] == "noeigentest"), None
         )
         assert noeigen is not None
-        assert noeigen["canonical_key"] == "eigen_test"
+        assert noeigen["canonical_key"] == "opt.eigen_test"
         assert noeigen["canonical_value"] == "disabled"
 
     def test_ts_opt_has_calcfc(self):
@@ -203,7 +205,7 @@ class TestTSRouteLineParsing:
         opt_params = [p for p in params if p["section"] == "opt"]
         calcfc = next((p for p in opt_params if p["raw_key"] == "calcfc"), None)
         assert calcfc is not None
-        assert calcfc["canonical_key"] == "initial_hessian"
+        assert calcfc["canonical_key"] == "opt.initial_hessian"
 
     def test_ts_and_species_share_scf_parameters(self):
         """TS and species logs should parse SCF params identically."""
@@ -262,15 +264,23 @@ class TestParameterDBStorage:
         db_session.add(entry)
         db_session.flush()
 
-        # Seed vocab entries for canonical keys that appear in parsed params
+        # Seed vocab entries for canonical keys that appear in parsed params.
+        # The initial migration now seeds the Phase 1 vocabulary, so skip
+        # any keys that are already present to keep this test idempotent.
         canonical_keys_used = {
             p["canonical_key"]
             for p in parsed["parameters"]
             if p.get("canonical_key")
         }
-        for ck in canonical_keys_used:
-            vocab = CalculationParameterVocab(canonical_key=ck)
-            db_session.add(vocab)
+        already_seeded = set(
+            db_session.scalars(
+                select(CalculationParameterVocab.canonical_key).where(
+                    CalculationParameterVocab.canonical_key.in_(canonical_keys_used)
+                )
+            ).all()
+        )
+        for ck in canonical_keys_used - already_seeded:
+            db_session.add(CalculationParameterVocab(canonical_key=ck))
         db_session.flush()
 
         # Create the calculation
@@ -328,7 +338,8 @@ class TestParameterDBStorage:
         results = (
             db_session.execute(
                 select(CalculationParameter).where(
-                    CalculationParameter.canonical_key == "scf_convergence",
+                    CalculationParameter.calculation_id == stored_calculation.id,
+                    CalculationParameter.canonical_key == "scf.convergence",
                     CalculationParameter.canonical_value == "tight",
                 )
             )
@@ -343,6 +354,7 @@ class TestParameterDBStorage:
         results = (
             db_session.execute(
                 select(CalculationParameter).where(
+                    CalculationParameter.calculation_id == stored_calculation.id,
                     CalculationParameter.raw_key == "calcfc",
                     CalculationParameter.section == "opt",
                 )
@@ -351,13 +363,19 @@ class TestParameterDBStorage:
             .all()
         )
         assert len(results) == 1
-        assert results[0].canonical_key == "initial_hessian"
+        assert results[0].canonical_key == "opt.initial_hessian"
 
-    def test_query_unmapped_iop(self, db_session, stored_calculation):
-        """Unmapped IOp parameters are stored with canonical_key=NULL."""
+    def test_query_iop(self, db_session, stored_calculation):
+        """IOp parameters land under canonical key 'internal_option.iop'.
+
+        The overlay/option coordinate is preserved in raw_key so each
+        IOp row is distinguishable while still grouped under one
+        canonical key for queryability.
+        """
         results = (
             db_session.execute(
                 select(CalculationParameter).where(
+                    CalculationParameter.calculation_id == stored_calculation.id,
                     CalculationParameter.section == "internal_option",
                 )
             )
@@ -366,7 +384,7 @@ class TestParameterDBStorage:
         )
         assert len(results) >= 1
         iop = results[0]
-        assert iop.canonical_key is None
+        assert iop.canonical_key == "internal_option.iop"
         assert iop.raw_key == "IOp(2/9)"
         assert iop.raw_value == "2000"
 
@@ -375,19 +393,21 @@ class TestParameterDBStorage:
         param = (
             db_session.execute(
                 select(CalculationParameter).where(
-                    CalculationParameter.canonical_key == "opt_convergence",
+                    CalculationParameter.calculation_id == stored_calculation.id,
+                    CalculationParameter.canonical_key == "opt.convergence",
                 )
             )
             .scalar_one()
         )
         assert param.vocab is not None
-        assert param.vocab.canonical_key == "opt_convergence"
+        assert param.vocab.canonical_key == "opt.convergence"
 
     def test_resource_params_segregated(self, db_session, stored_calculation):
         """Resource parameters are stored with section='resource'."""
         results = (
             db_session.execute(
                 select(CalculationParameter).where(
+                    CalculationParameter.calculation_id == stored_calculation.id,
                     CalculationParameter.section == "resource",
                 )
             )
@@ -395,5 +415,5 @@ class TestParameterDBStorage:
             .all()
         )
         keys = {r.canonical_key for r in results}
-        assert "memory" in keys
-        assert "nproc_shared" in keys
+        assert "memory.raw" in keys
+        assert "parallel.nproc_shared" in keys

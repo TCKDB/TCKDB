@@ -2,12 +2,8 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.db.models.common import (
-    TransitionStateEntryStatus,
-    TransitionStateSelectionKind,
-)
+from app.db.models.common import TransitionStateEntryStatus
 from app.schemas.common import (
-    ORMBaseSchema,
     SchemaBase,
     TimestampedCreatedByReadSchema,
 )
@@ -61,7 +57,6 @@ class TransitionStateRead(TransitionStateBase, TimestampedCreatedByReadSchema):
     """Read schema for a transition-state concept."""
 
     entries: list["TransitionStateEntryRead"] = Field(default_factory=list)
-    selections: list["TransitionStateSelectionRead"] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -113,48 +108,3 @@ class TransitionStateEntryRead(TransitionStateEntryBase, TimestampedCreatedByRea
     """Read schema for a transition-state entry."""
 
     transition_state_id: int
-
-
-# ---------------------------------------------------------------------------
-# TransitionStateSelection (curation layer)
-# ---------------------------------------------------------------------------
-
-
-class TransitionStateSelectionBase(BaseModel):
-    """Shared fields for a transition-state selection.
-
-    :param transition_state_id: The TS concept this selection belongs to.
-    :param transition_state_entry_id: The selected TS entry.
-    :param selection_kind: The purpose of this selection.
-    :param note: Optional note.
-    """
-
-    transition_state_id: int
-    transition_state_entry_id: int
-    selection_kind: TransitionStateSelectionKind
-    note: str | None = None
-
-
-class TransitionStateSelectionCreate(TransitionStateSelectionBase, SchemaBase):
-    """Create schema for a transition-state selection."""
-
-    @model_validator(mode="after")
-    def normalize_text(self) -> Self:
-        self.note = normalize_optional_text(self.note)
-        return self
-
-
-class TransitionStateSelectionUpdate(SchemaBase):
-    """Patch schema for a transition-state selection."""
-
-    selection_kind: TransitionStateSelectionKind | None = None
-    note: str | None = None
-
-    @model_validator(mode="after")
-    def normalize_text(self) -> Self:
-        self.note = normalize_optional_text(self.note)
-        return self
-
-
-class TransitionStateSelectionRead(TransitionStateSelectionBase, TimestampedCreatedByReadSchema):
-    """Read schema for a transition-state selection."""

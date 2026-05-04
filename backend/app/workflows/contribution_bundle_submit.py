@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import DomainError
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
+    RecordReviewStatus,
     SubmissionKind,
     SubmissionRecordType,
     SubmissionSourceKind,
@@ -49,6 +50,7 @@ from app.schemas.workflows.contribution_bundle import (
     ContributionBundleV0,
 )
 from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
+from app.services.record_review import ReviewPolicy
 from app.services.submission import (
     create_submission,
     link_record,
@@ -122,6 +124,7 @@ def _import_thermo_bundle(
     bundle: ContributionBundleV0,
     *,
     actor_id: int,
+    review_policy: ReviewPolicy,
 ) -> list[ContributionBundleSubmittedRecord]:
     """Import every thermo upload in ``bundle`` and return submitted-record rows.
 
@@ -132,7 +135,7 @@ def _import_thermo_bundle(
     records: list[ContributionBundleSubmittedRecord] = []
     for index, upload in enumerate(bundle.records.thermo_uploads):
         thermo: Thermo = persist_thermo_upload(
-            session, upload, created_by=actor_id
+            session, upload, created_by=actor_id, review_policy=review_policy
         )
         local_ref = f"thermo_uploads[{index}]"
         records.append(
@@ -159,6 +162,7 @@ def _import_kinetics_bundle(
     bundle: ContributionBundleV0,
     *,
     actor_id: int,
+    review_policy: ReviewPolicy,
 ) -> list[ContributionBundleSubmittedRecord]:
     """Import every kinetics upload in ``bundle`` and return submitted-record rows.
 
@@ -168,7 +172,7 @@ def _import_kinetics_bundle(
     records: list[ContributionBundleSubmittedRecord] = []
     for index, upload in enumerate(bundle.records.kinetics_uploads):
         kinetics: Kinetics = persist_kinetics_upload(
-            session, upload, created_by=actor_id
+            session, upload, created_by=actor_id, review_policy=review_policy
         )
         local_ref = f"kinetics_uploads[{index}]"
         records.append(
@@ -260,11 +264,22 @@ def submit_contribution_bundle(
         summary=bundle.submission.summary,
     )
 
-    # 3. Run the per-family import through existing workflows.
+    # 3. Run the per-family import through existing workflows. The
+    #    review policy carries the moderation context: bundle submissions
+    #    enter `under_review` and link every produced record back to this
+    #    submission, so on approval we can flip them to approved in bulk.
+    review_policy = ReviewPolicy(
+        status=RecordReviewStatus.under_review,
+        submission_id=submission.id,
+    )
     if bundle.bundle_kind is BundleKind.thermo:
-        records = _import_thermo_bundle(session, bundle, actor_id=actor.id)
+        records = _import_thermo_bundle(
+            session, bundle, actor_id=actor.id, review_policy=review_policy
+        )
     else:
-        records = _import_kinetics_bundle(session, bundle, actor_id=actor.id)
+        records = _import_kinetics_bundle(
+            session, bundle, actor_id=actor.id, review_policy=review_policy
+        )
 
     # 4. Create record links — products and immediate identity parents,
     #    deduped per (record_type, record_id) since a bundle may touch the

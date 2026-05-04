@@ -311,3 +311,193 @@ class TestReadAfterWrite:
         )
         assert entry.status_code == 200
         assert entry.json()["id"] == upload["id"]
+
+    def test_upload_with_explicit_input_geometry_for_opt_round_trip(
+        self, client
+    ):
+        """A producer-explicit ``input_geometries`` for an opt calc must
+        round-trip through ``GET /api/v1/calculations/{opt_id}/input-geometries``
+        with the declared xyz preserved in the resolved geometry row."""
+        pre_opt_xyz = "2\npre-opt H2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.81"
+        payload = {
+            "species_entry": {
+                "smiles": "[H][H]",
+                "charge": 0,
+                "multiplicity": 1,
+            },
+            "geometry": {
+                "xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74",
+            },
+            "calculation": {
+                "type": "opt",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+                "opt_result": {"converged": True},
+                "input_geometries": [{"xyz_text": pre_opt_xyz}],
+            },
+            "label": "h2-explicit-opt-input",
+        }
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 201, resp.text
+        opt_id = resp.json()["primary_calculation"]["calculation_id"]
+
+        listed = client.get(
+            f"/api/v1/calculations/{opt_id}/input-geometries"
+        )
+        assert listed.status_code == 200
+        rows = listed.json()
+        assert len(rows) == 1
+        assert rows[0]["input_order"] == 1
+        # Two atoms came in; the resolved Geometry must reflect that.
+        assert rows[0]["geometry"]["natoms"] == 2
+
+    def test_conformer_upload_freq_sp_have_input_geometries(self, client):
+        """Conformer upload with primary opt + freq + sp additionals must
+        produce one row in calculation_input_geometry for each of the
+        freq/sp calcs (visible via GET .../input-geometries) and zero
+        rows for the primary opt calc.
+        """
+        payload = {
+            "species_entry": {
+                "smiles": "[H][H]",
+                "charge": 0,
+                "multiplicity": 1,
+            },
+            "geometry": {
+                "xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74",
+            },
+            "calculation": {
+                "type": "opt",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+                "opt_result": {"converged": True},
+            },
+            "additional_calculations": [
+                {
+                    "type": "freq",
+                    "software_release": {"name": "Gaussian", "version": "16"},
+                    "level_of_theory": {
+                        "method": "B3LYP", "basis": "6-31G(d)"
+                    },
+                    "freq_result": {"n_imag": 0, "zpe_hartree": 0.010},
+                },
+                {
+                    "type": "sp",
+                    "software_release": {"name": "Orca", "version": "5.0"},
+                    "level_of_theory": {
+                        "method": "CCSD(T)", "basis": "cc-pVTZ"
+                    },
+                    "sp_result": {"electronic_energy_hartree": -1.195},
+                },
+            ],
+            "label": "h2-input-geom",
+        }
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 201
+        body = resp.json()
+
+        opt_id = body["primary_calculation"]["calculation_id"]
+        additionals = {
+            ref["type"]: ref["calculation_id"]
+            for ref in body["additional_calculations"]
+        }
+        freq_id = additionals["freq"]
+        sp_id = additionals["sp"]
+
+        opt_inputs = client.get(
+            f"/api/v1/calculations/{opt_id}/input-geometries"
+        ).json()
+        assert opt_inputs == []
+
+        freq_inputs = client.get(
+            f"/api/v1/calculations/{freq_id}/input-geometries"
+        ).json()
+        assert len(freq_inputs) == 1
+
+        sp_inputs = client.get(
+            f"/api/v1/calculations/{sp_id}/input-geometries"
+        ).json()
+        assert len(sp_inputs) == 1
+
+    def test_upload_with_explicit_scan_output_geometries_round_trip(
+        self, client
+    ):
+        """Bundle upload with a scan additional calc declaring three
+        scan-point output geometries must round-trip through
+        ``GET /api/v1/calculations/{scan_id}/output-geometries`` with
+        the declared roles preserved and ordered by ``output_order``."""
+        xyz_a = "1\nscan-1\nH 0.0 0.0 0.10"
+        xyz_b = "1\nscan-2\nH 0.0 0.0 0.20"
+        xyz_c = "1\nscan-3\nH 0.0 0.0 0.30"
+        payload = {
+            "species_entry": {
+                "smiles": "[H]",
+                "charge": 0,
+                "multiplicity": 2,
+            },
+            "conformers": [
+                {
+                    "key": "c0",
+                    "geometry": {"xyz_text": "1\nH atom\nH 0.0 0.0 0.0"},
+                    "primary_calculation": {
+                        "key": "opt0",
+                        "type": "opt",
+                        "software_release": {
+                            "name": "Gaussian", "version": "16"
+                        },
+                        "level_of_theory": {
+                            "method": "B3LYP", "basis": "6-31G(d)"
+                        },
+                        "opt_result": {"converged": True},
+                    },
+                    "additional_calculations": [
+                        {
+                            "key": "scan0",
+                            "type": "scan",
+                            "software_release": {
+                                "name": "Gaussian", "version": "16"
+                            },
+                            "level_of_theory": {
+                                "method": "B3LYP", "basis": "6-31G(d)"
+                            },
+                            "output_geometries": [
+                                {
+                                    "geometry": {"xyz_text": xyz_a},
+                                    "role": "scan_point",
+                                },
+                                {
+                                    "geometry": {"xyz_text": xyz_b},
+                                    "role": "scan_point",
+                                },
+                                {
+                                    "geometry": {"xyz_text": xyz_c},
+                                    "role": "scan_point",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        resp = client.post(
+            "/api/v1/uploads/computed-species", json=payload
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+
+        scan_id = next(
+            ref["calculation_id"]
+            for ref in body["conformers"][0]["additional_calculations"]
+            if ref["key"] == "scan0"
+        )
+
+        listed = client.get(
+            f"/api/v1/calculations/{scan_id}/output-geometries"
+        )
+        assert listed.status_code == 200
+        rows = listed.json()
+        assert [r["output_order"] for r in rows] == [1, 2, 3]
+        assert [r["role"] for r in rows] == [
+            "scan_point", "scan_point", "scan_point"
+        ]
+        assert len({r["geometry"]["id"] for r in rows}) == 3

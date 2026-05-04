@@ -7,6 +7,7 @@ from app.db.models.common import (
     ActivationEnergyUnits,
     ArrheniusAUnits,
     KineticsModelKind,
+    KineticsUncertaintyKind,
     ScientificOriginKind,
 )
 from app.schemas.common import SchemaBase
@@ -121,6 +122,7 @@ class KineticsUploadRequest(SchemaBase):
     reported_ea_units: ActivationEnergyUnits | None = None
 
     a_uncertainty: float | None = None
+    a_uncertainty_kind: KineticsUncertaintyKind | None = None
     n_uncertainty: float | None = None
     d_reported_ea: float | None = None
 
@@ -155,6 +157,26 @@ class KineticsUploadRequest(SchemaBase):
             and self.tmin_k > self.tmax_k
         ):
             raise ValueError("tmin_k must be less than or equal to tmax_k.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_a_uncertainty_kind(self) -> Self:
+        has_value = self.a_uncertainty is not None
+        has_kind = self.a_uncertainty_kind is not None
+        if has_value != has_kind:
+            raise ValueError(
+                "a_uncertainty and a_uncertainty_kind must both be provided "
+                "or both omitted."
+            )
+        if (
+            self.a_uncertainty_kind == KineticsUncertaintyKind.multiplicative
+            and self.a_uncertainty is not None
+            and self.a_uncertainty < 1.0
+        ):
+            raise ValueError(
+                "Multiplicative a_uncertainty must be >= 1.0 (factor f, "
+                "with the true value within [A/f, A*f])."
+            )
         return self
 
     @model_validator(mode="after")

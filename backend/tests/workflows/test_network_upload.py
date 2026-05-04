@@ -89,13 +89,16 @@ def test_persist_network_upload_resolves_links_and_provenance(
     )
 
     with Session(db_engine) as session, session.begin():
-        session.add(AppUser(id=9, username="network_tester"))
+        user = AppUser(username="network_tester")
+        session.add(user)
         session.flush()
 
-        network = persist_network_upload(session, _network_request(), created_by=9)
+        network = persist_network_upload(
+            session, _network_request(), created_by=user.id
+        )
 
         assert network.id is not None
-        assert network.created_by == 9
+        assert network.created_by == user.id
         assert network.literature is not None
         assert network.literature.title == "Arkane network import"
         assert network.software_release is not None

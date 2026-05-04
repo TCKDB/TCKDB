@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 import app.db.models  # noqa: F401
 from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType, ThermoCalculationRole
+from app.db.models.common import (
+    CalculationType,
+    SubmissionRecordType,
+    ThermoCalculationRole,
+)
 from app.db.models.thermo import Thermo
 from app.schemas.entities.thermo import ThermoSourceCalculationCreate
 from app.schemas.workflows.thermo_upload import (
@@ -18,6 +22,11 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
 from app.services.energy_correction_resolution import create_applied_energy_correction
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
+)
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 
@@ -128,6 +137,7 @@ def persist_thermo_upload(
     request: ThermoUploadRequest,
     *,
     created_by: int | None = None,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
 ) -> Thermo:
     """Persist a complete thermo upload workflow.
 
@@ -201,6 +211,7 @@ def persist_thermo_upload(
     )
     thermo = persist_thermo(session, thermo_create, created_by=created_by)
 
+    applied_corrections: list = []
     for correction_payload in request.applied_energy_corrections:
         source_calc_id: int | None = None
         if correction_payload.source_calculation_key is not None:
@@ -225,13 +236,32 @@ def persist_thermo_upload(
             )
             source_calc_id = calc_row.id
 
-        create_applied_energy_correction(
-            session,
-            correction_payload,
-            target_species_entry_id=species_entry.id,
-            source_calculation_id=source_calc_id,
-            created_by=created_by,
+        applied_corrections.append(
+            create_applied_energy_correction(
+                session,
+                correction_payload,
+                target_species_entry_id=species_entry.id,
+                source_calculation_id=source_calc_id,
+                created_by=created_by,
+            )
         )
 
     session.flush()
+
+    targets: list[RecordRef] = [
+        RecordRef(SubmissionRecordType.thermo, thermo.id),
+        RecordRef(SubmissionRecordType.species_entry, species_entry.id),
+    ]
+    targets.extend(
+        RecordRef(SubmissionRecordType.calculation, c.id)
+        for c in calculations_by_key.values()
+    )
+    targets.extend(
+        RecordRef(SubmissionRecordType.applied_energy_correction, aec.id)
+        for aec in applied_corrections
+    )
+    apply_review_policy(
+        session, targets=targets, policy=review_policy, created_by=created_by
+    )
+
     return thermo

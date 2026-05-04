@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
@@ -24,6 +24,10 @@ from app.db.models.common import (
 )
 from app.db.models.literature import Literature
 from app.db.models.software import SoftwareRelease
+from app.db.models.energy_correction import (
+    AppliedEnergyCorrection,
+    FrequencyScaleFactor,
+)
 from app.db.models.statmech import (
     Statmech,
     StatmechSourceCalculation,
@@ -507,3 +511,177 @@ class TestStatmechUploadSchemaValidation:
                     },
                 ],
             )
+
+
+# ---------------------------------------------------------------------------
+# Frequency-scale-factor unification tests
+#
+# Exercise the unified FreqScaleFactorRef through the standalone statmech
+# upload path. The same resolver is shared with the computed-species and
+# computed-reaction bundle paths, so identity/dedupe behavior is verified
+# once here.
+# ---------------------------------------------------------------------------
+
+
+_FSF_LOT = {"method": "wB97X-D", "basis": "def2-TZVP"}
+
+
+def _statmech_request_with_fsf(
+    *,
+    smiles: str,
+    note: str | None = None,
+    fsf_overrides: dict | None = None,
+) -> StatmechUploadRequest:
+    fsf: dict = {
+        "level_of_theory": dict(_FSF_LOT),
+        "scale_kind": "fundamental",
+        "value": 0.988,
+    }
+    if fsf_overrides:
+        fsf.update(fsf_overrides)
+    return _basic_request(
+        species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
+        freq_scale_factor=fsf,
+        note=note,
+    )
+
+
+def test_unified_fsf_ref_supports_full_identity(db_engine, monkeypatch) -> None:
+    """A FreqScaleFactorRef carrying every identity field — LoT, software,
+    scale_kind, value, source_literature, workflow_tool_release — and a
+    descriptive note round-trips into a single FrequencyScaleFactor row,
+    with all FK fields populated through the unified resolver."""
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata",
+        lambda doi: {
+            "title": "Scale factors for harmonic frequencies",
+            "container-title": ["J. Chem. Phys."],
+            "issued": 2018,
+            "URL": f"https://doi.org/{doi}",
+        },
+    )
+    request = _statmech_request_with_fsf(
+        smiles="CC",
+        fsf_overrides={
+            "software": {"name": "Gaussian"},
+            "source_literature": {
+                "doi": "10.1063/fsf.full",
+                "title": "Fallback title",
+            },
+            "workflow_tool_release": {"name": "ARC", "version": "1.1.0"},
+            "note": "wB97X-D/def2-TZVP fundamental factor",
+        },
+    )
+
+    with Session(db_engine) as session, session.begin():
+        statmech = persist_statmech_upload(session, request)
+
+        assert statmech.frequency_scale_factor_id is not None
+        fsf = session.get(FrequencyScaleFactor, statmech.frequency_scale_factor_id)
+        assert fsf is not None
+        assert fsf.value == 0.988
+        assert fsf.scale_kind.value == "fundamental"
+        assert fsf.level_of_theory is not None
+        assert fsf.level_of_theory.method.lower() == "wb97x-d"
+        assert fsf.software is not None
+        assert fsf.software.name == "Gaussian"
+        assert fsf.source_literature_id is not None
+        assert fsf.source_literature.title == "Scale factors for harmonic frequencies"
+        assert fsf.workflow_tool_release_id is not None
+        assert fsf.workflow_tool_release.workflow_tool.name == "ARC"
+        assert fsf.note == "wB97X-D/def2-TZVP fundamental factor"
+
+
+def test_bare_citation_string_lives_in_note_no_fake_literature(db_engine) -> None:
+    """When a producer has only a citation string, it goes into the FSF
+    note. No Literature row is synthesized from raw prose, and the
+    ``source_literature_id`` stays NULL."""
+    citation = "Truhlar et al., 2010 (in-house tabulation, DOI unknown)"
+    request = _statmech_request_with_fsf(
+        smiles="C",
+        fsf_overrides={"note": citation},
+    )
+
+    with Session(db_engine) as session, session.begin():
+        lit_count_before = session.scalar(select(func.count()).select_from(Literature))
+        statmech = persist_statmech_upload(session, request)
+        lit_count_after = session.scalar(select(func.count()).select_from(Literature))
+
+        assert lit_count_after == lit_count_before  # nothing new in literature
+
+        fsf = session.get(FrequencyScaleFactor, statmech.frequency_scale_factor_id)
+        assert fsf is not None
+        assert fsf.source_literature_id is None
+        assert fsf.note == citation
+
+
+def test_note_does_not_affect_identity_first_writer_wins(db_engine) -> None:
+    """Two refs that share every identity field but differ only in
+    ``note`` resolve to the SAME FrequencyScaleFactor row. The note from
+    the first writer is preserved; subsequent notes are silently
+    ignored. This pins the documented contract: notes are descriptive,
+    never identity-bearing, never mutate registry rows."""
+    smiles = "N"
+    request_a = _statmech_request_with_fsf(
+        smiles=smiles,
+        note="upload A",
+        fsf_overrides={"software": {"name": "Gaussian"}, "note": "first writer note"},
+    )
+    request_b = _statmech_request_with_fsf(
+        smiles=smiles,
+        note="upload B",
+        fsf_overrides={
+            "software": {"name": "Gaussian"},
+            "note": "different but should be ignored on dedupe",
+        },
+    )
+
+    with Session(db_engine) as session, session.begin():
+        sm_a = persist_statmech_upload(session, request_a)
+        sm_b = persist_statmech_upload(session, request_b)
+
+        # Two statmech rows (statmech is append-only) but one FSF row.
+        assert sm_a.id != sm_b.id
+        assert sm_a.frequency_scale_factor_id == sm_b.frequency_scale_factor_id
+
+        fsf = session.get(
+            FrequencyScaleFactor, sm_a.frequency_scale_factor_id
+        )
+        assert fsf is not None
+        assert fsf.note == "first writer note"  # first-writer wins; B's note dropped
+
+        # Exactly one FSF row exists for this identity tuple — the
+        # full DB-identity match across all six structural fields.
+        matching = session.scalars(
+            select(FrequencyScaleFactor).where(
+                FrequencyScaleFactor.value == 0.988,
+                FrequencyScaleFactor.level_of_theory_id == fsf.level_of_theory_id,
+                FrequencyScaleFactor.software_id == fsf.software_id,
+                FrequencyScaleFactor.scale_kind == fsf.scale_kind,
+                FrequencyScaleFactor.source_literature_id.is_(None),
+                FrequencyScaleFactor.workflow_tool_release_id.is_(None),
+            )
+        ).all()
+        assert len(matching) == 1
+
+
+def test_fsf_in_statmech_does_not_create_applied_energy_correction(db_engine) -> None:
+    """Linking a frequency scale factor through ``statmech.frequency_scale_factor_id``
+    is statmech provenance, not an applied correction. No
+    ``applied_energy_correction`` row should be produced for this path."""
+    request = _statmech_request_with_fsf(
+        smiles="O",
+        fsf_overrides={"software": {"name": "Gaussian"}},
+    )
+
+    with Session(db_engine) as session, session.begin():
+        aec_before = session.scalar(
+            select(func.count()).select_from(AppliedEnergyCorrection)
+        )
+        statmech = persist_statmech_upload(session, request)
+        aec_after = session.scalar(
+            select(func.count()).select_from(AppliedEnergyCorrection)
+        )
+
+        assert statmech.frequency_scale_factor_id is not None
+        assert aec_after == aec_before

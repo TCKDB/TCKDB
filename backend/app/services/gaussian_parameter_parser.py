@@ -17,32 +17,34 @@ from pathlib import Path
 #: canonical_value_fn is an optional callable that normalizes the raw_value.
 _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     # opt section
-    ("opt", "calcfc"): ("initial_hessian", "calculate_at_first_point"),
-    ("opt", "calcall"): ("initial_hessian", "calculate_at_every_point"),
-    ("opt", "readfc"): ("initial_hessian", "read_from_checkpoint"),
-    ("opt", "tight"): ("opt_convergence", "tight"),
-    ("opt", "verytight"): ("opt_convergence", "very_tight"),
-    ("opt", "loose"): ("opt_convergence", "loose"),
-    ("opt", "maxcycle"): ("opt_max_cycles", None),
-    ("opt", "maxstep"): ("opt_max_step", None),
-    ("opt", "ts"): ("saddle_order", "1"),
-    ("opt", "noeigentest"): ("eigen_test", "disabled"),
+    ("opt", "calcfc"): ("opt.initial_hessian", "calculate_at_first_point"),
+    ("opt", "calcall"): ("opt.initial_hessian", "calculate_at_every_point"),
+    ("opt", "readfc"): ("opt.initial_hessian", "read_from_checkpoint"),
+    ("opt", "tight"): ("opt.convergence", "tight"),
+    ("opt", "verytight"): ("opt.convergence", "very_tight"),
+    ("opt", "loose"): ("opt.convergence", "loose"),
+    ("opt", "maxcycle"): ("opt.max_cycles", None),
+    ("opt", "maxstep"): ("opt.max_step", None),
+    ("opt", "ts"): ("opt.saddle_order", "1"),
+    ("opt", "noeigentest"): ("opt.eigen_test", "disabled"),
     # scf section
-    ("scf", "tight"): ("scf_convergence", "tight"),
-    ("scf", "verytight"): ("scf_convergence", "very_tight"),
-    ("scf", "direct"): ("scf_direct", "true"),
-    ("scf", "incore"): ("scf_direct", "incore"),
-    ("scf", "xqc"): ("scf_fallback", "xqc"),
-    ("scf", "maxcycle"): ("scf_max_cycles", None),
+    ("scf", "tight"): ("scf.convergence", "tight"),
+    ("scf", "verytight"): ("scf.convergence", "very_tight"),
+    ("scf", "direct"): ("scf.direct", "true"),
+    ("scf", "incore"): ("scf.direct", "incore"),
+    ("scf", "xqc"): ("scf.fallback", "xqc"),
+    ("scf", "maxcycle"): ("scf.max_cycles", None),
     # integral section
-    ("integral", "grid"): ("grid_quality", None),
-    ("integral", "acc2e"): ("integral_accuracy", None),
+    ("integral", "grid"): ("grid.quality", None),
+    ("integral", "acc2e"): ("integral.accuracy", None),
     # general section
-    ("general", "guess"): ("guess_strategy", None),
+    ("general", "guess"): ("guess.strategy", None),
+    # symmetry section
+    ("symmetry", "nosymm"): ("symmetry.disabled", "true"),
     # resource section
-    ("resource", "%mem"): ("memory", None),
-    ("resource", "%nprocshared"): ("nproc_shared", None),
-    ("resource", "%nproc"): ("nproc", None),
+    ("resource", "%mem"): ("memory.raw", None),
+    ("resource", "%nprocshared"): ("parallel.nproc_shared", None),
+    ("resource", "%nproc"): ("parallel.nproc", None),
 }
 
 
@@ -67,12 +69,52 @@ def _lookup_canonical(
 _ROUTE_DELIM = re.compile(r"^[\s-]{60,}$")
 
 
-def _extract_route_line(text: str) -> str:
-    """Extract the Gaussian route line from log text.
+def extract_gaussian_route_text(text: str) -> str | None:
+    """Return the Gaussian route section from a log echo or raw input file.
 
-    The route line sits between two rows of dashes (------) in the early
-    part of the output.  It may span multiple lines.
+    Tries the log-echo dash-delimited block first. If that yields nothing
+    (e.g. raw ``.gjf`` / ``.com`` input), falls back to scanning for the
+    first non-empty line whose stripped form starts with ``#``, then
+    collects continuation lines until the first blank line.
+
+    The two modes use different join strategies:
+
+    * Log echoes: Gaussian hard-wraps at column width; concatenating with
+      no separator preserves tokens like ``def2tzvp`` that were split mid-
+      identifier.
+    * Raw input: lines are human-edited, so wrapping is logical not
+      physical; joining with spaces preserves token boundaries.
+
+    Returns ``None`` if no route could be identified.
     """
+
+    log_route = _extract_route_line_from_log_echo(text)
+    if log_route:
+        return log_route
+    return _extract_route_line_from_raw_input(text)
+
+
+def _extract_route_line(text: str) -> str:
+    """Backwards-compatible wrapper around :func:`extract_gaussian_route_text`.
+
+    Returns ``""`` for the no-route case instead of ``None`` so existing
+    call sites that pass straight into :func:`_parse_route_tokens` keep
+    working without per-call None guards.
+    """
+
+    route = extract_gaussian_route_text(text)
+    return route or ""
+
+
+def _extract_route_line_from_log_echo(text: str) -> str:
+    """Extract the route line from a Gaussian log echo.
+
+    The route line sits between two rows of dashes (``------``) in the
+    early part of the output.  It may span multiple physical lines, but
+    Gaussian wraps at column width with no internal spaces, so the
+    parts must be concatenated with no separator.
+    """
+
     lines = text.splitlines()
     in_route = False
     route_parts: list[str] = []
@@ -83,32 +125,25 @@ def _extract_route_line(text: str) -> str:
             if in_route:
                 # second delimiter — we're done
                 break
-            # Check if previous context suggests this is the route block.
-            # The route line starts with # and sits after the first dash row.
             in_route = True
             continue
         if in_route:
             route_parts.append(stripped)
 
-    # Concatenate directly — Gaussian hard-wraps at column width, so
-    # content already has internal spacing; joining with spaces would
-    # split tokens like "def2tz" + "vp" → "def2tz vp" instead of "def2tzvp".
     raw = "".join(route_parts)
-    # The first dash-delimited block might be the warning/copyright block.
-    # The route line always starts with #.
-    if not raw.startswith("#"):
-        # Try again: skip the first occurrence and look for the next.
-        return _extract_route_line_fallback(text)
-    return raw
+    if raw.startswith("#"):
+        return raw
+    # First dash block might be the warning/copyright block; try the
+    # next one.
+    return _extract_route_line_fallback(text)
 
 
 def _extract_route_line_fallback(text: str) -> str:
-    """Fallback: scan for a line starting with # between dashes."""
+    """Fallback: scan dash-delimited blocks for one starting with ``#``."""
     lines = text.splitlines()
     dash_positions = [
         i for i, line in enumerate(lines) if _ROUTE_DELIM.match(line.strip())
     ]
-    # Find consecutive dash pairs where the content starts with #
     for i in range(len(dash_positions) - 1):
         start = dash_positions[i] + 1
         end = dash_positions[i + 1]
@@ -116,6 +151,42 @@ def _extract_route_line_fallback(text: str) -> str:
         if block.startswith("#"):
             return block
     return ""
+
+
+def _extract_route_line_from_raw_input(text: str) -> str | None:
+    """Extract the route from a raw Gaussian input (``.gjf`` / ``.com``).
+
+    Rules:
+
+    1. Find the first non-empty line whose stripped form starts with ``#``.
+    2. Collect that line plus every subsequent non-empty line.
+    3. Stop at the first blank line — that terminates the route section
+       and starts the title block.
+    4. Join with single spaces. Raw input is human-authored and wrapping
+       is logical, so token boundaries land on the line breaks.
+
+    Returns ``None`` if no ``#`` line was found.
+    """
+
+    lines = text.splitlines()
+    in_route = False
+    route_parts: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not in_route:
+            if stripped.startswith("#"):
+                in_route = True
+                route_parts.append(stripped)
+            continue
+        # in_route
+        if stripped == "":
+            break
+        route_parts.append(stripped)
+
+    if not route_parts:
+        return None
+    return " ".join(route_parts)
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +256,7 @@ def _parse_route_tokens(route: str) -> list[dict]:
             params.append(
                 {
                     "raw_key": "verbosity",
-                    "canonical_key": "output_verbosity",
+                    "canonical_key": "output.verbosity",
                     "raw_value": m.group(1).upper(),
                     "canonical_value": {
                         "P": "full",
@@ -199,22 +270,25 @@ def _parse_route_tokens(route: str) -> list[dict]:
         route = route[m.end() :] if m else route[1:]
 
     # Extract IOp() directives first (they contain parens that confuse
-    # the general tokenizer)
+    # the general tokenizer). Each IOp(overlay/option=value) becomes one
+    # row; the overlay/option pair stays in raw_key so the same canonical
+    # key 'internal_option.iop' is queryable across all IOp settings.
     for iop_match in _IOP_RE.finditer(route):
         iop_body = iop_match.group(1)
         for part in iop_body.split(","):
             part = part.strip()
-            # Format: overlay/option=value
             if "=" in part:
                 iop_key, iop_val = part.split("=", 1)
+                iop_key = iop_key.strip()
+                iop_val = iop_val.strip()
                 params.append(
                     {
                         "raw_key": f"IOp({iop_key})",
-                        "canonical_key": None,
+                        "canonical_key": "internal_option.iop",
                         "raw_value": iop_val,
                         "canonical_value": None,
                         "section": "internal_option",
-                        "value_type": "int",
+                        "value_type": _guess_value_type(iop_val),
                     }
                 )
     # Remove IOp(...) from route for further parsing
@@ -291,12 +365,26 @@ def _parse_route_tokens(route: str) -> list[dict]:
 
         # Standalone keyword (not method/basis, not key=value)
         else:
-            # Skip route-level modifiers that aren't parameters
-            if token.lower() in ("nosymm", "force", "test"):
-                ck, cv = _lookup_canonical("general", token)
+            lowered = token.lower()
+            # Symmetry-control flags land in their own section so they
+            # are independent of the generic "general" bucket.
+            if lowered == "nosymm":
+                ck, cv = _lookup_canonical("symmetry", lowered)
                 params.append(
                     {
-                        "raw_key": token,
+                        "raw_key": lowered,
+                        "canonical_key": ck,
+                        "raw_value": "true",
+                        "canonical_value": cv,
+                        "section": "symmetry",
+                        "value_type": "bool",
+                    }
+                )
+            elif lowered in ("force", "test"):
+                ck, cv = _lookup_canonical("general", lowered)
+                params.append(
+                    {
+                        "raw_key": lowered,
                         "canonical_key": ck,
                         "raw_value": "true",
                         "canonical_value": cv,

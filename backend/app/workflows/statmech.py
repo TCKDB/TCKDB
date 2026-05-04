@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
 from app.db.models.calculation import Calculation
+from app.db.models.common import SubmissionRecordType
 from app.db.models.statmech import Statmech
 from app.schemas.entities.statmech import (
     StatmechSourceCalculationCreate,
@@ -23,6 +24,11 @@ from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayloa
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
+)
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import resolve_or_create_statmech
@@ -56,6 +62,7 @@ def persist_statmech_upload(
     request: StatmechUploadRequest,
     *,
     created_by: int | None = None,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
 ) -> Statmech:
     """Persist a complete standalone statmech upload workflow.
 
@@ -168,4 +175,17 @@ def persist_statmech_upload(
     )
 
     session.flush()
+
+    targets = [
+        RecordRef(SubmissionRecordType.statmech, statmech.id),
+        RecordRef(SubmissionRecordType.species_entry, species_entry.id),
+    ]
+    targets.extend(
+        RecordRef(SubmissionRecordType.calculation, c.id)
+        for c in calculations_by_key.values()
+    )
+    apply_review_policy(
+        session, targets=targets, policy=review_policy, created_by=created_by
+    )
+
     return statmech

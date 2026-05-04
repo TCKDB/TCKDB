@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from app.db.models.reaction import ReactionEntry
     from app.db.models.software import Software
     from app.db.models.species import ConformerObservation, SpeciesEntry
+    from app.db.models.transition_state import TransitionStateEntry
     from app.db.models.workflow import WorkflowToolRelease
 
 
@@ -278,6 +279,13 @@ class AppliedEnergyCorrection(Base, TimestampMixin, CreatedByMixin):
         ForeignKey("reaction_entry.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
     )
+    target_transition_state_entry_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "transition_state_entry.id", deferrable=True, initially="IMMEDIATE"
+        ),
+        nullable=True,
+    )
 
     # Source FKs — provenance of what data was used
     source_conformer_observation_id: Mapped[Optional[int]] = mapped_column(
@@ -334,6 +342,9 @@ class AppliedEnergyCorrection(Base, TimestampMixin, CreatedByMixin):
     target_reaction_entry: Mapped[Optional["ReactionEntry"]] = relationship(
         foreign_keys=[target_reaction_entry_id],
     )
+    target_transition_state_entry: Mapped[Optional["TransitionStateEntry"]] = relationship(
+        foreign_keys=[target_transition_state_entry_id],
+    )
     source_conformer_observation: Mapped[Optional["ConformerObservation"]] = relationship(
         foreign_keys=[source_conformer_observation_id],
     )
@@ -351,7 +362,8 @@ class AppliedEnergyCorrection(Base, TimestampMixin, CreatedByMixin):
             name="temperature_k_gt_0",
         ),
         CheckConstraint(
-            "num_nonnulls(target_species_entry_id, target_reaction_entry_id) = 1",
+            "num_nonnulls(target_species_entry_id, target_reaction_entry_id, "
+            "target_transition_state_entry_id) = 1",
             name="exactly_one_target",
         ),
         CheckConstraint(
@@ -362,6 +374,7 @@ class AppliedEnergyCorrection(Base, TimestampMixin, CreatedByMixin):
             "uq_applied_energy_correction_dedup",
             "target_species_entry_id",
             "target_reaction_entry_id",
+            "target_transition_state_entry_id",
             "source_conformer_observation_id",
             "scheme_id",
             "frequency_scale_factor_id",

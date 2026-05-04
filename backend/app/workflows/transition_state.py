@@ -10,6 +10,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401  — ensure all mappers are loaded
+from app.db.models.common import SubmissionRecordType
 from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.workflows.reaction_upload import (
     ReactionUploadRequest,
@@ -18,6 +19,11 @@ from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
+)
 from app.services.transition_state_resolution import (
     create_transition_state_and_entry,
     persist_ts_calculations,
@@ -30,6 +36,7 @@ def persist_transition_state_upload(
     request: TransitionStateUploadRequest,
     *,
     created_by: int | None = None,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
 ) -> TransitionStateEntry:
     """Persist a complete transition-state upload workflow.
 
@@ -46,7 +53,9 @@ def persist_transition_state_upload(
     :returns: Newly created ``TransitionStateEntry`` row.
     """
 
-    # 1. Resolve reaction from embedded content
+    # 1. Resolve reaction from embedded content. Thread the same review
+    #    policy so the reaction_entry created en route lands in the same
+    #    state as the TS records this workflow is about to write.
     rxn = request.reaction
     reaction_entry = persist_reaction_upload(
         session,
@@ -70,6 +79,7 @@ def persist_transition_state_upload(
             ],
         ),
         created_by=created_by,
+        review_policy=review_policy,
     )
 
     # 2. Create TS concept + candidate entry
@@ -88,7 +98,7 @@ def persist_transition_state_upload(
     geometry = resolve_geometry_payload(session, request.geometry)
 
     # 4. Persist calculations (primary opt + additional)
-    persist_ts_calculations(
+    primary_calc, additional_calcs = persist_ts_calculations(
         session,
         primary_opt_upload=request.primary_opt,
         additional_uploads=request.additional_calculations,
@@ -98,4 +108,19 @@ def persist_transition_state_upload(
     )
 
     session.flush()
+
+    targets: list[RecordRef] = [
+        RecordRef(SubmissionRecordType.transition_state_entry, ts_entry.id),
+        RecordRef(
+            SubmissionRecordType.transition_state, ts_entry.transition_state_id
+        ),
+        RecordRef(SubmissionRecordType.calculation, primary_calc.id),
+    ]
+    targets.extend(
+        RecordRef(SubmissionRecordType.calculation, c.id) for c in additional_calcs
+    )
+    apply_review_policy(
+        session, targets=targets, policy=review_policy, created_by=created_by
+    )
+
     return ts_entry

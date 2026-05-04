@@ -247,3 +247,16 @@ docs/roadmaps/
 # Covers both bare ``.codex`` and any ``.codex_*`` companion files.
 .codex
 .codex*
+
+# Local dev auth artifacts written by backend/scripts/dev_login.sh
+backend/cookies.txt
+backend/.tckdb_auth.env
+backend/.tckdb_api_key
+.vexb/state.json
+.vexb/workspace.json
+.vexb/index.sqlite
+.gitignore
+.gitignore
+.gitignore
+cookies.txt
+.vexb/config.json

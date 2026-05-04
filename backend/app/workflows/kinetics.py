@@ -5,12 +5,21 @@ from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
 from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType, KineticsCalculationRole
+from app.db.models.common import (
+    CalculationType,
+    KineticsCalculationRole,
+    SubmissionRecordType,
+)
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.services.calculation_resolution import resolve_level_of_theory_ref
 from app.services.kinetics_resolution import persist_kinetics, resolve_kinetics_upload
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
+)
 from app.services.species_resolution import resolve_species_entry
 from app.workflows.reaction import persist_reaction_upload
 
@@ -56,6 +65,7 @@ def persist_kinetics_upload(
     request: KineticsUploadRequest,
     *,
     created_by: int | None = None,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
 ) -> Kinetics:
     """Persist a complete kinetics upload workflow.
 
@@ -66,6 +76,9 @@ def persist_kinetics_upload(
     """
 
     # 1. Resolve reaction
+    #    Pass the same review_policy so the reaction_entry created en route is
+    #    captured in the same review state as the kinetics row this workflow
+    #    is producing.
     reaction_entry = persist_reaction_upload(
         session,
         ReactionUploadRequest(
@@ -88,6 +101,7 @@ def persist_kinetics_upload(
             ],
         ),
         created_by=created_by,
+        review_policy=review_policy,
     )
 
     # 2. Create kinetics record
@@ -136,5 +150,15 @@ def persist_kinetics_upload(
             )
 
         session.flush()
+
+    apply_review_policy(
+        session,
+        targets=[
+            RecordRef(SubmissionRecordType.kinetics, kinetics.id),
+            RecordRef(SubmissionRecordType.reaction_entry, reaction_entry.id),
+        ],
+        policy=review_policy,
+        created_by=created_by,
+    )
 
     return kinetics

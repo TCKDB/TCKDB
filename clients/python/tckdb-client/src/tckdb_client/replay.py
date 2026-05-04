@@ -40,6 +40,15 @@ RESPONSE_BODY_CAP = 4096
 SIDECAR_GLOB = "*.meta.json"
 DEFAULT_FORMAT_VERSIONS: tuple[str, ...] = ("0",)
 
+# Terminal sidecar status: a calculation_artifact sidecar whose target
+# /calculations/{id} no longer exists on the server (typically after a
+# DB reset or fresh re-upload of the parent bundle). The integer
+# calculation_id baked into these sidecars at producer time is stale
+# and the only fix is regeneration from output.yml. We keep replay
+# idempotent by skipping this status on every subsequent walk instead
+# of retrying forever.
+STATUS_NEEDS_REGENERATION = "needs_regeneration"
+
 
 @dataclass(frozen=True)
 class ReplayFailure:
@@ -63,6 +72,7 @@ class ReplaySummary:
     skipped_already_uploaded: int
     skipped_marked_skipped: int
     skipped_failed_due_to_only_pending: int
+    skipped_needs_regeneration: int
     failed: int
     dry_run: int
     by_kind: dict[str, dict[str, int]] = field(default_factory=dict)
@@ -163,6 +173,15 @@ def _process_one(
         counts.skipped_marked_skipped += 1
         counts.bump(kind, "skipped_marked_skipped")
         return
+    if status == STATUS_NEEDS_REGENERATION:
+        # Terminal status. The sidecar's calculation_id is stale (the
+        # parent calc no longer exists on this server) and only a fresh
+        # regeneration from output.yml can fix it — retrying the POST
+        # would just produce another 404. Skip silently every walk so
+        # the count stays meaningful but no HTTP traffic is generated.
+        counts.skipped_needs_regeneration += 1
+        counts.bump(kind, "skipped_needs_regeneration")
+        return
     if only_pending and status == "failed":
         # Distinct counter: the sidecar is *not* uploaded — it's a
         # known-failed sidecar deliberately deferred by --only-pending.
@@ -219,14 +238,36 @@ def _process_one(
             return
         except TCKDBHTTPError as exc:
             last_error = _format_http_error(exc)
+            response_payload = (
+                exc.response_json
+                if exc.response_json is not None
+                else exc.response_text
+            )
+            # 404 on a calculation_artifact sidecar means the parent
+            # calculation no longer exists on the server (DB reset or
+            # fresh re-upload), making the sidecar's baked-in
+            # ``calculation_id`` permanently stale. Mark it terminal so
+            # subsequent runs skip silently instead of cascading 404s.
+            if (
+                kind == "calculation_artifact"
+                and exc.status_code == 404
+            ):
+                _mark_needs_regeneration(
+                    sidecar_path,
+                    sidecar,
+                    last_error=last_error,
+                    response_status_code=exc.status_code,
+                    response_payload=response_payload,
+                )
+                counts.skipped_needs_regeneration += 1
+                counts.bump(kind, "skipped_needs_regeneration")
+                return
             _mark_failed(
                 sidecar_path,
                 sidecar,
                 last_error=last_error,
                 response_status_code=exc.status_code,
-                response_payload=exc.response_json
-                if exc.response_json is not None
-                else exc.response_text,
+                response_payload=response_payload,
                 dry_run=False,
             )
             counts.record_failure(sidecar_path, kind, last_error)
@@ -380,6 +421,7 @@ def _replay_calculation_artifact(
 _DISPATCH: dict[str, Callable[..., TCKDBResponse]] = {
     "conformer_calculation": _replay_json_payload,
     "computed_species": _replay_json_payload,
+    "computed_reaction": _replay_json_payload,
     "calculation_artifact": _replay_calculation_artifact,
 }
 
@@ -528,6 +570,38 @@ def _mark_failed(
         logger.error("atomic sidecar write failed for %s: %s", sidecar_path, exc)
 
 
+def _mark_needs_regeneration(
+    sidecar_path: Path,
+    sidecar: dict,
+    *,
+    last_error: str,
+    response_status_code: int | None,
+    response_payload: Any,
+) -> None:
+    """Persist the terminal ``needs_regeneration`` status on a sidecar.
+
+    Same shape as ``_mark_failed`` but writes the terminal status, which
+    the next replay walk recognizes and skips without an HTTP call.
+    Never runs under ``dry_run`` — the caller only invokes us after a
+    real HTTP response was received, so there's no dry-run path here.
+    """
+    updated = dict(sidecar)
+    updated.update(
+        {
+            "bundle_format_version": sidecar.get("bundle_format_version", "0"),
+            "status": STATUS_NEEDS_REGENERATION,
+            "last_attempted_at": _utc_now_iso(),
+            "last_error": last_error,
+            "response_status_code": response_status_code,
+        }
+    )
+    updated.update(_bound_response_body(response_payload))
+    try:
+        _atomic_write_sidecar(sidecar_path, updated)
+    except OSError as exc:
+        logger.error("atomic sidecar write failed for %s: %s", sidecar_path, exc)
+
+
 def _atomic_write_sidecar(sidecar_path: Path, sidecar: dict) -> None:
     """Write ``sidecar`` JSON via tempfile + os.replace.
 
@@ -570,6 +644,7 @@ class _CountAccumulator:
         "skipped_already_uploaded",
         "skipped_marked_skipped",
         "skipped_failed_due_to_only_pending",
+        "skipped_needs_regeneration",
         "failed",
         "dry_run",
         "_by_kind",
@@ -582,6 +657,7 @@ class _CountAccumulator:
         self.skipped_already_uploaded = 0
         self.skipped_marked_skipped = 0
         self.skipped_failed_due_to_only_pending = 0
+        self.skipped_needs_regeneration = 0
         self.failed = 0
         self.dry_run = 0
         self._by_kind: dict[str, dict[str, int]] = {}
@@ -616,6 +692,7 @@ class _CountAccumulator:
             skipped_failed_due_to_only_pending=(
                 self.skipped_failed_due_to_only_pending
             ),
+            skipped_needs_regeneration=self.skipped_needs_regeneration,
             failed=self.failed,
             dry_run=self.dry_run,
             by_kind={k: dict(v) for k, v in self._by_kind.items()},
@@ -629,5 +706,6 @@ __all__ = [
     "ReplaySummary",
     "replay_bundle",
     "RESPONSE_BODY_CAP",
+    "STATUS_NEEDS_REGENERATION",
     "SUPPORTED_PAYLOAD_KINDS",
 ]

@@ -2,11 +2,15 @@
 
 This module intentionally has **no standalone ``/uploads/energy-corrections``
 route**. Every class here (``AppliedEnergyCorrectionUploadPayload``,
-``EnergyCorrectionSchemeRef``, ``FrequencyScaleFactorRef``, and component
-payloads) is consumed as a nested fragment by the conformer, thermo, and
-computed-reaction upload flows. Scheme/FSF references are resolved and applied
-corrections are persisted by ``app.services.energy_correction_resolution``
-when a parent upload embeds them.
+``EnergyCorrectionSchemeRef``, and component payloads) is consumed as a
+nested fragment by the conformer, thermo, and computed-reaction upload
+flows. Scheme references are resolved and applied corrections are
+persisted by ``app.services.energy_correction_resolution`` when a parent
+upload embeds them.
+
+The frequency-scale-factor ref lives at
+``app.schemas.fragments.refs.FreqScaleFactorRef`` and is shared with the
+statmech upload path; it is the single ref shape for all FSF use cases.
 
 If standalone ingestion becomes a product requirement, wire a dedicated route
 at ``app/api/routes/uploads.py`` and a workflow orchestrator alongside the
@@ -16,18 +20,17 @@ for the product context.
 
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
 from app.db.models.common import (
     AppliedCorrectionComponentKind,
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     EnergyUnit,
-    FrequencyScaleKind,
     MeliusBacComponentKind,
 )
 from app.schemas.common import SchemaBase
-from app.schemas.fragments.refs import LevelOfTheoryRef
+from app.schemas.fragments.refs import FreqScaleFactorRef, LevelOfTheoryRef
 from app.schemas.utils import normalize_optional_text, normalize_required_text
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 
@@ -103,25 +106,6 @@ class SchemeComponentParamPayload(SchemaBase):
     value: float
 
 
-class FrequencyScaleFactorRef(SchemaBase):
-    """Upload-facing reference to a frequency scale factor.
-
-    Resolved by (level_of_theory + scale_kind). If a match exists, reused;
-    otherwise created.
-    """
-
-    level_of_theory: LevelOfTheoryRef
-    scale_kind: FrequencyScaleKind
-    value: float = Field(gt=0)
-    source_literature: LiteratureUploadRequest | None = None
-    note: str | None = None
-
-    @model_validator(mode="after")
-    def normalize_text_fields(self) -> Self:
-        self.note = normalize_optional_text(self.note)
-        return self
-
-
 # ---------------------------------------------------------------------------
 # Applied correction component payload
 # ---------------------------------------------------------------------------
@@ -161,6 +145,29 @@ _SCHEME_ROLES: frozenset[EnergyCorrectionApplicationRole] = frozenset(
 )
 
 
+# Compatibility map: when a role is in this map, the resolved scheme's
+# ``kind`` must be one of the listed values. Roles absent from the map
+# (composite_delta, custom, atomization_reference_adjustment) are
+# intentionally left unconstrained — they are domain escape hatches
+# whose semantic kind is producer-defined.
+_ROLE_TO_REQUIRED_SCHEME_KINDS: dict[
+    EnergyCorrectionApplicationRole, frozenset[EnergyCorrectionSchemeKind]
+] = {
+    EnergyCorrectionApplicationRole.aec_total: frozenset(
+        {EnergyCorrectionSchemeKind.atom_energy}
+    ),
+    EnergyCorrectionApplicationRole.bac_total: frozenset(
+        {
+            EnergyCorrectionSchemeKind.bac_petersson,
+            EnergyCorrectionSchemeKind.bac_melius,
+        }
+    ),
+    EnergyCorrectionApplicationRole.soc_total: frozenset(
+        {EnergyCorrectionSchemeKind.soc}
+    ),
+}
+
+
 class AppliedEnergyCorrectionUploadPayload(SchemaBase):
     """Upload-facing payload for one applied energy correction.
 
@@ -172,7 +179,7 @@ class AppliedEnergyCorrectionUploadPayload(SchemaBase):
 
     # Provenance source — exactly one required
     scheme: EnergyCorrectionSchemeRef | None = None
-    frequency_scale_factor: FrequencyScaleFactorRef | None = None
+    frequency_scale_factor: FreqScaleFactorRef | None = None
 
     application_role: EnergyCorrectionApplicationRole
 
@@ -215,6 +222,38 @@ class AppliedEnergyCorrectionUploadPayload(SchemaBase):
                 f"application_role='{role.value}' requires scheme, "
                 f"not frequency_scale_factor."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_role_scheme_kind_compatibility(self) -> Self:
+        """Ensure the resolved scheme's ``kind`` is compatible with the
+        applied correction's ``application_role``.
+
+        This is the domain check above and beyond
+        ``validate_role_source_compatibility`` — it doesn't only verify
+        that *a* scheme was provided, but that the right *kind* of scheme
+        was provided (e.g. ``aec_total`` must come from an
+        ``atom_energy`` scheme, not a ``bac_petersson`` scheme).
+
+        Roles absent from ``_ROLE_TO_REQUIRED_SCHEME_KINDS`` are
+        unconstrained — they are escape hatches whose scheme.kind is
+        producer-defined.
+        """
+        if self.scheme is None:
+            return self
+
+        allowed = _ROLE_TO_REQUIRED_SCHEME_KINDS.get(self.application_role)
+        if allowed is None:
+            return self
+
+        if self.scheme.kind not in allowed:
+            allowed_names = sorted(k.value for k in allowed)
+            raise ValueError(
+                f"application_role='{self.application_role.value}' requires a "
+                f"scheme with kind in {allowed_names}, got "
+                f"kind='{self.scheme.kind.value}'."
+            )
+
         return self
 
     @model_validator(mode="after")

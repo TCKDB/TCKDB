@@ -3,7 +3,13 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
+from app.db.models.common import SubmissionRecordType
 from app.db.models.network import Network
+from app.services.record_review import (
+    RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
+)
 from app.services.species_resolution import resolve_species_entry
 from app.schemas.workflows.network_upload import NetworkUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
@@ -16,6 +22,7 @@ def persist_network_upload(
     request: NetworkUploadRequest,
     *,
     created_by: int | None = None,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
 ) -> Network:
     """Persist a complete network upload workflow.
 
@@ -60,6 +67,7 @@ def persist_network_upload(
                 ],
             ),
             created_by=created_by,
+            review_policy=review_policy,
         ).id
         for reaction in request.reactions
     ]
@@ -70,4 +78,12 @@ def persist_network_upload(
         species_entry_ids=species_entry_ids,
         reaction_entry_ids=reaction_entry_ids,
     )
-    return persist_network(session, network_create, created_by=created_by)
+    network = persist_network(session, network_create, created_by=created_by)
+
+    apply_review_policy(
+        session,
+        targets=[RecordRef(SubmissionRecordType.network, network.id)],
+        policy=review_policy,
+        created_by=created_by,
+    )
+    return network

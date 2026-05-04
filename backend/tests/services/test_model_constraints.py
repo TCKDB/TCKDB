@@ -70,39 +70,6 @@ def _create_transition_state_entry(connection) -> int:
     ).scalar_one()
 
 
-def _create_transition_state_entry_with_parent(connection) -> tuple[int, int]:
-    reaction_id = connection.execute(text("""
-            INSERT INTO chem_reaction (reversible)
-            VALUES (true)
-            RETURNING id
-            """)).scalar_one()
-    reaction_entry_id = connection.execute(
-        text("""
-            INSERT INTO reaction_entry (reaction_id)
-            VALUES (:reaction_id)
-            RETURNING id
-            """),
-        {"reaction_id": reaction_id},
-    ).scalar_one()
-    transition_state_id = connection.execute(
-        text("""
-            INSERT INTO transition_state (reaction_entry_id)
-            VALUES (:reaction_entry_id)
-            RETURNING id
-            """),
-        {"reaction_entry_id": reaction_entry_id},
-    ).scalar_one()
-    transition_state_entry_id = connection.execute(
-        text("""
-            INSERT INTO transition_state_entry (transition_state_id, charge, multiplicity)
-            VALUES (:transition_state_id, 0, 1)
-            RETURNING id
-            """),
-        {"transition_state_id": transition_state_id},
-    ).scalar_one()
-    return transition_state_id, transition_state_entry_id
-
-
 def _create_species_calculation(connection) -> int:
     species_id = _create_species(connection, inchi_key=_next_inchi_key("SPCALC"))
     species_entry_id = _create_species_entry(connection, species_id)
@@ -383,40 +350,6 @@ def test_calculation_allows_multiple_rows_per_conformer_observation(db_conn) -> 
         {"conformer_observation_id": conformer_observation_id},
     ).scalar_one()
     assert count == 2
-
-
-def test_transition_state_selection_requires_entry_from_same_transition_state(
-    db_conn,
-) -> None:
-    transition_state_id_1, transition_state_entry_id_1 = (
-        _create_transition_state_entry_with_parent(db_conn)
-    )
-    transition_state_id_2, transition_state_entry_id_2 = (
-        _create_transition_state_entry_with_parent(db_conn)
-    )
-
-    db_conn.execute(
-        text("""
-            INSERT INTO transition_state_selection (transition_state_id, transition_state_entry_id, selection_kind)
-            VALUES (:transition_state_id, :transition_state_entry_id, 'curator_pick')
-            """),
-        {
-            "transition_state_id": transition_state_id_1,
-            "transition_state_entry_id": transition_state_entry_id_1,
-        },
-    )
-
-    _assert_integrity_error(
-        db_conn,
-        """
-        INSERT INTO transition_state_selection (transition_state_id, transition_state_entry_id, selection_kind)
-        VALUES (:transition_state_id, :transition_state_entry_id, 'validated_reference')
-        """,
-        {
-            "transition_state_id": transition_state_id_1,
-            "transition_state_entry_id": transition_state_entry_id_2,
-        },
-    )
 
 
 def test_calculation_input_geometry_supports_multiple_ordered_inputs(db_conn) -> None:
