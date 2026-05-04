@@ -260,3 +260,4 @@ backend/.tckdb_api_key
 .gitignore
 cookies.txt
 .vexb/config.json
+backend/cookies.txt
