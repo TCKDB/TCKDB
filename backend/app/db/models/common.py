@@ -87,8 +87,24 @@ class CalculationType(str, Enum):
     sp = "sp"
     irc = "irc"
     scan = "scan"
-    neb = "neb"
+    path_search = "path_search"
     conf = "conf"
+
+
+class PathSearchMethod(str, Enum):
+    """Algorithmic family of a path-search calculation.
+
+    A ``path_search`` calculation explores a reaction path between or
+    from molecular endpoints to produce a TS guess. The specific
+    algorithm (NEB, GSM, ...) is data on the result row, not a separate
+    top-level calculation type.
+    """
+
+    neb = "neb"
+    gsm = "gsm"
+    growing_string = "growing_string"
+    freezing_string = "freezing_string"
+    other = "other"
 
 
 class CalculationQuality(str, Enum):
@@ -103,7 +119,7 @@ class CalculationGeometryRole(str, Enum):
     scan_point = "scan_point"
     irc_forward = "irc_forward"
     irc_reverse = "irc_reverse"
-    neb_image = "neb_image"
+    path_search_point = "path_search_point"
 
 
 class CalculationDependencyRole(str, Enum):
@@ -114,7 +130,6 @@ class CalculationDependencyRole(str, Enum):
     irc_start = "irc_start"
     irc_followup = "irc_followup"
     scan_parent = "scan_parent"
-    neb_parent = "neb_parent"
 
 
 class ValidationStatus(str, Enum):
@@ -150,6 +165,22 @@ class ArtifactKind(str, Enum):
     checkpoint = "checkpoint"
     formatted_checkpoint = "formatted_checkpoint"
     ancillary = "ancillary"
+
+
+class SCFStabilityStatus(str, Enum):
+    """SCF wavefunction stability evidence status persisted on
+    ``calc_scf_stability``.
+
+    ``not_checked`` is intentionally NOT a stored value — absence of a
+    ``calc_scf_stability`` row encodes "not checked" and the read API
+    projects this when no row exists. Stored values must reflect a
+    stability analysis that was actually attempted.
+    """
+
+    stable = "stable"
+    unstable = "unstable"
+    stabilized = "stabilized"
+    inconclusive = "inconclusive"
 
 
 class ParameterSource(str, Enum):

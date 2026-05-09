@@ -59,6 +59,7 @@ from app.services.energy_correction_resolution import (
 )
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.services.geometry_validation import run_and_persist_geometry_validation
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
@@ -310,6 +311,39 @@ def persist_computed_reaction_upload(
             )
 
     session.flush()
+
+    # Phase-1 geometry-identity validation for species-side opt calcs.
+    # Best-effort: opt only, no-ops on missing data, never aborts the
+    # upload, and a failed result is persisted as evidence rather than
+    # used as a gate.
+    #
+    # TS geometry validation is intentionally deferred. A TS does not
+    # have a single canonical species graph — its connectivity sits
+    # between the reactant and product graphs — so feeding it through
+    # the species-isomorphism validator would systematically mis-fire
+    # as a fail. A reaction-aware TS validator (checking expected
+    # forming/breaking bonds against the reaction's atom map and
+    # ideally IRC endpoint geometries) is the right tool, and is
+    # tracked as future work. Until then, no row is written for TS.
+    for sp in request.species:
+        species_smiles = sp.species_entry.smiles
+        species_calc_keys: list[str] = [sp.conformers[0].calculation.key] if sp.conformers else []
+        for conf in sp.conformers[1:]:
+            species_calc_keys.append(conf.calculation.key)
+        for calc_in in sp.calculations:
+            species_calc_keys.append(calc_in.key)
+        for calc_key in species_calc_keys:
+            calc_id = calculation_key_to_id.get(calc_key)
+            if calc_id is None:
+                continue
+            calc_row = session.get(Calculation, calc_id)
+            if calc_row is None:
+                continue
+            run_and_persist_geometry_validation(
+                session,
+                calc_row,
+                species_smiles=species_smiles,
+            )
 
     # ------------------------------------------------------------------
     # 2. Resolve reaction

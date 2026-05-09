@@ -12,6 +12,7 @@ from app.db.models.common import (
     ConstraintKind,
     CoordinateUnit,
     IRCDirection,
+    PathSearchMethod,
     ValidationStatus,
 )
 from app.schemas.common import (
@@ -526,19 +527,38 @@ class CalculationIRCResultRead(ORMBaseSchema):
 
 
 # ---------------------------------------------------------------------------
-# NEB image results (Phase 2)
+# Path-search results (Phase 2 — generalizes NEB / GSM / string methods)
 # ---------------------------------------------------------------------------
 
 
-class CalculationNEBImageResultRead(ORMBaseSchema):
+class CalculationPathSearchPointRead(ORMBaseSchema):
     calculation_id: int
-    image_index: int
+    point_index: int
     electronic_energy_hartree: float | None = None
     relative_energy_kj_mol: float | None = None
-    path_distance_angstrom: float | None = None
+    path_coordinate: float | None = None
     max_force: float | None = None
     rms_force: float | None = None
+    max_gradient: float | None = None
+    rms_gradient: float | None = None
+    is_ts_guess: bool
     is_climbing_image: bool
+    geometry_id: int | None = None
+    note: str | None = None
+
+
+class CalculationPathSearchResultRead(ORMBaseSchema):
+    calculation_id: int
+    method: PathSearchMethod
+    is_double_ended: bool | None = None
+    converged: bool | None = None
+    n_points: int | None = None
+    selected_ts_point_index: int | None = None
+    climbing_image_index: int | None = None
+    source_endpoint_count: int | None = None
+    zero_energy_reference_hartree: float | None = None
+    note: str | None = None
+    points: list[CalculationPathSearchPointRead] = []
 
 
 
@@ -566,9 +586,19 @@ class CalculationParameterRead(TimestampedReadSchema):
 
 
 class CalculationGeometryValidationRead(ORMBaseSchema):
-    """Inherits ORMBaseSchema (not TimestampedReadSchema) because the PK is
-    calculation_id, not a surrogate id column. TimestampedReadSchema assumes
-    id: int which does not exist on this table."""
+    """Read shape for geometry-identity validation evidence.
+
+    Reports whether a calculation's output geometry preserves the declared
+    molecular identity (graph isomorphism + RMSD diagnostics). This is a
+    structure-consistency check; it is **not** SCF/wavefunction stability
+    (see :class:`CalculationSCFStabilityRead` /
+    :class:`~app.db.models.calculation.CalculationSCFStability`) and it is
+    not frequency/stationary-point validation.
+
+    Inherits ORMBaseSchema (not TimestampedReadSchema) because the PK is
+    ``calculation_id``, not a surrogate id column; TimestampedReadSchema
+    assumes ``id: int`` which does not exist on this table.
+    """
 
     calculation_id: int
     created_at: datetime
@@ -582,3 +612,35 @@ class CalculationGeometryValidationRead(ORMBaseSchema):
     validation_status: ValidationStatus
     validation_reason: str | None = None
     rmsd_warning_threshold: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# SCF wavefunction stability (calc_scf_stability)
+# ---------------------------------------------------------------------------
+
+
+class CalculationSCFStabilityRead(ORMBaseSchema):
+    """Read shape for SCF stability evidence.
+
+    Status widens the persisted enum with the projected ``"not_checked"``
+    value the route handler emits when no row exists. All evidence
+    fields are nullable because they are nullable on the row AND
+    because the projected ``not_checked`` shape is all-nulls.
+
+    No cross-field validators here — those guard producer input on
+    :class:`CalculationSCFStabilityCreate` and would mis-fire against
+    the projected ``not_checked`` shape.
+    """
+
+    calculation_id: int
+    status: Literal[
+        "stable", "unstable", "stabilized", "inconclusive", "not_checked"
+    ]
+    lowest_eigenvalue: float | None = None
+    instability_count: int | None = None
+    instability_type: str | None = None
+    reoptimized_wavefunction: bool | None = None
+    source_calculation_id: int | None = None
+    source_artifact_id: int | None = None
+    note: str | None = None
+    created_at: datetime | None = None

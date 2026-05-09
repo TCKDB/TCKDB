@@ -408,3 +408,119 @@ class TestMultipleIOps:
         params = _parse_route_tokens(route)
         iops = _params_by_section(params, "internal_option")
         assert len(iops) == 2
+
+
+# ---------------------------------------------------------------------------
+# 8. SCF convergence trust flag (IOp(5/13=1))
+# ---------------------------------------------------------------------------
+
+
+def _has_canonical(
+    params: list[dict], canonical_key: str, canonical_value: str
+) -> bool:
+    return any(
+        p.get("canonical_key") == canonical_key
+        and p.get("canonical_value") == canonical_value
+        for p in params
+    )
+
+
+class TestScfConvergenceTrustFlag:
+    """Gaussian IOp(5/13=1) tells the SCF to continue when convergence
+    fails -- the reported energy/geometry comes from a non-converged
+    wavefunction. The parser must surface this as queryable canonical
+    rows alongside the generic ``internal_option.iop`` row, so safety
+    queries can hit a stable canonical_key without scanning raw values.
+    """
+
+    def test_simple_form_emits_both_canonicals(self):
+        route = "#P opt b3lyp/6-31g(d) IOp(5/13=1)"
+        params = _parse_route_tokens(route)
+        # Generic row preserved.
+        assert _has_canonical(params, "internal_option.iop", None) or any(
+            p.get("canonical_key") == "internal_option.iop"
+            and p.get("raw_key") == "IOp(5/13)"
+            for p in params
+        )
+        # Specialized canonicals emitted.
+        assert _has_canonical(
+            params, "scf.convergence_failure_ignored", "true"
+        )
+        assert _has_canonical(
+            params, "scf.convergence_failure_action", "continue"
+        )
+
+    def test_mixed_iop_block_isolates_5_13(self):
+        """Other IOp options in the same comma-separated block must not
+        interfere: each gets its generic row; only ``5/13=1`` triggers
+        the specialized canonical rows.
+        """
+        route = "#P opt b3lyp/6-31g(d) IOp(1/8=10,5/13=1,2/9=1)"
+        params = _parse_route_tokens(route)
+        iop_rows = _params_by_section(params, "internal_option")
+        # Three generic IOp rows + two specialized canonicals = 5.
+        assert len([p for p in iop_rows if p["canonical_key"] == "internal_option.iop"]) == 3
+        assert _has_canonical(
+            params, "scf.convergence_failure_ignored", "true"
+        )
+        assert _has_canonical(
+            params, "scf.convergence_failure_action", "continue"
+        )
+
+    def test_whitespace_and_case_insensitive(self):
+        route = "#P opt b3lyp/6-31g(d) iop( 5/13 = 1 )"
+        params = _parse_route_tokens(route)
+        assert _has_canonical(
+            params, "scf.convergence_failure_ignored", "true"
+        )
+        assert _has_canonical(
+            params, "scf.convergence_failure_action", "continue"
+        )
+
+    def test_no_false_positive_other_value(self):
+        """5/13=2 (or any value other than 1) must NOT trigger the trust
+        flag. The default value (0) is also not stored to avoid flooding
+        the table with no-op observations.
+        """
+        for route in [
+            "#P opt b3lyp/6-31g(d) IOp(5/13=0)",
+            "#P opt b3lyp/6-31g(d) IOp(5/13=2)",
+        ]:
+            params = _parse_route_tokens(route)
+            assert not _has_canonical(
+                params, "scf.convergence_failure_ignored", "true"
+            ), route
+            assert not _has_canonical(
+                params, "scf.convergence_failure_action", "continue"
+            ), route
+
+    def test_no_false_positive_similar_overlay(self):
+        """``15/13=1`` and ``5/130=1`` are different overlay/option
+        coordinates from ``5/13``. Equality on the parsed lhs naturally
+        rejects them — the trust flag must not fire.
+        """
+        for route in [
+            "#P opt b3lyp/6-31g(d) IOp(15/13=1)",
+            "#P opt b3lyp/6-31g(d) IOp(5/130=1)",
+        ]:
+            params = _parse_route_tokens(route)
+            assert not _has_canonical(
+                params, "scf.convergence_failure_ignored", "true"
+            ), route
+
+    def test_raw_key_preserved_on_specialized_rows(self):
+        """The specialized canonical rows must still carry ``IOp(5/13)``
+        as raw_key so the Gaussian-specific origin is recoverable.
+        """
+        route = "#P opt b3lyp/6-31g(d) IOp(5/13=1)"
+        params = _parse_route_tokens(route)
+        specialized = [
+            p
+            for p in params
+            if p.get("canonical_key")
+            in {"scf.convergence_failure_ignored", "scf.convergence_failure_action"}
+        ]
+        assert len(specialized) == 2
+        assert all(p["raw_key"] == "IOp(5/13)" for p in specialized)
+        assert all(p["raw_value"] == "1" for p in specialized)
+        assert all(p["section"] == "internal_option" for p in specialized)

@@ -33,7 +33,9 @@ from app.db.models.common import (
     CoordinateUnit,
     IRCDirection,
     ParameterSource,
+    PathSearchMethod,
     ScanCoordinateKind,
+    SCFStabilityStatus,
     ValidationStatus,
 )
 
@@ -199,10 +201,15 @@ class Calculation(Base, TimestampMixin, CreatedByMixin):
         cascade="all, delete-orphan",
         order_by="CalculationIRCPoint.point_index",
     )
-    neb_images: Mapped[list["CalculationNEBImageResult"]] = relationship(
+    path_search_result: Mapped[Optional["CalculationPathSearchResult"]] = relationship(
         back_populates="calculation",
         cascade="all, delete-orphan",
-        order_by="CalculationNEBImageResult.image_index",
+        uselist=False,
+    )
+    path_search_points: Mapped[list["CalculationPathSearchPoint"]] = relationship(
+        back_populates="calculation",
+        cascade="all, delete-orphan",
+        order_by="CalculationPathSearchPoint.point_index",
     )
     artifacts: Mapped[list["CalculationArtifact"]] = relationship(
         back_populates="calculation",
@@ -210,6 +217,12 @@ class Calculation(Base, TimestampMixin, CreatedByMixin):
     )
     parameters: Mapped[list["CalculationParameter"]] = relationship(
         back_populates="calculation",
+        cascade="all, delete-orphan",
+    )
+    scf_stability: Mapped[Optional["CalculationSCFStability"]] = relationship(
+        back_populates="calculation",
+        foreign_keys="CalculationSCFStability.calculation_id",
+        uselist=False,
         cascade="all, delete-orphan",
     )
     geometry_validation: Mapped[Optional["CalculationGeometryValidation"]] = relationship(
@@ -306,7 +319,7 @@ class CalculationDependency(Base):
     rules or full DAG validation belong in application logic unless the policy
     is narrowed enough for partial unique indexes. Selected roles currently
     enforce at most one parent per child: `optimized_from`, `freq_on`,
-    `single_point_on`, `scan_parent`, and `neb_parent`.
+    `single_point_on`, and `scan_parent`.
     """
 
     __tablename__ = "calculation_dependency"
@@ -361,12 +374,6 @@ class CalculationDependency(Base):
             "child_calculation_id",
             unique=True,
             postgresql_where=text("dependency_role = 'scan_parent'"),
-        ),
-        Index(
-            "uq_calculation_dependency_child_calculation_id_neb_parent",
-            "child_calculation_id",
-            unique=True,
-            postgresql_where=text("dependency_role = 'neb_parent'"),
         ),
     )
 
@@ -802,38 +809,116 @@ class CalculationIRCPoint(Base):
     __table_args__ = (CheckConstraint("point_index >= 0", name="point_index_ge_0"),)
 
 
-class CalculationNEBImageResult(Base):
-    """Per-image result from a NEB calculation.
+class CalculationPathSearchResult(Base):
+    """Path-search-level metadata for a calculation that explored a
+    reaction path between or from molecular endpoints.
 
-    Stores the converged energy profile along the NEB path.
-    PK is ``(calculation_id, image_index)``.  Image 0 is the reactant
-    endpoint, image N is the product endpoint.
-
-    The ``is_climbing_image`` flag marks the image that was promoted to
-    a climbing image in NEB-CI — typically the highest-energy image,
-    which approximates the transition state.
+    Generalizes path-based TS-search algorithms (NEB, GSM, growing/
+    freezing string, ...). The specific algorithm is data on
+    ``method`` rather than a separate ``CalculationType``. The path
+    sample (images, nodes, ...) lives in ``calc_path_search_point``.
     """
 
-    __tablename__ = "calc_neb_image_result"
+    __tablename__ = "calc_path_search_result"
 
     calculation_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
         primary_key=True,
     )
-    image_index: Mapped[int] = mapped_column(Integer, primary_key=True)
+    method: Mapped[PathSearchMethod] = mapped_column(
+        SAEnum(PathSearchMethod, name="path_search_method"),
+        nullable=False,
+    )
+    is_double_ended: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    converged: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    n_points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    selected_ts_point_index: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    climbing_image_index: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    source_endpoint_count: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    zero_energy_reference_hartree: Mapped[Optional[float]] = mapped_column(
+        nullable=True
+    )
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    calculation: Mapped["Calculation"] = relationship(
+        back_populates="path_search_result"
+    )
+    points: Mapped[list["CalculationPathSearchPoint"]] = relationship(
+        primaryjoin=(
+            "CalculationPathSearchResult.calculation_id == "
+            "foreign(CalculationPathSearchPoint.calculation_id)"
+        ),
+        viewonly=True,
+        order_by="CalculationPathSearchPoint.point_index",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "n_points IS NULL OR n_points >= 1", name="n_points_ge_1"
+        ),
+        CheckConstraint(
+            "selected_ts_point_index IS NULL OR selected_ts_point_index >= 0",
+            name="selected_ts_point_index_ge_0",
+        ),
+        CheckConstraint(
+            "climbing_image_index IS NULL OR climbing_image_index >= 0",
+            name="climbing_image_index_ge_0",
+        ),
+        CheckConstraint(
+            "source_endpoint_count IS NULL OR source_endpoint_count >= 1",
+            name="source_endpoint_count_ge_1",
+        ),
+    )
+
+
+class CalculationPathSearchPoint(Base):
+    """One sampled point on a path-search calculation's reaction path.
+
+    Generalizes NEB images, GSM nodes, and string-method path points.
+    PK is ``(calculation_id, point_index)``. ``point_index`` preserves
+    the source ordering from the algorithm (0 = reactant endpoint for
+    double-ended methods).
+    """
+
+    __tablename__ = "calc_path_search_point"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    point_index: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     electronic_energy_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
     relative_energy_kj_mol: Mapped[Optional[float]] = mapped_column(nullable=True)
-    path_distance_angstrom: Mapped[Optional[float]] = mapped_column(nullable=True)
+    path_coordinate: Mapped[Optional[float]] = mapped_column(nullable=True)
     max_force: Mapped[Optional[float]] = mapped_column(nullable=True)
     rms_force: Mapped[Optional[float]] = mapped_column(nullable=True)
+    max_gradient: Mapped[Optional[float]] = mapped_column(nullable=True)
+    rms_gradient: Mapped[Optional[float]] = mapped_column(nullable=True)
+    is_ts_guess: Mapped[bool] = mapped_column(default=False)
     is_climbing_image: Mapped[bool] = mapped_column(default=False)
+    geometry_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("geometry.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    calculation: Mapped["Calculation"] = relationship(back_populates="neb_images")
+    calculation: Mapped["Calculation"] = relationship(
+        back_populates="path_search_points"
+    )
+    geometry: Mapped[Optional["Geometry"]] = relationship()
 
     __table_args__ = (
-        CheckConstraint("image_index >= 0", name="image_index_ge_0"),
+        CheckConstraint("point_index >= 0", name="point_index_ge_0"),
     )
 
 
@@ -983,6 +1068,11 @@ class CalculationParameter(Base, TimestampMixin):
             "canonical_key",
             "canonical_value",
         ),
+        Index(
+            "ix_calculation_parameter_source",
+            "calculation_id",
+            "source",
+        ),
         CheckConstraint(
             "parameter_index IS NULL OR parameter_index >= 0",
             name="parameter_index_ge_0",
@@ -991,10 +1081,44 @@ class CalculationParameter(Base, TimestampMixin):
 
 
 class CalculationGeometryValidation(Base, TimestampMixin):
-    """Result of validating a calculation's output geometry against species identity.
+    """Evidence that a calculation's output geometry preserves the intended molecular identity.
 
-    Stores graph isomorphism check, Kabsch-aligned RMSD, and the policy decision.
-    One row per calculation (PK = calculation_id).
+    This is a *structure-consistency* check: it compares the calculation's
+    output geometry (and optionally its input geometry) against the declared
+    species identity, using graph isomorphism as the identity criterion and
+    Kabsch-aligned RMSD as a suspicion signal. It is intended to catch cases
+    where an optimization rearranged the molecule, broke or formed bonds,
+    dissociated the species, transferred a proton, or otherwise produced a
+    different chemical identity than the one being claimed.
+
+    What this is NOT:
+
+    * **Not SCF / wavefunction stability.** Whether the electronic
+      wavefunction is stable with respect to orbital rotations
+      (Gaussian ``Stable`` / ``Stable=Opt``, ORCA stability analysis) lives
+      in :class:`CalculationSCFStability` (``calc_scf_stability``). That is
+      an electronic-structure check, not a geometry/identity check.
+    * **Not frequency / stationary-point validation.** Whether the geometry
+      is a minimum vs. a saddle (number of imaginary frequencies, Hessian
+      character) lives on the frequency result tables, not here.
+
+    One row per calculation (PK = ``calculation_id``). Absence of a row means
+    geometry validation was not performed; it does not mean the geometry is
+    invalid. The record-producing service is
+    :func:`app.services.geometry_validation.validate_calculation_geometry`,
+    wired into the computed-species and computed-reaction bundle workflows
+    for species-side opt calcs (TS opt is intentionally deferred to a
+    future reaction-aware validator).
+
+    **Interpreting a ``fail`` row.** A ``validation_status=fail`` row means
+    "the automated identity validator found a mismatch," **not** "the
+    calculation is scientifically invalid." Connectivity perception from
+    XYZ is imperfect for weak complexes, stretched or partially broken
+    bonds, radicals, charged species, loose conformers, and
+    proton-transfer-like geometries — all of which can legitimately
+    produce false-positive ``fail`` rows even when the underlying
+    calculation is fine. These rows are intended as *curator attention*
+    signals, not as inputs to automatic rejection or quality gating.
     """
 
     __tablename__ = "calc_geometry_validation"
@@ -1034,4 +1158,78 @@ class CalculationGeometryValidation(Base, TimestampMixin):
     )
     output_geometry: Mapped[Optional["Geometry"]] = relationship(
         foreign_keys=[output_geometry_id],
+    )
+
+
+class CalculationSCFStability(Base, TimestampMixin, CreatedByMixin):
+    """SCF wavefunction stability evidence for a calculation.
+
+    A row exists only when a stability analysis was actually attempted
+    by the producer. Absence of a row means "not checked" — read APIs
+    project this as :attr:`SCFStabilityStatus` with no stored value;
+    no row is inserted to represent ``not_checked``.
+
+    Producer contract (not enforced by DB constraint, deliberately):
+
+    * Emit ``status = stable`` only when an SCF/wavefunction stability
+      analysis was observed. Ordinary SCF convergence is NOT enough.
+    * If unsure whether a stability analysis was performed, omit the
+      block entirely so the read API projects ``not_checked``.
+    * Use ``status = inconclusive`` only when a stability analysis was
+      clearly attempted but its result could not be parsed.
+    """
+
+    __tablename__ = "calc_scf_stability"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    status: Mapped[SCFStabilityStatus] = mapped_column(
+        SAEnum(SCFStabilityStatus, name="scf_stability_status"),
+        nullable=False,
+    )
+    lowest_eigenvalue: Mapped[Optional[float]] = mapped_column(nullable=True)
+    instability_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    instability_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reoptimized_wavefunction: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    source_calculation_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
+    source_artifact_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "calculation_artifact.id", deferrable=True, initially="IMMEDIATE"
+        ),
+        nullable=True,
+    )
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    calculation: Mapped["Calculation"] = relationship(
+        back_populates="scf_stability",
+        foreign_keys=[calculation_id],
+    )
+    source_calculation: Mapped[Optional["Calculation"]] = relationship(
+        foreign_keys=[source_calculation_id],
+    )
+    source_artifact: Mapped[Optional["CalculationArtifact"]] = relationship(
+        foreign_keys=[source_artifact_id],
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "instability_count IS NULL OR instability_count >= 0",
+            name="instability_count_ge_0",
+        ),
+        CheckConstraint(
+            "NOT (status = 'stable' AND reoptimized_wavefunction IS TRUE)",
+            name="stable_no_reopt",
+        ),
+        CheckConstraint(
+            "NOT (status = 'stabilized' AND instability_count = 0)",
+            name="stabilized_has_instability",
+        ),
     )

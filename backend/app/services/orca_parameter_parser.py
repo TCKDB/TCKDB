@@ -688,12 +688,17 @@ def parse_scan_results(text: str) -> list[dict] | None:
 
 
 # ---------------------------------------------------------------------------
-# NEB PATH SUMMARY extraction
+# NEB PATH SUMMARY extraction (emitted as a generic path_search_result)
 # ---------------------------------------------------------------------------
 
 
-def parse_neb_path_summary(text: str) -> list[dict] | None:
-    """Extract per-image results from the ORCA NEB PATH SUMMARY block.
+def parse_neb_path_summary(text: str) -> dict | None:
+    """Extract path-search points from the ORCA NEB PATH SUMMARY block.
+
+    Returns a generic ``path_search_result``-shaped dict with
+    ``method='neb'`` and a ``points`` list. NEB is one method of a
+    path-search calculation; other algorithms (GSM, string methods)
+    share the same shape.
 
     Handles two ORCA output formats:
 
@@ -789,16 +794,24 @@ def parse_neb_path_summary(text: str) -> list[dict] | None:
 
         rel_energy_kj = round(rel_energy * 4.184, 4)
         images.append({
-            "image_index": image_idx,
+            "point_index": image_idx,
             "electronic_energy_hartree": energy,
             "relative_energy_kj_mol": rel_energy_kj,
-            "path_distance_angstrom": path_dist,
+            "path_coordinate": path_dist,
             "max_force": max_fp,
             "rms_force": rms_fp,
             "is_climbing_image": is_ci,
+            "is_ts_guess": is_ci,
         })
 
-    return images if images else None
+    if not images:
+        return None
+    return {
+        "method": "neb",
+        "is_double_ended": True,
+        "n_points": len(images),
+        "points": images,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1086,8 +1099,9 @@ def parse_orca_log(
     # Parse scan results from output summary (fast path)
     scan_points = parse_scan_results(text)
 
-    # Parse NEB path summary (if present)
-    neb_images = parse_neb_path_summary(text)
+    # Parse NEB path summary (if present) — emitted as a generic
+    # path_search_result with method='neb'.
+    path_search_result = parse_neb_path_summary(text)
 
     # Parse IRC path summary (if present)
     irc_result = parse_irc_path_summary(text)
@@ -1096,7 +1110,7 @@ def parse_orca_log(
         "parameters": all_params,
         "scan_coordinates": scan_coordinates,
         "scan_points": scan_points,
-        "neb_images": neb_images,
+        "path_search_result": path_search_result,
         "irc_result": irc_result,
         "parameters_json": {
             "input_lines": input_lines,

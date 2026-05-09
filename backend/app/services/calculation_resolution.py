@@ -19,11 +19,13 @@ from app.db.models.calculation import (
     CalculationInputGeometry,
     CalculationIRCPoint,
     CalculationIRCResult,
-    CalculationNEBImageResult,
     CalculationOptResult,
     CalculationOutputGeometry,
     CalculationParameter,
     CalculationParameterVocab,
+    CalculationPathSearchPoint,
+    CalculationPathSearchResult,
+    CalculationSCFStability,
     CalculationSPResult,
 )
 from app.db.models.common import (
@@ -41,8 +43,8 @@ from app.schemas.fragments.calculation import (
     CalculationParameterObservation,
     CalculationWithResultsPayload,
     IRCResultPayload,
-    NEBResultPayload,
     OutputGeometryEntry,
+    PathSearchResultPayload,
 )
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.refs import (
@@ -364,41 +366,62 @@ def _persist_irc_result(
             linked_geometry_ids.add(geometry_id)
 
 
-def _persist_neb_result(
+def _persist_path_search_result(
     session: Session,
     calculation: Calculation,
-    payload: NEBResultPayload,
+    payload: PathSearchResultPayload,
 ) -> None:
-    """Persist a NEB result bundle and its per-image rows.
+    """Persist a path-search result bundle and its per-point rows.
 
-    Resolves optional inline image geometries via the shared geometry
-    resolution service and links each resolved geometry through
-    ``calculation_output_geometry`` with role ``neb_image``. Duplicate
-    ``(calculation_id, geometry_id)`` pairs are silently collapsed to a
-    single link to honour the table uniqueness constraint.
+    Generalizes NEB / GSM / string-method TS-search outputs. Resolves
+    optional inline point geometries via the shared geometry resolution
+    service and links each resolved geometry through
+    ``calculation_output_geometry`` with role ``path_search_point``.
+    Duplicate ``(calculation_id, geometry_id)`` pairs are silently
+    collapsed to a single link to honour the table uniqueness constraint.
 
     :param session: Active SQLAlchemy session.
-    :param calculation: The owning NEB calculation row.
-    :param payload: Upload-facing NEB result bundle.
+    :param calculation: The owning path-search calculation row.
+    :param payload: Upload-facing path-search result bundle.
     """
+
+    session.add(
+        CalculationPathSearchResult(
+            calculation_id=calculation.id,
+            method=payload.method,
+            is_double_ended=payload.is_double_ended,
+            converged=payload.converged,
+            n_points=payload.n_points,
+            selected_ts_point_index=payload.selected_ts_point_index,
+            climbing_image_index=payload.climbing_image_index,
+            source_endpoint_count=payload.source_endpoint_count,
+            zero_energy_reference_hartree=payload.zero_energy_reference_hartree,
+            note=payload.note,
+        )
+    )
 
     linked_geometry_ids = _pending_output_geometry_ids(session, calculation.id)
 
-    for image in sorted(payload.images, key=lambda img: img.image_index):
+    for point in sorted(payload.points, key=lambda p: p.point_index):
         geometry_id: int | None = None
-        if image.geometry is not None:
-            geometry_id = resolve_geometry_payload(session, image.geometry).id
+        if point.geometry is not None:
+            geometry_id = resolve_geometry_payload(session, point.geometry).id
 
         session.add(
-            CalculationNEBImageResult(
+            CalculationPathSearchPoint(
                 calculation_id=calculation.id,
-                image_index=image.image_index,
-                electronic_energy_hartree=image.electronic_energy_hartree,
-                relative_energy_kj_mol=image.relative_energy_kj_mol,
-                path_distance_angstrom=image.path_distance_angstrom,
-                max_force=image.max_force,
-                rms_force=image.rms_force,
-                is_climbing_image=image.is_climbing_image,
+                point_index=point.point_index,
+                electronic_energy_hartree=point.electronic_energy_hartree,
+                relative_energy_kj_mol=point.relative_energy_kj_mol,
+                path_coordinate=point.path_coordinate,
+                max_force=point.max_force,
+                rms_force=point.rms_force,
+                max_gradient=point.max_gradient,
+                rms_gradient=point.rms_gradient,
+                is_ts_guess=point.is_ts_guess,
+                is_climbing_image=point.is_climbing_image,
+                geometry_id=geometry_id,
+                note=point.note,
             )
         )
 
@@ -407,8 +430,8 @@ def _persist_neb_result(
                 CalculationOutputGeometry(
                     calculation_id=calculation.id,
                     geometry_id=geometry_id,
-                    output_order=image.image_index + 2,
-                    role=CalculationGeometryRole.neb_image,
+                    output_order=point.point_index + 2,
+                    role=CalculationGeometryRole.path_search_point,
                 )
             )
             linked_geometry_ids.add(geometry_id)
@@ -465,13 +488,31 @@ def persist_calculation_result(
             )
         _persist_irc_result(session, calculation, calc_upload.irc_result)
 
-    if calc_upload.neb_result is not None:
-        if calculation.type != CalculationType.neb:
+    if calc_upload.path_search_result is not None:
+        if calculation.type != CalculationType.path_search:
             raise ValueError(
-                f"neb_result is only allowed on neb calculations "
-                f"(got type '{calculation.type.value}')."
+                f"path_search_result is only allowed on path_search "
+                f"calculations (got type '{calculation.type.value}')."
             )
-        _persist_neb_result(session, calculation, calc_upload.neb_result)
+        _persist_path_search_result(
+            session, calculation, calc_upload.path_search_result
+        )
+
+    if calc_upload.scf_stability is not None:
+        scf = calc_upload.scf_stability
+        session.add(
+            CalculationSCFStability(
+                calculation_id=calculation.id,
+                status=scf.status,
+                lowest_eigenvalue=scf.lowest_eigenvalue,
+                instability_count=scf.instability_count,
+                instability_type=scf.instability_type,
+                reoptimized_wavefunction=scf.reoptimized_wavefunction,
+                source_calculation_id=scf.source_calculation_id,
+                source_artifact_id=scf.source_artifact_id,
+                note=scf.note,
+            )
+        )
 
     for constraint in calc_upload.constraints:
         session.add(
@@ -637,11 +678,26 @@ def _delete_parser_parameter_rows(session: Session, calculation_id: int) -> None
 
 # Mapping from calculation type to the dependency role when the child
 # depends on the primary calculation.
+#
+# Path-search calculations are intentionally not in this table — the edge
+# direction is inverted (path-search TS guess is the *parent* of the TS
+# optimization, via ``optimized_from``). See ``_INVERTED_DEPENDENCY_ROLE_FOR_TYPE``.
 _DEPENDENCY_ROLE_FOR_TYPE: dict[CalculationType, CalculationDependencyRole] = {
     CalculationType.freq: CalculationDependencyRole.freq_on,
     CalculationType.sp: CalculationDependencyRole.single_point_on,
     CalculationType.irc: CalculationDependencyRole.irc_start,
-    CalculationType.neb: CalculationDependencyRole.neb_parent,
+}
+
+
+# Mapping from calculation type to the dependency role when the additional
+# calculation is a *parent* of the primary calculation (edge inverted vs.
+# ``_DEPENDENCY_ROLE_FOR_TYPE``). Path-search TS-guess generators (NEB,
+# GSM, ...) live here: the path search runs first, produces the TS guess,
+# and the primary opt is then ``optimized_from`` that guess.
+_INVERTED_DEPENDENCY_ROLE_FOR_TYPE: dict[
+    CalculationType, CalculationDependencyRole
+] = {
+    CalculationType.path_search: CalculationDependencyRole.optimized_from,
 }
 
 
@@ -653,14 +709,17 @@ _DEPENDENCY_ROLE_FOR_TYPE: dict[CalculationType, CalculationDependencyRole] = {
 _DEPENDENCY_ROLE_TO_PARENT_TYPE: dict[
     CalculationDependencyRole, CalculationType
 ] = {
-    CalculationDependencyRole.optimized_from: CalculationType.opt,
     CalculationDependencyRole.freq_on: CalculationType.opt,
     CalculationDependencyRole.single_point_on: CalculationType.opt,
     CalculationDependencyRole.irc_start: CalculationType.opt,
     CalculationDependencyRole.scan_parent: CalculationType.opt,
-    CalculationDependencyRole.neb_parent: CalculationType.opt,
     CalculationDependencyRole.irc_followup: CalculationType.irc,
 }
+# Note: ``optimized_from`` is intentionally *not* pinned to a single
+# parent type. Its parent may be either ``opt`` (a previous geometry
+# optimisation that the next opt restarts from) or ``path_search`` (a
+# NEB/GSM TS-guess that feeds a TS optimisation). Validation is policy
+# below at call sites instead of in this static table.
 
 
 # Roles that enforce one-parent-per-child via partial unique indexes
@@ -674,8 +733,12 @@ _ONE_PARENT_PER_CHILD_ROLES: frozenset[CalculationDependencyRole] = frozenset(
         CalculationDependencyRole.freq_on,
         CalculationDependencyRole.single_point_on,
         CalculationDependencyRole.scan_parent,
-        CalculationDependencyRole.neb_parent,
     }
+)
+
+
+_OPTIMIZED_FROM_PARENT_TYPES: frozenset[CalculationType] = frozenset(
+    {CalculationType.opt, CalculationType.path_search}
 )
 
 
@@ -690,9 +753,18 @@ def assert_dependency_role_type_compatible(
     Roles not present in ``_DEPENDENCY_ROLE_TO_PARENT_TYPE`` (e.g.
     ``arkane_source``) are scientific metadata that does not pin a specific
     parent ``CalculationType``; those are accepted unconditionally.
-    Bundle workflows surface incompatibilities as 422 to mirror DR-0028
-    error semantics.
+    ``optimized_from`` accepts a parent of either ``opt`` (restart-from)
+    or ``path_search`` (TS-guess generator). Bundle workflows surface
+    incompatibilities as 422 to mirror DR-0028 error semantics.
     """
+    if role is CalculationDependencyRole.optimized_from:
+        if parent_calc.type not in _OPTIMIZED_FROM_PARENT_TYPES:
+            raise ValueError(
+                f"{context}: role='optimized_from' requires a parent of "
+                f"type 'opt' or 'path_search', got "
+                f"'{parent_calc.type.value}'."
+            )
+        return
     expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE.get(role)
     if expected is None:
         return
@@ -827,9 +899,9 @@ _INPUT_GEOMETRY_TYPES: frozenset[CalculationType] = frozenset(
 # Calculation types whose converged output IS the conformer geometry. Only
 # ``opt`` qualifies: by construction the conformer geometry is opt's
 # ``final`` output, so when a producer omits ``output_geometries`` we can
-# safely synthesize that single row. Freq, sp, scan, irc, neb and conf do
-# NOT have a producer-agnostic universal mapping from calc type to a
-# specific output geometry/role — the producer must declare explicitly.
+# safely synthesize that single row. Freq, sp, scan, irc, path_search and
+# conf do NOT have a producer-agnostic universal mapping from calc type to
+# a specific output geometry/role — the producer must declare explicitly.
 _OUTPUT_GEOMETRY_TYPES: frozenset[CalculationType] = frozenset(
     {CalculationType.opt}
 )
@@ -914,7 +986,7 @@ def attach_calculation_output_geometries(
     as a 422 (``ValueError``) before the insert rather than letting it
     bubble out as a generic ``IntegrityError``. Geometries already linked
     in the same session (e.g. by ``_persist_irc_result`` or
-    ``_persist_neb_result``) are also rejected with the same error.
+    ``_persist_path_search_result``) are also rejected with the same error.
 
     Fallback path: when the list is empty, ``calc.type`` is in
     ``_OUTPUT_GEOMETRY_TYPES``, and ``fallback_geometry_id`` is provided,
@@ -1077,6 +1149,19 @@ def persist_additional_calculations(
                     parent_calculation_id=primary_calc.id,
                     child_calculation_id=child_calc.id,
                     dependency_role=dep_role,
+                )
+            )
+
+        # Inverted-edge case: path_search is a TS-guess generator, so the
+        # primary opt is ``optimized_from`` the path search rather than the
+        # other way around.
+        inverted_role = _INVERTED_DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)
+        if inverted_role is not None:
+            session.add(
+                CalculationDependency(
+                    parent_calculation_id=child_calc.id,
+                    child_calculation_id=primary_calc.id,
+                    dependency_role=inverted_role,
                 )
             )
 

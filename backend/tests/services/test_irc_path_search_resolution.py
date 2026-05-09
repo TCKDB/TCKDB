@@ -1,10 +1,10 @@
-"""Service-level tests for IRC and NEB result persistence.
+"""Service-level tests for IRC and path-search result persistence.
 
 Exercises ``persist_calculation_result`` via the shared
 ``resolve_and_persist_calculation_with_results`` helper, focusing on:
 
 - IRC result bundles (metadata, per-point rows, output-geometry links)
-- NEB image bundles (per-image rows, output-geometry links)
+- Path-search result bundles (NEB / GSM points, output-geometry links)
 - Type/result compatibility rejection
 - Deduplication of the ``(calculation_id, geometry_id)`` pair
 """
@@ -18,20 +18,23 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import (
     CalculationIRCPoint,
     CalculationIRCResult,
-    CalculationNEBImageResult,
     CalculationOutputGeometry,
+    CalculationPathSearchPoint,
+    CalculationPathSearchResult,
 )
 from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
     IRCDirection,
+    PathSearchMethod,
 )
 from app.schemas.fragments.calculation import (
+    CalculationCreateRequest,
     CalculationWithResultsPayload,
     IRCPointPayload,
     IRCResultPayload,
-    NEBImageResultPayload,
-    NEBResultPayload,
+    PathSearchPointPayload,
+    PathSearchResultPayload,
 )
 from app.services.calculation_resolution import (
     persist_calculation,
@@ -39,7 +42,6 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_calculation_create_request,
 )
-from app.schemas.fragments.calculation import CalculationCreateRequest
 
 
 _SOFTWARE = {"name": "gaussian", "version": "16", "revision": "C.02"}
@@ -199,43 +201,51 @@ def test_persist_irc_result_rejected_for_non_irc_calc(db_engine) -> None:
 
 
 # ---------------------------------------------------------------------------
-# NEB
+# Path search (NEB / GSM)
 # ---------------------------------------------------------------------------
 
 
-def test_persist_neb_result_with_images_and_geometries(db_engine) -> None:
-    """NEB image rows plus per-image output-geometry links."""
+def test_persist_path_search_neb_result_with_points_and_geometries(
+    db_engine,
+) -> None:
+    """NEB-method path-search result plus per-point output-geometry links."""
 
     with Session(db_engine) as session, session.begin():
         species_entry_id = _create_species_entry(
-            session, inchi_key=_next_inchi_key("NEBPATH")
+            session, inchi_key=_next_inchi_key("PSNEB")
         )
 
-        neb_payload = NEBResultPayload(
-            images=[
-                NEBImageResultPayload(
-                    image_index=0,
+        ps_payload = PathSearchResultPayload(
+            method=PathSearchMethod.neb,
+            is_double_ended=True,
+            converged=True,
+            n_points=3,
+            climbing_image_index=1,
+            points=[
+                PathSearchPointPayload(
+                    point_index=0,
                     electronic_energy_hartree=-1.0,
                     geometry={"xyz_text": _xyz("I0", 0.0)},
                 ),
-                NEBImageResultPayload(
-                    image_index=1,
+                PathSearchPointPayload(
+                    point_index=1,
                     electronic_energy_hartree=-0.9,
                     is_climbing_image=True,
+                    is_ts_guess=True,
                     geometry={"xyz_text": _xyz("I1", 0.5)},
                 ),
-                NEBImageResultPayload(
-                    image_index=2,
+                PathSearchPointPayload(
+                    point_index=2,
                     electronic_energy_hartree=-1.05,
                     geometry={"xyz_text": _xyz("I2", 1.0)},
                 ),
             ],
         )
         upload = CalculationWithResultsPayload(
-            type=CalculationType.neb,
+            type=CalculationType.path_search,
             software_release=_SOFTWARE,
             level_of_theory=_LOT,
-            neb_result=neb_payload,
+            path_search_result=ps_payload,
         )
 
         calc = resolve_and_persist_calculation_with_results(
@@ -244,14 +254,21 @@ def test_persist_neb_result_with_images_and_geometries(db_engine) -> None:
             species_entry_id=species_entry_id,
         )
 
-        images = session.scalars(
-            select(CalculationNEBImageResult).where(
-                CalculationNEBImageResult.calculation_id == calc.id
+        result = session.get(CalculationPathSearchResult, calc.id)
+        assert result is not None
+        assert result.method is PathSearchMethod.neb
+        assert result.is_double_ended is True
+        assert result.climbing_image_index == 1
+
+        points = session.scalars(
+            select(CalculationPathSearchPoint).where(
+                CalculationPathSearchPoint.calculation_id == calc.id
             )
         ).all()
-        assert {img.image_index for img in images} == {0, 1, 2}
-        climbing = next(img for img in images if img.is_climbing_image)
-        assert climbing.image_index == 1
+        assert {p.point_index for p in points} == {0, 1, 2}
+        climbing = next(p for p in points if p.is_climbing_image)
+        assert climbing.point_index == 1
+        assert climbing.is_ts_guess is True
 
         links = session.scalars(
             select(CalculationOutputGeometry).where(
@@ -260,37 +277,84 @@ def test_persist_neb_result_with_images_and_geometries(db_engine) -> None:
         ).all()
         assert len(links) == 3
         assert all(
-            link.role == CalculationGeometryRole.neb_image for link in links
+            link.role == CalculationGeometryRole.path_search_point
+            for link in links
         )
         assert {link.output_order for link in links} == {2, 3, 4}
 
 
-def test_neb_result_dedupes_shared_image_geometry(db_engine) -> None:
-    """Two images with the same geometry produce only one output-geometry row."""
+def test_persist_path_search_gsm_result_persists(db_engine) -> None:
+    """A GSM-method path-search row persists with method='gsm'."""
 
     with Session(db_engine) as session, session.begin():
         species_entry_id = _create_species_entry(
-            session, inchi_key=_next_inchi_key("NEBDEDUP")
+            session, inchi_key=_next_inchi_key("PSGSM")
+        )
+
+        ps_payload = PathSearchResultPayload(
+            method=PathSearchMethod.gsm,
+            is_double_ended=True,
+            converged=True,
+            n_points=2,
+            selected_ts_point_index=1,
+            points=[
+                PathSearchPointPayload(
+                    point_index=0,
+                    relative_energy_kj_mol=0.0,
+                ),
+                PathSearchPointPayload(
+                    point_index=1,
+                    relative_energy_kj_mol=44.2,
+                    is_ts_guess=True,
+                ),
+            ],
+        )
+        upload = CalculationWithResultsPayload(
+            type=CalculationType.path_search,
+            software_release=_SOFTWARE,
+            level_of_theory=_LOT,
+            path_search_result=ps_payload,
+        )
+
+        calc = resolve_and_persist_calculation_with_results(
+            session,
+            upload,
+            species_entry_id=species_entry_id,
+        )
+
+        result = session.get(CalculationPathSearchResult, calc.id)
+        assert result is not None
+        assert result.method is PathSearchMethod.gsm
+        assert result.selected_ts_point_index == 1
+
+
+def test_path_search_result_dedupes_shared_point_geometry(db_engine) -> None:
+    """Two points with the same geometry produce only one output-geometry row."""
+
+    with Session(db_engine) as session, session.begin():
+        species_entry_id = _create_species_entry(
+            session, inchi_key=_next_inchi_key("PSDEDUP")
         )
 
         shared_xyz = _xyz("SHARED", 0.5)
-        neb_payload = NEBResultPayload(
-            images=[
-                NEBImageResultPayload(
-                    image_index=0,
+        ps_payload = PathSearchResultPayload(
+            method=PathSearchMethod.neb,
+            points=[
+                PathSearchPointPayload(
+                    point_index=0,
                     geometry={"xyz_text": shared_xyz},
                 ),
-                NEBImageResultPayload(
-                    image_index=1,
+                PathSearchPointPayload(
+                    point_index=1,
                     geometry={"xyz_text": shared_xyz},
                 ),
             ],
         )
         upload = CalculationWithResultsPayload(
-            type=CalculationType.neb,
+            type=CalculationType.path_search,
             software_release=_SOFTWARE,
             level_of_theory=_LOT,
-            neb_result=neb_payload,
+            path_search_result=ps_payload,
         )
 
         calc = resolve_and_persist_calculation_with_results(

@@ -743,6 +743,7 @@ Notes:
 - `calculation_parameter_vocab` is keyed directly by `canonical_key`
 - `calculation_parameter` is an EAV-style parsed-parameter store with indexes on calculation, raw-key/section, and canonical key/value
 - `parameter_index` must be null or non-negative
+- One raw token may emit multiple canonical observations. Gaussian `IOp(5/13=1)` (instructs the SCF to continue when convergence fails) is stored as three rows: a generic `internal_option.iop` row plus two specialized canonicals — `scf.convergence_failure_ignored = true` and `scf.convergence_failure_action = continue`. This is a calculation **trust** flag, not SCF wavefunction stability evidence; it must not populate `calc_scf_stability`. Future high-severity trust flags may be promoted into a dedicated `calculation_diagnostic_flag` / read-warning surface.
 - `calculation_constraint` uses `(calculation_id, constraint_index)` as its composite primary key
 - constraint-arity checks enforce valid atom usage for cartesian, bond, angle, and dihedral/improper constraints
 - `calculation_dependency` prevents self-edges
@@ -750,7 +751,7 @@ Notes:
 
 Ownership of geometric coordinate metadata across calculation tables:
 
-- `calculation_constraint` is the canonical store for input coordinates **held fixed** during a calculation. It is generic across opt, TS, scan, IRC, NEB, and any other constrained run. A scan with one or more frozen coordinates writes both: the stepped coordinate(s) into `calc_scan_coordinate` and the held-fixed coordinate(s) into `calculation_constraint`. The two never duplicate the same coordinate.
+- `calculation_constraint` is the canonical store for input coordinates **held fixed** during a calculation. It is generic across opt, TS, scan, IRC, path-search (NEB / GSM / string methods), and any other constrained run. A scan with one or more frozen coordinates writes both: the stepped coordinate(s) into `calc_scan_coordinate` and the held-fixed coordinate(s) into `calculation_constraint`. The two never duplicate the same coordinate.
 - `calc_scan_coordinate` is the canonical store for the **active scan grid** (which coordinate is stepped, step size, start/end, symmetry hints). Only scan calculations write rows here.
 - `calc_scan_point` plus `calc_scan_point_coordinate_value` are the canonical store for **scan output**: per-point energy/geometry and the observed coordinate values along the scanned grid. They are write-once results, not input metadata.
 - `statmech_torsion` (with `statmech_torsion_definition`) is the canonical store for **thermochemical rotor interpretation** — the fitted treatment kind (hindered, free, rigid top), symmetry number, and dimension. It may reference its source scan via `source_scan_calculation_id` but does not replace scan-grid storage or constraint storage; it is a downstream interpretation, not a copy.
@@ -792,6 +793,56 @@ Ownership of geometric coordinate metadata across calculation tables:
 - `validation_reason`
 - `rmsd_warning_threshold`
 - `created_at`
+
+`calc_geometry_validation` is a *structure-consistency* check: does the
+calculation's output geometry still represent the declared species
+identity (graph isomorphism, with RMSD as a suspicion signal)? It exists
+to catch optimizations that rearranged the molecule, broke or formed
+bonds, dissociated, or transferred a proton.
+
+A `validation_status=fail` row means "the automated identity validator
+found a mismatch," **not** "the calculation is scientifically invalid."
+Connectivity perception from XYZ is imperfect for weak complexes,
+stretched or partially broken bonds, radicals, charged species, loose
+conformers, and proton-transfer-like geometries — these can produce
+false-positive `fail` rows even when the calculation is fine. These
+rows are curator-attention signals, not inputs to automatic rejection
+or quality gating. Phase-1 wiring records evidence; it never blocks an
+upload.
+
+Three closely related but distinct calculation-quality surfaces must not
+be conflated:
+
+- **Geometry validation** — molecular identity / connectivity preservation.
+  Table: `calc_geometry_validation`.
+- **SCF stability** — electronic wavefunction stability with respect to
+  orbital rotations (Gaussian `Stable` / `Stable=Opt`, ORCA stability
+  analysis). Table: `calc_scf_stability`.
+- **Frequency validation** — nuclear Hessian / stationary-point character
+  (number of imaginary modes, etc.). Lives on `calc_freq_result` and
+  related fields, not in a dedicated validation table.
+
+`calc_scf_stability` fields:
+
+- `calculation_id`
+- `status` (`scf_stability_status` enum: `stable`, `unstable`,
+  `stabilized`, `inconclusive`; the read API also projects `not_checked`
+  when no row exists)
+- `lowest_eigenvalue`
+- `instability_count`
+- `instability_type`
+- `reoptimized_wavefunction`
+- `source_calculation_id`
+- `source_artifact_id`
+- `note`
+- `created_at`, `created_by_id`
+
+A row in `calc_scf_stability` exists only when a stability analysis was
+actually attempted; absence of a row is the canonical encoding of
+"not checked" and is projected as `status = "not_checked"` by the read
+API. Ordinary SCF convergence is not stability evidence and must not
+populate this table; `IOp(5/13=1)`-style trust flags (see §7.3) are also
+not stability evidence.
 
 `calc_irc_result` fields:
 
@@ -860,16 +911,59 @@ Ownership of geometric coordinate metadata across calculation tables:
 - `coordinate_value`
 - `value_unit`
 
-`calc_neb_image_result` fields:
+### Path-search calculations (NEB / GSM / string methods)
+
+A path-search calculation explores a reaction path between or from
+molecular endpoints to produce a TS guess. NEB and GSM (and growing/
+freezing-string variants) are *methods* of a path-search calculation,
+not separate top-level calculation provenance concepts. They share one
+result table family, with the algorithm carried as data on
+`calc_path_search_result.method`:
+
+```text
+calculation.type = path_search
+calc_path_search_result.method ∈ {neb, gsm, growing_string, freezing_string, other}
+```
+
+A path-search calculation may serve as the parent of a TS optimization
+through `calculation_dependency.role = optimized_from`:
+
+```text
+ts_guess(path_search) ──optimized_from──▶ ts_opt(opt)
+```
+
+Heuristic / template / user-supplied TS guesses remain geometry-only —
+they are not modelled as path-search calculations unless a real
+calculation was run.
+
+`calc_path_search_result` fields:
 
 - `calculation_id`
-- `image_index`
+- `method`
+- `is_double_ended`
+- `converged`
+- `n_points`
+- `selected_ts_point_index`
+- `climbing_image_index`
+- `source_endpoint_count`
+- `zero_energy_reference_hartree`
+- `note`
+
+`calc_path_search_point` fields:
+
+- `calculation_id`
+- `point_index`
 - `electronic_energy_hartree`
 - `relative_energy_kj_mol`
-- `path_distance_angstrom`
+- `path_coordinate`
 - `max_force`
 - `rms_force`
+- `max_gradient`
+- `rms_gradient`
+- `is_ts_guess`
 - `is_climbing_image`
+- `geometry_id`
+- `note`
 
 Notes:
 

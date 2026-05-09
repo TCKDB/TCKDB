@@ -1,17 +1,17 @@
-"""Schema-level tests for IRC and NEB upload payloads."""
+"""Schema-level tests for IRC and path-search upload payloads."""
 
 from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
 
-from app.db.models.common import CalculationType, IRCDirection
+from app.db.models.common import CalculationType, IRCDirection, PathSearchMethod
 from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     IRCPointPayload,
     IRCResultPayload,
-    NEBImageResultPayload,
-    NEBResultPayload,
+    PathSearchPointPayload,
+    PathSearchResultPayload,
 )
 
 
@@ -95,37 +95,73 @@ def test_irc_forward_point_requires_has_forward_flag():
 
 
 # ---------------------------------------------------------------------------
-# NEB
+# Path search (NEB / GSM / string methods share one shape)
 # ---------------------------------------------------------------------------
 
 
-def test_neb_result_accepts_valid_payload():
-    payload = NEBResultPayload(
-        images=[
-            NEBImageResultPayload(image_index=0),
-            NEBImageResultPayload(image_index=1, is_climbing_image=True),
-            NEBImageResultPayload(image_index=2),
+def test_path_search_result_accepts_neb_payload():
+    payload = PathSearchResultPayload(
+        method=PathSearchMethod.neb,
+        is_double_ended=True,
+        converged=True,
+        n_points=3,
+        points=[
+            PathSearchPointPayload(point_index=0),
+            PathSearchPointPayload(
+                point_index=1, is_climbing_image=True, is_ts_guess=True
+            ),
+            PathSearchPointPayload(point_index=2),
         ],
     )
-    assert len(payload.images) == 3
+    assert payload.method is PathSearchMethod.neb
+    assert len(payload.points) == 3
 
 
-def test_neb_image_index_must_be_non_negative():
+def test_path_search_result_accepts_gsm_payload():
+    payload = PathSearchResultPayload(
+        method=PathSearchMethod.gsm,
+        is_double_ended=True,
+        converged=True,
+        n_points=2,
+        selected_ts_point_index=1,
+        points=[
+            PathSearchPointPayload(point_index=0),
+            PathSearchPointPayload(point_index=1, is_ts_guess=True),
+        ],
+    )
+    assert payload.method is PathSearchMethod.gsm
+    assert payload.selected_ts_point_index == 1
+
+
+def test_path_search_point_index_must_be_non_negative():
     with pytest.raises(ValidationError):
-        NEBImageResultPayload(image_index=-1)
+        PathSearchPointPayload(point_index=-1)
 
 
-def test_neb_requires_at_least_one_image():
+def test_path_search_requires_at_least_one_point():
     with pytest.raises(ValidationError):
-        NEBResultPayload(images=[])
+        PathSearchResultPayload(method=PathSearchMethod.neb, points=[])
 
 
-def test_neb_duplicate_image_indices_rejected():
-    with pytest.raises(ValueError, match="image_index values must be unique"):
-        NEBResultPayload(
-            images=[
-                NEBImageResultPayload(image_index=0),
-                NEBImageResultPayload(image_index=0),
+def test_path_search_duplicate_point_indices_rejected():
+    with pytest.raises(ValueError, match="point_index values must be unique"):
+        PathSearchResultPayload(
+            method=PathSearchMethod.neb,
+            points=[
+                PathSearchPointPayload(point_index=0),
+                PathSearchPointPayload(point_index=0),
+            ],
+        )
+
+
+def test_path_search_selected_ts_point_index_must_match():
+    with pytest.raises(ValueError, match="selected_ts_point_index must match"):
+        PathSearchResultPayload(
+            method=PathSearchMethod.gsm,
+            selected_ts_point_index=99,
+            points=[
+                PathSearchPointPayload(point_index=0),
+                PathSearchPointPayload(point_index=1),
             ],
         )
 
@@ -149,14 +185,15 @@ def test_irc_result_rejected_on_non_irc_calculation():
         )
 
 
-def test_neb_result_rejected_on_non_neb_calculation():
-    with pytest.raises(ValueError, match="neb_result.*not allowed"):
+def test_path_search_result_rejected_on_non_path_search_calculation():
+    with pytest.raises(ValueError, match="path_search_result.*not allowed"):
         CalculationWithResultsPayload(
             type=CalculationType.opt,
             software_release=_SOFTWARE,
             level_of_theory=_LOT,
-            neb_result=NEBResultPayload(
-                images=[NEBImageResultPayload(image_index=0)],
+            path_search_result=PathSearchResultPayload(
+                method=PathSearchMethod.neb,
+                points=[PathSearchPointPayload(point_index=0)],
             ),
         )
 
@@ -173,20 +210,39 @@ def test_irc_calculation_accepts_irc_result():
         ),
     )
     assert payload.irc_result is not None
-    assert payload.neb_result is None
+    assert payload.path_search_result is None
 
 
-def test_neb_calculation_accepts_neb_result():
+def test_path_search_calculation_accepts_neb_method():
     payload = CalculationWithResultsPayload(
-        type=CalculationType.neb,
+        type=CalculationType.path_search,
         software_release=_SOFTWARE,
         level_of_theory=_LOT,
-        neb_result=NEBResultPayload(
-            images=[
-                NEBImageResultPayload(image_index=0),
-                NEBImageResultPayload(image_index=1),
+        path_search_result=PathSearchResultPayload(
+            method=PathSearchMethod.neb,
+            points=[
+                PathSearchPointPayload(point_index=0),
+                PathSearchPointPayload(point_index=1),
             ],
         ),
     )
-    assert payload.neb_result is not None
-    assert len(payload.neb_result.images) == 2
+    assert payload.path_search_result is not None
+    assert payload.path_search_result.method is PathSearchMethod.neb
+    assert len(payload.path_search_result.points) == 2
+
+
+def test_path_search_calculation_accepts_gsm_method():
+    payload = CalculationWithResultsPayload(
+        type=CalculationType.path_search,
+        software_release=_SOFTWARE,
+        level_of_theory=_LOT,
+        path_search_result=PathSearchResultPayload(
+            method=PathSearchMethod.gsm,
+            points=[
+                PathSearchPointPayload(point_index=0),
+                PathSearchPointPayload(point_index=1, is_ts_guess=True),
+            ],
+        ),
+    )
+    assert payload.path_search_result is not None
+    assert payload.path_search_result.method is PathSearchMethod.gsm

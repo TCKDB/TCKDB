@@ -9,6 +9,8 @@ from app.db.models.common import (
     CalculationType,
     ConstraintKind,
     IRCDirection,
+    PathSearchMethod,
+    SCFStabilityStatus,
 )
 from app.schemas.common import SchemaBase
 from app.schemas.fragments.calculation_origin import CalculationOriginMetadata
@@ -160,6 +162,89 @@ class SPResultPayload(SchemaBase):
     electronic_energy_hartree: float | None = None
 
 
+class SCFStabilityPayload(SchemaBase):
+    """Optional inline SCF wavefunction stability evidence.
+
+    Attaches to any calculation type — there is no calc_type restriction.
+    Producers must only emit ``status = stable`` when an actual
+    SCF/wavefunction stability analysis was observed; ordinary SCF
+    convergence does NOT qualify. When unsure whether a stability
+    analysis was performed, omit the block — the read API will project
+    ``not_checked``. Use ``status = inconclusive`` only when a stability
+    analysis was clearly attempted but its result could not be parsed.
+
+    :param status: Persisted status. ``not_checked`` is NOT a valid
+        stored value — omit the block to express that.
+    :param lowest_eigenvalue: Smallest eigenvalue from the stability
+        Hessian (software-specific).
+    :param instability_count: Number of distinct instabilities found.
+    :param instability_type: Free-text describing the instability class
+        (e.g. ``"RHF→UHF"``, ``"internal"``).
+    :param reoptimized_wavefunction: Whether a stable wavefunction was
+        obtained by stability optimisation / reoptimisation.
+    :param source_calculation_id: Optional FK to the calculation whose
+        log carries the stability evidence (when separate from the
+        owning calculation).
+    :param source_artifact_id: Optional FK to a ``calculation_artifact``
+        row holding the stability log bytes (e.g. an ``ancillary`` or
+        ``output_log`` artifact).
+    """
+
+    status: SCFStabilityStatus
+    lowest_eigenvalue: float | None = None
+    instability_count: int | None = Field(default=None, ge=0)
+    instability_type: str | None = None
+    reoptimized_wavefunction: bool | None = None
+    source_calculation_id: int | None = None
+    source_artifact_id: int | None = None
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_status_consistency(self) -> Self:
+        """Cross-field consistency between ``status`` and other fields.
+
+        Mirrors the soft semantic invariants encoded as DB check
+        constraints on ``calc_scf_stability``: catching them here gives
+        a 422 with a producer-friendly message rather than letting the
+        DB raise an opaque IntegrityError.
+
+        Producer contract is intentionally narrow: we do NOT require
+        evidence-bearing fields (``lowest_eigenvalue`` /
+        ``source_artifact_id``) for ``status = stable`` — that is left
+        to the producer documentation.
+        """
+        if (
+            self.status == SCFStabilityStatus.stable
+            and self.reoptimized_wavefunction is True
+        ):
+            raise ValueError(
+                "scf_stability.status = 'stable' is inconsistent with "
+                "reoptimized_wavefunction = True. A stable wavefunction "
+                "did not need to be re-optimised; use 'stabilized' if a "
+                "re-optimisation actually occurred."
+            )
+        if (
+            self.status == SCFStabilityStatus.stabilized
+            and self.instability_count == 0
+        ):
+            raise ValueError(
+                "scf_stability.status = 'stabilized' implies at least "
+                "one instability was found and then resolved; "
+                "instability_count = 0 contradicts that. Leave it null "
+                "if unknown."
+            )
+        if (
+            self.status == SCFStabilityStatus.unstable
+            and self.reoptimized_wavefunction is True
+        ):
+            raise ValueError(
+                "scf_stability.status = 'unstable' records that an "
+                "instability remains. Use 'stabilized' if a stable "
+                "wavefunction was subsequently obtained."
+            )
+        return self
+
+
 class IRCPointPayload(SchemaBase):
     """Upload-facing inline payload for one IRC-path sampled point.
 
@@ -248,44 +333,111 @@ class IRCResultPayload(SchemaBase):
         return self
 
 
-class NEBImageResultPayload(SchemaBase):
-    """Upload-facing inline payload for one NEB image result.
+class PathSearchPointPayload(SchemaBase):
+    """Upload-facing inline payload for one path-search point.
 
-    :param image_index: Zero-based image index (0 = reactant, N = product).
-    :param electronic_energy_hartree: Electronic energy at this image.
+    Generalizes NEB images, GSM nodes, and string-method path points.
+
+    :param point_index: Zero-based point index along the path.
+    :param electronic_energy_hartree: Electronic energy at this point.
     :param relative_energy_kj_mol: Energy relative to the zero-energy reference.
-    :param path_distance_angstrom: Cumulative path distance at this image.
-    :param max_force: Max force component at this image.
-    :param rms_force: RMS force at this image.
-    :param is_climbing_image: Whether this image was the climbing image.
-    :param geometry: Optional inline geometry payload for this image.
+    :param path_coordinate: Optional path-coordinate value (e.g. cumulative
+        path distance for NEB, reaction-coordinate for GSM/string methods).
+    :param max_force: Max force component at this point.
+    :param rms_force: RMS force at this point.
+    :param max_gradient: Max gradient component at this point.
+    :param rms_gradient: RMS gradient at this point.
+    :param is_ts_guess: Whether this point is the algorithm's TS guess.
+    :param is_climbing_image: Whether this image was the climbing image
+        (NEB-CI specific; ignored by string-method outputs).
+    :param geometry: Optional inline geometry payload for this point.
+    :param note: Optional free-text note.
     """
 
-    image_index: int = Field(ge=0)
+    point_index: int = Field(ge=0)
     electronic_energy_hartree: float | None = None
     relative_energy_kj_mol: float | None = None
-    path_distance_angstrom: float | None = None
+    path_coordinate: float | None = None
     max_force: float | None = None
     rms_force: float | None = None
+    max_gradient: float | None = None
+    rms_gradient: float | None = None
+    is_ts_guess: bool = False
     is_climbing_image: bool = False
     geometry: GeometryPayload | None = None
+    note: str | None = None
 
 
-class NEBResultPayload(SchemaBase):
-    """Upload-facing inline result bundle for a NEB calculation.
+class PathSearchResultPayload(SchemaBase):
+    """Upload-facing inline result bundle for a path-search calculation.
 
-    :param images: One row per NEB image, unique on ``image_index``.
+    A path-search calculation explores a reaction path between or from
+    molecular endpoints to produce a TS guess. The specific algorithm
+    (NEB, GSM, growing/freezing string, ...) lives on ``method`` rather
+    than as a separate top-level calculation type.
+
+    :param method: The path-search algorithm used.
+    :param is_double_ended: Whether the algorithm uses two endpoints
+        (NEB, GSM) versus single-ended (growing string, freezing string).
+    :param converged: Whether the path search converged.
+    :param n_points: Total sampled-point count (consistency check).
+    :param selected_ts_point_index: Index of the point selected as the
+        TS guess (0-based). Must match a ``points[].point_index``.
+    :param climbing_image_index: Optional index of the climbing image in
+        NEB-CI runs.
+    :param source_endpoint_count: Optional count of endpoint geometries
+        consumed by the algorithm (typically 2 for double-ended runs).
+    :param zero_energy_reference_hartree: Energy used as relative zero
+        for ``relative_energy_kj_mol`` on each point.
+    :param note: Optional free-text note.
+    :param points: Path samples (images / nodes / path points), unique on
+        ``point_index``.
     """
 
-    images: list[NEBImageResultPayload] = Field(min_length=1)
+    method: PathSearchMethod
+    is_double_ended: bool | None = None
+    converged: bool | None = None
+    n_points: int | None = Field(default=None, ge=1)
+    selected_ts_point_index: int | None = Field(default=None, ge=0)
+    climbing_image_index: int | None = Field(default=None, ge=0)
+    source_endpoint_count: int | None = Field(default=None, ge=1)
+    zero_energy_reference_hartree: float | None = None
+    note: str | None = None
+    points: list[PathSearchPointPayload] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_unique_image_indices(self) -> Self:
-        """Require unique ``image_index`` across all provided images."""
+    def validate_points(self) -> Self:
+        """Enforce unique ``point_index``, TS-index / climbing-index
+        consistency, and ``n_points`` agreement with the point list."""
 
-        indices = [image.image_index for image in self.images]
+        indices = [p.point_index for p in self.points]
         if len(set(indices)) != len(indices):
-            raise ValueError("NEB image_index values must be unique.")
+            raise ValueError("Path-search point_index values must be unique.")
+        index_set = set(indices)
+
+        if (
+            self.selected_ts_point_index is not None
+            and self.selected_ts_point_index not in index_set
+        ):
+            raise ValueError(
+                "selected_ts_point_index must match the point_index of one "
+                "of the provided points."
+            )
+
+        if (
+            self.climbing_image_index is not None
+            and self.climbing_image_index not in index_set
+        ):
+            raise ValueError(
+                "climbing_image_index must match the point_index of one "
+                "of the provided points."
+            )
+
+        if self.n_points is not None and self.n_points != len(self.points):
+            raise ValueError(
+                f"n_points={self.n_points} does not match the number of "
+                f"provided points ({len(self.points)})."
+            )
         return self
 
 
@@ -337,15 +489,17 @@ class OutputGeometryEntry(SchemaBase):
 class CalculationWithResultsPayload(CalculationPayload):
     """A calculation with optional typed result blocks.
 
-    Extends ``CalculationPayload`` with opt/freq/sp/irc/neb result fields.
-    Validation enforces that only the result type matching the calculation
-    type may be provided.
+    Extends ``CalculationPayload`` with opt/freq/sp/irc/path_search result
+    fields. Validation enforces that only the result type matching the
+    calculation type may be provided.
 
     :param opt_result: Inline optimisation result (type must be ``opt``).
     :param freq_result: Inline frequency result (type must be ``freq``).
     :param sp_result: Inline single-point result (type must be ``sp``).
     :param irc_result: Inline IRC result bundle (type must be ``irc``).
-    :param neb_result: Inline NEB result bundle (type must be ``neb``).
+    :param path_search_result: Inline path-search result bundle (type
+        must be ``path_search``). Carries NEB, GSM, and other path-based
+        TS-search algorithms via ``path_search_result.method``.
     :param parameters: Optional parsed execution-control parameter
         observations. Each becomes one ``calculation_parameter`` row.
     :param parameters_json: Optional JSON snapshot of the parser output
@@ -359,7 +513,9 @@ class CalculationWithResultsPayload(CalculationPayload):
     freq_result: FreqResultPayload | None = None
     sp_result: SPResultPayload | None = None
     irc_result: IRCResultPayload | None = None
-    neb_result: NEBResultPayload | None = None
+    path_search_result: PathSearchResultPayload | None = None
+
+    scf_stability: SCFStabilityPayload | None = None
 
     input_geometries: list[GeometryPayload] = Field(
         default_factory=list,
@@ -393,9 +549,9 @@ class CalculationWithResultsPayload(CalculationPayload):
         default_factory=list,
         description=(
             "Coordinate constraints held fixed during this calculation. "
-            "Generic across opt, freq, sp, irc, neb, scan, and any other "
-            "constrained run — these are input/provenance metadata and do "
-            "not require a result block. For scan calculations, frozen "
+            "Generic across opt, freq, sp, irc, path_search, scan, and any "
+            "other constrained run — these are input/provenance metadata and "
+            "do not require a result block. For scan calculations, frozen "
             "coordinates may be declared here while the stepped coordinate "
             "is declared on the scan_result.coordinates list."
         ),
@@ -418,7 +574,7 @@ class CalculationWithResultsPayload(CalculationPayload):
             CalculationType.freq: "freq_result",
             CalculationType.sp: "sp_result",
             CalculationType.irc: "irc_result",
-            CalculationType.neb: "neb_result",
+            CalculationType.path_search: "path_search_result",
         }
         allowed_field = allowed.get(self.type)
         for field_name in (
@@ -426,7 +582,7 @@ class CalculationWithResultsPayload(CalculationPayload):
             "freq_result",
             "sp_result",
             "irc_result",
-            "neb_result",
+            "path_search_result",
         ):
             value = getattr(self, field_name)
             if value is not None and field_name != allowed_field:

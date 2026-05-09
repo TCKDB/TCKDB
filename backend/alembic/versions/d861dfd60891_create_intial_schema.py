@@ -62,6 +62,8 @@ def _seed_calculation_parameter_vocab() -> None:
         {"canonical_key": "scf.max_cycles", "description": "Maximum SCF iterations before fallback.", "expected_value_type": "int", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
         {"canonical_key": "scf.direct", "description": "SCF integral handling: direct/incore.", "expected_value_type": "enum", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
         {"canonical_key": "scf.fallback", "description": "SCF fallback algorithm (e.g. xqc, qc).", "expected_value_type": "enum", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
+        {"canonical_key": "scf.convergence_failure_ignored", "description": "Producer configured the SCF to continue if convergence fails. Reported energy/geometry comes from a non-converged wavefunction.", "expected_value_type": "bool", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": False, "note": "Triggered by Gaussian IOp(5/13=1). This is a calculation trust flag, not SCF wavefunction stability evidence -- it should not populate calc_scf_stability."},
+        {"canonical_key": "scf.convergence_failure_action", "description": "Action the producer instructed for SCF convergence failure (e.g. continue, fallback).", "expected_value_type": "enum", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": False, "note": "Co-emitted with scf.convergence_failure_ignored from Gaussian IOp(5/13=1)."},
         # Optimisation block
         {"canonical_key": "opt.convergence", "description": "Geometry optimisation convergence target.", "expected_value_type": "enum", "affects_scientific_result": True, "affects_numerics": True, "affects_resources": False, "note": None},
         {"canonical_key": "opt.max_cycles", "description": "Maximum optimisation steps.", "expected_value_type": "int", "affects_scientific_result": False, "affects_numerics": True, "affects_resources": False, "note": None},
@@ -778,7 +780,7 @@ def upgrade() -> None:
     )
     op.create_table('calculation',
     sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('type', sa.Enum('opt', 'freq', 'sp', 'irc', 'scan', 'neb', 'conf', name='calc_type'), nullable=False),
+    sa.Column('type', sa.Enum('opt', 'freq', 'sp', 'irc', 'scan', 'path_search', 'conf', name='calc_type'), nullable=False),
     sa.Column('quality', sa.Enum('raw', 'curated', 'rejected', name='calc_quality'), server_default='raw', nullable=False),
     sa.Column('species_entry_id', sa.BigInteger(), nullable=True),
     sa.Column('transition_state_entry_id', sa.BigInteger(), nullable=True),
@@ -942,18 +944,42 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['geometry_id'], ['geometry.id'], name=op.f('fk_calc_irc_point_geometry_id_geometry'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('calculation_id', 'point_index', name=op.f('pk_calc_irc_point'))
     )
-    op.create_table('calc_neb_image_result',
+    op.create_table('calc_path_search_result',
     sa.Column('calculation_id', sa.BigInteger(), nullable=False),
-    sa.Column('image_index', sa.Integer(), nullable=False),
+    sa.Column('method', sa.Enum('neb', 'gsm', 'growing_string', 'freezing_string', 'other', name='path_search_method'), nullable=False),
+    sa.Column('is_double_ended', sa.Boolean(), nullable=True),
+    sa.Column('converged', sa.Boolean(), nullable=True),
+    sa.Column('n_points', sa.Integer(), nullable=True),
+    sa.Column('selected_ts_point_index', sa.Integer(), nullable=True),
+    sa.Column('climbing_image_index', sa.Integer(), nullable=True),
+    sa.Column('source_endpoint_count', sa.Integer(), nullable=True),
+    sa.Column('zero_energy_reference_hartree', sa.Float(), nullable=True),
+    sa.Column('note', sa.Text(), nullable=True),
+    sa.CheckConstraint('climbing_image_index IS NULL OR climbing_image_index >= 0', name=op.f('ck_calc_path_search_result_climbing_image_index_ge_0')),
+    sa.CheckConstraint('n_points IS NULL OR n_points >= 1', name=op.f('ck_calc_path_search_result_n_points_ge_1')),
+    sa.CheckConstraint('selected_ts_point_index IS NULL OR selected_ts_point_index >= 0', name=op.f('ck_calc_path_search_result_selected_ts_point_index_ge_0')),
+    sa.CheckConstraint('source_endpoint_count IS NULL OR source_endpoint_count >= 1', name=op.f('ck_calc_path_search_result_source_endpoint_count_ge_1')),
+    sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calc_path_search_result_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
+    sa.PrimaryKeyConstraint('calculation_id', name=op.f('pk_calc_path_search_result'))
+    )
+    op.create_table('calc_path_search_point',
+    sa.Column('calculation_id', sa.BigInteger(), nullable=False),
+    sa.Column('point_index', sa.Integer(), nullable=False),
     sa.Column('electronic_energy_hartree', sa.Float(), nullable=True),
     sa.Column('relative_energy_kj_mol', sa.Float(), nullable=True),
-    sa.Column('path_distance_angstrom', sa.Float(), nullable=True),
+    sa.Column('path_coordinate', sa.Float(), nullable=True),
     sa.Column('max_force', sa.Float(), nullable=True),
     sa.Column('rms_force', sa.Float(), nullable=True),
+    sa.Column('max_gradient', sa.Float(), nullable=True),
+    sa.Column('rms_gradient', sa.Float(), nullable=True),
+    sa.Column('is_ts_guess', sa.Boolean(), nullable=False, server_default='false'),
     sa.Column('is_climbing_image', sa.Boolean(), nullable=False, server_default='false'),
-    sa.CheckConstraint('image_index >= 0', name=op.f('ck_calc_neb_image_result_image_index_ge_0')),
-    sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calc_neb_image_result_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
-    sa.PrimaryKeyConstraint('calculation_id', 'image_index', name=op.f('pk_calc_neb_image_result'))
+    sa.Column('geometry_id', sa.BigInteger(), nullable=True),
+    sa.Column('note', sa.Text(), nullable=True),
+    sa.CheckConstraint('point_index >= 0', name=op.f('ck_calc_path_search_point_point_index_ge_0')),
+    sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calc_path_search_point_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
+    sa.ForeignKeyConstraint(['geometry_id'], ['geometry.id'], name=op.f('fk_calc_path_search_point_geometry_id_geometry'), initially='IMMEDIATE', deferrable=True),
+    sa.PrimaryKeyConstraint('calculation_id', 'point_index', name=op.f('pk_calc_path_search_point'))
     )
     op.create_table('calc_sp_result',
     sa.Column('calculation_id', sa.BigInteger(), nullable=False),
@@ -995,6 +1021,27 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['created_by'], ['app_user.id'], name=op.f('fk_calculation_artifact_created_by_app_user'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_calculation_artifact'))
     )
+    op.create_table('calc_scf_stability',
+    sa.Column('calculation_id', sa.BigInteger(), nullable=False),
+    sa.Column('status', sa.Enum('stable', 'unstable', 'stabilized', 'inconclusive', name='scf_stability_status'), nullable=False),
+    sa.Column('lowest_eigenvalue', sa.Float(), nullable=True),
+    sa.Column('instability_count', sa.Integer(), nullable=True),
+    sa.Column('instability_type', sa.Text(), nullable=True),
+    sa.Column('reoptimized_wavefunction', sa.Boolean(), nullable=True),
+    sa.Column('source_calculation_id', sa.BigInteger(), nullable=True),
+    sa.Column('source_artifact_id', sa.BigInteger(), nullable=True),
+    sa.Column('note', sa.Text(), nullable=True),
+    sa.Column('created_by', sa.BigInteger(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.CheckConstraint('instability_count IS NULL OR instability_count >= 0', name=op.f('ck_calc_scf_stability_instability_count_ge_0')),
+    sa.CheckConstraint("NOT (status = 'stable' AND reoptimized_wavefunction IS TRUE)", name=op.f('ck_calc_scf_stability_stable_no_reopt')),
+    sa.CheckConstraint("NOT (status = 'stabilized' AND instability_count = 0)", name=op.f('ck_calc_scf_stability_stabilized_has_instability')),
+    sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calc_scf_stability_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
+    sa.ForeignKeyConstraint(['source_calculation_id'], ['calculation.id'], name=op.f('fk_calc_scf_stability_source_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
+    sa.ForeignKeyConstraint(['source_artifact_id'], ['calculation_artifact.id'], name=op.f('fk_calc_scf_stability_source_artifact_id_calculation_artifact'), initially='IMMEDIATE', deferrable=True),
+    sa.ForeignKeyConstraint(['created_by'], ['app_user.id'], name=op.f('fk_calc_scf_stability_created_by_app_user'), initially='IMMEDIATE', deferrable=True),
+    sa.PrimaryKeyConstraint('calculation_id', name=op.f('pk_calc_scf_stability'))
+    )
     op.create_table('calculation_parameter',
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('calculation_id', sa.BigInteger(), nullable=False),
@@ -1022,14 +1069,13 @@ def upgrade() -> None:
     op.create_table('calculation_dependency',
     sa.Column('parent_calculation_id', sa.BigInteger(), nullable=False),
     sa.Column('child_calculation_id', sa.BigInteger(), nullable=False),
-    sa.Column('dependency_role', sa.Enum('optimized_from', 'freq_on', 'single_point_on', 'arkane_source', 'irc_start', 'irc_followup', 'scan_parent', 'neb_parent', name='calculation_dependency_role'), nullable=False),
+    sa.Column('dependency_role', sa.Enum('optimized_from', 'freq_on', 'single_point_on', 'arkane_source', 'irc_start', 'irc_followup', 'scan_parent', name='calculation_dependency_role'), nullable=False),
     sa.CheckConstraint('parent_calculation_id <> child_calculation_id', name=op.f('ck_calculation_dependency_not_self')),
     sa.ForeignKeyConstraint(['child_calculation_id'], ['calculation.id'], name=op.f('fk_calculation_dependency_child_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
     sa.ForeignKeyConstraint(['parent_calculation_id'], ['calculation.id'], name=op.f('fk_calculation_dependency_parent_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('parent_calculation_id', 'child_calculation_id', name=op.f('pk_calculation_dependency'))
     )
     op.create_index('uq_calculation_dependency_child_calculation_id_freq_on', 'calculation_dependency', ['child_calculation_id'], unique=True, postgresql_where=sa.text("dependency_role = 'freq_on'"))
-    op.create_index('uq_calculation_dependency_child_calculation_id_neb_parent', 'calculation_dependency', ['child_calculation_id'], unique=True, postgresql_where=sa.text("dependency_role = 'neb_parent'"))
     op.create_index('uq_calculation_dependency_child_calculation_id_optimized_from', 'calculation_dependency', ['child_calculation_id'], unique=True, postgresql_where=sa.text("dependency_role = 'optimized_from'"))
     op.create_index('uq_calculation_dependency_child_calculation_id_scan_parent', 'calculation_dependency', ['child_calculation_id'], unique=True, postgresql_where=sa.text("dependency_role = 'scan_parent'"))
     op.create_index('uq_calculation_dependency_child_calculation_id_single_point_on', 'calculation_dependency', ['child_calculation_id'], unique=True, postgresql_where=sa.text("dependency_role = 'single_point_on'"))
@@ -1047,7 +1093,7 @@ def upgrade() -> None:
     sa.Column('calculation_id', sa.BigInteger(), nullable=False),
     sa.Column('geometry_id', sa.BigInteger(), nullable=False),
     sa.Column('output_order', sa.Integer(), nullable=False),
-    sa.Column('role', sa.Enum('final', 'initial', 'scan_point', 'irc_forward', 'irc_reverse', 'neb_image', name='calculation_geometry_role'), nullable=True),
+    sa.Column('role', sa.Enum('final', 'initial', 'scan_point', 'irc_forward', 'irc_reverse', 'path_search_point', name='calculation_geometry_role'), nullable=True),
     sa.CheckConstraint('output_order >= 1', name=op.f('ck_calculation_output_geometry_output_order_ge_1')),
     sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calculation_output_geometry_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
     sa.ForeignKeyConstraint(['geometry_id'], ['geometry.id'], name=op.f('fk_calculation_output_geometry_geometry_id_geometry'), initially='IMMEDIATE', deferrable=True),
@@ -1559,9 +1605,10 @@ def downgrade() -> None:
     op.drop_index('uq_calculation_dependency_child_calculation_id_single_point_on', table_name='calculation_dependency', postgresql_where=sa.text("dependency_role = 'single_point_on'"))
     op.drop_index('uq_calculation_dependency_child_calculation_id_scan_parent', table_name='calculation_dependency', postgresql_where=sa.text("dependency_role = 'scan_parent'"))
     op.drop_index('uq_calculation_dependency_child_calculation_id_optimized_from', table_name='calculation_dependency', postgresql_where=sa.text("dependency_role = 'optimized_from'"))
-    op.drop_index('uq_calculation_dependency_child_calculation_id_neb_parent', table_name='calculation_dependency', postgresql_where=sa.text("dependency_role = 'neb_parent'"))
     op.drop_index('uq_calculation_dependency_child_calculation_id_freq_on', table_name='calculation_dependency', postgresql_where=sa.text("dependency_role = 'freq_on'"))
     op.drop_table('calculation_dependency')
+    op.drop_table('calc_scf_stability')
+    op.execute("DROP TYPE IF EXISTS scf_stability_status")
     op.drop_table('calculation_artifact')
     op.drop_index('ix_calculation_parameter_source', table_name='calculation_parameter')
     op.drop_index('ix_calculation_parameter_canonical_key_value', table_name='calculation_parameter')
@@ -1574,7 +1621,9 @@ def downgrade() -> None:
     op.drop_table('calc_geometry_validation')
     op.execute("DROP TYPE IF EXISTS validation_status")
     op.drop_table('calc_sp_result')
-    op.drop_table('calc_neb_image_result')
+    op.drop_table('calc_path_search_point')
+    op.drop_table('calc_path_search_result')
+    op.execute("DROP TYPE IF EXISTS path_search_method")
     op.drop_table('calc_irc_point')
     op.drop_table('calc_irc_result')
     op.execute("DROP TYPE IF EXISTS irc_direction")

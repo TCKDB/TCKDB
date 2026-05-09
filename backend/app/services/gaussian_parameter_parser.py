@@ -235,6 +235,57 @@ def _extract_link0(text: str) -> list[dict]:
 _IOP_RE = re.compile(r"IOp\(([^)]+)\)", re.IGNORECASE)
 
 
+def _emit_scf_convergence_failure_ignored(iop_value: str) -> list[dict]:
+    """Emit specialized canonical rows for ``IOp(5/13=1)``.
+
+    Gaussian's overlay/option ``5/13=1`` instructs the SCF to continue when
+    convergence fails — so the reported energy/geometry comes from a non-
+    converged wavefunction. This is a calculation trust flag, not SCF
+    wavefunction stability evidence. Two canonical rows are emitted (in
+    addition to the generic ``internal_option.iop`` row written by the
+    caller):
+
+    - ``scf.convergence_failure_ignored = true`` — boolean, drives simple
+      safety queries.
+    - ``scf.convergence_failure_action = continue`` — enum, leaves room
+      for future Gaussian options that select alternative actions
+      without re-canonicalizing.
+
+    Returns an empty list for any value other than ``"1"``. The default
+    Gaussian value (``0`` — fail and stop) is not stored as a canonical
+    row to avoid flooding the table with no-op observations.
+    """
+    if iop_value.strip() != "1":
+        return []
+    return [
+        {
+            "raw_key": "IOp(5/13)",
+            "canonical_key": "scf.convergence_failure_ignored",
+            "raw_value": iop_value,
+            "canonical_value": "true",
+            "section": "internal_option",
+            "value_type": "bool",
+        },
+        {
+            "raw_key": "IOp(5/13)",
+            "canonical_key": "scf.convergence_failure_action",
+            "raw_value": iop_value,
+            "canonical_value": "continue",
+            "section": "internal_option",
+            "value_type": "enum",
+        },
+    ]
+
+
+# Maps an IOp overlay/option (lhs of ``=``, e.g. ``"5/13"``) to a
+# specialized emitter that returns 0+ extra parameter rows for that
+# specific value. Equality on the lhs string naturally rejects similar-
+# but-distinct overlays like ``"15/13"`` or ``"5/130"``.
+_IOP_TRUST_FLAG_EMITTERS: dict[str, callable] = {
+    "5/13": _emit_scf_convergence_failure_ignored,
+}
+
+
 def _parse_route_tokens(route: str) -> list[dict]:
     """Parse the Gaussian route line into parameter dicts.
 
@@ -273,6 +324,13 @@ def _parse_route_tokens(route: str) -> list[dict]:
     # the general tokenizer). Each IOp(overlay/option=value) becomes one
     # row; the overlay/option pair stays in raw_key so the same canonical
     # key 'internal_option.iop' is queryable across all IOp settings.
+    #
+    # Specific overlay/option pairs that materially affect result trust
+    # ALSO emit specialized canonical rows alongside the generic one, so
+    # safety queries like "find all calcs where SCF convergence failure
+    # was ignored" can hit a stable canonical_key without scanning raw
+    # values across thousands of IOp permutations. See
+    # ``_IOP_TRUST_FLAG_EMITTERS`` for the registered set.
     for iop_match in _IOP_RE.finditer(route):
         iop_body = iop_match.group(1)
         for part in iop_body.split(","):
@@ -291,6 +349,9 @@ def _parse_route_tokens(route: str) -> list[dict]:
                         "value_type": _guess_value_type(iop_val),
                     }
                 )
+                emitter = _IOP_TRUST_FLAG_EMITTERS.get(iop_key)
+                if emitter is not None:
+                    params.extend(emitter(iop_val))
     # Remove IOp(...) from route for further parsing
     route = _IOP_RE.sub("", route).strip()
 

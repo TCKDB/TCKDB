@@ -33,9 +33,9 @@ from app.schemas.fragments.calculation import (
     CalculationParameterObservation,
     FreqResultPayload,
     IRCResultPayload,
-    NEBResultPayload,
     OptResultPayload,
     OutputGeometryEntry,
+    PathSearchResultPayload,
     SPResultPayload,
 )
 from app.schemas.fragments.geometry import GeometryPayload
@@ -139,7 +139,7 @@ class CalculationInBundle(SchemaBase):
     freq_result: FreqResultPayload | None = None
     sp_result: SPResultPayload | None = None
     irc_result: IRCResultPayload | None = None
-    neb_result: NEBResultPayload | None = None
+    path_search_result: PathSearchResultPayload | None = None
     scan_result: CalculationScanResultCreate | None = None
 
     input_geometries: list[GeometryPayload] = Field(
@@ -173,11 +173,12 @@ class CalculationInBundle(SchemaBase):
         default_factory=list,
         description=(
             "Coordinate constraints held fixed during this calculation. "
-            "Generic across opt, freq, sp, irc, neb, scan — input/provenance "
-            "metadata that does not require a result block. For scan calcs, "
-            "frozen coordinates may be declared here while the stepped "
-            "coordinate is declared on scan_result.coordinates. The two "
-            "lists must not duplicate the same constraint_index."
+            "Generic across opt, freq, sp, irc, path_search, scan — "
+            "input/provenance metadata that does not require a result "
+            "block. For scan calcs, frozen coordinates may be declared "
+            "here while the stepped coordinate is declared on "
+            "scan_result.coordinates. The two lists must not duplicate "
+            "the same constraint_index."
         ),
     )
 
@@ -196,7 +197,7 @@ class CalculationInBundle(SchemaBase):
             CalculationType.freq: "freq_result",
             CalculationType.sp: "sp_result",
             CalculationType.irc: "irc_result",
-            CalculationType.neb: "neb_result",
+            CalculationType.path_search: "path_search_result",
             CalculationType.scan: "scan_result",
         }
         allowed_field = allowed.get(self.type)
@@ -205,7 +206,7 @@ class CalculationInBundle(SchemaBase):
             "freq_result",
             "sp_result",
             "irc_result",
-            "neb_result",
+            "path_search_result",
             "scan_result",
         ):
             value = getattr(self, field_name)

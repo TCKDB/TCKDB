@@ -36,8 +36,8 @@ from app.schemas.fragments.calculation import (
     CalculationConstraintCreate,
     CalculationWithResultsPayload,
     IRCResultPayload,
-    NEBResultPayload,
     OutputGeometryEntry,
+    PathSearchResultPayload,
 )
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
@@ -98,30 +98,31 @@ class ComputedReactionCalculationIn(_BaseCalculationIn):
     depends_on: list[CalculationDependencyInBundle] = Field(default_factory=list)
 
     irc_result: IRCResultPayload | None = None
-    neb_result: NEBResultPayload | None = None
+    path_search_result: PathSearchResultPayload | None = None
     scan_result: CalculationScanResultCreate | None = None
 
     constraints: list[CalculationConstraintCreate] = Field(
         default_factory=list,
         description=(
             "Coordinate constraints held fixed during this calculation. "
-            "Generic across opt, freq, sp, irc, neb, scan — input/provenance "
-            "metadata that does not require a result block. For scan calcs, "
-            "frozen coordinates may be declared here while the stepped "
-            "coordinate is declared on scan_result.coordinates. The two "
-            "lists must not duplicate the same constraint_index."
+            "Generic across opt, freq, sp, irc, path_search, scan — "
+            "input/provenance metadata that does not require a result "
+            "block. For scan calcs, frozen coordinates may be declared "
+            "here while the stepped coordinate is declared on "
+            "scan_result.coordinates. The two lists must not duplicate "
+            "the same constraint_index."
         ),
     )
 
     @model_validator(mode="after")
     def validate_result_matches_type(self) -> Self:
         """Mirror ``CalculationWithResultsPayload.validate_result_matches_type``
-        for the ``irc_result`` / ``neb_result`` / ``scan_result`` fields.
-        The base ``CalculationIn`` has no result-block matrix to validate,
-        and the adapter uses ``model_copy(update=...)`` which bypasses
-        pydantic validators — so this is the only place where mismatched
-        ``(type, irc_result|neb_result|scan_result)`` pairs reject as 422
-        before hitting the persistence seam.
+        for the ``irc_result`` / ``path_search_result`` / ``scan_result``
+        fields. The base ``CalculationIn`` has no result-block matrix to
+        validate, and the adapter uses ``model_copy(update=...)`` which
+        bypasses pydantic validators — so this is the only place where
+        mismatched ``(type, irc_result|path_search_result|scan_result)``
+        pairs reject as 422 before hitting the persistence seam.
 
         ``scan_result`` is bundle-only and persisted by the workflow via
         ``persist_calculation_scan`` after the calculation row is created;
@@ -132,10 +133,13 @@ class ComputedReactionCalculationIn(_BaseCalculationIn):
                 f"irc_result is only allowed for calculation type 'irc', "
                 f"got '{self.type.value}'."
             )
-        if self.neb_result is not None and self.type != CalculationType.neb:
+        if (
+            self.path_search_result is not None
+            and self.type != CalculationType.path_search
+        ):
             raise ValueError(
-                f"neb_result is only allowed for calculation type 'neb', "
-                f"got '{self.type.value}'."
+                f"path_search_result is only allowed for calculation type "
+                f"'path_search', got '{self.type.value}'."
             )
         if self.scan_result is not None and self.type != CalculationType.scan:
             raise ValueError(
@@ -158,9 +162,12 @@ class ComputedReactionCalculationIn(_BaseCalculationIn):
                         f"calculation type 'scan'. Use 'scan_result' "
                         f"to carry scan data."
                     )
-            if self.irc_result is not None or self.neb_result is not None:
+            if (
+                self.irc_result is not None
+                or self.path_search_result is not None
+            ):
                 raise ValueError(
-                    "irc_result/neb_result are not allowed for "
+                    "irc_result/path_search_result are not allowed for "
                     "calculation type 'scan'. Use 'scan_result' instead."
                 )
         return self
@@ -208,7 +215,7 @@ def calculation_in_to_with_results_payload(
             "input_geometries": list(calc_in.input_geometries),
             "output_geometries": list(calc_in.output_geometries),
             "irc_result": calc_in.irc_result,
-            "neb_result": calc_in.neb_result,
+            "path_search_result": calc_in.path_search_result,
             "constraints": list(calc_in.constraints),
         }
     )

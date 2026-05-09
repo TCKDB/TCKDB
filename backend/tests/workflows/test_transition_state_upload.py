@@ -20,9 +20,10 @@ from app.db.models.calculation import (
     CalculationFreqResult,
     CalculationIRCPoint,
     CalculationIRCResult,
-    CalculationNEBImageResult,
     CalculationOptResult,
     CalculationOutputGeometry,
+    CalculationPathSearchPoint,
+    CalculationPathSearchResult,
     CalculationSPResult,
 )
 from app.db.models.common import (
@@ -30,14 +31,15 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
     IRCDirection,
+    PathSearchMethod,
 )
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     IRCPointPayload,
     IRCResultPayload,
-    NEBImageResultPayload,
-    NEBResultPayload,
+    PathSearchPointPayload,
+    PathSearchResultPayload,
 )
 from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
@@ -354,14 +356,14 @@ def test_schema_allows_irc_additional():
 
 
 # ---------------------------------------------------------------------------
-# End-to-end IRC/NEB write-path tests
+# End-to-end IRC / path-search write-path tests
 # ---------------------------------------------------------------------------
 
 
 _XYZ_IRC_F = "1\nF1\nH  0.0  0.0  1.2\n"
 _XYZ_IRC_R = "1\nR1\nH  0.0  0.0  0.8\n"
-_XYZ_NEB_0 = "1\nI0\nH  0.0  0.0  0.0\n"
-_XYZ_NEB_2 = "1\nI2\nH  0.0  0.0  1.5\n"
+_XYZ_PS_0 = "1\nI0\nH  0.0  0.0  0.0\n"
+_XYZ_PS_2 = "1\nI2\nH  0.0  0.0  1.5\n"
 
 
 def test_ts_upload_with_irc_additional_persists_irc_result(db_engine) -> None:
@@ -462,11 +464,16 @@ def test_ts_upload_with_irc_additional_persists_irc_result(db_engine) -> None:
         assert CalculationGeometryRole.irc_reverse in roles
 
 
-def test_ts_upload_with_neb_additional_persists_neb_images(db_engine) -> None:
-    """TS upload carrying a NEB additional calc persists NEB image rows."""
+def test_ts_upload_with_path_search_neb_additional_persists_points(
+    db_engine,
+) -> None:
+    """TS upload carrying a path_search (NEB) additional calc persists
+    path-search points and wires the inverted ``optimized_from`` edge:
+    the path-search calc is the *parent* of the primary TS opt.
+    """
 
     with Session(db_engine) as session, session.begin():
-        session.add(AppUser(id=61, username="ts_neb_writer"))
+        session.add(AppUser(id=61, username="ts_path_search_writer"))
         session.flush()
 
         request = TransitionStateUploadRequest(
@@ -481,26 +488,32 @@ def test_ts_upload_with_neb_additional_persists_neb_images(db_engine) -> None:
             ),
             additional_calculations=[
                 CalculationWithResultsPayload(
-                    type="neb",
+                    type="path_search",
                     software_release=_SOFTWARE,
                     level_of_theory=_LOT,
-                    neb_result=NEBResultPayload(
-                        images=[
-                            NEBImageResultPayload(
-                                image_index=0,
+                    path_search_result=PathSearchResultPayload(
+                        method=PathSearchMethod.neb,
+                        is_double_ended=True,
+                        converged=True,
+                        n_points=3,
+                        climbing_image_index=1,
+                        points=[
+                            PathSearchPointPayload(
+                                point_index=0,
                                 electronic_energy_hartree=-1.0,
-                                geometry={"xyz_text": _XYZ_NEB_0},
+                                geometry={"xyz_text": _XYZ_PS_0},
                             ),
-                            NEBImageResultPayload(
-                                image_index=1,
+                            PathSearchPointPayload(
+                                point_index=1,
                                 electronic_energy_hartree=-0.9,
                                 is_climbing_image=True,
+                                is_ts_guess=True,
                                 geometry={"xyz_text": _XYZ_TS},
                             ),
-                            NEBImageResultPayload(
-                                image_index=2,
+                            PathSearchPointPayload(
+                                point_index=2,
                                 electronic_energy_hartree=-1.05,
-                                geometry={"xyz_text": _XYZ_NEB_2},
+                                geometry={"xyz_text": _XYZ_PS_2},
                             ),
                         ],
                     ),
@@ -511,39 +524,61 @@ def test_ts_upload_with_neb_additional_persists_neb_images(db_engine) -> None:
             session, request, created_by=61
         )
 
-        neb_calc = session.scalar(
+        ps_calc = session.scalar(
             select(Calculation).where(
                 Calculation.transition_state_entry_id == ts_entry.id,
-                Calculation.type == CalculationType.neb,
+                Calculation.type == CalculationType.path_search,
             )
         )
-        assert neb_calc is not None
+        assert ps_calc is not None
+        ps_result = session.get(CalculationPathSearchResult, ps_calc.id)
+        assert ps_result is not None
+        assert ps_result.method is PathSearchMethod.neb
 
-        images = session.scalars(
-            select(CalculationNEBImageResult).where(
-                CalculationNEBImageResult.calculation_id == neb_calc.id
+        points = session.scalars(
+            select(CalculationPathSearchPoint).where(
+                CalculationPathSearchPoint.calculation_id == ps_calc.id
             )
         ).all()
-        assert {img.image_index for img in images} == {0, 1, 2}
+        assert {p.point_index for p in points} == {0, 1, 2}
 
-        # Dependency edge back to the primary opt with role=neb_parent
+        # Inverted edge: path-search is parent of the primary opt via
+        # ``optimized_from``. The TS opt is the child.
+        primary_opt = session.scalar(
+            select(Calculation).where(
+                Calculation.transition_state_entry_id == ts_entry.id,
+                Calculation.type == CalculationType.opt,
+            )
+        )
+        assert primary_opt is not None
         deps = session.scalars(
             select(CalculationDependency).where(
-                CalculationDependency.child_calculation_id == neb_calc.id,
+                CalculationDependency.parent_calculation_id == ps_calc.id,
+                CalculationDependency.child_calculation_id == primary_opt.id,
                 CalculationDependency.dependency_role
-                == CalculationDependencyRole.neb_parent,
+                == CalculationDependencyRole.optimized_from,
             )
         ).all()
         assert len(deps) == 1
 
-        # Climbing image reuses the shared TS saddle geometry — the role=final
-        # shortcut and the role=neb_image link must not double-insert that pair.
+        # Path-search calculations store LoT on the parent calculation row.
+        # Since this path_search calc and the primary opt calc use the same LoT ref,
+        # they should resolve to the same level_of_theory row.
+        assert ps_calc.lot_id is not None
+        assert ps_calc.lot.method == _LOT["method"]
+        assert ps_calc.lot.basis == _LOT["basis"]
+        assert primary_opt.lot_id is not None
+        assert ps_calc.lot_id == primary_opt.lot_id
+
+        # Climbing image reuses the shared TS saddle geometry — the
+        # path-search-point role and any other output rows must not
+        # double-insert the same (calc, geom) pair.
         links = session.scalars(
             select(CalculationOutputGeometry).where(
-                CalculationOutputGeometry.calculation_id == neb_calc.id
+                CalculationOutputGeometry.calculation_id == ps_calc.id
             )
         ).all()
         geom_ids = [link.geometry_id for link in links]
         assert len(geom_ids) == len(set(geom_ids))  # no dupes on (calc, geom)
         roles = {link.role for link in links}
-        assert CalculationGeometryRole.neb_image in roles
+        assert CalculationGeometryRole.path_search_point in roles

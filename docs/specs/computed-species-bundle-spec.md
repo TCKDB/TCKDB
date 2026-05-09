@@ -96,7 +96,7 @@ class CalculationInBundle(SchemaBase):
     freq_result: FreqResultPayload | None = None
     sp_result: SPResultPayload | None = None
     irc_result: IRCResultPayload | None = None
-    neb_result: NEBResultPayload | None = None
+    path_search_result: PathSearchResultPayload | None = None
     scan_result: ScanResultPayload | None = None
 
     # Calc-level dependencies referenced by local key (non-auto edges)

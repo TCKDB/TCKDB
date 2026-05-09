@@ -35,13 +35,15 @@ from app.db.models.calculation import (
     CalculationInputGeometry,
     CalculationIRCPoint,
     CalculationIRCResult,
-    CalculationNEBImageResult,
     CalculationOptResult,
     CalculationOutputGeometry,
     CalculationParameter,
+    CalculationPathSearchPoint,
+    CalculationPathSearchResult,
     CalculationScanCoordinate,
     CalculationScanPoint,
     CalculationScanResult,
+    CalculationSCFStability,
     CalculationSPResult,
 )
 from app.db.models.geometry import Geometry
@@ -57,14 +59,16 @@ from app.schemas.entities.calculation import (
     CalculationInputGeometryDetailRead,
     CalculationIRCPointRead,
     CalculationIRCResultRead,
-    CalculationNEBImageResultRead,
     CalculationOptResultRead,
+    CalculationPathSearchPointRead,
+    CalculationPathSearchResultRead,
     CalculationOutputGeometryDetailRead,
     CalculationParameterRead,
     CalculationRead,
     CalculationScanCoordinateRead,
     CalculationScanPointRead,
     CalculationScanResultRead,
+    CalculationSCFStabilityRead,
     CalculationSPResultRead,
 )
 
@@ -439,24 +443,44 @@ def list_irc_points(
 
 
 # ---------------------------------------------------------------------------
-# Tier C — Phase 2: NEB sub-resources
+# Tier C — Phase 2: path-search sub-resources (NEB / GSM / string methods)
 # ---------------------------------------------------------------------------
 
 
 @router.get(
-    "/{calculation_id}/neb-images",
-    response_model=list[CalculationNEBImageResultRead],
+    "/{calculation_id}/path-search-result",
+    response_model=CalculationPathSearchResultRead,
 )
-def list_neb_images(
+def get_path_search_result(
+    calculation_id: int, session: Session = Depends(get_db)
+):
+    _get_calculation_or_404(calculation_id, session)
+    row = session.scalar(
+        select(CalculationPathSearchResult)
+        .where(CalculationPathSearchResult.calculation_id == calculation_id)
+        .options(selectinload(CalculationPathSearchResult.points))
+    )
+    if row is None:
+        raise NotFoundError(
+            f"Path-search result not found for calculation {calculation_id}"
+        )
+    return CalculationPathSearchResultRead.model_validate(row)
+
+
+@router.get(
+    "/{calculation_id}/path-search-points",
+    response_model=list[CalculationPathSearchPointRead],
+)
+def list_path_search_points(
     calculation_id: int, session: Session = Depends(get_db)
 ):
     _get_calculation_or_404(calculation_id, session)
     rows = session.scalars(
-        select(CalculationNEBImageResult)
-        .where(CalculationNEBImageResult.calculation_id == calculation_id)
-        .order_by(CalculationNEBImageResult.image_index.asc())
+        select(CalculationPathSearchPoint)
+        .where(CalculationPathSearchPoint.calculation_id == calculation_id)
+        .order_by(CalculationPathSearchPoint.point_index.asc())
     ).all()
-    return [CalculationNEBImageResultRead.model_validate(r) for r in rows]
+    return [CalculationPathSearchPointRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -612,6 +636,21 @@ def upload_calculation_artifacts(
 def get_geometry_validation(
     calculation_id: int, session: Session = Depends(get_db)
 ):
+    """Return geometry-identity validation evidence for a calculation.
+
+    Reports whether the calculation's output geometry preserves the declared
+    molecular identity (graph isomorphism vs. species SMILES, optional
+    Kabsch RMSD against the input geometry).
+
+    This is **not** SCF/wavefunction stability — see
+    ``GET /calculations/{id}/scf-stability`` for that — and it is not
+    frequency/stationary-point validation.
+
+    Unlike the SCF-stability endpoint, missing rows return 404 rather than
+    a projected ``not_checked`` payload: geometry validation is not yet
+    populated by the standard upload workflow, so most calculations
+    legitimately have no record here today.
+    """
     _get_calculation_or_404(calculation_id, session)
     row = session.scalar(
         select(CalculationGeometryValidation).where(
@@ -623,3 +662,31 @@ def get_geometry_validation(
             f"Geometry validation not found for calculation {calculation_id}"
         )
     return CalculationGeometryValidationRead.model_validate(row)
+
+
+@router.get(
+    "/{calculation_id}/scf-stability",
+    response_model=CalculationSCFStabilityRead,
+)
+def get_scf_stability(
+    calculation_id: int, session: Session = Depends(get_db)
+):
+    """Return SCF wavefunction stability evidence for a calculation.
+
+    Unlike sibling result endpoints, this endpoint never 404s on a
+    missing row: absence of a ``calc_scf_stability`` row is the
+    canonical encoding of "not checked", and the response projects
+    ``status = "not_checked"`` with all evidence fields ``null``.
+    """
+    _get_calculation_or_404(calculation_id, session)
+    row = session.scalar(
+        select(CalculationSCFStability).where(
+            CalculationSCFStability.calculation_id == calculation_id
+        )
+    )
+    if row is None:
+        return CalculationSCFStabilityRead(
+            calculation_id=calculation_id,
+            status="not_checked",
+        )
+    return CalculationSCFStabilityRead.model_validate(row)

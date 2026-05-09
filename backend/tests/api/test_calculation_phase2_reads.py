@@ -1,8 +1,8 @@
 """Tests for Phase 2 calculation sub-resource endpoints.
 
 All test data is seeded via raw ORM inserts (no upload workflow creates
-scan/IRC/NEB/parameter/artifact/validation data). A conformer upload
-provides the parent calculation row; the helper then patches the
+scan/IRC/path-search/parameter/artifact/validation data). A conformer
+upload provides the parent calculation row; the helper then patches the
 calculation type to match the child family being tested so the test
 data is scientifically coherent, not just mechanically valid.
 """
@@ -17,14 +17,20 @@ from app.db.models.calculation import (
     CalculationGeometryValidation,
     CalculationIRCPoint,
     CalculationIRCResult,
-    CalculationNEBImageResult,
     CalculationParameter,
+    CalculationPathSearchPoint,
+    CalculationPathSearchResult,
     CalculationScanCoordinate,
     CalculationScanPoint,
     CalculationScanPointCoordinateValue,
     CalculationScanResult,
 )
-from app.db.models.common import ArtifactKind, IRCDirection, ValidationStatus
+from app.db.models.common import (
+    ArtifactKind,
+    IRCDirection,
+    PathSearchMethod,
+    ValidationStatus,
+)
 
 
 def _hydrogen_conformer_payload() -> dict:
@@ -49,7 +55,7 @@ def _hydrogen_conformer_payload() -> dict:
 def _get_calc_id(client, db_session=None, calc_type=None) -> int:
     """Upload a conformer and return the calculation id.
 
-    When *calc_type* is given (e.g. "scan", "irc", "neb"), the parent
+    When *calc_type* is given (e.g. "scan", "irc", "path_search"), the parent
     calculation's type column is patched so the test data is scientifically
     coherent with the child rows being inserted.
     """
@@ -228,33 +234,76 @@ class TestIRCPoints:
 
 
 # ---------------------------------------------------------------------------
-# NEB family
+# Path-search family (NEB / GSM / string methods)
 # ---------------------------------------------------------------------------
 
 
-class TestNEBImages:
+class TestPathSearchResult:
+    def test_path_search_result_404_when_absent(self, client):
+        calc_id = _get_calc_id(client)
+        resp = client.get(
+            f"/api/v1/calculations/{calc_id}/path-search-result"
+        )
+        assert resp.status_code == 404
+
+    def test_path_search_result_nests_points(self, client, db_session):
+        calc_id = _get_calc_id(client, db_session, calc_type="path_search")
+        db_session.add(CalculationPathSearchResult(
+            calculation_id=calc_id,
+            method=PathSearchMethod.neb,
+            is_double_ended=True,
+            converged=True,
+            n_points=3,
+            climbing_image_index=1,
+        ))
+        for idx in [0, 1, 2]:
+            db_session.add(CalculationPathSearchPoint(
+                calculation_id=calc_id, point_index=idx,
+                electronic_energy_hartree=-1.0 + idx * 0.01,
+                is_climbing_image=(idx == 1),
+                is_ts_guess=(idx == 1),
+            ))
+        db_session.flush()
+
+        resp = client.get(
+            f"/api/v1/calculations/{calc_id}/path-search-result"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["method"] == "neb"
+        assert data["is_double_ended"] is True
+        assert data["climbing_image_index"] == 1
+        assert len(data["points"]) == 3
+
+
+class TestPathSearchPoints:
     def test_empty(self, client):
         calc_id = _get_calc_id(client)
-        resp = client.get(f"/api/v1/calculations/{calc_id}/neb-images")
+        resp = client.get(
+            f"/api/v1/calculations/{calc_id}/path-search-points"
+        )
         assert resp.status_code == 200
         assert resp.json() == []
 
     def test_ordered_including_zero_index(self, client, db_session):
-        calc_id = _get_calc_id(client, db_session, calc_type="neb")
+        calc_id = _get_calc_id(client, db_session, calc_type="path_search")
         for idx in [2, 0, 1]:
-            db_session.add(CalculationNEBImageResult(
-                calculation_id=calc_id, image_index=idx,
+            db_session.add(CalculationPathSearchPoint(
+                calculation_id=calc_id, point_index=idx,
                 electronic_energy_hartree=-1.0 + idx * 0.01,
                 is_climbing_image=(idx == 1),
+                is_ts_guess=(idx == 1),
             ))
         db_session.flush()
 
-        resp = client.get(f"/api/v1/calculations/{calc_id}/neb-images")
+        resp = client.get(
+            f"/api/v1/calculations/{calc_id}/path-search-points"
+        )
         assert resp.status_code == 200
-        images = resp.json()
-        assert len(images) == 3
-        assert [i["image_index"] for i in images] == [0, 1, 2]
-        assert images[1]["is_climbing_image"] is True
+        points = resp.json()
+        assert len(points) == 3
+        assert [p["point_index"] for p in points] == [0, 1, 2]
+        assert points[1]["is_climbing_image"] is True
 
 
 # ---------------------------------------------------------------------------

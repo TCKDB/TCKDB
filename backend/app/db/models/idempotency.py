@@ -8,6 +8,7 @@ from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -54,4 +55,7 @@ class IdempotencyRecord(Base, TimestampMixin):
             "idempotency_key",
             name="uq_idempotency_record_user_method_endpoint_key",
         ),
+        # Supports the cleanup job in delete_expired_records(); without it
+        # the periodic sweep does a full table scan.
+        Index("ix_idempotency_record_expires_at", "expires_at"),
     )

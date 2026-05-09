@@ -50,6 +50,7 @@ from app.services.calculation_parameter_extraction import (
 )
 from app.services.calculation_resolution import (
     _DEPENDENCY_ROLE_FOR_TYPE,
+    _INVERTED_DEPENDENCY_ROLE_FOR_TYPE,
     add_dependency_edge_idempotent,
     assert_dependency_role_type_compatible,
     attach_calculation_input_geometries,
@@ -65,6 +66,7 @@ from app.services.energy_correction_resolution import (
     resolve_or_create_freq_scale_factor_ref,
 )
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.services.geometry_validation import run_and_persist_geometry_validation
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.record_review import (
     RecordRef,
@@ -156,7 +158,7 @@ def _to_calc_with_results_payload(
         freq_result=calc_in.freq_result,
         sp_result=calc_in.sp_result,
         irc_result=calc_in.irc_result,
-        neb_result=calc_in.neb_result,
+        path_search_result=calc_in.path_search_result,
         input_geometries=calc_in.input_geometries,
         output_geometries=calc_in.output_geometries,
         parameters=calc_in.parameters,
@@ -419,9 +421,42 @@ def persist_computed_species_upload(
                     ),
                 )
 
+            # Inverted-edge case: path_search TS-guess is the parent of
+            # the primary opt (optimized_from), not the other way around.
+            inverted_role = _INVERTED_DEPENDENCY_ROLE_FOR_TYPE.get(
+                additional_in.type
+            )
+            if inverted_role is not None:
+                add_dependency_edge_idempotent(
+                    session,
+                    parent_calculation_id=child_calc.id,
+                    child_calculation_id=primary_calc.id,
+                    dependency_role=inverted_role,
+                    context=(
+                        f"auto-dependency for calculation '{additional_in.key}' "
+                        f"(role='{inverted_role.value}', inverted)"
+                    ),
+                )
+
             additional_calcs.append(child_calc)
 
         session.flush()
+
+        # Phase-1 geometry-identity validation. Best-effort: opt calcs
+        # only, skips when output geometry / SMILES is unavailable, and
+        # never aborts the upload. A failed/warned result is recorded as
+        # evidence; it does NOT gate persistence of the calculation.
+        run_and_persist_geometry_validation(
+            session,
+            primary_calc,
+            species_smiles=request.species_entry.smiles,
+        )
+        for child_calc in additional_calcs:
+            run_and_persist_geometry_validation(
+                session,
+                child_calc,
+                species_smiles=request.species_entry.smiles,
+            )
 
         conformer_outcomes.append(
             ConformerUploadOutcomeInBundle(

@@ -90,7 +90,7 @@ _ALLOWED_ADDITIONAL_TYPES = frozenset(
         CalculationType.freq,
         CalculationType.sp,
         CalculationType.irc,
-        CalculationType.neb,
+        CalculationType.path_search,
     }
 )
 
@@ -109,7 +109,10 @@ class TransitionStateUploadRequest(SchemaBase):
     :param unmapped_smiles: Optional SMILES for the TS (no atom maps).
     :param geometry: Saddle-point geometry payload (XYZ text).
     :param primary_opt: Required primary optimisation calculation.
-    :param additional_calculations: Optional freq / sp / irc calculations.
+    :param additional_calculations: Optional freq / sp / irc / path_search
+        calculations. A ``path_search`` additional calculation models a
+        TS-guess generator (NEB, GSM, ...) and is wired as the parent of
+        the primary opt via ``calculation_dependency.role = optimized_from``.
     :param label: Optional human-readable label for the TS concept.
     :param note: Optional free-text note on the TS concept.
     """
