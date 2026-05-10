@@ -1,0 +1,251 @@
+"""Shared read fragments and request models for the /api/v1/scientific/* layer.
+
+Defined once here, imported by the per-endpoint scientific read modules so the
+fragment shapes (review summary, provenance summary, evidence breakdown,
+temperature coverage, pagination) stay consistent across endpoints.
+
+See docs/specs/read_api_mvp.md for the canonical contract.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from enum import Enum
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.db.models.common import RecordReviewStatus
+
+# ---------------------------------------------------------------------------
+# Request-side enums and shared knobs
+# ---------------------------------------------------------------------------
+
+
+class CollapseMode(str, Enum):
+    """Collapse axis values per spec D4 / Phase 2.1.
+
+    ``all``    return every eligible record after filter/sort/pagination.
+    ``first``  return at most one record (zero or one) after filter and sort.
+    """
+
+    all = "all"
+    first = "first"
+
+
+# Map review status to ranking key per L2. Lower wins.
+REVIEW_RANK: dict[RecordReviewStatus, int] = {
+    RecordReviewStatus.approved: 0,
+    RecordReviewStatus.under_review: 1,
+    RecordReviewStatus.not_reviewed: 2,
+    RecordReviewStatus.deprecated: 3,
+    RecordReviewStatus.rejected: 4,
+}
+
+
+# ---------------------------------------------------------------------------
+# Pagination
+# ---------------------------------------------------------------------------
+
+
+DEFAULT_LIMIT = 50
+MAX_LIMIT = 200
+
+
+class Pagination(BaseModel):
+    """Echoed pagination block per L5.
+
+    ``total``    pre-collapse, post-filter match count.
+    ``returned`` actual length of ``records``.
+    """
+
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=MAX_LIMIT)
+    returned: int = Field(ge=0)
+    total: int = Field(ge=0)
+
+
+# ---------------------------------------------------------------------------
+# Review fragments
+# ---------------------------------------------------------------------------
+
+
+class ReviewStatusSummary(BaseModel):
+    """Counts per review status across a candidate record set (pre-collapse)."""
+
+    approved: int = 0
+    under_review: int = 0
+    not_reviewed: int = 0
+    deprecated: int = 0
+    rejected: int = 0
+    total: int = 0
+
+
+class RecordReviewBadge(BaseModel):
+    """Single record's direct review state — no chain traversal (D7)."""
+
+    status: RecordReviewStatus
+    reviewed_at: datetime | None = None
+    reviewer_kind: Literal["human", "automated", "system"] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Level of theory / software / workflow tool / literature summaries
+# ---------------------------------------------------------------------------
+
+
+class LevelOfTheorySummary(BaseModel):
+    """Lightweight LoT shape used in scientific provenance summaries."""
+
+    level_of_theory_id: int
+    method: str
+    basis: str | None = None
+    dispersion: str | None = None
+    solvent: str | None = None
+    label: str | None = None
+
+
+class SoftwareReleaseSummary(BaseModel):
+    """Software release pointer used in provenance summaries."""
+
+    software_release_id: int
+    software: str
+    version: str | None = None
+
+
+class WorkflowToolReleaseSummary(BaseModel):
+    """Workflow tool release pointer used in provenance summaries."""
+
+    workflow_tool_release_id: int
+    workflow_tool: str
+    version: str | None = None
+
+
+class LiteratureSummary(BaseModel):
+    """Minimal literature reference used in provenance summaries.
+
+    A canonical literature read model lives in
+    ``app/schemas/entities/literature.py`` (LiteratureRead). This summary is a
+    deliberately smaller shape sufficient for scientific-read provenance,
+    avoiding a heavier include for what is usually a sidebar fact.
+    """
+
+    id: int
+    title: str | None = None
+    year: int | None = None
+    doi: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Calculation / validation fragments
+# ---------------------------------------------------------------------------
+
+
+# Geometry validation values per Phase 2.3 spec patch.
+GeometryValidationStatus = Literal["passed", "warning", "fail", "not_present"]
+
+# SCF stability values per Phase 2.3 spec patch.
+SCFStabilityStatusValue = Literal[
+    "stable", "unstable", "stabilized", "inconclusive", "not_present"
+]
+
+
+class ValidationSummary(BaseModel):
+    """Geometry validation outcome for a single calculation."""
+
+    status: GeometryValidationStatus
+    calculation_id: int
+
+
+class SCFStabilitySummary(BaseModel):
+    """SCF wavefunction stability outcome for a single calculation."""
+
+    status: SCFStabilityStatusValue
+    calculation_id: int
+
+
+class CalculationEvidenceSummary(BaseModel):
+    """Lightweight per-calculation summary embedded in provenance blocks."""
+
+    calculation_id: int
+    calculation_type: str
+    converged: bool | None = None
+    geometry_validation_status: GeometryValidationStatus
+    scf_stability_status: SCFStabilityStatusValue
+    level_of_theory: LevelOfTheorySummary | None = None
+    software: SoftwareReleaseSummary | None = None
+
+
+class PathSearchSummary(BaseModel):
+    """Path-search calculation summary used in TS-backed kinetics provenance."""
+
+    calculation_id: int
+    method: str | None = None
+    converged: bool | None = None
+
+
+# ---------------------------------------------------------------------------
+# Temperature coverage and evidence completeness
+# ---------------------------------------------------------------------------
+
+
+class TemperatureCoverage(BaseModel):
+    """D8 verbatim — full-range coverage gate plus extrapolation distance.
+
+    ``overlap_fraction`` is diagnostic only; per D8 it is never the primary
+    sort score.
+    """
+
+    requested_min_k: float | None = None
+    requested_max_k: float | None = None
+    record_min_k: float | None = None
+    record_max_k: float | None = None
+    covers_requested_range: bool
+    overlap_fraction: float | None = None
+    extrapolation_distance_k: float
+
+
+class EvidenceCompletenessBreakdown(BaseModel):
+    """L1 — score plus auditable per-predicate checklist.
+
+    The outer shape is stable across endpoints; the ``checklist`` keys are
+    endpoint-specific. Use ``model_config(extra="allow")`` so each endpoint
+    can attach its own checklist keys without redefining the model.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    score: int = Field(ge=0)
+    max: int = Field(ge=0)
+    checklist: dict[str, bool]
+
+
+# ---------------------------------------------------------------------------
+# Default-trust filter knobs
+# ---------------------------------------------------------------------------
+
+
+def default_visible_statuses(
+    *, include_rejected: bool = False, include_deprecated: bool = False
+) -> set[RecordReviewStatus]:
+    """Set of statuses that should be visible by default per D5.
+
+    Approved / under_review / not_reviewed are always visible. Rejected and
+    deprecated are excluded unless explicitly opted in.
+    """
+    statuses = {
+        RecordReviewStatus.approved,
+        RecordReviewStatus.under_review,
+        RecordReviewStatus.not_reviewed,
+    }
+    if include_rejected:
+        statuses.add(RecordReviewStatus.rejected)
+    if include_deprecated:
+        statuses.add(RecordReviewStatus.deprecated)
+    return statuses
+
+
+def status_at_or_above(threshold: RecordReviewStatus) -> set[RecordReviewStatus]:
+    """Set of statuses with ``review_rank <= threshold's rank`` (better or equal)."""
+    threshold_rank = REVIEW_RANK[threshold]
+    return {s for s, rank in REVIEW_RANK.items() if rank <= threshold_rank}

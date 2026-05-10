@@ -31,6 +31,7 @@ from app.api.routes import (
     uploads,
     workflow_tools,
 )
+from app.api.routes.scientific import scientific_router
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
@@ -38,6 +39,9 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(lookup.router, prefix="/lookup", tags=["lookup"])
+api_router.include_router(
+    scientific_router, prefix="/scientific", tags=["scientific"]
+)
 api_router.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
 api_router.include_router(bundles.router, prefix="/bundles", tags=["bundles"])
 api_router.include_router(

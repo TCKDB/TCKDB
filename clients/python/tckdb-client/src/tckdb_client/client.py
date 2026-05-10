@@ -173,11 +173,16 @@ class TCKDBClient:
         path: str,
         *,
         json: Any = None,
+        params: Mapping[str, Any] | None = None,
         authenticated: bool = True,
         idempotency_key: str | None = None,
         extra_headers: Mapping[str, str] | None = None,
     ) -> TCKDBResponse:
         """Perform an HTTP request and return a :class:`TCKDBResponse`.
+
+        ``params`` is forwarded to ``httpx``: list values produce repeated
+        query parameters (``?include=a&include=b``), ``None`` values are
+        dropped, ``bool`` values are serialized as ``"true"``/``"false"``.
 
         Network failures and timeouts raise :class:`TCKDBConnectionError`;
         non-success responses raise the appropriate
@@ -192,7 +197,11 @@ class TCKDBClient:
         )
         try:
             response = self._client.request(
-                method, url, json=json, headers=headers
+                method,
+                url,
+                json=json,
+                params=_clean_params(params) if params else None,
+                headers=headers,
             )
         except httpx.TimeoutException as exc:
             raise TCKDBConnectionError(f"Request timed out: {exc}") from exc
@@ -341,6 +350,468 @@ class TCKDBClient:
         return self.post_json(
             "/bundles/submit", bundle, idempotency_key=idempotency_key
         )
+
+    # ------------------------------------------------------------------
+    # Scientific read/query methods (/api/v1/scientific/*)
+    # ------------------------------------------------------------------
+    #
+    # Thin wrappers over the backend scientific read API. They serialize
+    # parameters and return parsed JSON; they do NOT rank, select, or
+    # interpret responses, and they hold no ARC/RMG-specific logic. See
+    # docs/specs/read_api_mvp.md for the response contract.
+
+    def search_species(
+        self,
+        *,
+        smiles: str | None = None,
+        inchi: str | None = None,
+        inchi_key: str | None = None,
+        formula: str | None = None,
+        charge: int | None = None,
+        multiplicity: int | None = None,
+        electronic_state_kind: str | None = None,
+        species_entry_kind: str | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+        include: list[str] | None = None,
+        collapse: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> Any:
+        """``GET /scientific/species/search`` — discover species by identity.
+
+        At least one identifier (``smiles``, ``inchi``, ``inchi_key``,
+        ``formula``) must be supplied. Returns the parsed
+        ``ScientificSpeciesSearchResponse`` JSON envelope.
+        """
+        params = {
+            "smiles": smiles,
+            "inchi": inchi,
+            "inchi_key": inchi_key,
+            "formula": formula,
+            "charge": charge,
+            "multiplicity": multiplicity,
+            "electronic_state_kind": electronic_state_kind,
+            "species_entry_kind": species_entry_kind,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+            "include": include,
+            "collapse": collapse,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self.request_json(
+            "GET", "/scientific/species/search", params=params
+        ).data
+
+    def search_reactions(
+        self,
+        *,
+        reactants: list[str] | None = None,
+        products: list[str] | None = None,
+        direction: str | None = None,
+        family: str | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+        include: list[str] | None = None,
+        collapse: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method: str = "POST",
+    ) -> Any:
+        """``GET|POST /scientific/reactions/search`` — discover reaction entries.
+
+        Defaults to ``POST`` because reactant/product SMILES often contain
+        characters (``[`` ``]`` ``+``) that round-trip awkwardly through
+        query strings. Pass ``method="GET"`` to force the GET form. Returns
+        the parsed ``ScientificReactionSearchResponse`` JSON envelope.
+        """
+        if method.upper() == "GET":
+            params = {
+                "reactants": reactants,
+                "products": products,
+                "direction": direction,
+                "family": family,
+                "min_review_status": min_review_status,
+                "include_deprecated": include_deprecated,
+                "include_rejected": include_rejected,
+                "include": include,
+                "collapse": collapse,
+                "offset": offset,
+                "limit": limit,
+            }
+            return self.request_json(
+                "GET", "/scientific/reactions/search", params=params
+            ).data
+        body = {
+            k: v
+            for k, v in {
+                "reactants": reactants,
+                "products": products,
+                "direction": direction,
+                "family": family,
+                "min_review_status": min_review_status,
+                "include_deprecated": include_deprecated,
+                "include_rejected": include_rejected,
+                "include": include,
+                "collapse": collapse,
+                "offset": offset,
+                "limit": limit,
+            }.items()
+            if v is not None
+        }
+        return self.request_json(
+            "POST", "/scientific/reactions/search", json=body
+        ).data
+
+    def get_reaction_kinetics(
+        self,
+        reaction_entry_id: int,
+        *,
+        temperature_min: float | None = None,
+        temperature_max: float | None = None,
+        pressure: float | None = None,
+        model_kind: str | None = None,
+        level_of_theory_id: int | None = None,
+        software: str | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+        include: list[str] | None = None,
+        collapse: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> Any:
+        """``GET /scientific/reaction-entries/{reaction_entry_id}/kinetics``.
+
+        ``reaction_entry_id`` is strictly ``reaction_entry.id``; supplying a
+        ``chem_reaction.id`` returns 404. Returns the parsed
+        ``ScientificReactionKineticsResponse`` JSON envelope. Provenance
+        keys are always present in each record; TS-chain fields are
+        ``null`` for non-TS-backed kinetics.
+        """
+        path = f"/scientific/reaction-entries/{reaction_entry_id}/kinetics"
+        params = {
+            "temperature_min": temperature_min,
+            "temperature_max": temperature_max,
+            "pressure": pressure,
+            "model_kind": model_kind,
+            "level_of_theory_id": level_of_theory_id,
+            "software": software,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+            "include": include,
+            "collapse": collapse,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self.request_json("GET", path, params=params).data
+
+    def get_species_thermo(
+        self,
+        species_entry_id: int,
+        *,
+        temperature_min: float | None = None,
+        temperature_max: float | None = None,
+        model_kind: str | None = None,
+        level_of_theory_id: int | None = None,
+        software: str | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+        include: list[str] | None = None,
+        collapse: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+    ) -> Any:
+        """``GET /scientific/species-entries/{species_entry_id}/thermo``.
+
+        ``species_entry_id`` is strictly ``species_entry.id``; supplying a
+        ``species.id`` returns 404. Returns the parsed
+        ``ScientificSpeciesThermoResponse`` JSON envelope.
+        """
+        path = f"/scientific/species-entries/{species_entry_id}/thermo"
+        params = {
+            "temperature_min": temperature_min,
+            "temperature_max": temperature_max,
+            "model_kind": model_kind,
+            "level_of_theory_id": level_of_theory_id,
+            "software": software,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+            "include": include,
+            "collapse": collapse,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self.request_json("GET", path, params=params).data
+
+    def search_thermo(
+        self,
+        *,
+        smiles: str | None = None,
+        inchi: str | None = None,
+        inchi_key: str | None = None,
+        formula: str | None = None,
+        charge: int | None = None,
+        multiplicity: int | None = None,
+        electronic_state_kind: str | None = None,
+        species_entry_kind: str | None = None,
+        temperature_min: float | None = None,
+        temperature_max: float | None = None,
+        model_kind: str | None = None,
+        level_of_theory_id: int | None = None,
+        software: str | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+        include: list[str] | None = None,
+        collapse: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method: str = "POST",
+    ) -> Any:
+        """``GET|POST /scientific/thermo/search`` — chemistry-first thermo search.
+
+        Returns thermo records along with the resolved species/species_entry
+        identity context, so callers don't have to chain
+        ``search_species`` → ``get_species_thermo`` themselves. Defaults to
+        POST (mirrors ``search_reactions``); pass ``method="GET"`` for the
+        query-string form.
+        """
+        body = {
+            "smiles": smiles,
+            "inchi": inchi,
+            "inchi_key": inchi_key,
+            "formula": formula,
+            "charge": charge,
+            "multiplicity": multiplicity,
+            "electronic_state_kind": electronic_state_kind,
+            "species_entry_kind": species_entry_kind,
+            "temperature_min": temperature_min,
+            "temperature_max": temperature_max,
+            "model_kind": model_kind,
+            "level_of_theory_id": level_of_theory_id,
+            "software": software,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+            "include": include,
+            "collapse": collapse,
+            "offset": offset,
+            "limit": limit,
+        }
+        if method.upper() == "GET":
+            return self.request_json(
+                "GET", "/scientific/thermo/search", params=body
+            ).data
+        return self.request_json(
+            "POST",
+            "/scientific/thermo/search",
+            json={k: v for k, v in body.items() if v is not None},
+        ).data
+
+    def search_kinetics(
+        self,
+        *,
+        reactants: list[str] | None = None,
+        products: list[str] | None = None,
+        direction: str | None = None,
+        family: str | None = None,
+        temperature_min: float | None = None,
+        temperature_max: float | None = None,
+        pressure: float | None = None,
+        model_kind: str | None = None,
+        level_of_theory_id: int | None = None,
+        software: str | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+        include: list[str] | None = None,
+        collapse: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method: str = "POST",
+    ) -> Any:
+        """``GET|POST /scientific/kinetics/search`` — chemistry-first kinetics search.
+
+        Returns kinetics records along with the resolved reaction/reaction_entry
+        identity context. Defaults to POST because reactant/product SMILES
+        encode awkwardly in URL query strings; pass ``method="GET"`` for the
+        repeated-query-param form. Non-TS-backed kinetics surface with null
+        TS-chain provenance fields, exactly like the entry-id detail endpoint.
+        """
+        body = {
+            "reactants": reactants,
+            "products": products,
+            "direction": direction,
+            "family": family,
+            "temperature_min": temperature_min,
+            "temperature_max": temperature_max,
+            "pressure": pressure,
+            "model_kind": model_kind,
+            "level_of_theory_id": level_of_theory_id,
+            "software": software,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+            "include": include,
+            "collapse": collapse,
+            "offset": offset,
+            "limit": limit,
+        }
+        if method.upper() == "GET":
+            return self.request_json(
+                "GET", "/scientific/kinetics/search", params=body
+            ).data
+        return self.request_json(
+            "POST",
+            "/scientific/kinetics/search",
+            json={k: v for k, v in body.items() if v is not None},
+        ).data
+
+    def search_species_calculations(
+        self,
+        *,
+        smiles: str | None = None,
+        inchi: str | None = None,
+        inchi_key: str | None = None,
+        formula: str | None = None,
+        charge: int | None = None,
+        multiplicity: int | None = None,
+        electronic_state_kind: str | None = None,
+        species_entry_kind: str | None = None,
+        species_id: int | None = None,
+        species_entry_id: int | None = None,
+        calculation_type: str | None = None,
+        level_of_theory_id: int | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        workflow_tool: str | None = None,
+        scientific_origin: str | None = None,
+        calculation_quality: str | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+        include_rejected_quality: bool | None = None,
+        ranking: str | None = None,
+        include: list[str] | None = None,
+        collapse: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method_http: str = "POST",
+    ) -> Any:
+        """``GET|POST /scientific/species-calculations/search`` — chemistry-first
+        species calculation/conformer search.
+
+        Returns calculation-centered records that include resolved species
+        identity, energy (when applicable), level of theory, software,
+        conformer context (when present), geometry IDs, validation, review
+        state, and provenance. ``ranking='lowest_energy'`` requires
+        ``calculation_type='sp'`` or ``calculation_type='opt'``.
+
+        Defaults to POST. Pass ``method_http='GET'`` to use the
+        query-string form. (The kwarg is named ``method_http`` rather than
+        ``method`` to avoid colliding with the LoT ``method`` filter.)
+        """
+        body = {
+            "smiles": smiles,
+            "inchi": inchi,
+            "inchi_key": inchi_key,
+            "formula": formula,
+            "charge": charge,
+            "multiplicity": multiplicity,
+            "electronic_state_kind": electronic_state_kind,
+            "species_entry_kind": species_entry_kind,
+            "species_id": species_id,
+            "species_entry_id": species_entry_id,
+            "calculation_type": calculation_type,
+            "level_of_theory_id": level_of_theory_id,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "workflow_tool": workflow_tool,
+            "scientific_origin": scientific_origin,
+            "calculation_quality": calculation_quality,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+            "include_rejected_quality": include_rejected_quality,
+            "ranking": ranking,
+            "include": include,
+            "collapse": collapse,
+            "offset": offset,
+            "limit": limit,
+        }
+        if method_http.upper() == "GET":
+            return self.request_json(
+                "GET",
+                "/scientific/species-calculations/search",
+                params=body,
+            ).data
+        return self.request_json(
+            "POST",
+            "/scientific/species-calculations/search",
+            json={k: v for k, v in body.items() if v is not None},
+        ).data
+
+    def get_reaction_full(
+        self,
+        reaction_entry_id: int,
+        *,
+        include: list[str] | None = None,
+        include_review: str | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+    ) -> Any:
+        """``GET /scientific/reaction-entries/{reaction_entry_id}/full``.
+
+        Composite scientific read joining species, kinetics, transition
+        states, calculations, and review summary into one document. Returns
+        the parsed ``ScientificReactionFullResponse`` JSON envelope. The
+        backend never fabricates TS links for non-TS-backed kinetics.
+        """
+        path = f"/scientific/reaction-entries/{reaction_entry_id}/full"
+        params = {
+            "include": include,
+            "include_review": include_review,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+        }
+        return self.request_json("GET", path, params=params).data
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers
+# ---------------------------------------------------------------------------
+
+
+def _clean_params(params: Mapping[str, Any]) -> dict[str, Any]:
+    """Drop ``None`` entries and serialize ``bool`` as lowercase string.
+
+    Lists are passed through (``httpx`` repeats them as separate query
+    parameters). Empty lists are dropped — supplying ``include=[]`` is
+    semantically equivalent to omitting the parameter.
+    """
+    out: dict[str, Any] = {}
+    for key, value in params.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            out[key] = "true" if value else "false"
+            continue
+        if isinstance(value, list) and not value:
+            continue
+        out[key] = value
+    return out
 
 
 __all__ = [

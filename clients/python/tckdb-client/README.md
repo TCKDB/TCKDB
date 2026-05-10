@@ -149,6 +149,101 @@ except TCKDBValidationError as exc:
     print(exc.status_code, exc.detail)
 ```
 
+## Scientific read/query methods
+
+The client exposes thin wrappers over the backend's `/api/v1/scientific/*`
+read surface. These methods are **generic** TCKDB reads — they serialize
+parameters, call the backend, and return parsed JSON. They contain no
+ARC- or RMG-specific selection or reuse policy, no client-side ranking,
+and no notion of a "best" record. Trust posture, sort order, evidence
+completeness, and provenance shape are all decided by the backend per
+[`docs/specs/read_api_mvp.md`](../../../docs/specs/read_api_mvp.md).
+
+**Recommended — chemistry-first search** (use these for hosted workflow
+tools that know identifiers, not entry ids):
+
+```python
+# Thermo by SMILES — one call, entry id returned in the response
+thermo = client.search_thermo(
+    smiles="C[CH2]",
+    temperature_min=300,
+    temperature_max=3000,
+    collapse="first",
+    include=["provenance", "review"],
+)
+
+# Kinetics by reactants/products
+kinetics = client.search_kinetics(
+    reactants=["[CH3]", "c1ccccc1"],
+    products=["CH4", "[c]1ccccc1"],
+    direction="either",
+    temperature_min=300,
+    temperature_max=2000,
+    collapse="first",
+    include=["provenance", "review"],
+)
+```
+
+**Discovery-only** (use only when you want the identity layer without
+records — e.g. listing matched candidates in a UI):
+
+```python
+species = client.search_species(smiles="C[CH2]")
+
+rxns = client.search_reactions(
+    reactants=["[CH3]", "c1ccccc1"],
+    products=["CH4", "[c]1ccccc1"],
+    direction="either",
+)
+# Force GET if you prefer query-string encoding:
+rxns_get = client.search_reactions(
+    reactants=["A"], products=["B"], method="GET",
+)
+```
+
+**Entry-id detail / follow-up** (still useful for inspection,
+curation, or chaining off ids you already hold):
+
+```python
+# Kinetics for a known reaction entry, sorted per the locked D9 chain
+kinetics = client.get_reaction_kinetics(
+    reaction_entry_id=51,
+    temperature_min=300,
+    temperature_max=2000,
+    collapse="first",
+)
+
+# Thermo for a known species entry
+thermo = client.get_species_thermo(
+    species_entry_id=31,
+    temperature_min=300,
+    temperature_max=3000,
+    model_kind="nasa",
+)
+
+# Composite "everything supporting this reaction" document
+full = client.get_reaction_full(
+    reaction_entry_id=51,
+    include=["kinetics", "transition_states", "calculations", "review"],
+    include_review="full",
+)
+```
+
+**Notes**
+
+- `reaction_entry_id` is strictly `reaction_entry.id` (not `chem_reaction.id`).
+  `species_entry_id` is strictly `species_entry.id` (not `species.id`). A
+  mismatched ID returns 404.
+- Client-supplied `sort=` is not supported in v0; the backend returns 422
+  if a `sort` query parameter is sent. The methods deliberately omit a
+  `sort` argument for that reason.
+- `direction="exact"` is rejected by the backend with 422.
+- `include` accepts a Python list and is serialized as repeated query
+  parameters (`?include=a&include=b`).
+- Returned values are parsed JSON `dict` envelopes matching the response
+  models in `backend/app/schemas/reads/scientific_*.py`. The client does
+  not impose typed models.
+
 ## Examples
 
 - [`examples/basic_usage.py`](examples/basic_usage.py)
