@@ -1,0 +1,142 @@
+# ARC run fixtures — provenance of each extracted scenario.
+#
+# Each entry records WHERE the scenario came from on the original contributor's
+# machine. Source ARC run directories are NOT in this repo (calcs/ alone is
+# multi-GB per run). When fixtures need regeneration after a TCKDB upload-
+# schema change, point scripts/regenerate_arc_fixtures.py at these paths.
+#
+# Extracted layout per scenario:
+#   <scenario>/
+#     output.yml          ARC scientific summary (reference only)
+#     input.yml           ARC project config (reference only, may be absent)
+#     tckdb_payloads/     pre-generated upload payloads + meta files
+#
+# Source-of-truth identifiers:
+#   source_path        absolute path on contributor's machine when copied
+#   arc_version        ARC release at the time the run completed
+#   arc_git_commit     full ARC commit hash from output.yml
+#   project            ARC project name from output.yml
+#   reaction_family    primary reaction family for the run
+#   feature_focus      what this scenario stresses in the upload path
+
+extracted_on: 2026-05-12
+extracted_by: calvinpieters@gmail.com
+
+scenarios:
+  reaction_1:
+    source_path: /home/calvin/code/arc_tckdb
+    arc_version: 1.1.0
+    arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
+    project: demo_reaction
+    reaction_family: H_Abstraction
+    feature_focus: baseline H-abstraction with IRC-derived TS
+
+  scan_1:
+    source_path: /home/calvin/code/arc_tckdb_scan
+    arc_version: 1.1.0
+    arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
+    project: rmg_rxn_1142
+    reaction_family: H_Abstraction
+    feature_focus: heavy rotor-scan coverage (32 rotor references)
+
+  neb_1:
+    source_path: /home/calvin/code/arc_tckdb_neb
+    arc_version: 1.1.0
+    arc_git_commit: e8775551f3
+    project: OrcaNEB_Test
+    reaction_family: intra_H_migration
+    feature_focus: NEB-based TS search (intramolecular H migration)
+
+  rotor_scan_1:
+    source_path: /home/calvin/code/arc_rotor_scan/rxn_188
+    arc_version: 1.1.0
+    arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
+    project: rxn_188
+    reaction_family: H_Abstraction
+    feature_focus: methane + hydroxyl (overlap with reaction_1, scan_1)
+
+  rotor_scan_2:
+    source_path: /home/calvin/code/arc_rotor_scan/rxn_209
+    arc_version: 1.1.0
+    arc_git_commit: e8775551f3
+    project: rxn_209
+    reaction_family: H_Abstraction
+    feature_focus: peroxyl chemistry (CH3OO + CH4)
+
+  rotor_scan_3:
+    source_path: /home/calvin/code/arc_rotor_scan/rxn_210
+    arc_version: 1.1.0
+    arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
+    project: rxn_210
+    reaction_family: H_Abstraction
+    feature_focus: H atom + ethane (monatomic species + simple alkane)
+
+  rotor_scan_4:
+    source_path: /home/calvin/code/arc_rotor_scan/rxn_298
+    arc_version: 1.1.0
+    arc_git_commit: b0afc86a7c
+    project: rxn_298
+    reaction_family: H_Abstraction
+    feature_focus: hydroperoxyl + isobutane (peroxide bond chemistry)
+
+  rotor_scan_5:
+    source_path: /home/calvin/code/arc_rotor_scan/rxn_30
+    arc_version: 1.1.0
+    arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
+    project: rxn_30
+    reaction_family: H_Abstraction
+    feature_focus: isobutyraldehyde + H (carbonyl + H atom)
+
+  rotor_scan_6:
+    source_path: /home/calvin/code/arc_rotor_scan/rxn_392
+    arc_version: 1.1.0
+    arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
+    project: rxn_392
+    reaction_family: H_Abstraction
+    feature_focus: vinyl radical + methanol
+
+  rotor_scan_7:
+    source_path: /home/calvin/code/arc_rotor_scan/rxn_476
+    arc_version: 1.1.0
+    arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
+    project: rxn_476
+    reaction_family: H_Abstraction
+    feature_focus: sulfur + oxygen heteroatom chemistry
+
+  rotor_scan_8:
+    source_path: /home/calvin/code/arc_rotor_scan/rxn_682
+    arc_version: 1.1.0
+    arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
+    project: rxn_682
+    reaction_family: H_Abstraction
+    feature_focus: methylamine + H (nitrogen + H atom)
+
+  rotor_scan_9:
+    source_path: /home/calvin/code/arc_rotor_scan/rxn_998
+    arc_version: 1.1.0
+    arc_git_commit: b0afc86a7c
+    project: rxn_998
+    reaction_family: H_Abstraction
+    feature_focus: propene + iso-propyl (overlap with neb_1)
+
+  rotor_scan_10:
+    source_path: /home/calvin/code/arc_rotor_scan/rmg_rxn_1142
+    arc_version: 1.1.0
+    arc_git_commit: 8f3a9131d6f6bd148c5e6f50034626741ceb0528
+    project: rmg_rxn_1142
+    reaction_family: H_Abstraction
+    feature_focus: n-butane + hydroxyl (overlap with scan_1, rotor_scan_1)
+
+# Cross-scenario species overlap — load-bearing for conformer consolidation
+# testing. The same chemical species computed by independent ARC runs should
+# share a single conformer_group with multiple conformer_observations.
+species_overlap:
+  "[CH3]":   [reaction_1, rotor_scan_1, rotor_scan_2, rotor_scan_7]
+  "C":       [reaction_1, rotor_scan_1, rotor_scan_2, rotor_scan_7]   # methane
+  "[H]":     [rotor_scan_3, rotor_scan_5, rotor_scan_8]
+  "[H][H]":  [rotor_scan_3, rotor_scan_5, rotor_scan_8]
+  "[OH]":    [scan_1, rotor_scan_1, rotor_scan_10]
+  "CCCC":    [scan_1, rotor_scan_10]                                   # n-butane
+  "[CH2]CCC":[scan_1, rotor_scan_10]                                   # n-butyl
+  "[CH](C)C":[neb_1, rotor_scan_9]                                     # iso-propyl
+  "[O]":     [scan_1, rotor_scan_10]

@@ -14,6 +14,9 @@ from app.schemas.reads.scientific_kinetics_search import (
     ScientificKineticsSearchResponse,
 )
 from app.schemas.reads.scientific_reactions import ReactionDirectionQuery
+from app.services.scientific_read.internal_ids import (
+    apply_internal_ids_visibility,
+)
 from app.services.scientific_read.kinetics_search import search_kinetics
 
 router = APIRouter(prefix="/kinetics")
@@ -28,11 +31,14 @@ def kinetics_search_get(
     products: list[str] | None = Query(None),
     direction: ReactionDirectionQuery = Query(ReactionDirectionQuery.either),
     family: str | None = Query(None),
+    reaction_ref: str | None = Query(None),
+    reaction_entry_ref: str | None = Query(None),
     temperature_min: float | None = Query(None),
     temperature_max: float | None = Query(None),
     pressure: float | None = Query(None),
     model_kind: KineticsModelKind | None = Query(None),
     level_of_theory_id: int | None = Query(None),
+    level_of_theory_ref: str | None = Query(None),
     software: str | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
@@ -55,11 +61,14 @@ def kinetics_search_get(
         products=products or [],
         direction=direction,
         family=family,
+        reaction_ref=reaction_ref,
+        reaction_entry_ref=reaction_entry_ref,
         temperature_min=temperature_min,
         temperature_max=temperature_max,
         pressure=pressure,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
+        level_of_theory_ref=level_of_theory_ref,
         software=software,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
@@ -70,7 +79,7 @@ def kinetics_search_get(
         offset=offset,
         limit=limit,
     )
-    return search_kinetics(session, request)
+    return apply_internal_ids_visibility(search_kinetics(session, request))
 
 
 @router.post("/search", response_model=ScientificKineticsSearchResponse)
@@ -95,4 +104,4 @@ def kinetics_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return search_kinetics(session, body)
+    return apply_internal_ids_visibility(search_kinetics(session, body))

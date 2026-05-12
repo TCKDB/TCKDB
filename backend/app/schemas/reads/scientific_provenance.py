@@ -52,10 +52,16 @@ class ReactionFullReadRequest(BaseModel):
 
 
 class ReactionEntrySummary(BaseModel):
-    """Top-level reaction-entry header for the /full response."""
+    """Top-level reaction-entry header for the /full response.
+
+    Phase B: ``reaction_ref`` and ``reaction_entry_ref`` are the public
+    stable handles alongside the integer IDs.
+    """
 
     id: int
+    reaction_entry_ref: str
     reaction_id: int
+    reaction_ref: str
     equation: str
     reversible: bool
     family: str | None = None
@@ -63,9 +69,14 @@ class ReactionEntrySummary(BaseModel):
 
 
 class ReactionFullSpeciesParticipant(BaseModel):
-    """Reactant or product side participant in /full."""
+    """Reactant or product side participant in /full.
+
+    Phase B: ``species_entry_ref`` is the public stable handle for the
+    participant species entry.
+    """
 
     species_entry_id: int
+    species_entry_ref: str
     smiles: str
     participant_index: int
     review: RecordReviewBadge
@@ -79,25 +90,41 @@ class ReactionFullSpecies(BaseModel):
 
 
 class TransitionStateCalculationSlot(BaseModel):
-    """One calculation slot within the TS sub-record (ts_opt, ts_freq, etc.)."""
+    """One calculation slot within the TS sub-record (ts_opt, ts_freq, etc.).
+
+    Phase B: ``calculation_ref`` is the public stable handle alongside
+    ``calculation_id``.
+    """
 
     calculation_id: int
+    calculation_ref: str
     type: str
     method: str | None = None  # populated for path-search calcs
 
 
 class TransitionStateDependency(BaseModel):
-    """Edge in the TS calculation dependency graph."""
+    """Edge in the TS calculation dependency graph.
+
+    Phase B: ``parent_calculation_ref`` and ``child_calculation_ref`` are
+    the public stable handles alongside the integer IDs.
+    """
 
     parent_calculation_id: int
+    parent_calculation_ref: str
     child_calculation_id: int
+    child_calculation_ref: str
     role: str
 
 
 class TransitionStateInFull(BaseModel):
-    """Transition-state record embedded in /full."""
+    """Transition-state record embedded in /full.
+
+    Phase B: ``transition_state_entry_ref`` is the public stable handle
+    alongside ``transition_state_entry_id``.
+    """
 
     transition_state_entry_id: int
+    transition_state_entry_ref: str
     review: RecordReviewBadge
     calculations: dict[str, TransitionStateCalculationSlot] = Field(default_factory=dict)
     dependencies: list[TransitionStateDependency] = Field(default_factory=list)

@@ -35,7 +35,8 @@ def test_returns_200_for_valid_reaction_entry_id(client, db_session):
     resp = client.get(f"/api/v1/scientific/reaction-entries/{entry.id}/full")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["reaction_entry"]["id"] == entry.id
+    # Phase D: reaction_entry.id is hidden; identity surfaces via the ref.
+    assert body["reaction_entry"]["reaction_entry_ref"] == entry.public_ref
     # Default: species + kinetics + transition_states present.
     assert body["species"] is not None
     assert body["kinetics"] == []
@@ -93,7 +94,8 @@ def test_non_ts_backed_kinetics_no_fabricated_ts_links(client, db_session):
     body = resp.json()
     assert len(body["kinetics"]) == 1
     p = body["kinetics"][0]["provenance"]
-    assert p["transition_state_entry_id"] is None
+    # Phase D: ref siblings are null for non-TS-backed records.
+    assert p["transition_state_entry_ref"] is None
     assert body["transition_states"] == []  # not fabricated
 
 
@@ -110,9 +112,11 @@ def test_include_review_full_adds_audit_array(client, db_session):
     )
     body = resp.json()
     assert body["review_records"] is not None
+    # Phase D: ReviewRecordEntry.record_id is an internal PK with no
+    # ref sibling, so it's hidden in the default response. Verify the
+    # audit array shows the reaction_entry record_type entry.
     assert any(
-        r["record_type"] == "reaction_entry" and r["record_id"] == entry.id
-        for r in body["review_records"]
+        r["record_type"] == "reaction_entry" for r in body["review_records"]
     )
 
 

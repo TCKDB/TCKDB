@@ -50,6 +50,8 @@ class ThermoReadRequest(BaseModel):
     temperature_max: float | None = None
     model_kind: ThermoModelKindQuery | None = None
     level_of_theory_id: int | None = None
+    # Phase C: LoT may be supplied by ref instead of (or alongside) id.
+    level_of_theory_ref: str | None = None
     software: str | None = None
 
     min_review_status: RecordReviewStatus | None = None
@@ -89,14 +91,21 @@ class ThermoPointBlock(BaseModel):
 
 
 class ThermoProvenance(BaseModel):
-    """Thermo provenance block — keys always present, ``null`` when absent."""
+    """Thermo provenance block — keys always present, ``null`` when absent.
+
+    Phase B: integer ``*_id`` fields keep their place; ``*_ref`` siblings
+    carry the public stable handles.
+    """
 
     primary_calculation: CalculationEvidenceSummary | None = None
     level_of_theory: LevelOfTheorySummary | None = None
     software: SoftwareReleaseSummary | None = None
     statmech_id: int | None = None
+    statmech_ref: str | None = None
     freq_calculation_id: int | None = None
+    freq_calculation_ref: str | None = None
     sp_calculation_id: int | None = None
+    sp_calculation_ref: str | None = None
 
 
 class ThermoRecord(BaseModel):
@@ -106,9 +115,13 @@ class ThermoRecord(BaseModel):
     ``app/db/models/thermo.py``, ``ThermoPoint.cp_j_mol_k`` is the canonical
     (and only) cp representation in v0. Future schema work may surface a
     cp-units field; v0 omits it from the response.
+
+    Phase B: ``thermo_ref`` is the public stable handle alongside the
+    integer ``thermo_id``.
     """
 
     thermo_id: int
+    thermo_ref: str
     scientific_origin: ScientificOriginKind
     model_kind: ThermoModelKindQuery
     review: RecordReviewBadge
@@ -133,10 +146,15 @@ class RequestEcho(BaseModel):
 
 
 class ScientificSpeciesThermoResponse(BaseModel):
-    """Response envelope for /api/v1/scientific/species-entries/{id}/thermo."""
+    """Response envelope for /api/v1/scientific/species-entries/{id}/thermo.
+
+    Phase B: ``species_entry_ref`` mirrors ``species_entry_id`` as the
+    public stable handle for the response's path-parameter resource.
+    """
 
     request: RequestEcho
     species_entry_id: int
+    species_entry_ref: str
     review_summary: ReviewStatusSummary
     records: list[ThermoRecord]
     pagination: Pagination

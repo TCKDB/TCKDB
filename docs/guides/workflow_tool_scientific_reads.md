@@ -1,5 +1,11 @@
 # Workflow-tool scientific reads from TCKDB
 
+> For the framing-neutral hosted-query entry point (anonymous reads,
+> refs, abuse-control expectations), see
+> [public_hosted_querying.md](public_hosted_querying.md). This guide
+> picks up where that one leaves off and focuses on workflow-tool
+> integration patterns.
+
 ## Purpose
 
 This guide shows developers how to integrate a workflow tool with TCKDB's
@@ -16,14 +22,41 @@ and provenance summaries.
 ## What this guide covers
 
 - searching for species and reactions by chemical identity
-- retrieving thermo for a known `species_entry`
-- retrieving kinetics for a known `reaction_entry`
+- retrieving thermo for a `species_entry` via its public ref
+- retrieving kinetics for a `reaction_entry` via its public ref
 - inspecting full provenance for a reaction
 - reading and interpreting the review/trust state
 - using the documented filter / sort / collapse vocabulary
 - handling kinetics records that are not transition-state-backed
 - handling empty results and HTTP errors
 - where workflow-specific reuse policy belongs (hint: not in `tckdb-client`)
+
+> **Refs are the normal hosted handles. Integer IDs are internal/debug
+> compatibility fields.**
+>
+> Phase D: scientific read responses hide integer `*_id` fields and
+> bare integer-id arrays by default. Their public `*_ref` siblings
+> (and the ref-bearing object arrays like `input_geometries`,
+> `supporting_calculations`) remain visible. Workflow tools should
+> query by chemistry, then use the returned `*_ref` values (e.g.
+> `spe_...`, `rxe_...`, `lot_...`) for follow-up reads.
+>
+> To request the legacy id-bearing shape (compatibility, debugging),
+> add the `internal_ids` token to the include list — e.g.
+> `include=["provenance", "review", "internal_ids"]`. The opt-in is
+> only effective when the deployment sets
+> `ALLOW_PUBLIC_INTERNAL_IDS=true`; otherwise it is silently dropped
+> and the response stays refs-only.
+>
+> `include=all` does **not** include `internal_ids`. Combine
+> explicitly: `include=["all", "internal_ids"]`.
+>
+> Route inputs are unchanged — integer path handles and `*_id` query
+> filters still work as inputs. See
+> [`docs/specs/internal_ids_visibility_policy.md`](../specs/internal_ids_visibility_policy.md)
+> and
+> [`docs/specs/public_identifier_policy.md`](../specs/public_identifier_policy.md)
+> for the full contract.
 
 ## What this guide does not cover
 
@@ -80,17 +113,25 @@ from tckdb_client import TCKDBClient
 
 client = TCKDBClient(
     base_url="http://127.0.0.1:8000/api/v1",   # include /api/v1
-    api_key="…",                                # only if deployment requires auth
+    api_key=None,                               # optional for public scientific reads
 )
 ```
 
 - `base_url` should already include the `/api/v1` prefix; the client
   joins paths cleanly and never duplicates it.
-- `api_key` is forwarded as the `X-API-Key` header on every request when
-  set. If the deployment exposes scientific reads without auth, omit it.
+- `api_key` is optional for public scientific reads. Use it only when
+  the deployment requires authentication or when you need authenticated
+  quotas/features. When set, the client forwards it as the `X-API-Key`
+  header on every request — including reads — so authenticated
+  deployments still see a billable identity.
 - Use the client as a context manager when convenient
   (`with TCKDBClient(...) as client:`) to release the underlying HTTP
   connection at scope exit.
+
+> Public reads being anonymous-friendly in the client is not an
+> abuse-control mechanism. Hosted deployments should enforce abuse
+> limits server-side through rate limits, pagination caps, query
+> timeouts, and monitoring.
 
 ## Read/query workflow overview
 
@@ -104,28 +145,32 @@ client.search_thermo(smiles="...", temperature_min=..., temperature_max=...)
 client.search_kinetics(reactants=[...], products=[...], direction="...")
 ```
 
-Entry ids are **returned handles**, not prerequisites. The
-entry-id detail methods stay useful for follow-up reads, provenance
-inspection, curation, and stable references — but workflow tools no
-longer need to chain them manually for the common case:
+Entry-id detail methods stay useful for follow-up reads, provenance
+inspection, curation, and stable references. The path parameter accepts
+either the integer PK or a public ref of the matching prefix, so the
+ref-first flow is the natural one:
 
 ```python
-# Detail/follow-up reads (still supported, useful for inspection):
-client.get_species_thermo(species_entry_id=...)
-client.get_reaction_kinetics(reaction_entry_id=...)
-client.get_reaction_full(reaction_entry_id=...)
+# Follow-up reads keyed off the *_ref returned by search_*:
+client.get_species_thermo(species_entry_id="spe_...")   # ref accepted
+client.get_reaction_kinetics(reaction_entry_id="rxe_...")
+client.get_reaction_full(reaction_entry_id="rxe_...")
+
+# Integer ids still work for code that already holds them:
+client.get_species_thermo(species_entry_id=31)
 ```
 
 A normal scientific read has four stages:
 
 1. **Chemistry-first search.** Call `search_thermo` or `search_kinetics`
    with chemical identifiers; get back records that already include the
-   resolved `species_entry_id` / `reaction_entry_id`.
+   resolved `species_entry_ref` / `reaction_entry_ref` (and the matching
+   integer ids).
 2. **Trust inspection.** Inspect `review` on each returned record;
    inspect `provenance` to see what calculations support it.
 3. **Optional follow-up.** If you need the full provenance graph for
-   inspection or curation, use `get_reaction_full(reaction_entry_id=...)`
-   with the id you got back from the search.
+   inspection or curation, use `get_reaction_full(reaction_entry_id=<ref>)`
+   with the public ref you got back from the search.
 4. **Workflow decision.** The adapter (not `tckdb-client`) decides
    whether to reuse the TCKDB record or proceed with its own calculation.
 
@@ -291,25 +336,37 @@ The response is a search envelope:
 ```
 
 This call returns **candidate species/species-entry records**, not full
-thermo or kinetics. Use `species_entry_id` from any returned entry as
-the input to subsequent thermo or conformer reads.
+thermo or kinetics. Each entry carries both `species_entry_id` and
+`species_entry_ref`; pass either one (the ref is preferred) into
+subsequent thermo or conformer reads.
 
 ## Species thermo retrieval (entry-id detail / follow-up)
 
 > For most hosted workflow-tool use, prefer `search_thermo` (above).
-> Use this entry-id form for follow-up reads, curation tooling, or when
-> you already have a stable `species_entry_id` from a prior call.
+> Use this entry handle form for follow-up reads, curation tooling, or
+> when you already have a stable `species_entry_ref` (or
+> `species_entry_id`) from a prior call.
 
-Once a `species_entry_id` is known, retrieve thermo with explicit
-temperature bounds when relevant:
+Once a `species_entry` handle is known, retrieve thermo with explicit
+temperature bounds when relevant. The path parameter accepts either
+the public ref (preferred) or the integer id:
 
 ```python
+# Ref-first follow-up (preferred):
+thermo = client.get_species_thermo(
+    species_entry_id="spe_...",   # public ref accepted as the handle
+    temperature_min=300,
+    temperature_max=3000,
+    collapse="first",
+    include=["provenance", "review"],
+)
+
+# Integer-id form (compatibility):
 thermo = client.get_species_thermo(
     species_entry_id=31,
     temperature_min=300,
     temperature_max=3000,
     collapse="first",
-    include=["provenance", "review"],
 )
 ```
 
@@ -352,11 +409,11 @@ rxns = client.search_reactions(
 
 Each record carries:
 
-- `reaction_id`, `reaction_entry_id`
+- `reaction_id` / `reaction_ref`, `reaction_entry_id` / `reaction_entry_ref`
 - `equation`, `reversible`, `family`
 - `matched_direction` — which orientation matched the query
 - `reactants`, `products` — participant lists with `species_entry_id`,
-  `smiles`, `participant_index`
+  `species_entry_ref`, `smiles`, `participant_index`
 - `availability` — boolean flags + counts (kinetics, transition state,
   path search) for the entry
 - `review` — direct review badge for the reaction entry
@@ -374,18 +431,28 @@ client.search_reactions(reactants=["A"], products=["B"], method="GET")
 ## Reaction kinetics retrieval (entry-id detail / follow-up)
 
 > For most hosted workflow-tool use, prefer `search_kinetics` (above).
-> Use this entry-id form for follow-up reads, curation, or when you
-> already have a stable `reaction_entry_id`.
+> Use this entry handle form for follow-up reads, curation, or when you
+> already have a stable `reaction_entry_ref` (or `reaction_entry_id`).
 
-Use a `reaction_entry_id` from `search_kinetics` or `search_reactions` to fetch kinetics.
+Use a `reaction_entry_ref` from `search_kinetics` or `search_reactions`
+(or the integer id, for compatibility) to fetch kinetics:
 
 ```python
+# Ref-first follow-up (preferred):
+kinetics = client.get_reaction_kinetics(
+    reaction_entry_id="rxe_...",   # public ref accepted as the handle
+    temperature_min=300,
+    temperature_max=2000,
+    collapse="first",
+    include=["provenance", "review"],
+)
+
+# Integer-id form (compatibility):
 kinetics = client.get_reaction_kinetics(
     reaction_entry_id=51,
     temperature_min=300,
     temperature_max=2000,
     collapse="first",
-    include=["provenance", "review"],
 )
 ```
 
@@ -415,8 +482,9 @@ intended for **inspection, debugging, and curation**, not for quick
 search:
 
 ```python
+# Ref-first follow-up (preferred): chain from search_kinetics' returned ref.
 full = client.get_reaction_full(
-    reaction_entry_id=51,
+    reaction_entry_id="rxe_...",   # public ref accepted as the handle
     include=[
         "species",
         "kinetics",
@@ -438,6 +506,51 @@ Sub-arrays you did not ask for are **omitted** from the response.
 Sub-arrays you did ask for are **always present**, possibly empty. So a
 caller can distinguish "I asked and got nothing" (`"foo": []` or
 `"foo": null`) from "I didn't ask" (key absent).
+
+## Geometry detail reads
+
+`species-calculations/search` returns `geometry_ref` handles, not
+inline coordinates. Use the detail endpoint to retrieve the full
+coordinate payload when needed:
+
+```python
+# Refs returned by search:
+geom_block = calcs["records"][0]["geometry"]
+geometry_handle = (
+    geom_block["primary_output_geometry_ref"]
+    or geom_block["input_geometries"][0]["geometry_ref"]
+)
+
+# Detail follow-up — also accepts an integer id for compatibility:
+geometry = client.get_geometry(geometry_handle)
+# {"geometry_ref": "geom_…", "natoms": 3, "format": "cartesian",
+#  "coordinate_units": "angstrom",
+#  "symbols": ["O", "H", "H"], "coords": [...], "provenance": {...}}
+```
+
+Expectations by calculation type:
+
+- **SP**: `input_geometries` populated; `primary_output_geometry_ref`
+  is `null` by design (the upload layer only auto-attaches an output
+  geometry for `opt`).
+- **OPT**: `primary_output_geometry_ref` is set when the optimized
+  geometry was persisted; the role is typically `final`.
+- **freq / scan / irc / path_search**: producer-declared only —
+  output geometry only present when explicitly uploaded.
+
+The detail endpoint's response also includes a small `provenance`
+summary listing every calculation that produced (with `role`) or
+consumed the geometry — useful for tracing why a geometry appears in
+the database.
+
+> **Picking only the sections you want.** The example script bundled
+> with `tckdb-client` (`examples/scientific_reads.py`) is a multi-call
+> demo. Narrow it with `--only species`, `--only calculations,geometry`,
+> `--no-followups`, etc. Override the hard-coded
+> `calculation_type=sp` / `ranking=lowest_energy` with
+> `--calculation-type opt --ranking latest` (or whatever the backend
+> accepts). The backend API itself is unchanged — this is only the
+> example's filtering surface.
 
 ## Trust and review state
 
@@ -636,13 +749,15 @@ if not records:
     print("No matching kinetics found in TCKDB.")
 else:
     rec = records[0]
-    print("reaction_entry_id:", rec["reaction"]["reaction_entry_id"])
-    print("matched_direction:", rec["reaction"]["matched_direction"])
-    print("kinetics_id      :", rec["kinetics"]["kinetics_id"])
-    print("scientific_origin:", rec["kinetics"]["scientific_origin"])
-    print("review status    :", rec["kinetics"]["review"]["status"])
-    print("temperature cov. :", rec["kinetics"]["temperature_coverage"])
-    print("evidence score   :", rec["kinetics"]["evidence_completeness"]["score"])
+    print("reaction_entry_ref:", rec["reaction"]["reaction_entry_ref"])
+    print("reaction_entry_id :", rec["reaction"]["reaction_entry_id"])
+    print("matched_direction :", rec["reaction"]["matched_direction"])
+    print("kinetics_ref      :", rec["kinetics"]["kinetics_ref"])
+    print("kinetics_id       :", rec["kinetics"]["kinetics_id"])
+    print("scientific_origin :", rec["kinetics"]["scientific_origin"])
+    print("review status     :", rec["kinetics"]["review"]["status"])
+    print("temperature cov.  :", rec["kinetics"]["temperature_coverage"])
+    print("evidence score    :", rec["kinetics"]["evidence_completeness"]["score"])
 ```
 
 The two-call form (use only when you specifically need a separate
@@ -659,9 +774,13 @@ rxns = client.search_reactions(
 
 records = rxns.get("records", [])
 if records:
-    reaction_entry_id = records[0]["reaction_entry_id"]
+    # Prefer the public ref; fall back to the integer id if needed.
+    reaction_entry_handle = (
+        records[0].get("reaction_entry_ref")
+        or records[0]["reaction_entry_id"]
+    )
     kinetics = client.get_reaction_kinetics(
-        reaction_entry_id=reaction_entry_id,
+        reaction_entry_id=reaction_entry_handle,
         temperature_min=300,
         temperature_max=2000,
         collapse="first",

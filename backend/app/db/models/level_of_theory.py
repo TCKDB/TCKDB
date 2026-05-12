@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import CHAR, BigInteger, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, PublicRefMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
 
 
-class LevelOfTheory(Base, TimestampMixin):
+class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
     """Method/basis provenance used by calculations."""
 
     __tablename__ = "level_of_theory"

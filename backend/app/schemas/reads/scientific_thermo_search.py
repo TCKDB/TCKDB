@@ -18,6 +18,14 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
+from app.schemas.reads._field_bounds import (
+    MAX_FORMULA_LENGTH as _MAX_FORMULA_LENGTH,
+    MAX_INCHI_KEY_LENGTH as _MAX_INCHI_KEY_LENGTH,
+    MAX_INCHI_LENGTH as _MAX_INCHI_LENGTH,
+    MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
+    MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
+    MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
+)
 from app.schemas.reads.scientific_common import (
     CollapseMode,
     Pagination,
@@ -41,21 +49,28 @@ class ThermoSearchRequest(BaseModel):
     """
 
     # Species identity filters
-    smiles: str | None = None
-    inchi: str | None = None
-    inchi_key: str | None = None
-    formula: str | None = None
+    smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
+    inchi: str | None = Field(default=None, max_length=_MAX_INCHI_LENGTH)
+    inchi_key: str | None = Field(default=None, max_length=_MAX_INCHI_KEY_LENGTH)
+    formula: str | None = Field(default=None, max_length=_MAX_FORMULA_LENGTH)
     charge: int | None = None
     multiplicity: int | None = None
     electronic_state_kind: SpeciesEntryStateKind | None = None
     species_entry_kind: StationaryPointKind | None = None
+
+    # Phase C: optional explicit handles for follow-up lookups.
+    species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
+    species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
 
     # Thermo filters
     temperature_min: float | None = None
     temperature_max: float | None = None
     model_kind: ThermoModelKindQuery | None = None
     level_of_theory_id: int | None = None
-    software: str | None = None
+    level_of_theory_ref: str | None = Field(
+        default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
+    software: str | None = Field(default=None, max_length=_MAX_SOFTWARE_NAME_LENGTH)
 
     # Trust filters
     min_review_status: RecordReviewStatus | None = None
@@ -77,14 +92,20 @@ class ThermoSearchRequest(BaseModel):
 
 
 class ThermoSearchSpeciesContext(BaseModel):
-    """Resolved species/species-entry identity context for a thermo record."""
+    """Resolved species/species-entry identity context for a thermo record.
+
+    Phase B: ``species_ref`` and ``species_entry_ref`` are the public
+    stable handles alongside the integer IDs.
+    """
 
     species_id: int
+    species_ref: str
     canonical_smiles: str
     inchi_key: str
     charge: int
     multiplicity: int
     species_entry_id: int
+    species_entry_ref: str
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
     species_entry_review: RecordReviewBadge

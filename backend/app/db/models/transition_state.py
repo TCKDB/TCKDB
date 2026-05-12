@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import TransitionStateEntryStatus
 from app.db.types import RDKitMol
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from app.db.models.reaction import ReactionEntry
 
 
-class TransitionState(Base, TimestampMixin, CreatedByMixin):
+class TransitionState(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Reaction-channel-level transition-state concept.
 
     This groups candidate saddle-point structures that belong to the same
@@ -49,7 +49,7 @@ class TransitionState(Base, TimestampMixin, CreatedByMixin):
     )
 
 
-class TransitionStateEntry(Base, TimestampMixin, CreatedByMixin):
+class TransitionStateEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """One candidate transition-state geometry family member under a TS concept.
 
     Calculations refine or validate this candidate.

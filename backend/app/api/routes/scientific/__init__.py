@@ -14,6 +14,7 @@ Sub-routers:
     kinetics_search.router  → /scientific/kinetics/search (GET, POST)
     species_calculations_search.router
                             → /scientific/species-calculations/search (GET, POST)
+    geometries.router       → /scientific/geometries/{geometry_handle}
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.routes.scientific import (
+    geometries,
     kinetics,
     kinetics_search,
     provenance,
@@ -40,5 +42,6 @@ scientific_router.include_router(provenance.router)
 scientific_router.include_router(thermo_search.router)
 scientific_router.include_router(kinetics_search.router)
 scientific_router.include_router(species_calculations_search.router)
+scientific_router.include_router(geometries.router)
 
 __all__ = ["scientific_router"]

@@ -22,7 +22,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     ArtifactKind,
     CalculationDependencyRole,
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from app.db.models.workflow import WorkflowToolRelease
 
 
-class Calculation(Base, TimestampMixin, CreatedByMixin):
+class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Computational record with one scientific owner and an optional observation anchor."""
 
     __tablename__ = "calculation"

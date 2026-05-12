@@ -1,0 +1,4169 @@
+arc_git_commit: e8775551f34ae46fd048f999114657d72a4a9862
+arc_version: 1.1.0
+arkane_git_commit: 6b1368de6c19204c7ce4fda6fbecb05da4a0fe0e
+arkane_level_of_theory:
+  auxiliary_basis: aug-cc-pvtz/c
+  basis: cc-pvtz-f12
+  cabs: cc-pvtz-f12-cabs
+  method: dlpno-ccsd(t)-f12
+  method_type: wavefunction
+  software: orca
+atom_energy_corrections:
+  C: -37.78475071221127
+  Cl: -459.69651810328156
+  F: -99.65901652526594
+  H: -0.5000040040073649
+  N: -54.52453035051977
+  O: -74.99813677621309
+  S: -397.6679482878494
+bac_type: p
+bond_additivity_corrections:
+  C#C: -0.982597271828914
+  C#N: -0.3283125828210814
+  C#O: 0.17286574008491584
+  C-C: -0.008543746007425343
+  C-Cl: 0.3520255124816659
+  C-F: 0.631472917414716
+  C-H: -0.08017305273944866
+  C-N: 0.13833379134615956
+  C-O: -0.13764526344273006
+  C-S: 0.09397847801178551
+  C=C: -0.35527223034098027
+  C=N: -0.6082496375886673
+  C=O: -0.5925653642190839
+  C=S: -0.7916167979435471
+  Cl-Cl: 0.102119976777834
+  Cl-F: 0.35834979657113486
+  Cl-H: 0.37722761336653576
+  Cl-N: 0.24362105625176722
+  Cl-O: -0.30321812576871465
+  Cl-S: 0.3698531320784155
+  F-F: -0.5206580899046781
+  F-H: 0.10770093360747524
+  F-O: -1.093697489896995
+  F-S: 0.9537024545758375
+  H-H: -0.4695215879854784
+  H-N: -0.3001881490725287
+  H-O: -0.17273460791217013
+  H-S: 0.6453788347829875
+  N#N: 0.3536764027271856
+  N-N: 1.0280964341867438
+  N-O: -0.36569948213780085
+  N=N: 0.016819631963059654
+  N=O: -2.1355012391692445
+  O-O: -1.5577087944484471
+  O-S: -0.6020941596112097
+  O=O: -4.405777043235522
+  O=S: -0.14850188392821617
+  S-S: 0.19851252326088406
+  S=S: -1.914710085917519
+composite_method: null
+datetime_completed: 2026-05-09 03:52
+datetime_started: 2026-05-08 17:38
+freq_level:
+  basis: def2tzvp
+  method: wb97xd
+  method_type: dft
+  software: gaussian
+freq_scale_factor: 0.988
+freq_scale_factor_source: Calculated as described in 10.1021/ct100326h
+opt_level:
+  basis: def2tzvp
+  method: wb97xd
+  method_type: dft
+  software: gaussian
+project: rxn_209
+reactions:
+- family: H_Abstraction
+  kinetics:
+    A: 8.38148e-05
+    A_units: cm^3/(mol*s)
+    Ea: 82.5116
+    Ea_units: kJ/mol
+    Tmax_k: 3000.0
+    Tmin_k: 300.0
+    dA: 1.7284
+    dEa: 0.407592
+    dEa_units: kJ/mol
+    dn: 0.0712732
+    n: 5.35538
+    n_data_points: 50
+    tunneling: Eckart
+  label: rxn_209_C + rxn_209_CO[O] <=> rxn_209_[CH3] + rxn_209_COO
+  multiplicity: 2
+  product_labels:
+  - rxn_209_COO
+  - rxn_209_[CH3]
+  reactant_labels:
+  - rxn_209_C
+  - rxn_209_CO[O]
+  ts_label: rxn_209_TS0
+schema_version: '1.0'
+sp_level:
+  auxiliary_basis: aug-cc-pvtz/c
+  basis: cc-pvtz-f12
+  cabs: cc-pvtz-f12-cabs
+  method: dlpno-ccsd(t)-f12
+  method_type: wavefunction
+  software: orca
+species:
+- additional_calculations: []
+  applied_energy_corrections:
+  - application_role: aec_total
+    components:
+    - component_kind: atom
+      contribution_value: 38.055229194978246
+      key: C
+      multiplicity: 1
+      parameter_unit: hartree
+      parameter_value: -37.78475071221127
+    - component_kind: atom
+      contribution_value: 2.3226882247238505
+      key: H
+      multiplicity: 4
+      parameter_unit: hartree
+      parameter_value: -0.5000040040073649
+    scheme:
+      atom_params:
+      - element: C
+        value: -37.78475071221127
+      - element: Cl
+        value: -459.69651810328156
+      - element: F
+        value: -99.65901652526594
+      - element: H
+        value: -0.5000040040073649
+      - element: N
+        value: -54.52453035051977
+      - element: O
+        value: -74.99813677621309
+      - element: S
+        value: -397.6679482878494
+      kind: atom_energy
+      level_of_theory: &id001
+        auxiliary_basis: aug-cc-pvtz/c
+        basis: cc-pvtz-f12
+        cabs: cc-pvtz-f12-cabs
+        method: dlpno-ccsd(t)-f12
+        method_type: wavefunction
+        software: orca
+      name: atom_energy
+      note: Per-species AEC computed by Arkane.
+      source_literature: null
+      units: hartree
+      version: null
+    value: 40.377917419702094
+    value_unit: hartree
+  - application_role: bac_total
+    components:
+    - component_kind: bond
+      contribution_value: -0.32069221095779465
+      key: C-H
+      multiplicity: 4
+      parameter_unit: kcal_mol
+      parameter_value: -0.08017305273944866
+    scheme:
+      bond_params:
+      - bond_key: C#C
+        value: -0.982597271828914
+      - bond_key: C#N
+        value: -0.3283125828210814
+      - bond_key: C#O
+        value: 0.17286574008491584
+      - bond_key: C-C
+        value: -0.008543746007425343
+      - bond_key: C-Cl
+        value: 0.3520255124816659
+      - bond_key: C-F
+        value: 0.631472917414716
+      - bond_key: C-H
+        value: -0.08017305273944866
+      - bond_key: C-N
+        value: 0.13833379134615956
+      - bond_key: C-O
+        value: -0.13764526344273006
+      - bond_key: C-S
+        value: 0.09397847801178551
+      - bond_key: C=C
+        value: -0.35527223034098027
+      - bond_key: C=N
+        value: -0.6082496375886673
+      - bond_key: C=O
+        value: -0.5925653642190839
+      - bond_key: C=S
+        value: -0.7916167979435471
+      - bond_key: Cl-Cl
+        value: 0.102119976777834
+      - bond_key: Cl-F
+        value: 0.35834979657113486
+      - bond_key: Cl-H
+        value: 0.37722761336653576
+      - bond_key: Cl-N
+        value: 0.24362105625176722
+      - bond_key: Cl-O
+        value: -0.30321812576871465
+      - bond_key: Cl-S
+        value: 0.3698531320784155
+      - bond_key: F-F
+        value: -0.5206580899046781
+      - bond_key: F-H
+        value: 0.10770093360747524
+      - bond_key: F-O
+        value: -1.093697489896995
+      - bond_key: F-S
+        value: 0.9537024545758375
+      - bond_key: H-H
+        value: -0.4695215879854784
+      - bond_key: H-N
+        value: -0.3001881490725287
+      - bond_key: H-O
+        value: -0.17273460791217013
+      - bond_key: H-S
+        value: 0.6453788347829875
+      - bond_key: N#N
+        value: 0.3536764027271856
+      - bond_key: N-N
+        value: 1.0280964341867438
+      - bond_key: N-O
+        value: -0.36569948213780085
+      - bond_key: N=N
+        value: 0.016819631963059654
+      - bond_key: N=O
+        value: -2.1355012391692445
+      - bond_key: O-O
+        value: -1.5577087944484471
+      - bond_key: O-S
+        value: -0.6020941596112097
+      - bond_key: O=O
+        value: -4.405777043235522
+      - bond_key: O=S
+        value: -0.14850188392821617
+      - bond_key: S-S
+        value: 0.19851252326088406
+      - bond_key: S=S
+        value: -1.914710085917519
+      kind: bac_petersson
+      level_of_theory: *id001
+      name: bac_petersson
+      note: Per-species BAC computed by Arkane (bac_type=p).
+      source_literature: null
+      units: kcal_mol
+      version: null
+    value: -0.32069221095779465
+    value_unit: kcal_mol
+  charge: 0
+  coarse_opt_final_energy_hartree: -40.5193512411
+  coarse_opt_input_xyz: |-
+    C       0.00000000    0.00000000    0.00000000
+    H       0.62859600    0.62859600    0.62859600
+    H      -0.62859600   -0.62859600    0.62859600
+    H      -0.62859600    0.62859600   -0.62859600
+    H       0.62859600   -0.62859600   -0.62859600
+  coarse_opt_log: calcs/Species/rxn_209_C/opt_a3242/input.log
+  coarse_opt_n_steps: 2
+  coarse_opt_output_xyz: |-
+    C       0.00000000    0.00000000    0.00000000
+    H       0.62859600    0.62859600    0.62859600
+    H      -0.62859600   -0.62859600    0.62859600
+    H      -0.62859600    0.62859600   -0.62859600
+    H       0.62859600   -0.62859600   -0.62859600
+  converged: true
+  ess_versions:
+    freq: Gaussian 09, Revision D.01
+    opt: Gaussian 09, Revision D.01
+    sp: ORCA 6.0.0
+  formula: CH4
+  freq_constraints: []
+  freq_input: calcs/Species/rxn_209_C/freq_a3266/input.gjf
+  freq_log: calcs/Species/rxn_209_C/freq_a3266/input.log
+  freq_n_imag: 0
+  imag_freq_cm1: null
+  inchi: InChI=1S/CH4/h1H4
+  inchi_key: VNWKTOKETHGBQD-UHFFFAOYSA-N
+  is_ts: false
+  label: rxn_209_C
+  multiplicity: 1
+  opt_constraints: []
+  opt_converged: true
+  opt_final_energy_hartree: -40.5192788934
+  opt_input: calcs/Species/rxn_209_C/opt_a3249/input.gjf
+  opt_input_xyz: |-
+    C       0.00000000    0.00000000    0.00000000
+    H       0.62859600    0.62859600    0.62859600
+    H      -0.62859600   -0.62859600    0.62859600
+    H      -0.62859600    0.62859600   -0.62859600
+    H       0.62859600   -0.62859600   -0.62859600
+  opt_log: calcs/Species/rxn_209_C/opt_a3249/input.log
+  opt_n_steps: 2
+  original_label: null
+  smiles: C
+  sp_constraints: []
+  sp_energy_hartree: -40.45320975029
+  sp_input: calcs/Species/rxn_209_C/sp_a3269/input.in
+  sp_log: calcs/Species/rxn_209_C/sp_a3269/input.log
+  statmech:
+    e0_kj_mol: -84.2644
+    external_symmetry: 12
+    harmonic_frequencies_cm1:
+    - 1342.6735
+    - 1342.6735
+    - 1342.6735
+    - 1560.9717
+    - 1560.9717
+    - 3045.2959
+    - 3165.2109
+    - 3165.211
+    - 3165.211
+    is_linear: false
+    optical_isomers: 1
+    point_group: Td
+    rigid_rotor_kind: asymmetric_top
+    spin_multiplicity: 1
+    torsions: []
+  thermo:
+    h298_kj_mol: -74.24773216277796
+    nasa_high:
+      coeffs:
+      - 0.679928
+      - 0.0116842
+      - -4.57495e-06
+      - 7.69427e-10
+      - -3.8759e-14
+      - -9567.46
+      - 15.3442
+      tmax_k: 3000.0
+      tmin_k: 616.762
+    nasa_low:
+      coeffs:
+      - 4.04142
+      - -0.00247768
+      - 1.12891e-05
+      - 3.70345e-09
+      - -9.36804e-12
+      - -10127.4
+      - -0.426344
+      tmax_k: 616.762
+      tmin_k: 10.0
+    s298_j_mol_k: 186.05536740783657
+    thermo_points:
+    - cp_j_mol_k: 36.07023342676027
+      g_kj_mol: -130.06454873457963
+      h_kj_mol: -74.18106301576397
+      s_j_mol_k: 186.27828572938557
+      temperature_k: 300.0
+    - cp_j_mol_k: 40.356808937468664
+      g_kj_mol: -149.25484275137458
+      h_kj_mol: -70.37116284800574
+      s_j_mol_k: 197.20919975842207
+      temperature_k: 400.0
+    - cp_j_mol_k: 45.74858417543
+      g_kj_mol: -169.46198936845676
+      h_kj_mol: -66.07265352987842
+      s_j_mol_k: 206.77867167715664
+      temperature_k: 500.0
+    - cp_j_mol_k: 51.58909722084595
+      g_kj_mol: -190.5872271786299
+      h_kj_mol: -61.20628037852117
+      s_j_mol_k: 215.6349113335145
+      temperature_k: 600.0
+    - cp_j_mol_k: 62.17055758372896
+      g_kj_mol: -235.37520011947643
+      h_kj_mol: -49.7963360536382
+      s_j_mol_k: 231.97358008229781
+      temperature_k: 800.0
+    - cp_j_mol_k: 70.838021011312
+      g_kj_mol: -283.2765348558939
+      h_kj_mol: -36.465697629534255
+      s_j_mol_k: 246.8108372263596
+      temperature_k: 1000.0
+    - cp_j_mol_k: 85.74872273017151
+      g_kj_mol: -414.92345096564264
+      h_kj_mol: 3.037102563325216
+      s_j_mol_k: 278.6403690193119
+      temperature_k: 1500.0
+    - cp_j_mol_k: 93.81883915360001
+      g_kj_mol: -560.9316276359402
+      h_kj_mol: 48.14561305656749
+      s_j_mol_k: 304.5386203462539
+      temperature_k: 2000.0
+    - cp_j_mol_k: 97.4532964874202
+      g_kj_mol: -686.3214232758152
+      h_kj_mol: 86.45539493212499
+      s_j_mol_k: 321.9903409199751
+      temperature_k: 2400.0
+    tmax_k: null
+    tmin_k: null
+  xyz: |-
+    C       0.00000000    0.00000000    0.00000000
+    H       0.62869900    0.62869900    0.62869900
+    H      -0.62869900   -0.62869900    0.62869900
+    H      -0.62869900    0.62869900   -0.62869900
+    H       0.62869900   -0.62869900   -0.62869900
+  zpe_hartree: 0.044859
+- additional_calculations:
+  - key: scan_rotor_0
+    scan_result:
+      coordinates:
+      - atom1_index: 4
+        atom2_index: 1
+        atom3_index: 2
+        atom4_index: 3
+        coordinate_index: 1
+        coordinate_kind: dihedral
+        end_value: 423.9854102534243
+        resolution_degrees: 8.0
+        start_value: 63.98541025342428
+        step_count: 46
+        step_size: 8.0
+        symmetry_number: 3
+        value_unit: degree
+      dimension: 1
+      is_relaxed: true
+      points:
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 0.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873354546
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11858200   -0.22050800    0.02032600
+            O       0.02445200    0.59874800   -0.01737300
+            O       1.15300700   -0.26531000   -0.10304400
+            H      -1.13679000   -0.84377100    0.91994000
+            H      -1.96030400    0.47291500    0.03584100
+            H      -1.17907800   -0.85350700   -0.86845500
+            H       1.56799200   -0.12009800    0.75405900
+        point_index: 1
+        relative_energy_kj_mol: 0.0
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 8.000100000000003
+          value_unit: degree
+        electronic_energy_hartree: -190.873156639
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11863100   -0.22150500    0.01901800
+            O       0.02455600    0.59826000   -0.01441100
+            O       1.15488900   -0.26250100   -0.10404300
+            H      -1.21339500   -0.74577100    0.97593000
+            H      -1.95827500    0.46501100   -0.09861100
+            H      -1.11213700   -0.93773600   -0.80502000
+            H       1.56003300   -0.13854500    0.76122300
+        point_index: 2
+        relative_energy_kj_mol: 0.5196048004702041
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 16.000100000000003
+          value_unit: degree
+        electronic_energy_hartree: -190.872595335
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12063700   -0.22162300    0.01837200
+            O       0.02525400    0.59691300   -0.01224600
+            O       1.15797800   -0.25969200   -0.10463500
+            H      -1.29523800   -0.63880600    1.01631800
+            H      -1.94872900    0.44256000   -0.23457100
+            H      -1.05170000   -1.01734800   -0.72454200
+            H       1.55363900   -0.15443300    0.76760600
+        point_index: 3
+        relative_energy_kj_mol: 1.993308372972537
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 24.000100000000003
+          value_unit: degree
+        electronic_energy_hartree: -190.871757624
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12401900   -0.22084100    0.01840700
+            O       0.02633500    0.59505600   -0.01113500
+            O       1.16143300   -0.25745000   -0.10480100
+            H      -1.37931900   -0.52361000    1.04006400
+            H      -1.93082500    0.40351300   -0.36977600
+            H      -0.99808900   -1.09124900   -0.62525800
+            H       1.55020000   -0.16445600    0.77201800
+        point_index: 4
+        relative_energy_kj_mol: 4.192718484828561
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 32.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.870786726
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12835300   -0.21912500    0.01889600
+            O       0.02767600    0.59310000   -0.01093400
+            O       1.16468500   -0.25611000   -0.10481700
+            H      -1.46237700   -0.40163900    1.04618200
+            H      -1.90445900    0.34519200   -0.50181700
+            H      -0.95196400   -1.15703500   -0.50574900
+            H       1.55003000   -0.16768800    0.77401600
+        point_index: 5
+        relative_energy_kj_mol: 6.741811046290881
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 40.0
+          value_unit: degree
+        electronic_energy_hartree: -190.869854603
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13303300   -0.21652000    0.01976400
+            O       0.02903400    0.59128400   -0.01223500
+            O       1.16700500   -0.25655200   -0.10441900
+            H      -1.54164000   -0.27355300    1.03411500
+            H      -1.86908900    0.26542100   -0.62700900
+            H      -0.91478700   -1.21128500   -0.36453100
+            H       1.55540100   -0.15931700    0.77207700
+        point_index: 6
+        relative_energy_kj_mol: 9.18909985080073
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 48.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.869139712
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13710900   -0.21362500    0.02038400
+            O       0.03016400    0.58984300   -0.01455200
+            O       1.16832700   -0.25824400   -0.10378700
+            H      -1.61544000   -0.14391400    1.00223300
+            H      -1.82432100    0.16576900   -0.73896200
+            H      -0.88859700   -1.24854200   -0.20658800
+            H       1.56308300   -0.14435700    0.76772500
+        point_index: 7
+        relative_energy_kj_mol: 11.066046070048904
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 56.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.868781076
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13981800   -0.21084900    0.02073900
+            O       0.03080400    0.58888500   -0.01828700
+            O       1.16826500   -0.26142800   -0.10245900
+            H      -1.68244300   -0.01557600    0.94996100
+            H      -1.77041300    0.04762500   -0.83296000
+            H      -0.87439600   -1.26484200   -0.03568900
+            H       1.57361100   -0.12176900    0.76022000
+        point_index: 8
+        relative_energy_kj_mol: 12.00764483721917
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 64.0
+          value_unit: degree
+        electronic_energy_hartree: -190.868847923
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.14042500   -0.20902900    0.02070500
+            O       0.03085700    0.58866700   -0.02282200
+            O       1.16683500   -0.26532500   -0.10052200
+            H      -1.74213900    0.10547200    0.87710400
+            H      -1.70807100   -0.08278800   -0.90425900
+            H      -0.87274100   -1.25783000    0.13841900
+            H       1.58395900   -0.09741800    0.75125300
+        point_index: 9
+        relative_energy_kj_mol: 11.832138048188831
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 72.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.869319552
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13885400   -0.20854900    0.02068400
+            O       0.03021900    0.58907100   -0.02768600
+            O       1.16423900   -0.26939700   -0.09799700
+            H      -1.79481100    0.21415100    0.78485200
+            H      -1.63828000   -0.21853400   -0.95133400
+            H      -0.88314400   -1.22841100    0.30646800
+            H       1.59370200   -0.07331100    0.74137300
+        point_index: 10
+        relative_energy_kj_mol: 10.593876175480275
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 79.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.870096014
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13576500   -0.20946300    0.02059100
+            O       0.02922900    0.59001900   -0.03131200
+            O       1.16130100   -0.27238000   -0.09588100
+            H      -1.84094600    0.30503300    0.67616100
+            H      -1.56302400   -0.35135400   -0.97547300
+            H      -0.90527800   -1.18083900    0.45922600
+            H       1.59959900   -0.05717500    0.73408000
+        point_index: 11
+        relative_energy_kj_mol: 8.555275304443988
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 88.0
+          value_unit: degree
+        electronic_energy_hartree: -190.871029883
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13135400   -0.21176300    0.02031200
+            O       0.02797100    0.59186400   -0.03219400
+            O       1.15841700   -0.27309400   -0.09543200
+            H      -1.88024500    0.37433700    0.55557900
+            H      -1.48350700   -0.47506300   -0.98062200
+            H      -0.93669300   -1.12195300    0.59033000
+            H       1.59746700   -0.05690700    0.73385500
+        point_index: 12
+        relative_energy_kj_mol: 6.103402377231218
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 96.0
+          value_unit: degree
+        electronic_energy_hartree: -190.871958632
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12667800   -0.21465000    0.02006100
+            O       0.02665900    0.59404200   -0.03065700
+            O       1.15594400   -0.27217700   -0.09633400
+            H      -1.91248800    0.42383500    0.42644100
+            H      -1.40197400   -0.58825800   -0.96986600
+            H      -0.97725500   -1.05563800    0.70108500
+            H       1.59096400   -0.06696200    0.73790400
+        point_index: 13
+        relative_energy_kj_mol: 3.6649720092861906
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 104.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872730272
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12247400   -0.21753800    0.01985600
+            O       0.02550600    0.59627800   -0.02673800
+            O       1.15420000   -0.26984400   -0.09852800
+            H      -1.93700000    0.45506400    0.29193700
+            H      -1.32075300   -0.68983100   -0.94599900
+            H      -1.02616000   -0.98545700    0.79211200
+            H       1.58111300   -0.08601100    0.74494500
+        point_index: 14
+        relative_energy_kj_mol: 1.6390312985510835
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 112.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873219159
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11958300   -0.21965000    0.01997500
+            O       0.02466700    0.59790700   -0.02174400
+            O       1.15321500   -0.26726100   -0.10102800
+            H      -1.95331600    0.47082700    0.15363000
+            H      -1.24196200   -0.78194900   -0.90938500
+            H      -1.08316400   -0.91074800    0.86740100
+            H       1.57288600   -0.10539600    0.75067800
+        point_index: 15
+        relative_energy_kj_mol: 0.3554585493248852
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 120.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.873349562
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11851700   -0.22059300    0.02037100
+            O       0.02445200    0.59886600   -0.01647100
+            O       1.15306600   -0.26487300   -0.10347000
+            H      -1.96090000    0.47214500    0.01336800
+            H      -1.16748100   -0.86650900   -0.85970200
+            H      -1.14752900   -0.83067600    0.92879200
+            H       1.56687400   -0.12334300    0.75483900
+        point_index: 16
+        relative_energy_kj_mol: 0.013085491332082862
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 128.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.873098044
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11949100   -0.22023000    0.02089600
+            O       0.02478400    0.59873100   -0.01174800
+            O       1.15414600   -0.26268600   -0.10552400
+            H      -1.95900800    0.46005600   -0.12711400
+            H      -1.09956200   -0.94528700   -0.79584300
+            H      -1.21887200   -0.74319400    0.97776900
+            H       1.56294600   -0.13855700    0.75798400
+        point_index: 17
+        relative_energy_kj_mol: 0.6734459647049282
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 136.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.872507876
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12213000   -0.21879800    0.02121200
+            O       0.02562700    0.59789500   -0.00797800
+            O       1.15624300   -0.26055800   -0.10711700
+            H      -1.94820100    0.43303700   -0.26561700
+            H      -1.03830600   -1.01921400   -0.71645400
+            H      -1.29494400   -0.64705500    1.01417300
+            H       1.55926400   -0.15267600    0.76138900
+        point_index: 18
+        relative_energy_kj_mol: 2.2229319651211363
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 144.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.871670267
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12621800   -0.21654500    0.02133700
+            O       0.02681300    0.59620100   -0.00600000
+            O       1.15936400   -0.25872700   -0.10788500
+            H      -1.92825300    0.39076100   -0.40012500
+            H      -0.98598900   -1.08865600   -0.61911900
+            H      -1.37462000   -0.53982100    1.03761300
+            H       1.55675400   -0.16280300    0.76468900
+        point_index: 19
+        relative_energy_kj_mol: 4.4220742759134835
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 152.0
+          value_unit: degree
+        electronic_energy_hartree: -190.870723457
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13065600   -0.21406200    0.02121200
+            O       0.02824500    0.59448600   -0.00625200
+            O       1.16232800   -0.25778400   -0.10766400
+            H      -1.90020800    0.33038100   -0.52785200
+            H      -0.94116800   -1.15201200   -0.50142800
+            H      -1.45501100   -0.42124200    1.04611400
+            H       1.55573800   -0.16637200    0.76722100
+        point_index: 20
+        relative_energy_kj_mol: 6.907923796852908
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 159.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.869823029
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13503300   -0.21184500    0.02100700
+            O       0.02949000    0.59249400   -0.00878200
+            O       1.16525900   -0.25777900   -0.10653700
+            H      -1.86402100    0.25205200   -0.64550100
+            H      -0.90713300   -1.20574000   -0.36298000
+            H      -1.53438100   -0.29177700    1.03680500
+            H       1.55774100   -0.16118600    0.76818400
+        point_index: 21
+        relative_energy_kj_mol: 9.27199738330385
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 167.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.869130163
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13837100   -0.21034000    0.02092400
+            O       0.03046200    0.59069200   -0.01334500
+            O       1.16709500   -0.25936000   -0.10455200
+            H      -1.82021500    0.15529700   -0.74926900
+            H      -0.88401100   -1.24484300   -0.20490800
+            H      -1.61045500   -0.15467100    1.00618400
+            H       1.56444700   -0.14439800    0.76562500
+        point_index: 22
+        relative_energy_kj_mol: 11.091116968190722
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 175.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.868779805
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.14003700   -0.20997600    0.02079800
+            O       0.03086400    0.58920700   -0.01831400
+            O       1.16782900   -0.26182800   -0.10247600
+            H      -1.76892000    0.04349600   -0.83550500
+            H      -0.87303300   -1.26388500   -0.03401000
+            H      -1.68117700   -0.01731300    0.95125200
+            H       1.57381100   -0.12147500    0.75979000
+        point_index: 23
+        relative_energy_kj_mol: 12.010981847544754
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 184.0
+          value_unit: degree
+        electronic_energy_hartree: -190.868852302
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13964900   -0.21083800    0.02072100
+            O       0.03073600    0.58839200   -0.02234900
+            O       1.16723500   -0.26473600   -0.10083000
+            H      -1.70976900   -0.07825900   -0.90208800
+            H      -0.87478500   -1.25979400    0.14015500
+            H      -1.74518100    0.11176200    0.87163000
+            H       1.58385900   -0.09792400    0.75140300
+        point_index: 24
+        relative_energy_kj_mol: 11.820640984337192
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 192.0
+          value_unit: degree
+        electronic_energy_hartree: -190.869343748
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13726500   -0.21248100    0.02107500
+            O       0.02985100    0.58817700   -0.02536800
+            O       1.16538100   -0.26791500   -0.09946100
+            H      -1.64320100   -0.20602800   -0.94818200
+            H      -0.88880600   -1.23254200    0.30920400
+            H      -1.80073900    0.22617900    0.77037300
+            H       1.59447900   -0.07482600    0.74077800
+        point_index: 25
+        relative_energy_kj_mol: 10.530349580911905
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 199.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.870156682
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13345900   -0.21460700    0.02166800
+            O       0.02880500    0.58914400   -0.02661100
+            O       1.16251500   -0.27049800   -0.09880600
+            H      -1.56866100   -0.33354400   -0.97463600
+            H      -0.91421400   -1.18605800    0.46297000
+            H      -1.84799500    0.31901600    0.65255000
+            H       1.60107200   -0.06094500    0.73244000
+        point_index: 26
+        relative_energy_kj_mol: 8.39599147910288
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 207.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.871127548
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12915300   -0.21656600    0.02239500
+            O       0.02737900    0.59056700   -0.02672700
+            O       1.15965800   -0.27179100   -0.09867800
+            H      -1.48854100   -0.45841700   -0.98216400
+            H      -0.94916100   -1.12499500    0.59763900
+            H      -1.88631400    0.38931500    0.52463900
+            H       1.60264000   -0.05671900    0.72875900
+        point_index: 27
+        relative_energy_kj_mol: 5.846982933568357
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 216.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872073507
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12467200   -0.21841300    0.02264100
+            O       0.02610000    0.59302100   -0.02522300
+            O       1.15674900   -0.27135100   -0.09949800
+            H      -1.40330200   -0.57674500   -0.97267900
+            H      -0.99118900   -1.05522400    0.71036100
+            H      -1.91683900    0.43580100    0.39192500
+            H       1.59656800   -0.06671400    0.73232300
+        point_index: 28
+        relative_energy_kj_mol: 3.3633677130346964
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 224.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872829355
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12121800   -0.21971000    0.02229700
+            O       0.02514800    0.59553300   -0.02280200
+            O       1.15459400   -0.26961100   -0.10072600
+            H      -1.31686400   -0.68789900   -0.94656400
+            H      -1.04056800   -0.97937100    0.80340600
+            H      -1.93951700    0.46298000    0.25754000
+            H       1.58631800   -0.08482000    0.74006200
+        point_index: 29
+        relative_energy_kj_mol: 1.3788888961354766
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 232.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873270496
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11896900   -0.22046300    0.02126200
+            O       0.02453100    0.59780100   -0.01964600
+            O       1.15320400   -0.26710100   -0.10213500
+            H      -1.23169000   -0.79104300   -0.90439500
+            H      -1.09645100   -0.89883800    0.87905000
+            H      -1.95453800    0.47352100    0.12306600
+            H       1.57461500   -0.10645500    0.74894600
+        point_index: 30
+        relative_energy_kj_mol: 0.2206732630904603
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 240.0
+          value_unit: degree
+        electronic_energy_hartree: -190.87332997
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11864400   -0.22044400    0.01973000
+            O       0.02449900    0.59912100   -0.01609400
+            O       1.15307000   -0.26433000   -0.10354800
+            H      -1.15184600   -0.88570700   -0.84631700
+            H      -1.15958400   -0.81310900    0.93951200
+            H      -1.96195700    0.47032800   -0.01100600
+            H       1.56469300   -0.12717700    0.75656000
+        point_index: 31
+        relative_energy_kj_mol: 0.06452428455978747
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 248.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.87300133
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11972200   -0.21991000    0.01778100
+            O       0.02479300    0.59951000   -0.01223200
+            O       1.15407100   -0.26143800   -0.10505000
+            H      -1.07981700   -0.97181900   -0.77303900
+            H      -1.22925200   -0.72260700    0.98541900
+            H      -1.96023500    0.45543800   -0.14343400
+            H       1.55672100   -0.14613000    0.76262200
+        point_index: 32
+        relative_energy_kj_mol: 0.9273685579917753
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 256.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.872347797
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12295400   -0.21871800    0.01593700
+            O       0.02573400    0.59840900   -0.00820000
+            O       1.15687600   -0.25834100   -0.10682100
+            H      -1.01819600   -1.04787700   -0.68538000
+            H      -1.30458400   -0.62407500    1.01832000
+            H      -1.95115600    0.42718400   -0.27583600
+            H       1.55078100   -0.16347000    0.76744100
+        point_index: 33
+        relative_energy_kj_mol: 2.6432193569026468
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 264.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.871479896
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12686900   -0.21715500    0.01463200
+            O       0.02692300    0.59669000   -0.00536400
+            O       1.16006200   -0.25620800   -0.10811500
+            H      -0.96756900   -1.11541200   -0.58230400
+            H      -1.38312800   -0.51712900    1.03768200
+            H      -1.93253100    0.38528500   -0.40521000
+            H       1.54855500   -0.17366600    0.76987600
+        point_index: 34
+        relative_energy_kj_mol: 4.9218933094556485
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 272.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.870546417
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13117100   -0.21530500    0.01430700
+            O       0.02822300    0.59450700   -0.00452700
+            O       1.16330500   -0.25535200   -0.10861400
+            H      -0.92841600   -1.17318300   -0.46363400
+            H      -1.46252300   -0.40066900    1.04265100
+            H      -1.90465000    0.32723800   -0.52991300
+            H       1.55039300   -0.17480000    0.77018600
+        point_index: 35
+        relative_energy_kj_mol: 7.372742291732211
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 280.0
+          value_unit: degree
+        electronic_energy_hartree: -190.86969928
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13521300   -0.21334700    0.01533900
+            O       0.02944200    0.59225600   -0.00677200
+            O       1.16588800   -0.25638000   -0.10771700
+            H      -0.90013900   -1.21939500   -0.32877500
+            H      -1.54047800   -0.27431200    1.03134900
+            H      -1.86783300    0.25014000   -0.64664700
+            H       1.55708200   -0.16335700    0.76794800
+        point_index: 36
+        relative_energy_kj_mol: 9.596900365304704
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 288.0
+          value_unit: degree
+        electronic_energy_hartree: -190.869076021
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13824700   -0.21167000    0.01724900
+            O       0.03035900    0.59042800   -0.01130900
+            O       1.16754200   -0.25850900   -0.10579400
+            H      -0.88191800   -1.25078900   -0.18167400
+            H      -1.61429400   -0.14348700    1.00062700
+            H      -1.82241000    0.15444600   -0.75023600
+            H       1.56489700   -0.14550300    0.76461600
+        point_index: 37
+        relative_energy_kj_mol: 11.233266781474935
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 296.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.86877457
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13996600   -0.21039500    0.01984100
+            O       0.03084200    0.58907200   -0.01761300
+            O       1.16799100   -0.26160900   -0.10291400
+            H      -0.87320300   -1.26464900   -0.02612700
+            H      -1.68290400   -0.01320700    0.94853200
+            H      -1.76882300    0.04229000   -0.83661800
+            H       1.57406300   -0.12176600    0.75938500
+        point_index: 38
+        relative_energy_kj_mol: 12.024726339311862
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 304.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.868841928
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.14003400   -0.20980700    0.02254400
+            O       0.03082100    0.58856100   -0.02413400
+            O       1.16701700   -0.26510900   -0.09975500
+            H      -0.87300500   -1.25956100    0.13120000
+            H      -1.74503600    0.10892100    0.87480600
+            H      -1.70762600   -0.08123600   -0.90261300
+            H       1.58316500   -0.09689500    0.75245800
+        point_index: 39
+        relative_energy_kj_mol: 11.847877919864153
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 312.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.86926851
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13848400   -0.20992600    0.02482900
+            O       0.03022500    0.58881600   -0.02941300
+            O       1.16487400   -0.26840300   -0.09703700
+            H      -0.88159300   -1.23609400    0.28371500
+            H      -1.79974900    0.21650600    0.78172300
+            H      -1.63982000   -0.20952400   -0.94728500
+            H       1.59127300   -0.07463400    0.74446900
+        point_index: 40
+        relative_energy_kj_mol: 10.727886939239037
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 320.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.869986199
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13557000   -0.21080200    0.02625600
+            O       0.02930500    0.59003700   -0.03227800
+            O       1.16169000   -0.27112100   -0.09537300
+            H      -0.89886000   -1.19661500    0.42583700
+            H      -1.84711400    0.30463400    0.67321000
+            H      -1.56611100   -0.33583500   -0.97200600
+            H       1.59755000   -0.05870900    0.73663300
+        point_index: 41
+        relative_energy_kj_mol: 8.843594571394965
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 328.0002
+          value_unit: degree
+        electronic_energy_hartree: -190.870880859
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.13172000   -0.21239400    0.02657500
+            O       0.02799600    0.59186600   -0.03229400
+            O       1.15847000   -0.27232200   -0.09532900
+            H      -0.92589200   -1.14457700    0.55398000
+            H      -1.88596800    0.37257300    0.55420200
+            H      -1.48863800   -0.45581900   -0.97927100
+            H       1.59909200   -0.05416700    0.73262000
+        point_index: 42
+        relative_energy_kj_mol: 6.49466486811151
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 336.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.871806821
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12731300   -0.21445600    0.02579700
+            O       0.02675400    0.59431400   -0.02989400
+            O       1.15525200   -0.27225700   -0.09663000
+            H      -0.96252600   -1.08230500    0.66714000
+            H      -1.91701500    0.42017500    0.42891500
+            H      -1.40843400   -0.56709800   -0.97167200
+            H       1.59580700   -0.06049300    0.73303400
+        point_index: 43
+        relative_energy_kj_mol: 4.0635517682708775
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 344.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.872612261
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12334800   -0.21667200    0.02428700
+            O       0.02553800    0.59639300   -0.02607500
+            O       1.15320100   -0.27082600   -0.09870800
+            H      -1.01033700   -1.01123200    0.76581700
+            H      -1.93972400    0.45160900    0.29974400
+            H      -1.32883400   -0.66975600   -0.95044800
+            H       1.58907100   -0.07512500    0.73743100
+        point_index: 44
+        relative_energy_kj_mol: 1.9488691623680618
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 352.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.873159335
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12015000   -0.21888200    0.02212700
+            O       0.02478500    0.59818000   -0.02134700
+            O       1.15239200   -0.26808500   -0.10127400
+            H      -1.06832200   -0.93235900    0.84945800
+            H      -1.95404100    0.46824000    0.16908300
+            H      -1.25164300   -0.76441700   -0.91660600
+            H       1.57749000   -0.09892900    0.74627100
+        point_index: 45
+        relative_energy_kj_mol: 0.512526452863362
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 360.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.873354528
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11862500   -0.22044000    0.02045400
+            O       0.02444900    0.59869400   -0.01762700
+            O       1.15291600   -0.26558600   -0.10285800
+            H      -1.13688200   -0.84324900    0.92037200
+            H      -1.96029500    0.47303900    0.03556000
+            H      -1.17918300   -0.85389900   -0.86800000
+            H       1.56918900   -0.11811000    0.75322400
+        point_index: 46
+        relative_energy_kj_mol: 4.7259020016059444e-05
+      zero_energy_reference_hartree: -190.873354546
+    type: scan
+  - key: scan_rotor_1
+    scan_result:
+      coordinates:
+      - atom1_index: 1
+        atom2_index: 2
+        atom3_index: 3
+        atom4_index: 7
+        coordinate_index: 1
+        coordinate_kind: dihedral
+        end_value: 607.6507396584807
+        resolution_degrees: 8.0
+        start_value: 247.65073965848072
+        step_count: 46
+        step_size: 8.0
+        symmetry_number: 1
+        value_unit: degree
+      dimension: 1
+      is_relaxed: true
+      points:
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 0.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873354546
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11858200   -0.22050800    0.02032600
+            O       0.02445200    0.59874800   -0.01737300
+            O       1.15300700   -0.26531000   -0.10304400
+            H      -1.13679000   -0.84377100    0.91994000
+            H      -1.96030400    0.47291500    0.03584100
+            H      -1.17907800   -0.85350700   -0.86845500
+            H       1.56799200   -0.12009800    0.75405900
+        point_index: 1
+        relative_energy_kj_mol: 0.0
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 8.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873306949
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11637200   -0.22332200    0.01263100
+            O       0.02425000    0.60082900   -0.00216500
+            O       1.15861800   -0.24979500   -0.11205400
+            H      -1.13561600   -0.86795000    0.89753100
+            H      -1.96090400    0.46617100    0.04364800
+            H      -1.17200000   -0.83535900   -0.89083800
+            H       1.50380600   -0.23119800    0.78761800
+        point_index: 2
+        relative_energy_kj_mol: 0.12496591673521154
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 16.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873146575
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11385300   -0.22538700    0.00359700
+            O       0.02414500    0.60278200    0.01495000
+            O       1.16417500   -0.23413000   -0.11848800
+            H      -1.13503200   -0.89264500    0.87212700
+            H      -1.96134900    0.45952200    0.05037000
+            H      -1.16356000   -0.81447600   -0.91524000
+            H       1.43649100   -0.34929400    0.79946600
+        point_index: 3
+        relative_energy_kj_mol: 0.546027831067006
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 24.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872850888
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11107500   -0.22652800   -0.00567500
+            O       0.02409000    0.60453500    0.03171600
+            O       1.16964400   -0.21927300   -0.12160100
+            H      -1.13541100   -0.91396000    0.84764200
+            H      -1.96160300    0.45351400    0.05385000
+            H      -1.15376300   -0.79460400   -0.93800000
+            H       1.36735700   -0.46788200    0.78964000
+        point_index: 4
+        relative_energy_kj_mol: 1.3223540076994362
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 32.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872401881
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.10815100   -0.22675800   -0.01410100
+            O       0.02405600    0.60618300    0.04598600
+            O       1.17501400   -0.20609300   -0.12104000
+            H      -1.13584900   -0.93020300    0.82681800
+            H      -1.96163300    0.44853800    0.05473500
+            H      -1.14398600   -0.77784500   -0.95697300
+            H       1.29781600   -0.58067000    0.76045600
+        point_index: 5
+        relative_energy_kj_mol: 2.5012218225668517
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 40.0
+          value_unit: degree
+        electronic_energy_hartree: -190.871787865
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.10523900   -0.22625600   -0.02087500
+            O       0.02401100    0.60790900    0.05634800
+            O       1.18029600   -0.19511800   -0.11692200
+            H      -1.13591000   -0.94046200    0.81174300
+            H      -1.96144500    0.44480400    0.05349600
+            H      -1.13526400   -0.76589500   -0.97079200
+            H       1.22959600   -0.68324100    0.71539800
+        point_index: 6
+        relative_energy_kj_mol: 4.113320743637055
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 48.0
+          value_unit: degree
+        electronic_energy_hartree: -190.871006421
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.10254400   -0.22526300   -0.02556500
+            O       0.02392000    0.60980900    0.06223400
+            O       1.18554000   -0.18646800   -0.10970100
+            H      -1.13512100   -0.94516200    0.80298900
+            H      -1.96109300    0.44229200    0.05140400
+            H      -1.12875600   -0.75898100   -0.97929900
+            H       1.16455200   -0.77329300    0.65803300
+        point_index: 7
+        relative_energy_kj_mol: 6.165001854911997
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 56.0
+          value_unit: degree
+        electronic_energy_hartree: -190.870067704
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.10028000   -0.22401200   -0.02804300
+            O       0.02375400    0.61183300    0.06374500
+            O       1.19079000   -0.17993300   -0.09997700
+            H      -1.13331600   -0.94531900    0.80011100
+            H      -1.96064400    0.44089900    0.04968300
+            H      -1.12532500   -0.75646500   -0.98299200
+            H       1.10460900   -0.85024400    0.59131300
+        point_index: 8
+        relative_energy_kj_mol: 8.62960320544657
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 64.0
+          value_unit: degree
+        electronic_energy_hartree: -190.868999572
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09864800   -0.22269400   -0.02838900
+            O       0.02348500    0.61380100    0.06137300
+            O       1.19607500   -0.17510200   -0.08834600
+            H      -1.13108300   -0.94153100    0.80261200
+            H      -1.96017400    0.44061800    0.04835500
+            H      -1.12501300   -0.75797500   -0.98229300
+            H       1.05167800   -0.91454300    0.51745100
+        point_index: 9
+        relative_energy_kj_mol: 11.433983620160426
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 72.0
+          value_unit: degree
+        electronic_energy_hartree: -190.867853087
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09776800   -0.22146100   -0.02680100
+            O       0.02308400    0.61549600    0.05575800
+            O       1.20135600   -0.17151600   -0.07532300
+            H      -1.12913300   -0.93420700    0.80990300
+            H      -1.95978100    0.44138500    0.04688700
+            H      -1.12734600   -0.76320500   -0.97761200
+            H       1.00734800   -0.96704800    0.43814800
+        point_index: 10
+        relative_energy_kj_mol: 14.444079825330606
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 80.0
+          value_unit: degree
+        electronic_energy_hartree: -190.866703595
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09760100   -0.22043200   -0.02354400
+            O       0.02256400    0.61679900    0.04756000
+            O       1.20644300   -0.16881500   -0.06131900
+            H      -1.12810100   -0.92342200    0.82152700
+            H      -1.95954400    0.44301000    0.04410900
+            H      -1.13120200   -0.77219600   -0.96916400
+            H       0.97239300   -1.00866700    0.35486600
+        point_index: 11
+        relative_energy_kj_mol: 17.46207090850988
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 88.0
+          value_unit: degree
+        electronic_energy_hartree: -190.865646241
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09796000   -0.21967100   -0.01893100
+            O       0.02198300    0.61768600    0.03740700
+            O       1.21102300   -0.16676900   -0.04664700
+            H      -1.12857400   -0.90892700    0.83718100
+            H      -1.95948900    0.44518800    0.03839600
+            H      -1.13499600   -0.78532700   -0.95694200
+            H       0.94676900   -1.04024600    0.26887700
+        point_index: 12
+        relative_energy_kj_mol: 20.238153685703544
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 96.0
+          value_unit: degree
+        electronic_energy_hartree: -190.864785018
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09855800   -0.21918100   -0.01329200
+            O       0.02144000    0.61820600    0.02586400
+            O       1.21470500   -0.16527400   -0.03154100
+            H      -1.13036800   -0.89110200    0.85598500
+            H      -1.95955600    0.44742700    0.02924500
+            H      -1.13763200   -0.80223400   -0.94129400
+            H       0.92974500   -1.06246100    0.18123100
+        point_index: 13
+        relative_energy_kj_mol: 22.499294550262785
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 104.0
+          value_unit: degree
+        electronic_energy_hartree: -190.864215577
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09907300   -0.21892000   -0.00696800
+            O       0.02104900    0.61847700    0.01343300
+            O       1.21711600   -0.16435100   -0.01617400
+            H      -1.13304900   -0.87035600    0.87704000
+            H      -1.95967000    0.44912700    0.01650200
+            H      -1.13819800   -0.82251200   -0.92253700
+            H       0.92003600   -1.07574300    0.09273000
+        point_index: 14
+        relative_energy_kj_mol: 23.994361815061364
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 112.0
+          value_unit: degree
+        electronic_energy_hartree: -190.86400574
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09926800   -0.21883800   -0.00029400
+            O       0.02091800    0.61859100    0.00056500
+            O       1.21797600   -0.16404800   -0.00068700
+            H      -1.13541600   -0.84824100    0.89869700
+            H      -1.95971900    0.44980400    0.00192900
+            H      -1.13698500   -0.84451000   -0.90175900
+            H       0.91658000   -1.08037000    0.00387000
+        point_index: 15
+        relative_energy_kj_mol: 24.545288828840366
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 120.0
+          value_unit: degree
+        electronic_energy_hartree: -190.86418228
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09911000   -0.21891900    0.00640900
+            O       0.02100100    0.61849700   -0.01231000
+            O       1.21726600   -0.16428400    0.01481700
+            H      -1.13794700   -0.82469100    0.92060400
+            H      -1.95971900    0.44918000   -0.01497000
+            H      -1.13342400   -0.86816200   -0.87915500
+            H       0.91960900   -1.07651600   -0.08498800
+        point_index: 16
+        relative_energy_kj_mol: 24.08178308388693
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 128.0
+          value_unit: degree
+        electronic_energy_hartree: -190.864722417
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09862500   -0.21917900    0.01275700
+            O       0.02137000    0.61826100   -0.02480200
+            O       1.21498000   -0.16515600    0.03020500
+            H      -1.13745800   -0.80427300    0.93954900
+            H      -1.95963000    0.44754000   -0.02776400
+            H      -1.13075400   -0.88901600   -0.85802300
+            H       0.92879700   -1.06401800   -0.17353000
+        point_index: 17
+        relative_energy_kj_mol: 22.663653466886245
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 136.0
+          value_unit: degree
+        electronic_energy_hartree: -190.865561744
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09802300   -0.21962700    0.01845800
+            O       0.02193700    0.61775800   -0.03645200
+            O       1.21139300   -0.16662400    0.04534600
+            H      -1.13513700   -0.78680400    0.95562400
+            H      -1.95951400    0.44540200   -0.03744600
+            H      -1.12880300   -0.90735500   -0.83879600
+            H       0.94494500   -1.04254700   -0.26128100
+        point_index: 18
+        relative_energy_kj_mol: 20.46000054728116
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 144.0
+          value_unit: degree
+        electronic_energy_hartree: -190.866606073
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09764000   -0.22036000    0.02317400
+            O       0.02251900    0.61689000   -0.04674900
+            O       1.20688700   -0.16861100    0.06006300
+            H      -1.13137300   -0.77344100    0.96809400
+            H      -1.95954000    0.44325300   -0.04329200
+            H      -1.12834800   -0.92206300   -0.82291700
+            H       0.96985900   -1.01181800   -0.34743700
+        point_index: 19
+        relative_energy_kj_mol: 17.718114905633946
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 152.0
+          value_unit: degree
+        electronic_energy_hartree: -190.867751609
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09775300   -0.22136100    0.02656400
+            O       0.02304200    0.61560700   -0.05514400
+            O       1.20183800   -0.17123800    0.07413500
+            H      -1.12741500   -0.76421800    0.97681000
+            H      -1.95974500    0.44160900   -0.04611400
+            H      -1.12939400   -0.93306600   -0.81102500
+            H       1.00403000   -0.97111200   -0.43098700
+        point_index: 20
+        relative_energy_kj_mol: 14.710510299895594
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 160.0
+          value_unit: degree
+        electronic_energy_hartree: -190.868901792
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.09855400   -0.22257700    0.02831600
+            O       0.02345200    0.61393900   -0.06101300
+            O       1.19655800   -0.17473100    0.08725800
+            H      -1.12481100   -0.75878500    0.98176500
+            H      -1.96011200    0.44078000   -0.04749300
+            H      -1.13138600   -0.94059300   -0.80344000
+            H       1.04756100   -0.91960500   -0.51068400
+        point_index: 21
+        relative_energy_kj_mol: 11.690704996322653
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 168.0
+          value_unit: degree
+        electronic_energy_hartree: -190.86997909
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.10011100   -0.22389500    0.02815200
+            O       0.02373100    0.61199200   -0.06369800
+            O       1.19125600   -0.17943700    0.09902900
+            H      -1.12481600   -0.75695400    0.98282200
+            H      -1.96057800    0.44095100   -0.04878200
+            H      -1.13361100   -0.94468900   -0.80051900
+            H       1.09976800   -0.85638100   -0.58508300
+        point_index: 22
+        relative_energy_kj_mol: 8.862259249949293
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 176.0
+          value_unit: degree
+        electronic_energy_hartree: -190.870930438
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.10231300   -0.22516400    0.02587000
+            O       0.02390000    0.60997800   -0.06254600
+            O       1.18598900   -0.18581000    0.10894200
+            H      -1.12795400   -0.75905000    0.97956500
+            H      -1.96106500    0.44217100   -0.05055600
+            H      -1.13534100   -0.94493400   -0.80287800
+            H       1.15911900   -0.78055500   -0.65252200
+        point_index: 23
+        relative_energy_kj_mol: 6.364495210692846
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 184.0
+          value_unit: degree
+        electronic_energy_hartree: -190.871726186
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.10497800   -0.22619000    0.02137700
+            O       0.02399300    0.60806900   -0.05705200
+            O       1.18074200   -0.19426100    0.11640600
+            H      -1.13410400   -0.76566800    0.97144000
+            H      -1.96146500    0.44454300   -0.05252500
+            H      -1.13622700   -0.94055200   -0.81118800
+            H       1.22378100   -0.69164300   -0.71082000
+        point_index: 24
+        relative_energy_kj_mol: 4.275258949396021
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 192.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872354896
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.10788500   -0.22674600    0.01477400
+            O       0.02404600    0.60633300   -0.04706800
+            O       1.17546400   -0.20503500    0.12081500
+            H      -1.14256400   -0.77731700    0.95800200
+            H      -1.96168000    0.44817300   -0.05370200
+            H      -1.13631600   -0.93066300   -0.82581800
+            H       1.29179100   -0.59010200   -0.75709400
+        point_index: 25
+        relative_energy_kj_mol: 2.6245809334423504
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 200.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872817935
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11082500   -0.22658700    0.00646400
+            O       0.02408700    0.60468400   -0.03309400
+            O       1.17010900   -0.21804200    0.12169600
+            H      -1.15231900   -0.79369100    0.93943300
+            H      -1.96166200    0.45305500   -0.05304600
+            H      -1.13591500   -0.91492400   -0.84617700
+            H       1.36128300   -0.47805700   -0.78781500
+        point_index: 26
+        relative_energy_kj_mol: 1.4088721044989938
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 208.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873126352
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11362400   -0.22552800   -0.00277500
+            O       0.02414400    0.60294800   -0.01646800
+            O       1.16465200   -0.23278700    0.11889700
+            H      -1.16227900   -0.81325400    0.91697900
+            H      -1.96140500    0.45899000   -0.04997400
+            H      -1.13545700   -0.89410300   -0.87034000
+            H       1.43052100   -0.35975300   -0.79944300
+        point_index: 27
+        relative_energy_kj_mol: 0.5991233146465322
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 216.0
+          value_unit: degree
+        electronic_energy_hartree: -190.87329778
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11616300   -0.22353500   -0.01187800
+            O       0.02424800    0.60100900    0.00071200
+            O       1.15909100   -0.24841900    0.11273100
+            H      -1.17122600   -0.83370900    0.89287000
+            H      -1.96095000    0.46558500   -0.04416000
+            H      -1.13561300   -0.87002700   -0.89546100
+            H       1.49805800   -0.24135800   -0.78952100
+        point_index: 28
+        relative_energy_kj_mol: 0.14903912496023405
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 224.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873354207
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11836800   -0.22078200   -0.01972500
+            O       0.02442700    0.59895000    0.01618200
+            O       1.15347800   -0.26399900    0.10390400
+            H      -1.17861000   -0.85197300    0.87033200
+            H      -1.96032800    0.47232000   -0.03677100
+            H      -1.13654800   -0.84593000   -0.91807900
+            H       1.56245500   -0.12933400   -0.75782800
+        point_index: 29
+        relative_energy_kj_mol: 0.0008900444416788207
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 232.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873322667
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12022100   -0.21758700   -0.02546000
+            O       0.02469200    0.59700800    0.02810600
+            O       1.14790000   -0.27869700    0.09330600
+            H      -1.18401500   -0.86590500    0.85219700
+            H      -1.95959100    0.47878100   -0.02876200
+            H      -1.13849500   -0.82479900   -0.93566300
+            H       1.62269100   -0.02904500   -0.70630500
+        point_index: 30
+        relative_energy_kj_mol: 0.0836983099981951
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 240.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873230328
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12171300   -0.21430600   -0.02863400
+            O       0.02505200    0.59546500    0.03552700
+            O       1.14244900   -0.29197300    0.08169900
+            H      -1.18705700   -0.87471900    0.84012500
+            H      -1.95880800    0.48463400   -0.02068400
+            H      -1.14163600   -0.80850700   -0.94709500
+            H       1.67777200    0.05649300   -0.63835400
+        point_index: 31
+        relative_energy_kj_mol: 0.3261343413963942
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 248.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873104021
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12287600   -0.21122300   -0.02919600
+            O       0.02549300    0.59445900    0.03835500
+            O       1.13728600   -0.30354300    0.06959100
+            H      -1.18805700   -0.87811400    0.83489800
+            H      -1.95800300    0.48977100   -0.01354300
+            H      -1.14567900   -0.79824400   -0.95204000
+            H       1.72676400    0.12660000   -0.55770200
+        point_index: 32
+        relative_energy_kj_mol: 0.6577533520496233
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 256.0
+          value_unit: degree
+        electronic_energy_hartree: -190.87296737
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12375700   -0.20852300   -0.02736600
+            O       0.02598400    0.59397000    0.03705000
+            O       1.13258900   -0.31327100    0.05724700
+            H      -1.18736400   -0.87655500    0.83622600
+            H      -1.95721900    0.49416200   -0.00778600
+            H      -1.15036300   -0.79406800   -0.95097200
+            H       1.76890600    0.18200000   -0.46764300
+        point_index: 33
+        relative_energy_kj_mol: 1.0165305331715793
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 264.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872839134
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12439500   -0.20630800   -0.02350800
+            O       0.02647700    0.59388200    0.03233700
+            O       1.12852900   -0.32109900    0.04478000
+            H      -1.18522200   -0.87094700    0.84311200
+            H      -1.95650700    0.49776700   -0.00338000
+            H      -1.15550600   -0.79525400   -0.94480000
+            H       1.80355300    0.22402100   -0.37081700
+        point_index: 34
+        relative_energy_kj_mol: 1.3532141329949265
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 272.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872733292
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12482600   -0.20462900   -0.01804600
+            O       0.02691900    0.59403100    0.02502400
+            O       1.12527400   -0.32700800    0.03222400
+            H      -1.18203200   -0.86209800    0.85441900
+            H      -1.95591200    0.50055300   -0.00042100
+            H      -1.16079600   -0.80097700   -0.93442700
+            H       1.83015600    0.25411500   -0.26927800
+        point_index: 35
+        relative_energy_kj_mol: 1.6311022890316795
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 280.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872658183
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12508800   -0.20350300   -0.01142700
+            O       0.02725300    0.59424700    0.01590500
+            O       1.12298000   -0.33098300    0.01959200
+            H      -1.17826300   -0.85074400    0.86898200
+            H      -1.95547500    0.50248100    0.00097400
+            H      -1.16587100   -0.81037600   -0.92073300
+            H       1.84827100    0.27354300   -0.16463100
+        point_index: 36
+        relative_energy_kj_mol: 1.828300957877043
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 288.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872618369
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12521500   -0.20292800   -0.00410400
+            O       0.02743400    0.59438800    0.00572400
+            O       1.12178500   -0.33301900    0.00690300
+            H      -1.17419400   -0.83789400    0.88545500
+            H      -1.95522600    0.50351500    0.00115500
+            H      -1.17060100   -0.82227900   -0.90480300
+            H       1.85756500    0.28327700   -0.05820700
+        point_index: 37
+        relative_energy_kj_mol: 1.9328326092121813
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 296.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872616743
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12520200   -0.20291200    0.00347400
+            O       0.02743800    0.59441300   -0.00482000
+            O       1.12171600   -0.33311300   -0.00580900
+            H      -1.16978300   -0.82482500    0.90239600
+            H      -1.95521000    0.50354300    0.00087400
+            H      -1.17495400   -0.83533700   -0.88790500
+            H       1.85792700    0.28368700    0.04882600
+        point_index: 38
+        relative_energy_kj_mol: 1.9371016719806526
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 304.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872653264
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12507100   -0.20344700    0.01084800
+            O       0.02727100    0.59430100   -0.01504200
+            O       1.12279500   -0.33125400   -0.01850800
+            H      -1.16540900   -0.81234000    0.91877500
+            H      -1.95543000    0.50258400    0.00023000
+            H      -1.17865100   -0.84871200   -0.87104400
+            H       1.84938700    0.27477300    0.15535000
+        point_index: 39
+        relative_energy_kj_mol: 1.8412157916575738
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 312.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872725355
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12484900   -0.20451600    0.01754400
+            O       0.02695500    0.59406400   -0.02427200
+            O       1.12502000   -0.32743900   -0.03114500
+            H      -1.16083000   -0.80217000    0.93303500
+            H      -1.95585400    0.50076500    0.00074900
+            H      -1.18209700   -0.86071300   -0.85592400
+            H       1.83207100    0.25621000    0.26021100
+        point_index: 40
+        relative_energy_kj_mol: 1.651940881387429
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 320.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872828853
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12445000   -0.20614000    0.02311800
+            O       0.02652600    0.59389000   -0.03177200
+            O       1.12821000   -0.32169300   -0.04370400
+            H      -1.15579800   -0.79581600    0.94390300
+            H      -1.95644600    0.49806200    0.00320800
+            H      -1.18516500   -0.87006400   -0.84410200
+            H       1.80622000    0.22708400    0.36208900
+        point_index: 41
+        relative_energy_kj_mol: 1.3802068970801502
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 328.0
+          value_unit: degree
+        electronic_energy_hartree: -190.872955682
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12383500   -0.20830800    0.02712900
+            O       0.02603500    0.59394700   -0.03674400
+            O       1.13220900   -0.31402900   -0.05617700
+            H      -1.15077700   -0.79401100    0.95059500
+            H      -1.95715700    0.49451800    0.00725000
+            H      -1.18727600   -0.87616300   -0.83665300
+            H       1.77226300    0.18615600    0.45940600
+        point_index: 42
+        relative_energy_kj_mol: 1.0472173755180463
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 336.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873092237
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12297600   -0.21097000    0.02914600
+            O       0.02554100    0.59439500   -0.03837900
+            O       1.13685900   -0.30446700   -0.06853100
+            H      -1.14612900   -0.79756900    0.95222000
+            H      -1.95794000    0.49018700    0.01274700
+            H      -1.18801800   -0.87822100   -0.83471600
+            H       1.73074000    0.13199500    0.55015700
+        point_index: 43
+        relative_energy_kj_mol: 0.6886922423287263
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 344.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873220245
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12183200   -0.21402700    0.02880100
+            O       0.02509100    0.59535800   -0.03593700
+            O       1.14198500   -0.29305600   -0.08066700
+            H      -1.14209100   -0.80717900    0.94790100
+            H      -1.95875000    0.48509900    0.01963400
+            H      -1.18707500   -0.87539300   -0.83927000
+            H       1.68230100    0.06322000    0.63175700
+        point_index: 44
+        relative_energy_kj_mol: 0.35260725648530483
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 352.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873316542
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.12036700   -0.21730100    0.02585600
+            O       0.02472100    0.59685700   -0.02892500
+            O       1.14741700   -0.27992000   -0.09233200
+            H      -1.13882900   -0.82301400    0.93701700
+            H      -1.95953800    0.47930700    0.02772100
+            H      -1.18424600   -0.86702200   -0.85078100
+            H       1.62770900   -0.02096300    0.70096400
+        point_index: 45
+        relative_energy_kj_mol: 0.09977949662737795
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 360.0
+          value_unit: degree
+        electronic_energy_hartree: -190.873354541
+        geometry:
+          xyz_text: |-
+            7
+
+            C      -1.11854900   -0.22051400    0.02033400
+            O       0.02444500    0.59876500   -0.01737700
+            O       1.15299900   -0.26532800   -0.10304500
+            H      -1.13657700   -0.84408700    0.91973700
+            H      -1.96026400    0.47291500    0.03619600
+            H      -1.17928600   -0.85322100   -0.86863400
+            H       1.56787000   -0.12001500    0.75407500
+        point_index: 46
+        relative_energy_kj_mol: 1.3127509705638405e-05
+      zero_energy_reference_hartree: -190.873354546
+    type: scan
+  applied_energy_corrections:
+  - application_role: aec_total
+    components:
+    - component_kind: atom
+      contribution_value: 38.055229194978246
+      key: C
+      multiplicity: 1
+      parameter_unit: hartree
+      parameter_value: -37.78475071221127
+    - component_kind: atom
+      contribution_value: 2.3226882247238505
+      key: H
+      multiplicity: 4
+      parameter_unit: hartree
+      parameter_value: -0.5000040040073649
+    - component_kind: atom
+      contribution_value: 150.18095818171778
+      key: O
+      multiplicity: 2
+      parameter_unit: hartree
+      parameter_value: -74.99813677621309
+    scheme:
+      atom_params:
+      - element: C
+        value: -37.78475071221127
+      - element: Cl
+        value: -459.69651810328156
+      - element: F
+        value: -99.65901652526594
+      - element: H
+        value: -0.5000040040073649
+      - element: N
+        value: -54.52453035051977
+      - element: O
+        value: -74.99813677621309
+      - element: S
+        value: -397.6679482878494
+      kind: atom_energy
+      level_of_theory: &id002
+        auxiliary_basis: aug-cc-pvtz/c
+        basis: cc-pvtz-f12
+        cabs: cc-pvtz-f12-cabs
+        method: dlpno-ccsd(t)-f12
+        method_type: wavefunction
+        software: orca
+      name: atom_energy
+      note: Per-species AEC computed by Arkane.
+      source_literature: null
+      units: hartree
+      version: null
+    value: 190.55887560141989
+    value_unit: hartree
+  - application_role: bac_total
+    components:
+    - component_kind: bond
+      contribution_value: -0.240519158218346
+      key: C-H
+      multiplicity: 3
+      parameter_unit: kcal_mol
+      parameter_value: -0.08017305273944866
+    - component_kind: bond
+      contribution_value: -0.13764526344273006
+      key: C-O
+      multiplicity: 1
+      parameter_unit: kcal_mol
+      parameter_value: -0.13764526344273006
+    - component_kind: bond
+      contribution_value: -0.17273460791217013
+      key: H-O
+      multiplicity: 1
+      parameter_unit: kcal_mol
+      parameter_value: -0.17273460791217013
+    - component_kind: bond
+      contribution_value: -1.5577087944484471
+      key: O-O
+      multiplicity: 1
+      parameter_unit: kcal_mol
+      parameter_value: -1.5577087944484471
+    scheme:
+      bond_params:
+      - bond_key: C#C
+        value: -0.982597271828914
+      - bond_key: C#N
+        value: -0.3283125828210814
+      - bond_key: C#O
+        value: 0.17286574008491584
+      - bond_key: C-C
+        value: -0.008543746007425343
+      - bond_key: C-Cl
+        value: 0.3520255124816659
+      - bond_key: C-F
+        value: 0.631472917414716
+      - bond_key: C-H
+        value: -0.08017305273944866
+      - bond_key: C-N
+        value: 0.13833379134615956
+      - bond_key: C-O
+        value: -0.13764526344273006
+      - bond_key: C-S
+        value: 0.09397847801178551
+      - bond_key: C=C
+        value: -0.35527223034098027
+      - bond_key: C=N
+        value: -0.6082496375886673
+      - bond_key: C=O
+        value: -0.5925653642190839
+      - bond_key: C=S
+        value: -0.7916167979435471
+      - bond_key: Cl-Cl
+        value: 0.102119976777834
+      - bond_key: Cl-F
+        value: 0.35834979657113486
+      - bond_key: Cl-H
+        value: 0.37722761336653576
+      - bond_key: Cl-N
+        value: 0.24362105625176722
+      - bond_key: Cl-O
+        value: -0.30321812576871465
+      - bond_key: Cl-S
+        value: 0.3698531320784155
+      - bond_key: F-F
+        value: -0.5206580899046781
+      - bond_key: F-H
+        value: 0.10770093360747524
+      - bond_key: F-O
+        value: -1.093697489896995
+      - bond_key: F-S
+        value: 0.9537024545758375
+      - bond_key: H-H
+        value: -0.4695215879854784
+      - bond_key: H-N
+        value: -0.3001881490725287
+      - bond_key: H-O
+        value: -0.17273460791217013
+      - bond_key: H-S
+        value: 0.6453788347829875
+      - bond_key: N#N
+        value: 0.3536764027271856
+      - bond_key: N-N
+        value: 1.0280964341867438
+      - bond_key: N-O
+        value: -0.36569948213780085
+      - bond_key: N=N
+        value: 0.016819631963059654
+      - bond_key: N=O
+        value: -2.1355012391692445
+      - bond_key: O-O
+        value: -1.5577087944484471
+      - bond_key: O-S
+        value: -0.6020941596112097
+      - bond_key: O=O
+        value: -4.405777043235522
+      - bond_key: O=S
+        value: -0.14850188392821617
+      - bond_key: S-S
+        value: 0.19851252326088406
+      - bond_key: S=S
+        value: -1.914710085917519
+      kind: bac_petersson
+      level_of_theory: *id002
+      name: bac_petersson
+      note: Per-species BAC computed by Arkane (bac_type=p).
+      source_literature: null
+      units: kcal_mol
+      version: null
+    value: -2.1086078240216932
+    value_unit: kcal_mol
+  charge: 0
+  coarse_opt_final_energy_hartree: -190.873349539
+  coarse_opt_input_xyz: |-
+    C      -1.11895700   -0.22051000    0.02035700
+    O       0.02438400    0.59841500   -0.01752500
+    O       1.15336600   -0.26528400   -0.10295900
+    H      -1.13589100   -0.84576000    0.91870600
+    H      -1.95952300    0.47419600    0.03899300
+    H      -1.18134400   -0.85139000   -0.86984700
+    H       1.56850200   -0.11903800    0.75387500
+  coarse_opt_log: calcs/Species/rxn_209_COO/opt_a3252/input.log
+  coarse_opt_n_steps: 4
+  coarse_opt_output_xyz: |-
+    C      -1.11895700   -0.22051000    0.02035700
+    O       0.02438400    0.59841500   -0.01752500
+    O       1.15336600   -0.26528400   -0.10295900
+    H      -1.13589100   -0.84576000    0.91870600
+    H      -1.95952300    0.47419600    0.03899300
+    H      -1.18134400   -0.85139000   -0.86984700
+    H       1.56850200   -0.11903800    0.75387500
+  converged: true
+  ess_versions:
+    freq: Gaussian 09, Revision D.01
+    opt: Gaussian 09, Revision D.01
+    sp: ORCA 6.0.0
+  formula: CH4O2
+  freq_constraints: []
+  freq_input: calcs/Species/rxn_209_COO/freq_a3275/input.gjf
+  freq_log: calcs/Species/rxn_209_COO/freq_a3275/input.log
+  freq_n_imag: 0
+  imag_freq_cm1: null
+  inchi: InChI=1S/CH4O2/c1-3-2/h2H,1H3
+  inchi_key: MEUKEBNAABNAEX-UHFFFAOYSA-N
+  is_ts: false
+  label: rxn_209_COO
+  multiplicity: 1
+  opt_constraints: []
+  opt_converged: true
+  opt_final_energy_hartree: -190.873354546
+  opt_input: calcs/Species/rxn_209_COO/opt_a3259/input.gjf
+  opt_input_xyz: |-
+    C      -1.11895700   -0.22051000    0.02035700
+    O       0.02438400    0.59841500   -0.01752500
+    O       1.15336600   -0.26528400   -0.10295900
+    H      -1.13589100   -0.84576000    0.91870600
+    H      -1.95952300    0.47419600    0.03899300
+    H      -1.18134400   -0.85139000   -0.86984700
+    H       1.56850200   -0.11903800    0.75387500
+  opt_log: calcs/Species/rxn_209_COO/opt_a3259/input.log
+  opt_n_steps: 2
+  original_label: null
+  smiles: COO
+  sp_constraints: []
+  sp_energy_hartree: -190.664519754053
+  sp_input: calcs/Species/rxn_209_COO/sp_a3274/input.in
+  sp_log: calcs/Species/rxn_209_COO/sp_a3274/input.log
+  statmech:
+    e0_kj_mol: -144.565
+    external_symmetry: 1
+    harmonic_frequencies_cm1:
+    - 201.0655
+    - 253.4544
+    - 465.894
+    - 937.0024
+    - 1094.0855
+    - 1182.5509
+    - 1225.6023
+    - 1403.429
+    - 1460.1585
+    - 1471.6628
+    - 1515.8971
+    - 3025.0675
+    - 3098.4315
+    - 3140.6592
+    - 3826.2324
+    is_linear: false
+    optical_isomers: 2
+    point_group: C1
+    rigid_rotor_kind: asymmetric_top
+    spin_multiplicity: 1
+    torsions:
+    - atom_indices:
+      - 4
+      - 1
+      - 2
+      - 3
+      barrier_kj_mol: 12.024726339311862
+      pivot_atoms:
+      - 1
+      - 2
+      source_scan_calculation_key: scan_rotor_0
+      symmetry_number: 3
+      treatment: hindered_rotor
+    - atom_indices:
+      - 1
+      - 2
+      - 3
+      - 7
+      barrier_kj_mol: 24.545288828840366
+      pivot_atoms:
+      - 2
+      - 3
+      source_scan_calculation_key: scan_rotor_1
+      symmetry_number: 1
+      treatment: hindered_rotor
+  thermo:
+    h298_kj_mol: -130.80860701529284
+    nasa_high:
+      coeffs:
+      - 3.23724
+      - 0.0168892
+      - -8.7616e-06
+      - 2.2269e-09
+      - -2.22877e-13
+      - -17458.0
+      - 10.5411
+      tmax_k: 3000.0
+      tmin_k: 960.356
+    nasa_low:
+      coeffs:
+      - 3.89981
+      - 0.00974549
+      - 9.24375e-06
+      - -1.50256e-08
+      - 5.50571e-12
+      - -17383.1
+      - 8.42397
+      tmax_k: 960.356
+      tmin_k: 10.0
+    s298_j_mol_k: 281.34609570590317
+    thermo_points:
+    - cp_j_mol_k: 60.64824937640207
+      g_kj_mol: -215.21278240835943
+      h_kj_mol: -130.69657608766022
+      s_j_mol_k: 281.72068773566406
+      temperature_k: 300.0
+    - cp_j_mol_k: 70.30978411376627
+      g_kj_mol: -244.34567696511465
+      h_kj_mol: -124.14525173855336
+      s_j_mol_k: 300.5010630664033
+      temperature_k: 400.0
+    - cp_j_mol_k: 79.398213720255
+      g_kj_mol: -275.2438119294247
+      h_kj_mol: -116.6538448414605
+      s_j_mol_k: 317.1799341759284
+      temperature_k: 500.0
+    - cp_j_mol_k: 87.65835098662836
+      g_kj_mol: -307.7333674374742
+      h_kj_mol: -108.2933408113639
+      s_j_mol_k: 332.40004437685053
+      temperature_k: 600.0
+    - cp_j_mol_k: 101.22232452169078
+      g_kj_mol: -376.9955299827799
+      h_kj_mol: -89.33812387653484
+      s_j_mol_k: 359.5717576328063
+      temperature_k: 800.0
+    - cp_j_mol_k: 111.15503708533602
+      g_kj_mol: -451.33187435055885
+      h_kj_mol: -68.05015970357546
+      s_j_mol_k: 383.2817146469834
+      temperature_k: 1000.0
+    - cp_j_mol_k: 126.7533996826635
+      g_kj_mol: -655.6174369647229
+      h_kj_mol: -8.137075516682438
+      s_j_mol_k: 431.65357429869357
+      temperature_k: 1500.0
+    - cp_j_mol_k: 134.84749920057604
+      g_kj_mol: -881.2215739681068
+      h_kj_mol: 57.467972003985075
+      s_j_mol_k: 469.34477298604594
+      temperature_k: 2000.0
+    - cp_j_mol_k: 138.80716376361158
+      g_kj_mol: -1074.0786063463743
+      h_kj_mol: 112.24742618595734
+      s_j_mol_k: 494.30251355513826
+      temperature_k: 2400.0
+    tmax_k: null
+    tmin_k: null
+  xyz: |-
+    C      -1.11858200   -0.22050800    0.02032600
+    O       0.02445200    0.59874800   -0.01737300
+    O       1.15300700   -0.26531000   -0.10304400
+    H      -1.13679000   -0.84377100    0.91994000
+    H      -1.96030400    0.47291500    0.03584100
+    H      -1.17907800   -0.85350700   -0.86845500
+    H       1.56799200   -0.12009800    0.75405900
+  zpe_hartree: 0.05536219999999999
+- additional_calculations: []
+  applied_energy_corrections:
+  - application_role: aec_total
+    components:
+    - component_kind: atom
+      contribution_value: 38.055229194978246
+      key: C
+      multiplicity: 1
+      parameter_unit: hartree
+      parameter_value: -37.78475071221127
+    - component_kind: atom
+      contribution_value: 1.742016168542888
+      key: H
+      multiplicity: 3
+      parameter_unit: hartree
+      parameter_value: -0.5000040040073649
+    scheme:
+      atom_params:
+      - element: C
+        value: -37.78475071221127
+      - element: Cl
+        value: -459.69651810328156
+      - element: F
+        value: -99.65901652526594
+      - element: H
+        value: -0.5000040040073649
+      - element: N
+        value: -54.52453035051977
+      - element: O
+        value: -74.99813677621309
+      - element: S
+        value: -397.6679482878494
+      kind: atom_energy
+      level_of_theory: &id003
+        auxiliary_basis: aug-cc-pvtz/c
+        basis: cc-pvtz-f12
+        cabs: cc-pvtz-f12-cabs
+        method: dlpno-ccsd(t)-f12
+        method_type: wavefunction
+        software: orca
+      name: atom_energy
+      note: Per-species AEC computed by Arkane.
+      source_literature: null
+      units: hartree
+      version: null
+    value: 39.79724536352113
+    value_unit: hartree
+  - application_role: bac_total
+    components:
+    - component_kind: bond
+      contribution_value: -0.240519158218346
+      key: C-H
+      multiplicity: 3
+      parameter_unit: kcal_mol
+      parameter_value: -0.08017305273944866
+    scheme:
+      bond_params:
+      - bond_key: C#C
+        value: -0.982597271828914
+      - bond_key: C#N
+        value: -0.3283125828210814
+      - bond_key: C#O
+        value: 0.17286574008491584
+      - bond_key: C-C
+        value: -0.008543746007425343
+      - bond_key: C-Cl
+        value: 0.3520255124816659
+      - bond_key: C-F
+        value: 0.631472917414716
+      - bond_key: C-H
+        value: -0.08017305273944866
+      - bond_key: C-N
+        value: 0.13833379134615956
+      - bond_key: C-O
+        value: -0.13764526344273006
+      - bond_key: C-S
+        value: 0.09397847801178551
+      - bond_key: C=C
+        value: -0.35527223034098027
+      - bond_key: C=N
+        value: -0.6082496375886673
+      - bond_key: C=O
+        value: -0.5925653642190839
+      - bond_key: C=S
+        value: -0.7916167979435471
+      - bond_key: Cl-Cl
+        value: 0.102119976777834
+      - bond_key: Cl-F
+        value: 0.35834979657113486
+      - bond_key: Cl-H
+        value: 0.37722761336653576
+      - bond_key: Cl-N
+        value: 0.24362105625176722
+      - bond_key: Cl-O
+        value: -0.30321812576871465
+      - bond_key: Cl-S
+        value: 0.3698531320784155
+      - bond_key: F-F
+        value: -0.5206580899046781
+      - bond_key: F-H
+        value: 0.10770093360747524
+      - bond_key: F-O
+        value: -1.093697489896995
+      - bond_key: F-S
+        value: 0.9537024545758375
+      - bond_key: H-H
+        value: -0.4695215879854784
+      - bond_key: H-N
+        value: -0.3001881490725287
+      - bond_key: H-O
+        value: -0.17273460791217013
+      - bond_key: H-S
+        value: 0.6453788347829875
+      - bond_key: N#N
+        value: 0.3536764027271856
+      - bond_key: N-N
+        value: 1.0280964341867438
+      - bond_key: N-O
+        value: -0.36569948213780085
+      - bond_key: N=N
+        value: 0.016819631963059654
+      - bond_key: N=O
+        value: -2.1355012391692445
+      - bond_key: O-O
+        value: -1.5577087944484471
+      - bond_key: O-S
+        value: -0.6020941596112097
+      - bond_key: O=O
+        value: -4.405777043235522
+      - bond_key: O=S
+        value: -0.14850188392821617
+      - bond_key: S-S
+        value: 0.19851252326088406
+      - bond_key: S=S
+        value: -1.914710085917519
+      kind: bac_petersson
+      level_of_theory: *id003
+      name: bac_petersson
+      note: Per-species BAC computed by Arkane (bac_type=p).
+      source_literature: null
+      units: kcal_mol
+      version: null
+    value: -0.240519158218346
+    value_unit: kcal_mol
+  charge: 0
+  coarse_opt_final_energy_hartree: -39.8386278621
+  coarse_opt_input_xyz: |-
+    C       0.00000000    0.00000000    0.00000000
+    H       0.00000000    1.07918400    0.00000000
+    H      -0.93460000   -0.53959200    0.00000000
+    H       0.93460000   -0.53959200    0.00000000
+  coarse_opt_log: calcs/Species/rxn_209_[CH3]/opt_a3244/input.log
+  coarse_opt_n_steps: 2
+  coarse_opt_output_xyz: |-
+    C       0.00000000    0.00000000    0.00000000
+    H       0.00000000    1.07918400    0.00000000
+    H      -0.93460000   -0.53959200    0.00000000
+    H       0.93460000   -0.53959200    0.00000000
+  converged: true
+  ess_versions:
+    freq: Gaussian 09, Revision D.01
+    opt: Gaussian 09, Revision D.01
+    sp: ORCA 6.0.0
+  formula: CH3
+  freq_constraints: []
+  freq_input: calcs/Species/rxn_209_[CH3]/freq_a3268/input.gjf
+  freq_log: calcs/Species/rxn_209_[CH3]/freq_a3268/input.log
+  freq_n_imag: 0
+  imag_freq_cm1: null
+  inchi: InChI=1S/CH3/h1H3
+  inchi_key: WCYWZMWISLQXQU-UHFFFAOYSA-N
+  is_ts: false
+  label: rxn_209_[CH3]
+  multiplicity: 2
+  opt_constraints: []
+  opt_converged: true
+  opt_final_energy_hartree: -39.8386406054
+  opt_input: calcs/Species/rxn_209_[CH3]/opt_a3254/input.gjf
+  opt_input_xyz: |-
+    C       0.00000000    0.00000000    0.00000000
+    H       0.00000000    1.07918400    0.00000000
+    H      -0.93460000   -0.53959200    0.00000000
+    H       0.93460000   -0.53959200    0.00000000
+  opt_log: calcs/Species/rxn_209_[CH3]/opt_a3254/input.log
+  opt_n_steps: 2
+  original_label: null
+  smiles: '[CH3]'
+  sp_constraints: []
+  sp_energy_hartree: -39.775146794978
+  sp_input: calcs/Species/rxn_209_[CH3]/sp_a3265/input.in
+  sp_log: calcs/Species/rxn_209_[CH3]/sp_a3265/input.log
+  statmech:
+    e0_kj_mol: 133.303
+    external_symmetry: 6
+    harmonic_frequencies_cm1:
+    - 526.5328
+    - 1410.342
+    - 1410.349
+    - 3126.365
+    - 3308.3016
+    - 3308.3073
+    is_linear: false
+    optical_isomers: 1
+    point_group: D3h
+    rigid_rotor_kind: asymmetric_top
+    spin_multiplicity: 2
+    torsions: []
+  thermo:
+    h298_kj_mol: 143.80917358652835
+    nasa_high:
+      coeffs:
+      - 3.24886
+      - 0.00501885
+      - -1.26765e-06
+      - 3.22041e-11
+      - 2.01564e-14
+      - 16120.0
+      - 3.46326
+      tmax_k: 3000.0
+      tmin_k: 646.828
+    nasa_low:
+      coeffs:
+      - 3.99122
+      - 0.000427537
+      - 9.38082e-06
+      - -1.09441e-08
+      - 4.26297e-12
+      - 16024.0
+      - 0.205282
+      tmax_k: 646.828
+      tmin_k: 10.0
+    s298_j_mol_k: 194.57358039244872
+    thermo_points:
+    - cp_j_mol_k: 39.10125117158731
+      g_kj_mol: 85.4368757166797
+      h_kj_mol: 143.88146025966054
+      s_j_mol_k: 194.81528180993615
+      temperature_k: 300.0
+    - cp_j_mol_k: 42.169967929746306
+      g_kj_mol: 65.35153108983175
+      h_kj_mol: 147.94358615506874
+      s_j_mol_k: 206.48013766309248
+      temperature_k: 400.0
+    - cp_j_mol_k: 45.302370367297
+      g_kj_mol: 44.20387947871455
+      h_kj_mol: 152.31748218333703
+      s_j_mol_k: 216.227205409245
+      temperature_k: 500.0
+    - cp_j_mol_k: 48.335290928928075
+      g_kj_mol: 22.146313923326176
+      h_kj_mol: 157.00064964774492
+      s_j_mol_k: 224.7572262073646
+      temperature_k: 600.0
+    - cp_j_mol_k: 53.85606582056158
+      g_kj_mol: -24.31735955370954
+      h_kj_mol: 167.2322435027686
+      s_j_mol_k: 239.43700382059768
+      temperature_k: 800.0
+    - cp_j_mol_k: 58.637152779476004
+      g_kj_mol: -73.48805368260146
+      h_kj_mol: 178.493565883538
+      s_j_mol_k: 251.98161956613944
+      temperature_k: 1000.0
+    - cp_j_mol_k: 67.6436600055941
+      g_kj_mol: -206.16095953889283
+      h_kj_mol: 210.22943608544026
+      s_j_mol_k: 277.5935970828887
+      temperature_k: 1500.0
+    - cp_j_mol_k: 73.1348872497344
+      g_kj_mol: -350.20576824750833
+      h_kj_mol: 245.54994931027395
+      s_j_mol_k: 297.87785877889115
+      temperature_k: 2000.0
+    - cp_j_mol_k: 75.71462891216933
+      g_kj_mol: -472.1399667816956
+      h_kj_mol: 275.3614287673809
+      s_j_mol_k: 311.4589148121152
+      temperature_k: 2400.0
+    tmax_k: null
+    tmin_k: null
+  xyz: |-
+    C       0.00000000    0.00000000    0.00000000
+    H       0.00000000    1.07942400    0.00000000
+    H       0.93480900   -0.53971200    0.00000000
+    H      -0.93480900   -0.53971200    0.00000000
+  zpe_hartree: 0.0298217
+- additional_calculations:
+  - key: scan_rotor_0
+    scan_result:
+      coordinates:
+      - atom1_index: 4
+        atom2_index: 1
+        atom3_index: 2
+        atom4_index: 3
+        coordinate_index: 1
+        coordinate_kind: dihedral
+        end_value: 420.54194876444944
+        resolution_degrees: 8.0
+        start_value: 60.54194876444943
+        step_count: 46
+        step_size: 8.0
+        symmetry_number: 3
+        value_unit: degree
+      dimension: 1
+      is_relaxed: true
+      points:
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 0.0
+          value_unit: degree
+        electronic_energy_hartree: -190.233643955
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -0.98892700   -0.47946000    0.00000000
+            O       0.00000000    0.55983200    0.00000000
+            O       1.20300500    0.06818600    0.00000000
+            H      -0.86962500   -1.08786700    0.89557000
+            H      -0.86962500   -1.08786700   -0.89557000
+            H      -1.95122700    0.02835500    0.00000000
+        point_index: 1
+        relative_energy_kj_mol: 0.002625499851734247
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 8.000100000000003
+          value_unit: degree
+        electronic_energy_hartree: -190.23358554
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08446500   -0.17961100   -0.00064000
+            O       0.15863700    0.53635900    0.00005200
+            O       1.17353100   -0.27542500    0.00050300
+            H      -1.20729100   -0.68462200    0.95710000
+            H      -1.08489900   -0.89788100   -0.81867300
+            H      -1.85836500    0.57269300   -0.13902900
+        point_index: 2
+        relative_energy_kj_mol: 0.1559940740355402
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 16.000100000000003
+          value_unit: degree
+        electronic_energy_hartree: -190.233413889
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08535200   -0.17991800   -0.00093300
+            O       0.15871700    0.53528100   -0.00013500
+            O       1.17490400   -0.27476800    0.00105700
+            H      -1.27603700   -0.56520100    1.00093100
+            H      -1.03541700   -0.98865800   -0.72719700
+            H      -1.84540700    0.54925500   -0.27551300
+        point_index: 3
+        relative_energy_kj_mol: 0.6066637502666796
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 24.000100000000003
+          value_unit: degree
+        electronic_energy_hartree: -190.233166404
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08684500   -0.17989500   -0.00107600
+            O       0.15858500    0.53367000   -0.00017500
+            O       1.17689200   -0.27354800    0.00143300
+            H      -1.34700500   -0.44070400    1.02525100
+            H      -0.99080000   -1.06927200   -0.61965600
+            H      -1.82494200    0.50836800   -0.40920500
+        point_index: 4
+        relative_energy_kj_mol: 1.256435582683455
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 32.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232884976
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08879500   -0.17968200   -0.00099200
+            O       0.15854500    0.53191800   -0.00008900
+            O       1.17913200   -0.27219500    0.00148600
+            H      -1.41769500   -0.31334800    1.03017300
+            H      -0.95391100   -1.13681400   -0.49881400
+            H      -1.79704000    0.45046700   -0.53658500
+        point_index: 5
+        relative_energy_kj_mol: 1.9953247568067325
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 40.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232620827
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09085000   -0.17903600   -0.00084200
+            O       0.15843000    0.53045800    0.00035900
+            O       1.18114000   -0.27098400    0.00096900
+            H      -1.48571600   -0.18550300    1.01556100
+            H      -0.92399000   -1.18993100   -0.36438700
+            H      -1.76175600    0.37386400   -0.65674700
+        point_index: 6
+        relative_energy_kj_mol: 2.6888479189014527
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 48.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232416167
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09225500   -0.17858900   -0.00051600
+            O       0.15842900    0.52944200    0.00037600
+            O       1.18249200   -0.27018000    0.00056900
+            H      -1.55081800   -0.05976300    0.98141400
+            H      -0.90413200   -1.22586200   -0.22320700
+            H      -1.71889200    0.28306300   -0.76267100
+        point_index: 7
+        relative_energy_kj_mol: 3.2261827199363835
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 56.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232303995
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09308300   -0.17815000   -0.00015000
+            O       0.15854500    0.52903800    0.00016000
+            O       1.18305400   -0.26989300    0.00017800
+            H      -1.61164200    0.06136400    0.92812400
+            H      -0.89359800   -1.24406900   -0.07629700
+            H      -1.66905300    0.17844100   -0.85363200
+        point_index: 8
+        relative_energy_kj_mol: 3.520690290052523
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 64.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232302255
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09341500   -0.17778400    0.00023700
+            O       0.15822000    0.52845000   -0.00030700
+            O       1.18370900   -0.26951400   -0.00009300
+            H      -1.66727300    0.17546700    0.85635700
+            H      -0.89427600   -1.24415700    0.07209300
+            H      -1.61338800    0.06390500   -0.92667200
+        point_index: 9
+        relative_energy_kj_mol: 3.525258659773647
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 72.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232412215
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09284800   -0.17779100    0.00060300
+            O       0.15864300    0.52942800   -0.00094500
+            O       1.18245200   -0.27031800   -0.00021800
+            H      -1.71695000    0.27919600    0.76746100
+            H      -0.90246900   -1.22562800    0.21920700
+            H      -1.55225200   -0.05970100   -0.98098600
+        point_index: 10
+        relative_energy_kj_mol: 3.2365586953396916
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 80.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232616252
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09157200   -0.17782300    0.00075300
+            O       0.15867600    0.53060100   -0.00149500
+            O       1.18092300   -0.27127000   -0.00023300
+            H      -1.75998000    0.37039100    0.66277200
+            H      -0.92142700   -1.18915800    0.36222700
+            H      -1.48595000   -0.18894200   -1.01569000
+        point_index: 11
+        relative_energy_kj_mol: 2.700859580730599
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 88.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232883088
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08977800   -0.17806300    0.00075600
+            O       0.15870000    0.53213300   -0.00185100
+            O       1.17893800   -0.27245700   -0.00014500
+            H      -1.79611700    0.44665100    0.54454600
+            H      -0.94998900   -1.13585800    0.49673700
+            H      -1.41633300   -0.31982300   -1.02985600
+        point_index: 12
+        relative_energy_kj_mol: 2.000281700576355
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 96.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.233167925
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08775500   -0.17848700    0.00067100
+            O       0.15872300    0.53386000   -0.00184700
+            O       1.17674300   -0.27371200   -0.00004400
+            H      -1.82496000    0.50626700    0.41540600
+            H      -0.98733900   -1.06763900    0.61945300
+            H      -1.34489500   -0.44889500   -1.02375500
+        point_index: 13
+        relative_energy_kj_mol: 1.2524421973949385
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 104.0
+          value_unit: degree
+        electronic_energy_hartree: -190.233418939
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08586400   -0.17896400    0.00049400
+            O       0.15874500    0.53548400   -0.00141900
+            O       1.17471100   -0.27483700   -0.00000400
+            H      -1.84602300    0.54843000    0.27814800
+            H      -1.03305100   -0.98627600    0.72842100
+            H      -1.27338900   -0.57354600   -0.99814200
+        point_index: 14
+        relative_energy_kj_mol: 0.5934049759855732
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 112.0
+          value_unit: degree
+        electronic_energy_hartree: -190.23359035
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08450700   -0.17934600    0.00033300
+            O       0.15876300    0.53671800   -0.00065200
+            O       1.17320000   -0.27564100   -0.00005900
+            H      -1.85879600    0.57299100    0.13566500
+            H      -1.08601300   -0.89375100    0.82190800
+            H      -1.20385500   -0.69178200   -0.95387600
+        point_index: 15
+        relative_energy_kj_mol: 0.14336541977257725
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 120.0
+          value_unit: degree
+        electronic_energy_hartree: -190.233644651
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08398000   -0.17946800    0.00016800
+            O       0.15878600    0.53719900    0.00031800
+            O       1.17262100   -0.27595900   -0.00017800
+            H      -1.86280800    0.58025600   -0.00929800
+            H      -1.14607100   -0.79136900    0.89910200
+            H      -1.13849400   -0.80200000   -0.89194100
+        point_index: 16
+        relative_energy_kj_mol: 0.000798151948360546
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 128.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.233573117
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08445900   -0.17925500    0.00002600
+            O       0.15880000    0.53684800    0.00128400
+            O       1.17307900   -0.27573100   -0.00030600
+            H      -1.85791500    0.57036700   -0.15403100
+            H      -1.21149000   -0.68052900    0.95913400
+            H      -1.07888000   -0.90324500   -0.81308100
+        point_index: 17
+        relative_energy_kj_mol: 0.18861065881631198
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 136.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.233388466
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08582200   -0.17877400   -0.00012800
+            O       0.15880800    0.53568400    0.00196900
+            O       1.17453600   -0.27498200   -0.00032400
+            H      -1.84418300    0.54334700   -0.29600900
+            H      -1.28115600   -0.56165900    1.00151900
+            H      -1.02649000   -0.99465400   -0.71789800
+        point_index: 18
+        relative_energy_kj_mol: 0.6734118331199966
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 144.0
+          value_unit: degree
+        electronic_energy_hartree: -190.23313009
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08777200   -0.17816900   -0.00026800
+            O       0.15881100    0.53401100    0.00226000
+            O       1.17663000   -0.27387200   -0.00023400
+            H      -1.82198600    0.49904900   -0.43241500
+            H      -1.35273000   -0.43643900    1.02522600
+            H      -0.98217400   -1.07470700   -0.60741200
+        point_index: 19
+        relative_energy_kj_mol: 1.3517779845375233
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 152.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232844934
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08988200   -0.17763400   -0.00036500
+            O       0.15878900    0.53220000    0.00210800
+            O       1.17892000   -0.27259900   -0.00005700
+            H      -1.79197100    0.43747000   -0.56042200
+            H      -1.42417000   -0.30685500    1.02932200
+            H      -0.94623700   -1.14161900   -0.48311500
+        point_index: 20
+        relative_energy_kj_mol: 2.100455022121796
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 160.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232583889
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09173100   -0.17732700   -0.00035400
+            O       0.15876200    0.53061500    0.00158000
+            O       1.18095100   -0.27140700    0.00013400
+            H      -1.75465100    0.35935800   -0.67719600
+            H      -1.49363100   -0.17577200    1.01308700
+            H      -0.91903400   -1.19328500   -0.34747600
+        point_index: 21
+        relative_energy_kj_mol: 2.785828632653452
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 168.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232391288
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09302800   -0.17728500   -0.00020500
+            O       0.15873000    0.52949900    0.00083700
+            O       1.18241000   -0.27049100    0.00023100
+            H      -1.71063500    0.26625900   -0.78010000
+            H      -1.55934400   -0.04662200    0.97634100
+            H      -0.90096400   -1.22799500   -0.20355300
+        point_index: 22
+        relative_energy_kj_mol: 3.2915025308978176
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 176.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232295867
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09358900   -0.17748200    0.00007300
+            O       0.15870300    0.52892200    0.00008100
+            O       1.18316100   -0.26997100    0.00017800
+            H      -1.66027500    0.16061500   -0.86701100
+            H      -1.62036100    0.07722800    0.91944100
+            H      -0.89274000   -1.24455800   -0.05493400
+        point_index: 23
+        relative_energy_kj_mol: 3.5420303528760737
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 184.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232312316
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09336800   -0.17788200    0.00041200
+            O       0.15865700    0.52893500   -0.00046000
+            O       1.18312900   -0.26990400   -0.00006300
+            H      -1.60403300    0.04529200   -0.93634300
+            H      -1.67574600    0.19224800    0.84348900
+            H      -0.89430000   -1.24249900    0.09456700
+        point_index: 24
+        relative_energy_kj_mol: 3.4988435057423652
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 191.9998
+          value_unit: degree
+        electronic_energy_hartree: -190.232438523
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09241400   -0.17837400    0.00076400
+            O       0.15862100    0.52953300   -0.00071300
+            O       1.18230900   -0.27032800   -0.00042900
+            H      -1.54260400   -0.07686100   -0.98706100
+            H      -1.72461500    0.29551500    0.75044700
+            H      -0.90574000   -1.22205600    0.24117000
+        point_index: 25
+        relative_energy_kj_mol: 3.1674870450593855
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 199.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.232654383
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09066400   -0.17907700    0.00087400
+            O       0.15839900    0.53057000   -0.00033200
+            O       1.18099000   -0.27107400   -0.00101700
+            H      -1.47661400   -0.20266900   -1.01871500
+            H      -1.76711300    0.38492700    0.64140400
+            H      -0.92740200   -1.18375900    0.38286100
+        point_index: 26
+        relative_energy_kj_mol: 2.6007466456402586
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 208.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232923816
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08893200   -0.17946700    0.00106300
+            O       0.15836700    0.53192000   -0.00005100
+            O       1.17921900   -0.27210500   -0.00131300
+            H      -1.40764500   -0.33012500   -1.03087200
+            H      -1.80254700    0.45746100    0.52140400
+            H      -0.95690600   -1.12905300    0.51400200
+        point_index: 27
+        relative_energy_kj_mol: 1.8933503423027076
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 215.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.233203605
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08703100   -0.17958900    0.00120700
+            O       0.15870900    0.53392500   -0.00024100
+            O       1.17655200   -0.27369200   -0.00108400
+            H      -1.33683900   -0.45773400   -1.02314500
+            H      -1.82863800    0.51375100    0.39392400
+            H      -0.99442500   -1.06034500    0.63257900
+        point_index: 28
+        relative_energy_kj_mol: 1.1587643624582122
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 223.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.233442865
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08534400   -0.17962900    0.00097800
+            O       0.15872500    0.53554800   -0.00024800
+            O       1.17450100   -0.27487400   -0.00076100
+            H      -1.26642000   -0.58197200   -0.99587500
+            H      -1.84767000    0.55272500    0.25953000
+            H      -1.03964900   -0.97836700    0.73855200
+        point_index: 29
+        relative_energy_kj_mol: 0.5305872663443373
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 231.9999
+          value_unit: degree
+        electronic_energy_hartree: -190.233600512
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08425300   -0.17956300    0.00052700
+            O       0.15875900    0.53676100   -0.00021900
+            O       1.17300300   -0.27568100   -0.00031400
+            H      -1.19788800   -0.70056300   -0.94980400
+            H      -1.85923400    0.57463400    0.12143000
+            H      -1.09145500   -0.88533100    0.82947600
+        point_index: 30
+        relative_energy_kj_mol: 0.11668509014971144
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 240.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.233643934
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08393200   -0.17937300   -0.00019200
+            O       0.15875700    0.53728100   -0.00011100
+            O       1.17240000   -0.27594000    0.00014900
+            H      -1.13344100   -0.81142600   -0.88586500
+            H      -1.86295000    0.58001100   -0.01749600
+            H      -1.14927400   -0.78308200    0.90420600
+        point_index: 31
+        relative_energy_kj_mol: 0.0026806352880282564
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 248.0
+          value_unit: degree
+        electronic_energy_hartree: -190.233568578
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08486700   -0.17906100   -0.00087200
+            O       0.15873100    0.53655300    0.00036900
+            O       1.17337200   -0.27539000    0.00033100
+            H      -1.07546700   -0.91233100   -0.80548100
+            H      -1.85863200    0.56966000   -0.15734100
+            H      -1.21351800   -0.67226300    0.96245800
+        point_index: 32
+        relative_energy_kj_mol: 0.20052780268004736
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 256.0
+          value_unit: degree
+        electronic_energy_hartree: -190.233386508
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08623000   -0.17870500   -0.00164400
+            O       0.15861000    0.53531800    0.00096000
+            O       1.17495200   -0.27444400    0.00035500
+            H      -1.02468600   -1.00244200   -0.71011000
+            H      -1.84574300    0.54372000   -0.29320500
+            H      -1.28068500   -0.55603600    1.00265900
+        point_index: 33
+        relative_energy_kj_mol: 0.6785525618762559
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 264.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.233134517
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08781000   -0.17850500   -0.00215600
+            O       0.15870200    0.53407300    0.00148900
+            O       1.17660200   -0.27348900    0.00021200
+            H      -0.98080600   -1.08027100   -0.60105000
+            H      -1.82565700    0.50045900   -0.42496600
+            H      -1.34911000   -0.43382900    1.02535100
+        point_index: 34
+        relative_energy_kj_mol: 1.340154896682255
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 272.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232855293
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08965900   -0.17824300   -0.00244300
+            O       0.15853400    0.53222700    0.00208400
+            O       1.17890100   -0.27215000   -0.00006200
+            H      -0.94570700   -1.14440400   -0.48043100
+            H      -1.79642500    0.44237600   -0.55007800
+            H      -1.41940000   -0.30912700    1.02899100
+        point_index: 35
+        relative_energy_kj_mol: 2.0732574691239525
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 280.0
+          value_unit: degree
+        electronic_energy_hartree: -190.232596723
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09134200   -0.17807200   -0.00214700
+            O       0.15849800    0.53067000    0.00202100
+            O       1.18092000   -0.27105300   -0.00022200
+            H      -0.91940100   -1.19421700   -0.34875000
+            H      -1.76007000    0.36666100   -0.66654800
+            H      -1.48782000   -0.18094400    1.01378900
+        point_index: 36
+        relative_energy_kj_mol: 2.752132967500179
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 288.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232401696
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09256200   -0.17799400   -0.00149000
+            O       0.15853300    0.52960200    0.00150800
+            O       1.18230900   -0.27030300   -0.00023200
+            H      -0.90151600   -1.22797400   -0.20895700
+            H      -1.71592200    0.27543400   -0.77091500
+            H      -1.55392900   -0.05389300    0.97861100
+        point_index: 37
+        relative_energy_kj_mol: 3.264176328349631
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 296.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232299673
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09323000   -0.17792000   -0.00046800
+            O       0.15848900    0.52893600    0.00047100
+            O       1.18318200   -0.26984100   -0.00008300
+            H      -0.89315000   -1.24459500   -0.06352100
+            H      -1.66514100    0.16974000   -0.86027500
+            H      -1.61570100    0.06962100    0.92350000
+        point_index: 38
+        relative_energy_kj_mol: 3.532037700427837
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 304.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232307108
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09319800   -0.17792900    0.00062500
+            O       0.15853100    0.52901200   -0.00065100
+            O       1.18309200   -0.26990100    0.00011200
+            H      -0.89372700   -1.24336100    0.08346400
+            H      -1.60775000    0.05317000   -0.93207100
+            H      -1.67232300    0.18488400    0.84916400
+        point_index: 39
+        relative_energy_kj_mol: 3.512517109016761
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 312.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.23242322
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09248200   -0.17798800    0.00160700
+            O       0.15849700    0.52962900   -0.00161900
+            O       1.18226700   -0.27032300    0.00024200
+            H      -0.90353700   -1.22434400    0.22831400
+            H      -1.54532700   -0.07095900   -0.98450800
+            H      -1.72235900    0.28878600    0.75756500
+        point_index: 40
+        relative_energy_kj_mol: 3.2076650694609095
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 320.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232628483
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.09136800   -0.17808200    0.00187000
+            O       0.15843700    0.53067600   -0.00169200
+            O       1.18105000   -0.27107400    0.00005100
+            H      -0.92277700   -1.18865300    0.36602200
+            H      -1.47928800   -0.19558100   -1.01706600
+            H      -1.76562900    0.37590800    0.65295300
+        point_index: 41
+        relative_energy_kj_mol: 2.668747091964342
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 328.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.232892797
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08945900   -0.17826800    0.00240800
+            O       0.15855200    0.53243500   -0.00199200
+            O       1.17865500   -0.27230500    0.00001800
+            H      -0.95008100   -1.13658200    0.49735200
+            H      -1.40988200   -0.32598200   -1.02963600
+            H      -1.80094000    0.45112700    0.53363300
+        point_index: 42
+        relative_energy_kj_mol: 1.9747907224224417
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 336.0001
+          value_unit: degree
+        electronic_energy_hartree: -190.233170822
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08752900   -0.17868000    0.00188200
+            O       0.15853500    0.53422500   -0.00133400
+            O       1.17651100   -0.27357000   -0.00030500
+            H      -0.98565500   -1.07060500    0.61614800
+            H      -1.34098500   -0.44874900   -1.02379900
+            H      -1.82856000    0.50619500    0.40947400
+        point_index: 43
+        relative_energy_kj_mol: 1.244836124300884
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 344.0
+          value_unit: degree
+        electronic_energy_hartree: -190.233416002
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08587600   -0.17890300    0.00145300
+            O       0.15853000    0.53555400   -0.00089000
+            O       1.17468000   -0.27460200   -0.00038400
+            H      -1.03061300   -0.99099600    0.72375300
+            H      -1.27238500   -0.57115200   -0.99860100
+            H      -1.84742900    0.54795800    0.27632500
+        point_index: 44
+        relative_energy_kj_mol: 0.6011160690080304
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 352.0
+          value_unit: degree
+        electronic_energy_hartree: -190.233585546
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08452200   -0.17925600    0.00070700
+            O       0.15858600    0.53666000   -0.00035100
+            O       1.17323800   -0.27546700   -0.00029900
+            H      -1.08280000   -0.89943800    0.81721500
+            H      -1.20564500   -0.68674600   -0.95612500
+            H      -1.85900900    0.57217400    0.13986800
+        point_index: 45
+        relative_energy_kj_mol: 0.1559783210537419
+      - coordinate_values:
+        - coordinate_index: 1
+          coordinate_value: 360.0
+          value_unit: degree
+        electronic_energy_hartree: -190.233644955
+        geometry:
+          xyz_text: |-
+            6
+
+            C      -1.08387800   -0.17959800   -0.00005400
+            O       0.15863200    0.53703200   -0.00009500
+            O       1.17272200   -0.27583600    0.00005700
+            H      -1.14200200   -0.79686600    0.89553700
+            H      -1.14313900   -0.79567600   -0.89639300
+            H      -1.86242300    0.58056500    0.00148300
+        point_index: 46
+        relative_energy_kj_mol: 0.0
+      zero_energy_reference_hartree: -190.233644955
+    type: scan
+  applied_energy_corrections:
+  - application_role: aec_total
+    components:
+    - component_kind: atom
+      contribution_value: 38.055229194978246
+      key: C
+      multiplicity: 1
+      parameter_unit: hartree
+      parameter_value: -37.78475071221127
+    - component_kind: atom
+      contribution_value: 1.742016168542888
+      key: H
+      multiplicity: 3
+      parameter_unit: hartree
+      parameter_value: -0.5000040040073649
+    - component_kind: atom
+      contribution_value: 150.18095818171778
+      key: O
+      multiplicity: 2
+      parameter_unit: hartree
+      parameter_value: -74.99813677621309
+    scheme:
+      atom_params:
+      - element: C
+        value: -37.78475071221127
+      - element: Cl
+        value: -459.69651810328156
+      - element: F
+        value: -99.65901652526594
+      - element: H
+        value: -0.5000040040073649
+      - element: N
+        value: -54.52453035051977
+      - element: O
+        value: -74.99813677621309
+      - element: S
+        value: -397.6679482878494
+      kind: atom_energy
+      level_of_theory: &id004
+        auxiliary_basis: aug-cc-pvtz/c
+        basis: cc-pvtz-f12
+        cabs: cc-pvtz-f12-cabs
+        method: dlpno-ccsd(t)-f12
+        method_type: wavefunction
+        software: orca
+      name: atom_energy
+      note: Per-species AEC computed by Arkane.
+      source_literature: null
+      units: hartree
+      version: null
+    value: 189.9782035452389
+    value_unit: hartree
+  - application_role: bac_total
+    components:
+    - component_kind: bond
+      contribution_value: -0.240519158218346
+      key: C-H
+      multiplicity: 3
+      parameter_unit: kcal_mol
+      parameter_value: -0.08017305273944866
+    - component_kind: bond
+      contribution_value: -0.13764526344273006
+      key: C-O
+      multiplicity: 1
+      parameter_unit: kcal_mol
+      parameter_value: -0.13764526344273006
+    - component_kind: bond
+      contribution_value: -1.5577087944484471
+      key: O-O
+      multiplicity: 1
+      parameter_unit: kcal_mol
+      parameter_value: -1.5577087944484471
+    scheme:
+      bond_params:
+      - bond_key: C#C
+        value: -0.982597271828914
+      - bond_key: C#N
+        value: -0.3283125828210814
+      - bond_key: C#O
+        value: 0.17286574008491584
+      - bond_key: C-C
+        value: -0.008543746007425343
+      - bond_key: C-Cl
+        value: 0.3520255124816659
+      - bond_key: C-F
+        value: 0.631472917414716
+      - bond_key: C-H
+        value: -0.08017305273944866
+      - bond_key: C-N
+        value: 0.13833379134615956
+      - bond_key: C-O
+        value: -0.13764526344273006
+      - bond_key: C-S
+        value: 0.09397847801178551
+      - bond_key: C=C
+        value: -0.35527223034098027
+      - bond_key: C=N
+        value: -0.6082496375886673
+      - bond_key: C=O
+        value: -0.5925653642190839
+      - bond_key: C=S
+        value: -0.7916167979435471
+      - bond_key: Cl-Cl
+        value: 0.102119976777834
+      - bond_key: Cl-F
+        value: 0.35834979657113486
+      - bond_key: Cl-H
+        value: 0.37722761336653576
+      - bond_key: Cl-N
+        value: 0.24362105625176722
+      - bond_key: Cl-O
+        value: -0.30321812576871465
+      - bond_key: Cl-S
+        value: 0.3698531320784155
+      - bond_key: F-F
+        value: -0.5206580899046781
+      - bond_key: F-H
+        value: 0.10770093360747524
+      - bond_key: F-O
+        value: -1.093697489896995
+      - bond_key: F-S
+        value: 0.9537024545758375
+      - bond_key: H-H
+        value: -0.4695215879854784
+      - bond_key: H-N
+        value: -0.3001881490725287
+      - bond_key: H-O
+        value: -0.17273460791217013
+      - bond_key: H-S
+        value: 0.6453788347829875
+      - bond_key: N#N
+        value: 0.3536764027271856
+      - bond_key: N-N
+        value: 1.0280964341867438
+      - bond_key: N-O
+        value: -0.36569948213780085
+      - bond_key: N=N
+        value: 0.016819631963059654
+      - bond_key: N=O
+        value: -2.1355012391692445
+      - bond_key: O-O
+        value: -1.5577087944484471
+      - bond_key: O-S
+        value: -0.6020941596112097
+      - bond_key: O=O
+        value: -4.405777043235522
+      - bond_key: O=S
+        value: -0.14850188392821617
+      - bond_key: S-S
+        value: 0.19851252326088406
+      - bond_key: S=S
+        value: -1.914710085917519
+      kind: bac_petersson
+      level_of_theory: *id004
+      name: bac_petersson
+      note: Per-species BAC computed by Arkane (bac_type=p).
+      source_literature: null
+      units: kcal_mol
+      version: null
+    value: -1.9358732161095231
+    value_unit: kcal_mol
+  charge: 0
+  coarse_opt_final_energy_hartree: -190.233632257
+  coarse_opt_input_xyz: |-
+    C      -0.98883300   -0.47952300    0.00000000
+    O       0.00000000    0.55977200    0.00000000
+    O       1.20288500    0.06816200    0.00000000
+    H      -0.86957700   -1.08726000    0.89561600
+    H      -0.86957700   -1.08726000   -0.89561600
+    H      -1.95092600    0.02818400    0.00000000
+  coarse_opt_log: calcs/Species/rxn_209_CO[O]/opt_a3246/input.log
+  coarse_opt_n_steps: 2
+  coarse_opt_output_xyz: |-
+    C      -0.98883300   -0.47952300    0.00000000
+    O       0.00000000    0.55977200    0.00000000
+    O       1.20288500    0.06816200    0.00000000
+    H      -0.86957700   -1.08726000    0.89561600
+    H      -0.86957700   -1.08726000   -0.89561600
+    H      -1.95092600    0.02818400    0.00000000
+  converged: true
+  ess_versions:
+    freq: Gaussian 09, Revision D.01
+    opt: Gaussian 09, Revision D.01
+    sp: ORCA 6.0.0
+  formula: CH3O2
+  freq_constraints: []
+  freq_input: calcs/Species/rxn_209_CO[O]/freq_a3267/input.gjf
+  freq_log: calcs/Species/rxn_209_CO[O]/freq_a3267/input.log
+  freq_n_imag: 0
+  imag_freq_cm1: null
+  inchi: InChI=1S/CH3O2/c1-3-2/h1H3
+  inchi_key: WTFNSXYULBQCQV-UHFFFAOYSA-N
+  is_ts: false
+  label: rxn_209_CO[O]
+  multiplicity: 2
+  opt_constraints: []
+  opt_converged: true
+  opt_final_energy_hartree: -190.233643955
+  opt_input: calcs/Species/rxn_209_CO[O]/opt_a3257/input.gjf
+  opt_input_xyz: |-
+    C      -0.98883300   -0.47952300    0.00000000
+    O       0.00000000    0.55977200    0.00000000
+    O       1.20288500    0.06816200    0.00000000
+    H      -0.86957700   -1.08726000    0.89561600
+    H      -0.86957700   -1.08726000   -0.89561600
+    H      -1.95092600    0.02818400    0.00000000
+  opt_log: calcs/Species/rxn_209_CO[O]/opt_a3257/input.log
+  opt_n_steps: 2
+  original_label: null
+  smiles: CO[O]
+  sp_constraints: []
+  sp_energy_hartree: -190.019512920326
+  sp_input: calcs/Species/rxn_209_CO[O]/sp_a3264/input.in
+  sp_log: calcs/Species/rxn_209_CO[O]/sp_a3264/input.log
+  statmech:
+    e0_kj_mol: -5.46391
+    external_symmetry: 1
+    harmonic_frequencies_cm1:
+    - 139.184
+    - 509.2181
+    - 959.1432
+    - 1141.2141
+    - 1195.7861
+    - 1280.5306
+    - 1456.4823
+    - 1479.3962
+    - 1489.9866
+    - 3067.6508
+    - 3163.3337
+    - 3180.2482
+    is_linear: false
+    optical_isomers: 1
+    point_group: Cs
+    rigid_rotor_kind: asymmetric_top
+    spin_multiplicity: 2
+    torsions:
+    - atom_indices:
+      - 4
+      - 1
+      - 2
+      - 3
+      barrier_kj_mol: 3.5420303528760737
+      pivot_atoms:
+      - 1
+      - 2
+      source_scan_calculation_key: scan_rotor_0
+      symmetry_number: 3
+      treatment: hindered_rotor
+  thermo:
+    h298_kj_mol: 7.014394573533665
+    nasa_high:
+      coeffs:
+      - 1.96224
+      - 0.0159157
+      - -8.23564e-06
+      - 2.03983e-09
+      - -1.9598e-13
+      - -375.789
+      - 16.7852
+      tmax_k: 3000.0
+      tmin_k: 545.134
+    nasa_low:
+      coeffs:
+      - 3.97895
+      - 0.00111756
+      - 3.24839e-05
+      - -4.77587e-08
+      - 2.26422e-11
+      - -595.66
+      - 8.27937
+      tmax_k: 545.134
+      tmin_k: 10.0
+    s298_j_mol_k: 268.9700926192256
+    thermo_points:
+    - cp_j_mol_k: 50.98173089463425
+      g_kj_mol: -73.6769246248071
+      h_kj_mol: 7.108566271249482
+      s_j_mol_k: 269.28496965352196
+      temperature_k: 300.0
+    - cp_j_mol_k: 59.41922049655745
+      g_kj_mol: -101.41436255908116
+      h_kj_mol: 12.629934167045262
+      s_j_mol_k: 285.11074181531603
+      temperature_k: 400.0
+    - cp_j_mol_k: 67.38052266036001
+      g_kj_mol: -130.64326624298275
+      h_kj_mol: 18.97603543478917
+      s_j_mol_k: 299.2386033555439
+      temperature_k: 500.0
+    - cp_j_mol_k: 74.51457969179559
+      g_kj_mol: -161.2222923108458
+      h_kj_mol: 26.077988321021213
+      s_j_mol_k: 312.167134386445
+      temperature_k: 600.0
+    - cp_j_mol_k: 86.37164932882536
+      g_kj_mol: -226.02286556477438
+      h_kj_mol: 42.21683650908008
+      s_j_mol_k: 335.2996275923181
+      temperature_k: 800.0
+    - cp_j_mol_k: 95.50127256280001
+      g_kj_mol: -295.1542183469176
+      h_kj_mol: 60.44495734047333
+      s_j_mol_k: 355.5991756873909
+      temperature_k: 1000.0
+    - cp_j_mol_k: 109.73338293318001
+      g_kj_mol: -483.8559295535026
+      h_kj_mol: 112.17597707824274
+      s_j_mol_k: 397.3546044211636
+      temperature_k: 1500.0
+    - cp_j_mol_k: 116.68563262688001
+      g_kj_mol: -690.9995603902219
+      h_kj_mol: 168.97860907939466
+      s_j_mol_k: 429.9890847348083
+      temperature_k: 2000.0
+    - cp_j_mol_k: 119.8871821962148
+      g_kj_mol: -867.4221517177566
+      h_kj_mol: 216.3351593063656
+      s_j_mol_k: 451.5655462600509
+      temperature_k: 2400.0
+    tmax_k: null
+    tmin_k: null
+  xyz: |-
+    C      -0.98892700   -0.47946000    0.00000000
+    O       0.00000000    0.55983200    0.00000000
+    O       1.20300500    0.06818600    0.00000000
+    H      -0.86962500   -1.08786700    0.89557000
+    H      -0.86962500   -1.08786700   -0.89557000
+    H      -1.95122700    0.02835500    0.00000000
+  zpe_hartree: 0.0434268
+transition_states:
+- additional_calculations: []
+  applied_energy_corrections:
+  - application_role: aec_total
+    components:
+    - component_kind: atom
+      contribution_value: 76.11045838995649
+      key: C
+      multiplicity: 2
+      parameter_unit: hartree
+      parameter_value: -37.78475071221127
+    - component_kind: atom
+      contribution_value: 4.064704393266738
+      key: H
+      multiplicity: 7
+      parameter_unit: hartree
+      parameter_value: -0.5000040040073649
+    - component_kind: atom
+      contribution_value: 150.18095818171778
+      key: O
+      multiplicity: 2
+      parameter_unit: hartree
+      parameter_value: -74.99813677621309
+    scheme:
+      atom_params:
+      - element: C
+        value: -37.78475071221127
+      - element: Cl
+        value: -459.69651810328156
+      - element: F
+        value: -99.65901652526594
+      - element: H
+        value: -0.5000040040073649
+      - element: N
+        value: -54.52453035051977
+      - element: O
+        value: -74.99813677621309
+      - element: S
+        value: -397.6679482878494
+      kind: atom_energy
+      level_of_theory: &id005
+        auxiliary_basis: aug-cc-pvtz/c
+        basis: cc-pvtz-f12
+        cabs: cc-pvtz-f12-cabs
+        method: dlpno-ccsd(t)-f12
+        method_type: wavefunction
+        software: orca
+      name: atom_energy
+      note: Per-species AEC computed by Arkane.
+      source_literature: null
+      units: hartree
+      version: null
+    value: 230.356120964941
+    value_unit: hartree
+  - application_role: bac_total
+    components: []
+    scheme:
+      bond_params:
+      - bond_key: C#C
+        value: -0.982597271828914
+      - bond_key: C#N
+        value: -0.3283125828210814
+      - bond_key: C#O
+        value: 0.17286574008491584
+      - bond_key: C-C
+        value: -0.008543746007425343
+      - bond_key: C-Cl
+        value: 0.3520255124816659
+      - bond_key: C-F
+        value: 0.631472917414716
+      - bond_key: C-H
+        value: -0.08017305273944866
+      - bond_key: C-N
+        value: 0.13833379134615956
+      - bond_key: C-O
+        value: -0.13764526344273006
+      - bond_key: C-S
+        value: 0.09397847801178551
+      - bond_key: C=C
+        value: -0.35527223034098027
+      - bond_key: C=N
+        value: -0.6082496375886673
+      - bond_key: C=O
+        value: -0.5925653642190839
+      - bond_key: C=S
+        value: -0.7916167979435471
+      - bond_key: Cl-Cl
+        value: 0.102119976777834
+      - bond_key: Cl-F
+        value: 0.35834979657113486
+      - bond_key: Cl-H
+        value: 0.37722761336653576
+      - bond_key: Cl-N
+        value: 0.24362105625176722
+      - bond_key: Cl-O
+        value: -0.30321812576871465
+      - bond_key: Cl-S
+        value: 0.3698531320784155
+      - bond_key: F-F
+        value: -0.5206580899046781
+      - bond_key: F-H
+        value: 0.10770093360747524
+      - bond_key: F-O
+        value: -1.093697489896995
+      - bond_key: F-S
+        value: 0.9537024545758375
+      - bond_key: H-H
+        value: -0.4695215879854784
+      - bond_key: H-N
+        value: -0.3001881490725287
+      - bond_key: H-O
+        value: -0.17273460791217013
+      - bond_key: H-S
+        value: 0.6453788347829875
+      - bond_key: N#N
+        value: 0.3536764027271856
+      - bond_key: N-N
+        value: 1.0280964341867438
+      - bond_key: N-O
+        value: -0.36569948213780085
+      - bond_key: N=N
+        value: 0.016819631963059654
+      - bond_key: N=O
+        value: -2.1355012391692445
+      - bond_key: O-O
+        value: -1.5577087944484471
+      - bond_key: O-S
+        value: -0.6020941596112097
+      - bond_key: O=O
+        value: -4.405777043235522
+      - bond_key: O=S
+        value: -0.14850188392821617
+      - bond_key: S-S
+        value: 0.19851252326088406
+      - bond_key: S=S
+        value: -1.914710085917519
+      kind: bac_petersson
+      level_of_theory: *id005
+      name: bac_petersson
+      note: Per-species BAC computed by Arkane (bac_type=p).
+      source_literature: null
+      units: kcal_mol
+      version: null
+    value: 0.0
+    value_unit: kcal_mol
+  charge: 0
+  chosen_ts_method: heuristics
+  coarse_opt_final_energy_hartree: -230.707628033
+  coarse_opt_input_xyz: |-
+    C      -2.15223000    0.41778300    0.04812100
+    H      -2.93565500   -0.33216700    0.05164400
+    H      -1.91745400    0.84935600    1.01565600
+    H      -0.99770800   -0.35836400   -0.17880100
+    H      -2.18167300    1.11602700   -0.78108700
+    C       1.54248500    0.65805600   -0.17376400
+    O       0.86666900   -0.36170000    0.52968900
+    O      -0.05136200   -0.94951000   -0.32357600
+    H       0.85192800    1.46077200   -0.45254400
+    H       2.02402300    0.25850600   -1.06859400
+    H       2.29255300    1.04051100    0.51868000
+  coarse_opt_log: calcs/TSs/rxn_209_TS0/opt_a3429/input.log
+  coarse_opt_n_steps: 15
+  coarse_opt_output_xyz: |-
+    C      -2.15223000    0.41778300    0.04812100
+    H      -2.93565500   -0.33216700    0.05164400
+    H      -1.91745400    0.84935600    1.01565600
+    H      -0.99770800   -0.35836400   -0.17880100
+    H      -2.18167300    1.11602700   -0.78108700
+    C       1.54248500    0.65805600   -0.17376400
+    O       0.86666900   -0.36170000    0.52968900
+    O      -0.05136200   -0.94951000   -0.32357600
+    H       0.85192800    1.46077200   -0.45254400
+    H       2.02402300    0.25850600   -1.06859400
+    H       2.29255300    1.04051100    0.51868000
+  converged: true
+  ess_versions:
+    freq: Gaussian 09, Revision D.01
+    opt: Gaussian 09, Revision D.01
+    sp: ORCA 6.0.0
+  formula: C2H7O2
+  freq_constraints: []
+  freq_input: calcs/TSs/rxn_209_TS0/freq_a3461/input.gjf
+  freq_log: calcs/TSs/rxn_209_TS0/freq_a3461/input.log
+  freq_n_imag: 1
+  gsm_log: null
+  imag_freq_cm1: -1839.7647
+  inchi: null
+  inchi_key: null
+  irc_converged: null
+  irc_log_directions: []
+  irc_logs: []
+  is_ts: true
+  label: rxn_209_TS0
+  multiplicity: 2
+  neb_log: null
+  opt_constraints: []
+  opt_converged: true
+  opt_final_energy_hartree: -230.707590808
+  opt_input: calcs/TSs/rxn_209_TS0/opt_a3434/input.gjf
+  opt_input_xyz: |-
+    C      -2.15223000    0.41778300    0.04812100
+    H      -2.93565500   -0.33216700    0.05164400
+    H      -1.91745400    0.84935600    1.01565600
+    H      -0.99770800   -0.35836400   -0.17880100
+    H      -2.18167300    1.11602700   -0.78108700
+    C       1.54248500    0.65805600   -0.17376400
+    O       0.86666900   -0.36170000    0.52968900
+    O      -0.05136200   -0.94951000   -0.32357600
+    H       0.85192800    1.46077200   -0.45254400
+    H       2.02402300    0.25850600   -1.06859400
+    H       2.29255300    1.04051100    0.51868000
+  opt_log: calcs/TSs/rxn_209_TS0/opt_a3434/input.log
+  opt_n_steps: 6
+  original_label: null
+  rxn_label: rxn_209_C + rxn_209_CO[O] <=> rxn_209_[CH3] + rxn_209_COO
+  smiles: null
+  sp_constraints: []
+  sp_energy_hartree: -230.42815809128402
+  sp_input: calcs/TSs/rxn_209_TS0/sp_a3457/input.in
+  sp_log: calcs/TSs/rxn_209_TS0/sp_a3457/input.log
+  statmech:
+    e0_kj_mol: 25.3082
+    external_symmetry: 1
+    harmonic_frequencies_cm1:
+    - 45.8895
+    - 89.4351
+    - 146.5631
+    - 250.1504
+    - 398.5051
+    - 479.1906
+    - 531.2984
+    - 607.4241
+    - 966.6371
+    - 998.8844
+    - 1105.4615
+    - 1173.8069
+    - 1177.0187
+    - 1227.746
+    - 1422.8039
+    - 1425.4398
+    - 1457.9105
+    - 1463.4045
+    - 1475.2829
+    - 1507.0671
+    - 3025.1678
+    - 3086.6916
+    - 3103.9387
+    - 3148.6485
+    - 3238.507
+    - 3242.4395
+    is_linear: false
+    optical_isomers: 2
+    point_group: C1
+    rigid_rotor_kind: asymmetric_top
+    spin_multiplicity: 2
+    torsions: []
+  successful_ts_methods:
+  - user guess 0
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - heuristics
+  - autotst
+  - autotst
+  - autotst
+  - autotst
+  thermo: null
+  xyz: |-
+    C      -2.14768800    0.41880800    0.04838900
+    H      -2.92659000   -0.33215000    0.12371800
+    H      -1.87723100    0.90272300    0.98126800
+    H      -0.99745500   -0.36321800   -0.17946800
+    H      -2.21251400    1.06969800   -0.81652000
+    C       1.53659700    0.66124100   -0.17357800
+    O       0.86684300   -0.36302200    0.52877100
+    O      -0.05028000   -0.95347300   -0.32333600
+    H       0.84369000    1.46523700   -0.44331300
+    H       2.01338400    0.26787200   -1.07370200
+    H       2.29075200    1.04150300    0.51566900
+  zpe_hartree: 0.0838259

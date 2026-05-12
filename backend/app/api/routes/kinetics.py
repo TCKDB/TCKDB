@@ -60,5 +60,5 @@ def list_kinetics(
 def get_kinetics(kinetics_id: int, session: Session = Depends(get_db)):
     kinetics = session.get(Kinetics, kinetics_id)
     if kinetics is None:
-        raise NotFoundError(f"Kinetics {kinetics_id} not found")
+        raise NotFoundError("Kinetics not found")
     return KineticsRead.model_validate(kinetics)

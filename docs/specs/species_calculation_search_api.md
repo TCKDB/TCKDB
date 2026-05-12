@@ -345,11 +345,20 @@ conformers       — full conformer block (not just summary); includes torsion_f
 geometry         — accepted but deferred in v0 (returns IDs only by default; future phase may embed full XYZ)
 validation       — geometry_validation summary block
 scf_stability    — scf_stability summary block
-all              — every legal token above
+internal_ids     — Phase D opt-in: restore integer *_id fields and the bare integer-id arrays (input_geometry_ids, output_geometry_ids, supporting_calculation_ids) when the deployment allows it
+all              — every legal token above **except** internal_ids
 ```
 
 Unknown tokens → 422 `unknown_include_token` with the legal list (Phase 4 convention).
 Known but illegal-elsewhere tokens (e.g. `kinetics`, `transition_states`) → 422 same code.
+
+**Phase D bare-array policy.** By default the response carries the
+ref-bearing object arrays (`input_geometries`, `output_geometries`,
+`supporting_calculations`) only. The legacy bare integer-id arrays
+(`input_geometry_ids`, `output_geometry_ids`,
+`supporting_calculation_ids`) are restored only when
+`include=internal_ids` is allowed by the deployment. See
+[`docs/specs/internal_ids_visibility_policy.md`](./internal_ids_visibility_policy.md).
 
 ---
 

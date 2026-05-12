@@ -23,6 +23,102 @@ class Settings(BaseSettings):
     # tooling.
     auth_allow_open_registration: bool = True
 
+    # Phase D internal-ID visibility policy. When ``False`` (the
+    # default, intended for hosted production), the scientific read
+    # API hides internal integer primary keys (``*_id`` fields,
+    # ``*_ids`` bare arrays, and a small allow-list of non-suffix PK
+    # keys like ``LiteratureSummary.id``) from every response and
+    # silently drops ``include=internal_ids`` from the resolved
+    # include set. Set to ``True`` in local/dev/test environments
+    # that need the legacy id-bearing shape for compatibility or
+    # debugging. See ``docs/specs/internal_ids_visibility_policy.md``.
+    allow_public_internal_ids: bool = False
+
+    # -----------------------------------------------------------------
+    # Hosted abuse-control settings (security phase 1).
+    # See ``docs/specs/public_read_abuse_controls.md``.
+    # -----------------------------------------------------------------
+
+    # Master switch for the application-level rate limiter. The test
+    # suite turns it off via env var so the fixed budgets don't
+    # interfere with bulk test runs.
+    rate_limit_enabled: bool = True
+
+    # Per-minute budgets, evaluated as a fixed window. Anonymous
+    # callers are keyed by client IP; authenticated callers are keyed
+    # by API-key fingerprint or session cookie so concurrent users on
+    # one IP don't share a bucket.
+    rate_limit_anon_per_minute: int = 60
+    rate_limit_auth_per_minute: int = 300
+
+    # Auth-surface throttles. These are deliberately tight: login is
+    # the credential-stuffing target, and register is the account-spam
+    # target. Both are keyed by client IP.
+    rate_limit_auth_login_per_minute: int = 10
+    rate_limit_register_per_hour: int = 10
+
+    # When set, the middleware reads the client IP from this header.
+    # Only enable when the deployment terminates TLS behind a trusted
+    # reverse proxy that overwrites the header. With this unset the
+    # middleware falls back to the ASGI transport peer, which a
+    # spoofer cannot influence.
+    trusted_proxy_header: str | None = None
+
+    # Per-public-read query caps. These guard against unbounded
+    # responses regardless of rate-limit budget.
+    public_max_limit: int = 200
+    public_max_offset: int = 10_000
+    max_geometry_atoms_public: int = 500
+    max_full_calculations_public: int = 100
+    max_full_geometries_public: int = 100
+    max_full_artifacts_public: int = 100
+
+    # OpenAPI / Swagger / ReDoc exposure. Default on for local
+    # development so the docs stay one URL away. Hosted deployments
+    # set ``EXPOSE_API_DOCS=false`` to gate the docs behind a private
+    # network or an authenticated path. When false, FastAPI never
+    # registers ``/docs``, ``/redoc``, or ``/openapi.json``.
+    expose_api_docs: bool = True
+
+    # Legacy entity-read auth gate. The public scientific surface
+    # lives under ``/api/v1/scientific/*``; the older
+    # ``/api/v1/{thermo,kinetics,...}`` routes pre-date the
+    # internal-IDs visibility policy and have a flatter shape that
+    # leaks integer PKs. Hosted deployments leave this on so those
+    # routes require credentials; local/dev sets it to false to keep
+    # them open.
+    legacy_reads_require_auth: bool = True
+
+    # Session cookie posture. The defaults assume the API is behind a
+    # TLS-terminating proxy in production; local/dev sets
+    # ``SESSION_COOKIE_SECURE=false`` so plain-HTTP login works.
+    session_cookie_secure: bool = True
+    session_cookie_samesite: str = "lax"
+    session_cookie_httponly: bool = True
+
+    # F13: PostgreSQL ``statement_timeout`` for application sessions.
+    # Set as a positive integer (milliseconds) to apply the timeout
+    # on every new DBAPI connection — a safety net so one expensive
+    # query cannot consume a pool slot indefinitely. ``0`` or
+    # ``None`` disables the app-level setting (production deployments
+    # are encouraged to set ``ALTER ROLE tckdb SET
+    # statement_timeout = '30s'`` at the role level instead — see
+    # ``docs/specs/public_read_abuse_controls.md``).
+    db_statement_timeout_ms: int | None = 30_000
+
+    # CORS — empty allow-list means "no CORS middleware registered",
+    # which is the correct hosted default. Production deployments set
+    # ``CORS_ALLOW_ORIGINS="https://app.tckdb.org"`` (one or more
+    # comma-separated origins).
+    cors_allow_origins: list[str] = []
+    cors_allow_credentials: bool = False
+    cors_allow_methods: list[str] = ["GET", "POST", "OPTIONS"]
+    cors_allow_headers: list[str] = [
+        "Authorization",
+        "Content-Type",
+        "X-API-Key",
+    ]
+
     @property
     def database_url(self) -> str:
         return (

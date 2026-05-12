@@ -35,9 +35,10 @@ def test_get_returns_200_with_envelope(client, db_session):
     assert "pagination" in body
     assert len(body["records"]) == 1
     rec = body["records"][0]
-    assert rec["species"]["species_id"] == species.id
-    assert rec["species"]["species_entry_id"] == entry.id
-    assert rec["calculation"]["calculation_id"] == calc.id
+    # Phase D: identify records by public ref in default responses.
+    assert rec["species"]["species_ref"] == species.public_ref
+    assert rec["species"]["species_entry_ref"] == entry.public_ref
+    assert rec["calculation"]["calculation_ref"] == calc.public_ref
 
 
 def test_post_accepts_json_body(client, db_session):
@@ -86,7 +87,7 @@ def test_lowest_energy_with_sp_returns_lowest_first(client, db_session):
     assert resp.status_code == 200
     body = resp.json()
     assert len(body["records"]) == 1
-    assert body["records"][0]["calculation"]["calculation_id"] == low.id
+    assert body["records"][0]["calculation"]["calculation_ref"] == low.public_ref
     # pre-collapse total
     assert body["pagination"]["total"] == 2
 
@@ -184,4 +185,6 @@ def test_method_basis_filter_via_calculation_lot(client, db_session):
         "?smiles=MB&method=wb97xd&basis=def2tzvp"
     )
     body = resp.json()
-    assert {r["calculation"]["calculation_id"] for r in body["records"]} == {in_lot.id}
+    assert {
+        r["calculation"]["calculation_ref"] for r in body["records"]
+    } == {in_lot.public_ref}

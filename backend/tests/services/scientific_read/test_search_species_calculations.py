@@ -684,3 +684,35 @@ def test_sort_is_deterministic_across_calls(db_session):
         db_session, SpeciesCalculationsSearchRequest(smiles="DET")
     )
     assert r1.model_dump() == r2.model_dump()
+
+
+def test_sp_calc_with_no_output_geometry_returns_empty_output_geometries(
+    db_session,
+):
+    """Phase 2 audit (thermo/geometry): an SP calc without an explicit
+    output geometry is **expected** to return ``output_geometries=[]``
+    and ``primary_output_geometry_ref=None``.
+
+    The upload layer only auto-attaches an output geometry for ``opt``
+    (see ``_OUTPUT_GEOMETRY_TYPES = {opt}``). SP / freq / scan / irc /
+    path_search require an explicit producer declaration. This test
+    locks in the behavior so a future refactor doesn't accidentally
+    fabricate an output geometry for SP.
+    """
+    _, entry = _entry(db_session, smiles="SPNO")
+    sp = make_calculation(
+        db_session, type=CalculationType.sp, species_entry_id=entry.id
+    )
+    response = search_species_calculations(
+        db_session, SpeciesCalculationsSearchRequest(smiles="SPNO")
+    )
+    matching = [
+        r
+        for r in response.records
+        if r.calculation.calculation_ref == sp.public_ref
+    ]
+    assert len(matching) == 1
+    geom = matching[0].geometry
+    assert geom.output_geometries == []
+    assert geom.primary_output_geometry_ref is None
+    assert geom.primary_output_geometry_role is None

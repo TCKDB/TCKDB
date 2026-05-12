@@ -6,14 +6,14 @@ from sqlalchemy import BigInteger, Index, Integer, Text, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, PublicRefMixin, TimestampMixin
 from app.db.models.common import LiteratureKind
 
 if TYPE_CHECKING:
     from app.db.models.literature_author import LiteratureAuthor
 
 
-class Literature(Base, TimestampMixin):
+class Literature(Base, TimestampMixin, PublicRefMixin):
     __tablename__ = "literature"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

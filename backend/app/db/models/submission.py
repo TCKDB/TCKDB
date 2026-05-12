@@ -40,7 +40,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     SubmissionActorKind,
     SubmissionAuditEventKind,
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from app.db.models.app_user import AppUser
 
 
-class Submission(Base, TimestampMixin):
+class Submission(Base, TimestampMixin, PublicRefMixin):
     """One user contribution event tracked for moderation and publication.
 
     The submission is the anchor for moderation state; the chemistry tables

@@ -12,12 +12,55 @@ from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.orm import Session
 
 from app.api.app import create_app
+from app.api.config import settings
 from app.api.deps import get_current_user, get_db, get_write_db
+from app.api.rate_limit import reset_rate_limit_store
 from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def _disable_rate_limit_by_default():
+    """Disable the public rate limiter for every test by default.
+
+    The middleware uses an in-process store keyed by client IP — under
+    the TestClient every request comes from the same loopback host, so
+    a 60/min anonymous budget would otherwise reject test #61.  Tests
+    that exercise the limiter explicitly opt back in (see
+    ``backend/tests/api/test_api_rate_limiting.py``).
+    """
+    previous = settings.rate_limit_enabled
+    settings.rate_limit_enabled = False
+    reset_rate_limit_store()
+    try:
+        yield
+    finally:
+        settings.rate_limit_enabled = previous
+        reset_rate_limit_store()
+
+
+@pytest.fixture(autouse=True)
+def _security_phase2_test_defaults():
+    """Relax Phase 2 production-only defaults for the test suite.
+
+    The hosted production posture requires a credential for the
+    legacy ``/api/v1/{thermo,kinetics,...}`` routes and emits secure
+    cookies. Both break the test fixtures (anonymous TestClient over
+    HTTP). Tests opt back into the production posture by flipping
+    these flags via monkeypatch in their own scope.
+    """
+    previous_legacy = settings.legacy_reads_require_auth
+    previous_secure = settings.session_cookie_secure
+    settings.legacy_reads_require_auth = False
+    settings.session_cookie_secure = False
+    try:
+        yield
+    finally:
+        settings.legacy_reads_require_auth = previous_legacy
+        settings.session_cookie_secure = previous_secure
 
 
 def _base_env() -> dict[str, str]:

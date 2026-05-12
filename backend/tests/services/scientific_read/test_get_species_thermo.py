@@ -255,3 +255,178 @@ def test_sort_is_deterministic(db_session):
         db_session, species_entry_id=entry.id, request=ThermoReadRequest()
     )
     assert r1.model_dump() == r2.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 audit: statmech-source-calculation fallback for thermo provenance
+# (see docs/audits/thermo_provenance_geometry_audit.md).
+#
+# When a thermo's own ThermoSourceCalculation rows do not cover the freq /
+# SP / opt roles, the read service falls back to the picked statmech's
+# StatmechSourceCalculation rows so that ``provenance.freq_calculation_ref``,
+# ``sp_calculation_ref``, ``primary_calculation``, ``level_of_theory``, and
+# ``software`` populate from real, persisted data — matching the actual
+# computed-thermo derivation path.
+# ---------------------------------------------------------------------------
+
+
+def _seed_thermo_with_statmech_sources(db_session, *, with_thermo_sources: bool):
+    """Build a species_entry + thermo + statmech with freq + SP statmech
+    source-calculation rows. When ``with_thermo_sources`` is True, also
+    persist ThermoSourceCalculation rows on the thermo so we can verify
+    that explicit thermo sources take precedence over the statmech
+    fallback.
+    """
+    from app.db.models.common import (
+        CalculationType,
+        ScientificOriginKind,
+        StatmechCalculationRole,
+        ThermoCalculationRole,
+    )
+    from app.db.models.statmech import Statmech, StatmechSourceCalculation
+    from app.db.models.thermo import ThermoSourceCalculation
+    from tests.services.scientific_read._factories import (
+        make_calculation,
+        make_lot,
+    )
+
+    entry = _entry_with_smiles(db_session, smiles="C#CCNCN")
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    attach_thermo_nasa(db_session, thermo=thermo)
+
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    freq_calc = make_calculation(
+        db_session,
+        type=CalculationType.freq,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+    )
+    sp_calc = make_calculation(
+        db_session,
+        type=CalculationType.sp,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+    )
+
+    statmech = Statmech(
+        species_entry_id=entry.id,
+        scientific_origin=ScientificOriginKind.computed,
+    )
+    db_session.add(statmech)
+    db_session.flush()
+    db_session.add(
+        StatmechSourceCalculation(
+            statmech_id=statmech.id,
+            calculation_id=freq_calc.id,
+            role=StatmechCalculationRole.freq,
+        )
+    )
+    db_session.add(
+        StatmechSourceCalculation(
+            statmech_id=statmech.id,
+            calculation_id=sp_calc.id,
+            role=StatmechCalculationRole.sp,
+        )
+    )
+
+    if with_thermo_sources:
+        # An explicit thermo-source row that should win over the statmech
+        # fallback. Tag the link with the ``composite`` thermo role so
+        # the primary-calc picker (sp → composite → freq → opt) returns
+        # this calc rather than the statmech-derived SP. The underlying
+        # CalculationType doesn't have to match the role label.
+        composite_calc = make_calculation(
+            db_session,
+            type=CalculationType.sp,
+            species_entry_id=entry.id,
+            lot_id=lot.id,
+        )
+        db_session.add(
+            ThermoSourceCalculation(
+                thermo_id=thermo.id,
+                calculation_id=composite_calc.id,
+                role=ThermoCalculationRole.composite,
+            )
+        )
+        db_session.flush()
+        return entry, thermo, freq_calc, sp_calc, composite_calc, lot
+    db_session.flush()
+    return entry, thermo, freq_calc, sp_calc, None, lot
+
+
+def test_provenance_falls_back_to_statmech_freq_sp_when_thermo_sources_empty(
+    db_session,
+):
+    entry, _thermo, freq_calc, sp_calc, _none, _lot = (
+        _seed_thermo_with_statmech_sources(db_session, with_thermo_sources=False)
+    )
+
+    response = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    record = response.records[0]
+    prov = record.provenance
+
+    # Statmech-linked freq/SP calcs now surface in the thermo provenance.
+    assert prov.freq_calculation_ref == freq_calc.public_ref
+    assert prov.sp_calculation_ref == sp_calc.public_ref
+    # statmech_ref still points at the picked statmech.
+    assert prov.statmech_ref is not None
+
+
+def test_provenance_falls_back_to_statmech_lot_and_primary_calc(db_session):
+    entry, _thermo, _freq, sp_calc, _none, lot = (
+        _seed_thermo_with_statmech_sources(db_session, with_thermo_sources=False)
+    )
+
+    response = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    prov = response.records[0].provenance
+
+    # primary_calculation falls back to the SP per role priority.
+    assert prov.primary_calculation is not None
+    assert prov.primary_calculation.calculation_ref == sp_calc.public_ref
+    # LoT and software summaries now project the primary calc's metadata.
+    assert prov.level_of_theory is not None
+    assert prov.level_of_theory.level_of_theory_ref == lot.public_ref
+
+
+def test_thermo_source_calcs_take_precedence_over_statmech_fallback(db_session):
+    entry, _thermo, _freq, _sp_stat, composite_calc, _lot = (
+        _seed_thermo_with_statmech_sources(db_session, with_thermo_sources=True)
+    )
+
+    response = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    prov = response.records[0].provenance
+
+    # The explicit thermo composite source wins over the statmech-based
+    # primary picker. The composite role has higher priority than freq
+    # for the primary calc.
+    assert prov.primary_calculation is not None
+    assert (
+        prov.primary_calculation.calculation_ref == composite_calc.public_ref
+    )
+
+
+def test_evidence_completeness_counts_statmech_freq_sp_when_thermo_sources_empty(
+    db_session,
+):
+    entry, _thermo, _freq, _sp, _none, _lot = (
+        _seed_thermo_with_statmech_sources(db_session, with_thermo_sources=False)
+    )
+
+    response = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    checklist = response.records[0].evidence_completeness.checklist
+
+    assert checklist["has_statmech_source"] is True
+    # Phase 2 audit: these used to be False because the predicates only
+    # looked at ThermoSourceCalculation. They now OR-in the picked
+    # statmech's source roles.
+    assert checklist["has_source_calculations"] is True
+    assert checklist["has_frequency_evidence"] is True
+    assert checklist["has_sp_or_energy_evidence"] is True

@@ -1,0 +1,114 @@
+project: rmg_rxn_1142
+job_types:
+  opt: true
+  fine: true
+  freq: true
+  rotors: true
+  irc: false
+  sp: true
+compute_thermo: true
+bac_type: null
+allow_nonisomorphic_2d: false
+ts_adapters: []
+species:
+- label: rmg_rxn_1142_r1_sbr-O-sbr
+  smiles: '[O]'
+  multiplicity: 3
+- label: rmg_rxn_1142_r2_CCCC
+  smiles: CCCC
+  multiplicity: 1
+  xyz: |
+    C      -1.93124700   -0.12550400    0.00002800
+    C      -0.55626200    0.52323600   -0.00003000
+    C       0.55626100   -0.52323500   -0.00003200
+    C       1.93124600    0.12550300    0.00002600
+    H      -2.06970900   -0.75137400    0.88741900
+    H      -2.06976000   -0.75143800   -0.88731000
+    H      -2.71217500    0.64135600    0.00002000
+    H      -0.46228900    1.16692900   -0.88241900
+    H      -0.46223800    1.16698200    0.88231400
+    H       0.46228100   -1.16692600   -0.88242100
+    H       0.46224900   -1.16698500    0.88231000
+    H       2.06971900    0.75135600    0.88742700
+    H       2.06975200    0.75145500   -0.88729900
+    H       2.71217600   -0.64135500    0.00000600
+- label: rmg_rxn_1142_p1_sbr-OH-sbr
+  smiles: '[OH]'
+  multiplicity: 2
+  xyz: |
+    O       0.00000000    0.00000000    0.10789300
+    H       0.00000000    0.00000000   -0.86314300
+- label: rmg_rxn_1142_p2_sbr-CH2-sbrCCC
+  smiles: '[CH2]CCC'
+  multiplicity: 2
+  xyz: |
+    C       1.97239400    0.13778400   -0.02618700
+    C       0.62636700   -0.49993400    0.05601200
+    C      -0.49814700    0.52710800   -0.06328100
+    C      -1.86532100   -0.13493000    0.01030000
+    H       2.16089000    1.09648500    0.44390300
+    H       2.81941800   -0.43910300   -0.38009800
+    H       0.54776000   -1.03596500    1.00837300
+    H       0.53765100   -1.24150600   -0.74607500
+    H      -0.41694700    1.26992600    0.73966700
+    H      -0.41285500    1.06966900   -1.01272500
+    H      -1.99703200   -0.65807600    0.96283400
+    H      -1.99489000   -0.85877600   -0.80063000
+    H      -2.65574900    0.61717500   -0.07631700
+- label: rmg_rxn_1142_TS0
+  is_ts: true
+  multiplicity: 3
+reactions:
+- label: rmg_rxn_1142_r1_sbr-O-sbr + rmg_rxn_1142_r2_CCCC <=> rmg_rxn_1142_p1_sbr-OH-sbr
+    + rmg_rxn_1142_p2_sbr-CH2-sbrCCC
+  multiplicity: 3
+  ts_label: rmg_rxn_1142_TS0
+  ts_xyz_guess:
+  - |
+    O      -2.27690900   -1.22529700   -0.13894500
+    C       2.33922700   -0.44812800   -0.12168300
+    C       0.92404800   -0.24873700    0.40600200
+    C       0.15766700    0.85428700   -0.32316500
+    C      -1.24997600    1.04071900    0.17781700
+    H       2.94045100    0.46889200   -0.01506800
+    H       2.33116100   -0.71729700   -1.18970300
+    H       2.85907000   -1.25240000    0.41929400
+    H       0.34522600   -1.18164900    0.31278800
+    H       0.95708900   -0.01251900    1.48382600
+    H       0.14021300    0.64111500   -1.40566100
+    H       0.69690400    1.81575000   -0.21704200
+    H      -1.34360200    1.19798200    1.26231600
+    H      -1.86020700   -0.08387700    0.02139200
+    H      -1.87682600    1.73752700   -0.39440600
+opt_level:
+  method: wb97xd
+  basis: def2tzvp
+freq_level:
+  method: wb97xd
+  basis: def2tzvp
+sp_level:
+  method: DLPNO-CCSD(T)-F12
+  basis: cc-pVTZ-F12
+  auxiliary_basis: aug-cc-pVTZ/C
+  cabs: cc-pVTZ-F12-CABS
+  software: orca
+  args:
+    keyword:
+      dlpno_threshold: TightPNO
+      rijcosx: RIJCOSX
+      grid: DEFGRID3
+      uno: UNO
+tckdb:
+  enabled: true
+  base_url: "http://127.0.0.1:8000/api/v1"
+  api_key_env: "TCKDB_API_KEY"
+  payload_dir: "tckdb_payloads"
+  upload: true
+  strict: false
+  timeout_seconds: 30
+  upload_mode: "computed_reaction"
+  artifacts:
+      upload: true
+      kinds: ["output_log", "input"]
+      max_size_mb: 50
+

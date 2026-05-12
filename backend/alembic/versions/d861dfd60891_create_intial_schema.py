@@ -16,6 +16,7 @@ from sqlalchemy.dialects import postgresql
 
 import app.db.types
 from app.schemas.reaction_family import CANONICAL_REACTION_FAMILIES
+from app.services.public_refs import make_content_ref
 
 # revision identifiers, used by Alembic.
 revision: str = "d861dfd60891"
@@ -1554,6 +1555,120 @@ def upgrade() -> None:
              '{"require_all_comparable_torsions_within_threshold": true, "torsion_match_threshold_degrees": 15, "use_circular_difference": true, "exclude_methyl_rotors": false, "exclude_terminal_noisy_rotors": true, "methyl_symmetry_fold": 3, "quantization_bin_degrees": 15, "rigid_fallback_use_rmsd": true, "rmsd_threshold_angstrom": 0.5, "tie_break": "closest_torsional_distance"}'::jsonb,
              true)
     """))
+
+    _add_public_ref_columns_and_indexes()
+
+
+# Phase A — public ref columns + UNIQUE indexes for ref-bearing tables.
+# See docs/specs/public_identifier_policy.md.
+#
+# Each entry is (table_name, ref_prefix). The prefix is embedded in the
+# server-side fallback so raw-SQL inserts (test fixtures, manual SQL)
+# still produce a legible per-table placeholder ref. The ORM
+# ``before_insert`` listener overrides the placeholder with a real
+# content-derived or opaque ref on every ORM-mediated insert.
+_PUBLIC_REF_TABLES: tuple[tuple[str, str], ...] = (
+    ("species", "spc"),
+    ("species_entry", "spe"),
+    ("chem_reaction", "rxn"),
+    ("reaction_entry", "rxe"),
+    ("thermo", "thm"),
+    ("kinetics", "kin"),
+    ("calculation", "calc"),
+    ("geometry", "geom"),
+    ("conformer_group", "cg"),
+    ("conformer_observation", "co"),
+    ("conformer_assignment_scheme", "cas"),
+    ("statmech", "sm"),
+    ("transport", "trn"),
+    ("transition_state", "ts"),
+    ("transition_state_entry", "tse"),
+    ("level_of_theory", "lot"),
+    ("software", "soft"),
+    ("software_release", "srel"),
+    ("workflow_tool", "wft"),
+    ("workflow_tool_release", "wfr"),
+    ("literature", "lit"),
+    ("frequency_scale_factor", "fsf"),
+    ("energy_correction_scheme", "ecs"),
+    ("submission", "sub"),
+)
+
+
+def _add_public_ref_columns_and_indexes() -> None:
+    """Add ``public_ref`` columns + UNIQUE indexes to every ref-bearing table.
+
+    Phase A. Behavior split between two layers:
+
+    1. **Server-side fallback** — every column carries a per-table
+       ``server_default`` of ``'<prefix>_' || gen_random_uuid()::text``.
+       This satisfies NOT NULL whenever a row is inserted via raw SQL
+       (test fixtures using ``connection.execute(text("INSERT…"))`` and
+       similar manual paths). PostgreSQL 13+ provides ``gen_random_uuid()``
+       built-in.
+
+    2. **ORM-level override** — for ORM-mediated inserts the global
+       ``before_insert`` listener installed in ``app.db.models.__init__``
+       computes the right ref (content-derived for identity tables,
+       opaque base32 for event tables per
+       ``docs/specs/public_identifier_policy.md``) and assigns it before
+       the row is sent to the database. The ORM-supplied value wins over
+       the server_default.
+
+    The one row that needs an explicit migration-time backfill is the
+    seeded default ``conformer_assignment_scheme`` (``torsion_basin v1``).
+    """
+    # Step 1 — add columns with the per-table server_default fallback.
+    # Columns are added NULLable initially because PostgreSQL applies
+    # server_defaults only when the value is omitted from INSERT, and the
+    # backfill UPDATE for the seeded scheme row needs to write its own
+    # value. We flip NOT NULL after the backfill.
+    for table, prefix in _PUBLIC_REF_TABLES:
+        # Strip hyphens and truncate to 26 chars so the placeholder body
+        # matches the ORM-generated body length and the whole ref fits
+        # inside ``String(40)`` for any prefix in _PUBLIC_REF_TABLES
+        # (longest prefix = 4 chars → 4 + 1 + 26 = 31 chars).
+        op.add_column(
+            table,
+            sa.Column(
+                "public_ref",
+                sa.String(length=40),
+                nullable=True,
+                server_default=sa.text(
+                    f"'{prefix}_' || substring("
+                    f"replace(gen_random_uuid()::text, '-', ''), 1, 26)"
+                ),
+            ),
+        )
+
+    # Step 2 — backfill the seeded default conformer_assignment_scheme so
+    # its public_ref is the documented content-derived value (not a UUID
+    # placeholder). Other seeded tables (reaction_family,
+    # calculation_parameter_vocab) are not in the public-ref scope.
+    cas_ref = make_content_ref(
+        "cas", "cas:name=torsion_basin;version=v1;scope=canonical"
+    )
+    op.execute(
+        sa.text(
+            "UPDATE conformer_assignment_scheme SET public_ref = :ref "
+            "WHERE name = 'torsion_basin' AND version = 'v1'"
+        ).bindparams(ref=cas_ref)
+    )
+
+    # Step 3 — flip NOT NULL and add the UNIQUE index per table.
+    for table, _prefix in _PUBLIC_REF_TABLES:
+        op.alter_column(
+            table,
+            "public_ref",
+            existing_type=sa.String(length=40),
+            nullable=False,
+        )
+        op.create_index(
+            op.f(f"ix_{table}_public_ref"),
+            table,
+            ["public_ref"],
+            unique=True,
+        )
 
 
 def downgrade() -> None:

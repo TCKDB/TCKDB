@@ -15,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     AppliedCorrectionComponentKind,
     EnergyCorrectionApplicationRole,
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin):
+class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Reusable energy-correction parameter set.
 
     Examples: atom energies, atom enthalpy-of-formation references,
@@ -182,7 +182,7 @@ class EnergyCorrectionSchemeComponentParam(Base):
     )
 
 
-class FrequencyScaleFactor(Base, TimestampMixin, CreatedByMixin):
+class FrequencyScaleFactor(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Immutable registry row for one frequency scale factor definition.
 
     Uniqueness is based on the full identity of the definition — LOT, software,

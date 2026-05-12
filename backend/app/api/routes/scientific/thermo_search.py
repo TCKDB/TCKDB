@@ -18,6 +18,9 @@ from app.schemas.reads.scientific_thermo_search import (
     ScientificThermoSearchResponse,
     ThermoSearchRequest,
 )
+from app.services.scientific_read.internal_ids import (
+    apply_internal_ids_visibility,
+)
 from app.services.scientific_read.thermo_search import search_thermo
 
 router = APIRouter(prefix="/thermo")
@@ -36,10 +39,13 @@ def thermo_search_get(
     multiplicity: int | None = Query(None),
     electronic_state_kind: SpeciesEntryStateKind | None = Query(None),
     species_entry_kind: StationaryPointKind | None = Query(None),
+    species_ref: str | None = Query(None),
+    species_entry_ref: str | None = Query(None),
     temperature_min: float | None = Query(None),
     temperature_max: float | None = Query(None),
     model_kind: ThermoModelKindQuery | None = Query(None),
     level_of_theory_id: int | None = Query(None),
+    level_of_theory_ref: str | None = Query(None),
     software: str | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
@@ -66,10 +72,13 @@ def thermo_search_get(
         multiplicity=multiplicity,
         electronic_state_kind=electronic_state_kind,
         species_entry_kind=species_entry_kind,
+        species_ref=species_ref,
+        species_entry_ref=species_entry_ref,
         temperature_min=temperature_min,
         temperature_max=temperature_max,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
+        level_of_theory_ref=level_of_theory_ref,
         software=software,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
@@ -80,7 +89,7 @@ def thermo_search_get(
         offset=offset,
         limit=limit,
     )
-    return search_thermo(session, request)
+    return apply_internal_ids_visibility(search_thermo(session, request))
 
 
 @router.post("/search", response_model=ScientificThermoSearchResponse)
@@ -105,4 +114,4 @@ def thermo_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return search_thermo(session, body)
+    return apply_internal_ids_visibility(search_thermo(session, body))

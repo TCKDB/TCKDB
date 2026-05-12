@@ -1,0 +1,78 @@
+project: rxn_210
+job_types:
+  opt: true
+  fine: true
+  freq: true
+  rotors: true
+  irc: false
+  sp: true
+compute_thermo: true
+allow_nonisomorphic_2d: false
+species:
+- label: rxn_210_CC
+  smiles: 'CC'
+  multiplicity: 1
+  xyz: |
+    C      0.64340000     0.33900000    -0.16980000
+    C     -0.66730000    -0.31410000     0.16730000
+    H      1.40700000    -0.43230000    -0.09610000
+    H      0.75020000     0.67440000    -1.19910000
+    H      0.99460000     1.08270000     0.54210000
+    H     -0.65730000    -0.72540000     1.17790000
+    H     -0.89640000    -1.12500000    -0.52580000
+    H     -1.48860000     0.40690000     0.11350000
+- label: rxn_210_[H][H]
+  smiles: '[H][H]'
+  multiplicity: 1
+  xyz: |
+    H     -0.18030000     0.20060000    -0.02170000
+    H      0.31280000    -0.34800000     0.03770000
+- label: rxn_210_C[CH2]
+  smiles: 'C[CH2]'
+  multiplicity: 2
+  xyz: |
+    C     -0.62010000     0.01890000    -0.00170000
+    C      0.85890000    -0.05530000     0.05000000
+    H     -1.07380000    -0.97300000    -0.05590000
+    H     -0.96800000     0.57060000    -0.88720000
+    H     -1.03030000     0.53690000     0.86780000
+    H      1.39390000    -0.83860000    -0.46950000
+    H      1.43940000     0.74040000     0.49650000
+- label: rxn_210_[H]
+  smiles: '[H]'
+  multiplicity: 2
+  xyz: |
+    H      0.00000000     0.00000000     0.00000000
+reactions:
+- label: rxn_210_CC + rxn_210_[H] <=> rxn_210_C[CH2] + rxn_210_[H][H]
+opt_level:
+  method: wb97xd
+  basis: def2tzvp
+freq_level:
+  method: wb97xd
+  basis: def2tzvp
+sp_level:
+  method: DLPNO-CCSD(T)-F12
+  basis: cc-pVTZ-F12
+  auxiliary_basis: aug-cc-pVTZ/C
+  cabs: cc-pVTZ-F12-CABS
+  software: orca
+  args:
+    keyword:
+      dlpno_threshold: TightPNO
+      rijcosx: RIJCOSX
+      grid: DEFGRID3
+      uno: UNO
+tckdb:
+  enabled: true
+  base_url: "http://127.0.0.1:8000/api/v1"
+  api_key_env: "TCKDB_API_KEY"
+  payload_dir: "tckdb_payloads"
+  upload: true
+  strict: false
+  timeout_seconds: 30
+  upload_mode: "computed_reaction"
+  artifacts:
+      upload: true
+      kinds: ["output_log", "input"]
+      max_size_mb: 50

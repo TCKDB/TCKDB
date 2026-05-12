@@ -21,6 +21,9 @@ from app.schemas.reads.scientific_species_calculations import (
     ScientificSpeciesCalculationsSearchResponse,
     SpeciesCalculationsSearchRequest,
 )
+from app.services.scientific_read.internal_ids import (
+    apply_internal_ids_visibility,
+)
 from app.services.scientific_read.species_calculations_search import (
     search_species_calculations,
 )
@@ -45,8 +48,11 @@ def species_calculations_search_get(
     species_entry_kind: StationaryPointKind | None = Query(None),
     species_id: int | None = Query(None, ge=1),
     species_entry_id: int | None = Query(None, ge=1),
+    species_ref: str | None = Query(None),
+    species_entry_ref: str | None = Query(None),
     calculation_type: CalculationType | None = Query(None),
     level_of_theory_id: int | None = Query(None),
+    level_of_theory_ref: str | None = Query(None),
     method: str | None = Query(None),
     basis: str | None = Query(None),
     software: str | None = Query(None),
@@ -82,8 +88,11 @@ def species_calculations_search_get(
         species_entry_kind=species_entry_kind,
         species_id=species_id,
         species_entry_id=species_entry_id,
+        species_ref=species_ref,
+        species_entry_ref=species_entry_ref,
         calculation_type=calculation_type,
         level_of_theory_id=level_of_theory_id,
+        level_of_theory_ref=level_of_theory_ref,
         method=method,
         basis=basis,
         software=software,
@@ -101,7 +110,9 @@ def species_calculations_search_get(
         offset=offset,
         limit=limit,
     )
-    return search_species_calculations(session, request)
+    return apply_internal_ids_visibility(
+        search_species_calculations(session, request)
+    )
 
 
 @router.post(
@@ -129,4 +140,6 @@ def species_calculations_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return search_species_calculations(session, body)
+    return apply_internal_ids_visibility(
+        search_species_calculations(session, body)
+    )

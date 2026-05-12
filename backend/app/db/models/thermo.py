@@ -13,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import ScientificOriginKind, ThermoCalculationRole
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from app.db.models.workflow import WorkflowToolRelease
 
 
-class Thermo(Base, TimestampMixin, CreatedByMixin):
+class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Thermochemistry records for a species entry."""
 
     __tablename__ = "thermo"

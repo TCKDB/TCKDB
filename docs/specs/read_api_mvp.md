@@ -137,10 +137,38 @@ The full legal vocabulary across all endpoints:
 
 ```
 provenance, calculations, artifacts, review, species, thermo, kinetics,
-statmech, transport, transition_states, path_search, irc, scans, conformers, all
+statmech, transport, transition_states, path_search, irc, scans, conformers,
+internal_ids, all
 ```
 
-Per-endpoint subsets are listed in each endpoint section. Unknown tokens → **422 Unprocessable Entity** with a list of legal tokens for that endpoint. `include=all` expands to every legal token for the endpoint it's used on.
+Per-endpoint subsets are listed in each endpoint section. Unknown tokens → **422 Unprocessable Entity** with a list of legal tokens for that endpoint. Tokens that are in the global vocabulary but illegal for a specific endpoint also return 422 with the per-endpoint legal list.
+
+#### Encoding
+
+`include=` accepts a **comma-separated token list** and that is the documented public form:
+
+```
+GET /scientific/species/search?smiles=O&include=provenance,review
+```
+
+Whitespace around each token is trimmed; empty tokens are dropped; duplicates are deduplicated server-side.
+
+Repeated `include=` query parameters parse to the same flat list (`?include=a,b&include=c` → `["a","b","c"]`). This encoding is supported for HTTP client compatibility but is not the canonical form — public docs, examples, and the OpenAPI description all use the comma-separated form. Don't rely on per-token positional semantics across the two encodings.
+
+#### `include=all` expansion
+
+`include=all` expands to every legal token for the endpoint it's used on **except `internal_ids`**. The `internal_ids` opt-in stays out of the default expansion and must be requested explicitly:
+
+```
+include=internal_ids        # internal ids only
+include=all,internal_ids    # full public expansion + internal ids
+```
+
+Both encodings — `?include=all,internal_ids` and `?include=all&include=internal_ids` — produce the same resolved set.
+
+#### `internal_ids`
+
+`internal_ids` is a Phase D opt-in: it asks the backend to restore the legacy integer-ID shape (every `*_id` field plus the bare `*_ids` arrays like `input_geometry_ids` / `supporting_calculation_ids`). The token is only effective when the deployment sets `ALLOW_PUBLIC_INTERNAL_IDS=true`; in hosted production it is silently dropped (no 4xx, no IDs). The dropped state is reflected in the `request.include` echo so callers can detect when their opt-in had no effect. See [`docs/specs/internal_ids_visibility_policy.md`](./internal_ids_visibility_policy.md) for the full contract.
 
 ### Review include naming (`include=review` vs `include_review=full`)
 

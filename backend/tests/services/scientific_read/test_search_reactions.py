@@ -234,7 +234,7 @@ def test_unknown_include_token_rejected(db_session):
 
 
 def test_missing_identifier_rejected(db_session):
-    with pytest.raises(ValueError, match="missing_identifier"):
+    with pytest.raises(ValueError, match="missing_reaction_search_filter"):
         search_reactions(db_session, ReactionSearchRequest())
 
 

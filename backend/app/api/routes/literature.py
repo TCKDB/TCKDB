@@ -75,5 +75,5 @@ def get_literature(literature_id: int, session: Session = Depends(get_db)):
         .options(selectinload(Literature.authors))
     )
     if row is None:
-        raise NotFoundError(f"Literature {literature_id} not found")
+        raise NotFoundError("Literature not found")
     return LiteratureRead.model_validate(row)

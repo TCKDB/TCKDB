@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.config import settings
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
 from app.schemas.reads.scientific_common import (
@@ -58,35 +59,69 @@ def reject_client_sort(sort: str | None) -> None:
 def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
     """Validate offset/limit per L5 and return them coerced to defaults.
 
-    Raises ValueError → 422 on out-of-range values.
+    Raises ValueError → 422 on out-of-range values. The ``limit`` cap
+    is the lesser of the per-endpoint ``MAX_LIMIT`` and the hosted
+    abuse-control setting ``settings.public_max_limit``; the
+    ``offset`` cap protects deep pagination as required by the public
+    abuse-controls policy.
     """
     if offset < 0:
         raise ValueError("invalid_pagination: offset must be >= 0")
     if limit < 1:
         raise ValueError("invalid_pagination: limit must be >= 1")
-    if limit > MAX_LIMIT:
+    effective_limit_cap = min(MAX_LIMIT, settings.public_max_limit)
+    if limit > effective_limit_cap:
         raise ValueError(
-            f"invalid_pagination: limit must be <= {MAX_LIMIT} (got {limit})"
+            "invalid_pagination: limit_too_large: limit must be "
+            f"<= {effective_limit_cap} (got {limit})"
+        )
+    if offset > settings.public_max_offset:
+        raise ValueError(
+            "invalid_pagination: offset_too_large: offset must be "
+            f"<= {settings.public_max_offset} (got {offset})"
         )
     return offset, limit
 
 
 def validate_includes(
-    requested: Iterable[str], legal: set[str], endpoint_name: str
+    requested: Iterable[str],
+    legal: set[str],
+    endpoint_name: str,
+    *,
+    internal_tokens: set[str] = frozenset(),
 ) -> set[str]:
     """Resolve ``include=`` tokens for an endpoint.
 
-    - ``all`` expands to ``legal - {"all"}``
-    - Tokens not in ``legal`` raise ValueError → 422
-    - Empty / duplicate input is normalized to a set
+    - ``all`` expands to ``legal - {"all"}`` **minus** ``internal_tokens``.
+      Tokens marked internal must be requested explicitly; supplying
+      ``include=all`` alone does not include them.
+    - Tokens not in ``legal`` raise ValueError → 422.
+    - Empty / duplicate input is normalized to a set.
+
+    Phase D: callers pass ``internal_tokens={"internal_ids"}`` so the
+    ``internal_ids`` opt-in stays out of the ``all`` expansion. Callers
+    that genuinely want everything must say ``include=all,internal_ids``.
     """
     requested_set = {t for t in requested if t}
     if not requested_set:
         return set()
-    if "all" in requested_set:
-        return legal - {"all"}
-
     legal_no_all = legal - {"all"}
+    if "all" in requested_set:
+        # ``all`` expands to public tokens only. Internal tokens still
+        # require explicit opt-in.
+        public_expansion = legal_no_all - internal_tokens
+        # Validate any non-``all`` tokens supplied alongside ``all``.
+        explicit = requested_set - {"all"}
+        bad = explicit - legal
+        if bad:
+            sorted_legal = sorted(legal_no_all) + ["all"]
+            raise ValueError(
+                "unknown_include_token: "
+                f"token(s) {sorted(bad)!r} not legal for {endpoint_name}. "
+                f"Legal tokens: {sorted_legal!r}"
+            )
+        return public_expansion | (explicit & legal_no_all)
+
     bad = requested_set - legal
     if bad:
         sorted_legal = sorted(legal_no_all) + ["all"]
@@ -297,3 +332,28 @@ def slice_for_pagination(
     if collapse_first:
         return items[:1]
     return items[offset : offset + limit]
+
+
+# ---------------------------------------------------------------------------
+# Public-ref bulk loaders (Phase B)
+# ---------------------------------------------------------------------------
+
+
+def refs_for_ids(
+    session: Session, model_cls, ids: Iterable[int]
+) -> dict[int, str]:
+    """Bulk-load ``{id: public_ref}`` for ``model_cls`` over the given ids.
+
+    Always single SQL round-trip; returns an empty dict for empty input.
+    Used by Phase B service builders to populate ``*_ref`` sibling fields
+    without an N+1 query per record.
+    """
+    id_list = [i for i in ids if i is not None]
+    if not id_list:
+        return {}
+    rows = session.execute(
+        select(model_cls.id, model_cls.public_ref).where(
+            model_cls.id.in_(id_list)
+        )
+    ).all()
+    return {row.id: row.public_ref for row in rows}

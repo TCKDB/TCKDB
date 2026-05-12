@@ -45,6 +45,9 @@ from app.services.scientific_read.common import (
     validate_pagination,
     validate_temperature_range,
 )
+from app.services.scientific_read.internal_ids import (
+    filter_internal_ids_from_resolved,
+)
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.reactions import search_reactions
 
@@ -57,8 +60,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "transition_states",
     "path_search",
     "irc",
+    "internal_ids",
     "all",
 }
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 # Tokens passed through to the kinetics detail endpoint (it has its own
 # legal set; intersection prevents 422 noise from cross-endpoint tokens).
@@ -97,8 +102,12 @@ def search_kinetics(
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
     includes = validate_includes(
-        request.include, _LEGAL_INCLUDE_TOKENS, "/scientific/kinetics/search"
+        request.include,
+        _LEGAL_INCLUDE_TOKENS,
+        "/scientific/kinetics/search",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
+    includes = filter_internal_ids_from_resolved(includes)
     validate_temperature_range(request.temperature_min, request.temperature_max)
 
     # 1) Resolve reaction_entries.
@@ -107,6 +116,9 @@ def search_kinetics(
         products=request.products,
         direction=request.direction,
         family=request.family,
+        # Phase C: pass through explicit reaction-handle refs.
+        reaction_ref=request.reaction_ref,
+        reaction_entry_ref=request.reaction_entry_ref,
         # Default trust posture on entry; kinetics-level review filter is
         # applied below so it stays shallow per D7.
         min_review_status=None,
@@ -124,7 +136,9 @@ def search_kinetics(
     for r_record in reactions_resp.records:
         ctx = KineticsSearchReactionContext(
             reaction_id=r_record.reaction_id,
+            reaction_ref=r_record.reaction_ref,
             reaction_entry_id=r_record.reaction_entry_id,
+            reaction_entry_ref=r_record.reaction_entry_ref,
             equation=r_record.equation,
             reversible=r_record.reversible,
             family=r_record.family,
@@ -153,6 +167,7 @@ def search_kinetics(
             pressure=request.pressure,
             model_kind=request.model_kind,
             level_of_theory_id=request.level_of_theory_id,
+            level_of_theory_ref=request.level_of_theory_ref,
             software=request.software,
             min_review_status=request.min_review_status,
             include_rejected=request.include_rejected,
@@ -240,6 +255,12 @@ def _filter_echo(request: KineticsSearchRequest) -> dict[str, object]:
         echo["model_kind"] = request.model_kind.value
     if request.level_of_theory_id is not None:
         echo["level_of_theory_id"] = request.level_of_theory_id
+    if request.level_of_theory_ref is not None:
+        echo["level_of_theory_ref"] = request.level_of_theory_ref
+    if request.reaction_ref is not None:
+        echo["reaction_ref"] = request.reaction_ref
+    if request.reaction_entry_ref is not None:
+        echo["reaction_entry_ref"] = request.reaction_entry_ref
     if request.software is not None:
         echo["software"] = request.software
     if request.min_review_status is not None:

@@ -57,5 +57,5 @@ def list_thermo(
 def get_thermo(thermo_id: int, session: Session = Depends(get_db)):
     thermo = session.get(Thermo, thermo_id)
     if thermo is None:
-        raise NotFoundError(f"Thermo {thermo_id} not found")
+        raise NotFoundError("Thermo not found")
     return ThermoRead.model_validate(thermo)

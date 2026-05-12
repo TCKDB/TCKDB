@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 def _get_network_or_404(network_id: int, session: Session) -> Network:
     network = session.get(Network, network_id)
     if network is None:
-        raise NotFoundError(f"Network {network_id} not found")
+        raise NotFoundError("Network not found")
     return network
 
 
@@ -77,7 +77,7 @@ def _get_solve_for_network_or_404(
     solve = session.get(NetworkSolve, solve_id)
     if solve is None or solve.network_id != network_id:
         raise NotFoundError(
-            f"Solve {solve_id} not found for network {network_id}"
+            "Solve not found for the requested network"
         )
     return solve
 
@@ -88,7 +88,7 @@ def _get_channel_for_network_or_404(
     channel = session.get(NetworkChannel, channel_id)
     if channel is None or channel.network_id != network_id:
         raise NotFoundError(
-            f"Channel {channel_id} not found for network {network_id}"
+            "Channel not found for the requested network"
         )
     return channel
 
@@ -356,7 +356,7 @@ def get_network(network_id: int, session: Session = Depends(get_db)):
         )
     )
     if network is None:
-        raise NotFoundError(f"Network {network_id} not found")
+        raise NotFoundError("Network not found")
 
     species_links = session.scalars(
         select(NetworkSpecies)
@@ -528,7 +528,7 @@ def get_network_solve(
     )
     if solve is None or solve.network_id != network_id:
         raise NotFoundError(
-            f"Solve {solve_id} not found for network {network_id}"
+            "Solve not found for the requested network"
         )
 
     bath_gases = session.scalars(

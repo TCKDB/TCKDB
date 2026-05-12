@@ -85,7 +85,7 @@ def _get_calculation_or_404(
 ) -> Calculation:
     calc = session.get(Calculation, calculation_id)
     if calc is None:
-        raise NotFoundError(f"Calculation {calculation_id} not found")
+        raise NotFoundError("Calculation not found")
     return calc
 
 
@@ -210,7 +210,7 @@ def get_sp_result(calculation_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError(
-            f"SP result not found for calculation {calculation_id}"
+            "SP result not found for the calculation"
         )
     return CalculationSPResultRead.model_validate(row)
 
@@ -225,7 +225,7 @@ def get_opt_result(calculation_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError(
-            f"Optimization result not found for calculation {calculation_id}"
+            "Optimization result not found for the calculation"
         )
     return CalculationOptResultRead.model_validate(row)
 
@@ -240,7 +240,7 @@ def get_freq_result(calculation_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError(
-            f"Frequency result not found for calculation {calculation_id}"
+            "Frequency result not found for the calculation"
         )
     return CalculationFreqResultRead.model_validate(row)
 
@@ -368,7 +368,7 @@ def get_scan_result(calculation_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError(
-            f"Scan result not found for calculation {calculation_id}"
+            "Scan result not found for the calculation"
         )
     return CalculationScanResultRead.model_validate(row)
 
@@ -421,7 +421,7 @@ def get_irc_result(calculation_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError(
-            f"IRC result not found for calculation {calculation_id}"
+            "IRC result not found for the calculation"
         )
     return CalculationIRCResultRead.model_validate(row)
 
@@ -462,7 +462,7 @@ def get_path_search_result(
     )
     if row is None:
         raise NotFoundError(
-            f"Path-search result not found for calculation {calculation_id}"
+            "Path-search result not found for the calculation"
         )
     return CalculationPathSearchResultRead.model_validate(row)
 
@@ -659,7 +659,7 @@ def get_geometry_validation(
     )
     if row is None:
         raise NotFoundError(
-            f"Geometry validation not found for calculation {calculation_id}"
+            "Geometry validation not found for the calculation"
         )
     return CalculationGeometryValidationRead.model_validate(row)
 

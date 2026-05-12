@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import ReactionRole
 
 if TYPE_CHECKING:
@@ -36,7 +36,7 @@ class ReactionFamily(Base, TimestampMixin):
     )
 
 
-class ChemReaction(Base, TimestampMixin):
+class ChemReaction(Base, TimestampMixin, PublicRefMixin):
     __tablename__ = "chem_reaction"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -105,7 +105,7 @@ class ReactionParticipant(Base):
     __table_args__ = (CheckConstraint("stoichiometry >= 1", name="stoichiometry_ge_1"),)
 
 
-class ReactionEntry(Base, TimestampMixin, CreatedByMixin):
+class ReactionEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     __tablename__ = "reaction_entry"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

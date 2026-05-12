@@ -1,0 +1,45 @@
+project: OrcaNEB_Test
+level_of_theory: b3lyp/def2tzvp
+conformer_level: b3lyp/def2tzvp
+
+
+allow_nonisomorphic_2d: true
+compute_thermo: true
+compute_rates: true
+job_types:
+  rotors: false
+  conf_opt: true
+  fine: true
+  freq: true
+  opt: true
+  sp: true
+  irc: false
+species:
+  - label: i-C3H7
+    smiles: "C[CH]C"
+    multiplicity: 2
+    charge: 0
+  - label: n-C3H7
+    smiles: "CC[CH2]"
+    multiplicity: 2
+    charge: 0
+reactions:
+  - reactants: [i-C3H7]
+    products: [n-C3H7]
+    multiplicity: 2
+    charge: 0
+    family: intra_H_migration
+tckdb:
+  enabled: true
+  base_url: "http://127.0.0.1:8000/api/v1"
+  api_key_env: "TCKDB_API_KEY"
+  payload_dir: "tckdb_payloads"
+  upload: true
+  strict: false
+  timeout_seconds: 30
+  upload_mode: "computed_reaction"
+  artifacts:
+      upload: true
+      kinds: ["output_log", "input"]
+      max_size_mb: 50
+

@@ -52,6 +52,8 @@ class KineticsReadRequest(BaseModel):
     pressure: float | None = None
     model_kind: KineticsModelKind | None = None
     level_of_theory_id: int | None = None
+    # Phase C: LoT may be supplied by ref instead of (or alongside) id.
+    level_of_theory_ref: str | None = None
     software: str | None = None
 
     min_review_status: RecordReviewStatus | None = None
@@ -97,12 +99,21 @@ class KineticsProvenance(BaseModel):
 
     TS-chain fields populated only for TS-backed computational kinetics. The
     service must never fabricate TS links for non-TS-backed records.
+
+    Phase B: ``*_ref`` siblings carry the public stable handles for each
+    integer ``*_id`` field. The nested summary objects (path_search,
+    primary_level_of_theory, primary_software, etc.) carry their own
+    ``*_ref`` fields per their schemas.
     """
 
     transition_state_entry_id: int | None = None
+    transition_state_entry_ref: str | None = None
     ts_opt_calculation_id: int | None = None
+    ts_opt_calculation_ref: str | None = None
     ts_freq_calculation_id: int | None = None
+    ts_freq_calculation_ref: str | None = None
     ts_sp_calculation_id: int | None = None
+    ts_sp_calculation_ref: str | None = None
     path_search: PathSearchSummary | None = None
     irc: dict[str, object] | None = None
     primary_level_of_theory: LevelOfTheorySummary | None = None
@@ -115,9 +126,14 @@ class KineticsProvenance(BaseModel):
 
 
 class KineticsRecord(BaseModel):
-    """One kinetics record returned by the kinetics endpoint."""
+    """One kinetics record returned by the kinetics endpoint.
+
+    Phase B: ``kinetics_ref`` is the public stable handle alongside
+    ``kinetics_id``.
+    """
 
     kinetics_id: int
+    kinetics_ref: str
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind
     review: RecordReviewBadge
@@ -139,10 +155,15 @@ class RequestEcho(BaseModel):
 
 
 class ScientificReactionKineticsResponse(BaseModel):
-    """Response envelope for /api/v1/scientific/reaction-entries/{id}/kinetics."""
+    """Response envelope for /api/v1/scientific/reaction-entries/{id}/kinetics.
+
+    Phase B: ``reaction_entry_ref`` mirrors ``reaction_entry_id`` as the
+    public stable handle for the response's path-parameter resource.
+    """
 
     request: RequestEcho
     reaction_entry_id: int
+    reaction_entry_ref: str
     review_summary: ReviewStatusSummary
     records: list[KineticsRecord]
     pagination: Pagination

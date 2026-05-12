@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import BigInteger, Date, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, PublicRefMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from app.db.models.transport import Transport
 
 
-class Software(Base, TimestampMixin):
+class Software(Base, TimestampMixin, PublicRefMixin):
     """Stable identity of a software package."""
 
     __tablename__ = "software"
@@ -37,7 +37,7 @@ class Software(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("name"),)
 
 
-class SoftwareRelease(Base, TimestampMixin):
+class SoftwareRelease(Base, TimestampMixin, PublicRefMixin):
     """Exact release metadata for a software package.
 
     Dedupe uses `(software_id, version, revision, build)` with PostgreSQL

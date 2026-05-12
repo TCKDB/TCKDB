@@ -1,0 +1,111 @@
+project: rxn_476
+job_types:
+  opt: true
+  fine: true
+  freq: true
+  rotors: true
+  irc: false
+  sp: true
+compute_thermo: true
+bac_type: null
+allow_nonisomorphic_2d: false
+ts_adapters: []
+species:
+- label: rxn_476_CC(S)O
+  smiles: 'CC(S)O'
+  multiplicity: 1
+  xyz: |
+    C      0.62440000    -0.00880000    -1.61660000
+    C      0.54330000     0.10690000    -0.11930000
+    S     -0.82530000    -0.78010000     0.66580000
+    O      0.63860000     1.43880000     0.24880000
+    H     -0.23630000     0.47270000    -2.08810000
+    H      0.64960000    -1.05530000    -1.91530000
+    H      1.52990000     0.48700000    -1.97040000
+    H      1.39910000    -0.43570000     0.28240000
+    H     -1.82030000    -0.13900000     0.03040000
+    H      0.47530000     1.50820000     1.19260000
+- label: rxn_476_C
+  smiles: 'C'
+  multiplicity: 1
+  xyz: |
+    H     -0.86110000     0.46010000    -0.36730000
+    C      0.03450000    -0.01900000     0.01480000
+    H      0.80500000     0.72290000    -0.16830000
+    H      0.12520000    -0.92270000    -0.57890000
+    H     -0.18690000    -0.19150000     1.06330000
+- label: rxn_476_C[C](S)O
+  smiles: 'C[C](S)O'
+  multiplicity: 2
+  xyz: |
+    C     -0.59700000    -0.69000000    -0.34900000
+    C      0.14950000     0.51860000     0.08440000
+    S      1.32820000     1.32510000    -0.92100000
+    O      0.24270000     0.65500000     1.43640000
+    H     -1.53240000    -0.76920000     0.21010000
+    H     -0.02850000    -1.61010000    -0.16130000
+    H     -0.82300000    -0.64170000    -1.41220000
+    H      0.66090000     2.47580000    -1.14210000
+    H      0.84990000     1.37250000     1.63530000
+- label: rxn_476_[CH3]
+  smiles: '[CH3]'
+  multiplicity: 2
+  xyz: |
+    C      0.00000000     0.00000000     0.00000000
+    H      1.06380000    -0.17470000     0.05400000
+    H     -0.68330000    -0.83510000    -0.02800000
+    H     -0.38050000     1.00980000    -0.02600000
+- label: rxn_476_TS0
+  is_ts: true
+  multiplicity: 2
+reactions:
+- label: rxn_476_CC(S)O + rxn_476_[CH3] <=> rxn_476_C[C](S)O + rxn_476_C
+  multiplicity: 2
+  ts_label: rxn_476_TS0
+  ts_xyz_guess:
+  - |
+    C      0.15880000     0.22150000    -1.73590000
+    C      0.07780000     0.33720000    -0.23870000
+    S     -1.29080000    -0.54990000     0.54640000
+    O      0.17310000     1.66900000     0.12950000
+    H     -0.70180000     0.70300000    -2.20750000
+    H      0.18410000    -0.82500000    -2.03470000
+    H      1.06430000     0.71720000    -2.08980000
+    H      1.07750000    -0.29660000     0.23070000
+    H     -2.28590000     0.09120000    -0.08890000
+    H      0.00980000     1.73840000     1.07330000
+    C      2.26630000    -0.93250000     0.73780000
+    H      3.03670000    -0.19060000     0.55470000
+    H      2.35690000    -1.83620000     0.14410000
+    H      2.04480000    -1.10510000     1.78640000
+opt_level:
+  method: wb97xd
+  basis: def2tzvp
+freq_level:
+  method: wb97xd
+  basis: def2tzvp
+sp_level:
+  method: DLPNO-CCSD(T)-F12
+  basis: cc-pVTZ-F12
+  auxiliary_basis: aug-cc-pVTZ/C
+  cabs: cc-pVTZ-F12-CABS
+  software: orca
+  args:
+    keyword:
+      dlpno_threshold: TightPNO
+      rijcosx: RIJCOSX
+      grid: DEFGRID3
+      uno: UNO
+tckdb:
+  enabled: true
+  base_url: "http://127.0.0.1:8000/api/v1"
+  api_key_env: "TCKDB_API_KEY"
+  payload_dir: "tckdb_payloads"
+  upload: true
+  strict: false
+  timeout_seconds: 30
+  upload_mode: "computed_reaction"
+  artifacts:
+      upload: true
+      kinds: ["output_log", "input"]
+      max_size_mb: 50

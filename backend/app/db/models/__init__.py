@@ -28,6 +28,16 @@ from . import (
     workflow,
 )
 
+# Install the global before_insert listener that auto-populates ``public_ref``
+# on every PublicRefMixin row. Done here so any code path that imports the
+# models package wires the listener exactly once. Idempotent.
+from app.services.public_refs import (  # noqa: E402
+    install_public_ref_listener as _install_public_ref_listener,
+)
+
+_install_public_ref_listener()
+
+
 __all__ = [
     "api_key",
     "app_user",

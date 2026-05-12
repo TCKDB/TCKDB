@@ -14,6 +14,9 @@ from app.schemas.reads.scientific_reactions import (
     ReactionSearchRequest,
     ScientificReactionSearchResponse,
 )
+from app.services.scientific_read.internal_ids import (
+    apply_internal_ids_visibility,
+)
 from app.services.scientific_read.reactions import search_reactions
 
 router = APIRouter(prefix="/reactions")
@@ -26,6 +29,8 @@ def reaction_search_get(
     products: list[str] | None = Query(None),
     direction: ReactionDirectionQuery = Query(ReactionDirectionQuery.either),
     family: str | None = Query(None),
+    reaction_ref: str | None = Query(None),
+    reaction_entry_ref: str | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
@@ -46,6 +51,8 @@ def reaction_search_get(
         products=products or [],
         direction=direction,
         family=family,
+        reaction_ref=reaction_ref,
+        reaction_entry_ref=reaction_entry_ref,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
@@ -55,7 +62,7 @@ def reaction_search_get(
         offset=offset,
         limit=limit,
     )
-    return search_reactions(session, request)
+    return apply_internal_ids_visibility(search_reactions(session, request))
 
 
 # Allowed query-string keys on the POST endpoint. Any other key produces
@@ -86,4 +93,4 @@ def reaction_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return search_reactions(session, body)
+    return apply_internal_ids_visibility(search_reactions(session, body))

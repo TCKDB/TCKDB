@@ -98,7 +98,7 @@ def get_energy_correction_scheme(
         )
     )
     if row is None:
-        raise NotFoundError(f"EnergyCorrectionScheme {scheme_id} not found")
+        raise NotFoundError("EnergyCorrectionScheme not found")
     return EnergyCorrectionSchemeRead.model_validate(row)
 
 
@@ -161,7 +161,7 @@ def get_frequency_scale_factor(
 ):
     row = session.get(FrequencyScaleFactor, fsf_id)
     if row is None:
-        raise NotFoundError(f"FrequencyScaleFactor {fsf_id} not found")
+        raise NotFoundError("FrequencyScaleFactor not found")
     return FrequencyScaleFactorRead.model_validate(row)
 
 
@@ -237,6 +237,6 @@ def get_applied_energy_correction(
     )
     if row is None:
         raise NotFoundError(
-            f"AppliedEnergyCorrection {correction_id} not found"
+            "AppliedEnergyCorrection not found"
         )
     return AppliedEnergyCorrectionRead.model_validate(row)

@@ -1,0 +1,39 @@
+{
+  "base_url": "http://127.0.0.1:8000/api/v1",
+  "bundle_format_version": "0",
+  "created_at": "2026-05-07T07:44:17Z",
+  "endpoint": "/uploads/computed-reaction",
+  "idempotency_key": "arc:rxn_30:rxn_30_CC-C-C-O-rxn_30_-H-rxn_30_C-C-C-C-O-rxn_30_-H-H-:TS0:computed_reaction:fdf1a80b718d8a9c",
+  "idempotency_replayed": false,
+  "last_error": null,
+  "payload_file": "/home/calvin/code/arc_rotor_scan/rxn_30/tckdb_payloads/computed_reaction/rxn_30_CC-C-C-O-rxn_30_-H-rxn_30_C-C-C-C-O-rxn_30_-H-H.payload.json",
+  "payload_kind": "computed_reaction",
+  "response_body": {
+    "kinetics_ids": [
+      6
+    ],
+    "reaction_entry_id": 7,
+    "reaction_id": 7,
+    "species_count": 4,
+    "species_entry_ids": [
+      20,
+      1,
+      21,
+      3
+    ],
+    "thermo_ids": [
+      24,
+      25,
+      26,
+      27
+    ],
+    "transition_state_entry_id": 7,
+    "type": "computed_reaction",
+    "warnings": []
+  },
+  "response_body_original_length": null,
+  "response_body_truncated": false,
+  "response_status_code": 201,
+  "status": "uploaded",
+  "uploaded_at": "2026-05-08T20:50:02Z"
+}

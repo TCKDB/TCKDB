@@ -95,9 +95,15 @@ class RecordReviewBadge(BaseModel):
 
 
 class LevelOfTheorySummary(BaseModel):
-    """Lightweight LoT shape used in scientific provenance summaries."""
+    """Lightweight LoT shape used in scientific provenance summaries.
+
+    Phase B: ``level_of_theory_ref`` is the public stable handle; the
+    existing ``level_of_theory_id`` integer stays for the compatibility
+    window. See ``docs/specs/public_identifier_policy.md``.
+    """
 
     level_of_theory_id: int
+    level_of_theory_ref: str
     method: str
     basis: str | None = None
     dispersion: str | None = None
@@ -109,6 +115,7 @@ class SoftwareReleaseSummary(BaseModel):
     """Software release pointer used in provenance summaries."""
 
     software_release_id: int
+    software_release_ref: str
     software: str
     version: str | None = None
 
@@ -117,6 +124,7 @@ class WorkflowToolReleaseSummary(BaseModel):
     """Workflow tool release pointer used in provenance summaries."""
 
     workflow_tool_release_id: int
+    workflow_tool_release_ref: str
     workflow_tool: str
     version: str | None = None
 
@@ -128,9 +136,13 @@ class LiteratureSummary(BaseModel):
     ``app/schemas/entities/literature.py`` (LiteratureRead). This summary is a
     deliberately smaller shape sufficient for scientific-read provenance,
     avoiding a heavier include for what is usually a sidebar fact.
+
+    Phase B: ``literature_ref`` is the public stable handle; ``id`` stays
+    for the compatibility window.
     """
 
     id: int
+    literature_ref: str
     title: str | None = None
     year: int | None = None
     doi: str | None = None
@@ -151,10 +163,15 @@ SCFStabilityStatusValue = Literal[
 
 
 class ValidationSummary(BaseModel):
-    """Geometry validation outcome for a single calculation."""
+    """Geometry validation outcome for a single calculation.
+
+    Phase B: ``calculation_ref`` is the public stable handle for the
+    associated calculation; ``calculation_id`` stays for compatibility.
+    """
 
     status: GeometryValidationStatus
     calculation_id: int
+    calculation_ref: str | None = None
 
 
 class SCFStabilitySummary(BaseModel):
@@ -162,12 +179,14 @@ class SCFStabilitySummary(BaseModel):
 
     status: SCFStabilityStatusValue
     calculation_id: int
+    calculation_ref: str | None = None
 
 
 class CalculationEvidenceSummary(BaseModel):
     """Lightweight per-calculation summary embedded in provenance blocks."""
 
     calculation_id: int
+    calculation_ref: str | None = None
     calculation_type: str
     converged: bool | None = None
     geometry_validation_status: GeometryValidationStatus
@@ -180,6 +199,7 @@ class PathSearchSummary(BaseModel):
     """Path-search calculation summary used in TS-backed kinetics provenance."""
 
     calculation_id: int
+    calculation_ref: str | None = None
     method: str | None = None
     converged: bool | None = None
 

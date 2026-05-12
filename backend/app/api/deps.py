@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Iterator
 
 from fastapi import Cookie, Depends, Header, HTTPException, Query
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.config import settings
@@ -26,6 +26,40 @@ from app.services.auth import (
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+
+
+def _install_statement_timeout_listener(target_engine) -> None:
+    """Apply ``settings.db_statement_timeout_ms`` on every new DBAPI connection.
+
+    Registered as a ``connect`` event so the timeout follows pooled
+    connections without needing to wrap each session in a context
+    manager. When the setting is ``None``/``0`` no listener is
+    attached and the role-level value (or PostgreSQL default) wins.
+
+    Production deployments should also pin the timeout at the role
+    level (``ALTER ROLE tckdb SET statement_timeout = '30s'``) so it
+    survives even when the API process forgets to set it. The app-
+    level listener is a belt-and-braces safety net, not the
+    authoritative configuration. See F13 in
+    ``docs/specs/public_read_abuse_controls.md``.
+    """
+    timeout_ms = settings.db_statement_timeout_ms
+    if not timeout_ms or timeout_ms <= 0:
+        return
+
+    @event.listens_for(target_engine, "connect")
+    def _set_statement_timeout(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            # Parameterized SET is not accepted by PostgreSQL, so we
+            # inline the integer literal. ``timeout_ms`` is bound
+            # from settings (operator-controlled), not user input.
+            cursor.execute(f"SET statement_timeout = {int(timeout_ms)}")
+        finally:
+            cursor.close()
+
+
+_install_statement_timeout_listener(engine)
 
 
 def get_db() -> Iterator[Session]:
@@ -184,6 +218,49 @@ def require_admin(
     if current_user.role is not AppUserRole.admin:
         raise HTTPException(status_code=403, detail="Admin role required.")
     return current_user
+
+
+def require_auth_for_legacy_reads(
+    x_api_key: str | None = Header(None, alias=API_KEY_HEADER),
+    tckdb_session: str | None = Cookie(None, alias=SESSION_COOKIE_NAME),
+    session: Session = Depends(get_db),
+) -> AppUser | None:
+    """Optionally require authentication on the legacy entity-read routes.
+
+    The public scientific surface lives under ``/api/v1/scientific/*``;
+    the legacy ``/api/v1/{thermo,kinetics,...}`` routes pre-date the
+    visibility policy and bypass it. When
+    ``settings.legacy_reads_require_auth`` is true (the hosted
+    default), this dependency requires any credential to proceed —
+    routes that already require auth (uploads, reviews) are
+    unaffected because they install their own stricter dependency.
+
+    When the setting is false (local/dev), the dependency is a no-op
+    and returns ``None`` so anonymous callers see the legacy shape
+    unchanged. See F14 in the audit and
+    ``docs/specs/public_read_abuse_controls.md``.
+    """
+    if not settings.legacy_reads_require_auth:
+        return None
+    if x_api_key:
+        user = authenticate_api_key(session, x_api_key)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        return user
+    if tckdb_session:
+        user = resolve_session(session, tckdb_session)
+        if user is None:
+            raise HTTPException(
+                status_code=401, detail="Invalid or expired session"
+            )
+        return user
+    raise HTTPException(
+        status_code=401,
+        detail=(
+            "Authentication required for legacy entity-read endpoints; "
+            "use /api/v1/scientific/* for the public read surface."
+        ),
+    )
 
 
 class PaginationParams:

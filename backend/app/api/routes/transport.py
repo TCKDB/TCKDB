@@ -66,5 +66,5 @@ def get_transport(transport_id: int, session: Session = Depends(get_db)):
         .options(selectinload(Transport.source_calculations))
     )
     if row is None:
-        raise NotFoundError(f"Transport {transport_id} not found")
+        raise NotFoundError("Transport not found")
     return TransportRead.model_validate(row)

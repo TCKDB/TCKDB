@@ -746,7 +746,7 @@ def lookup_calculations(
 
     entry = session.get(SpeciesEntry, species_entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {species_entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
 
     stmt = select(Calculation).where(Calculation.species_entry_id == species_entry_id)
     if type is not None:
@@ -805,7 +805,7 @@ def lookup_thermo(
 
     entry = session.get(SpeciesEntry, species_entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {species_entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
 
     rows = session.scalars(
         select(Thermo)
@@ -1060,7 +1060,7 @@ def lookup_kinetics(
 
     entry = session.get(ReactionEntry, reaction_entry_id)
     if entry is None:
-        raise NotFoundError(f"ReactionEntry {reaction_entry_id} not found")
+        raise NotFoundError("ReactionEntry not found")
 
     stmt = select(Kinetics).where(Kinetics.reaction_entry_id == reaction_entry_id)
     if model_kind:
@@ -1266,7 +1266,7 @@ def lookup_statmech(
 
     entry = session.get(SpeciesEntry, species_entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {species_entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
 
     rows = session.scalars(
         select(Statmech)
@@ -1344,7 +1344,7 @@ def lookup_transport(
 
     entry = session.get(SpeciesEntry, species_entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {species_entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
 
     rows = session.scalars(
         select(Transport)

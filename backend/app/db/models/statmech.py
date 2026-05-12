@@ -14,7 +14,7 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     RigidRotorKind,
     ScientificOriginKind,
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from app.db.models.workflow import WorkflowToolRelease
 
 
-class Statmech(Base, TimestampMixin, CreatedByMixin):
+class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Statistical mechanics interpretation layer for a species entry."""
 
     __tablename__ = "statmech"

@@ -16,6 +16,7 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import (
     SCFStabilityStatus,
+    StatmechCalculationRole,
     SubmissionRecordType,
     ThermoCalculationRole,
     ValidationStatus,
@@ -23,7 +24,7 @@ from app.db.models.common import (
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import SpeciesEntry
-from app.db.models.statmech import Statmech
+from app.db.models.statmech import Statmech, StatmechSourceCalculation
 from app.db.models.thermo import (
     Thermo,
     ThermoNASA,
@@ -58,6 +59,13 @@ from app.services.scientific_read.common import (
     validate_temperature_range,
     visible_statuses,
 )
+from app.services.scientific_read.handles import (
+    NO_MATCH,
+    reconcile_level_of_theory_pair,
+)
+from app.services.scientific_read.internal_ids import (
+    filter_internal_ids_from_resolved,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
@@ -65,8 +73,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "statmech",
     "review",
     "artifacts",
+    "internal_ids",
     "all",
 }
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 _DEFAULT_SORT_ECHO = (
     "covers_requested_temperature_range,extrapolation_distance_k,review_rank,"
@@ -104,13 +114,30 @@ def get_species_thermo(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
         "/scientific/species-entries/{id}/thermo",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
+    includes = filter_internal_ids_from_resolved(includes)
     validate_temperature_range(request.temperature_min, request.temperature_max)
 
-    if session.get(SpeciesEntry, species_entry_id) is None:
+    species_entry = session.get(SpeciesEntry, species_entry_id)
+    if species_entry is None:
         raise NotFoundError(
             f"species_entry not found (species_entry_id={species_entry_id})"
         )
+    species_entry_ref = species_entry.public_ref
+
+    # Phase C: reconcile level_of_theory_id + level_of_theory_ref into a
+    # single integer id. Unknown ref returns NO_MATCH → empty response.
+    lot_id_or_match = reconcile_level_of_theory_pair(
+        session,
+        id_value=request.level_of_theory_id,
+        ref_value=request.level_of_theory_ref,
+    )
+    if lot_id_or_match is NO_MATCH:
+        return _empty_response(
+            species_entry_id, species_entry_ref, request, includes, offset, limit
+        )
+    effective_lot_id: int | None = lot_id_or_match  # type: ignore[assignment]
 
     thermo_rows = list(
         session.scalars(
@@ -118,12 +145,20 @@ def get_species_thermo(
         ).all()
     )
     if not thermo_rows:
-        return _empty_response(species_entry_id, request, includes, offset, limit)
+        return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
     sources_by_thermo = _load_sources(session, [t.id for t in thermo_rows])
     nasa_by_thermo = _load_nasa(session, [t.id for t in thermo_rows])
     points_by_thermo = _load_points(session, [t.id for t in thermo_rows])
     statmech_ids_by_entry = _load_statmech_ids(session, species_entry_id)
+    statmech_refs = _load_statmech_refs(session, statmech_ids_by_entry)
+    # Phase 2 audit: load source-calc rows from the picked statmech so
+    # thermo provenance and evidence completeness can fall back to them
+    # when the thermo's own ThermoSourceCalculation rows are empty.
+    picked_statmech_id = (
+        next(iter(statmech_ids_by_entry), None) if statmech_ids_by_entry else None
+    )
+    statmech_sources = _load_statmech_sources(session, picked_statmech_id)
 
     # Determine model_kind per record (nasa | points | scalar) and apply filter.
     classified: list[tuple[Thermo, ThermoModelKindQuery]] = []
@@ -138,18 +173,18 @@ def get_species_thermo(
             continue
         classified.append((t, kind))
     if not classified:
-        return _empty_response(species_entry_id, request, includes, offset, limit)
+        return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
     # LoT filter applied against primary source calc (per Phase 2.3 spec).
-    if request.level_of_theory_id is not None:
+    if effective_lot_id is not None:
         classified = [
             (t, kind)
             for t, kind in classified
             if _primary_lot_id(sources_by_thermo.get(t.id, []))
-            == request.level_of_theory_id
+            == effective_lot_id
         ]
     if not classified:
-        return _empty_response(species_entry_id, request, includes, offset, limit)
+        return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
     # Software filter.
     if request.software is not None:
@@ -162,7 +197,7 @@ def get_species_thermo(
                 kept.append((t, kind))
         classified = kept
     if not classified:
-        return _empty_response(species_entry_id, request, includes, offset, limit)
+        return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
     # Review badges + visibility.
     badges = fetch_review_badges(
@@ -177,17 +212,21 @@ def get_species_thermo(
     )
     classified = [(t, kind) for t, kind in classified if badges[t.id].status in visible]
     if not classified:
-        return _empty_response(species_entry_id, request, includes, offset, limit)
+        return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
-    # Pre-fetch validation/SCF data for ALL relevant source calcs.
+    # Pre-fetch validation/SCF data for ALL relevant source calcs. Phase 2
+    # audit: include statmech-linked source calcs in the lookup set so the
+    # fallback inside ``_build_provenance`` / ``_evidence_breakdown`` can
+    # render LoT, software, geom-validation, and SCF stability for them.
     all_source_calc_ids = {
         sc.calculation_id
         for srcs in sources_by_thermo.values()
         for sc in srcs
-    }
+    } | {sc.calculation_id for sc in statmech_sources}
     geom_vals = _geometry_validations(session, all_source_calc_ids)
     scf_vals = _scf_stabilities(session, all_source_calc_ids)
     calc_meta = _calc_lot_meta(session, all_source_calc_ids)
+    calc_refs = _calc_refs(session, all_source_calc_ids)
 
     records: list[ThermoRecord] = []
     for t, model_kind in classified:
@@ -218,6 +257,7 @@ def get_species_thermo(
             thermo=t,
             sources=sources,
             statmech_ids_for_entry=statmech_ids_by_entry,
+            statmech_sources=statmech_sources,
             nasa_present=nasa_block is not None,
             points_count=len(points_by_thermo.get(t.id, [])),
             geom_vals=geom_vals,
@@ -228,11 +268,15 @@ def get_species_thermo(
         provenance = _build_provenance(
             sources=sources,
             calc_meta=calc_meta,
+            calc_refs=calc_refs,
             statmech_ids=statmech_ids_by_entry,
+            statmech_refs=statmech_refs,
+            statmech_sources=statmech_sources,
         )
 
         record = ThermoRecord(
             thermo_id=t.id,
+            thermo_ref=t.public_ref,
             scientific_origin=t.scientific_origin,
             model_kind=model_kind,
             review=badges[t.id],
@@ -294,6 +338,7 @@ def get_species_thermo(
             include=sorted(includes),
         ),
         species_entry_id=species_entry_id,
+        species_entry_ref=species_entry_ref,
         review_summary=summary,
         records=returned,
         pagination=build_pagination(
@@ -359,6 +404,58 @@ def _load_statmech_ids(session: Session, species_entry_id: int) -> set[int]:
     return set(rows)
 
 
+def _load_statmech_sources(
+    session: Session, statmech_id: int | None
+) -> list[StatmechSourceCalculation]:
+    """Load source-calculation links for the picked statmech.
+
+    Used by ``_build_provenance`` / ``_evidence_breakdown`` as a fallback
+    when a thermo record's own ``ThermoSourceCalculation`` rows do not
+    cover the freq / SP / composite roles. Returns ``[]`` when no
+    statmech was picked.
+    """
+    if statmech_id is None:
+        return []
+    return list(
+        session.scalars(
+            select(StatmechSourceCalculation).where(
+                StatmechSourceCalculation.statmech_id == statmech_id
+            )
+        ).all()
+    )
+
+
+def _statmech_calc_id_for_role(
+    statmech_sources: list[StatmechSourceCalculation],
+    role: StatmechCalculationRole,
+) -> int | None:
+    """Return the first statmech-source calc id matching *role*, or ``None``."""
+    for sc in statmech_sources:
+        if sc.role == role:
+            return sc.calculation_id
+    return None
+
+
+def _statmech_primary_calc_id(
+    statmech_sources: list[StatmechSourceCalculation],
+) -> int | None:
+    """Pick a primary calculation id from statmech sources using the same
+    role priority the thermo service uses (sp → composite → freq → opt).
+    """
+    for role in (
+        StatmechCalculationRole.sp,
+        StatmechCalculationRole.composite,
+        StatmechCalculationRole.freq,
+        StatmechCalculationRole.opt,
+    ):
+        calc_id = _statmech_calc_id_for_role(statmech_sources, role)
+        if calc_id is not None:
+            return calc_id
+    if statmech_sources:
+        return statmech_sources[0].calculation_id
+    return None
+
+
 def _geometry_validations(
     session: Session, calc_ids: set[int]
 ) -> dict[int, ValidationStatus]:
@@ -395,11 +492,13 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             Calculation.id,
             Calculation.type,
             Calculation.lot_id,
+            LevelOfTheory.public_ref,
             LevelOfTheory.method,
             LevelOfTheory.basis,
             LevelOfTheory.dispersion,
             LevelOfTheory.solvent,
             Calculation.software_release_id,
+            SoftwareRelease.public_ref,
             Software.name,
             SoftwareRelease.version,
             CalculationGeometryValidation.validation_status,
@@ -428,18 +527,45 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
         row[0]: {
             "type": row[1],
             "lot_id": row[2],
-            "lot_method": row[3],
-            "lot_basis": row[4],
-            "lot_dispersion": row[5],
-            "lot_solvent": row[6],
-            "software_release_id": row[7],
-            "software_name": row[8],
-            "software_version": row[9],
-            "geometry_validation": row[10],
-            "scf_stability": row[11],
+            "lot_ref": row[3],
+            "lot_method": row[4],
+            "lot_basis": row[5],
+            "lot_dispersion": row[6],
+            "lot_solvent": row[7],
+            "software_release_id": row[8],
+            "software_release_ref": row[9],
+            "software_name": row[10],
+            "software_version": row[11],
+            "geometry_validation": row[12],
+            "scf_stability": row[13],
         }
         for row in rows
     }
+
+
+def _calc_refs(session: Session, calc_ids: set[int]) -> dict[int, str]:
+    """Bulk-load {calculation_id: public_ref} for a set of calc ids."""
+    if not calc_ids:
+        return {}
+    rows = session.execute(
+        select(Calculation.id, Calculation.public_ref).where(
+            Calculation.id.in_(calc_ids)
+        )
+    ).all()
+    return {cid: ref for cid, ref in rows}
+
+
+def _load_statmech_refs(
+    session: Session, statmech_ids: set[int]
+) -> dict[int, str]:
+    if not statmech_ids:
+        return {}
+    rows = session.execute(
+        select(Statmech.id, Statmech.public_ref).where(
+            Statmech.id.in_(statmech_ids)
+        )
+    ).all()
+    return {sid: ref for sid, ref in rows}
 
 
 # ---------------------------------------------------------------------------
@@ -484,9 +610,25 @@ def _build_provenance(
     *,
     sources: list[ThermoSourceCalculation],
     calc_meta: dict[int, dict],
+    calc_refs: dict[int, str],
     statmech_ids: set[int],
+    statmech_refs: dict[int, str],
+    statmech_sources: list[StatmechSourceCalculation],
 ) -> ThermoProvenance:
+    """Build a ``ThermoProvenance`` block for one thermo record.
+
+    Phase 2 audit (thermo provenance / geometry): when the thermo's own
+    ``ThermoSourceCalculation`` rows are empty or do not cover a role,
+    fall back to the picked statmech's ``StatmechSourceCalculation``
+    rows for that role. Explicit thermo sources always win. This makes
+    computed-thermo provenance reflect the freq / SP / LoT / software
+    that live on the statmech the thermo derives from, instead of
+    coming back uniformly ``null``.
+    """
     primary_calc_id_v = _primary_calc_id(sources)
+    # Fall back to a statmech-derived primary when thermo declared none.
+    if primary_calc_id_v is None:
+        primary_calc_id_v = _statmech_primary_calc_id(statmech_sources)
     primary_meta = calc_meta.get(primary_calc_id_v) if primary_calc_id_v else None
 
     primary_calc_summary: CalculationEvidenceSummary | None = None
@@ -498,6 +640,7 @@ def _build_provenance(
         scf = primary_meta["scf_stability"]
         primary_calc_summary = CalculationEvidenceSummary(
             calculation_id=primary_calc_id_v,
+            calculation_ref=calc_refs.get(primary_calc_id_v),
             calculation_type=primary_meta["type"].value,
             converged=None,
             geometry_validation_status=gv.value if gv is not None else "not_present",
@@ -509,7 +652,15 @@ def _build_provenance(
         primary_sw = _sw_summary(primary_meta)
 
     freq_calc_id = _calc_id_for_role(sources, ThermoCalculationRole.freq)
+    if freq_calc_id is None:
+        freq_calc_id = _statmech_calc_id_for_role(
+            statmech_sources, StatmechCalculationRole.freq
+        )
     sp_calc_id = _calc_id_for_role(sources, ThermoCalculationRole.sp)
+    if sp_calc_id is None:
+        sp_calc_id = _statmech_calc_id_for_role(
+            statmech_sources, StatmechCalculationRole.sp
+        )
 
     statmech_id = next(iter(statmech_ids), None) if statmech_ids else None
 
@@ -518,8 +669,11 @@ def _build_provenance(
         level_of_theory=primary_lot,
         software=primary_sw,
         statmech_id=statmech_id,
+        statmech_ref=statmech_refs.get(statmech_id) if statmech_id is not None else None,
         freq_calculation_id=freq_calc_id,
+        freq_calculation_ref=calc_refs.get(freq_calc_id) if freq_calc_id is not None else None,
         sp_calculation_id=sp_calc_id,
+        sp_calculation_ref=calc_refs.get(sp_calc_id) if sp_calc_id is not None else None,
     )
 
 
@@ -541,6 +695,7 @@ def _lot_summary(meta: dict) -> LevelOfTheorySummary | None:
         label_parts.append(meta["lot_basis"])
     return LevelOfTheorySummary(
         level_of_theory_id=lot_id,
+        level_of_theory_ref=meta["lot_ref"],
         method=meta["lot_method"] or "",
         basis=meta["lot_basis"],
         dispersion=meta["lot_dispersion"],
@@ -555,6 +710,7 @@ def _sw_summary(meta: dict) -> SoftwareReleaseSummary | None:
         return None
     return SoftwareReleaseSummary(
         software_release_id=sr_id,
+        software_release_ref=meta["software_release_ref"],
         software=meta["software_name"] or "",
         version=meta["software_version"],
     )
@@ -565,20 +721,35 @@ def _evidence_breakdown(
     thermo: Thermo,
     sources: list[ThermoSourceCalculation],
     statmech_ids_for_entry: set[int],
+    statmech_sources: list[StatmechSourceCalculation],
     nasa_present: bool,
     points_count: int,
     geom_vals: dict[int, ValidationStatus],
     scf_vals: dict[int, SCFStabilityStatus],
 ) -> EvidenceCompletenessBreakdown:
-    """Thermo L1 checklist, max=8."""
-    has_sources = len(sources) > 0
+    """Thermo L1 checklist, max=8.
+
+    Phase 2 audit (thermo provenance / geometry): for computed thermo
+    that derives from a statmech without denormalized thermo-source
+    rows, count the statmech's freq / SP / opt source calculations
+    toward the checklist. Direct thermo source-calculation rows still
+    win when present; statmech-linked rows are a fallback. The
+    predicate names and the total ``max`` are unchanged.
+    """
+    statmech_roles = {sc.role for sc in statmech_sources}
+    has_sources = len(sources) > 0 or len(statmech_sources) > 0
     has_statmech = len(statmech_ids_for_entry) > 0
 
     source_roles = {sc.role for sc in sources}
-    has_freq_evidence = ThermoCalculationRole.freq in source_roles
+    has_freq_evidence = (
+        ThermoCalculationRole.freq in source_roles
+        or StatmechCalculationRole.freq in statmech_roles
+    )
     has_sp_or_energy_evidence = (
         ThermoCalculationRole.sp in source_roles
         or ThermoCalculationRole.composite in source_roles
+        or StatmechCalculationRole.sp in statmech_roles
+        or StatmechCalculationRole.composite in statmech_roles
     )
     has_temperature_dependent_model = nasa_present or points_count >= 2
 
@@ -587,15 +758,24 @@ def _evidence_breakdown(
         for v in (thermo.h298_uncertainty_kj_mol, thermo.s298_uncertainty_j_mol_k)
     )
 
-    # Geometry validation: target = opt source calc.
+    # Geometry validation: target = opt source calc, falling back to the
+    # statmech's opt source if thermo declared none.
     opt_calc_id = _calc_id_for_role(sources, ThermoCalculationRole.opt)
+    if opt_calc_id is None:
+        opt_calc_id = _statmech_calc_id_for_role(
+            statmech_sources, StatmechCalculationRole.opt
+        )
     has_geom_val = False
     if opt_calc_id is not None:
         gv = geom_vals.get(opt_calc_id)
         has_geom_val = gv in {ValidationStatus.passed, ValidationStatus.warning}
 
-    # SCF stability: target = sp source calc.
+    # SCF stability: target = sp source calc (with the same statmech fallback).
     sp_calc_id = _calc_id_for_role(sources, ThermoCalculationRole.sp)
+    if sp_calc_id is None:
+        sp_calc_id = _statmech_calc_id_for_role(
+            statmech_sources, StatmechCalculationRole.sp
+        )
     has_scf = False
     if sp_calc_id is not None:
         s = scf_vals.get(sp_calc_id)
@@ -647,6 +827,8 @@ def _filter_echo(request: ThermoReadRequest) -> dict[str, object]:
         echo["model_kind"] = request.model_kind.value
     if request.level_of_theory_id is not None:
         echo["level_of_theory_id"] = request.level_of_theory_id
+    if request.level_of_theory_ref is not None:
+        echo["level_of_theory_ref"] = request.level_of_theory_ref
     if request.software is not None:
         echo["software"] = request.software
     if request.min_review_status is not None:
@@ -660,6 +842,7 @@ def _filter_echo(request: ThermoReadRequest) -> dict[str, object]:
 
 def _empty_response(
     species_entry_id: int,
+    species_entry_ref: str,
     request: ThermoReadRequest,
     includes: set[str],
     offset: int,
@@ -673,6 +856,7 @@ def _empty_response(
             include=sorted(includes),
         ),
         species_entry_id=species_entry_id,
+        species_entry_ref=species_entry_ref,
         review_summary=review_summary([]),
         records=[],
         pagination=build_pagination(

@@ -9,6 +9,7 @@ _EXPECTED_PATHS = {
     "/api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics",
     "/api/v1/scientific/species-entries/{species_entry_id}/thermo",
     "/api/v1/scientific/reaction-entries/{reaction_entry_id}/full",
+    "/api/v1/scientific/geometries/{geometry_handle}",
 }
 
 

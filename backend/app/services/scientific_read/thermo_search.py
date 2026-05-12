@@ -47,6 +47,9 @@ from app.services.scientific_read.common import (
     validate_pagination,
     validate_temperature_range,
 )
+from app.services.scientific_read.internal_ids import (
+    filter_internal_ids_from_resolved,
+)
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.thermo import get_species_thermo
 
@@ -57,8 +60,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
     "statmech",
     "conformers",
+    "internal_ids",
     "all",
 }
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 # Tokens that are legal at this endpoint but only meaningful to the
 # inner thermo retrieval. The remaining tokens (statmech, conformers)
@@ -92,17 +97,28 @@ def search_thermo(
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
     includes = validate_includes(
-        request.include, _LEGAL_INCLUDE_TOKENS, "/scientific/thermo/search"
+        request.include,
+        _LEGAL_INCLUDE_TOKENS,
+        "/scientific/thermo/search",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
+    includes = filter_internal_ids_from_resolved(includes)
     validate_temperature_range(request.temperature_min, request.temperature_max)
 
     if not any(
         v is not None
-        for v in (request.smiles, request.inchi, request.inchi_key, request.formula)
+        for v in (
+            request.smiles,
+            request.inchi,
+            request.inchi_key,
+            request.formula,
+            request.species_ref,
+            request.species_entry_ref,
+        )
     ):
         raise ValueError(
             "missing_identifier: at least one of {smiles, inchi, inchi_key, "
-            "formula} is required."
+            "formula, species_ref, species_entry_ref} is required."
         )
 
     # 1) Resolve species + species_entries.
@@ -115,6 +131,9 @@ def search_thermo(
         multiplicity=request.multiplicity,
         electronic_state_kind=request.electronic_state_kind,
         species_entry_kind=request.species_entry_kind,
+        # Phase C: pass through explicit refs as identity filters.
+        species_ref=request.species_ref,
+        species_entry_ref=request.species_entry_ref,
         # Pass through the trust posture so entry-level filtering is
         # consistent across the two layers.
         min_review_status=None,  # entry filtering only — thermo filter is shallow
@@ -135,11 +154,13 @@ def search_thermo(
         for entry in sp_record.entries:
             ctx = ThermoSearchSpeciesContext(
                 species_id=sp_record.species_id,
+                species_ref=sp_record.species_ref,
                 canonical_smiles=sp_record.canonical_smiles,
                 inchi_key=sp_record.inchi_key,
                 charge=sp_record.charge,
                 multiplicity=sp_record.multiplicity,
                 species_entry_id=entry.species_entry_id,
+                species_entry_ref=entry.species_entry_ref,
                 species_entry_kind=entry.species_entry_kind,
                 electronic_state_kind=entry.electronic_state_kind,
                 species_entry_review=entry.review,
@@ -167,6 +188,7 @@ def search_thermo(
             temperature_max=request.temperature_max,
             model_kind=request.model_kind,
             level_of_theory_id=request.level_of_theory_id,
+            level_of_theory_ref=request.level_of_theory_ref,
             software=request.software,
             min_review_status=request.min_review_status,
             include_rejected=request.include_rejected,
@@ -257,6 +279,12 @@ def _filter_echo(request: ThermoSearchRequest) -> dict[str, object]:
         echo["model_kind"] = request.model_kind.value
     if request.level_of_theory_id is not None:
         echo["level_of_theory_id"] = request.level_of_theory_id
+    if request.level_of_theory_ref is not None:
+        echo["level_of_theory_ref"] = request.level_of_theory_ref
+    if request.species_ref is not None:
+        echo["species_ref"] = request.species_ref
+    if request.species_entry_ref is not None:
+        echo["species_entry_ref"] = request.species_entry_ref
     if request.software is not None:
         echo["software"] = request.software
     if request.min_review_status is not None:

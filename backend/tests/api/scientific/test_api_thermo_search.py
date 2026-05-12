@@ -27,9 +27,10 @@ def test_get_returns_200_with_envelope(client, db_session):
     assert "request" in body and "review_summary" in body and "records" in body
     assert len(body["records"]) == 1
     rec = body["records"][0]
-    assert rec["species"]["species_id"] == species.id
-    assert rec["species"]["species_entry_id"] == entry.id
-    assert rec["thermo"]["thermo_id"] == thermo.id
+    # Phase D: identify records by public ref in default responses.
+    assert rec["species"]["species_ref"] == species.public_ref
+    assert rec["species"]["species_entry_ref"] == entry.public_ref
+    assert rec["thermo"]["thermo_ref"] == thermo.public_ref
 
 
 def test_post_accepts_json_body(client, db_session):

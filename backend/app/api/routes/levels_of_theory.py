@@ -59,5 +59,5 @@ def list_levels_of_theory(
 def get_level_of_theory(lot_id: int, session: Session = Depends(get_db)):
     row = session.get(LevelOfTheory, lot_id)
     if row is None:
-        raise NotFoundError(f"LevelOfTheory {lot_id} not found")
+        raise NotFoundError("LevelOfTheory not found")
     return LevelOfTheoryRead.model_validate(row)

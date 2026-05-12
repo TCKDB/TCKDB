@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import CHAR, BigInteger, Date, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, PublicRefMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from app.db.models.transport import Transport
 
 
-class WorkflowTool(Base, TimestampMixin):
+class WorkflowTool(Base, TimestampMixin, PublicRefMixin):
     """Stable identity for a workflow or orchestration tool."""
 
     __tablename__ = "workflow_tool"
@@ -36,7 +36,7 @@ class WorkflowTool(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("name"),)
 
 
-class WorkflowToolRelease(Base, TimestampMixin):
+class WorkflowToolRelease(Base, TimestampMixin, PublicRefMixin):
     """Exact provenance for a workflow tool code state.
 
     Dedupe uses `(workflow_tool_id, version, git_commit)` with PostgreSQL

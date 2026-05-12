@@ -1,0 +1,52 @@
+project: rxn_998
+job_types:
+  rotors: true
+  irc: false
+  fine: true
+  sp: true
+compute_thermo: true
+bac_type: null
+skip_nmd: false
+allow_nonisomorphic_2d: false
+species:
+- label: rxn_998_C=CC
+  smiles: C=CC
+- label: rxn_998_C[CH]C
+  smiles: C[CH]C
+- label: rxn_998_CCC
+  smiles: CCC
+- label: rxn_998_[CH2]C=C
+  smiles: '[CH2]C=C'
+reactions:
+- label: rxn_998_C=CC + rxn_998_C[CH]C <=> rxn_998_CCC + rxn_998_[CH2]C=C
+opt_level:
+  method: wb97xd
+  basis: def2tzvp
+freq_level:
+  method: wb97xd
+  basis: def2tzvp
+sp_level:
+  method: DLPNO-CCSD(T)-F12
+  basis: cc-pVTZ-F12
+  auxiliary_basis: aug-cc-pVTZ/C
+  cabs: cc-pVTZ-F12-CABS
+  software: orca
+  args:
+    keyword:
+      dlpno_threshold: TightPNO
+      rijcosx: RIJCOSX
+      grid: DEFGRID3
+      uno: UNO
+tckdb:
+  enabled: true
+  base_url: "http://127.0.0.1:8000/api/v1"
+  api_key_env: "TCKDB_API_KEY"
+  payload_dir: "tckdb_payloads"
+  upload: true
+  strict: false
+  timeout_seconds: 30
+  upload_mode: "computed_reaction"
+  artifacts:
+      upload: true
+      kinds: ["output_log", "input"]
+      max_size_mb: 50

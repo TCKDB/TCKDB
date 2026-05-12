@@ -62,7 +62,7 @@ def list_reactions(
 def get_reaction(reaction_id: int, session: Session = Depends(get_db)):
     reaction = session.get(ChemReaction, reaction_id)
     if reaction is None:
-        raise NotFoundError(f"Reaction {reaction_id} not found")
+        raise NotFoundError("Reaction not found")
     return ChemReactionRead.model_validate(reaction)
 
 
@@ -77,7 +77,7 @@ entries_router = APIRouter()
 def get_reaction_entry(entry_id: int, session: Session = Depends(get_db)):
     entry = session.get(ReactionEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"ReactionEntry {entry_id} not found")
+        raise NotFoundError("ReactionEntry not found")
     return ReactionEntryRead.model_validate(entry)
 
 
@@ -90,7 +90,7 @@ def list_kinetics_for_entry(
 ):
     entry = session.get(ReactionEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"ReactionEntry {entry_id} not found")
+        raise NotFoundError("ReactionEntry not found")
     rows = session.scalars(
         select(Kinetics)
         .where(Kinetics.reaction_entry_id == entry_id)
@@ -108,7 +108,7 @@ def list_transition_states_for_entry(
 ):
     entry = session.get(ReactionEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"ReactionEntry {entry_id} not found")
+        raise NotFoundError("ReactionEntry not found")
     rows = session.scalars(
         select(TransitionState)
         .where(TransitionState.reaction_entry_id == entry_id)

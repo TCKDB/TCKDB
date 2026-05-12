@@ -1,0 +1,46 @@
+project: demo_reaction
+compute_thermo: true
+skip_nmd: false
+level_of_theory: "wb97xd/def2tzvp"
+arkane_level_of_theory:
+        method: "wb97xd"
+        basis: "def2tzvp"
+        year: "2023"
+job_types:
+  opt: true
+  freq: true
+  sp: true
+  rotors: true
+  conf_opt: true
+  fine: true
+  irc: true
+
+species:
+  - label: "CHO"
+    smiles: "[CH]=O"
+  - label: "CH4"
+    smiles: "C"
+    
+  - label: "CH2O"
+    smiles: "C=O"
+  - label: "CH3"
+    smiles: "[CH3]"
+
+reactions:
+  - label: "CHO + CH4 <=> CH2O + CH3"
+
+tckdb:
+  enabled: true
+  base_url: "http://127.0.0.1:8000/api/v1"
+  api_key_env: "TCKDB_API_KEY"
+  payload_dir: "tckdb_payloads"
+  upload: true
+  strict: false
+  timeout_seconds: 30
+  upload_mode: "computed_reaction"
+  artifacts:
+      upload: true
+      kinds: ["output_log", "input"]
+      max_size_mb: 50
+
+

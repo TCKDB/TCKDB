@@ -1,0 +1,18 @@
+{
+  "base_url": "http://127.0.0.1:8000/api/v1",
+  "bundle_format_version": "0",
+  "created_at": "2026-05-10T12:48:23Z",
+  "endpoint": "/uploads/computed-reaction",
+  "idempotency_key": "arc:rxn_298:rxn_298_-O-O-rxn_298_CC-C-C-rxn_298_OO-rxn_298_C-C-C-C:TS0:computed_reaction:efc7a46079a198b8",
+  "idempotency_replayed": null,
+  "is_partial": false,
+  "last_error": "HTTP 401: {'detail': 'Invalid API key'}",
+  "payload_file": "/home/calvin/code/arc_rotor_scan/rxn_298/tckdb_payloads/computed_reaction/rxn_298_-O-O-rxn_298_CC-C-C-rxn_298_OO-rxn_298_C-C-C-C.payload.json",
+  "payload_kind": "computed_reaction",
+  "response_body": {
+    "detail": "Invalid API key"
+  },
+  "response_status_code": 401,
+  "status": "failed",
+  "uploaded_at": null
+}

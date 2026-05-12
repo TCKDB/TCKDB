@@ -370,8 +370,13 @@ def test_ts_upload_with_irc_additional_persists_irc_result(db_engine) -> None:
     """TS upload carrying an IRC additional calc persists IRC structured rows."""
 
     with Session(db_engine) as session, session.begin():
-        session.add(AppUser(id=60, username="ts_irc_writer"))
+        # Let the DB assign the user id rather than hardcoding 60 — other
+        # committed tests in the suite may consume IDs in that range and
+        # trigger a unique-constraint violation under certain orderings.
+        writer = AppUser(username="ts_irc_writer")
+        session.add(writer)
         session.flush()
+        writer_id = writer.id
 
         request = TransitionStateUploadRequest(
             reaction=_REACTION,
@@ -416,7 +421,7 @@ def test_ts_upload_with_irc_additional_persists_irc_result(db_engine) -> None:
             ],
         )
         ts_entry = persist_transition_state_upload(
-            session, request, created_by=60
+            session, request, created_by=writer_id
         )
 
         irc_calc = session.scalar(

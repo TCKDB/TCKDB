@@ -53,7 +53,7 @@ def list_transition_states(
 def get_transition_state(ts_id: int, session: Session = Depends(get_db)):
     ts = session.get(TransitionState, ts_id)
     if ts is None:
-        raise NotFoundError(f"TransitionState {ts_id} not found")
+        raise NotFoundError("TransitionState not found")
     return TransitionStateRead.model_validate(ts)
 
 
@@ -66,5 +66,5 @@ def get_transition_state_entry(
 ):
     entry = session.get(TransitionStateEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"TransitionStateEntry {entry_id} not found")
+        raise NotFoundError("TransitionStateEntry not found")
     return TransitionStateEntryRead.model_validate(entry)

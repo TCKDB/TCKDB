@@ -108,7 +108,7 @@ def list_species(
 def get_species(species_id: int, session: Session = Depends(get_db)):
     species = session.get(Species, species_id)
     if species is None:
-        raise NotFoundError(f"Species {species_id} not found")
+        raise NotFoundError("Species not found")
     return SpeciesRead.model_validate(species)
 
 
@@ -152,7 +152,7 @@ def get_species_entry(entry_id: int, session: Session = Depends(get_db)):
     """
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
     read = SpeciesEntryRead.model_validate(entry)
     read.conformer_summary = _species_entry_conformer_summary(session, entry_id)
     return read
@@ -173,7 +173,7 @@ def list_conformer_groups_for_entry(
     """
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
 
     obs_count_sq = (
         select(
@@ -217,7 +217,7 @@ def list_conformers_for_entry(
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
     observations = session.scalars(
         select(ConformerObservation)
         .join(ConformerGroup)
@@ -373,9 +373,9 @@ def get_lowest_sp_conformer_observation_for_entry(
     """
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
     if session.get(LevelOfTheory, lot_id) is None:
-        raise NotFoundError(f"LevelOfTheory {lot_id} not found")
+        raise NotFoundError("LevelOfTheory not found")
 
     result = _resolve_lowest_sp_conformer_observation(
         session,
@@ -400,7 +400,7 @@ def list_thermo_for_entry(
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
     rows = session.scalars(
         select(Thermo)
         .where(Thermo.species_entry_id == entry_id)
@@ -418,7 +418,7 @@ def list_statmech_for_entry(
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
     rows = session.scalars(
         select(Statmech)
         .where(Statmech.species_entry_id == entry_id)
@@ -436,7 +436,7 @@ def list_transport_for_entry(
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
-        raise NotFoundError(f"SpeciesEntry {entry_id} not found")
+        raise NotFoundError("SpeciesEntry not found")
     rows = session.scalars(
         select(Transport)
         .where(Transport.species_entry_id == entry_id)

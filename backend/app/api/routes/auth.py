@@ -87,9 +87,9 @@ def _set_session_cookie(response: Response, token: str, ttl: timedelta) -> None:
         key=SESSION_COOKIE_NAME,
         value=token,
         max_age=int(ttl.total_seconds()),
-        httponly=True,
-        samesite="lax",
-        secure=False,  # the deployment can flip this at the reverse-proxy layer
+        httponly=settings.session_cookie_httponly,
+        samesite=settings.session_cookie_samesite,
+        secure=settings.session_cookie_secure,
     )
 
 

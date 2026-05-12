@@ -1,0 +1,14 @@
+# /etc/systemd/system/tckdb-backup.timer
+#
+# Fires tckdb-backup.service nightly at 03:15 local time.
+
+[Unit]
+Description=TCKDB nightly Postgres backup timer
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+Unit=tckdb-backup.service
+
+[Install]
+WantedBy=timers.target

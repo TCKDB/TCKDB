@@ -8,9 +8,16 @@ workflow tools see the same kinetics block as the entry-id detail endpoint.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
+from app.schemas.reads._field_bounds import (
+    MAX_FAMILY_LENGTH as _MAX_FAMILY_LENGTH,
+    MAX_PARTICIPANTS_PER_REACTION as _MAX_PARTICIPANTS_PER_REACTION,
+    MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
+    MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
+    MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
+)
 from app.schemas.reads.scientific_common import (
     CollapseMode,
     Pagination,
@@ -38,10 +45,20 @@ class KineticsSearchRequest(BaseModel):
     """
 
     # Reaction identity filters
-    reactants: list[str] = Field(default_factory=list)
-    products: list[str] = Field(default_factory=list)
+    reactants: list[str] = Field(
+        default_factory=list, max_length=_MAX_PARTICIPANTS_PER_REACTION
+    )
+    products: list[str] = Field(
+        default_factory=list, max_length=_MAX_PARTICIPANTS_PER_REACTION
+    )
     direction: ReactionDirectionQuery = ReactionDirectionQuery.either
-    family: str | None = None
+    family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
+
+    # Phase C: optional explicit reaction/reaction-entry handles.
+    reaction_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
+    reaction_entry_ref: str | None = Field(
+        default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
 
     # Kinetics filters
     temperature_min: float | None = None
@@ -49,7 +66,10 @@ class KineticsSearchRequest(BaseModel):
     pressure: float | None = None
     model_kind: KineticsModelKind | None = None
     level_of_theory_id: int | None = None
-    software: str | None = None
+    level_of_theory_ref: str | None = Field(
+        default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
+    software: str | None = Field(default=None, max_length=_MAX_SOFTWARE_NAME_LENGTH)
 
     # Trust filters
     min_review_status: RecordReviewStatus | None = None
@@ -64,6 +84,17 @@ class KineticsSearchRequest(BaseModel):
     offset: int = 0
     limit: int = 50
 
+    @field_validator("reactants", "products")
+    @classmethod
+    def _bound_participant_lengths(cls, value: list[str]) -> list[str]:
+        for item in value:
+            if len(item) > _MAX_SMILES_LENGTH:
+                raise ValueError(
+                    "smiles_too_long: participant SMILES exceeds "
+                    f"the maximum length of {_MAX_SMILES_LENGTH}."
+                )
+        return value
+
 
 # ---------------------------------------------------------------------------
 # Per-record + envelope
@@ -71,10 +102,16 @@ class KineticsSearchRequest(BaseModel):
 
 
 class KineticsSearchReactionContext(BaseModel):
-    """Resolved reaction/reaction-entry identity context for a kinetics record."""
+    """Resolved reaction/reaction-entry identity context for a kinetics record.
+
+    Phase B: ``reaction_ref`` and ``reaction_entry_ref`` are the public
+    stable handles alongside the integer IDs.
+    """
 
     reaction_id: int
+    reaction_ref: str
     reaction_entry_id: int
+    reaction_entry_ref: str
     equation: str
     reversible: bool
     family: str | None = None

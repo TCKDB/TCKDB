@@ -17,7 +17,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     ConformerAssignmentScopeKind,
     ConformerSelectionKind,
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from app.db.models.transport import Transport
 
 
-class Species(Base, TimestampMixin):
+class Species(Base, TimestampMixin, PublicRefMixin):
     """Store graph-defined species identities without resolved stereo or 3D conformers."""
 
     __tablename__ = "species"
@@ -88,7 +88,7 @@ class Species(Base, TimestampMixin):
         ]
 
 
-class SpeciesEntry(Base, TimestampMixin, CreatedByMixin):
+class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Store one stereochemically, electronically, or isotopically resolved species form.
 
     The resolved identity tuple is unique, with nullable identity components
@@ -186,7 +186,7 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin):
     )
 
 
-class ConformerGroup(Base, TimestampMixin, CreatedByMixin):
+class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Store one deduplicated conformational-basin identity for a species entry."""
 
     __tablename__ = "conformer_group"
@@ -232,7 +232,7 @@ class ConformerGroup(Base, TimestampMixin, CreatedByMixin):
     )
 
 
-class ConformerObservation(Base, TimestampMixin, CreatedByMixin):
+class ConformerObservation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Store one provenance-bearing conformer observation assigned to a basin."""
 
     __tablename__ = "conformer_observation"
@@ -334,7 +334,7 @@ class ConformerSelection(Base, TimestampMixin, CreatedByMixin):
     )
 
 
-class ConformerAssignmentScheme(Base, TimestampMixin, CreatedByMixin):
+class ConformerAssignmentScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Store versioned metadata about conformer-assignment or selection logic.
 
     This table is optional in the simplified design. It is useful when the

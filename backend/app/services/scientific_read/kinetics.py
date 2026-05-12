@@ -67,6 +67,13 @@ from app.services.scientific_read.common import (
     validate_temperature_range,
     visible_statuses,
 )
+from app.services.scientific_read.handles import (
+    NO_MATCH,
+    reconcile_level_of_theory_pair,
+)
+from app.services.scientific_read.internal_ids import (
+    filter_internal_ids_from_resolved,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
@@ -76,8 +83,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "irc",
     "review",
     "artifacts",
+    "internal_ids",
     "all",
 }
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 _DEFAULT_SORT_ECHO = (
     "covers_requested_range,extrapolation_distance_k,review_rank,"
@@ -119,7 +128,9 @@ def get_reaction_kinetics(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
         "/scientific/reaction-entries/{id}/kinetics",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
+    includes = filter_internal_ids_from_resolved(includes)
     validate_temperature_range(request.temperature_min, request.temperature_max)
 
     entry = session.get(ReactionEntry, reaction_entry_id)
@@ -127,6 +138,19 @@ def get_reaction_kinetics(
         raise NotFoundError(
             f"reaction_entry not found (reaction_entry_id={reaction_entry_id})"
         )
+    reaction_entry_ref = entry.public_ref
+
+    # Phase C: reconcile level_of_theory_id + level_of_theory_ref.
+    lot_id_or_match = reconcile_level_of_theory_pair(
+        session,
+        id_value=request.level_of_theory_id,
+        ref_value=request.level_of_theory_ref,
+    )
+    if lot_id_or_match is NO_MATCH:
+        return _empty_response(
+            reaction_entry_id, reaction_entry_ref, request, includes, offset, limit
+        )
+    effective_lot_id: int | None = lot_id_or_match  # type: ignore[assignment]
 
     # Load kinetics rows for this entry, applying simple column filters.
     stmt = select(Kinetics).where(Kinetics.reaction_entry_id == reaction_entry_id)
@@ -135,7 +159,7 @@ def get_reaction_kinetics(
     kinetics_rows: list[Kinetics] = list(session.scalars(stmt).all())
 
     if not kinetics_rows:
-        return _empty_response(reaction_entry_id, request, includes, offset, limit)
+        return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
     # Bulk-load source calculations and dependent provenance.
     sources_by_kinetics = _load_source_calculations(
@@ -143,15 +167,15 @@ def get_reaction_kinetics(
     )
 
     # Apply level_of_theory_id filter (operates on the primary source calc).
-    if request.level_of_theory_id is not None:
+    if effective_lot_id is not None:
         kinetics_rows = [
             k
             for k in kinetics_rows
             if _primary_lot_id(sources_by_kinetics.get(k.id, []))
-            == request.level_of_theory_id
+            == effective_lot_id
         ]
     if not kinetics_rows:
-        return _empty_response(reaction_entry_id, request, includes, offset, limit)
+        return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
     # Software filter — match against primary source calc's software release name.
     if request.software is not None:
@@ -176,7 +200,7 @@ def get_reaction_kinetics(
             == software_name
         ]
     if not kinetics_rows:
-        return _empty_response(reaction_entry_id, request, includes, offset, limit)
+        return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
     # Review badges + visibility filtering.
     badges = fetch_review_badges(
@@ -191,7 +215,7 @@ def get_reaction_kinetics(
     )
     kinetics_rows = [k for k in kinetics_rows if badges[k.id].status in visible]
     if not kinetics_rows:
-        return _empty_response(reaction_entry_id, request, includes, offset, limit)
+        return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
     # Bulk-load TS data for the entry to determine has_transition_state and
     # path-search/IRC chain reachability.
@@ -205,6 +229,8 @@ def get_reaction_kinetics(
     calc_meta = _calc_metadata(session, all_source_calc_ids)
     geometry_validations = _geometry_validations(session, all_source_calc_ids)
     scf_stabilities = _scf_stabilities(session, all_source_calc_ids)
+    calc_refs = _calc_refs(session, all_source_calc_ids)
+    ts_entry_refs = _ts_entry_refs(session, ts_entry_ids)
 
     # Bulk-load lit / software / workflow tool referenced directly by the
     # kinetics rows.
@@ -232,6 +258,8 @@ def get_reaction_kinetics(
             kinetics=k,
             sources=sources,
             calc_meta=calc_meta,
+            calc_refs=calc_refs,
+            ts_entry_refs=ts_entry_refs,
             geometry_validations=geometry_validations,
             scf_stabilities=scf_stabilities,
             lit_summaries=lit_summaries,
@@ -264,6 +292,7 @@ def get_reaction_kinetics(
         records.append(
             KineticsRecord(
                 kinetics_id=k.id,
+                kinetics_ref=k.public_ref,
                 scientific_origin=k.scientific_origin,
                 model_kind=k.model_kind,
                 review=badges[k.id],
@@ -316,6 +345,7 @@ def get_reaction_kinetics(
             include=sorted(includes),
         ),
         reaction_entry_id=reaction_entry_id,
+        reaction_entry_ref=reaction_entry_ref,
         review_summary=summary,
         records=returned,
         pagination=build_pagination(
@@ -337,6 +367,8 @@ def _build_provenance(
     kinetics: Kinetics,
     sources: list[KineticsSourceCalculation],
     calc_meta: dict[int, "_CalcMeta"],
+    calc_refs: dict[int, str],
+    ts_entry_refs: dict[int, str],
     geometry_validations: dict[int, ValidationStatus],
     scf_stabilities: dict[int, SCFStabilityStatus],
     lit_summaries: dict[int, LiteratureSummary],
@@ -362,13 +394,20 @@ def _build_provenance(
         meta = calc_meta[path_search_calc]
         path_search_summary = PathSearchSummary(
             calculation_id=path_search_calc,
+            calculation_ref=calc_refs.get(path_search_calc),
             method=_extract_path_method(meta),
             converged=None,  # not stored on Calculation directly
         )
 
     irc_calc = _first_calc_with_type(by_role, calc_meta, CalculationType.irc)
     irc_summary = (
-        {"calculation_id": irc_calc, "type": "irc"} if irc_calc is not None else None
+        {
+            "calculation_id": irc_calc,
+            "calculation_ref": calc_refs.get(irc_calc),
+            "type": "irc",
+        }
+        if irc_calc is not None
+        else None
     )
 
     transition_state_entry_id = _first_ts_entry_id(sources, calc_meta)
@@ -390,11 +429,15 @@ def _build_provenance(
         status = geometry_validations.get(ts_opt_calc_id)
         if status is not None:
             geometry_validation = ValidationSummary(
-                status=status.value, calculation_id=ts_opt_calc_id
+                status=status.value,
+                calculation_id=ts_opt_calc_id,
+                calculation_ref=calc_refs.get(ts_opt_calc_id),
             )
         else:
             geometry_validation = ValidationSummary(
-                status="not_present", calculation_id=ts_opt_calc_id
+                status="not_present",
+                calculation_id=ts_opt_calc_id,
+                calculation_ref=calc_refs.get(ts_opt_calc_id),
             )
 
     scf_stability: SCFStabilitySummary | None = None
@@ -403,18 +446,30 @@ def _build_provenance(
         status_scf = scf_stabilities.get(scf_target)
         if status_scf is not None:
             scf_stability = SCFStabilitySummary(
-                status=status_scf.value, calculation_id=scf_target
+                status=status_scf.value,
+                calculation_id=scf_target,
+                calculation_ref=calc_refs.get(scf_target),
             )
         else:
             scf_stability = SCFStabilitySummary(
-                status="not_present", calculation_id=scf_target
+                status="not_present",
+                calculation_id=scf_target,
+                calculation_ref=calc_refs.get(scf_target),
             )
 
     return KineticsProvenance(
         transition_state_entry_id=transition_state_entry_id,
+        transition_state_entry_ref=(
+            ts_entry_refs.get(transition_state_entry_id)
+            if transition_state_entry_id is not None
+            else None
+        ),
         ts_opt_calculation_id=ts_opt_calc_id,
+        ts_opt_calculation_ref=calc_refs.get(ts_opt_calc_id) if ts_opt_calc_id is not None else None,
         ts_freq_calculation_id=ts_freq_calc_id,
+        ts_freq_calculation_ref=calc_refs.get(ts_freq_calc_id) if ts_freq_calc_id is not None else None,
         ts_sp_calculation_id=ts_sp_calc_id,
+        ts_sp_calculation_ref=calc_refs.get(ts_sp_calc_id) if ts_sp_calc_id is not None else None,
         path_search=path_search_summary,
         irc=irc_summary,
         primary_level_of_theory=primary_lot,
@@ -521,11 +576,13 @@ class _CalcMeta:
         "type",
         "transition_state_entry_id",
         "lot_id",
+        "lot_ref",
         "lot_method",
         "lot_basis",
         "lot_dispersion",
         "lot_solvent",
         "software_release_id",
+        "software_release_ref",
         "software_name",
         "software_version",
         "parameters_json",
@@ -538,11 +595,13 @@ class _CalcMeta:
         type: CalculationType,
         transition_state_entry_id: int | None,
         lot_id: int | None,
+        lot_ref: str | None,
         lot_method: str | None,
         lot_basis: str | None,
         lot_dispersion: str | None,
         lot_solvent: str | None,
         software_release_id: int | None,
+        software_release_ref: str | None,
         software_name: str | None,
         software_version: str | None,
         parameters_json: dict | None,
@@ -551,11 +610,13 @@ class _CalcMeta:
         self.type = type
         self.transition_state_entry_id = transition_state_entry_id
         self.lot_id = lot_id
+        self.lot_ref = lot_ref
         self.lot_method = lot_method
         self.lot_basis = lot_basis
         self.lot_dispersion = lot_dispersion
         self.lot_solvent = lot_solvent
         self.software_release_id = software_release_id
+        self.software_release_ref = software_release_ref
         self.software_name = software_name
         self.software_version = software_version
         self.parameters_json = parameters_json
@@ -589,11 +650,13 @@ def _calc_metadata(
             Calculation.transition_state_entry_id,
             Calculation.lot_id,
             Calculation.parameters_json,
+            LevelOfTheory.public_ref,
             LevelOfTheory.method,
             LevelOfTheory.basis,
             LevelOfTheory.dispersion,
             LevelOfTheory.solvent,
             Calculation.software_release_id,
+            SoftwareRelease.public_ref,
             Software.name,
             SoftwareRelease.version,
         )
@@ -613,16 +676,42 @@ def _calc_metadata(
             transition_state_entry_id=row[2],
             lot_id=row[3],
             parameters_json=row[4],
-            lot_method=row[5],
-            lot_basis=row[6],
-            lot_dispersion=row[7],
-            lot_solvent=row[8],
-            software_release_id=row[9],
-            software_name=row[10],
-            software_version=row[11],
+            lot_ref=row[5],
+            lot_method=row[6],
+            lot_basis=row[7],
+            lot_dispersion=row[8],
+            lot_solvent=row[9],
+            software_release_id=row[10],
+            software_release_ref=row[11],
+            software_name=row[12],
+            software_version=row[13],
         )
         for row in rows
     }
+
+
+def _calc_refs(session: Session, calc_ids: set[int]) -> dict[int, str]:
+    if not calc_ids:
+        return {}
+    rows = session.execute(
+        select(Calculation.id, Calculation.public_ref).where(
+            Calculation.id.in_(calc_ids)
+        )
+    ).all()
+    return {cid: ref for cid, ref in rows}
+
+
+def _ts_entry_refs(
+    session: Session, ts_entry_ids: set[int]
+) -> dict[int, str]:
+    if not ts_entry_ids:
+        return {}
+    rows = session.execute(
+        select(TransitionStateEntry.id, TransitionStateEntry.public_ref).where(
+            TransitionStateEntry.id.in_(ts_entry_ids)
+        )
+    ).all()
+    return {tid: ref for tid, ref in rows}
 
 
 def _geometry_validations(
@@ -685,7 +774,11 @@ def _literature_summaries(
     rows = session.scalars(select(Literature).where(Literature.id.in_(lit_ids))).all()
     return {
         lit.id: LiteratureSummary(
-            id=lit.id, title=lit.title, year=lit.year, doi=lit.doi
+            id=lit.id,
+            literature_ref=lit.public_ref,
+            title=lit.title,
+            year=lit.year,
+            doi=lit.doi,
         )
         for lit in rows
     }
@@ -698,16 +791,22 @@ def _software_release_summaries(
         return {}
     rows = session.execute(
         select(
-            SoftwareRelease.id, Software.name, SoftwareRelease.version
+            SoftwareRelease.id,
+            SoftwareRelease.public_ref,
+            Software.name,
+            SoftwareRelease.version,
         )
         .join(Software, Software.id == SoftwareRelease.software_id)
         .where(SoftwareRelease.id.in_(release_ids))
     ).all()
     return {
         rid: SoftwareReleaseSummary(
-            software_release_id=rid, software=name, version=version
+            software_release_id=rid,
+            software_release_ref=ref,
+            software=name,
+            version=version,
         )
-        for rid, name, version in rows
+        for rid, ref, name, version in rows
     }
 
 
@@ -719,6 +818,7 @@ def _workflow_tool_release_summaries(
     rows = session.execute(
         select(
             WorkflowToolRelease.id,
+            WorkflowToolRelease.public_ref,
             WorkflowTool.name,
             WorkflowToolRelease.version,
         )
@@ -728,10 +828,11 @@ def _workflow_tool_release_summaries(
     return {
         rid: WorkflowToolReleaseSummary(
             workflow_tool_release_id=rid,
+            workflow_tool_release_ref=ref,
             workflow_tool=name,
             version=version,
         )
-        for rid, name, version in rows
+        for rid, ref, name, version in rows
     }
 
 
@@ -829,6 +930,7 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         label_parts.append(meta.lot_basis)
     return LevelOfTheorySummary(
         level_of_theory_id=meta.lot_id,
+        level_of_theory_ref=meta.lot_ref,
         method=meta.lot_method or "",
         basis=meta.lot_basis,
         dispersion=meta.lot_dispersion,
@@ -842,6 +944,7 @@ def _software_summary_for_calc(meta: _CalcMeta | None) -> SoftwareReleaseSummary
         return None
     return SoftwareReleaseSummary(
         software_release_id=meta.software_release_id,
+        software_release_ref=meta.software_release_ref,
         software=meta.software_name or "",
         version=meta.software_version,
     )
@@ -876,6 +979,8 @@ def _filter_echo(request: KineticsReadRequest) -> dict[str, object]:
         echo["model_kind"] = request.model_kind.value
     if request.level_of_theory_id is not None:
         echo["level_of_theory_id"] = request.level_of_theory_id
+    if request.level_of_theory_ref is not None:
+        echo["level_of_theory_ref"] = request.level_of_theory_ref
     if request.software is not None:
         echo["software"] = request.software
     if request.min_review_status is not None:
@@ -889,6 +994,7 @@ def _filter_echo(request: KineticsReadRequest) -> dict[str, object]:
 
 def _empty_response(
     reaction_entry_id: int,
+    reaction_entry_ref: str,
     request: KineticsReadRequest,
     includes: set[str],
     offset: int,
@@ -902,6 +1008,7 @@ def _empty_response(
             include=sorted(includes),
         ),
         reaction_entry_id=reaction_entry_id,
+        reaction_entry_ref=reaction_entry_ref,
         review_summary=review_summary([]),
         records=[],
         pagination=build_pagination(

@@ -1,0 +1,38 @@
+{
+  "base_url": "http://127.0.0.1:8000/api/v1",
+  "bundle_format_version": "0",
+  "created_at": "2026-05-08T21:03:56Z",
+  "endpoint": "/uploads/computed-reaction",
+  "idempotency_key": "arc:rmg_rxn_1142:rmg_rxn_1142_r1_sbr-O-sbr-rmg_rxn_1142_r2_CCCC-rmg_rxn_1142_p1_sbr-OH-sbr-rmg_rxn_1142_p2_sbr-CH2-sbrCCC:rmg_rxn_1142_TS0:computed_reaction:3d10e4e8508064d5",
+  "idempotency_replayed": false,
+  "is_partial": false,
+  "last_error": null,
+  "payload_file": "/home/calvin/code/arc_tckdb_scan/tckdb_payloads/computed_reaction/rmg_rxn_1142_r1_sbr-O-sbr-rmg_rxn_1142_r2_CCCC-rmg_rxn_1142_p1_sbr-OH-sbr-rmg_rxn_1142_p2_sbr-CH2-sbrCCC.payload.json",
+  "payload_kind": "computed_reaction",
+  "response_body": {
+    "kinetics_ids": [
+      7
+    ],
+    "reaction_entry_id": 8,
+    "reaction_id": 4,
+    "species_count": 4,
+    "species_entry_ids": [
+      11,
+      12,
+      6,
+      13
+    ],
+    "thermo_ids": [
+      28,
+      29,
+      30,
+      31
+    ],
+    "transition_state_entry_id": 8,
+    "type": "computed_reaction",
+    "warnings": []
+  },
+  "response_status_code": 201,
+  "status": "uploaded",
+  "uploaded_at": "2026-05-08T21:03:57Z"
+}

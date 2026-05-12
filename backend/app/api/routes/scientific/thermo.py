@@ -1,4 +1,11 @@
-"""GET /api/v1/scientific/species-entries/{species_entry_id}/thermo."""
+"""GET /api/v1/scientific/species-entries/{species_entry_id}/thermo.
+
+Phase C: the path parameter now accepts either the integer
+``species_entry.id`` or a public ref of the form ``spe_...``. The URL
+template keeps the historical ``{species_entry_id}`` name for backwards
+compatibility with OpenAPI consumers. See
+``docs/specs/public_identifier_policy.md``.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +21,10 @@ from app.schemas.reads.scientific_thermo import (
     ThermoModelKindQuery,
     ThermoReadRequest,
 )
+from app.services.scientific_read.handles import resolve_species_entry_handle
+from app.services.scientific_read.internal_ids import (
+    apply_internal_ids_visibility,
+)
 from app.services.scientific_read.thermo import get_species_thermo
 
 router = APIRouter(prefix="/species-entries")
@@ -24,12 +35,13 @@ router = APIRouter(prefix="/species-entries")
     response_model=ScientificSpeciesThermoResponse,
 )
 def species_thermo(
-    species_entry_id: int = Path(..., ge=1),
+    species_entry_id: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_db),
     temperature_min: float | None = Query(None),
     temperature_max: float | None = Query(None),
     model_kind: ThermoModelKindQuery | None = Query(None),
     level_of_theory_id: int | None = Query(None),
+    level_of_theory_ref: str | None = Query(None),
     software: str | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
@@ -42,15 +54,21 @@ def species_thermo(
 ) -> ScientificSpeciesThermoResponse:
     """Return thermo records for a species entry, sorted per L3.
 
-    Path param is strictly ``species_entry.id`` — supplying a ``species.id``
-    returns 404. ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``
-    §Endpoint 4.
+    Path handle is strictly the species-entry resource: an integer
+    ``species_entry.id`` or a public ref starting with ``spe_``. A
+    ``species.id`` (or any other prefix) returns 422 / 404.
+    ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``
+    §Endpoint 4 and ``docs/specs/public_identifier_policy.md``.
     """
+    resolved_species_entry_id = resolve_species_entry_handle(
+        session, species_entry_id
+    )
     request = ThermoReadRequest(
         temperature_min=temperature_min,
         temperature_max=temperature_max,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
+        level_of_theory_ref=level_of_theory_ref,
         software=software,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
@@ -61,6 +79,10 @@ def species_thermo(
         offset=offset,
         limit=limit,
     )
-    return get_species_thermo(
-        session, species_entry_id=species_entry_id, request=request
+    return apply_internal_ids_visibility(
+        get_species_thermo(
+            session,
+            species_entry_id=resolved_species_entry_id,
+            request=request,
+        )
     )

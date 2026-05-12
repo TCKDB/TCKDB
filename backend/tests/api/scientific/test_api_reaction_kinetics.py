@@ -34,7 +34,8 @@ def test_returns_200_for_valid_reaction_entry_id(client, db_session):
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["reaction_entry_id"] == entry.id
+    # Phase D: default response identifies the reaction entry by ref.
+    assert body["reaction_entry_ref"] == entry.public_ref
     assert len(body["records"]) == 1
 
 
@@ -77,10 +78,13 @@ def test_non_ts_backed_provenance_returns_nulls(client, db_session):
     assert resp.status_code == 200
     record = resp.json()["records"][0]
     p = record["provenance"]
-    assert p["transition_state_entry_id"] is None
-    assert p["ts_opt_calculation_id"] is None
-    assert p["ts_freq_calculation_id"] is None
-    assert p["ts_sp_calculation_id"] is None
+    # Phase D: integer TS-chain ids are hidden in the default response.
+    # The corresponding ref siblings remain visible and are null for
+    # non-TS-backed kinetics.
+    assert p["transition_state_entry_ref"] is None
+    assert p["ts_opt_calculation_ref"] is None
+    assert p["ts_freq_calculation_ref"] is None
+    assert p["ts_sp_calculation_ref"] is None
     assert p["path_search"] is None
     assert p["irc"] is None
     # Non-TS provenance keys are still present in the JSON shape.

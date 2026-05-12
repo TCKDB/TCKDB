@@ -1,0 +1,100 @@
+project: rxn_209
+job_types:
+  opt: true
+  fine: true
+  freq: true
+  rotors: true
+  irc: false
+  sp: true
+compute_thermo: true
+allow_nonisomorphic_2d: false
+species:
+- label: rxn_209_C
+  smiles: 'C'
+  multiplicity: 1
+  xyz: |
+    C     -0.00330000    -0.03270000    -0.02980000
+    H      0.10720000     0.78930000     0.66920000
+    H      0.64680000    -0.78850000     0.39750000
+    H     -1.06660000    -0.22930000     0.06130000
+    H      0.31930000     0.37220000    -0.98260000
+- label: rxn_209_COO
+  smiles: 'COO'
+  multiplicity: 1
+  xyz: |
+    C     -0.65360000     0.82420000    -0.57850000
+    O     -0.36810000    -0.16000000     0.39140000
+    O      0.94340000    -0.57100000     0.22810000
+    H     -0.61450000     0.39930000    -1.58710000
+    H     -1.66690000     1.16200000    -0.36070000
+    H      0.04600000     1.65920000    -0.50270000
+    H      0.89510000    -1.30560000    -0.38800000
+- label: rxn_209_[CH3]
+  smiles: '[CH3]'
+  multiplicity: 2
+  xyz: |
+    C      0.00000000     0.00000000     0.00000000
+    H      1.06380000    -0.17470000     0.05400000
+    H     -0.68330000    -0.83510000    -0.02800000
+    H     -0.38050000     1.00980000    -0.02600000
+- label: rxn_209_CO[O]
+  smiles: 'CO[O]'
+  multiplicity: 2
+  xyz: |
+    C     -0.43440000     0.02120000     0.00060000
+    O      0.87540000     0.58520000    -0.15580000
+    O      1.80090000    -0.30340000     0.05060000
+    H     -0.54370000    -0.35480000     1.01700000
+    H     -1.13120000     0.83470000    -0.19030000
+    H     -0.56700000    -0.78290000    -0.72200000
+- label: rxn_209_TS0
+  is_ts: true
+  multiplicity: 2
+reactions:
+- label: rxn_209_C + rxn_209_CO[O] <=> rxn_209_[CH3] + rxn_209_COO
+  multiplicity: 2
+  ts_label: rxn_209_TS0
+  ts_xyz_guess:
+  - |
+    C     -0.76970000     1.40600000     0.04810000
+    O     -0.48420000     0.42170000     1.01800000
+    O      0.82740000     0.01070000     0.85470000
+    H     -0.73060000     0.98110000    -0.96050000
+    H     -1.78300000     1.74370000     0.26590000
+    H     -0.07010000     2.24090000     0.12390000
+    C      0.62710000    -1.91850000    -0.77570000
+    H      0.77070000    -0.85040000     0.13250000
+    H      1.27720000    -2.67420000    -0.34850000
+    H     -0.43620000    -2.11510000    -0.68460000
+    H      0.94970000    -1.51350000    -1.72860000
+opt_level:
+  method: wb97xd
+  basis: def2tzvp
+freq_level:
+  method: wb97xd
+  basis: def2tzvp
+sp_level:
+  method: DLPNO-CCSD(T)-F12
+  basis: cc-pVTZ-F12
+  auxiliary_basis: aug-cc-pVTZ/C
+  cabs: cc-pVTZ-F12-CABS
+  software: orca
+  args:
+    keyword:
+      dlpno_threshold: TightPNO
+      rijcosx: RIJCOSX
+      grid: DEFGRID3
+      uno: UNO
+tckdb:
+  enabled: true
+  base_url: "http://127.0.0.1:8000/api/v1"
+  api_key_env: "TCKDB_API_KEY"
+  payload_dir: "tckdb_payloads"
+  upload: true
+  strict: false
+  timeout_seconds: 30
+  upload_mode: "computed_reaction"
+  artifacts:
+      upload: true
+      kinds: ["output_log", "input"]
+      max_size_mb: 50

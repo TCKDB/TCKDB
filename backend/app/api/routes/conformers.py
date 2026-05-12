@@ -95,7 +95,7 @@ def get_conformer_group(group_id: int, session: Session = Depends(get_db)):
         )
     )
     if row is None:
-        raise NotFoundError(f"ConformerGroup {group_id} not found")
+        raise NotFoundError("ConformerGroup not found")
     return ConformerGroupDetailRead(
         **ConformerGroupRead.model_validate(row).model_dump(),
         observation_count=len(row.observations),
@@ -116,7 +116,7 @@ def list_conformer_group_selections(
     """Return all curation-layer selections attached to a conformer group."""
     group = session.get(ConformerGroup, group_id)
     if group is None:
-        raise NotFoundError(f"ConformerGroup {group_id} not found")
+        raise NotFoundError("ConformerGroup not found")
     return [ConformerSelectionRead.model_validate(s) for s in group.selections]
 
 
@@ -203,5 +203,5 @@ def get_conformer_observation(
 ):
     row = session.get(ConformerObservation, observation_id)
     if row is None:
-        raise NotFoundError(f"ConformerObservation {observation_id} not found")
+        raise NotFoundError("ConformerObservation not found")
     return ConformerObservationRead.model_validate(row)

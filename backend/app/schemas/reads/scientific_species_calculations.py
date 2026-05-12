@@ -25,6 +25,17 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
+from app.schemas.reads._field_bounds import (
+    MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
+    MAX_FORMULA_LENGTH as _MAX_FORMULA_LENGTH,
+    MAX_INCHI_KEY_LENGTH as _MAX_INCHI_KEY_LENGTH,
+    MAX_INCHI_LENGTH as _MAX_INCHI_LENGTH,
+    MAX_METHOD_LENGTH as _MAX_METHOD_LENGTH,
+    MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
+    MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
+    MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
+    MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
+)
 from app.schemas.reads.scientific_common import (
     CollapseMode,
     LevelOfTheorySummary,
@@ -72,10 +83,10 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     """
 
     # Chemistry-first species identity filters
-    smiles: str | None = None
-    inchi: str | None = None
-    inchi_key: str | None = None
-    formula: str | None = None
+    smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
+    inchi: str | None = Field(default=None, max_length=_MAX_INCHI_LENGTH)
+    inchi_key: str | None = Field(default=None, max_length=_MAX_INCHI_KEY_LENGTH)
+    formula: str | None = Field(default=None, max_length=_MAX_FORMULA_LENGTH)
     charge: int | None = None
     multiplicity: int | None = None
     electronic_state_kind: SpeciesEntryStateKind | None = None
@@ -84,14 +95,22 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     # Explicit handles (optional)
     species_id: int | None = None
     species_entry_id: int | None = None
+    # Phase C: ref siblings for species / species_entry identity handles.
+    species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
+    species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
 
     # Calculation filters
     calculation_type: CalculationType | None = None
     level_of_theory_id: int | None = None
-    method: str | None = None
-    basis: str | None = None
-    software: str | None = None
-    workflow_tool: str | None = None
+    level_of_theory_ref: str | None = Field(
+        default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
+    method: str | None = Field(default=None, max_length=_MAX_METHOD_LENGTH)
+    basis: str | None = Field(default=None, max_length=_MAX_BASIS_LENGTH)
+    software: str | None = Field(default=None, max_length=_MAX_SOFTWARE_NAME_LENGTH)
+    workflow_tool: str | None = Field(
+        default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
+    )
     scientific_origin: ScientificOriginKind | None = None
     calculation_quality: CalculationQuality | None = None
 
@@ -117,10 +136,16 @@ class SpeciesCalculationsSearchRequest(BaseModel):
 
 
 class SpeciesCalculationsSpeciesContext(BaseModel):
-    """Resolved species/species-entry identity context for a calculation."""
+    """Resolved species/species-entry identity context for a calculation.
+
+    Phase B: ``species_ref`` and ``species_entry_ref`` are the public stable
+    handles alongside the integer IDs.
+    """
 
     species_id: int
+    species_ref: str
     species_entry_id: int
+    species_entry_ref: str
     canonical_smiles: str
     inchi_key: str
     charge: int
@@ -130,9 +155,14 @@ class SpeciesCalculationsSpeciesContext(BaseModel):
 
 
 class CalculationCoreBlock(BaseModel):
-    """Direct calculation-row metadata."""
+    """Direct calculation-row metadata.
+
+    Phase B: ``calculation_ref`` is the public stable handle alongside
+    ``calculation_id``.
+    """
 
     calculation_id: int
+    calculation_ref: str
     calculation_type: CalculationType
     calculation_quality: CalculationQuality
     created_at: datetime
@@ -155,24 +185,47 @@ class ConformerContextBlock(BaseModel):
 
     The service must never fabricate conformer associations; this block is
     populated only when ``Calculation.conformer_observation_id`` is set.
+
+    Phase B: ``*_ref`` siblings carry the public stable handles for the
+    observation, group, and assignment scheme.
     """
 
     conformer_observation_id: int
+    conformer_observation_ref: str
     conformer_group_id: int
+    conformer_group_ref: str
     conformer_assignment_scheme_id: int | None = None
+    conformer_assignment_scheme_ref: str | None = None
     conformer_group_label: str | None = None
     # In v0 a compact summary by default; full JSON via ``include=conformers``.
     torsion_fingerprint_json: dict[str, object] | None = None
     selection_kinds: list[ConformerSelectionKind] = Field(default_factory=list)
 
 
+class GeometryRef(BaseModel):
+    """Lightweight geometry reference pairing integer id with public ref."""
+
+    geometry_id: int
+    geometry_ref: str
+    role: CalculationGeometryRole | None = None
+
+
 class GeometryBlock(BaseModel):
-    """Geometry IDs and metadata. Full XYZ deferred per spec."""
+    """Geometry IDs and metadata. Full XYZ deferred per spec.
+
+    Phase B: ``primary_output_geometry_ref`` and the ``input_geometries`` /
+    ``output_geometries`` object arrays carry the public stable handles. The
+    bare ``*_id`` / ``*_ids`` fields are preserved for the compatibility
+    window.
+    """
 
     primary_output_geometry_id: int | None = None
+    primary_output_geometry_ref: str | None = None
     primary_output_geometry_role: CalculationGeometryRole | None = None
     input_geometry_ids: list[int] = Field(default_factory=list)
     output_geometry_ids: list[int] = Field(default_factory=list)
+    input_geometries: list[GeometryRef] = Field(default_factory=list)
+    output_geometries: list[GeometryRef] = Field(default_factory=list)
 
 
 class ValidationBlock(BaseModel):
@@ -182,11 +235,25 @@ class ValidationBlock(BaseModel):
     scf_stability: SCFStabilitySummary | None = None
 
 
+class SupportingCalculationRef(BaseModel):
+    """One supporting calculation reference (id + public ref)."""
+
+    calculation_id: int
+    calculation_ref: str
+
+
 class CalculationProvenanceBlock(BaseModel):
-    """Calculation-level provenance summary."""
+    """Calculation-level provenance summary.
+
+    Phase B: ``supporting_calculations`` object array and ``submission_ref``
+    carry the public stable handles alongside the legacy
+    ``supporting_calculation_ids`` and ``submission_id`` fields.
+    """
 
     supporting_calculation_ids: list[int] = Field(default_factory=list)
+    supporting_calculations: list[SupportingCalculationRef] = Field(default_factory=list)
     submission_id: int | None = None
+    submission_ref: str | None = None
     artifacts_available: bool = False
 
 

@@ -53,7 +53,7 @@ def list_software(
 def get_software(software_id: int, session: Session = Depends(get_db)):
     row = session.get(Software, software_id)
     if row is None:
-        raise NotFoundError(f"Software {software_id} not found")
+        raise NotFoundError("Software not found")
     return SoftwareRead.model_validate(row)
 
 
@@ -103,5 +103,5 @@ def list_software_releases(
 def get_software_release(release_id: int, session: Session = Depends(get_db)):
     row = session.get(SoftwareRelease, release_id)
     if row is None:
-        raise NotFoundError(f"SoftwareRelease {release_id} not found")
+        raise NotFoundError("SoftwareRelease not found")
     return SoftwareReleaseRead.model_validate(row)

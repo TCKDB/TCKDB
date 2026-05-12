@@ -17,6 +17,9 @@ from app.schemas.reads.scientific_species import (
     ScientificSpeciesSearchResponse,
     SpeciesSearchRequest,
 )
+from app.services.scientific_read.internal_ids import (
+    apply_internal_ids_visibility,
+)
 from app.services.scientific_read.species import search_species
 
 router = APIRouter(prefix="/species")
@@ -33,6 +36,8 @@ def species_search(
     multiplicity: int | None = Query(None),
     electronic_state_kind: SpeciesEntryStateKind | None = Query(None),
     species_entry_kind: StationaryPointKind | None = Query(None),
+    species_ref: str | None = Query(None),
+    species_entry_ref: str | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
@@ -58,6 +63,8 @@ def species_search(
         multiplicity=multiplicity,
         electronic_state_kind=electronic_state_kind,
         species_entry_kind=species_entry_kind,
+        species_ref=species_ref,
+        species_entry_ref=species_entry_ref,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
@@ -67,4 +74,4 @@ def species_search(
         offset=offset,
         limit=limit,
     )
-    return search_species(session, request)
+    return apply_internal_ids_visibility(search_species(session, request))

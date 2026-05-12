@@ -77,7 +77,7 @@ def get_workflow_tool(
 ):
     tool = session.get(WorkflowTool, workflow_tool_id)
     if tool is None:
-        raise NotFoundError(f"WorkflowTool {workflow_tool_id} not found")
+        raise NotFoundError("WorkflowTool not found")
 
     releases = session.scalars(
         select(WorkflowToolRelease)
@@ -161,6 +161,6 @@ def get_workflow_tool_release(
     )
     if row is None:
         raise NotFoundError(
-            f"WorkflowToolRelease {workflow_tool_release_id} not found"
+            "WorkflowToolRelease not found"
         )
     return WorkflowToolReleaseDetailRead.model_validate(row)

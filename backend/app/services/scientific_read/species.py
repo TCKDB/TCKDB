@@ -47,6 +47,14 @@ from app.services.scientific_read.common import (
     validate_pagination,
     visible_statuses,
 )
+from app.services.scientific_read.handles import (
+    NO_MATCH,
+    reconcile_species_entry_pair,
+    reconcile_species_pair,
+)
+from app.services.scientific_read.internal_ids import (
+    filter_internal_ids_from_resolved,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "thermo",
@@ -54,8 +62,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "transport",
     "conformers",
     "review",
+    "internal_ids",
     "all",
 }
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 _DEFAULT_SORT_ECHO = "review_rank,has_entries,created_at,id"
 
@@ -79,24 +89,60 @@ def search_species(
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
     includes = validate_includes(
-        request.include, _LEGAL_INCLUDE_TOKENS, "/scientific/species/search"
+        request.include,
+        _LEGAL_INCLUDE_TOKENS,
+        "/scientific/species/search",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
+    includes = filter_internal_ids_from_resolved(includes)
 
-    if not any(
+    # Phase C: ref-by-handle filters are valid identifier sources. Resolve
+    # them first so we know whether the caller supplied a real identifier
+    # and, if so, what id(s) to scope by.
+    species_pair = reconcile_species_pair(
+        session,
+        id_value=None,
+        ref_value=request.species_ref,
+    )
+    species_entry_pair = reconcile_species_entry_pair(
+        session,
+        id_value=None,
+        ref_value=request.species_entry_ref,
+    )
+    if species_pair is NO_MATCH or species_entry_pair is NO_MATCH:
+        return _empty_response(request, includes, offset, limit)
+    species_ref_id: int | None = species_pair  # type: ignore[assignment]
+    species_entry_ref_id: int | None = species_entry_pair  # type: ignore[assignment]
+
+    has_chem_identifier = any(
         v is not None
-        for v in (request.smiles, request.inchi, request.inchi_key, request.formula)
-    ):
+        for v in (
+            request.smiles,
+            request.inchi,
+            request.inchi_key,
+            request.formula,
+        )
+    )
+    if not has_chem_identifier and species_ref_id is None and species_entry_ref_id is None:
         raise ValueError(
             "missing_identifier: at least one of {smiles, inchi, inchi_key, "
-            "formula} is required."
+            "formula, species_ref, species_entry_ref} is required."
         )
 
-    species_rows = _query_matching_species(session, request)
+    species_rows = _query_matching_species(
+        session,
+        request,
+        species_ref_id=species_ref_id,
+        species_entry_ref_id=species_entry_ref_id,
+    )
     if not species_rows:
         return _empty_response(request, includes, offset, limit)
 
     species_id_to_entries = _query_filtered_entries(
-        session, species_rows, request
+        session,
+        species_rows,
+        request,
+        species_entry_ref_id=species_entry_ref_id,
     )
 
     # Bulk badge fetch across all surviving entries.
@@ -161,6 +207,7 @@ def search_species(
         records.append(
             SpeciesScientificRecord(
                 species_id=species.id,
+                species_ref=species.public_ref,
                 canonical_smiles=species.smiles,
                 inchi_key=species.inchi_key,
                 formula=None,  # not stored on Species; future addition
@@ -248,7 +295,11 @@ def _negate_id(value: int) -> int:
 
 
 def _query_matching_species(
-    session: Session, request: SpeciesSearchRequest
+    session: Session,
+    request: SpeciesSearchRequest,
+    *,
+    species_ref_id: int | None = None,
+    species_entry_ref_id: int | None = None,
 ) -> list[Species]:
     stmt = select(Species)
     if request.smiles is not None:
@@ -259,6 +310,16 @@ def _query_matching_species(
         stmt = stmt.where(Species.charge == request.charge)
     if request.multiplicity is not None:
         stmt = stmt.where(Species.multiplicity == request.multiplicity)
+    if species_ref_id is not None:
+        stmt = stmt.where(Species.id == species_ref_id)
+    if species_entry_ref_id is not None:
+        # Constrain the parent species to the one owning this entry.
+        stmt = stmt.where(
+            Species.id
+            == select(SpeciesEntry.species_id)
+            .where(SpeciesEntry.id == species_entry_ref_id)
+            .scalar_subquery()
+        )
     # inchi and formula are not stored on Species directly in the current
     # schema; if either is supplied alongside other filters they AND-combine
     # by yielding zero rows when inconsistent. For v0 we treat unsupported
@@ -278,6 +339,8 @@ def _query_filtered_entries(
     session: Session,
     species_rows: list[Species],
     request: SpeciesSearchRequest,
+    *,
+    species_entry_ref_id: int | None = None,
 ) -> dict[int, list[SpeciesEntry]]:
     species_ids = [sp.id for sp in species_rows]
     stmt = select(SpeciesEntry).where(SpeciesEntry.species_id.in_(species_ids))
@@ -285,6 +348,8 @@ def _query_filtered_entries(
         stmt = stmt.where(SpeciesEntry.electronic_state_kind == request.electronic_state_kind)
     if request.species_entry_kind is not None:
         stmt = stmt.where(SpeciesEntry.kind == request.species_entry_kind)
+    if species_entry_ref_id is not None:
+        stmt = stmt.where(SpeciesEntry.id == species_entry_ref_id)
 
     entries = session.scalars(stmt).all()
     grouped: dict[int, list[SpeciesEntry]] = {sid: [] for sid in species_ids}
@@ -425,6 +490,7 @@ def _build_entry_record(
 ) -> SpeciesEntryScientificRecord:
     return SpeciesEntryScientificRecord(
         species_entry_id=entry.id,
+        species_entry_ref=entry.public_ref,
         species_entry_kind=entry.kind,
         electronic_state_kind=entry.electronic_state_kind,
         review=badge,
@@ -445,6 +511,8 @@ def _filter_echo(request: SpeciesSearchRequest) -> dict[str, object]:
         "formula",
         "charge",
         "multiplicity",
+        "species_ref",
+        "species_entry_ref",
     ):
         value = getattr(request, field)
         if value is not None:

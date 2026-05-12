@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import CHAR, BigInteger, CheckConstraint, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, PublicRefMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.db.models.calculation import (
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     )
 
 
-class Geometry(Base, TimestampMixin):
+class Geometry(Base, TimestampMixin, PublicRefMixin):
     """Stores a reusable molecular geometry and its serialized XYZ form."""
 
     __tablename__ = "geometry"

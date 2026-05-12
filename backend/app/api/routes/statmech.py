@@ -87,5 +87,5 @@ def get_statmech(statmech_id: int, session: Session = Depends(get_db)):
         )
     )
     if row is None:
-        raise NotFoundError(f"Statmech {statmech_id} not found")
+        raise NotFoundError("Statmech not found")
     return StatmechRead.model_validate(row)

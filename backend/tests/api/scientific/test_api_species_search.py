@@ -20,8 +20,11 @@ def test_get_returns_200_with_envelope(client, db_session):
     body = resp.json()
     assert "request" in body and "review_summary" in body and "records" in body
     assert "pagination" in body
-    assert len(body["records"]) == 1
-    assert body["records"][0]["species_id"] == species.id
+    # Phase D: default responses identify records by public ref.
+    matching = [
+        r for r in body["records"] if r["species_ref"] == species.public_ref
+    ]
+    assert len(matching) == 1
 
 
 def test_get_parses_collapse_offset_limit(client, db_session):

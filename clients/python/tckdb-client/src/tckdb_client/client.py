@@ -147,15 +147,35 @@ class TCKDBClient:
         idempotency_key: str | None,
         extra: Mapping[str, str] | None = None,
     ) -> dict[str, str]:
+        """Build outgoing request headers.
+
+        Auth policy:
+
+        - ``authenticated=True`` (default for writes/admin): an API
+          key is required client-side. Missing key → ``TCKDBAuthenticationError``
+          before the request goes out.
+        - ``authenticated=False`` (scientific reads, health probe):
+          the API key is attached **if available** so authenticated
+          deployments can still bill the request against a user
+          quota, but the request is not gated client-side. A missing
+          key produces no client error — the backend decides whether
+          the path is anonymously accessible and surfaces 401/403 if
+          not.
+
+        Public reads being anonymous-friendly in the client is not an
+        abuse-control mechanism. Hosted deployments should enforce
+        abuse limits server-side (rate limits, pagination caps, query
+        timeouts, monitoring).
+        """
         headers: dict[str, str] = {"Accept": "application/json"}
         if json_body:
             headers["Content-Type"] = "application/json"
-        if authenticated:
-            if not self._api_key:
-                raise TCKDBAuthenticationError(
-                    "API key required for this request but none was configured.",
-                    status_code=None,
-                )
+        if authenticated and not self._api_key:
+            raise TCKDBAuthenticationError(
+                "API key required for this request but none was configured.",
+                status_code=None,
+            )
+        if self._api_key:
             headers[API_KEY_HEADER] = self._api_key
         if idempotency_key is not None:
             headers[IDEMPOTENCY_HEADER] = validate_idempotency_key(idempotency_key)
@@ -371,6 +391,8 @@ class TCKDBClient:
         multiplicity: int | None = None,
         electronic_state_kind: str | None = None,
         species_entry_kind: str | None = None,
+        species_ref: str | None = None,
+        species_entry_ref: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
@@ -382,8 +404,9 @@ class TCKDBClient:
         """``GET /scientific/species/search`` — discover species by identity.
 
         At least one identifier (``smiles``, ``inchi``, ``inchi_key``,
-        ``formula``) must be supplied. Returns the parsed
-        ``ScientificSpeciesSearchResponse`` JSON envelope.
+        ``formula``, ``species_ref``, ``species_entry_ref``) must be
+        supplied. Returns the parsed ``ScientificSpeciesSearchResponse``
+        JSON envelope.
         """
         params = {
             "smiles": smiles,
@@ -394,6 +417,8 @@ class TCKDBClient:
             "multiplicity": multiplicity,
             "electronic_state_kind": electronic_state_kind,
             "species_entry_kind": species_entry_kind,
+            "species_ref": species_ref,
+            "species_entry_ref": species_entry_ref,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
@@ -403,7 +428,10 @@ class TCKDBClient:
             "limit": limit,
         }
         return self.request_json(
-            "GET", "/scientific/species/search", params=params
+            "GET",
+            "/scientific/species/search",
+            params=params,
+            authenticated=False,
         ).data
 
     def search_reactions(
@@ -413,6 +441,8 @@ class TCKDBClient:
         products: list[str] | None = None,
         direction: str | None = None,
         family: str | None = None,
+        reaction_ref: str | None = None,
+        reaction_entry_ref: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
@@ -428,54 +458,50 @@ class TCKDBClient:
         characters (``[`` ``]`` ``+``) that round-trip awkwardly through
         query strings. Pass ``method="GET"`` to force the GET form. Returns
         the parsed ``ScientificReactionSearchResponse`` JSON envelope.
+
+        Phase C: ``reaction_ref`` / ``reaction_entry_ref`` may be supplied
+        as standalone identity filters (no SMILES required).
         """
-        if method.upper() == "GET":
-            params = {
-                "reactants": reactants,
-                "products": products,
-                "direction": direction,
-                "family": family,
-                "min_review_status": min_review_status,
-                "include_deprecated": include_deprecated,
-                "include_rejected": include_rejected,
-                "include": include,
-                "collapse": collapse,
-                "offset": offset,
-                "limit": limit,
-            }
-            return self.request_json(
-                "GET", "/scientific/reactions/search", params=params
-            ).data
-        body = {
-            k: v
-            for k, v in {
-                "reactants": reactants,
-                "products": products,
-                "direction": direction,
-                "family": family,
-                "min_review_status": min_review_status,
-                "include_deprecated": include_deprecated,
-                "include_rejected": include_rejected,
-                "include": include,
-                "collapse": collapse,
-                "offset": offset,
-                "limit": limit,
-            }.items()
-            if v is not None
+        common = {
+            "reactants": reactants,
+            "products": products,
+            "direction": direction,
+            "family": family,
+            "reaction_ref": reaction_ref,
+            "reaction_entry_ref": reaction_entry_ref,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+            "include": include,
+            "collapse": collapse,
+            "offset": offset,
+            "limit": limit,
         }
+        if method.upper() == "GET":
+            return self.request_json(
+                "GET",
+                "/scientific/reactions/search",
+                params=common,
+                authenticated=False,
+            ).data
+        body = {k: v for k, v in common.items() if v is not None}
         return self.request_json(
-            "POST", "/scientific/reactions/search", json=body
+            "POST",
+            "/scientific/reactions/search",
+            json=body,
+            authenticated=False,
         ).data
 
     def get_reaction_kinetics(
         self,
-        reaction_entry_id: int,
+        reaction_entry_id: int | str,
         *,
         temperature_min: float | None = None,
         temperature_max: float | None = None,
         pressure: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
+        level_of_theory_ref: str | None = None,
         software: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
@@ -487,11 +513,12 @@ class TCKDBClient:
     ) -> Any:
         """``GET /scientific/reaction-entries/{reaction_entry_id}/kinetics``.
 
-        ``reaction_entry_id`` is strictly ``reaction_entry.id``; supplying a
-        ``chem_reaction.id`` returns 404. Returns the parsed
-        ``ScientificReactionKineticsResponse`` JSON envelope. Provenance
-        keys are always present in each record; TS-chain fields are
-        ``null`` for non-TS-backed kinetics.
+        Phase C: ``reaction_entry_id`` accepts the integer
+        ``reaction_entry.id`` or a public ref of the form ``rxe_...``.
+        Supplying a ``chem_reaction.id`` or a wrong-prefix ref returns
+        422 / 404. Returns the parsed ``ScientificReactionKineticsResponse``
+        JSON envelope. Provenance keys are always present in each record;
+        TS-chain fields are ``null`` for non-TS-backed kinetics.
         """
         path = f"/scientific/reaction-entries/{reaction_entry_id}/kinetics"
         params = {
@@ -500,6 +527,7 @@ class TCKDBClient:
             "pressure": pressure,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
+            "level_of_theory_ref": level_of_theory_ref,
             "software": software,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
@@ -509,16 +537,19 @@ class TCKDBClient:
             "offset": offset,
             "limit": limit,
         }
-        return self.request_json("GET", path, params=params).data
+        return self.request_json(
+            "GET", path, params=params, authenticated=False
+        ).data
 
     def get_species_thermo(
         self,
-        species_entry_id: int,
+        species_entry_id: int | str,
         *,
         temperature_min: float | None = None,
         temperature_max: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
+        level_of_theory_ref: str | None = None,
         software: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
@@ -530,9 +561,11 @@ class TCKDBClient:
     ) -> Any:
         """``GET /scientific/species-entries/{species_entry_id}/thermo``.
 
-        ``species_entry_id`` is strictly ``species_entry.id``; supplying a
-        ``species.id`` returns 404. Returns the parsed
-        ``ScientificSpeciesThermoResponse`` JSON envelope.
+        Phase C: ``species_entry_id`` accepts the integer
+        ``species_entry.id`` or a public ref of the form ``spe_...``.
+        Supplying a ``species.id`` or a wrong-prefix ref returns 422 / 404.
+        Returns the parsed ``ScientificSpeciesThermoResponse`` JSON
+        envelope.
         """
         path = f"/scientific/species-entries/{species_entry_id}/thermo"
         params = {
@@ -540,6 +573,7 @@ class TCKDBClient:
             "temperature_max": temperature_max,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
+            "level_of_theory_ref": level_of_theory_ref,
             "software": software,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
@@ -549,7 +583,9 @@ class TCKDBClient:
             "offset": offset,
             "limit": limit,
         }
-        return self.request_json("GET", path, params=params).data
+        return self.request_json(
+            "GET", path, params=params, authenticated=False
+        ).data
 
     def search_thermo(
         self,
@@ -562,10 +598,13 @@ class TCKDBClient:
         multiplicity: int | None = None,
         electronic_state_kind: str | None = None,
         species_entry_kind: str | None = None,
+        species_ref: str | None = None,
+        species_entry_ref: str | None = None,
         temperature_min: float | None = None,
         temperature_max: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
+        level_of_theory_ref: str | None = None,
         software: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
@@ -582,7 +621,8 @@ class TCKDBClient:
         identity context, so callers don't have to chain
         ``search_species`` → ``get_species_thermo`` themselves. Defaults to
         POST (mirrors ``search_reactions``); pass ``method="GET"`` for the
-        query-string form.
+        query-string form. Phase C: ``species_ref``, ``species_entry_ref``,
+        and ``level_of_theory_ref`` may be supplied as filter handles.
         """
         body = {
             "smiles": smiles,
@@ -593,10 +633,13 @@ class TCKDBClient:
             "multiplicity": multiplicity,
             "electronic_state_kind": electronic_state_kind,
             "species_entry_kind": species_entry_kind,
+            "species_ref": species_ref,
+            "species_entry_ref": species_entry_ref,
             "temperature_min": temperature_min,
             "temperature_max": temperature_max,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
+            "level_of_theory_ref": level_of_theory_ref,
             "software": software,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
@@ -608,12 +651,16 @@ class TCKDBClient:
         }
         if method.upper() == "GET":
             return self.request_json(
-                "GET", "/scientific/thermo/search", params=body
+                "GET",
+                "/scientific/thermo/search",
+                params=body,
+                authenticated=False,
             ).data
         return self.request_json(
             "POST",
             "/scientific/thermo/search",
             json={k: v for k, v in body.items() if v is not None},
+            authenticated=False,
         ).data
 
     def search_kinetics(
@@ -623,11 +670,14 @@ class TCKDBClient:
         products: list[str] | None = None,
         direction: str | None = None,
         family: str | None = None,
+        reaction_ref: str | None = None,
+        reaction_entry_ref: str | None = None,
         temperature_min: float | None = None,
         temperature_max: float | None = None,
         pressure: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
+        level_of_theory_ref: str | None = None,
         software: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
@@ -651,11 +701,14 @@ class TCKDBClient:
             "products": products,
             "direction": direction,
             "family": family,
+            "reaction_ref": reaction_ref,
+            "reaction_entry_ref": reaction_entry_ref,
             "temperature_min": temperature_min,
             "temperature_max": temperature_max,
             "pressure": pressure,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
+            "level_of_theory_ref": level_of_theory_ref,
             "software": software,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
@@ -667,12 +720,16 @@ class TCKDBClient:
         }
         if method.upper() == "GET":
             return self.request_json(
-                "GET", "/scientific/kinetics/search", params=body
+                "GET",
+                "/scientific/kinetics/search",
+                params=body,
+                authenticated=False,
             ).data
         return self.request_json(
             "POST",
             "/scientific/kinetics/search",
             json={k: v for k, v in body.items() if v is not None},
+            authenticated=False,
         ).data
 
     def search_species_calculations(
@@ -688,8 +745,11 @@ class TCKDBClient:
         species_entry_kind: str | None = None,
         species_id: int | None = None,
         species_entry_id: int | None = None,
+        species_ref: str | None = None,
+        species_entry_ref: str | None = None,
         calculation_type: str | None = None,
         level_of_theory_id: int | None = None,
+        level_of_theory_ref: str | None = None,
         method: str | None = None,
         basis: str | None = None,
         software: str | None = None,
@@ -731,8 +791,11 @@ class TCKDBClient:
             "species_entry_kind": species_entry_kind,
             "species_id": species_id,
             "species_entry_id": species_entry_id,
+            "species_ref": species_ref,
+            "species_entry_ref": species_entry_ref,
             "calculation_type": calculation_type,
             "level_of_theory_id": level_of_theory_id,
+            "level_of_theory_ref": level_of_theory_ref,
             "method": method,
             "basis": basis,
             "software": software,
@@ -754,16 +817,18 @@ class TCKDBClient:
                 "GET",
                 "/scientific/species-calculations/search",
                 params=body,
+                authenticated=False,
             ).data
         return self.request_json(
             "POST",
             "/scientific/species-calculations/search",
             json={k: v for k, v in body.items() if v is not None},
+            authenticated=False,
         ).data
 
     def get_reaction_full(
         self,
-        reaction_entry_id: int,
+        reaction_entry_id: int | str,
         *,
         include: list[str] | None = None,
         include_review: str | None = None,
@@ -773,6 +838,8 @@ class TCKDBClient:
     ) -> Any:
         """``GET /scientific/reaction-entries/{reaction_entry_id}/full``.
 
+        Phase C: ``reaction_entry_id`` accepts the integer
+        ``reaction_entry.id`` or a public ref of the form ``rxe_...``.
         Composite scientific read joining species, kinetics, transition
         states, calculations, and review summary into one document. Returns
         the parsed ``ScientificReactionFullResponse`` JSON envelope. The
@@ -786,7 +853,35 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
         }
-        return self.request_json("GET", path, params=params).data
+        return self.request_json(
+            "GET", path, params=params, authenticated=False
+        ).data
+
+    def get_geometry(
+        self,
+        geometry_handle: int | str,
+        *,
+        include: list[str] | None = None,
+    ) -> Any:
+        """``GET /scientific/geometries/{geometry_handle}``.
+
+        Follow-up read that returns the full coordinate payload behind
+        a geometry ref. ``geometry_handle`` accepts the integer
+        ``geometry.id`` or a public ref of the form ``geom_…`` —
+        wrong-prefix refs return 422, unknown refs return 404. The
+        response surfaces ``symbols`` + ``coords`` (Ångström,
+        Cartesian) plus a compact provenance summary listing every
+        calculation that produced or consumed the geometry.
+
+        Phase D: ``geometry_id`` is hidden by default and restored
+        only when ``include=internal_ids`` is supplied and the
+        deployment allows it.
+        """
+        path = f"/scientific/geometries/{geometry_handle}"
+        params = {"include": include}
+        return self.request_json(
+            "GET", path, params=params, authenticated=False
+        ).data
 
 
 # ---------------------------------------------------------------------------

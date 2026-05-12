@@ -9,6 +9,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.config import settings
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
     Calculation,
@@ -64,6 +65,9 @@ from app.services.scientific_read.common import (
     validate_includes,
     visible_statuses,
 )
+from app.services.scientific_read.internal_ids import (
+    filter_internal_ids_from_resolved,
+)
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
@@ -77,8 +81,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "conformers",
     "artifacts",
     "review",
+    "internal_ids",
     "all",
 }
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 _DEFAULT_INCLUDES: set[str] = {"species", "kinetics", "transition_states"}
 
@@ -109,7 +115,9 @@ def get_reaction_full(
         request.include or sorted(_DEFAULT_INCLUDES),
         _LEGAL_INCLUDE_TOKENS,
         "/scientific/reaction-entries/{id}/full",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     ) or _DEFAULT_INCLUDES
+    includes = filter_internal_ids_from_resolved(includes)
 
     entry = session.get(ReactionEntry, reaction_entry_id)
     if entry is None:
@@ -142,7 +150,9 @@ def get_reaction_full(
 
     reaction_entry_summary = ReactionEntrySummary(
         id=entry.id,
+        reaction_entry_ref=entry.public_ref,
         reaction_id=entry.reaction_id,
+        reaction_ref=chem.public_ref if chem is not None else "",
         equation=_format_entry_equation(session, entry, chem),
         reversible=chem.reversible if chem else True,
         family=family_name,
@@ -186,6 +196,17 @@ def get_reaction_full(
     scans_block: list[dict] | None = [] if "scans" in includes else None
     conformers_block: list[dict] | None = [] if "conformers" in includes else None
     artifacts_block: list[dict] | None = [] if "artifacts" in includes else None
+
+    # Hosted abuse-control caps: reject responses that would expand
+    # beyond the configured public limits. ``include=all`` is what
+    # most often pushes a heavily-studied reaction over the edge, but
+    # the cap applies regardless of how the section was requested so
+    # there is no way to bypass by enumerating tokens.
+    _enforce_full_expansion_caps(
+        calculations=calculations_block,
+        geometries=None,  # geometries not currently expanded in /full
+        artifacts=artifacts_block,
+    )
 
     review_records_block: list[ReviewRecordEntry] | None = None
     if request.include_review == ReviewDetail.full:
@@ -239,6 +260,7 @@ def _build_species_section(
     rows = session.execute(
         select(
             ReactionEntryStructureParticipant.species_entry_id,
+            SpeciesEntry.public_ref,
             ReactionEntryStructureParticipant.role,
             ReactionEntryStructureParticipant.participant_index,
             Species.smiles,
@@ -261,12 +283,13 @@ def _build_species_section(
 
     reactants: list[ReactionFullSpeciesParticipant] = []
     products: list[ReactionFullSpeciesParticipant] = []
-    for species_entry_id, role, participant_index, smiles in rows:
+    for species_entry_id, species_entry_ref, role, participant_index, smiles in rows:
         badge = badge_by_entry[species_entry_id]
         if badge.status not in visible_review_statuses:
             continue
         participant = ReactionFullSpeciesParticipant(
             species_entry_id=species_entry_id,
+            species_entry_ref=species_entry_ref,
             smiles=smiles,
             participant_index=participant_index,
             review=badge,
@@ -348,12 +371,17 @@ def _build_transition_states_section(
         badge = badge_by_entry[ts_entry.id]
         if badge.status not in visible_review_statuses:
             continue
+        ts_calcs = calcs_by_ts_entry.get(ts_entry.id, [])
+        calc_refs = {c.id: c.public_ref for c in ts_calcs}
         out.append(
             TransitionStateInFull(
                 transition_state_entry_id=ts_entry.id,
+                transition_state_entry_ref=ts_entry.public_ref,
                 review=badge,
-                calculations=_format_ts_calc_slots(calcs_by_ts_entry.get(ts_entry.id, [])),
-                dependencies=_format_ts_deps(deps_by_ts_entry.get(ts_entry.id, [])),
+                calculations=_format_ts_calc_slots(ts_calcs),
+                dependencies=_format_ts_deps(
+                    deps_by_ts_entry.get(ts_entry.id, []), calc_refs
+                ),
             )
         )
 
@@ -373,13 +401,16 @@ def _build_calculations_section(
     rows = session.execute(
         select(
             Calculation.id,
+            Calculation.public_ref,
             Calculation.type,
             Calculation.lot_id,
+            LevelOfTheory.public_ref,
             LevelOfTheory.method,
             LevelOfTheory.basis,
             LevelOfTheory.dispersion,
             LevelOfTheory.solvent,
             Calculation.software_release_id,
+            SoftwareRelease.public_ref,
             Software.name,
             SoftwareRelease.version,
             CalculationGeometryValidation.validation_status,
@@ -417,29 +448,32 @@ def _build_calculations_section(
     return [
         CalculationEvidenceSummary(
             calculation_id=row[0],
-            calculation_type=row[1].value,
+            calculation_ref=row[1],
+            calculation_type=row[2].value,
             converged=None,
-            geometry_validation_status=row[10].value if row[10] else "not_present",
-            scf_stability_status=row[11].value if row[11] else "not_present",
+            geometry_validation_status=row[13].value if row[13] else "not_present",
+            scf_stability_status=row[14].value if row[14] else "not_present",
             level_of_theory=(
                 LevelOfTheorySummary(
-                    level_of_theory_id=row[2],
-                    method=row[3] or "",
-                    basis=row[4],
-                    dispersion=row[5],
-                    solvent=row[6],
-                    label="/".join(p for p in (row[3] or "", row[4]) if p),
+                    level_of_theory_id=row[3],
+                    level_of_theory_ref=row[4],
+                    method=row[5] or "",
+                    basis=row[6],
+                    dispersion=row[7],
+                    solvent=row[8],
+                    label="/".join(p for p in (row[5] or "", row[6]) if p),
                 )
-                if row[2] is not None
+                if row[3] is not None
                 else None
             ),
             software=(
                 SoftwareReleaseSummary(
-                    software_release_id=row[7],
-                    software=row[8] or "",
-                    version=row[9],
+                    software_release_id=row[9],
+                    software_release_ref=row[10],
+                    software=row[11] or "",
+                    version=row[12],
                 )
-                if row[7] is not None
+                if row[9] is not None
                 else None
             ),
         )
@@ -451,7 +485,7 @@ def _build_path_search_section(
     session: Session, reaction_entry_id: int
 ) -> list[PathSearchSummary]:
     rows = session.execute(
-        select(Calculation.id, Calculation.parameters_json)
+        select(Calculation.id, Calculation.public_ref, Calculation.parameters_json)
         .join(
             TransitionStateEntry,
             TransitionStateEntry.id == Calculation.transition_state_entry_id,
@@ -469,10 +503,11 @@ def _build_path_search_section(
     return [
         PathSearchSummary(
             calculation_id=cid,
+            calculation_ref=ref,
             method=(params.get("method") if isinstance(params, dict) else None),
             converged=None,
         )
-        for cid, params in rows
+        for cid, ref, params in rows
     ]
 
 
@@ -480,7 +515,7 @@ def _build_irc_section(
     session: Session, reaction_entry_id: int
 ) -> list[dict]:
     rows = session.execute(
-        select(Calculation.id)
+        select(Calculation.id, Calculation.public_ref)
         .join(
             TransitionStateEntry,
             TransitionStateEntry.id == Calculation.transition_state_entry_id,
@@ -495,7 +530,10 @@ def _build_irc_section(
         )
         .order_by(Calculation.id.desc())
     ).all()
-    return [{"calculation_id": cid, "type": "irc"} for (cid,) in rows]
+    return [
+        {"calculation_id": cid, "calculation_ref": ref, "type": "irc"}
+        for cid, ref in rows
+    ]
 
 
 def _build_review_records_section(
@@ -589,7 +627,10 @@ def _format_ts_calc_slots(
             m = c.parameters_json.get("method")
             method = m if isinstance(m, str) else None
         by_key[key] = TransitionStateCalculationSlot(
-            calculation_id=c.id, type=c.type.value, method=method
+            calculation_id=c.id,
+            calculation_ref=c.public_ref,
+            type=c.type.value,
+            method=method,
         )
     return by_key
 
@@ -616,6 +657,7 @@ def _deps_by_ts_entry(
 
 def _format_ts_deps(
     deps: list[CalculationDependency],
+    calc_refs: dict[int, str],
 ) -> list[TransitionStateDependency]:
     """Map ORM ``CalculationDependency`` rows to the read-schema dep shape.
 
@@ -628,7 +670,9 @@ def _format_ts_deps(
     return [
         TransitionStateDependency(
             parent_calculation_id=d.parent_calculation_id,
+            parent_calculation_ref=calc_refs.get(d.parent_calculation_id, ""),
             child_calculation_id=d.child_calculation_id,
+            child_calculation_ref=calc_refs.get(d.child_calculation_id, ""),
             role=d.dependency_role.value,
         )
         for d in deps
@@ -638,6 +682,36 @@ def _format_ts_deps(
 # ---------------------------------------------------------------------------
 # Equation formatter
 # ---------------------------------------------------------------------------
+
+
+def _enforce_full_expansion_caps(
+    *,
+    calculations: list | None,
+    geometries: list | None,
+    artifacts: list | None,
+) -> None:
+    """Reject /full responses whose expanded sub-arrays exceed the caps.
+
+    Each section has its own configurable ceiling; we raise the first
+    section that breaches it so the caller knows exactly which
+    sub-array is the offender. The 422 ``query_too_expensive`` code
+    is stable.
+    """
+    pairs: list[tuple[str, list | None, int]] = [
+        ("calculations", calculations, settings.max_full_calculations_public),
+        ("geometries", geometries, settings.max_full_geometries_public),
+        ("artifacts", artifacts, settings.max_full_artifacts_public),
+    ]
+    for section_name, block, cap in pairs:
+        if block is None or cap <= 0:
+            continue
+        if len(block) > cap:
+            raise ValueError(
+                "query_too_expensive: /full expansion for section "
+                f"{section_name!r} would return {len(block)} rows "
+                f"which exceeds the public cap of {cap}. Narrow the "
+                "include= set or request specific sections directly."
+            )
 
 
 def _format_entry_equation(

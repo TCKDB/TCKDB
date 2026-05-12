@@ -12,6 +12,13 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
+from app.schemas.reads._field_bounds import (
+    MAX_FORMULA_LENGTH as _MAX_FORMULA_LENGTH,
+    MAX_INCHI_KEY_LENGTH as _MAX_INCHI_KEY_LENGTH,
+    MAX_INCHI_LENGTH as _MAX_INCHI_LENGTH,
+    MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
+    MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
+)
 from app.schemas.reads.scientific_common import (
     CollapseMode,
     Pagination,
@@ -33,15 +40,20 @@ class SpeciesSearchRequest(BaseModel):
     return an empty result set, not a validation error (per Phase 2.1 patch).
     """
 
-    smiles: str | None = None
-    inchi: str | None = None
-    inchi_key: str | None = None
-    formula: str | None = None
+    smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
+    inchi: str | None = Field(default=None, max_length=_MAX_INCHI_LENGTH)
+    inchi_key: str | None = Field(default=None, max_length=_MAX_INCHI_KEY_LENGTH)
+    formula: str | None = Field(default=None, max_length=_MAX_FORMULA_LENGTH)
 
     charge: int | None = None
     multiplicity: int | None = None
     electronic_state_kind: SpeciesEntryStateKind | None = None
     species_entry_kind: StationaryPointKind | None = None
+
+    # Phase C: explicit handles (refs); ID siblings keep the existing
+    # behavior. If both are supplied they must resolve to the same row.
+    species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
+    species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
 
     min_review_status: RecordReviewStatus | None = None
     include_rejected: bool = False
@@ -82,9 +94,14 @@ class SpeciesEntrySectionIds(BaseModel):
 
 
 class SpeciesEntryScientificRecord(BaseModel):
-    """Per-entry block embedded in a SpeciesScientificRecord."""
+    """Per-entry block embedded in a SpeciesScientificRecord.
+
+    Phase B: ``species_entry_ref`` is the public stable handle alongside
+    the integer ``species_entry_id``.
+    """
 
     species_entry_id: int
+    species_entry_ref: str
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
     review: RecordReviewBadge
@@ -98,9 +115,14 @@ class SpeciesEntryScientificRecord(BaseModel):
 
 
 class SpeciesScientificRecord(BaseModel):
-    """One species row returned from /scientific/species/search."""
+    """One species row returned from /scientific/species/search.
+
+    Phase B: ``species_ref`` is the public stable handle alongside
+    the integer ``species_id``.
+    """
 
     species_id: int
+    species_ref: str
     canonical_smiles: str
     inchi_key: str
     formula: str | None = None

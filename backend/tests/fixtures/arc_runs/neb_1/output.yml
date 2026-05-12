@@ -1,0 +1,1078 @@
+arc_git_commit: e8775551f34ae46fd048f999114657d72a4a9862
+arc_version: 1.1.0
+arkane_git_commit: 6b1368de6c19204c7ce4fda6fbecb05da4a0fe0e
+arkane_level_of_theory:
+  basis: def2tzvp
+  method: b3lyp
+  method_type: dft
+  software: gaussian
+atom_energy_corrections:
+  Br: -2574.144347409212
+  C: -37.86564131254805
+  Cl: -460.1650388888628
+  F: -99.7683619387686
+  H: -0.5010929786112002
+  N: -54.60589708581987
+  O: -75.09767460743954
+  S: -398.1345106984206
+bac_type: p
+bond_additivity_corrections:
+  Br-Br: 3.4633544485714793
+  Br-C: 0.8576678821501889
+  Br-Cl: 2.2498078932330934
+  Br-F: 2.4349799110994486
+  Br-H: 1.9120878794248526
+  Br-O: -1.2554912099922857
+  C#C: -6.083773329564417
+  C#N: -2.136860022640749
+  C#O: -8.334026246642424
+  C-C: -2.214639347011169
+  C-Cl: -0.8984356792855536
+  C-F: -0.6575826486285459
+  C-H: -0.23472079981166077
+  C-N: -0.2579772638400554
+  C-O: -2.0692673022727166
+  C-S: -2.2621724201557067
+  C=C: -2.6818763979930718
+  C=N: -0.7807981986455196
+  C=O: -2.584152582408669
+  C=S: -2.085460420020578
+  Cl-Cl: 1.0817301972108992
+  Cl-F: 1.3696216424205936
+  Cl-H: 0.031274551188886335
+  Cl-N: 4.4271735162783745
+  Cl-O: 0.8034884368888399
+  Cl-S: 0.3161530545608124
+  F-F: 1.1872897701642178
+  F-H: -2.264464731231101
+  F-O: 0.7638728656874663
+  F-S: -1.7173415232394975
+  H-H: 1.8790645235838441
+  H-N: 0.3742510173286825
+  H-O: -2.1465258087062606
+  H-S: 0.2421215092503637
+  N#N: -1.8492812668033716
+  N-N: 3.3139927859940124
+  N-O: 1.7095387674278495
+  N=N: 4.064303078434774
+  N=O: -1.2520036302053368
+  O-O: -0.4557573593961288
+  O-S: -2.7142930163638104
+  O=O: -8.14129976151346
+  O=S: -4.500554640258455
+  S-S: -0.5234911635946635
+  S=S: -3.7434213748918332
+composite_method: null
+datetime_completed: 2026-05-09 11:52
+datetime_started: 2026-05-09 00:39
+freq_level:
+  basis: def2tzvp
+  method: b3lyp
+  method_type: dft
+  software: gaussian
+freq_scale_factor: 0.999
+freq_scale_factor_source: http://cccbdb.nist.gov/vibscalejust.asp
+opt_level:
+  basis: def2tzvp
+  method: b3lyp
+  method_type: dft
+  software: gaussian
+project: OrcaNEB_Test
+reactions:
+- family: intra_H_migration
+  kinetics:
+    A: 2.10321e-07
+    A_units: s^-1
+    Ea: 122.371
+    Ea_units: kJ/mol
+    Tmax_k: 3000.0
+    Tmin_k: 300.0
+    dA: 70.7828
+    dEa: 3.17286
+    dEa_units: kJ/mol
+    dn: 0.55482
+    n: 5.56265
+    n_data_points: 50
+    tunneling: Eckart
+  label: i-C3H7 <=> n-C3H7
+  multiplicity: 2
+  product_labels:
+  - n-C3H7
+  reactant_labels:
+  - i-C3H7
+  ts_label: TS0
+schema_version: '1.0'
+sp_level:
+  basis: def2tzvp
+  method: b3lyp
+  method_type: dft
+  software: gaussian
+species:
+- additional_calculations: []
+  applied_energy_corrections:
+  - application_role: aec_total
+    components:
+    - component_kind: atom
+      contribution_value: 114.4083593636803
+      key: C
+      multiplicity: 3
+      parameter_unit: hartree
+      parameter_value: -37.86564131254805
+    - component_kind: atom
+      contribution_value: 4.072327214794203
+      key: H
+      multiplicity: 7
+      parameter_unit: hartree
+      parameter_value: -0.5010929786112002
+    scheme:
+      atom_params:
+      - element: Br
+        value: -2574.144347409212
+      - element: C
+        value: -37.86564131254805
+      - element: Cl
+        value: -460.1650388888628
+      - element: F
+        value: -99.7683619387686
+      - element: H
+        value: -0.5010929786112002
+      - element: N
+        value: -54.60589708581987
+      - element: O
+        value: -75.09767460743954
+      - element: S
+        value: -398.1345106984206
+      kind: atom_energy
+      level_of_theory: &id001
+        basis: def2tzvp
+        method: b3lyp
+        method_type: dft
+        software: gaussian
+      name: atom_energy
+      note: Per-species AEC computed by Arkane.
+      source_literature: null
+      units: hartree
+      version: null
+    value: 118.48068657847452
+    value_unit: hartree
+  - application_role: bac_total
+    components:
+    - component_kind: bond
+      contribution_value: -4.429278694022338
+      key: C-C
+      multiplicity: 2
+      parameter_unit: kcal_mol
+      parameter_value: -2.214639347011169
+    - component_kind: bond
+      contribution_value: -1.6430455986816255
+      key: C-H
+      multiplicity: 7
+      parameter_unit: kcal_mol
+      parameter_value: -0.23472079981166077
+    scheme:
+      bond_params:
+      - bond_key: Br-Br
+        value: 3.4633544485714793
+      - bond_key: Br-C
+        value: 0.8576678821501889
+      - bond_key: Br-Cl
+        value: 2.2498078932330934
+      - bond_key: Br-F
+        value: 2.4349799110994486
+      - bond_key: Br-H
+        value: 1.9120878794248526
+      - bond_key: Br-O
+        value: -1.2554912099922857
+      - bond_key: C#C
+        value: -6.083773329564417
+      - bond_key: C#N
+        value: -2.136860022640749
+      - bond_key: C#O
+        value: -8.334026246642424
+      - bond_key: C-C
+        value: -2.214639347011169
+      - bond_key: C-Cl
+        value: -0.8984356792855536
+      - bond_key: C-F
+        value: -0.6575826486285459
+      - bond_key: C-H
+        value: -0.23472079981166077
+      - bond_key: C-N
+        value: -0.2579772638400554
+      - bond_key: C-O
+        value: -2.0692673022727166
+      - bond_key: C-S
+        value: -2.2621724201557067
+      - bond_key: C=C
+        value: -2.6818763979930718
+      - bond_key: C=N
+        value: -0.7807981986455196
+      - bond_key: C=O
+        value: -2.584152582408669
+      - bond_key: C=S
+        value: -2.085460420020578
+      - bond_key: Cl-Cl
+        value: 1.0817301972108992
+      - bond_key: Cl-F
+        value: 1.3696216424205936
+      - bond_key: Cl-H
+        value: 0.031274551188886335
+      - bond_key: Cl-N
+        value: 4.4271735162783745
+      - bond_key: Cl-O
+        value: 0.8034884368888399
+      - bond_key: Cl-S
+        value: 0.3161530545608124
+      - bond_key: F-F
+        value: 1.1872897701642178
+      - bond_key: F-H
+        value: -2.264464731231101
+      - bond_key: F-O
+        value: 0.7638728656874663
+      - bond_key: F-S
+        value: -1.7173415232394975
+      - bond_key: H-H
+        value: 1.8790645235838441
+      - bond_key: H-N
+        value: 0.3742510173286825
+      - bond_key: H-O
+        value: -2.1465258087062606
+      - bond_key: H-S
+        value: 0.2421215092503637
+      - bond_key: N#N
+        value: -1.8492812668033716
+      - bond_key: N-N
+        value: 3.3139927859940124
+      - bond_key: N-O
+        value: 1.7095387674278495
+      - bond_key: N=N
+        value: 4.064303078434774
+      - bond_key: N=O
+        value: -1.2520036302053368
+      - bond_key: O-O
+        value: -0.4557573593961288
+      - bond_key: O-S
+        value: -2.7142930163638104
+      - bond_key: O=O
+        value: -8.14129976151346
+      - bond_key: O=S
+        value: -4.500554640258455
+      - bond_key: S-S
+        value: -0.5234911635946635
+      - bond_key: S=S
+        value: -3.7434213748918332
+      kind: bac_petersson
+      level_of_theory: *id001
+      name: bac_petersson
+      note: Per-species BAC computed by Arkane (bac_type=p).
+      source_literature: null
+      units: kcal_mol
+      version: null
+    value: -6.072324292703964
+    value_unit: kcal_mol
+  charge: 0
+  coarse_opt_final_energy_hartree: -118.526864383
+  coarse_opt_input_xyz: |-
+    C       0.00942300   -0.19701000    1.29398200
+    C       0.00942300    0.53431000    0.00000000
+    C       0.00942300   -0.19701000   -1.29398200
+    H       0.76988900   -0.98626300    1.31033400
+    H      -0.95216100   -0.70109700    1.48227800
+    H       0.19220400    0.46707600    2.14011600
+    H      -0.18947900    1.59883000    0.00000000
+    H      -0.95216100   -0.70109700   -1.48227800
+    H       0.76988900   -0.98626300   -1.31033400
+    H       0.19220400    0.46707600   -2.14011600
+  coarse_opt_log: calcs/Species/i-C3H7/opt_a3445/input.log
+  coarse_opt_n_steps: 2
+  coarse_opt_output_xyz: |-
+    C       0.00942300   -0.19701000    1.29398200
+    C       0.00942300    0.53431000    0.00000000
+    C       0.00942300   -0.19701000   -1.29398200
+    H       0.76988900   -0.98626300    1.31033400
+    H      -0.95216100   -0.70109700    1.48227800
+    H       0.19220400    0.46707600    2.14011600
+    H      -0.18947900    1.59883000    0.00000000
+    H      -0.95216100   -0.70109700   -1.48227800
+    H       0.76988900   -0.98626300   -1.31033400
+    H       0.19220400    0.46707600   -2.14011600
+  converged: true
+  ess_versions:
+    freq: Gaussian 09, Revision D.01
+    opt: Gaussian 09, Revision D.01
+    sp: Gaussian 09, Revision D.01
+  formula: C3H7
+  freq_constraints: []
+  freq_input: calcs/Species/i-C3H7/freq_a3486/input.gjf
+  freq_log: calcs/Species/i-C3H7/freq_a3486/input.log
+  freq_n_imag: 0
+  imag_freq_cm1: null
+  inchi: InChI=1S/C3H7/c1-3-2/h3H,1-2H3
+  inchi_key: HNUALPPJLMYHDK-UHFFFAOYSA-N
+  is_ts: false
+  label: i-C3H7
+  multiplicity: 2
+  opt_constraints: []
+  opt_converged: true
+  opt_final_energy_hartree: -118.526865834
+  opt_input: calcs/Species/i-C3H7/opt_a3469/input.gjf
+  opt_input_xyz: |-
+    C       0.00942300   -0.19701000    1.29398200
+    C       0.00942300    0.53431000    0.00000000
+    C       0.00942300   -0.19701000   -1.29398200
+    H       0.76988900   -0.98626300    1.31033400
+    H      -0.95216100   -0.70109700    1.48227800
+    H       0.19220400    0.46707600    2.14011600
+    H      -0.18947900    1.59883000    0.00000000
+    H      -0.95216100   -0.70109700   -1.48227800
+    H       0.76988900   -0.98626300   -1.31033400
+    H       0.19220400    0.46707600   -2.14011600
+  opt_log: calcs/Species/i-C3H7/opt_a3469/input.log
+  opt_n_steps: 2
+  original_label: null
+  smiles: C[CH]C
+  sp_constraints: []
+  sp_energy_hartree: -118.526865834
+  sp_input: calcs/Species/i-C3H7/opt_a3469/input.gjf
+  sp_log: calcs/Species/i-C3H7/opt_a3469/input.log
+  statmech:
+    e0_kj_mol: 79.9317
+    external_symmetry: 1
+    harmonic_frequencies_cm1:
+    - 108.3795
+    - 110.9559
+    - 352.1943
+    - 391.2763
+    - 886.0327
+    - 941.7509
+    - 948.6791
+    - 1029.4621
+    - 1147.1378
+    - 1181.5847
+    - 1371.6764
+    - 1409.5626
+    - 1413.2924
+    - 1467.1586
+    - 1475.6798
+    - 1477.4617
+    - 1489.5985
+    - 2936.9842
+    - 2941.049
+    - 3011.5596
+    - 3012.8641
+    - 3086.7551
+    - 3087.9178
+    - 3171.3325
+    is_linear: false
+    optical_isomers: 1
+    point_group: Cs
+    rigid_rotor_kind: asymmetric_top
+    spin_multiplicity: 2
+    torsions: []
+  thermo:
+    h298_kj_mol: 96.08386662936998
+    nasa_high:
+      coeffs:
+      - 0.305184
+      - 0.0328871
+      - -1.76394e-05
+      - 4.614e-09
+      - -4.72937e-13
+      - 10163.2
+      - 24.6668
+      tmax_k: 3000.0
+      tmin_k: 448.763
+    nasa_low:
+      coeffs:
+      - 3.75246
+      - 0.0266167
+      - -7.8427e-05
+      - 2.16358e-07
+      - -1.86085e-10
+      - 9607.53
+      - 8.05406
+      tmax_k: 448.763
+      tmin_k: 10.0
+    s298_j_mol_k: 294.5636002039714
+    thermo_points:
+    - cp_j_mol_k: 74.94180742806
+      g_kj_mol: 7.714358371463081
+      h_kj_mol: 96.2222548518341
+      s_j_mol_k: 295.0263216012367
+      temperature_k: 300.0
+    - cp_j_mol_k: 90.910071011232
+      g_kj_mol: -22.99177635400415
+      h_kj_mol: 104.499026098006
+      s_j_mol_k: 318.72700613002536
+      temperature_k: 400.0
+    - cp_j_mol_k: 107.14091341498153
+      g_kj_mol: -55.978012232400594
+      h_kj_mol: 114.41413877924738
+      s_j_mol_k: 340.78430202329594
+      temperature_k: 500.0
+    - cp_j_mol_k: 121.57912647007142
+      g_kj_mol: -91.10803833082635
+      h_kj_mol: 125.8652261350332
+      s_j_mol_k: 361.62210744309925
+      temperature_k: 600.0
+    - cp_j_mol_k: 145.4558758639815
+      g_kj_mol: -167.34128586510224
+      h_kj_mol: 152.6723369952431
+      s_j_mol_k: 400.01702857543165
+      temperature_k: 800.0
+    - cp_j_mol_k: 163.74477090098404
+      g_kj_mol: -250.8563964733377
+      h_kj_mol: 183.67538840639526
+      s_j_mol_k: 434.5317848797329
+      temperature_k: 1000.0
+    - cp_j_mol_k: 192.27374838726155
+      g_kj_mol: -486.97720125928157
+      h_kj_mol: 273.5125315256462
+      s_j_mol_k: 506.9931551899518
+      temperature_k: 1500.0
+    - cp_j_mol_k: 206.75424581382407
+      g_kj_mol: -755.3671241643519
+      h_kj_mol: 373.64049196240654
+      s_j_mol_k: 564.5038080633792
+      temperature_k: 2000.0
+    - cp_j_mol_k: 213.88398361673885
+      g_kj_mol: -989.0312489505121
+      h_kj_mol: 457.8518405432897
+      s_j_mol_k: 602.8679539557507
+      temperature_k: 2400.0
+    tmax_k: null
+    tmin_k: null
+  xyz: |-
+    C       0.00943000   -0.19699100    1.29400800
+    C       0.00943000    0.53426900    0.00000000
+    C       0.00943000   -0.19699100   -1.29400800
+    H       0.77076300   -0.98539600    1.31103400
+    H      -0.95169700   -0.70220300    1.48162800
+    H       0.19084700    0.46735700    2.14022300
+    H      -0.18956000    1.59876700    0.00000000
+    H      -0.95169700   -0.70220300   -1.48162800
+    H       0.77076300   -0.98539600   -1.31103400
+    H       0.19084700    0.46735700   -2.14022300
+  zpe_hartree: 0.0875963
+- additional_calculations: []
+  applied_energy_corrections:
+  - application_role: aec_total
+    components:
+    - component_kind: atom
+      contribution_value: 114.4083593636803
+      key: C
+      multiplicity: 3
+      parameter_unit: hartree
+      parameter_value: -37.86564131254805
+    - component_kind: atom
+      contribution_value: 4.072327214794203
+      key: H
+      multiplicity: 7
+      parameter_unit: hartree
+      parameter_value: -0.5010929786112002
+    scheme:
+      atom_params:
+      - element: Br
+        value: -2574.144347409212
+      - element: C
+        value: -37.86564131254805
+      - element: Cl
+        value: -460.1650388888628
+      - element: F
+        value: -99.7683619387686
+      - element: H
+        value: -0.5010929786112002
+      - element: N
+        value: -54.60589708581987
+      - element: O
+        value: -75.09767460743954
+      - element: S
+        value: -398.1345106984206
+      kind: atom_energy
+      level_of_theory: &id002
+        basis: def2tzvp
+        method: b3lyp
+        method_type: dft
+        software: gaussian
+      name: atom_energy
+      note: Per-species AEC computed by Arkane.
+      source_literature: null
+      units: hartree
+      version: null
+    value: 118.48068657847452
+    value_unit: hartree
+  - application_role: bac_total
+    components:
+    - component_kind: bond
+      contribution_value: -4.429278694022338
+      key: C-C
+      multiplicity: 2
+      parameter_unit: kcal_mol
+      parameter_value: -2.214639347011169
+    - component_kind: bond
+      contribution_value: -1.6430455986816255
+      key: C-H
+      multiplicity: 7
+      parameter_unit: kcal_mol
+      parameter_value: -0.23472079981166077
+    scheme:
+      bond_params:
+      - bond_key: Br-Br
+        value: 3.4633544485714793
+      - bond_key: Br-C
+        value: 0.8576678821501889
+      - bond_key: Br-Cl
+        value: 2.2498078932330934
+      - bond_key: Br-F
+        value: 2.4349799110994486
+      - bond_key: Br-H
+        value: 1.9120878794248526
+      - bond_key: Br-O
+        value: -1.2554912099922857
+      - bond_key: C#C
+        value: -6.083773329564417
+      - bond_key: C#N
+        value: -2.136860022640749
+      - bond_key: C#O
+        value: -8.334026246642424
+      - bond_key: C-C
+        value: -2.214639347011169
+      - bond_key: C-Cl
+        value: -0.8984356792855536
+      - bond_key: C-F
+        value: -0.6575826486285459
+      - bond_key: C-H
+        value: -0.23472079981166077
+      - bond_key: C-N
+        value: -0.2579772638400554
+      - bond_key: C-O
+        value: -2.0692673022727166
+      - bond_key: C-S
+        value: -2.2621724201557067
+      - bond_key: C=C
+        value: -2.6818763979930718
+      - bond_key: C=N
+        value: -0.7807981986455196
+      - bond_key: C=O
+        value: -2.584152582408669
+      - bond_key: C=S
+        value: -2.085460420020578
+      - bond_key: Cl-Cl
+        value: 1.0817301972108992
+      - bond_key: Cl-F
+        value: 1.3696216424205936
+      - bond_key: Cl-H
+        value: 0.031274551188886335
+      - bond_key: Cl-N
+        value: 4.4271735162783745
+      - bond_key: Cl-O
+        value: 0.8034884368888399
+      - bond_key: Cl-S
+        value: 0.3161530545608124
+      - bond_key: F-F
+        value: 1.1872897701642178
+      - bond_key: F-H
+        value: -2.264464731231101
+      - bond_key: F-O
+        value: 0.7638728656874663
+      - bond_key: F-S
+        value: -1.7173415232394975
+      - bond_key: H-H
+        value: 1.8790645235838441
+      - bond_key: H-N
+        value: 0.3742510173286825
+      - bond_key: H-O
+        value: -2.1465258087062606
+      - bond_key: H-S
+        value: 0.2421215092503637
+      - bond_key: N#N
+        value: -1.8492812668033716
+      - bond_key: N-N
+        value: 3.3139927859940124
+      - bond_key: N-O
+        value: 1.7095387674278495
+      - bond_key: N=N
+        value: 4.064303078434774
+      - bond_key: N=O
+        value: -1.2520036302053368
+      - bond_key: O-O
+        value: -0.4557573593961288
+      - bond_key: O-S
+        value: -2.7142930163638104
+      - bond_key: O=O
+        value: -8.14129976151346
+      - bond_key: O=S
+        value: -4.500554640258455
+      - bond_key: S-S
+        value: -0.5234911635946635
+      - bond_key: S=S
+        value: -3.7434213748918332
+      kind: bac_petersson
+      level_of_theory: *id002
+      name: bac_petersson
+      note: Per-species BAC computed by Arkane (bac_type=p).
+      source_literature: null
+      units: kcal_mol
+      version: null
+    value: -6.072324292703964
+    value_unit: kcal_mol
+  charge: 0
+  coarse_opt_final_energy_hartree: -118.520605075
+  coarse_opt_input_xyz: |-
+    C       1.22551700   -0.24135100   -0.03359700
+    C      -0.08130200    0.55061800    0.04496000
+    C      -1.30139900   -0.29352300   -0.02658000
+    H       1.30110100   -0.77877100   -0.98100600
+    H       2.09240200    0.41642800    0.05163500
+    H       1.28445300   -0.97728300    0.77178500
+    H      -0.10782200    1.30675700   -0.74841400
+    H      -0.08619700    1.13174600    0.98236900
+    H      -1.27661100   -1.33150000    0.27971600
+    H      -2.26422700    0.13816100   -0.26478000
+  coarse_opt_log: calcs/Species/n-C3H7/opt_a3455/input.log
+  coarse_opt_n_steps: 1
+  coarse_opt_output_xyz: |-
+    C       1.22551700   -0.24135100   -0.03359700
+    C      -0.08130200    0.55061800    0.04496000
+    C      -1.30139900   -0.29352300   -0.02658000
+    H       1.30110100   -0.77877100   -0.98100600
+    H       2.09240200    0.41642800    0.05163500
+    H       1.28445300   -0.97728300    0.77178500
+    H      -0.10782200    1.30675700   -0.74841400
+    H      -0.08619700    1.13174600    0.98236900
+    H      -1.27661100   -1.33150000    0.27971600
+    H      -2.26422700    0.13816100   -0.26478000
+  converged: true
+  ess_versions:
+    freq: Gaussian 09, Revision D.01
+    opt: Gaussian 09, Revision D.01
+    sp: Gaussian 09, Revision D.01
+  formula: C3H7
+  freq_constraints: []
+  freq_input: calcs/Species/n-C3H7/freq_a3496/input.gjf
+  freq_log: calcs/Species/n-C3H7/freq_a3496/input.log
+  freq_n_imag: 0
+  imag_freq_cm1: null
+  inchi: InChI=1S/C3H7/c1-3-2/h1,3H2,2H3
+  inchi_key: OCBFFGCSTGGPSQ-UHFFFAOYSA-N
+  is_ts: false
+  label: n-C3H7
+  multiplicity: 2
+  opt_constraints: []
+  opt_converged: true
+  opt_final_energy_hartree: -118.520604707
+  opt_input: calcs/Species/n-C3H7/opt_a3483/input.gjf
+  opt_input_xyz: |-
+    C       1.22551700   -0.24135100   -0.03359700
+    C      -0.08130200    0.55061800    0.04496000
+    C      -1.30139900   -0.29352300   -0.02658000
+    H       1.30110100   -0.77877100   -0.98100600
+    H       2.09240200    0.41642800    0.05163500
+    H       1.28445300   -0.97728300    0.77178500
+    H      -0.10782200    1.30675700   -0.74841400
+    H      -0.08619700    1.13174600    0.98236900
+    H      -1.27661100   -1.33150000    0.27971600
+    H      -2.26422700    0.13816100   -0.26478000
+  opt_log: calcs/Species/n-C3H7/opt_a3483/input.log
+  opt_n_steps: 3
+  original_label: null
+  smiles: '[CH2]CC'
+  sp_constraints: []
+  sp_energy_hartree: -118.520604707
+  sp_input: calcs/Species/n-C3H7/opt_a3483/input.gjf
+  sp_log: calcs/Species/n-C3H7/opt_a3483/input.log
+  statmech:
+    e0_kj_mol: 97.1641
+    external_symmetry: 1
+    harmonic_frequencies_cm1:
+    - 99.2034
+    - 245.6934
+    - 374.2935
+    - 491.8517
+    - 759.3596
+    - 880.3524
+    - 926.2038
+    - 1052.8276
+    - 1085.0339
+    - 1173.2143
+    - 1269.4109
+    - 1364.9444
+    - 1411.4265
+    - 1465.4323
+    - 1468.2169
+    - 1497.9024
+    - 1504.1294
+    - 2922.5299
+    - 3004.7055
+    - 3029.1992
+    - 3088.2878
+    - 3094.3919
+    - 3138.9748
+    - 3237.452
+    is_linear: false
+    optical_isomers: 2
+    point_group: C1
+    rigid_rotor_kind: asymmetric_top
+    spin_multiplicity: 2
+    torsions: []
+  thermo:
+    h298_kj_mol: 112.64405333313731
+    nasa_high:
+      coeffs:
+      - 1.58679
+      - 0.0302317
+      - -1.56664e-05
+      - 3.98036e-09
+      - -3.98455e-13
+      - 11748.7
+      - 17.6939
+      tmax_k: 3000.0
+      tmin_k: 928.751
+    nasa_low:
+      coeffs:
+      - 3.89045
+      - 0.0119569
+      - 2.734e-05
+      - -3.65741e-08
+      - 1.31247e-11
+      - 11681.1
+      - 8.6899
+      tmax_k: 928.751
+      tmin_k: 10.0
+    s298_j_mol_k: 293.8255513181169
+    thermo_points:
+    - cp_j_mol_k: 75.30358565284264
+      g_kj_mol: 24.495957788889356
+      h_kj_mol: 112.78308180580623
+      s_j_mol_k: 294.2904133897229
+      temperature_k: 300.0
+    - cp_j_mol_k: 91.81554960476224
+      g_kj_mol: -6.1473137307608265
+      h_kj_mol: 121.14094643015781
+      s_j_mol_k: 318.2206504022966
+      temperature_k: 400.0
+    - cp_j_mol_k: 107.69262696005
+      g_kj_mol: -39.09172988864762
+      h_kj_mol: 131.12473784033585
+      s_j_mol_k: 340.43293545796695
+      temperature_k: 500.0
+    - cp_j_mol_k: 122.28880120356544
+      g_kj_mol: -74.19204193258071
+      h_kj_mol: 142.63648405190696
+      s_j_mol_k: 361.3808766408128
+      temperature_k: 600.0
+    - cp_j_mol_k: 146.36387370261824
+      g_kj_mol: -150.40246807541436
+      h_kj_mol: 169.62060964247777
+      s_j_mol_k: 400.0288471473651
+      temperature_k: 800.0
+    - cp_j_mol_k: 164.07774887564
+      g_kj_mol: -233.93701725796276
+      h_kj_mol: 200.74964776654136
+      s_j_mol_k: 434.6866650245041
+      temperature_k: 1000.0
+    - cp_j_mol_k: 192.07658003756248
+      g_kj_mol: -470.1419935049643
+      h_kj_mol: 290.56865574054575
+      s_j_mol_k: 507.14043283034005
+      temperature_k: 1500.0
+    - cp_j_mol_k: 206.63283789368
+      g_kj_mol: -738.591819918928
+      h_kj_mol: 390.6134067776427
+      s_j_mol_k: 564.6026133482853
+      temperature_k: 2000.0
+    - cp_j_mol_k: 213.75777527964712
+      g_kj_mol: -972.2912040258136
+      h_kj_mol: 474.77900058798974
+      s_j_mol_k: 602.9459185890847
+      temperature_k: 2400.0
+    tmax_k: null
+    tmin_k: null
+  xyz: |-
+    C       1.22548800   -0.24120300   -0.03258000
+    C      -0.08138700    0.55071600    0.04357500
+    C      -1.30138300   -0.29372900   -0.02603000
+    H       1.30002800   -0.78342200   -0.97734300
+    H       2.09231200    0.41720600    0.04816000
+    H       1.28570700   -0.97297200    0.77646300
+    H      -0.10777100    1.30478900   -0.75197400
+    H      -0.08674600    1.13480700    0.97907100
+    H      -1.27397600   -1.33427400    0.27106000
+    H      -2.26586400    0.13915900   -0.25522600
+  zpe_hartree: 0.0879032
+transition_states:
+- additional_calculations: []
+  applied_energy_corrections:
+  - application_role: aec_total
+    components:
+    - component_kind: atom
+      contribution_value: 114.4083593636803
+      key: C
+      multiplicity: 3
+      parameter_unit: hartree
+      parameter_value: -37.86564131254805
+    - component_kind: atom
+      contribution_value: 4.072327214794203
+      key: H
+      multiplicity: 7
+      parameter_unit: hartree
+      parameter_value: -0.5010929786112002
+    scheme:
+      atom_params:
+      - element: Br
+        value: -2574.144347409212
+      - element: C
+        value: -37.86564131254805
+      - element: Cl
+        value: -460.1650388888628
+      - element: F
+        value: -99.7683619387686
+      - element: H
+        value: -0.5010929786112002
+      - element: N
+        value: -54.60589708581987
+      - element: O
+        value: -75.09767460743954
+      - element: S
+        value: -398.1345106984206
+      kind: atom_energy
+      level_of_theory: &id003
+        basis: def2tzvp
+        method: b3lyp
+        method_type: dft
+        software: gaussian
+      name: atom_energy
+      note: Per-species AEC computed by Arkane.
+      source_literature: null
+      units: hartree
+      version: null
+    value: 118.48068657847452
+    value_unit: hartree
+  - application_role: bac_total
+    components: []
+    scheme:
+      bond_params:
+      - bond_key: Br-Br
+        value: 3.4633544485714793
+      - bond_key: Br-C
+        value: 0.8576678821501889
+      - bond_key: Br-Cl
+        value: 2.2498078932330934
+      - bond_key: Br-F
+        value: 2.4349799110994486
+      - bond_key: Br-H
+        value: 1.9120878794248526
+      - bond_key: Br-O
+        value: -1.2554912099922857
+      - bond_key: C#C
+        value: -6.083773329564417
+      - bond_key: C#N
+        value: -2.136860022640749
+      - bond_key: C#O
+        value: -8.334026246642424
+      - bond_key: C-C
+        value: -2.214639347011169
+      - bond_key: C-Cl
+        value: -0.8984356792855536
+      - bond_key: C-F
+        value: -0.6575826486285459
+      - bond_key: C-H
+        value: -0.23472079981166077
+      - bond_key: C-N
+        value: -0.2579772638400554
+      - bond_key: C-O
+        value: -2.0692673022727166
+      - bond_key: C-S
+        value: -2.2621724201557067
+      - bond_key: C=C
+        value: -2.6818763979930718
+      - bond_key: C=N
+        value: -0.7807981986455196
+      - bond_key: C=O
+        value: -2.584152582408669
+      - bond_key: C=S
+        value: -2.085460420020578
+      - bond_key: Cl-Cl
+        value: 1.0817301972108992
+      - bond_key: Cl-F
+        value: 1.3696216424205936
+      - bond_key: Cl-H
+        value: 0.031274551188886335
+      - bond_key: Cl-N
+        value: 4.4271735162783745
+      - bond_key: Cl-O
+        value: 0.8034884368888399
+      - bond_key: Cl-S
+        value: 0.3161530545608124
+      - bond_key: F-F
+        value: 1.1872897701642178
+      - bond_key: F-H
+        value: -2.264464731231101
+      - bond_key: F-O
+        value: 0.7638728656874663
+      - bond_key: F-S
+        value: -1.7173415232394975
+      - bond_key: H-H
+        value: 1.8790645235838441
+      - bond_key: H-N
+        value: 0.3742510173286825
+      - bond_key: H-O
+        value: -2.1465258087062606
+      - bond_key: H-S
+        value: 0.2421215092503637
+      - bond_key: N#N
+        value: -1.8492812668033716
+      - bond_key: N-N
+        value: 3.3139927859940124
+      - bond_key: N-O
+        value: 1.7095387674278495
+      - bond_key: N=N
+        value: 4.064303078434774
+      - bond_key: N=O
+        value: -1.2520036302053368
+      - bond_key: O-O
+        value: -0.4557573593961288
+      - bond_key: O-S
+        value: -2.7142930163638104
+      - bond_key: O=O
+        value: -8.14129976151346
+      - bond_key: O=S
+        value: -4.500554640258455
+      - bond_key: S-S
+        value: -0.5234911635946635
+      - bond_key: S=S
+        value: -3.7434213748918332
+      kind: bac_petersson
+      level_of_theory: *id003
+      name: bac_petersson
+      note: Per-species BAC computed by Arkane (bac_type=p).
+      source_literature: null
+      units: kcal_mol
+      version: null
+    value: 0.0
+    value_unit: kcal_mol
+  charge: 0
+  chosen_ts_method: xtb-gsm
+  coarse_opt_final_energy_hartree: -118.45784818599999
+  coarse_opt_input_xyz: |-
+    C      -1.31316800   -0.25454500   -0.03917200
+    C      -0.04117600    0.51580600    0.02251100
+    C       1.27596300   -0.19050000   -0.02355800
+    H      -0.81912300    0.28661900    1.03477400
+    H      -2.22026800    0.22974700   -0.36930400
+    H      -1.27503300   -1.33448700   -0.02353300
+    H      -0.09156300    1.55494400   -0.27778500
+    H       1.51531400   -0.52147000   -1.04437500
+    H       1.26896500   -1.08735700    0.60240200
+    H       2.09199500    0.44744000    0.31913300
+  coarse_opt_log: calcs/TSs/TS0/opt_a3552/input.log
+  coarse_opt_n_steps: 4
+  coarse_opt_output_xyz: |-
+    C      -1.31316800   -0.25454500   -0.03917200
+    C      -0.04117600    0.51580600    0.02251100
+    C       1.27596300   -0.19050000   -0.02355800
+    H      -0.81912300    0.28661900    1.03477400
+    H      -2.22026800    0.22974700   -0.36930400
+    H      -1.27503300   -1.33448700   -0.02353300
+    H      -0.09156300    1.55494400   -0.27778500
+    H       1.51531400   -0.52147000   -1.04437500
+    H       1.26896500   -1.08735700    0.60240200
+    H       2.09199500    0.44744000    0.31913300
+  converged: true
+  ess_versions:
+    freq: Gaussian 09, Revision D.01
+    opt: Gaussian 09, Revision D.01
+    sp: Gaussian 09, Revision D.01
+  formula: C3H7
+  freq_constraints: []
+  freq_input: calcs/TSs/TS0/freq_a3556/input.gjf
+  freq_log: calcs/TSs/TS0/freq_a3556/input.log
+  freq_n_imag: 1
+  gsm_log: calcs/TS_guesses/TS0/tsg1/stringfile.xyz0000
+  imag_freq_cm1: -1896.188
+  inchi: null
+  inchi_key: null
+  irc_converged: null
+  irc_log_directions: []
+  irc_logs: []
+  is_ts: true
+  label: TS0
+  multiplicity: 2
+  neb_log: null
+  opt_constraints: []
+  opt_converged: true
+  opt_final_energy_hartree: -118.45784660900001
+  opt_input: calcs/TSs/TS0/opt_a3555/input.gjf
+  opt_input_xyz: |-
+    C      -1.31316800   -0.25454500   -0.03917200
+    C      -0.04117600    0.51580600    0.02251100
+    C       1.27596300   -0.19050000   -0.02355800
+    H      -0.81912300    0.28661900    1.03477400
+    H      -2.22026800    0.22974700   -0.36930400
+    H      -1.27503300   -1.33448700   -0.02353300
+    H      -0.09156300    1.55494400   -0.27778500
+    H       1.51531400   -0.52147000   -1.04437500
+    H       1.26896500   -1.08735700    0.60240200
+    H       2.09199500    0.44744000    0.31913300
+  opt_log: calcs/TSs/TS0/opt_a3555/input.log
+  opt_n_steps: 2
+  original_label: null
+  rxn_label: i-C3H7 <=> n-C3H7
+  smiles: null
+  sp_constraints: []
+  sp_energy_hartree: -118.45784660900001
+  sp_input: calcs/TSs/TS0/opt_a3555/input.gjf
+  sp_log: calcs/TSs/TS0/opt_a3555/input.log
+  statmech:
+    e0_kj_mol: 277.478
+    external_symmetry: 1
+    harmonic_frequencies_cm1:
+    - 206.3945
+    - 366.0656
+    - 373.2662
+    - 701.2793
+    - 735.4454
+    - 896.5042
+    - 926.3241
+    - 1040.8683
+    - 1162.9104
+    - 1190.1153
+    - 1266.5487
+    - 1367.1518
+    - 1418.771
+    - 1433.0052
+    - 1482.3998
+    - 1491.8641
+    - 2190.3892
+    - 2963.8882
+    - 3040.5125
+    - 3089.4168
+    - 3145.9716
+    - 3164.4611
+    - 3257.6231
+    is_linear: false
+    optical_isomers: 2
+    point_group: C1
+    rigid_rotor_kind: asymmetric_top
+    spin_multiplicity: 2
+    torsions: []
+  successful_ts_methods:
+  - autotst
+  - autotst
+  - autotst
+  - autotst
+  - xtb-gsm
+  - orca_neb
+  thermo: null
+  xyz: |-
+    C      -1.31306500   -0.25457700   -0.03914500
+    C      -0.04113900    0.51596100    0.02231700
+    C       1.27589000   -0.19054600   -0.02352400
+    H      -0.81892400    0.28653000    1.03472600
+    H      -2.22033000    0.22960400   -0.36892900
+    H      -1.27476100   -1.33450500   -0.02373600
+    H      -0.09157700    1.55519800   -0.27756600
+    H       1.51612600   -0.52022200   -1.04454900
+    H       1.26752600   -1.08818800    0.60123900
+    H       2.09182700    0.44655400    0.32092500
+  zpe_hartree: 0.0840898

@@ -55,5 +55,5 @@ def get_geometry(geometry_id: int, session: Session = Depends(get_db)):
         .options(selectinload(Geometry.atoms))
     )
     if row is None:
-        raise NotFoundError(f"Geometry {geometry_id} not found")
+        raise NotFoundError("Geometry not found")
     return GeometryRead.model_validate(row)

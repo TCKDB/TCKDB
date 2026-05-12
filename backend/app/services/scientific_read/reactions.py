@@ -44,14 +44,24 @@ from app.services.scientific_read.common import (
     validate_pagination,
     visible_statuses,
 )
+from app.services.scientific_read.handles import (
+    NO_MATCH,
+    reconcile_reaction_entry_pair,
+    reconcile_reaction_pair,
+)
+from app.services.scientific_read.internal_ids import (
+    filter_internal_ids_from_resolved,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "kinetics",
     "transition_states",
     "species",
     "review",
+    "internal_ids",
     "all",
 }
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 _DEFAULT_SORT_ECHO = "review_rank,has_kinetics,has_transition_state,created_at,id"
 
@@ -79,11 +89,40 @@ def search_reactions(
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
     includes = validate_includes(
-        request.include, _LEGAL_INCLUDE_TOKENS, "/scientific/reactions/search"
+        request.include,
+        _LEGAL_INCLUDE_TOKENS,
+        "/scientific/reactions/search",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
-    if not request.reactants and not request.products:
+    includes = filter_internal_ids_from_resolved(includes)
+
+    # Phase C: explicit reaction/reaction_entry refs are valid identifier
+    # sources. Resolve them first so we can short-circuit (NO_MATCH) and
+    # so we know whether the caller supplied any identifier at all.
+    reaction_pair = reconcile_reaction_pair(
+        session, id_value=None, ref_value=request.reaction_ref
+    )
+    reaction_entry_pair = reconcile_reaction_entry_pair(
+        session, id_value=None, ref_value=request.reaction_entry_ref
+    )
+    if reaction_pair is NO_MATCH or reaction_entry_pair is NO_MATCH:
+        return _empty_response(request, includes, offset, limit)
+    reaction_ref_id: int | None = reaction_pair  # type: ignore[assignment]
+    reaction_entry_ref_id: int | None = reaction_entry_pair  # type: ignore[assignment]
+
+    has_participant_identifier = bool(request.reactants or request.products)
+    if (
+        not has_participant_identifier
+        and reaction_ref_id is None
+        and reaction_entry_ref_id is None
+    ):
+        # F6: a request that supplies neither a chemistry filter nor an
+        # explicit ref is the anonymous-enumeration shape. Reject with
+        # a stable code so clients can branch on it.
         raise ValueError(
-            "missing_identifier: at least one of reactants/products is required."
+            "missing_reaction_search_filter: at least one of "
+            "{reactants, products, reaction_ref, reaction_entry_ref} "
+            "is required to scope a reaction search."
         )
 
     # Resolve reactant / product SMILES to species IDs.
@@ -99,14 +138,47 @@ def search_reactions(
     if request.products and len(product_species_ids) != len(request.products):
         return _empty_response(request, includes, offset, limit)
 
-    # Find reaction entries whose participants match the requested set in the
-    # appropriate orientation(s).
-    candidate_entry_ids = _find_matching_reaction_entry_ids(
-        session,
-        reactant_species_ids=reactant_species_ids,
-        product_species_ids=product_species_ids,
-        direction=request.direction,
-    )
+    if has_participant_identifier:
+        # Find reaction entries whose participants match the requested set
+        # in the appropriate orientation(s).
+        candidate_entry_ids = _find_matching_reaction_entry_ids(
+            session,
+            reactant_species_ids=reactant_species_ids,
+            product_species_ids=product_species_ids,
+            direction=request.direction,
+        )
+        # Phase C: narrow the participant-derived candidate set with
+        # the explicit ref filters in SQL, so we still pay only one
+        # round-trip.
+        if reaction_entry_ref_id is not None:
+            candidate_entry_ids = [
+                eid for eid in candidate_entry_ids if eid == reaction_entry_ref_id
+            ]
+        if reaction_ref_id is not None and candidate_entry_ids:
+            keep = set(
+                session.scalars(
+                    select(ReactionEntry.id).where(
+                        ReactionEntry.id.in_(candidate_entry_ids),
+                        ReactionEntry.reaction_id == reaction_ref_id,
+                    )
+                ).all()
+            )
+            candidate_entry_ids = [eid for eid in candidate_entry_ids if eid in keep]
+    else:
+        # F6: no participant filter → build the candidate set from the
+        # explicit ref filters using SQL ``WHERE`` rather than scanning
+        # every reaction_entry id into memory.
+        ref_filters = []
+        if reaction_entry_ref_id is not None:
+            ref_filters.append(ReactionEntry.id == reaction_entry_ref_id)
+        if reaction_ref_id is not None:
+            ref_filters.append(ReactionEntry.reaction_id == reaction_ref_id)
+        # ``ref_filters`` is non-empty here because the earlier
+        # missing_reaction_search_filter check guarantees at least one
+        # of these refs is set when no participant filter is supplied.
+        candidate_entry_ids = list(
+            session.scalars(select(ReactionEntry.id).where(*ref_filters)).all()
+        )
 
     if not candidate_entry_ids:
         return _empty_response(request, includes, offset, limit)
@@ -156,9 +228,16 @@ def search_reactions(
     # Bulk fetch participants and availability for surviving entries.
     participants_by_entry = _load_participants(session, [e.id for e in entries])
     species_by_entry = _entry_species_ids(session, [e.id for e in entries])
+    all_participant_species_entry_ids = {
+        se
+        for participants in participants_by_entry.values()
+        for se, _, _ in participants
+    }
     smiles_by_entry_species = _resolve_participant_smiles(
-        session,
-        {se for participants in participants_by_entry.values() for se, _, _ in participants},
+        session, all_participant_species_entry_ids
+    )
+    refs_by_entry_species = _resolve_participant_refs(
+        session, all_participant_species_entry_ids
     )
     availability_by_entry = _compute_availability(session, [e.id for e in entries])
 
@@ -193,6 +272,7 @@ def search_reactions(
         reactants = [
             ReactionParticipantSummary(
                 species_entry_id=se,
+                species_entry_ref=refs_by_entry_species.get(se, ""),
                 smiles=smiles_by_entry_species.get(se, ""),
                 participant_index=idx,
             )
@@ -202,6 +282,7 @@ def search_reactions(
         products = [
             ReactionParticipantSummary(
                 species_entry_id=se,
+                species_entry_ref=refs_by_entry_species.get(se, ""),
                 smiles=smiles_by_entry_species.get(se, ""),
                 participant_index=idx,
             )
@@ -212,7 +293,9 @@ def search_reactions(
         records.append(
             ReactionScientificRecord(
                 reaction_id=chem.id,
+                reaction_ref=chem.public_ref,
                 reaction_entry_id=e.id,
+                reaction_entry_ref=e.public_ref,
                 equation=equation,
                 matched_direction=matched_direction_by_entry[e.id],
                 reversible=chem.reversible,
@@ -398,6 +481,20 @@ def _resolve_participant_smiles(
     return {se_id: smiles for se_id, smiles in rows}
 
 
+def _resolve_participant_refs(
+    session: Session, species_entry_ids: set[int]
+) -> dict[int, str]:
+    """Map species_entry_id → public_ref (Phase B)."""
+    if not species_entry_ids:
+        return {}
+    rows = session.execute(
+        select(SpeciesEntry.id, SpeciesEntry.public_ref).where(
+            SpeciesEntry.id.in_(species_entry_ids)
+        )
+    ).all()
+    return {se_id: ref for se_id, ref in rows}
+
+
 def _compute_availability(
     session: Session, entry_ids: list[int]
 ) -> dict[int, ReactionAvailability]:
@@ -526,6 +623,10 @@ def _filter_echo(request: ReactionSearchRequest) -> dict[str, object]:
     echo["direction"] = request.direction.value
     if request.family is not None:
         echo["family"] = request.family
+    if request.reaction_ref is not None:
+        echo["reaction_ref"] = request.reaction_ref
+    if request.reaction_entry_ref is not None:
+        echo["reaction_entry_ref"] = request.reaction_entry_ref
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:

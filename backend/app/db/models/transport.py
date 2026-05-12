@@ -13,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import ScientificOriginKind, TransportCalculationRole
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from app.db.models.workflow import WorkflowToolRelease
 
 
-class Transport(Base, TimestampMixin, CreatedByMixin):
+class Transport(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Transport properties attached to a species entry."""
 
     __tablename__ = "transport"
