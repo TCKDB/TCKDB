@@ -1,0 +1,61 @@
+# Canonical TCKDB backend runtime environment.
+#
+# Create the env on a new machine with:
+#   conda env create -f backend/environment.yml
+#   # or, for the Pi / containers:
+#   micromamba create -n tckdb_env -f backend/environment.yml
+#
+# Activate with:
+#   conda activate tckdb_env
+#
+# Scope: runtime dependencies required by the FastAPI app, Alembic
+# migrations, and helper scripts under backend/. Test / dev / publishing
+# packages (pytest, black, twine, matplotlib, ...) are deliberately
+# excluded — install those separately on developer workstations.
+#
+# Source of truth: this file. The future Pi Dockerfile must install
+# from this manifest rather than re-listing dependencies inline.
+
+name: tckdb_env
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.13
+
+  # Web framework + ASGI server. `uvicorn-standard` pulls in
+  # httptools / uvloop / websockets / watchfiles, which match what the
+  # current dev env runs.
+  - fastapi
+  - uvicorn-standard
+
+  # ORM + driver + migrations. `psycopg-c` is the optional C accelerator
+  # used by `psycopg` v3 when available.
+  - sqlalchemy
+  - psycopg
+  - psycopg-c
+  - alembic
+
+  # Validation / settings.
+  - pydantic
+  - pydantic-settings
+  - python-dotenv
+
+  # Chemistry.
+  - rdkit
+  - numpy
+
+  # Artifact storage (MinIO / S3) and outbound HTTP (literature lookup).
+  - boto3
+  - requests
+
+  # YAML I/O (ARC output.yml ingest, config).
+  - pyyaml
+
+  # pip-only deps (not packaged on conda-forge).
+  - pip
+  - pip:
+      # Drop-in replacement for the abandoned `isbnlib`; the runtime
+      # import path remains `import isbnlib`.
+      - isbnlib2
