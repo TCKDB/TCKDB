@@ -839,6 +839,24 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calc_freq_result_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('calculation_id', name=op.f('pk_calc_freq_result'))
     )
+    op.create_table('calc_freq_mode',
+    sa.Column('calculation_id', sa.BigInteger(), nullable=False),
+    sa.Column('mode_index', sa.Integer(), nullable=False),
+    sa.Column('frequency_cm1', sa.Float(), nullable=False),
+    sa.Column('is_imaginary', sa.Boolean(), nullable=False),
+    sa.Column('reduced_mass_amu', sa.Float(), nullable=True),
+    sa.Column('force_constant_mdyne_angstrom', sa.Float(), nullable=True),
+    sa.Column('ir_intensity_km_mol', sa.Float(), nullable=True),
+    sa.Column('raman_activity', sa.Float(), nullable=True),
+    sa.Column('symmetry_label', sa.Text(), nullable=True),
+    sa.Column('note', sa.Text(), nullable=True),
+    sa.CheckConstraint('mode_index >= 1', name=op.f('ck_calc_freq_mode_mode_index_ge_1')),
+    sa.CheckConstraint('reduced_mass_amu IS NULL OR reduced_mass_amu > 0', name=op.f('ck_calc_freq_mode_reduced_mass_amu_gt_0')),
+    sa.CheckConstraint('ir_intensity_km_mol IS NULL OR ir_intensity_km_mol >= 0', name=op.f('ck_calc_freq_mode_ir_intensity_km_mol_ge_0')),
+    sa.CheckConstraint('(is_imaginary AND frequency_cm1 < 0) OR (NOT is_imaginary AND frequency_cm1 >= 0)', name=op.f('ck_calc_freq_mode_frequency_sign_matches_is_imaginary')),
+    sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calc_freq_mode_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
+    sa.PrimaryKeyConstraint('calculation_id', 'mode_index', name=op.f('pk_calc_freq_mode'))
+    )
     op.create_table('calc_opt_result',
     sa.Column('calculation_id', sa.BigInteger(), nullable=False),
     sa.Column('converged', sa.Boolean(), nullable=True),
@@ -1750,6 +1768,7 @@ def downgrade() -> None:
     op.drop_table('calculation_constraint')
     op.execute("DROP TYPE IF EXISTS constraint_kind")
     op.drop_table('calc_opt_result')
+    op.drop_table('calc_freq_mode')
     op.drop_table('calc_freq_result')
     op.drop_table('network_kinetics')
     op.execute("DROP TYPE IF EXISTS pressure_unit")

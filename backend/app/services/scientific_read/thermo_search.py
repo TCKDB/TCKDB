@@ -58,18 +58,18 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "calculations",
     "artifacts",
     "review",
-    "statmech",
-    "conformers",
     "internal_ids",
     "all",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
-# Tokens that are legal at this endpoint but only meaningful to the
-# inner thermo retrieval. The remaining tokens (statmech, conformers)
-# are accepted but treated as no-ops at the data-shape level in v0;
-# their counts are exposed via the species entry's availability flags
-# upstream and via the thermo provenance summary downstream.
+# Tokens forwarded to the inner thermo retrieval. The set matches the
+# public legal tokens minus ``internal_ids`` / ``all`` — there are no
+# v0 no-op tokens at this endpoint (a previous draft accepted
+# ``statmech`` and ``conformers`` as accepted-but-no-op placeholders;
+# they were removed in favor of returning ``unknown_include_token`` so
+# the include grammar matches its semantics). If a future phase wires
+# either token through, add it back here and to ``_LEGAL_INCLUDE_TOKENS``.
 _THERMO_LEGAL_INCLUDES_PASSTHROUGH = {"provenance", "calculations", "review", "artifacts"}
 
 _DEFAULT_SORT_ECHO = (
@@ -171,9 +171,9 @@ def search_thermo(
         return _empty_response(request, includes, offset, limit)
 
     # 2) Per entry, retrieve thermo with the documented detail-endpoint
-    # ordering already applied. Only the includes that the inner endpoint
-    # supports are forwarded; the search-endpoint-level extras (statmech,
-    # conformers) are accepted but no-op'd in v0.
+    # ordering already applied. The forwarded include set equals the
+    # outer legal set minus ``internal_ids`` / ``all`` (which the inner
+    # endpoint does not accept directly).
     inner_includes = sorted(includes & _THERMO_LEGAL_INCLUDES_PASSTHROUGH)
 
     flat: list[ThermoSearchRecord] = []

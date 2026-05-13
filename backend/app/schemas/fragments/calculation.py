@@ -140,17 +140,86 @@ class OptResultPayload(SchemaBase):
     final_energy_hartree: float | None = None
 
 
+class FrequencyModePayload(BaseModel):
+    """One vibrational mode within a frequency calculation result.
+
+    Imaginary modes use a negative ``frequency_cm1`` together with
+    ``is_imaginary=True``. Producers that have only positive magnitudes
+    must flip the sign before upload; the cross-field validator below
+    refuses inconsistent combinations rather than silently normalising,
+    so the source of truth stays at the producer boundary.
+
+    :param mode_index: 1-based ordering from the ESS output.
+    :param frequency_cm1: Harmonic frequency in cm⁻¹; negative for
+        imaginary modes.
+    :param is_imaginary: Whether the mode is imaginary. Required and
+        consistent with the sign of ``frequency_cm1``.
+    :param reduced_mass_amu: Reduced mass in amu, when reported.
+    :param force_constant_mdyne_angstrom: Force constant in
+        mDyne/Ångström, when reported.
+    :param ir_intensity_km_mol: IR intensity in km/mol, when reported.
+    :param raman_activity: Raman activity (Å⁴/amu), when reported.
+    :param symmetry_label: Irreducible representation label
+        (e.g. ``"A1"``, ``"E"``), when reported.
+    :param note: Optional free-text annotation.
+    """
+
+    mode_index: int = Field(ge=1)
+    frequency_cm1: float
+    is_imaginary: bool
+    reduced_mass_amu: float | None = Field(default=None, gt=0)
+    force_constant_mdyne_angstrom: float | None = None
+    ir_intensity_km_mol: float | None = Field(default=None, ge=0)
+    raman_activity: float | None = None
+    symmetry_label: str | None = None
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_sign_matches_is_imaginary(self) -> Self:
+        if self.is_imaginary and self.frequency_cm1 >= 0:
+            raise ValueError(
+                "is_imaginary=True requires frequency_cm1 < 0. Negate the "
+                "magnitude at the producer boundary before upload."
+            )
+        if not self.is_imaginary and self.frequency_cm1 < 0:
+            raise ValueError(
+                "frequency_cm1 < 0 requires is_imaginary=True."
+            )
+        return self
+
+
 class FreqResultPayload(SchemaBase):
     """Optional inline result for a frequency calculation.
 
     :param n_imag: Number of imaginary frequencies.
     :param imag_freq_cm1: Value of the imaginary frequency in cm⁻¹.
     :param zpe_hartree: Zero-point energy in hartree.
+    :param modes: Optional per-mode frequency rows. When supplied,
+        ``mode_index`` values must be unique within the payload, and
+        the count of imaginary modes must agree with ``n_imag`` if both
+        are present.
     """
 
     n_imag: int | None = None
     imag_freq_cm1: float | None = None
     zpe_hartree: float | None = None
+    modes: list[FrequencyModePayload] | None = None
+
+    @model_validator(mode="after")
+    def validate_modes_consistency(self) -> Self:
+        if self.modes is None:
+            return self
+        indices = [m.mode_index for m in self.modes]
+        if len(set(indices)) != len(indices):
+            raise ValueError("mode_index values must be unique within a freq result.")
+        if self.n_imag is not None:
+            imaginary_count = sum(1 for m in self.modes if m.is_imaginary)
+            if imaginary_count != self.n_imag:
+                raise ValueError(
+                    f"n_imag={self.n_imag} does not match imaginary mode count "
+                    f"{imaginary_count} in modes."
+                )
+        return self
 
 
 class SPResultPayload(SchemaBase):

@@ -76,3 +76,39 @@ def test_invalid_include_token_returns_422(client, db_session):
 def test_missing_identifier_returns_422(client, db_session):
     resp = client.get("/api/v1/scientific/thermo/search")
     assert resp.status_code == 422
+
+
+def test_statmech_include_token_rejected_at_thermo_search(client, db_session):
+    """``include=statmech`` is not legal on ``/scientific/thermo/search``.
+
+    A previous draft accepted it as a no-op placeholder; Option B in
+    the v0 include-grammar reconciliation removes no-op acceptance so
+    the grammar matches its semantics. If a future phase wires
+    statmech data through here, this test should be updated alongside
+    the legal-set change.
+    """
+    _seed(db_session, smiles="O")
+    resp = client.get(
+        "/api/v1/scientific/thermo/search?smiles=O&include=statmech"
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert "detail" in body and "error" not in body
+    assert body["detail"].startswith("unknown_include_token:")
+    assert "statmech" in body["detail"]
+
+
+def test_conformers_include_token_rejected_at_thermo_search(client, db_session):
+    """``include=conformers`` is not legal on ``/scientific/thermo/search``.
+
+    Same rationale as the statmech test above.
+    """
+    _seed(db_session, smiles="N")
+    resp = client.get(
+        "/api/v1/scientific/thermo/search?smiles=N&include=conformers"
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert "detail" in body and "error" not in body
+    assert body["detail"].startswith("unknown_include_token:")
+    assert "conformers" in body["detail"]

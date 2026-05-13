@@ -39,6 +39,7 @@ from app.schemas.fragments.calculation import (
     CalculationParameterObservation,
     CalculationWithResultsPayload,
     FreqResultPayload,
+    FrequencyModePayload,
     OptResultPayload,
     SPResultPayload,
 )
@@ -113,6 +114,7 @@ class CalculationIn(SchemaBase):
     freq_n_imag: int | None = None
     freq_imag_freq_cm1: float | None = None
     freq_zpe_hartree: float | None = None
+    freq_frequencies_cm1: list[float] | None = None
 
     # Parsed execution-control parameters (routed through the shared seam).
     parameters: list[CalculationParameterObservation] | None = None
@@ -155,11 +157,26 @@ def calculation_in_to_with_results_payload(
         calc_in.freq_n_imag is not None
         or calc_in.freq_imag_freq_cm1 is not None
         or calc_in.freq_zpe_hartree is not None
+        or calc_in.freq_frequencies_cm1 is not None
     ):
+        modes = None
+        if calc_in.freq_frequencies_cm1 is not None:
+            # Sign convention: negative magnitudes mean imaginary modes; the
+            # canonical FrequencyModePayload validator will reject any
+            # inconsistent pair.
+            modes = [
+                FrequencyModePayload(
+                    mode_index=i + 1,
+                    frequency_cm1=value,
+                    is_imaginary=value < 0,
+                )
+                for i, value in enumerate(calc_in.freq_frequencies_cm1)
+            ]
         freq_result = FreqResultPayload(
             n_imag=calc_in.freq_n_imag,
             imag_freq_cm1=calc_in.freq_imag_freq_cm1,
             zpe_hartree=calc_in.freq_zpe_hartree,
+            modes=modes,
         )
     if (
         calc_in.type == CalculationType.sp

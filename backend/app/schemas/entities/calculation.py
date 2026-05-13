@@ -267,8 +267,20 @@ class CalculationFreqResultUpdate(SchemaBase):
     zpe_uncertainty_hartree: float | None = None
 
 
+class CalculationFreqModeRead(ORMBaseSchema):
+    mode_index: int
+    frequency_cm1: float
+    is_imaginary: bool
+    reduced_mass_amu: float | None = None
+    force_constant_mdyne_angstrom: float | None = None
+    ir_intensity_km_mol: float | None = None
+    raman_activity: float | None = None
+    symmetry_label: str | None = None
+    note: str | None = None
+
+
 class CalculationFreqResultRead(CalculationFreqResultBase, ORMBaseSchema):
-    pass
+    modes: list[CalculationFreqModeRead] = []
 
 
 class CalculationScanCoordinatePayload(BaseModel):

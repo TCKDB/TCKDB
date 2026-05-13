@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     CHAR,
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -427,6 +428,61 @@ class CalculationFreqResult(Base):
     zpe_uncertainty_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
 
     calculation: Mapped["Calculation"] = relationship(back_populates="freq_result")
+    modes: Mapped[list["CalculationFreqMode"]] = relationship(
+        primaryjoin=(
+            "CalculationFreqResult.calculation_id == "
+            "foreign(CalculationFreqMode.calculation_id)"
+        ),
+        order_by="CalculationFreqMode.mode_index",
+        viewonly=True,
+    )
+
+
+class CalculationFreqMode(Base):
+    """One vibrational mode parsed from a frequency calculation.
+
+    Imaginary modes are stored as negative ``frequency_cm1`` together
+    with ``is_imaginary = true``. The flag is redundant with the sign
+    but keeps query intent explicit (``WHERE is_imaginary``) and makes
+    ingestion bugs that drop the sign survivable.
+    """
+
+    __tablename__ = "calc_freq_mode"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    mode_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    frequency_cm1: Mapped[float] = mapped_column(nullable=False)
+    is_imaginary: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    reduced_mass_amu: Mapped[Optional[float]] = mapped_column(nullable=True)
+    force_constant_mdyne_angstrom: Mapped[Optional[float]] = mapped_column(
+        nullable=True
+    )
+    ir_intensity_km_mol: Mapped[Optional[float]] = mapped_column(nullable=True)
+    raman_activity: Mapped[Optional[float]] = mapped_column(nullable=True)
+    symmetry_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("calculation_id", "mode_index"),
+        CheckConstraint("mode_index >= 1", name="mode_index_ge_1"),
+        CheckConstraint(
+            "reduced_mass_amu IS NULL OR reduced_mass_amu > 0",
+            name="reduced_mass_amu_gt_0",
+        ),
+        CheckConstraint(
+            "ir_intensity_km_mol IS NULL OR ir_intensity_km_mol >= 0",
+            name="ir_intensity_km_mol_ge_0",
+        ),
+        CheckConstraint(
+            "(is_imaginary AND frequency_cm1 < 0) "
+            "OR (NOT is_imaginary AND frequency_cm1 >= 0)",
+            name="frequency_sign_matches_is_imaginary",
+        ),
+    )
 
 
 class CalculationScanResult(Base):

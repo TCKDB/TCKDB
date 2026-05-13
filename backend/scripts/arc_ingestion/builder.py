@@ -171,6 +171,8 @@ def _make_freq_calculation(
         calc["freq_n_imag"] = sp_info.freq_result.n_imag
         calc["freq_imag_freq_cm1"] = sp_info.freq_result.imag_freq_cm1
         calc["freq_zpe_hartree"] = sp_info.freq_result.zpe_hartree
+        if sp_info.freq_result.frequencies_cm1:
+            calc["freq_frequencies_cm1"] = list(sp_info.freq_result.frequencies_cm1)
 
     if include_artifacts:
         artifacts = []

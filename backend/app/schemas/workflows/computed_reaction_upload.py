@@ -155,6 +155,7 @@ class ComputedReactionCalculationIn(_BaseCalculationIn):
                 "freq_n_imag",
                 "freq_imag_freq_cm1",
                 "freq_zpe_hartree",
+                "freq_frequencies_cm1",
             ):
                 if getattr(self, forbidden) is not None:
                     raise ValueError(

@@ -779,6 +779,31 @@ Ownership of geometric coordinate metadata across calculation tables:
 - `zpe_hartree`
 - `zpe_uncertainty_hartree`
 
+`calc_freq_mode` fields (per-mode vibrational data, optional sibling of
+`calc_freq_result`):
+
+- `calculation_id`
+- `mode_index` (1-based, unique per calculation)
+- `frequency_cm1` (negative for imaginary modes)
+- `is_imaginary` (boolean; sign-consistent with `frequency_cm1` via DB CHECK)
+- `reduced_mass_amu`
+- `force_constant_mdyne_angstrom`
+- `ir_intensity_km_mol`
+- `raman_activity`
+- `symmetry_label`
+- `note`
+
+Convention: imaginary modes are stored as **negative** `frequency_cm1`
+together with `is_imaginary = true`. The two-way constraint
+`(is_imaginary AND frequency_cm1 < 0) OR (NOT is_imaginary AND frequency_cm1 >= 0)`
+is enforced at the DB. Producers that only have positive magnitudes
+must flip the sign before upload; the Pydantic
+`FrequencyModePayload` validator refuses inconsistent combinations.
+When both `n_imag` and `modes` are supplied on a freq result, the
+imaginary mode count must agree with `n_imag`. Mode rows are optional
+— existing payloads without `modes` continue to validate and persist
+exactly as before.
+
 `calc_geometry_validation` fields:
 
 - `calculation_id`

@@ -234,9 +234,9 @@ def get_opt_result(calculation_id: int, session: Session = Depends(get_db)):
 def get_freq_result(calculation_id: int, session: Session = Depends(get_db)):
     _get_calculation_or_404(calculation_id, session)
     row = session.scalar(
-        select(CalculationFreqResult).where(
-            CalculationFreqResult.calculation_id == calculation_id
-        )
+        select(CalculationFreqResult)
+        .where(CalculationFreqResult.calculation_id == calculation_id)
+        .options(selectinload(CalculationFreqResult.modes))
     )
     if row is None:
         raise NotFoundError(

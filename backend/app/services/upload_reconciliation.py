@@ -32,6 +32,13 @@ W_N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
 W_N_IMAG_SUGGESTS_TS = "n_imag_suggests_transition_state"
 W_N_IMAG_HIGHER_ORDER_SADDLE = "n_imag_higher_order_saddle"
 
+# Layer 1b: parser fidelity. A freq calculation that declares a parser
+# (``parameters_parser_version`` is set) but provides no per-mode
+# frequencies is suspicious — either the parser didn't run a freq job
+# or the producer dropped the mode list. Surface as a warning, not a
+# blocker, since manual uploads without a parser version remain valid.
+W_FREQ_PARSED_NO_MODES = "freq_parser_extracted_but_modes_missing"
+
 # Layer 2: deduction-based
 W_ELECTRONIC_STATE_CONTRADICTS_METHOD = "electronic_state_contradicts_method"
 W_TERM_SYMBOL_MISMATCH = "term_symbol_mismatch"
@@ -96,7 +103,11 @@ def build_ess_result_from_upload(
                 freq_payload = c.freq_result
                 break
         if freq_payload is not None:
+            frequencies_cm1: list[float] = []
+            if freq_payload.modes:
+                frequencies_cm1 = [m.frequency_cm1 for m in freq_payload.modes]
             freq = ESSFreqResult(
+                frequencies_cm1=frequencies_cm1,
                 n_imag=freq_payload.n_imag or 0,
                 imag_freq_cm1=freq_payload.imag_freq_cm1,
                 zpe_hartree=freq_payload.zpe_hartree,
@@ -177,6 +188,45 @@ def _get_payload_value(
 # ---------------------------------------------------------------------------
 
 _MINIMUM_KINDS = frozenset({StationaryPointKind.minimum, StationaryPointKind.vdw_complex})
+
+
+def check_freq_parser_fidelity(
+    calcs: list[CalculationWithResultsPayload],
+) -> list[UploadWarning]:
+    """Warn when a parsed freq calc has no per-mode frequencies.
+
+    A calculation that declares ``parameters_parser_version`` (the marker
+    that an automated ESS parser produced this payload) but ships a
+    freq result without ``modes`` likely lost the mode list somewhere
+    in the pipeline. Manual uploads with no parser version are left
+    alone — they have always been allowed to omit modes.
+
+    The check fires once per offending calculation; the warning's
+    ``field`` carries enough context for the producer to locate it.
+    """
+    warnings: list[UploadWarning] = []
+    for index, calc in enumerate(calcs):
+        if calc.freq_result is None:
+            continue
+        if calc.parameters_parser_version is None:
+            continue
+        if calc.freq_result.modes:
+            continue
+        warnings.append(
+            UploadWarning(
+                field=f"calculations[{index}].freq_result.modes",
+                code=W_FREQ_PARSED_NO_MODES,
+                message=(
+                    "freq_result was emitted by an ESS parser "
+                    f"(parameters_parser_version={calc.parameters_parser_version!r}) "
+                    "but carries no per-mode frequencies. Per-mode rows "
+                    "are required for downstream statmech recomputation; "
+                    "re-run the parser or attach the mode list before "
+                    "promoting the record."
+                ),
+            )
+        )
+    return warnings
 
 
 def _check_n_imag(
@@ -310,6 +360,10 @@ def reconcile_species_entry_full(
         freq_n_imag = extract_freq_n_imag(primary_calc, additional)
     if freq_n_imag is not None:
         warnings.extend(_check_n_imag(payload.species_entry_kind, freq_n_imag))
+
+    # Layer 1b: parser-fidelity check across all freq-bearing calcs.
+    if primary_calc is not None:
+        warnings.extend(check_freq_parser_fidelity([primary_calc, *additional]))
 
     # Layer 2: deduction-based checks
     ess_result = build_ess_result_from_upload(

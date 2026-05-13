@@ -15,6 +15,7 @@ from app.db.models.calculation import (
     Calculation,
     CalculationConstraint,
     CalculationDependency,
+    CalculationFreqMode,
     CalculationFreqResult,
     CalculationInputGeometry,
     CalculationIRCPoint,
@@ -471,6 +472,22 @@ def persist_calculation_result(
                 zpe_hartree=calc_upload.freq_result.zpe_hartree,
             )
         )
+        if calc_upload.freq_result.modes:
+            for mode in calc_upload.freq_result.modes:
+                session.add(
+                    CalculationFreqMode(
+                        calculation_id=calculation.id,
+                        mode_index=mode.mode_index,
+                        frequency_cm1=mode.frequency_cm1,
+                        is_imaginary=mode.is_imaginary,
+                        reduced_mass_amu=mode.reduced_mass_amu,
+                        force_constant_mdyne_angstrom=mode.force_constant_mdyne_angstrom,
+                        ir_intensity_km_mol=mode.ir_intensity_km_mol,
+                        raman_activity=mode.raman_activity,
+                        symmetry_label=mode.symmetry_label,
+                        note=mode.note,
+                    )
+                )
 
     if calc_upload.sp_result is not None:
         session.add(

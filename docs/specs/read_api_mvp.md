@@ -50,6 +50,75 @@ Out of scope (per roadmap §Non-goals):
 
 ---
 
+## Lookup vs selection vs provenance
+
+These three ideas are deliberately kept separate across `/scientific/*`. Conflating them is the most common source of API design drift.
+
+| Concept | What it answers | How the existing spec expresses it |
+|---|---|---|
+| **Lookup** | "Which records are candidates?" | The default `collapse=all` mode of every search/list endpoint, plus the primitive `/lookup/*` routes (out of scope for this spec, but the source of the *match* envelope). |
+| **Selection** | "Which one record should I take?" | `collapse=first` — returns the single first record under the endpoint's documented default ordering. There is **no** client-supplied `selection_policy` parameter in v0 (see *Sort vocabulary*); each endpoint's ordering is fixed and documented in its **Sorting** subsection. |
+| **Provenance** | "Why should I trust this record, and where did it come from?" | The `include=` tokens that expose calculation evidence, validation, review history, and supporting calculations — primarily `include=provenance`, `include=calculations`, `include=review`, `include=artifacts`, plus the endpoint-specific tokens listed in the per-endpoint *include=* legal sets (see Appendix). |
+
+The fixed application order is **filter → sort → collapse → pagination**, then `include=` expansion. Selection is not a filter; it does not change what `review_summary.total` counts (which always reflects the pre-collapse, post-filter candidate set, per *Collapse semantics*).
+
+A future v1 may introduce a constrained client-facing selection vocabulary; v0 keeps the surface closed and relies on the documented default sort to make "first" deterministic and inspectable.
+
+---
+
+## Non-goals (explicit)
+
+The Scope §Out of scope list above is the binding constraint. Restating in the form the read/query checklist asks for, the following are explicitly **not** in scope for this spec:
+
+- route implementation (this is a spec; implementation lives in Phase 3 / Phase 4)
+- frontend behavior of any kind
+- GraphQL or any non-REST query surface
+- a public SQL or generic query endpoint
+- LLM summaries, natural-language ranking, or recommendation
+- bulk export endpoints
+- commercial-access policy, quotas, or billing
+- new ingestion / upload schemas
+- ARC-specific behavior (TCKDB is workflow-tool agnostic; ARC is one of several possible clients)
+- returning the full provenance graph by default (provenance is opt-in via `include=`)
+- automatic "best record" selection beyond the documented `collapse=first` ordering — there is no policy that claims to be scientifically optimal across all use cases
+- changes to `/lookup/*`, direct entity routes, ARC, or `tckdb-client`
+
+---
+
+## Identifiers: public refs vs internal IDs
+
+Identifier policy is **not redefined here**. This subsection is a pointer.
+
+- Long-term direction: public APIs should prefer public refs/handles where available; internal integer IDs are not the long-term external contract.
+- Current Phase 2 behavior: response examples in this spec carry integer `*_id` fields as the primary identifiers. The full mapping of when integer IDs appear, when they are hidden, and the `internal_ids` opt-in token (gated by the `ALLOW_PUBLIC_INTERNAL_IDS` deployment flag) is defined in the identifier specs below, not in this file.
+- Any change to which identifiers are primary in `/scientific/*` responses must update those two specs first; this spec follows.
+
+Cross-references:
+
+- [`docs/specs/internal_ids_visibility_policy.md`](./internal_ids_visibility_policy.md) — `internal_ids` include token, deployment flag, dropped-state echo.
+- [`docs/specs/public_identifier_policy.md`](./public_identifier_policy.md) — public-ref naming, scope, migration posture.
+
+If those specs evolve toward public refs as the primary contract, the response examples in this spec become the *transitional* shape and should be updated at that point. They are not authoritative on identifier policy.
+
+---
+
+## Relationship to legacy / entity routes
+
+The repo exposes two parallel read surfaces. Both are real, both are mounted, and they serve different audiences:
+
+| Surface | Examples | Audience | Status |
+|---|---|---|---|
+| **Scientific** (`/api/v1/scientific/*`) | This spec's five endpoints, plus `/scientific/species-calculations/search`, `/scientific/geometries/...`, `/scientific/calculations/{id}/provenance`, `/scientific/thermo/search`, `/scientific/kinetics/search` | External clients asking chemistry questions ("what does TCKDB know about this species/reaction?"). | **Recommended** for new clients. |
+| **Entity / legacy** (`/api/v1/species`, `/api/v1/reactions`, `/api/v1/thermo`, `/api/v1/kinetics`, `/api/v1/calculations`, `/api/v1/transition-states`, `/api/v1/geometries`, `/api/v1/statmech`, `/api/v1/transport`, `/api/v1/conformer-groups`, etc.) | One-row-per-table reads, exposed-as-is. | Admin / internal / debug / compatibility. May be retained for direct inspection; not the user-facing scientific contract. |
+
+Guidance:
+
+- New external clients (including future SDK work and `tckdb-client` read paths) should target `/scientific/*` first and fall back to entity routes only when an inspection use case has no scientific counterpart.
+- Entity routes remain useful for: admin dashboards, debugging individual rows, compatibility for callers that already integrated against them, and migrations.
+- **Deprecation / sunset is a separate task** and is explicitly out of scope here. This spec does not gate, version, or remove any entity route.
+
+---
+
 ## Common conventions
 
 ### URL prefix
@@ -74,8 +143,10 @@ Client-supplied `sort=` is **not accepted** in v0. Each endpoint uses its docume
 
 ```
 422 Unprocessable Entity
-{ "error": { "code": "client_sort_not_supported", "message": "sort= is not accepted in v0; the per-endpoint default sort applies." } }
+{ "detail": "client_sort_not_supported: sort= is not accepted in v0; the per-endpoint default sort applies." }
 ```
+
+(Phase D error envelope. See *Error model* below for the full shape and the stable-code policy.)
 
 The default sort for each endpoint is documented in its **Sorting** subsection. Per-key ASC/DESC direction is fixed by the default and is not configurable. A future v1 may open a constrained per-endpoint `sort=` vocabulary; v0 keeps the surface closed.
 
@@ -213,8 +284,8 @@ Responses include:
 |---|---|
 | 200 | Success — possibly with empty `records` array |
 | 400 | Malformed request (bad JSON, missing required path param) |
-| 404 | Path-param resource does not exist (e.g., unknown `reaction_entry_id`) |
-| 422 | Validation error — bad enum value, unknown `include=` token, conflicting filters |
+| 404 | Path-param resource does not exist (e.g., unknown reaction-entry handle) |
+| 422 | Validation error — bad enum value, unknown `include=` token, conflicting filters, out-of-range pagination |
 
 Empty result sets are **not** 404. A search with zero matches returns:
 
@@ -222,17 +293,57 @@ Empty result sets are **not** 404. A search with zero matches returns:
 { "request": {...}, "review_summary": {"approved": 0, ...}, "records": [], "pagination": {...} }
 ```
 
-Error body:
+#### Error envelope (Phase D)
+
+Scientific read errors use the existing FastAPI-style envelope shared with the rest of the backend (write paths, lookup paths, admin paths). Stable machine-readable codes **are required**, but in Phase D they are exposed through the `detail` string prefix for most errors and through a separate top-level `code` field on selected 404s.
+
+**422 — validation errors** (unknown `include=` token, client-supplied `sort=`, malformed handle, conflicting id/ref pair, out-of-range pagination, unsupported direction value, temperature-range incoherence, POST query-string keys):
 
 ```json
-{
-  "error": {
-    "code": "unknown_include_token",
-    "message": "Token 'banana' is not a legal include= value for /scientific/species/search.",
-    "legal_values": ["thermo", "review", "all"]
-  }
-}
+{ "detail": "unknown_include_token: token(s) ['banana'] not legal for /scientific/species/search. Legal tokens: ['all', 'conformers', 'review', 'statmech', 'thermo', 'transport']" }
 ```
+
+```json
+{ "detail": "client_sort_not_supported: sort= is not accepted in v0; the per-endpoint default sort applies." }
+```
+
+The stable code is the **prefix of `detail` up to the first `": "`**. The legal-token list, when applicable, is rendered into the message tail (it is **not** a separate structured field in Phase D). Codes currently in use include:
+
+```
+client_sort_not_supported
+unknown_include_token
+invalid_handle
+handle_type_mismatch
+species_handle_conflict, species_entry_handle_conflict,
+reaction_handle_conflict, reaction_entry_handle_conflict,
+level_of_theory_handle_conflict, calculation_handle_conflict
+post_search_fields_must_be_in_body
+invalid_pagination               (covers limit_too_large / offset_too_large)
+invalid_temperature_range
+```
+
+FastAPI-native validation errors (bad enum value on a `Query(...)`, malformed JSON body) keep FastAPI's default 422 shape (`{"detail": [{"loc": [...], "msg": "...", "type": "..."}]}`); they are emitted before the service layer runs and carry no service-level code.
+
+**404 — path handle not found** (unknown integer id or unknown public ref on a `{handle}` path):
+
+```json
+{ "detail": "reaction_entry not found", "code": "handle_not_found" }
+```
+
+```json
+{ "detail": "reaction_entry not found (reaction_entry_ref='rxe_abc...')", "code": "handle_not_found" }
+```
+
+Integer-id lookups deliberately do **not** echo the integer back in `detail` (it is logged server-side instead — see `services/scientific_read/handles.py`). Refs are public by design and are echoed.
+
+**Frontend / client compatibility note.** Frontend and client code should **not** expect `body.error.code` in Phase D. For current scientific read errors, either:
+
+- read `body.detail` and (where stable codes are needed) take the prefix up to the first `": "`, or
+- read the dedicated top-level `body.code` field where present (currently 404 handle-not-found only).
+
+The shape is locked by [`backend/tests/api/scientific/test_error_envelope_shape.py`](../../backend/tests/api/scientific/test_error_envelope_shape.py).
+
+**Open question (Phase E):** whether a future phase should normalize all read/write errors to a richer envelope (e.g. `{ "error": { "code": ..., "message": ..., "legal_values": [...] } }`). Not implemented now. If pursued, it must change the entire FastAPI surface together — read paths cannot diverge from write/lookup/admin paths without breaking shared client error handling.
 
 ---
 
@@ -273,7 +384,7 @@ Single record's direct review state. No chain traversal (per D7).
 
 ```json
 {
-  "level_of_theory_id": 12,
+  "level_of_theory_ref": "lot_xxxxxxxxxxxxxxxxxxxxxxxxxx",
   "method": "wb97xd",
   "basis": "def2tzvp",
   "dispersion": null,
@@ -286,7 +397,7 @@ Single record's direct review state. No chain traversal (per D7).
 
 ```json
 {
-  "software_release_id": 5,
+  "software_release_ref": "srel_xxxxxxxxxxxxxxxxxxxxxxxxxx",
   "software": "Gaussian",
   "version": "16.C.01"
 }
@@ -296,7 +407,7 @@ Single record's direct review state. No chain traversal (per D7).
 
 ```json
 {
-  "calculation_id": 110,
+  "calculation_ref": "calc_xxxxxxxxxxxxxxxxxxxxxxxxxx",
   "calculation_type": "opt",
   "converged": true,
   "geometry_validation_status": "passed",
@@ -334,8 +445,8 @@ not_present   — no CalculationSCFStability row exists for this calculation
   "primary_calculation": { "...CalculationEvidenceSummary": "" },
   "level_of_theory": { "...LevelOfTheorySummary": "" },
   "software": { "...SoftwareReleaseSummary": "" },
-  "supporting_calculation_ids": [60, 61, 62, 63],
-  "submission_id": 41
+  "supporting_calculation_refs": ["calc_aaa...", "calc_bbb...", "calc_ccc...", "calc_ddd..."],
+  "submission_ref": "sub_xxxxxxxxxxxxxxxxxxxxxxxxxx"
 }
 ```
 
@@ -343,7 +454,7 @@ not_present   — no CalculationSCFStability row exists for this calculation
 
 ```json
 {
-  "calculation_id": 61,
+  "calculation_ref": "calc_xxxxxxxxxxxxxxxxxxxxxxxxxx",
   "method": "gsm",
   "converged": true
 }
@@ -351,18 +462,18 @@ not_present   — no CalculationSCFStability row exists for this calculation
 
 ### `ValidationSummary` and `SCFStabilitySummary`
 
-Both fragments share the same outer shape — a status string plus the calculation ID it describes.
+Both fragments share the same outer shape — a status string plus the calculation handle it describes.
 
 **`ValidationSummary`** (geometry validation outcome for a calculation):
 
 ```json
-{ "status": "passed | warning | fail | not_present", "calculation_id": 60 }
+{ "status": "passed | warning | fail | not_present", "calculation_ref": "calc_xxxxxxxxxxxxxxxxxxxxxxxxxx" }
 ```
 
 **`SCFStabilitySummary`** (SCF wavefunction stability outcome for a calculation):
 
 ```json
-{ "status": "stable | unstable | stabilized | inconclusive | not_present", "calculation_id": 60 }
+{ "status": "stable | unstable | stabilized | inconclusive | not_present", "calculation_ref": "calc_xxxxxxxxxxxxxxxxxxxxxxxxxx" }
 ```
 
 `not_present` indicates that no row exists in the corresponding validation/stability table for this calculation. It is an API-level value, not stored in the database.
@@ -500,7 +611,7 @@ Identity-resolved species discovery. Find candidate species by chemical identifi
   "review_summary": { "approved": 0, "under_review": 0, "not_reviewed": 1, "deprecated": 0, "rejected": 0, "total": 1 },
   "records": [
     {
-      "species_id": 12,
+      "species_ref": "spc_xxxxxxxxxxxxxxxxxxxxxxxxxx",
       "canonical_smiles": "C[CH2]",
       "inchi_key": "ZGEGCLOFRBLKSE-UHFFFAOYSA-N",
       "formula": "C2H5",
@@ -508,7 +619,7 @@ Identity-resolved species discovery. Find candidate species by chemical identifi
       "multiplicity": 2,
       "entries": [
         {
-          "species_entry_id": 31,
+          "species_entry_ref": "spe_xxxxxxxxxxxxxxxxxxxxxxxxxx",
           "species_entry_kind": "minimum",
           "electronic_state_kind": "ground",
           "review": { "...RecordReviewBadge": "" },
@@ -526,6 +637,8 @@ Identity-resolved species discovery. Find candidate species by chemical identifi
   "pagination": { "offset": 0, "limit": 50, "returned": 1, "total": 1 }
 }
 ```
+
+> Internal integer ids (`species_id`, `species_entry_id`, etc.) are **not** present in the default response. They are surfaced only when the request includes `include=internal_ids` **and** the deployment sets `ALLOW_PUBLIC_INTERNAL_IDS=true`. See [`internal_ids_visibility_policy.md`](./internal_ids_visibility_policy.md) and [`public_identifier_policy.md`](./public_identifier_policy.md).
 
 ### Sorting (L3)
 
@@ -638,20 +751,20 @@ Reactant/product lists encode poorly in URLs once SMILES contain query character
   "review_summary": { "approved": 1, "under_review": 0, "not_reviewed": 3, "deprecated": 0, "rejected": 0, "total": 4 },
   "records": [
     {
-      "reaction_id": 44,
-      "reaction_entry_id": 51,
+      "reaction_ref": "rxn_xxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "reaction_entry_ref": "rxe_xxxxxxxxxxxxxxxxxxxxxxxxxx",
       "equation": "[CH3] + c1ccccc1 <=> CH4 + [c]1ccccc1",
       "matched_direction": "forward",
       "reversible": true,
       "family": "h_abstraction",
       "review": { "...RecordReviewBadge": "" },
       "reactants": [
-        { "species_entry_id": 31, "smiles": "[CH3]", "participant_index": 0 },
-        { "species_entry_id": 27, "smiles": "c1ccccc1", "participant_index": 1 }
+        { "species_entry_ref": "spe_aaa...", "smiles": "[CH3]", "participant_index": 0 },
+        { "species_entry_ref": "spe_bbb...", "smiles": "c1ccccc1", "participant_index": 1 }
       ],
       "products": [
-        { "species_entry_id": 32, "smiles": "CH4", "participant_index": 0 },
-        { "species_entry_id": 33, "smiles": "[c]1ccccc1", "participant_index": 1 }
+        { "species_entry_ref": "spe_ccc...", "smiles": "CH4", "participant_index": 0 },
+        { "species_entry_ref": "spe_ddd...", "smiles": "[c]1ccccc1", "participant_index": 1 }
       ],
       "availability": {
         "has_kinetics": true,
@@ -664,6 +777,8 @@ Reactant/product lists encode poorly in URLs once SMILES contain query character
   "pagination": { "offset": 0, "limit": 50, "returned": 1, "total": 1 }
 }
 ```
+
+> Internal integer ids (`reaction_id`, `reaction_entry_id`, `species_entry_id`) are hidden by default. See the §1 note above.
 
 ### Test matrix
 
@@ -871,11 +986,11 @@ The response is the same envelope for every record category. Two examples follow
     "collapse": "all",
     "include": ["provenance"]
   },
-  "reaction_entry_id": 51,
+  "reaction_entry_ref": "rxe_xxxxxxxxxxxxxxxxxxxxxxxxxx",
   "review_summary": { "approved": 0, "under_review": 0, "not_reviewed": 2, "deprecated": 0, "rejected": 0, "total": 2 },
   "records": [
     {
-      "kinetics_id": 101,
+      "kinetics_ref": "kin_xxxxxxxxxxxxxxxxxxxxxxxxxx",
       "scientific_origin": "computed",
       "model_kind": "modified_arrhenius",
       "review": { "...RecordReviewBadge": "" },
@@ -895,10 +1010,10 @@ The response is the same envelope for every record category. Two examples follow
       "temperature_coverage": { "...TemperatureCoverage": "" },
       "evidence_completeness": { "...EvidenceCompletenessBreakdown": "" },
       "provenance": {
-        "transition_state_entry_id": 9,
-        "ts_opt_calculation_id": 60,
-        "ts_freq_calculation_id": 62,
-        "ts_sp_calculation_id": 63,
+        "transition_state_entry_ref": "tse_xxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "ts_opt_calculation_ref": "calc_aaa...",
+        "ts_freq_calculation_ref": "calc_bbb...",
+        "ts_sp_calculation_ref": "calc_ccc...",
         "path_search": { "...PathSearchSummary": "" },
         "irc": null,
         "primary_level_of_theory": { "...LevelOfTheorySummary": "" },
@@ -919,7 +1034,7 @@ The response is the same envelope for every record category. Two examples follow
 
 ```json
 {
-  "kinetics_id": 202,
+  "kinetics_ref": "kin_yyyyyyyyyyyyyyyyyyyyyyyyyy",
   "scientific_origin": "experimental",
   "model_kind": "modified_arrhenius",
   "review": { "...RecordReviewBadge": "" },
@@ -939,10 +1054,10 @@ The response is the same envelope for every record category. Two examples follow
   "temperature_coverage": { "...TemperatureCoverage": "" },
   "evidence_completeness": { "...EvidenceCompletenessBreakdown": "" },
   "provenance": {
-    "transition_state_entry_id": null,
-    "ts_opt_calculation_id": null,
-    "ts_freq_calculation_id": null,
-    "ts_sp_calculation_id": null,
+    "transition_state_entry_ref": null,
+    "ts_opt_calculation_ref": null,
+    "ts_freq_calculation_ref": null,
+    "ts_sp_calculation_ref": null,
     "path_search": null,
     "irc": null,
     "primary_level_of_theory": null,
@@ -950,7 +1065,7 @@ The response is the same envelope for every record category. Two examples follow
     "geometry_validation": null,
     "scf_stability": null,
     "literature": {
-      "id": 77,
+      "literature_ref": "lit_xxxxxxxxxxxxxxxxxxxxxxxxxx",
       "title": "Example kinetic study",
       "year": 1999
     },
@@ -1105,11 +1220,11 @@ If a predicate cannot be computed because its supporting read path does not exis
     "collapse": "all",
     "include": ["provenance"]
   },
-  "species_entry_id": 31,
+  "species_entry_ref": "spe_xxxxxxxxxxxxxxxxxxxxxxxxxx",
   "review_summary": { "approved": 1, "under_review": 0, "not_reviewed": 0, "deprecated": 0, "rejected": 0, "total": 1 },
   "records": [
     {
-      "thermo_id": 88,
+      "thermo_ref": "thm_xxxxxxxxxxxxxxxxxxxxxxxxxx",
       "model_kind": "nasa",
       "review": { "...RecordReviewBadge": "" },
       "h298_kj_mol": -12.3,
@@ -1128,9 +1243,9 @@ If a predicate cannot be computed because its supporting read path does not exis
         "primary_calculation": { "...CalculationEvidenceSummary": "" },
         "level_of_theory": { "...LevelOfTheorySummary": "" },
         "software": { "...SoftwareReleaseSummary": "" },
-        "statmech_id": 200,
-        "freq_calculation_id": 62,
-        "sp_calculation_id": 63
+        "statmech_ref": "sm_xxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "freq_calculation_ref": "calc_aaa...",
+        "sp_calculation_ref": "calc_bbb..."
       }
     }
   ],
@@ -1225,8 +1340,8 @@ The `transition_states` sub-array is **independent** of the `kinetics` sub-array
     "include": ["species", "kinetics", "transition_states", "calculations", "path_search", "irc", "scans", "conformers", "artifacts", "review"]
   },
   "reaction_entry": {
-    "id": 51,
-    "reaction_id": 44,
+    "reaction_entry_ref": "rxe_xxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "reaction_ref": "rxn_xxxxxxxxxxxxxxxxxxxxxxxxxx",
     "equation": "[CH3] + c1ccccc1 <=> CH4 + [c]1ccccc1",
     "reversible": true,
     "family": "h_abstraction",
@@ -1235,15 +1350,15 @@ The `transition_states` sub-array is **independent** of the `kinetics` sub-array
   "review_summary": { "approved": 2, "under_review": 0, "not_reviewed": 4, "deprecated": 0, "rejected": 0, "total": 6 },
   "species": {
     "reactants": [
-      { "species_entry_id": 31, "smiles": "[CH3]", "participant_index": 0, "review": { "...RecordReviewBadge": "" } }
+      { "species_entry_ref": "spe_aaa...", "smiles": "[CH3]", "participant_index": 0, "review": { "...RecordReviewBadge": "" } }
     ],
     "products": [
-      { "species_entry_id": 32, "smiles": "CH4",   "participant_index": 0, "review": { "...RecordReviewBadge": "" } }
+      { "species_entry_ref": "spe_ccc...", "smiles": "CH4",   "participant_index": 0, "review": { "...RecordReviewBadge": "" } }
     ]
   },
   "kinetics": [
     {
-      "kinetics_id": 101,
+      "kinetics_ref": "kin_xxxxxxxxxxxxxxxxxxxxxxxxxx",
       "scientific_origin": "computed",
       "model_kind": "modified_arrhenius",
       "review": { "...RecordReviewBadge": "" },
@@ -1252,10 +1367,10 @@ The `transition_states` sub-array is **independent** of the `kinetics` sub-array
       "uncertainty": { "A_uncertainty": null, "A_uncertainty_kind": null, "n_uncertainty": null, "Ea_uncertainty_kj_mol": null },
       "evidence_completeness": { "...EvidenceCompletenessBreakdown": "" },
       "provenance": {
-        "transition_state_entry_id": 9,
-        "ts_opt_calculation_id": 60,
-        "ts_freq_calculation_id": 62,
-        "ts_sp_calculation_id": 63,
+        "transition_state_entry_ref": "tse_xxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "ts_opt_calculation_ref": "calc_aaa...",
+        "ts_freq_calculation_ref": "calc_bbb...",
+        "ts_sp_calculation_ref": "calc_ccc...",
         "path_search": { "...PathSearchSummary": "" },
         "irc": null,
         "primary_level_of_theory": { "...LevelOfTheorySummary": "" },
@@ -1268,7 +1383,7 @@ The `transition_states` sub-array is **independent** of the `kinetics` sub-array
       }
     },
     {
-      "kinetics_id": 202,
+      "kinetics_ref": "kin_yyyyyyyyyyyyyyyyyyyyyyyyyy",
       "scientific_origin": "experimental",
       "model_kind": "modified_arrhenius",
       "review": { "...RecordReviewBadge": "" },
@@ -1277,17 +1392,17 @@ The `transition_states` sub-array is **independent** of the `kinetics` sub-array
       "uncertainty": { "A_uncertainty": 1.3, "A_uncertainty_kind": "multiplicative", "n_uncertainty": null, "Ea_uncertainty_kj_mol": 0.6 },
       "evidence_completeness": { "...EvidenceCompletenessBreakdown": "" },
       "provenance": {
-        "transition_state_entry_id": null,
-        "ts_opt_calculation_id": null,
-        "ts_freq_calculation_id": null,
-        "ts_sp_calculation_id": null,
+        "transition_state_entry_ref": null,
+        "ts_opt_calculation_ref": null,
+        "ts_freq_calculation_ref": null,
+        "ts_sp_calculation_ref": null,
         "path_search": null,
         "irc": null,
         "primary_level_of_theory": null,
         "primary_software": null,
         "geometry_validation": null,
         "scf_stability": null,
-        "literature": { "id": 77, "title": "Example kinetic study", "year": 1999 },
+        "literature": { "literature_ref": "lit_xxxxxxxxxxxxxxxxxxxxxxxxxx", "title": "Example kinetic study", "year": 1999 },
         "software_release": null,
         "workflow_tool_release": null
       }
@@ -1295,18 +1410,18 @@ The `transition_states` sub-array is **independent** of the `kinetics` sub-array
   ],
   "transition_states": [
     {
-      "transition_state_entry_id": 9,
+      "transition_state_entry_ref": "tse_xxxxxxxxxxxxxxxxxxxxxxxxxx",
       "review": { "...RecordReviewBadge": "" },
       "calculations": {
-        "ts_opt": { "calculation_id": 60, "type": "opt" },
-        "ts_guess": { "calculation_id": 61, "type": "path_search", "method": "gsm" },
-        "ts_freq": { "calculation_id": 62, "type": "freq" },
-        "ts_sp":   { "calculation_id": 63, "type": "sp" }
+        "ts_opt":   { "calculation_ref": "calc_aaa...", "type": "opt" },
+        "ts_guess": { "calculation_ref": "calc_ddd...", "type": "path_search", "method": "gsm" },
+        "ts_freq":  { "calculation_ref": "calc_bbb...", "type": "freq" },
+        "ts_sp":    { "calculation_ref": "calc_ccc...", "type": "sp" }
       },
       "dependencies": [
-        { "parent_calculation_id": 61, "child_calculation_id": 60, "role": "optimized_from" },
-        { "parent_calculation_id": 60, "child_calculation_id": 62, "role": "freq_on" },
-        { "parent_calculation_id": 60, "child_calculation_id": 63, "role": "single_point_on" }
+        { "parent_calculation_ref": "calc_ddd...", "child_calculation_ref": "calc_aaa...", "role": "optimized_from" },
+        { "parent_calculation_ref": "calc_aaa...", "child_calculation_ref": "calc_bbb...", "role": "freq_on" },
+        { "parent_calculation_ref": "calc_aaa...", "child_calculation_ref": "calc_ccc...", "role": "single_point_on" }
       ]
     }
   ],
@@ -1319,10 +1434,12 @@ The `transition_states` sub-array is **independent** of the `kinetics` sub-array
   "conformers": [],
   "artifacts": [],
   "review_records": [
-    { "record_type": "kinetics", "record_id": 101, "status": "approved", "reviewed_at": "..." }
+    { "record_type": "kinetics", "record_ref": "kin_xxxxxxxxxxxxxxxxxxxxxxxxxx", "status": "approved", "reviewed_at": "..." }
   ]
 }
 ```
+
+> Integer `*_id` fields (`reaction_entry.id`, `kinetics_id`, `transition_state_entry_id`, `calculation_id`, etc.) are not emitted by default. Add `include=internal_ids` on a deployment with `ALLOW_PUBLIC_INTERNAL_IDS=true` to get the legacy id-bearing shape back. See [`internal_ids_visibility_policy.md`](./internal_ids_visibility_policy.md).
 
 ### Test matrix
 
@@ -1340,6 +1457,43 @@ The `transition_states` sub-array is **independent** of the `kinetics` sub-array
 12. Client-supplied `sort=` → 422 (`client_sort_not_supported`).
 13. **`/full` includes non-TS-backed kinetics without fabricating TS links.** A reaction entry with both a TS-backed computational kinetics record and an experimental kinetics record returns both in `kinetics[]`; the experimental record's TS-chain provenance fields are all `null`; `transition_states[]` contains only the TS rows actually associated with the reaction entry, never invented from the experimental record.
 14. **`/full` returns experimental-only kinetics when no TS exists.** A reaction entry whose only kinetics is `scientific_origin=experimental` returns that record in `kinetics[]` and an empty `transition_states: []` (when `include=transition_states` is requested).
+
+---
+
+# Supporting endpoint index
+
+The five endpoints above are the MVP scientific contract. The following supporting endpoints already exist under `/api/v1/scientific/*` and complement the MVP. They are not respecified here — links point to their authoritative specs.
+
+| Endpoint | Methods | Status | Authoritative spec |
+|---|---|---|---|
+| `/api/v1/scientific/species-calculations/search` | GET, POST | implemented | [`docs/specs/species_calculation_search_api.md`](./species_calculation_search_api.md) |
+| `/api/v1/scientific/thermo/search` | GET, POST | implemented | (route-level; the path-scoped `/species-entries/{id}/thermo` in §4 is the MVP form. The standalone `/thermo/search` is a sibling discovery surface for cross-species queries.) |
+| `/api/v1/scientific/kinetics/search` | GET, POST | implemented | (route-level; the path-scoped `/reaction-entries/{id}/kinetics` in §3 is the MVP form. The standalone `/kinetics/search` is a sibling discovery surface for cross-reaction queries.) |
+| `/api/v1/scientific/geometries/{geometry_id}` | GET | implemented | (route-level; returns a geometry with its calculation-provenance attribution per [`docs/specs/path_search_calculation_schema.md`](./path_search_calculation_schema.md) and the lookup-side geometry contract.) |
+| `/api/v1/scientific/reaction-entries/{id}/full` | GET | implemented per §5 of this spec | This file, §5. |
+
+The path-scoped MVP endpoints (`/reaction-entries/{id}/kinetics`, `/species-entries/{id}/thermo`) and the cross-cutting search siblings (`/kinetics/search`, `/thermo/search`) serve different shapes of question — "what kinetics exist for *this* reaction entry?" vs "find me kinetics matching these filters across the DB". POST coverage on the standalone search siblings is documented at the route level and is not extended to the MVP endpoints by this spec.
+
+Planned (not yet implemented as `/scientific/*`):
+
+- `/api/v1/scientific/reaction-entries/{id}/transition-states` — currently inspectable through `/full?include=transition_states`. A dedicated path-scoped surface is *planned*, not implemented.
+- Standalone `/scientific/species` detail read (the MVP form is `/scientific/species/search`; per-species detail uses the legacy `/api/v1/species/{id}` until a `/scientific/*` detail endpoint is specified).
+
+---
+
+# Implementation-order rationale
+
+The MVP and supporting endpoints should be built in this order. The ordering follows the dependency graph of response fragments and the relative cost of getting each one wrong.
+
+1. **Species search** (`/scientific/species/search`). Foundation. Establishes `RecordReviewBadge`, `ReviewStatusSummary`, the `request` echo, pagination, and the include-token grammar. Has no inbound dependencies on other MVP endpoints.
+2. **Reaction search** (`/scientific/reactions/search`). Reuses §1 fragments and adds participant-matching semantics (`direction`, canonical-structure match). Establishes the POST-by-body convention. Required before any reaction-entry-scoped endpoint can be exercised by clients.
+3. **Thermo search/read** (`/scientific/species-entries/{id}/thermo` + supporting `/scientific/thermo/search`). Introduces `ProvenanceSummary`, `LevelOfTheorySummary`, `TemperatureCoverage`, and the thermo flavor of `EvidenceCompletenessBreakdown`. Builds on §1 species identity.
+4. **Kinetics search/read** (`/scientific/reaction-entries/{id}/kinetics` + supporting `/scientific/kinetics/search`). Reuses §3 provenance fragments and adds the kinetics-specific shapes: `parameters` per `model_kind`, `uncertainty`, `tunneling`, TS-backed provenance chain, and the kinetics flavor of `EvidenceCompletenessBreakdown`. Builds on §2 reaction identity.
+5. **Full reaction provenance** (`/scientific/reaction-entries/{id}/full`). Compositional — consumes the fragments built in §1–§4 plus the joined transition-state and calculation-graph data. Cheapest to build last because every sub-fragment is already specified and tested.
+6. **Supporting geometry / calculation / provenance reads.** (`/scientific/geometries/{id}`, `/scientific/calculations/{id}/provenance`, `/scientific/species-calculations/search`, and the planned `/reaction-entries/{id}/transition-states`.) Useful but not blocking for the headline questions in §1–§5; implementing them earlier risks duplicating fragment shapes that the MVP endpoints will later refine.
+7. **Legacy-route deprecation planning** (separate document, separate task). Only after `/scientific/*` is the canonical surface for the questions §1–§5 answer should there be a deprecation conversation about `/api/v1/species`, `/api/v1/thermo`, `/api/v1/kinetics`, etc. — and that conversation belongs in its own spec, not here.
+
+Why this order rather than e.g. building `/full` first: `/full` reuses every fragment defined by §1–§4. Implementing it before the constituent endpoints means inventing those fragment shapes inside a composite document where they are hard to test in isolation. Building them in their search/read endpoints first locks the shapes; `/full` then becomes a straight composition.
 
 ---
 
@@ -1368,12 +1522,57 @@ These are not blockers for spec acceptance — they are notes for the service-la
 
 # Appendix: per-endpoint `include=` legal sets
 
+## MVP endpoints (§1–§5)
+
 | Endpoint | Legal `include=` tokens | `all` expands to |
 |---|---|---|
-| `species/search` | `thermo, statmech, transport, conformers, review, all` | all five |
-| `reactions/search` | `kinetics, transition_states, species, review, all` | all four |
-| `reaction-entries/{id}/kinetics` | `provenance, calculations, transition_states, path_search, irc, review, artifacts, all` | all seven |
-| `species-entries/{id}/thermo` | `provenance, calculations, statmech, review, artifacts, all` | all five |
-| `reaction-entries/{id}/full` | `species, kinetics, transition_states, calculations, path_search, irc, scans, conformers, artifacts, review, all` | all ten |
+| `species/search` | `thermo, statmech, transport, conformers, review, internal_ids, all` | all public tokens (six), `internal_ids` opt-in only |
+| `reactions/search` | `kinetics, transition_states, species, review, internal_ids, all` | all public tokens (five), `internal_ids` opt-in only |
+| `reaction-entries/{handle}/kinetics` | `provenance, calculations, transition_states, path_search, irc, review, artifacts, internal_ids, all` | all public tokens (eight), `internal_ids` opt-in only |
+| `species-entries/{handle}/thermo` | `provenance, calculations, statmech, review, artifacts, internal_ids, all` | all public tokens (six), `internal_ids` opt-in only |
+| `reaction-entries/{handle}/full` | `species, kinetics, transition_states, calculations, path_search, irc, scans, conformers, artifacts, review, internal_ids, all` | all public tokens (eleven), `internal_ids` opt-in only |
 
-Tokens not listed for an endpoint → 422.
+## Supporting endpoints
+
+These endpoints are implemented under `/api/v1/scientific/*` but live outside the MVP §1–§5 set. Their authoritative specs are listed in the *Supporting endpoint index*. Their legal include sets are reproduced here for completeness.
+
+| Endpoint | Token | Meaning | Implemented |
+|---|---|---|---|
+| `/scientific/geometries/{handle}` | `review` | attach `RecordReviewBadge` to the geometry-attribution record(s) | yes |
+| | `provenance` | attach the calculation(s) that produced/consumed the geometry | yes |
+| | `internal_ids` | opt-in (deployment-gated) restoration of integer `*_id` fields | yes |
+| | `all` | expands to `{provenance, review}`; `internal_ids` stays opt-in | yes |
+| `/scientific/thermo/search` | `provenance` | attach `ProvenanceSummary` to each thermo record | yes |
+| | `calculations` | attach `CalculationEvidenceSummary[]` to each thermo record | yes |
+| | `artifacts` | attach artifact descriptors for the source calculations | yes |
+| | `review` | attach `RecordReviewBadge` to each thermo record | yes |
+| | `internal_ids` | opt-in (deployment-gated) | yes |
+| | `all` | expands to all public tokens above; `internal_ids` stays opt-in | yes |
+
+> `statmech` and `conformers` were briefly accepted as no-op placeholders on this endpoint; they were removed so the include grammar matches its semantics. Supplying either now returns `422 unknown_include_token`. If a future phase wires the underlying data through, the tokens get added back to the legal set and the Appendix at the same time.
+| `/scientific/kinetics/search` | `provenance` | kinetics `ProvenanceSummary` per record | yes |
+| | `calculations` | source `CalculationEvidenceSummary[]` per kinetics record | yes |
+| | `artifacts` | artifact descriptors for source calculations | yes |
+| | `review` | `RecordReviewBadge` per kinetics record | yes |
+| | `species` | reactant/product `SpeciesEntrySummary[]` per record | yes |
+| | `transition_states` | `TransitionStateSummary[]` per TS-backed record (omitted for non-TS-backed records — see §3) | yes |
+| | `path_search` | `PathSearchSummary` when present in the TS chain | yes |
+| | `irc` | IRC summary when present | yes |
+| | `internal_ids` | opt-in (deployment-gated) | yes |
+| | `all` | expands to all public tokens above; `internal_ids` stays opt-in | yes |
+| `/scientific/species-calculations/search` | `provenance` | calculation `ProvenanceSummary` per record | yes |
+| | `calculations` | full `CalculationEvidenceSummary` per record | yes |
+| | `artifacts` | artifact descriptors per calculation | yes |
+| | `review` | `RecordReviewBadge` per record | yes |
+| | `conformers` | conformer fingerprint/group summary per record | yes (summary) |
+| | `geometry` | geometry summary on the calculation (XYZ stays opt-in via `/geometries/{handle}`) | yes (summary; full XYZ via dedicated endpoint) |
+| | `validation` | `ValidationSummary` per record | yes |
+| | `scf_stability` | `SCFStabilitySummary` per record | yes |
+| | `internal_ids` | opt-in (deployment-gated) | yes |
+| | `all` | expands to all public tokens above; `internal_ids` stays opt-in | yes |
+
+## Rules
+
+- Tokens not listed for an endpoint → 422 (`unknown_include_token`).
+- `internal_ids` is always opt-in: it does **not** join the `all` expansion, and the deployment flag `ALLOW_PUBLIC_INTERNAL_IDS` gates whether the token has any effect (silently dropped otherwise; the dropped state is reflected in the `request.include` echo).
+- Tokens partially implemented (e.g. summary-only at the data-shape level) are still listed as `yes` here when they produce *some* response surface — the per-endpoint section documents the depth. No-op tokens are not accepted: a future phase that wires real data through is what re-introduces the token to the legal set.
