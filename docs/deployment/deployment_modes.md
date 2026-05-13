@@ -46,7 +46,7 @@ no public exposure.
 Typical workflow-tool configuration:
 
 ```text
-TCKDB_BASE_URL=http://127.0.0.1:8000/api/v1
+TCKDB_BASE_URL=http://127.0.0.1:8010/api/v1
 TCKDB_API_KEY=...
 ```
 
@@ -66,10 +66,11 @@ their own users and downstream workflow tools.
   port. Router port-forwarding is discouraged.
 - Postgres and object storage (MinIO/S3) must never be exposed
   publicly. Only the API is reachable through the tunnel/proxy.
-- The Raspberry Pi deployment belongs in this mode — see
-  [raspberry_pi_hosted_deployment.md](raspberry_pi_hosted_deployment.md)
-  for the canonical hosted-Pi recipe and the hosted-safe
-  environment-variable defaults.
+- The canonical self-hosted single-node recipe belongs in this mode
+  — see [self_hosted_single_node.md](self_hosted_single_node.md) for
+  the worked example (tested on a Raspberry Pi but portable to any
+  small Linux server) and the hosted-safe environment-variable
+  defaults.
 - Quick tunnels (random `*.trycloudflare.com` URLs, ngrok free tier,
   etc.) are acceptable **for testing only** — they rotate, lack a
   managed cert story, and are not appropriate for stable hosting.
@@ -120,7 +121,7 @@ shared scientific resource.
 | Review/moderation workflow | Optional | Optional | Required |
 | Backups | Operator choice | Required | Required, with off-box copy |
 | Receives contribution bundles | No (origin) | Optional | Yes (primary import target) |
-| Reference recipe | [local-v0.md](local-v0.md) | [raspberry_pi_hosted_deployment.md](raspberry_pi_hosted_deployment.md), [shared-private-deployment.md](shared-private-deployment.md) | (operator-managed) |
+| Reference recipe | [local-v0.md](local-v0.md) | [self_hosted_single_node.md](self_hosted_single_node.md), [shared-private-deployment.md](shared-private-deployment.md) | (operator-managed) |
 
 ## Domain and tunnel requirements
 
@@ -193,7 +194,7 @@ TCKDB instance it is configured against.
 | Rate limiting | Optional | Required | Required |
 | OpenAPI / Swagger | Operator choice | Hidden (`EXPOSE_API_DOCS=false`) | Hidden |
 | TLS | Not required | Required (edge cert via Cloudflare or origin cert via proxy) | Required |
-| Secrets management | `.env` on local disk | `.env.pi` outside repo, restricted perms | Operator-managed (vault/secret store) |
+| Secrets management | `.env` on local disk | `.env.selfhosted` outside repo, restricted perms | Operator-managed (vault/secret store) |
 
 The full hosted-mode threat model and abuse controls are documented in
 [security_public_read_abuse_audit.md](../audits/security_public_read_abuse_audit.md)
@@ -238,7 +239,7 @@ related roadmap specs (`local-bundle-export-v0-spec.md`,
   reference.
 - [shared-private-deployment.md](shared-private-deployment.md) —
   shared LAN-only lab/group instance.
-- [raspberry_pi_hosted_deployment.md](raspberry_pi_hosted_deployment.md)
+- [self_hosted_single_node.md](self_hosted_single_node.md)
   — hosted Pi (Mode 2) reference.
 - [client-access-from-hpc.md](client-access-from-hpc.md) — HPC as a
   client environment.

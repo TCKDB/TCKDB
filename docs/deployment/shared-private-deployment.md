@@ -117,7 +117,7 @@ host:
 
 | Service       | Role                                                  | Where it runs                       |
 |---------------|-------------------------------------------------------|-------------------------------------|
-| PostgreSQL+RDKit | Identity, results, provenance, moderation          | Docker (`docker-compose.local.yml`) — or a managed PostgreSQL+RDKit service, or a [native install](native-advanced.md) |
+| PostgreSQL+RDKit | Identity, results, provenance, moderation          | Docker (`docker-compose.yml`) — or a managed PostgreSQL+RDKit service, or a [native install](native-advanced.md) |
 | MinIO / S3    | Artifact / object storage                              | Docker, or lab-managed S3           |
 | Backend API   | FastAPI, schema, auth, upload routes                   | Host conda env (`tckdb_env`)        |
 | Upload worker | Async ingestion (optional; can run inline in the API) | Host conda env, or separate proc    |
@@ -249,7 +249,7 @@ server {
     ssl_certificate_key /etc/ssl/lab/tckdb.key;
 
     location /api/ {
-        proxy_pass http://127.0.0.1:8000/api/;
+        proxy_pass http://127.0.0.1:8010/api/;
         proxy_set_header Host              $host;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

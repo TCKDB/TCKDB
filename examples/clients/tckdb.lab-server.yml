@@ -8,5 +8,5 @@
 # Do NOT commit a real key.
 
 tckdb:
-  base_url: "http://lab-tckdb.internal:8000/api/v1"
+  base_url: "http://lab-tckdb.internal:8010/api/v1"
   api_key: "tck_lab_replace_me"

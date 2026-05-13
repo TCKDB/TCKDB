@@ -1,54 +1,155 @@
+# ============================================================================
+# TCKDB - canonical Docker Compose stack
+#
+# One file, two deployment scenarios, four services. Picks between them via
+# `--env-file` and `--profile`:
+#
+#   Local developer machine
+#   -----------------------
+#       cp .env.example .env                  # one-time; edit DB_PASSWORD etc.
+#       docker compose up -d db minio         # core services
+#       docker compose --profile worker up -d # add the upload worker
+#
+#   Self-hosted single-node server
+#   ------------------------------
+#       cp .env.selfhosted.example .env.selfhosted   # one-time; fill secrets
+#       docker compose --env-file .env.selfhosted up -d db minio
+#       docker compose --env-file .env.selfhosted --profile cloudflare up -d
+#
+# Conventions baked in
+# --------------------
+#   * Non-secret identifiers (DB_USER, DB_NAME, DB_PORT, S3_ACCESS_KEY) have
+#     soft defaults so first-time devs can boot without bikeshedding.
+#   * Secrets (DB_PASSWORD, S3_SECRET_KEY) are REQUIRED via `${VAR:?...}`.
+#     Compose fails fast if they are unset.
+#   * All published ports bind to 127.0.0.1 only. Postgres and MinIO are
+#     never reachable from the LAN or public internet. Loopback is enough
+#     because the API and Alembic run on the host (`tckdb_env` conda env).
+#   * Bridge networking for the data plane; `network_mode: host` only for
+#     `cloudflared`, which must dial the host-side API at 127.0.0.1:8010.
+#   * Optional services live behind profiles so `docker compose config`
+#     and `docker compose up -d db minio` ignore them by default.
+#
+# Image arch note: informaticsmatters/rdkit-cartridge-debian publishes
+# both linux/amd64 and linux/arm64, so the same file runs on x86_64
+# servers and on arm64 (Raspberry Pi) without changes.
+# ============================================================================
+
 services:
   db:
     image: informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
     environment:
-      POSTGRES_USER: tckdb
-      POSTGRES_PASSWORD: tckdb
-      POSTGRES_DB: tckdb_dev
+      POSTGRES_USER: ${DB_USER:-tckdb}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set (copy .env.example to .env or pass --env-file)}
+      POSTGRES_DB: ${DB_NAME:-tckdb_dev}
+    # Loopback-only publication. NEVER change to "${DB_PORT}:5432" or
+    # "0.0.0.0:5432" - that exposes Postgres on the LAN.
     ports:
-      - 5432:5432
-    network_mode: host
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - tckdb_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tckdb} -d ${DB_NAME:-tckdb_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"
-    ports:
-      - 9000:9000
-      - 9001:9001
     environment:
-      MINIO_ROOT_USER: tckdb
-      MINIO_ROOT_PASSWORD: tckdb_secret
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-tckdb}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set (copy .env.example to .env or pass --env-file)}
+    # Both the S3 API (9000) and the admin console (9001) are loopback-
+    # only. The console is never exposed to the tunnel.
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - tckdb_minio:/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
+      interval: 30s
       timeout: 5s
       retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   # Optional standalone upload worker.
-  # Activate with: docker compose --profile worker up
   #
-  # Alternatively, set TCKDB_INLINE_WORKER=true on the api service to run
-  # the worker inside the API process (simpler, but shares CPU).
+  # Activate with:
+  #     docker compose --profile worker up -d
+  #
+  # Alternatively, set TCKDB_INLINE_WORKER=true in the API process to run
+  # the worker inline (simpler, but shares CPU). This service expects a
+  # pre-built `tckdb-api` image; see docs/deployment/native-advanced.md.
+  # It runs on the bridge network and reaches Postgres via the `db`
+  # service name, so its DB_HOST is hardcoded - it must not pick up the
+  # host-side DB_HOST=127.0.0.1 default.
   worker:
     profiles: ["worker"]
-    image: tckdb-api  # build this image the same way as the API service
+    image: tckdb-api
     command: >
       conda run -n tckdb_env python -m app.workers.upload_worker
     environment:
-      DB_USER: tckdb
-      DB_PASSWORD: tckdb
-      DB_NAME: tckdb_dev
-      DB_HOST: 127.0.0.1
+      DB_HOST: db
       DB_PORT: "5432"
+      DB_USER: ${DB_USER:-tckdb}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_NAME: ${DB_NAME:-tckdb_dev}
       TCKDB_INLINE_WORKER: "false"
-    network_mode: host
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Cloudflare Tunnel - OPTIONAL ingress.
+  #
+  # Sits behind the `cloudflare` profile, so it is NOT started by
+  # default. Bring it up with:
+  #     docker compose --env-file .env.selfhosted --profile cloudflare up -d cloudflared
+  #
+  # The token is provisioned out-of-band via `cloudflared tunnel create`
+  # + Cloudflare Zero Trust dashboard and injected as CLOUDFLARED_TUNNEL_TOKEN
+  # in .env.selfhosted. The tunnel forwards only the public hostname ->
+  # 127.0.0.1:8010. Postgres, MinIO, and the MinIO console are not part of
+  # any ingress rule.
+  #
+  # `network_mode: host` so the tunnel can reach the API on 127.0.0.1:8010
+  # without piercing a Docker bridge. Do NOT also run cloudflared as a
+  # host-side systemd unit at the same time - pick one or the other.
+  #
+  # The token uses a `:-` default (not `:?`) because Compose interpolates
+  # variables even when the profile is inactive; the runtime check happens
+  # when cloudflared starts.
+  cloudflared:
+    profiles: ["cloudflare"]
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARED_TUNNEL_TOKEN:-}
+    network_mode: host
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   tckdb_pgdata:

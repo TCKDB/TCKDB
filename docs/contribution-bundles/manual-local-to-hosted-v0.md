@@ -369,7 +369,7 @@ Concretely:
   endpoints are `${BASE_URL}/bundles/dry-run` and
   `${BASE_URL}/bundles/submit`. Double `/api/v1/api/v1/...` paths return
   `404`.
-- Pointing at the local URL (`http://localhost:8000/...`) sends the
+- Pointing at the local URL (`http://localhost:8010/...`) sends the
   bundle to the local instance and is almost never what you want.
 
 ### Dry-run succeeds but submit fails

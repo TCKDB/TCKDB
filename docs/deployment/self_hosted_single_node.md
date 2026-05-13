@@ -1,5 +1,11 @@
-# Raspberry Pi hosted deployment
+# Self-hosted single-node deployment
 
+> This guide describes a self-hosted single-node TCKDB deployment
+> using Docker Compose. It was tested on a Raspberry Pi, but the
+> architecture applies to any small Linux server — a home/lab server,
+> a small VPS, an old workstation. Substitute your host wherever the
+> doc mentions a Pi.
+>
 > This is the canonical recipe for **Mode 2 — self-hosted online
 > TCKDB**. For the broader picture (the three deployment modes,
 > domain/tunnel requirements, air-gapped HPC notes, and how data
@@ -7,10 +13,15 @@
 > [deployment_modes.md](deployment_modes.md) and the
 > [export/import roadmap](../roadmaps/export_import_roadmap.md).
 
-Deploy TCKDB on a Raspberry Pi 4 or 5 as a small **public scientific
-database**. Anonymous reads under `/api/v1/scientific/*` are allowed;
-authenticated writes are not. Public reach happens through a
-**Cloudflare Tunnel**, not a router port-forward.
+The deployment exposes anonymous reads under `/api/v1/scientific/*`
+publicly through a reverse-proxy/tunnel (Cloudflare Tunnel in this
+worked example) and restricts authenticated writes to seeded
+accounts. Anything with Docker, ~4 GB RAM, and SSD-backed storage
+will do as the host.
+
+Public reach happens through a **reverse-proxy or tunnel**
+(Cloudflare Tunnel is what this example walks through), **not** a
+router port-forward.
 
 This is the **hosted** sibling of [local-v0.md](local-v0.md) and
 [shared-private-deployment.md](shared-private-deployment.md). Same
@@ -21,13 +32,15 @@ application, same schema, same auth model — what changes is the
 - Anonymous scientific reads are allowed, but every hosted abuse-control
   knob is on.
 - Postgres and MinIO are not reachable from anything but the API
-  process on the Pi.
+  process on the host.
 - TLS terminates at Cloudflare; the hop from `cloudflared` to the API
   is loopback only.
 
-> **Not a separate edition.** Use [.env.pi.example](../../.env.pi.example)
-> and [docker-compose.pi.yml](../../docker-compose.pi.yml). The backend
-> code is the same code the rest of the deployment scenarios run.
+> **Not a separate edition.** Use
+> [.env.selfhosted.example](../../.env.selfhosted.example) and
+> [docker-compose.yml](../../docker-compose.yml).
+> The backend code is the same code the rest of the deployment
+> scenarios run.
 
 ---
 
@@ -37,7 +50,7 @@ application, same schema, same auth model — what changes is the
 |---|---|---|---|---|
 | [Single-machine private](local-v0.md) | One user | `127.0.0.1` | Open | Open registration |
 | [Shared private](shared-private-deployment.md) | A lab | Lab URL | Auth | Seeded accounts |
-| **Pi hosted (this doc)** | Public | Cloudflare hostname | Anon, throttled | Seeded accounts |
+| **Self-hosted single-node (this doc)** | Public | Tunnel hostname | Anon, throttled | Seeded accounts |
 | Hosted community | Public | Public URL | Anon, throttled | Operator-managed |
 
 ---
@@ -46,17 +59,24 @@ application, same schema, same auth model — what changes is the
 
 ### Hardware
 
-- Raspberry Pi **4 (4GB+) or 5 (4GB+)**. The 8GB SKU is more comfortable
-  if you expect concurrent search traffic.
-- USB-3 SSD or NVMe HAT for the Postgres volume. SD cards burn out
-  under WAL traffic.
-- Wired Ethernet preferred over Wi-Fi.
+Any small Linux server with:
+
+- 4 GB RAM minimum (8 GB more comfortable under concurrent search traffic).
+- SSD-backed storage for the Postgres volume — **do not use an SD card**.
+  WAL traffic will wear it out within months.
+- Wired Ethernet preferred over Wi-Fi for a server role.
+
+Pi-specific hardware notes are in [Raspberry Pi notes](#raspberry-pi-notes)
+at the end of this doc.
 
 ### OS
 
-- **Raspberry Pi OS Bookworm (64-bit)** or **Debian Bookworm arm64**.
-  64-bit is required — the RDKit cartridge image only ships `linux/amd64`
-  and `linux/arm64`.
+- 64-bit Linux. Debian-derivative (Debian, Ubuntu, Raspberry Pi OS
+  Bookworm) is the smoothest path because Docker has first-class
+  packages.
+- The RDKit cartridge image (`informaticsmatters/rdkit-cartridge-debian`)
+  publishes `linux/amd64` and `linux/arm64`, so x86_64 servers and
+  64-bit Raspberry Pis both run it natively.
 
 ### Host packages
 
@@ -71,11 +91,14 @@ sudo apt install -y \
 ### Conda environment
 
 The backend runs on the host inside `tckdb_env`. Install Miniforge for
-`aarch64`:
+your host architecture (`x86_64` or `aarch64`):
 
 ```bash
+# Pick the matching installer for `uname -m`:
+#   x86_64 -> Miniforge3-Linux-x86_64.sh
+#   aarch64 -> Miniforge3-Linux-aarch64.sh
 curl -L -o /tmp/miniforge.sh \
-    https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh
+    "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-$(uname -m).sh"
 sudo bash /tmp/miniforge.sh -b -p /opt/conda
 sudo /opt/conda/bin/conda env create -n tckdb_env -f /opt/tckdb/backend/environment.yml
 ```
@@ -87,13 +110,14 @@ checked out at `/opt/tckdb`.)
 
 ## Docker installation
 
-Use the Docker Engine apt repo (the Debian-shipped `docker.io` is
-fine but lags). Pi OS is Debian-derived so the Debian repo works:
+Use the Docker Engine apt repo (the distro-shipped `docker.io` is
+fine but lags). On Debian/Ubuntu/Raspberry Pi OS:
 
 ```bash
 curl -fsSL https://download.docker.com/linux/debian/gpg | \
     sudo gpg --dearmor -o /usr/share/keyrings/docker.gpg
-echo "deb [arch=arm64 signed-by=/usr/share/keyrings/docker.gpg] \
+# `arch=` should match your host: amd64 or arm64.
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] \
     https://download.docker.com/linux/debian bookworm stable" | \
     sudo tee /etc/apt/sources.list.d/docker.list
 sudo apt update
@@ -108,10 +132,6 @@ Verify Compose v2:
 docker compose version
 ```
 
-> **Image arch note.** The `informaticsmatters/rdkit-cartridge-debian`
-> image publishes both `linux/amd64` and `linux/arm64`, so the Pi runs
-> it natively — no qemu/binfmt setup required.
-
 ---
 
 ## Filesystem layout
@@ -119,8 +139,8 @@ docker compose version
 ```text
 /opt/tckdb/                          # git checkout of TCKDB_v2
     backend/                         # python backend
-    docker-compose.pi.yml            # symlink or copy from repo
-    .env.pi                          # NOT committed; created from .env.pi.example
+    docker-compose.yml            # symlink or copy from repo
+    .env.selfhosted                          # NOT committed; created from .env.selfhosted.example
 /var/backups/tckdb/                  # nightly pg_dump output
 /var/log/                            # journald + Docker json-file logs
 ```
@@ -130,16 +150,59 @@ systemd units run as that user.
 
 ---
 
+## Host ports vs container ports
+
+The host and the container have separate port namespaces. This catches
+new operators out, so the convention used by this deployment is spelled
+out explicitly here.
+
+A compose `ports:` entry like:
+
+```yaml
+ports:
+  - "127.0.0.1:5434:5432"
+```
+
+means:
+
+```text
+host 127.0.0.1, port 5434   forwards to   container port 5432
+```
+
+Postgres inside the container still listens on `5432`. The host
+publishes that as `5434` only to avoid clashing with a host-installed
+Postgres that already binds `5432`.
+
+The mapping splits how the rest of the stack talks to the DB:
+
+| Where the consumer runs | `DB_HOST` | `DB_PORT` |
+|---|---|---|
+| On the host (Alembic, Uvicorn under systemd, `psql` from the host) | `127.0.0.1` | host-published port (e.g. `5432` or `5434`) |
+| Inside the same compose network as `db` (a future `api:` service) | `db` (the service name) | `5432` (the container port) |
+
+The default `docker-compose.yml` publishes
+`127.0.0.1:${DB_PORT:-5432}:5432`, so if you set `DB_PORT=5434` in
+`.env.selfhosted`, the host sees Postgres at `127.0.0.1:5434` and you
+must use that same value in any host-side `DB_PORT`. The container
+itself does not move.
+
+The same logic applies to MinIO: container ports `9000`/`9001`
+published to `127.0.0.1:9000`/`127.0.0.1:9001`. Never republish them
+on `0.0.0.0`.
+
+---
+
 ## Compose services
 
-[docker-compose.pi.yml](../../docker-compose.pi.yml) provisions three
-services:
+[docker-compose.yml](../../docker-compose.yml)
+defines three services, split across **core** services that run by
+default and an **opt-in ingress** service behind a Compose profile:
 
-| Service | Image | Binding | Public? |
-|---|---|---|---|
-| `db` | `informaticsmatters/rdkit-cartridge-debian` (arm64) | `127.0.0.1:5432` | **No** |
-| `minio` | `minio/minio` | `127.0.0.1:9000` + `127.0.0.1:9001` | **No** |
-| `cloudflared` | `cloudflare/cloudflared` | host network (egress only) | tunnel only |
+| Service | Image | Binding | Public? | Profile |
+|---|---|---|---|---|
+| `db` | `informaticsmatters/rdkit-cartridge-debian` | `127.0.0.1:5432` | **No** | (always) |
+| `minio` | `minio/minio` | `127.0.0.1:9000` + `127.0.0.1:9001` | **No** | (always) |
+| `cloudflared` | `cloudflare/cloudflared` | host network (egress only) | tunnel only | `cloudflare` (opt-in) |
 
 The FastAPI backend and (inline) upload worker run **on the host** as
 a systemd unit, not in Docker, so the existing conda-based dev/test
@@ -152,9 +215,47 @@ including the LAN.
 
 ---
 
+## Ingress options
+
+The core stack (`db`, `minio`, plus the host-side API) is independent
+of how you publish the API. Ingress is a separate layer; pick **one**
+of these, do not stack them:
+
+| Option | What it gives you | Where it's configured |
+|---|---|---|
+| **Cloudflare Tunnel via Compose (this repo's worked example)** | Public HTTPS hostname through Cloudflare; no inbound firewall hole. | The `cloudflared` service in `docker-compose.yml`, behind the `cloudflare` Compose profile. Token in `.env.selfhosted`. |
+| **Cloudflare Tunnel via host systemd `cloudflared`** | Same as above, run as a regular OS service. | Operator-managed; do **not** also start the Compose `cloudflared` service. |
+| **nginx / Caddy / Traefik reverse proxy** | TLS-terminating proxy in front of `127.0.0.1:8010`. | Operator-managed, outside this compose file. Set `TRUSTED_PROXY_HEADER` to whatever the proxy injects (e.g. `X-Real-IP` for nginx). |
+| **Tailscale / WireGuard / SSH tunnel** | Reach the API over a private overlay only — no public surface. | Operator-managed. Useful for lab-only deployments. |
+| **No ingress (loopback only)** | The API is reachable on `127.0.0.1:8010` from the host. Useful for local dev and validation runs. | Nothing to do. |
+
+The Compose default brings up only the core services:
+
+```bash
+docker compose --env-file .env.selfhosted \
+    up -d db minio
+```
+
+Cloudflare Tunnel ingress is opt-in via the `cloudflare` profile:
+
+```bash
+docker compose --env-file .env.selfhosted \
+    --profile cloudflare up -d cloudflared
+```
+
+If you choose nginx/Caddy/Traefik/Tailscale/etc., just don't pass
+`--profile cloudflare` and configure your proxy/tunnel separately.
+
+> **Don't run two ingresses pointing at the same API.** Cloudflare
+> Tunnel via Compose AND a host-side `cloudflared` systemd unit will
+> both try to register the tunnel and one of them will lose. Pick one
+> path.
+
+---
+
 ## Environment variables (hosted-safe defaults)
 
-Copy [`.env.pi.example`](../../.env.pi.example) to `.env.pi` and fill in
+Copy [`.env.selfhosted.example`](../../.env.selfhosted.example) to `.env.selfhosted` and fill in
 the placeholders. The non-negotiable hosted toggles:
 
 | Variable | Required value | Why |
@@ -183,12 +284,12 @@ because of `cloudflared`).
 Tunnel egress:
 
 - `CF-Connecting-IP` is injected by Cloudflare's edge and arrives at
-  the Pi over the authenticated tunnel. Origin spoofing is not
+  the host over the authenticated tunnel. Origin spoofing is not
   reachable.
 - `X-Forwarded-For` is forwarded as-is from the client request — an
   abuser can prepend anything to it.
 
-Set it once in `.env.pi`:
+Set it once in `.env.selfhosted`:
 
 ```dotenv
 TRUSTED_PROXY_HEADER=CF-Connecting-IP
@@ -203,16 +304,43 @@ unconditionally.
 
 ## Cloudflare Tunnel setup
 
+> **DNS, tunnel, ingress: three separate things.** They're easy to
+> confuse and it pays to keep them straight from the start.
+>
+> - A **DNS record** decides where a name points. Adding
+>   `tckdb.example.org` to your DNS zone tells the internet "if you
+>   want to reach this name, ask Cloudflare." Nothing about the DNS
+>   record knows or cares what TCKDB is.
+> - A **Cloudflare Tunnel** is a long-lived outbound connection from
+>   `cloudflared` on your host to Cloudflare. Once it's running,
+>   Cloudflare can route requests inbound through that connection
+>   instead of needing an open port on your firewall.
+> - **Ingress rules** inside the tunnel config say "when a request
+>   arrives for hostname X, forward it to local URL Y." This is the
+>   step that actually wires `https://tckdb.example.org` to
+>   `127.0.0.1:8010`.
+>
+> Creating a Cloudflare DNS record or a tunnel does not by itself
+> route traffic anywhere — you also have to add the ingress rule.
+> Conversely, an ingress rule for a hostname that has no DNS record
+> pointing at Cloudflare is dead-on-arrival. Both have to line up.
+>
+> If you just added a new hostname and `curl` says
+> `NXDOMAIN`/"could not resolve host", that may be DNS negative-cache
+> on your local resolver. The cache duration is bounded by the
+> zone's negative TTL (often a few minutes); waiting it out, or
+> flushing your resolver, fixes it.
+
 You need a Cloudflare account, a zone (e.g. `tckdb.example.org`), and
 the Zero Trust dashboard enabled (the free tier is fine).
 
 1. **Create the tunnel** in the Zero Trust dashboard (Networks →
    Tunnels → Create a tunnel → Cloudflared). Pick a name like
-   `tckdb-pi`. Cloudflare prints a tunnel token — this is the value
-   for `CLOUDFLARED_TUNNEL_TOKEN`.
+   `tckdb-selfhosted`. Cloudflare prints a tunnel token — this is
+   the value for `CLOUDFLARED_TUNNEL_TOKEN`.
 
 2. **Store the token** outside the committed repo. Add a line to
-   `/opt/tckdb/.env.pi` (do **not** add it to `.env.pi.example`):
+   `/opt/tckdb/.env.selfhosted` (do **not** add it to `.env.selfhosted.example`):
 
    ```dotenv
    CLOUDFLARED_TUNNEL_TOKEN=eyJhIjoi...   # from the Zero Trust UI
@@ -224,7 +352,7 @@ the Zero Trust dashboard enabled (the free tier is fine).
    - Subdomain: `api`
    - Domain: `tckdb.example.org`
    - Type: `HTTP`
-   - URL: `127.0.0.1:8000`
+   - URL: `127.0.0.1:8010`
 
    That is the **only** ingress rule. Do not add rules for `9001`
    (MinIO console), `5432` (Postgres), or any other internal port.
@@ -251,7 +379,7 @@ Cloudflare terminates TLS at the edge with a managed cert. Confirm:
   so `Strict` is the right setting — the origin certificate is
   Cloudflare's own.
 
-`TCKDB_PUBLIC_BASE_URL` in `.env.pi` should be the public URL:
+`TCKDB_PUBLIC_BASE_URL` in `.env.selfhosted` should be the public URL:
 
 ```dotenv
 TCKDB_PUBLIC_BASE_URL=https://api.tckdb.example.org/api/v1
@@ -259,11 +387,72 @@ TCKDB_PUBLIC_BASE_URL=https://api.tckdb.example.org/api/v1
 
 ---
 
+## Optional: protected DB-GUI access via TCP tunnel
+
+Day-to-day operators may want a DataGrip / DBeaver / `psql` session
+against the production database without exposing Postgres publicly.
+The right pattern is a **second** Cloudflare Tunnel ingress rule of
+type `TCP`, gated behind a Cloudflare Access policy. Postgres still
+binds only to `127.0.0.1` on the host — the tunnel forwards from
+Cloudflare to the loopback port, and Access authenticates *who* is
+allowed to use the forward.
+
+> **Do not expose Postgres on `0.0.0.0`.** The compose file binds
+> `127.0.0.1:5432` exactly so this can never happen by accident. The
+> tunnel adds a *separately authenticated* path on top of that
+> loopback binding.
+
+Setup (one-time, on Cloudflare side):
+
+1. In the same tunnel, add a second public hostname:
+   - Subdomain: `pg-tckdb`
+   - Domain: `tckdb.example.org` → `pg-tckdb.example.org`
+   - Type: `TCP`
+   - URL: `tcp://127.0.0.1:5432`
+2. In Cloudflare Access, create an Application of type
+   "Self-hosted" for `pg-tckdb.example.org`, with a policy that only
+   permits your operator email/identity provider.
+
+Then, from any operator workstation:
+
+```bash
+# Forwards localhost:15434 on your machine to pg-tckdb.example.org
+# over the authenticated tunnel. cloudflared opens an Access prompt
+# in the browser on the first call.
+cloudflared access tcp \
+    --hostname pg-tckdb.example.org \
+    --url localhost:15434
+```
+
+Leave that running, then configure your DB GUI:
+
+```text
+Host:     127.0.0.1
+Port:     15434
+Database: tckdb
+User:     tckdb
+Password: <DB_PASSWORD from .env.selfhosted>
+```
+
+Three independent authentication layers stack here, and that's the
+point:
+
+| Layer | What it checks |
+|---|---|
+| Cloudflare Access policy | Are you a permitted operator identity? |
+| `cloudflared access tcp` tunnel | Did Access issue you a valid token? |
+| Postgres `pg_hba` + role/password | Is this `username`/`password` valid for this database? |
+
+A leaked DB password alone cannot reach the database from the
+internet — the tunnel never opens without an Access token first.
+
+---
+
 ## Postgres `statement_timeout`
 
 Two layers — both should be on:
 
-1. **App-session level.** `DB_STATEMENT_TIMEOUT_MS=30000` in `.env.pi`.
+1. **App-session level.** `DB_STATEMENT_TIMEOUT_MS=30000` in `.env.selfhosted`.
    This is applied on every new DBAPI connection and protects against
    a runaway query in the pool. Set it as a positive integer in ms.
 
@@ -271,7 +460,7 @@ Two layers — both should be on:
    any client — including ad-hoc `psql` sessions — inherits it:
 
    ```bash
-   docker compose --env-file .env.pi -f docker-compose.pi.yml \
+   docker compose --env-file .env.selfhosted \
        exec -T db psql -U "$DB_USER" -d "$DB_NAME" \
        -c "ALTER ROLE tckdb SET statement_timeout = '30s';"
    ```
@@ -288,34 +477,40 @@ Two layers — both should be on:
 sudo mkdir -p /opt/tckdb && sudo chown -R tckdb:tckdb /opt/tckdb
 sudo -u tckdb git clone <repo-url> /opt/tckdb
 cd /opt/tckdb
-sudo -u tckdb cp .env.pi.example .env.pi
-sudo -u tckdb $EDITOR .env.pi        # fill in every change-me-* value
+sudo -u tckdb cp .env.selfhosted.example .env.selfhosted
+sudo -u tckdb $EDITOR .env.selfhosted        # fill in every change-me-* value
 
 # 1. Bring up the data plane
-docker compose --env-file .env.pi -f docker-compose.pi.yml up -d db minio
+docker compose --env-file .env.selfhosted up -d db minio
 
 # 2. Run migrations
 cd backend
-DB_NAME=$(grep ^DB_NAME ../.env.pi | cut -d= -f2) \
-DB_USER=$(grep ^DB_USER ../.env.pi | cut -d= -f2) \
-DB_PASSWORD=$(grep ^DB_PASSWORD ../.env.pi | cut -d= -f2) \
+DB_NAME=$(grep ^DB_NAME ../.env.selfhosted | cut -d= -f2) \
+DB_USER=$(grep ^DB_USER ../.env.selfhosted | cut -d= -f2) \
+DB_PASSWORD=$(grep ^DB_PASSWORD ../.env.selfhosted | cut -d= -f2) \
 DB_HOST=127.0.0.1 DB_PORT=5432 \
     /opt/conda/bin/conda run -n tckdb_env alembic upgrade head
 
 # 3. Persist the statement_timeout at role level (see above)
 
-# 4. Seed an admin account
+# 4. Seed an admin account (and later, log in / mint API keys).
+#    See docs/deployment/admin_auth_quickstart.md for the full recipe,
+#    including curator seeding and how to wire ARC against the deployment.
 /opt/conda/bin/conda run -n tckdb_env python scripts/bootstrap_admin.py \
-    --username admin --email admin@tckdb.example.org
+    --username admin --email admin@tckdb.example.org --role admin
 
 # 5. Start the API as a service
 sudo cp ../examples/deployment/systemd/tckdb-api.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now tckdb-api.service
 
-# 6. Bring up the tunnel last - this is what publishes the API
+# 6. (Optional, if using Cloudflare Tunnel via Compose) Bring up the
+#    tunnel last - this is what publishes the API.
+#    For nginx/Caddy/Traefik/Tailscale/etc., skip this step and
+#    configure that ingress separately.
 cd ..
-docker compose --env-file .env.pi -f docker-compose.pi.yml up -d cloudflared
+docker compose --env-file .env.selfhosted \
+    --profile cloudflare up -d cloudflared
 ```
 
 ---
@@ -341,7 +536,7 @@ sudo systemctl list-timers | grep tckdb-backup    # verify next run
 
 ### Off-box copy
 
-A copy on the Pi is not a backup. Sync `/var/backups/tckdb/` to an
+A copy on the same host is not a backup. Sync `/var/backups/tckdb/` to an
 off-box target — examples:
 
 - `rclone sync /var/backups/tckdb remote:tckdb-backups` (any rclone
@@ -357,7 +552,7 @@ If `S3_BUCKET=tckdb-artifacts` accumulates real data (parsed-output
 attachments etc.), mirror it the same way:
 
 ```bash
-docker compose -f docker-compose.pi.yml exec -T minio \
+docker compose exec -T minio \
     mc mirror /data/tckdb-artifacts /data/.snapshots/$(date +%F)
 ```
 
@@ -367,13 +562,13 @@ docker compose -f docker-compose.pi.yml exec -T minio \
 
 ```bash
 # Drop and recreate the DB (destructive)
-docker compose -f docker-compose.pi.yml --env-file .env.pi exec -T db \
+docker compose --env-file .env.selfhosted exec -T db \
     psql -U "$DB_USER" -d postgres \
     -c "DROP DATABASE IF EXISTS $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_USER;"
 
 # Restore from a dump
 gunzip -c /var/backups/tckdb/tckdb-2026-05-12.sql.gz | \
-    docker compose -f docker-compose.pi.yml --env-file .env.pi exec -T db \
+    docker compose --env-file .env.selfhosted exec -T db \
     psql -U "$DB_USER" -d "$DB_NAME"
 ```
 
@@ -407,7 +602,7 @@ Three log sources, three rotation strategies — all bounded:
 
 ## SSH / admin access hardening
 
-The Pi is on the internet via Cloudflare, but SSH should *not* be.
+The host is on the internet via Cloudflare, but SSH should *not* be.
 Lock it to LAN-only or, better, to Cloudflare Access:
 
 ### Minimum (LAN-only SSH)
@@ -440,8 +635,10 @@ SSH becomes `cloudflared access ssh ...` with an authenticated user.
 
 - `fail2ban` for the SSH jail (already installed in prerequisites).
 - `unattended-upgrades` enabled for security updates.
-- Disable Avahi/mDNS if the Pi runs on a hostile LAN.
-- **Never** run the API as root or as the `pi` user. The systemd unit
+- Disable Avahi/mDNS if the host runs on a hostile LAN.
+- **Never** run the API as root or as a default OS account (e.g. the
+  `pi` user on Raspberry Pi OS, the `ubuntu` user on Ubuntu cloud
+  images). The systemd unit
   uses an unprivileged `tckdb` user.
 
 ---
@@ -453,7 +650,7 @@ SSH becomes `cloudflared access ssh ...` with an authenticated user.
 `docker compose ps` should show every service `healthy`:
 
 ```bash
-docker compose --env-file .env.pi -f docker-compose.pi.yml ps
+docker compose --env-file .env.selfhosted ps
 ```
 
 ### External (tunnel)
@@ -468,7 +665,7 @@ or `tckdb-api.service` is down (`systemctl status tckdb-api`).
 
 ### Monitoring
 
-For a single-Pi deployment, a recurring uptime check from an external
+For a single-node deployment, a recurring uptime check from an external
 service (UptimeRobot, healthchecks.io) against `/api/v1/health` is
 sufficient. Page on three consecutive failures.
 
@@ -476,7 +673,7 @@ sufficient. Page on three consecutive failures.
 
 ## Smoke tests
 
-Run these from a workstation, **not** on the Pi (you want to exercise
+Run these from a workstation, **not** on the host (you want to exercise
 the public path).
 
 ### 1. Health
@@ -548,7 +745,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 ```
 
 If either returns 200, `EXPOSE_API_DOCS=true` slipped through — fix
-`.env.pi` and `systemctl restart tckdb-api`.
+`.env.selfhosted` and `systemctl restart tckdb-api`.
 
 ### 6. Postgres not publicly reachable
 
@@ -575,15 +772,22 @@ regressions** and **config regressions**. Both have a clean undo:
 
 ```bash
 # 1. Stop the public surface IMMEDIATELY so partial state doesn't
-#    leak into a downstream client.
-docker compose --env-file .env.pi -f docker-compose.pi.yml stop cloudflared
+#    leak into a downstream client. The exact "stop ingress" step
+#    depends on which ingress you chose (see "Ingress options").
+#    For the Compose cloudflared service:
+docker compose --env-file .env.selfhosted stop cloudflared
+#    For a host-side cloudflared systemd unit:
+#      sudo systemctl stop cloudflared
+#    For nginx/Caddy/Traefik: stop or reload-with-503 the proxy.
 sudo systemctl stop tckdb-api
 
 # 2. Pin the previous git revision and restart.
 cd /opt/tckdb
 sudo -u tckdb git checkout <prev-good-sha>
 sudo systemctl start tckdb-api
-docker compose --env-file .env.pi -f docker-compose.pi.yml start cloudflared
+# Restart the ingress that matches your setup:
+docker compose --env-file .env.selfhosted \
+    --profile cloudflare start cloudflared
 ```
 
 If a schema migration is the culprit and the DB is now ahead of the
@@ -601,28 +805,36 @@ sudo systemctl start tckdb-api
 
 ### Config rollback
 
-`.env.pi` is the single source of hosted-posture truth. Keep the
+`.env.selfhosted` is the single source of hosted-posture truth. Keep the
 previous version in git (in a *private* repo, not this one — it has
 secrets) or copy it before edits:
 
 ```bash
-sudo cp /opt/tckdb/.env.pi /opt/tckdb/.env.pi.$(date +%F)
-$EDITOR /opt/tckdb/.env.pi
+sudo cp /opt/tckdb/.env.selfhosted /opt/tckdb/.env.selfhosted.$(date +%F)
+$EDITOR /opt/tckdb/.env.selfhosted
 sudo systemctl restart tckdb-api
 # verify smoke tests; if anything regressed:
-sudo cp /opt/tckdb/.env.pi.$(date +%F) /opt/tckdb/.env.pi
+sudo cp /opt/tckdb/.env.selfhosted.$(date +%F) /opt/tckdb/.env.selfhosted
 sudo systemctl restart tckdb-api
 ```
 
 ### Emergency kill switch
 
+Stop whichever ingress is in front of the API. For the Compose
+cloudflared service:
+
 ```bash
-docker compose --env-file .env.pi -f docker-compose.pi.yml stop cloudflared
+docker compose --env-file .env.selfhosted \
+    stop cloudflared
 ```
 
-This drops the tunnel and the public URL returns Cloudflare's "tunnel
-offline" page. Everything else — Postgres, MinIO, the API — stays up
-on loopback so you can debug at leisure.
+For a host-side cloudflared systemd unit: `sudo systemctl stop
+cloudflared`. For nginx/Caddy/Traefik: stop or reload the proxy with a
+503-everything config.
+
+This drops the public surface — for Cloudflare Tunnel the URL returns
+the "tunnel offline" page. Everything else — Postgres, MinIO, the API
+— stays up on loopback so you can debug at leisure.
 
 ---
 
@@ -645,14 +857,45 @@ on loopback so you can debug at leisure.
 
 ---
 
+## Raspberry Pi notes
+
+The first working deployment of this recipe ran on a Raspberry Pi 4
+under Raspberry Pi OS Bookworm (64-bit). Everything in this guide
+applies, with these specifics worth knowing:
+
+- **Hardware.** Use the 4 GB or 8 GB SKU. SD-card storage is the
+  failure mode — put the Postgres volume on a USB-3 SSD or NVMe HAT.
+  Wired Ethernet beats Wi-Fi for a server role.
+- **OS.** Raspberry Pi OS Bookworm (64-bit) or Debian Bookworm arm64.
+  32-bit Pi OS will not work — the RDKit cartridge image is
+  `linux/arm64`, not `linux/arm`.
+- **Image arch.** The `informaticsmatters/rdkit-cartridge-debian`
+  image publishes `linux/arm64`, so the Pi runs it natively — no
+  qemu/binfmt setup required.
+- **Default user.** Raspberry Pi OS ships with a `pi` user. Do
+  **not** run the API or DB as `pi`. Create the unprivileged `tckdb`
+  user/group exactly as documented above.
+- **Cloudflared tunnel name.** A name like `tckdb-pi` is a reasonable
+  hint about where the tunnel runs, but it has no operational
+  meaning — pick whatever helps you recognize the tunnel in the Zero
+  Trust dashboard.
+
+Everything else — compose layout, env vars, abuse-control posture,
+backups, smoke tests — is identical to a non-Pi host.
+
+---
+
 ## See also
 
+- [admin_auth_quickstart.md](admin_auth_quickstart.md) — seeding
+  admin/curator accounts, logging in, minting API keys, and the
+  `check_selfhosted_deployment.sh` sanity-check script.
 - [deployment_modes.md](deployment_modes.md) — the three deployment
-  modes and how the Pi recipe fits into Mode 2.
+  modes and how this recipe fits into Mode 2.
 - [export_import_roadmap.md](../roadmaps/export_import_roadmap.md) —
   cross-instance data movement (offline → hosted, etc.).
-- [`.env.pi.example`](../../.env.pi.example) — full annotated env file.
-- [`docker-compose.pi.yml`](../../docker-compose.pi.yml) — the data-plane stack.
+- [`.env.selfhosted.example`](../../.env.selfhosted.example) — full annotated env file.
+- [`docker-compose.yml`](../../docker-compose.yml) — the data-plane stack.
 - [`examples/deployment/systemd/`](../../examples/deployment/systemd/) — host service units.
 - [`docs/audits/security_public_read_abuse_audit.md`](../audits/security_public_read_abuse_audit.md) — the threat model that motivates the hosted toggles above.
 - [`docs/specs/public_read_abuse_controls.md`](../specs/public_read_abuse_controls.md) — the implemented abuse-control spec these env vars wire.

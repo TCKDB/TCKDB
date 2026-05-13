@@ -22,7 +22,7 @@ A TCKDB client is configured by exactly two values:
 
 ```yaml
 tckdb:
-  base_url: "http://localhost:8000/api/v1"
+  base_url: "http://localhost:8010/api/v1"
   api_key: "tck_replace_me"
 ```
 
@@ -52,14 +52,14 @@ only `base_url` (and the matching `api_key`).
 
 ### Local TCKDB
 
-A local instance — typically `http://localhost:8000` — set up via
+A local instance — typically `http://localhost:8010` — set up via
 [Local v0 deployment](../deployment/local-v0.md). Useful for single-user
 workstations, laptops, and offline work.
 
 ```yaml
 # examples/clients/tckdb.local.yml
 tckdb:
-  base_url: "http://localhost:8000/api/v1"
+  base_url: "http://localhost:8010/api/v1"
   api_key: "tck_local_replace_me"
 ```
 
@@ -77,7 +77,7 @@ HPC/batch usage is covered in
 ```yaml
 # examples/clients/tckdb.lab-server.yml
 tckdb:
-  base_url: "http://lab-tckdb.internal:8000/api/v1"
+  base_url: "http://lab-tckdb.internal:8010/api/v1"
   api_key: "tck_lab_replace_me"
 ```
 
@@ -164,7 +164,7 @@ foot-gun. The recommended pattern for scripts, notebooks, automation, and
 CI is to read both values from the environment:
 
 ```bash
-export TCKDB_BASE_URL="http://localhost:8000/api/v1"
+export TCKDB_BASE_URL="http://localhost:8010/api/v1"
 export TCKDB_API_KEY="tck_replace_me"
 ```
 
@@ -411,7 +411,7 @@ instance is to upload it to that instance directly via its API.
 
 - **404 or doubled path such as `/api/v1/api/v1/...`.** The `base_url` is
   shaped incorrectly. Configure it once as the API root, for example
-  `http://localhost:8000/api/v1`, and have clients append endpoint paths
+  `http://localhost:8010/api/v1`, and have clients append endpoint paths
   like `/auth/me`.
 
 - **Connection works locally but not from an HPC job or lab machine.** The

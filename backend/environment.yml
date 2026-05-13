@@ -1,20 +1,42 @@
-# Canonical TCKDB backend runtime environment.
+# TCKDB backend — conda/mamba environment recipe.
 #
 # Create the env on a new machine with:
-#   conda env create -f backend/environment.yml
-#   # or, for the Pi / containers:
+#   mamba env create -n tckdb_env -f backend/environment.yml
+#   # or, equivalent:
+#   conda env create -n tckdb_env -f backend/environment.yml
+#   # or, for slim containers:
 #   micromamba create -n tckdb_env -f backend/environment.yml
 #
 # Activate with:
 #   conda activate tckdb_env
 #
-# Scope: runtime dependencies required by the FastAPI app, Alembic
-# migrations, and helper scripts under backend/. Test / dev / publishing
-# packages (pytest, black, twine, matplotlib, ...) are deliberately
-# excluded — install those separately on developer workstations.
+# ----------------------------------------------------------------------------
+# Relationship to backend/pyproject.toml
+# ----------------------------------------------------------------------------
+# This file is the recommended path for developer workstations because
+# it installs RDKit from conda-forge — historically the smoothest
+# RDKit build for the chemistry stack TCKDB uses.
 #
-# Source of truth: this file. The future Pi Dockerfile must install
-# from this manifest rather than re-listing dependencies inline.
+# Authoritative package metadata for the backend itself lives in
+# `backend/pyproject.toml`. That file defines the `tckdb-backend`
+# package, its runtime deps, dev/test extras (`[dev]`), and an optional
+# pip-RDKit extra (`[rdkit]`) for pure-pip / containerized setups where
+# conda is not available. A `uv.lock` next to it pins exact versions.
+#
+# Recommended developer workflow (conda + pip):
+#   mamba env create -n tckdb_env -f backend/environment.yml
+#   conda activate tckdb_env
+#   cd backend
+#   pip install -e ".[dev]"     # skip the [rdkit] extra — conda has it
+#
+# Recommended container / pure-pip workflow:
+#   cd backend
+#   uv sync --extra dev --extra rdkit
+#     # or: pip install -e ".[dev,rdkit]"
+#
+# Scope of THIS file: runtime dependencies for the FastAPI app, Alembic
+# migrations, and helper scripts. Test / dev / lint tools (pytest,
+# pytest-cov, httpx, ruff) come from the `[dev]` extra in pyproject.toml.
 
 name: tckdb_env
 

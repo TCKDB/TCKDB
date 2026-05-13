@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # Bootstrap a dev admin, log in, and mint an API key — single command.
 #
+# >>> LEGACY HELPER.  Prefer ``backend/scripts/tckdb_auth.sh`` for new
+#     work — it handles auth against any deployment (local, hosted,
+#     self-hosted), writes the same .tckdb_auth.env / .tckdb_api_key
+#     files this script does, and defaults to the current canonical
+#     local port (8010). dev_login.sh is kept for the
+#     ``make reset-login`` flow only and may be removed in a later
+#     cleanup pass once that target is migrated. <<<
+#
 # Idempotent: re-running with the same username promotes/refreshes the
 # admin row, opens a fresh session cookie, and mints a new API key.
 #
@@ -8,7 +16,7 @@
 #   username  : admin
 #   password  : 1234
 #   email     : admin@local
-#   base url  : http://127.0.0.1:8000/api/v1
+#   base url  : http://127.0.0.1:8010/api/v1
 #   cookies   : ./cookies.txt   (relative to backend/)
 #   API key label : dev-key
 #
@@ -24,7 +32,7 @@ set -euo pipefail
 USERNAME="${TCKDB_USERNAME:-admin}"
 PASSWORD="${TCKDB_PASSWORD:-1234}"
 EMAIL="${TCKDB_EMAIL:-admin@local}"
-BASE_URL="${TCKDB_BASE_URL:-http://127.0.0.1:8000/api/v1}"
+BASE_URL="${TCKDB_BASE_URL:-http://127.0.0.1:8010/api/v1}"
 COOKIES="${TCKDB_COOKIES:-cookies.txt}"
 API_KEY_LABEL="${TCKDB_API_KEY_LABEL:-dev-key}"
 

@@ -144,6 +144,15 @@ ENV/
 env.bak/
 venv.bak/
 
+# Deployment env files — real, populated env files for the various
+# deployment recipes. The *.example templates in the repo root remain
+# tracked; the populated counterparts must never be committed.
+.env.local
+.env.selfhosted
+!.env.example
+!.env.local.example
+!.env.selfhosted.example
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -219,7 +228,12 @@ CLAUDE.md
 
 ARCHITECTURE.md
 
+# Database backups — pg_dump output, plain SQL dumps, generic dump
+# files. Backups may be large and contain real data; never commit
+# them to the repo.
 backup_*.sql
+*.sql.gz
+*.dump
 
 clean_run_log.md
 
@@ -234,11 +248,14 @@ node_modules
 # Internal docs — specs, decision records, policy notes, design rationale,
 # roadmaps, audits, and one-off internal write-ups. Not distributed publicly.
 # Public-facing docs live under docs/clients/, docs/contribution-bundles/,
-# and docs/deployment/ — anything else under docs/ is internal.
+# docs/deployment/, docs/guides/, and docs/specs/. Anything else under
+# docs/ (including ad-hoc *.md files at the root) is internal.
 docs/*.md
+!docs/README.md
 docs/audits/
 docs/decisions/
 docs/roadmaps/
+docs/clients/
 
 # LibreOffice/OpenOffice lock files
 .~lock.*#
@@ -248,16 +265,21 @@ docs/roadmaps/
 .codex
 .codex*
 
-# Local dev auth artifacts written by backend/scripts/dev_login.sh
+# TCKDB local auth/session material written by backend/scripts/*.sh
+# (dev_login.sh, tckdb_auth.sh). Never commit any of these.
 backend/cookies.txt
 backend/.tckdb_auth.env
 backend/.tckdb_api_key
+.tckdb_auth.env
+.tckdb_api_key
+.tckdb_cookies.txt
+*.cookies.txt
+*.tckdb_cookies.txt
+cookies.txt
+backend/cookies.txt
+
+# vexb local index/state
 .vexb/state.json
 .vexb/workspace.json
 .vexb/index.sqlite
-.gitignore
-.gitignore
-.gitignore
-cookies.txt
 .vexb/config.json
-backend/cookies.txt

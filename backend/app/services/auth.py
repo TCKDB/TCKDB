@@ -233,7 +233,7 @@ def revoke_api_key(session: Session, key: ApiKey) -> None:
 
 
 class BootstrapResult(str):
-    """Outcome marker for :func:`bootstrap_admin`.
+    """Outcome marker for :func:`bootstrap_user`.
 
     Subclasses ``str`` so the CLI can print it directly while callers can
     still ``==``-compare against the class constants.
@@ -244,25 +244,33 @@ class BootstrapResult(str):
     UNCHANGED = "unchanged"
 
 
-def bootstrap_admin(
+class RoleChangeRefused(ValueError):
+    """Raised when bootstrap would change an existing user's role without ``force_role_change``."""
+
+
+def bootstrap_user(
     session: Session,
     *,
     username: str,
+    role: AppUserRole = AppUserRole.admin,
     password: Optional[str] = None,
     email: Optional[str] = None,
     full_name: Optional[str] = None,
     affiliation: Optional[str] = None,
+    force_role_change: bool = False,
 ) -> tuple[AppUser, str]:
-    """Create or promote an admin user, idempotently.
+    """Create or update a user at the requested role, idempotently.
 
     Lookup is by ``username`` first, then ``email`` (when provided). If a
-    matching account exists it is promoted to ``admin`` (preserving its
-    other fields). When neither matches, a new admin is created and
-    *password* is required.
+    matching account exists with the same role it is left as-is (only
+    reactivated if disabled). When the existing role differs, the change
+    is refused unless ``force_role_change=True``. When neither lookup
+    matches, a new user is created at ``role`` and *password* is required.
 
     Returns ``(user, outcome)`` where outcome is one of
-    ``BootstrapResult.{CREATED, PROMOTED, UNCHANGED}``. Repeated calls
-    with the same inputs settle on ``UNCHANGED``.
+    ``BootstrapResult.{CREATED, PROMOTED, UNCHANGED}``. ``PROMOTED`` is
+    used for any role change or reactivation, regardless of direction.
+    Repeated calls with the same inputs settle on ``UNCHANGED``.
     """
     username = username.strip()
     if not username:
@@ -275,7 +283,7 @@ def bootstrap_admin(
     if user is None:
         if not password:
             raise ValueError(
-                "password is required when creating a new admin user"
+                "password is required when creating a new user"
             )
         user = AppUser(
             username=username,
@@ -283,7 +291,7 @@ def bootstrap_admin(
             full_name=full_name,
             affiliation=affiliation,
             password_hash=hash_password(password),
-            role=AppUserRole.admin,
+            role=role,
             is_active=True,
         )
         session.add(user)
@@ -291,8 +299,13 @@ def bootstrap_admin(
         return user, BootstrapResult.CREATED
 
     outcome = BootstrapResult.UNCHANGED
-    if user.role is not AppUserRole.admin:
-        user.role = AppUserRole.admin
+    if user.role is not role:
+        if not force_role_change:
+            raise RoleChangeRefused(
+                f"user {user.username!r} has role {user.role.value!r}; "
+                f"refusing to change to {role.value!r} without force_role_change=True"
+            )
+        user.role = role
         outcome = BootstrapResult.PROMOTED
     if not user.is_active:
         user.is_active = True

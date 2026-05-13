@@ -15,16 +15,16 @@ first; raw JSON (``--json``) is untouched. Follow-up reads
 Usage::
 
     python examples/scientific_reads.py \\
-        --base-url http://127.0.0.1:8000/api/v1 \\
+        --base-url http://127.0.0.1:8010/api/v1 \\
         --smiles 'C[CH2]'
 
     python examples/scientific_reads.py \\
-        --base-url http://127.0.0.1:8000/api/v1 \\
+        --base-url http://127.0.0.1:8010/api/v1 \\
         --reactant '[CH3]' --reactant 'c1ccccc1' \\
         --product 'CH4' --product '[c]1ccccc1'
 
     python examples/scientific_reads.py \\
-        --base-url http://127.0.0.1:8000/api/v1 \\
+        --base-url http://127.0.0.1:8010/api/v1 \\
         --smiles 'CCO' \\
         --level-of-theory-ref 'lot_...' \\
         --json
@@ -64,10 +64,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--base-url",
-        default="http://127.0.0.1:8000/api/v1",
+        default="http://127.0.0.1:8010/api/v1",
         help=(
             "TCKDB API base URL including /api/v1 "
-            "(default: http://127.0.0.1:8000/api/v1)."
+            "(default: http://127.0.0.1:8010/api/v1)."
         ),
     )
     parser.add_argument(

@@ -1,8 +1,8 @@
 # /etc/systemd/system/tckdb-backup.service
 #
 # One-shot pg_dump of the TCKDB database, paired with tckdb-backup.timer
-# for daily execution. Used by the Raspberry Pi hosted deployment - see
-# docs/deployment/raspberry_pi_hosted_deployment.md (Backups section).
+# for daily execution. Used by the self-hosted single-node deployment -
+# see docs/deployment/self_hosted_single_node.md (Backups section).
 
 [Unit]
 Description=TCKDB nightly Postgres backup
@@ -13,7 +13,7 @@ Requires=docker.service
 Type=oneshot
 User=tckdb
 Group=tckdb
-EnvironmentFile=/opt/tckdb/.env.pi
+EnvironmentFile=/opt/tckdb/.env.selfhosted
 
 # pg_dump runs inside the running `db` container so we don't have to
 # install postgres client tooling on the host. The backup is written
@@ -22,8 +22,8 @@ ExecStart=/bin/bash -c '\
     set -euo pipefail; \
     mkdir -p /var/backups/tckdb; \
     out=/var/backups/tckdb/tckdb-$$(date +%%Y-%%m-%%d).sql.gz; \
-    /usr/bin/docker compose -f /opt/tckdb/docker-compose.pi.yml \
-        --env-file /opt/tckdb/.env.pi \
+    /usr/bin/docker compose -f /opt/tckdb/docker-compose.yml \
+        --env-file /opt/tckdb/.env.selfhosted \
         exec -T db pg_dump -U "$$DB_USER" -d "$$DB_NAME" \
         | gzip > "$$out"; \
     chmod 600 "$$out"; \

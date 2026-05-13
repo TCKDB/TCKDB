@@ -1,8 +1,8 @@
 # /etc/systemd/system/tckdb-api.service
 #
 # Runs the TCKDB FastAPI backend on the host (not in Docker) under the
-# project's conda env. Used by the Raspberry Pi hosted deployment - see
-# docs/deployment/raspberry_pi_hosted_deployment.md.
+# project's conda env. Used by the self-hosted single-node deployment -
+# see docs/deployment/self_hosted_single_node.md.
 #
 # Install:
 #   sudo cp examples/deployment/systemd/tckdb-api.service /etc/systemd/system/
@@ -23,16 +23,17 @@ User=tckdb
 Group=tckdb
 WorkingDirectory=/opt/tckdb/backend
 
-# Pull env vars (DB creds, abuse-control toggles, etc.) from .env.pi.
-# systemd's EnvironmentFile does not perform shell expansion or quoting -
-# write `KEY=value` lines exactly as in .env.pi.example.
-EnvironmentFile=/opt/tckdb/.env.pi
+# Pull env vars (DB creds, abuse-control toggles, etc.) from
+# .env.selfhosted. systemd's EnvironmentFile does not perform shell
+# expansion or quoting - write `KEY=value` lines exactly as in
+# .env.selfhosted.example.
+EnvironmentFile=/opt/tckdb/.env.selfhosted
 
 # Bind to localhost. cloudflared is the only thing that talks to this.
 ExecStart=/opt/conda/bin/conda run --no-capture-output -n tckdb_env \
     uvicorn main:app \
         --host 127.0.0.1 \
-        --port 8000 \
+        --port 8010 \
         --workers 2 \
         --proxy-headers \
         --forwarded-allow-ips 127.0.0.1
@@ -47,7 +48,7 @@ ProtectSystem=full
 ProtectHome=true
 
 # Log rotation is handled by journald (see journald.conf) plus the
-# Docker json-file driver limits in docker-compose.pi.yml.
+# Docker json-file driver limits in docker-compose.yml.
 StandardOutput=journal
 StandardError=journal
 

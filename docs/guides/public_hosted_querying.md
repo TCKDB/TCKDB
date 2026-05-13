@@ -57,7 +57,7 @@ Anonymous CLI call:
 
 ```bash
 python clients/python/tckdb-client/examples/query_cookbook.py \
-  --base-url http://127.0.0.1:8000/api/v1 \
+  --base-url http://127.0.0.1:8010/api/v1 \
   --smiles "O" \
   --recipe thermo
 ```
@@ -66,7 +66,7 @@ Authenticated CLI call (same recipe, attributed):
 
 ```bash
 python clients/python/tckdb-client/examples/query_cookbook.py \
-  --base-url http://127.0.0.1:8000/api/v1 \
+  --base-url http://127.0.0.1:8010/api/v1 \
   --api-key "$TCKDB_API_KEY" \
   --smiles "O" \
   --recipe thermo
@@ -168,7 +168,7 @@ client.get_geometry(geom_ref, include=["provenance"])
 from tckdb_client import TCKDBClient
 
 # Anonymous — public scientific reads only.
-client = TCKDBClient(base_url="http://127.0.0.1:8000/api/v1")
+client = TCKDBClient(base_url="http://127.0.0.1:8010/api/v1")
 
 thermo = client.search_thermo(
     smiles="O",
@@ -184,7 +184,7 @@ attributed reads, pass an `api_key`:
 
 ```python
 client = TCKDBClient(
-    base_url="http://127.0.0.1:8000/api/v1",
+    base_url="http://127.0.0.1:8010/api/v1",
     api_key=api_key,
 )
 ```
@@ -207,7 +207,7 @@ Thermo only:
 
 ```bash
 python clients/python/tckdb-client/examples/scientific_reads.py \
-  --base-url http://127.0.0.1:8000/api/v1 \
+  --base-url http://127.0.0.1:8010/api/v1 \
   --smiles "O" \
   --only thermo \
   --json
@@ -217,7 +217,7 @@ OPT calculations plus geometry coordinates:
 
 ```bash
 python clients/python/tckdb-client/examples/scientific_reads.py \
-  --base-url http://127.0.0.1:8000/api/v1 \
+  --base-url http://127.0.0.1:8010/api/v1 \
   --smiles "O" \
   --only calculations,geometry \
   --calculation-type opt \

@@ -1,0 +1,131 @@
+# TCKDB backend package metadata.
+#
+# This file is the **pip-installable** definition of the backend.
+# It coexists with `backend/environment.yml`:
+#
+#   - environment.yml is the conda/mamba recipe (system-level toolchain
+#     plus RDKit from conda-forge). It remains the recommended path
+#     for developers who want the conda-forge RDKit build.
+#   - pyproject.toml is the source of truth for the Python package
+#     itself (`tckdb-backend`), the runtime dependency *list*, dev/test
+#     extras, and the optional RDKit extra. It is what an eventual API
+#     Dockerfile will build off.
+#
+# Two supported developer setups:
+#
+#   Conda + pip (recommended when RDKit-cartridge parity matters):
+#     mamba env create -n tckdb_env -f backend/environment.yml
+#     cd backend && pip install -e ".[dev]"
+#     # RDKit comes from conda; skip the [rdkit] extra here.
+#
+#   Pure pip / uv (lockfile-driven, container-friendly):
+#     cd backend
+#     uv sync --extra dev --extra rdkit
+#     # or: pip install -e ".[dev,rdkit]"
+#
+# See docs/deployment/api_containerization_notes.md for the full
+# discussion.
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tckdb-backend"
+version = "0.1.0"
+description = "FastAPI backend for the TCKDB scientific database (thermochemistry / kinetics with provenance)."
+requires-python = ">=3.13"
+license = { text = "TBD — see repository root" }
+keywords = [
+    "tckdb",
+    "thermochemistry",
+    "kinetics",
+    "computational-chemistry",
+    "fastapi",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Database",
+]
+
+# Runtime dependencies. Lower bounds are tracked at major-feature
+# breaks: SQLAlchemy 2.x for `Mapped[...]`, Pydantic 2.x for the
+# settings/typing model the codebase already uses, psycopg 3.x for the
+# modern driver. RDKit is NOT here — see the [rdkit] extra below.
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.1",
+    "alembic>=1.13",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+    "boto3>=1.34",
+    "requests>=2.31",
+    "PyYAML>=6.0",
+    "numpy>=1.26",
+    # Drop-in replacement for the abandoned `isbnlib`; the runtime
+    # import path remains `import isbnlib` — see
+    # app/services/literature_metadata.py.
+    "isbnlib2>=0.1",
+]
+
+[project.optional-dependencies]
+# Test + lint tooling. Kept minimal: only what the test suite actually
+# imports (pytest, httpx for the FastAPI TestClient transport) plus
+# pytest-cov, which the pytest output already reports as a loaded
+# plugin in the conda env, and ruff as the modern default linter.
+dev = [
+    "pytest>=8",
+    "pytest-cov>=4",
+    "httpx>=0.27",
+    "ruff>=0.4",
+]
+# RDKit is intentionally optional and split out:
+#   - Conda/mamba developers get the conda-forge build via
+#     environment.yml — they do NOT need to install this extra.
+#   - Pure-pip users (and the future API container, if it builds off
+#     pyproject rather than environment.yml) opt in with `[rdkit]`.
+# Keeping RDKit out of the base runtime list means the lockfile
+# resolves on any platform; the heavy chemistry dep is a deliberate
+# choice, not an accidental transitive.
+rdkit = [
+    "rdkit>=2024.3",
+]
+
+# `tckdb-backend` is installed as `pip install -e .` from backend/.
+# The package itself is `app/`. `main.py` is the Uvicorn ASGI shim
+# referenced by `uvicorn main:app` and is exposed as a top-level module
+# so it imports cleanly inside an editable install.
+[tool.setuptools]
+py-modules = ["main"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = ["tests*", "alembic*", "scripts*"]
+
+# pytest configuration. Mirrors backend/pytest.ini for projects that
+# read pyproject; pytest.ini still wins where both exist, so the two
+# stay in sync deliberately.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+# Ruff configuration. Conservative defaults — no project linting policy
+# exists yet, so this only sets line length and target Python so a
+# casual `ruff check` doesn't fight common code patterns.
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+# Start with the small, low-controversy set. Expand once a project
+# linting policy is agreed.
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]  # line-length handled by formatter, not lint

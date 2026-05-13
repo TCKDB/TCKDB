@@ -515,7 +515,7 @@ def main():
         engine.dispose()
 
     print(f"\nDB is alive at: psql -h 127.0.0.1 -p 5432 -U tckdb -d tckdb_dev")
-    print(f"Start the API with: conda run -n tckdb_env uvicorn app.api.app:create_app --factory --reload")
+    print(f"Start the API with: conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8010 --reload")
 
 
 if __name__ == "__main__":

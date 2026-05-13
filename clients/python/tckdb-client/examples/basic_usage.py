@@ -3,7 +3,7 @@
 Reads ``TCKDB_BASE_URL`` and ``TCKDB_API_KEY`` from the environment and
 prints the health response and the authenticated user profile.
 
-    export TCKDB_BASE_URL="http://localhost:8000/api/v1"
+    export TCKDB_BASE_URL="http://localhost:8010/api/v1"
     export TCKDB_API_KEY="tck_replace_me"
     python examples/basic_usage.py
 """

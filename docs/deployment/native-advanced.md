@@ -223,7 +223,7 @@ failure.
 
 ```bash
 conda run -n tckdb_env uvicorn main:app \
-  --host 127.0.0.1 --port 8000
+  --host 127.0.0.1 --port 8010
 ```
 
 Bind to `127.0.0.1` and front it with a reverse proxy that
@@ -256,7 +256,7 @@ User=tckdb
 WorkingDirectory=/opt/tckdb/backend
 EnvironmentFile=/etc/tckdb/lab-server.env
 ExecStart=/opt/conda/bin/conda run -n tckdb_env \
-  uvicorn main:app --host 127.0.0.1 --port 8000
+  uvicorn main:app --host 127.0.0.1 --port 8010
 Restart=on-failure
 
 [Install]
@@ -300,7 +300,7 @@ Things that bite people on native installs:
 
 - The RDKit cartridge image is the painful step on native installs;
   the Docker quick-start skips it.
-- The reference Docker Compose file (`docker-compose.local.yml`) is
+- The reference Docker Compose file (`docker-compose.yml`) is
   tested as part of the documented single-machine /
   [shared private deployment](shared-private-deployment.md) flow.
   Native install is documented but not part of that tested path.

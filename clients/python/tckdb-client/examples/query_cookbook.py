@@ -11,11 +11,11 @@ Usage::
     python examples/query_cookbook.py --recipe list
 
     python examples/query_cookbook.py --recipe species_search \\
-        --smiles "O" --base-url http://127.0.0.1:8000/api/v1
+        --smiles "O" --base-url http://127.0.0.1:8010/api/v1
 
     python examples/query_cookbook.py --recipe all \\
         --smiles "O" --reactant "[CH3]" --product "CH4" \\
-        --base-url http://127.0.0.1:8000/api/v1 --json
+        --base-url http://127.0.0.1:8010/api/v1 --json
 
 Conventions:
 
@@ -62,10 +62,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--base-url",
-        default="http://127.0.0.1:8000/api/v1",
+        default="http://127.0.0.1:8010/api/v1",
         help=(
             "TCKDB API base URL including /api/v1 "
-            "(default: http://127.0.0.1:8000/api/v1)."
+            "(default: http://127.0.0.1:8010/api/v1)."
         ),
     )
     parser.add_argument(

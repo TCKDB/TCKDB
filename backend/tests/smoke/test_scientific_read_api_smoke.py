@@ -22,7 +22,7 @@ Configuration via environment variables:
 
 Run only the smoke tests::
 
-    TCKDB_SMOKE_BASE_URL=http://127.0.0.1:8000/api/v1 \\
+    TCKDB_SMOKE_BASE_URL=http://127.0.0.1:8010/api/v1 \\
         conda run -n tckdb_env pytest backend/tests/smoke/ -q
 
 When ``TCKDB_SMOKE_BASE_URL`` is unset the entire module is collected

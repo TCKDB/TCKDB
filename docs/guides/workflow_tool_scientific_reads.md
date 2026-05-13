@@ -112,7 +112,7 @@ Those decisions belong outside `tckdb-client`.
 from tckdb_client import TCKDBClient
 
 client = TCKDBClient(
-    base_url="http://127.0.0.1:8000/api/v1",   # include /api/v1
+    base_url="http://127.0.0.1:8010/api/v1",   # include /api/v1
     api_key=None,                               # optional for public scientific reads
 )
 ```
@@ -732,7 +732,7 @@ The chemistry-first form — one call, no manual id chaining:
 ```python
 from tckdb_client import TCKDBClient
 
-client = TCKDBClient(base_url="http://127.0.0.1:8000/api/v1")
+client = TCKDBClient(base_url="http://127.0.0.1:8010/api/v1")
 
 kinetics = client.search_kinetics(
     reactants=["[CH3]", "c1ccccc1"],

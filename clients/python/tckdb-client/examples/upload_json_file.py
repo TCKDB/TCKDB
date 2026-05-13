@@ -4,7 +4,7 @@ The client is generic — it does not construct payloads. This script
 just reads bytes from disk and POSTs them. Producing the JSON is the
 caller's job (or the job of a producer-specific adapter).
 
-    export TCKDB_BASE_URL="http://localhost:8000/api/v1"
+    export TCKDB_BASE_URL="http://localhost:8010/api/v1"
     export TCKDB_API_KEY="tck_replace_me"
     python examples/upload_json_file.py \\
       --endpoint /uploads/conformers \\

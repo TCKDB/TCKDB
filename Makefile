@@ -29,18 +29,32 @@
 #                      rather than in `reset` so the rotation is an
 #                      explicit, visible step.
 
-.PHONY: up down migrate reset reset-login test
+.PHONY: up down migrate reset reset-login test api admin doctor check help
+
+# Print available targets.
+help:
+	@echo "TCKDB local-dev targets:"
+	@echo "  make up           Start db/minio + run migrations"
+	@echo "  make api          Start the FastAPI backend on 127.0.0.1:8010 (foreground)"
+	@echo "  make admin        Bootstrap a dev admin user (idempotent)"
+	@echo "  make doctor       Run setup diagnostics (alias: make check)"
+	@echo "  make migrate      Re-apply migrations without restarting infra"
+	@echo "  make reset        Wipe DB + MinIO volumes, restart, re-migrate"
+	@echo "  make reset-login  reset + dev admin + API key (uses dev_login.sh)"
+	@echo "  make down         Stop infra (volumes preserved)"
+	@echo "  make test         Run the backend test suite"
 
 # Start local Postgres + MinIO and apply migrations to tckdb_dev.
-# If the latest initial migration was edited, this will silently
-# leave the DB stale — use `make reset` instead.
+# Uses the canonical docker-compose.yml at the repo root; Compose
+# auto-loads .env. If the latest initial migration was edited, this
+# will silently leave the DB stale — use `make reset` instead.
 up:
-	docker compose -f docker-compose.local.yml up -d
+	docker compose up -d db minio
 	cd backend && DB_NAME=tckdb_dev conda run -n tckdb_env alembic upgrade head
 
 # Stop the infrastructure containers (data volumes preserved).
 down:
-	docker compose -f docker-compose.local.yml down
+	docker compose down
 
 # Re-apply migrations against tckdb_dev without touching containers.
 migrate:
@@ -51,17 +65,39 @@ migrate:
 # this vs. `make up`. Does NOT reseed admin credentials or API keys —
 # run `make reset-login` for that.
 reset:
-	docker compose -f docker-compose.local.yml down -v
-	docker compose -f docker-compose.local.yml up -d
+	docker compose down -v
+	docker compose up -d db minio
 	cd backend && DB_NAME=tckdb_dev conda run -n tckdb_env alembic upgrade head
 
 # `make reset`, then re-bootstrap the dev admin user, log in, and mint
 # a fresh API key. Requires the API server to be running in another
 # terminal (dev_login.sh hits the live /auth endpoints):
-#     conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8000
+#     conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8010
 reset-login: reset
 	bash backend/scripts/dev_login.sh
 
 # Run the full backend test suite.
 test:
 	conda run -n tckdb_env pytest backend/tests/
+
+# Start the FastAPI backend (foreground). Cd into backend/ so the
+# `app` package is on sys.path; this is the exact form that the rest
+# of the docs assume.
+api:
+	cd backend && conda run -n tckdb_env --no-capture-output \
+	    uvicorn main:app --host 127.0.0.1 --port 8010
+
+# Bootstrap a dev admin user. Idempotent: re-running on an existing
+# user leaves the role unchanged (use --force-role-change to override).
+# Set TCKDB_BOOTSTRAP_PASSWORD in the environment to avoid passing
+# the password via flags.
+admin:
+	cd backend && conda run -n tckdb_env python scripts/bootstrap_admin.py \
+	    --username "$${TCKDB_BOOTSTRAP_USERNAME:-admin}" \
+	    --email    "$${TCKDB_BOOTSTRAP_EMAIL:-admin@example.org}" \
+	    --role     admin
+
+# Run setup diagnostics (db/minio health, RDKit, alembic, API).
+# `check` is an alias.
+doctor check:
+	bash backend/scripts/tckdb_doctor.sh

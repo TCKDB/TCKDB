@@ -28,7 +28,7 @@ Runtime dependency: `httpx`.
 Two values fully determine the target instance:
 
 ```bash
-export TCKDB_BASE_URL="http://localhost:8000/api/v1"
+export TCKDB_BASE_URL="http://localhost:8010/api/v1"
 export TCKDB_API_KEY="tck_replace_me"  # optional for public scientific reads
 ```
 
@@ -408,19 +408,19 @@ Empty results are reported with a friendly message; client errors print
 ```bash
 # Default — run the species-side queries against a local instance
 python examples/scientific_reads.py \
-  --base-url http://127.0.0.1:8000/api/v1 \
+  --base-url http://127.0.0.1:8010/api/v1 \
   --smiles "C[CH2]"
 
 # Add reactants/products to also run reaction discovery + kinetics +
 # a follow-up to /scientific/reaction-entries/{id}/full
 python examples/scientific_reads.py \
-  --base-url http://127.0.0.1:8000/api/v1 \
+  --base-url http://127.0.0.1:8010/api/v1 \
   --reactant "[CH3]" --reactant "c1ccccc1" \
   --product "CH4" --product "[c]1ccccc1"
 
 # Filter species-calculations by LoT, dump raw JSON
 python examples/scientific_reads.py \
-  --base-url http://127.0.0.1:8000/api/v1 \
+  --base-url http://127.0.0.1:8010/api/v1 \
   --smiles "CCO" \
   --level-of-theory-id 8 \
   --json

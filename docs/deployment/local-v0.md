@@ -67,7 +67,7 @@ Each section below states which context it assumes.
 
 ```bash
 cp backend/.env.local.example backend/.env
-docker compose -f docker-compose.local.yml up -d
+docker compose up -d
 ```
 
 This brings up:
@@ -128,7 +128,7 @@ TCKDB_BOOTSTRAP_PASSWORD='change-me' \
 
 > **Containerized usage.** Once a backend image exists (see
 > [Future work](#future-work)) the same script will run as
-> `docker compose -f docker-compose.local.yml exec api python scripts/bootstrap_admin.py ...`.
+> `docker compose exec api python scripts/bootstrap_admin.py ...`.
 > For Local v0 the host-side command above is the supported path.
 
 ---
@@ -139,7 +139,7 @@ TCKDB_BOOTSTRAP_PASSWORD='change-me' \
 
 ```bash
 conda run -n tckdb_env uvicorn main:app \
-  --host 127.0.0.1 --port 8000 --reload
+  --host 127.0.0.1 --port 8010 --reload
 ```
 
 By default `TCKDB_INLINE_WORKER=true` (in `backend/.env.local.example`)
@@ -158,7 +158,7 @@ conda run -n tckdb_env python -m app.workers.upload_worker
 ### a. Health endpoint
 
 ```bash
-curl -sf http://127.0.0.1:8000/api/v1/health
+curl -sf http://127.0.0.1:8010/api/v1/health
 # {"status":"ok"}
 ```
 
@@ -169,7 +169,7 @@ If you bootstrapped an admin in step 3, log in:
 ```bash
 curl -sf -c cookies.txt \
   -H "Content-Type: application/json" \
-  -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -X POST http://127.0.0.1:8010/api/v1/auth/login \
   -d '{"username": "admin", "password": "change-me"}'
 ```
 
@@ -178,7 +178,7 @@ Or, with `AUTH_ALLOW_OPEN_REGISTRATION=true`, register a new user:
 ```bash
 curl -sf -c cookies.txt \
   -H "Content-Type: application/json" \
-  -X POST http://127.0.0.1:8000/api/v1/auth/register \
+  -X POST http://127.0.0.1:8010/api/v1/auth/register \
   -d '{"username": "alice", "password": "change-me-too", "email": "alice@example.local"}'
 ```
 
@@ -193,7 +193,7 @@ API key.
 ```bash
 curl -sf -b cookies.txt \
   -H "Content-Type: application/json" \
-  -X POST http://127.0.0.1:8000/api/v1/auth/api-keys \
+  -X POST http://127.0.0.1:8010/api/v1/auth/api-keys \
   -d '{"label": "local-dev"}'
 ```
 
@@ -207,7 +207,7 @@ export TCKDB_API_KEY='tck_...'
 ### d. Confirm anonymous uploads are rejected
 
 ```bash
-curl -i -X POST http://127.0.0.1:8000/api/v1/uploads/...
+curl -i -X POST http://127.0.0.1:8010/api/v1/uploads/...
 # HTTP/1.1 401 Unauthorized
 ```
 
@@ -217,7 +217,7 @@ Any upload route accepts the `X-API-Key` header. The exact path and
 payload depend on the workflow; using a generic placeholder:
 
 ```bash
-curl -sf -X POST http://127.0.0.1:8000/api/v1/uploads/<workflow> \
+curl -sf -X POST http://127.0.0.1:8010/api/v1/uploads/<workflow> \
   -H "X-API-Key: $TCKDB_API_KEY" \
   -H "Content-Type: application/json" \
   --data @payload.json
@@ -276,7 +276,7 @@ two values:
 ```yaml
 # Local
 tckdb:
-  base_url: "http://localhost:8000/api/v1"
+  base_url: "http://localhost:8010/api/v1"
   api_key: "tck_..."
 ```
 
@@ -304,13 +304,13 @@ to a particular workflow tool.
 ### Stop (preserve data)
 
 ```bash
-docker compose -f docker-compose.local.yml down
+docker compose down
 ```
 
 ### Full reset (drop volumes — destroys local DB and artifacts)
 
 ```bash
-docker compose -f docker-compose.local.yml down -v
+docker compose down -v
 ```
 
 You'll need to re-run the migration (step 2) and bootstrap admin (step
@@ -321,7 +321,7 @@ You'll need to re-run the migration (step 2) and bootstrap admin (step
 ## Troubleshooting
 
 - **`alembic upgrade head` cannot connect.** Confirm the DB container is
-  healthy: `docker compose -f docker-compose.local.yml ps`. The default
+  healthy: `docker compose ps`. The default
   port (5432) must be free on the host because the compose file uses
   `network_mode: host`.
 - **Port 5432 already in use.** Either stop the existing Postgres

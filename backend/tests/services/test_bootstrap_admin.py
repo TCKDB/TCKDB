@@ -14,7 +14,8 @@ from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 from app.services.auth import (
     BootstrapResult,
-    bootstrap_admin,
+    RoleChangeRefused,
+    bootstrap_user,
     verify_password,
 )
 
@@ -26,7 +27,7 @@ class TestBootstrapAdmin:
         )
         assert before is None
 
-        user, outcome = bootstrap_admin(
+        user, outcome = bootstrap_user(
             db_session,
             username="root",
             email="root@example.com",
@@ -50,7 +51,9 @@ class TestBootstrapAdmin:
         db_session.add(existing)
         db_session.flush()
 
-        user, outcome = bootstrap_admin(db_session, username="moe")
+        user, outcome = bootstrap_user(
+            db_session, username="moe", force_role_change=True
+        )
 
         assert outcome == BootstrapResult.PROMOTED
         assert user.id == existing.id
@@ -68,10 +71,11 @@ class TestBootstrapAdmin:
         )
         db_session.flush()
 
-        user, outcome = bootstrap_admin(
+        user, outcome = bootstrap_user(
             db_session,
             username="brand-new-handle",  # does not match
             email="curly@example.com",
+            force_role_change=True,
         )
 
         assert outcome == BootstrapResult.PROMOTED
@@ -79,14 +83,14 @@ class TestBootstrapAdmin:
         assert user.role is AppUserRole.admin
 
     def test_idempotent_repeat_runs_settle_on_unchanged(self, db_session):
-        bootstrap_admin(
+        bootstrap_user(
             db_session,
             username="larry",
             email="larry@example.com",
             password="password-123-abc",
         )
         # Second invocation: same inputs, no mutation.
-        user, outcome = bootstrap_admin(
+        user, outcome = bootstrap_user(
             db_session,
             username="larry",
             email="larry@example.com",
@@ -111,15 +115,60 @@ class TestBootstrapAdmin:
         )
         db_session.flush()
 
-        user, outcome = bootstrap_admin(db_session, username="dormant")
+        user, outcome = bootstrap_user(db_session, username="dormant")
 
         assert outcome == BootstrapResult.PROMOTED
         assert user.is_active is True
 
     def test_creating_new_admin_requires_password(self, db_session):
         with pytest.raises(ValueError):
-            bootstrap_admin(db_session, username="passwordless")
+            bootstrap_user(db_session, username="passwordless")
 
     def test_username_required(self, db_session):
         with pytest.raises(ValueError):
-            bootstrap_admin(db_session, username="   ")
+            bootstrap_user(db_session, username="   ")
+
+    def test_creates_user_at_explicit_non_admin_role(self, db_session):
+        user, outcome = bootstrap_user(
+            db_session,
+            username="cure",
+            email="cure@example.com",
+            password="curator-pw-123",
+            role=AppUserRole.curator,
+        )
+
+        assert outcome == BootstrapResult.CREATED
+        assert user.role is AppUserRole.curator
+
+    def test_refuses_role_change_without_force(self, db_session):
+        db_session.add(
+            AppUser(
+                username="picky",
+                role=AppUserRole.user,
+                is_active=True,
+            )
+        )
+        db_session.flush()
+
+        with pytest.raises(RoleChangeRefused):
+            bootstrap_user(db_session, username="picky", role=AppUserRole.admin)
+
+    def test_force_role_change_can_demote(self, db_session):
+        db_session.add(
+            AppUser(
+                username="overpowered",
+                role=AppUserRole.admin,
+                is_active=True,
+            )
+        )
+        db_session.flush()
+
+        user, outcome = bootstrap_user(
+            db_session,
+            username="overpowered",
+            role=AppUserRole.curator,
+            force_role_change=True,
+        )
+
+        assert outcome == BootstrapResult.PROMOTED
+        assert user.role is AppUserRole.curator

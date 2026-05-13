@@ -4,13 +4,13 @@ This example is intentionally workflow-tool agnostic. It demonstrates the
 two-value targeting model used by every TCKDB client:
 
     TCKDB_BASE_URL   — the API root of the target instance, e.g.
-                       http://localhost:8000/api/v1 (local),
-                       http://lab-tckdb.internal:8000/api/v1 (lab-server),
+                       http://localhost:8010/api/v1 (local),
+                       http://lab-tckdb.internal:8010/api/v1 (lab-server),
                        https://tckdb.example.org/api/v1 (hosted).
     TCKDB_API_KEY    — an API key minted on THAT instance.
 
 Run:
-    export TCKDB_BASE_URL="http://localhost:8000/api/v1"
+    export TCKDB_BASE_URL="http://localhost:8010/api/v1"
     export TCKDB_API_KEY="tck_replace_me"
     python examples/clients/simple_upload.py
 """

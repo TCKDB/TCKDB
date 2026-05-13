@@ -72,7 +72,7 @@ Client configuration is:
 
 ```python
 client = TCKDBClient(
-    base_url="http://localhost:8000/api/v1",
+    base_url="http://localhost:8010/api/v1",
     api_key="tck_...",
 )
 ```
@@ -474,8 +474,8 @@ Rules:
 Examples:
 
 ```python
-TCKDBClient("http://localhost:8000/api/v1").me()
-TCKDBClient("http://localhost:8000/api/v1/").me()
+TCKDBClient("http://localhost:8010/api/v1").me()
+TCKDBClient("http://localhost:8010/api/v1/").me()
 client.post_json("/uploads/thermo", payload)
 client.post_json("uploads/thermo", payload)
 ```
@@ -514,7 +514,7 @@ No chemistry dependencies.
 Example upload JSON file flow:
 
 ```bash
-export TCKDB_BASE_URL="http://localhost:8000/api/v1"
+export TCKDB_BASE_URL="http://localhost:8010/api/v1"
 export TCKDB_API_KEY="tck_replace_me"
 
 python examples/upload_json_file.py \

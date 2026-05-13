@@ -70,19 +70,19 @@ After loading, exercise the demo via the runnable example:
 ```bash
 # Species + thermo + species-calculations queries for CH4
 python clients/python/tckdb-client/examples/scientific_reads.py \
-    --base-url http://127.0.0.1:8000/api/v1 \
+    --base-url http://127.0.0.1:8010/api/v1 \
     --smiles "C"
 
 # Plus reaction discovery + kinetics for CH3 + H2 → CH4 + H
 python clients/python/tckdb-client/examples/scientific_reads.py \
-    --base-url http://127.0.0.1:8000/api/v1 \
+    --base-url http://127.0.0.1:8010/api/v1 \
     --smiles "C" \
     --reactant "[CH3]" --reactant "[H][H]" \
     --product "C" --product "[H]"
 
 # Lowest SP energy for CH4 with raw JSON output
 python clients/python/tckdb-client/examples/scientific_reads.py \
-    --base-url http://127.0.0.1:8000/api/v1 \
+    --base-url http://127.0.0.1:8010/api/v1 \
     --smiles "C" \
     --json
 ```
@@ -144,22 +144,22 @@ kinetics + `/full` chain. Narrow the output with:
 ```bash
 # Just the species discovery call.
 python clients/python/tckdb-client/examples/scientific_reads.py \
-    --base-url http://127.0.0.1:8000/api/v1 \
+    --base-url http://127.0.0.1:8010/api/v1 \
     --smiles "C" --only species
 
 # Species-calculations + geometry follow-up.
 python clients/python/tckdb-client/examples/scientific_reads.py \
-    --base-url http://127.0.0.1:8000/api/v1 \
+    --base-url http://127.0.0.1:8010/api/v1 \
     --smiles "C" --only calculations,geometry
 
 # Disable every follow-up call.
 python clients/python/tckdb-client/examples/scientific_reads.py \
-    --base-url http://127.0.0.1:8000/api/v1 \
+    --base-url http://127.0.0.1:8010/api/v1 \
     --smiles "C" --no-followups
 
 # Re-target the species-calculations search at opt records.
 python clients/python/tckdb-client/examples/scientific_reads.py \
-    --base-url http://127.0.0.1:8000/api/v1 \
+    --base-url http://127.0.0.1:8010/api/v1 \
     --smiles "C" --only calculations --calculation-type opt
 ```
 

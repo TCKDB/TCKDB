@@ -204,7 +204,7 @@ Add an ARC-side config shape such as:
 ```yaml
 tckdb:
   enabled: true
-  base_url: "http://localhost:8000/api/v1"
+  base_url: "http://localhost:8010/api/v1"
   api_key_env: "TCKDB_API_KEY"
   payload_dir: "tckdb_payloads"
   upload: true
@@ -560,7 +560,7 @@ Include example config:
 ```yaml
 tckdb:
   enabled: true
-  base_url: "http://localhost:8000/api/v1"
+  base_url: "http://localhost:8010/api/v1"
   api_key_env: "TCKDB_API_KEY"
   payload_dir: "tckdb_payloads"
   upload: true

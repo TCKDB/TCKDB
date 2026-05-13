@@ -45,7 +45,7 @@ python examples/query_cookbook.py --recipe all --smiles "O" --json
 from tckdb_client import TCKDBClient
 
 client = TCKDBClient(
-    base_url="http://127.0.0.1:8000/api/v1",   # include /api/v1
+    base_url="http://127.0.0.1:8010/api/v1",   # include /api/v1
     api_key=None,                               # optional for public scientific reads
     timeout=30.0,
 )

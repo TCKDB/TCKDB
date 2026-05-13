@@ -78,7 +78,7 @@ class TCKDBClient:
     Parameters
     ----------
     base_url:
-        API root, e.g. ``http://localhost:8000/api/v1``. Trailing
+        API root, e.g. ``http://localhost:8010/api/v1``. Trailing
         slashes are stripped; path joining never duplicates ``/``.
     api_key:
         Optional API key. Required for authenticated endpoints; pass
