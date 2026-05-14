@@ -73,7 +73,7 @@ def test_parse_leaves_non_dotted_quad_with_port_alone():
 def low_budget_client(db_session: Session, monkeypatch):
     """A live TestClient with a tiny anonymous budget so 429 fires fast."""
     monkeypatch.setattr(settings, "rate_limit_enabled", True)
-    monkeypatch.setattr(settings, "rate_limit_anon_per_minute", 2)
+    monkeypatch.setattr(settings, "rate_limit_anon_read_per_minute", 2)
     reset_rate_limit_store()
 
     app = create_app()
@@ -125,7 +125,7 @@ def test_trusted_single_ip_header_resolves_full_value(low_budget_client, monkeyp
 
     # Drain via X-Real-IP=A
     headers_a = {"X-Real-IP": "1.2.3.4"}
-    for _ in range(settings.rate_limit_anon_per_minute):
+    for _ in range(settings.rate_limit_anon_read_per_minute):
         r = low_budget_client.get(
             "/api/v1/scientific/reactions/search", headers=headers_a
         )
@@ -156,7 +156,7 @@ def test_missing_configured_header_falls_back_to_transport_peer(
     monkeypatch.setattr(settings, "trusted_proxy_header", "X-Real-IP")
 
     # No X-Real-IP supplied → falls back to transport peer (127.0.0.1).
-    for _ in range(settings.rate_limit_anon_per_minute):
+    for _ in range(settings.rate_limit_anon_read_per_minute):
         r = low_budget_client.get("/api/v1/scientific/reactions/search")
         assert r.status_code != 429
     r = low_budget_client.get("/api/v1/scientific/reactions/search")

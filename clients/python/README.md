@@ -9,16 +9,22 @@ RMG, …). It accepts already-formed JSON payloads and sends them; it does
 chemistry dependencies.
 
 > For hosted/public querying, see
-> [`docs/guides/public_hosted_querying.md`](../../../docs/guides/public_hosted_querying.md).
+> [`docs/guides/public_hosted_querying.md`](../../docs/guides/public_hosted_querying.md).
 
 ## Install
 
-From the package directory:
+Install directly from the TCKDB monorepo without cloning:
 
 ```bash
-pip install -e .
+pip install "git+https://github.com/calvinp0/tckdbv2.git#subdirectory=clients/python"
+```
+
+Editable install for local development (from the repo root):
+
+```bash
+pip install -e ./clients/python
 # or with test extras:
-pip install -e ".[test]"
+pip install -e "./clients/python[test]"
 ```
 
 Runtime dependency: `httpx`.
@@ -34,7 +40,7 @@ export TCKDB_API_KEY="tck_replace_me"  # optional for public scientific reads
 
 API keys are minted on the **target instance**. Pointing at a different
 `base_url` does not migrate or sync data — see
-[`docs/clients/generic-client-targeting.md`](../../../docs/clients/generic-client-targeting.md).
+[`docs/clients/generic-client-targeting.md`](../../docs/clients/generic-client-targeting.md).
 
 ### When is the API key required?
 
@@ -181,7 +187,7 @@ parameters, call the backend, and return parsed JSON. They contain no
 ARC- or RMG-specific selection or reuse policy, no client-side ranking,
 and no notion of a "best" record. Trust posture, sort order, evidence
 completeness, and provenance shape are all decided by the backend per
-[`docs/specs/read_api_mvp.md`](../../../docs/specs/read_api_mvp.md).
+[`docs/specs/read_api_mvp.md`](../../docs/specs/read_api_mvp.md).
 
 **Recommended — chemistry-first search** (use these for hosted workflow
 tools that know identifiers, not entry ids):

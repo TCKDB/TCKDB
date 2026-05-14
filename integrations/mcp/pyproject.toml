@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tckdb-client"
-version = "0.12.0"
-description = "Generic synchronous Python HTTP client for the TCKDB API."
+name = "tckdb-mcp"
+version = "0.1.0"
+description = "Read-only MCP server wrapping the TCKDB scientific API."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "TCKDB" }]
-keywords = ["tckdb", "thermochemistry", "kinetics", "client", "http"]
+keywords = ["tckdb", "mcp", "chemistry", "kinetics", "thermo"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -19,6 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.27",
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -27,19 +28,18 @@ test = [
 ]
 
 [project.scripts]
-tckdb-replay = "tckdb_client.cli:main"
+tckdb-mcp = "tckdb_mcp.server:main"
 
 [project.urls]
-Homepage = "https://github.com/calvinp0/tckdbv2"
-Repository = "https://github.com/calvinp0/tckdbv2"
-Issues = "https://github.com/calvinp0/tckdbv2/issues"
-Documentation = "https://github.com/calvinp0/tckdbv2/tree/main/clients/python"
+Homepage = "https://github.com/tckdb"
+Specification = "https://github.com/tckdb/tckdb_v2/blob/main/docs/specs/mcp_readonly_integration.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-tckdb_client = ["py.typed"]
+tckdb_mcp = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]

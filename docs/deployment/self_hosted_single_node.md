@@ -270,6 +270,13 @@ the placeholders. The non-negotiable hosted toggles:
 | `DB_STATEMENT_TIMEOUT_MS` | `30000` (or stricter) | Per-session SQL cap. |
 | `TCKDB_API_HOST` | `127.0.0.1` | Only `cloudflared` talks to the API. |
 
+For the current default bucket budgets, see
+[`.env.selfhosted.example`](../../.env.selfhosted.example). This
+deployment doc only documents controls that are required or
+policy-relevant; numeric rate-limit budgets
+(`RATE_LIMIT_*_PER_MINUTE`) are tunable deployment settings and live
+in the env example to avoid two drifting sources of truth.
+
 ---
 
 ## Trusted proxy header
@@ -683,15 +690,20 @@ curl -fsS https://api.tckdb.example.org/api/v1/health
 # {"status":"ok"}
 ```
 
+Health verifies connectivity only. `/api/v1/health` is exempt from
+rate limiting (see [`rate_limit.py`](../../backend/app/api/rate_limit.py)),
+so it does **not** exercise any bucket — use the smoke test in §3
+below for that.
+
 ### 2. Anonymous scientific read via `query_cookbook.py`
 
 The cookbook lives at
-[clients/python/tckdb-client/examples/query_cookbook.py](../../clients/python/tckdb-client/examples/query_cookbook.py).
+[clients/python/examples/query_cookbook.py](../../clients/python/examples/query_cookbook.py).
 It uses refs as handles by default, which is what
 `ALLOW_PUBLIC_INTERNAL_IDS=false` requires:
 
 ```bash
-cd clients/python/tckdb-client
+cd clients/python
 pip install -e .
 
 python examples/query_cookbook.py --recipe species_search \
@@ -706,22 +718,53 @@ and that ref-based handles round-trip.
 
 ### 3. Rate-limit smoke test
 
-`RATE_LIMIT_ANON_PER_MINUTE=60` (default) means the 61st request from
-one IP inside a fixed window must be rejected with `429`:
+This exercises the **`anon_read`** bucket — anonymous scientific
+reads keyed by client IP. `RATE_LIMIT_ANON_READ_PER_MINUTE=60`
+(default) means the 61st anonymous scientific-read request from one
+IP inside a fixed window must be rejected with `429`.
+
+`/api/v1/health` is exempt, so the loop targets a real public
+scientific search endpoint (`POST /scientific/reactions/search`)
+with a minimal valid body that does not depend on seeded data — an
+empty `results` list is fine, the point is to land in the
+`anon_read` bucket and get rate-limited:
 
 ```bash
+base=https://api.tckdb.example.org/api/v1
 for i in $(seq 1 70); do
-    code=$(curl -s -o /dev/null -w "%{http_code}\n" \
-        https://api.tckdb.example.org/api/v1/health)
-    echo "$i $code"
+    code=$(curl -sS -o /dev/null -w "%{http_code}" \
+        -X POST "$base/scientific/reactions/search" \
+        -H "Content-Type: application/json" \
+        --data '{"reactants":["CC"],"products":["C[CH2]"],"limit":1}')
+    printf "%s %s\n" "$i" "$code"
 done | tail -15
 ```
 
-Expected: a run of `200`s followed by `429`s. If you never see `429`,
-either `RATE_LIMIT_ENABLED=false` slipped in, or
-`TRUSTED_PROXY_HEADER` is misconfigured and every request looks like
-it's coming from `127.0.0.1` (which is whitelisted differently — check
-the audit log).
+Expected: a run of `200`s (the search may legitimately return zero
+results on an empty DB) followed by `429`s once the per-minute
+budget is exhausted. If you raised `RATE_LIMIT_ANON_READ_PER_MINUTE`
+above 60, raise the loop count accordingly.
+
+The `429` response body identifies the bucket:
+
+```json
+{"detail":"...","code":"rate_limit_exceeded","bucket":"anon_read","retry_after_seconds":...}
+```
+
+Do **not** add `-H "X-API-Key: ..."` to this loop — that would
+switch the request into the `auth_read` bucket (300/min, keyed by
+credential fingerprint) and the anonymous limiter would not be
+exercised.
+
+If you never see `429`, the usual causes are:
+
+- `RATE_LIMIT_ENABLED=false` slipped into `.env.selfhosted`.
+- `TRUSTED_PROXY_HEADER` is misconfigured: behind Cloudflare Tunnel
+  every request arrives over loopback, so without
+  `TRUSTED_PROXY_HEADER=CF-Connecting-IP` the limiter sees every
+  caller as `127.0.0.1` and lumps unrelated callers into one bucket
+  (or fails to distinguish them from the origin). Check the audit
+  log for the IP the limiter actually recorded.
 
 ### 4. Legacy-route auth check
 

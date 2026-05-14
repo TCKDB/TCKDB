@@ -5,17 +5,25 @@ fixed-window counter keyed by ``(bucket, identity)``: every distinct
 caller gets a per-bucket counter that resets at the start of the next
 window. The window size and budget are bucket-specific.
 
-The middleware classifies each request into a bucket and chooses an
-identity:
+The middleware classifies each request into a route-class-aware
+bucket and chooses an identity:
 
 - ``/api/v1/auth/login`` and ``/api/v1/auth/api-keys`` → ``login``
-  bucket (per-minute, IP-keyed).
+  bucket (per-minute, IP-keyed). Tight: credential-stuffing target.
 - ``/api/v1/auth/register`` → ``register`` bucket (per-hour, IP-keyed).
-- Any other path with an authenticated identity hint (``X-API-Key``
-  header or session cookie) → ``auth`` bucket (per-minute, keyed by a
-  short hash of the credential so concurrent users on one IP don't
-  share a budget).
-- Everything else → ``anon`` bucket (per-minute, IP-keyed).
+  Tight: account-spam target.
+- Public scientific reads (GET ``/api/v1/scientific/...``, POST
+  ``/api/v1/scientific/.../search``, GET ``/api/v1/workflow-tools``,
+  GET ``/api/v1/workflow-tool-releases``) split by whether a
+  credential is present:
+  - With credential → ``auth_read`` (per-minute, credential-keyed).
+  - Without credential → ``anon_read`` (per-minute, IP-keyed).
+- Any other request with a credential → ``auth_write`` for mutating
+  methods (POST/PUT/PATCH/DELETE) or ``auth_read`` for read methods
+  on non-public-read paths. Both credential-keyed.
+- Everything else anonymous → ``anon_other`` (per-minute, IP-keyed).
+  Anonymous writes land here on purpose: they must not inherit the
+  generous read budget.
 
 Identity derivation honors ``settings.trusted_proxy_header`` when set
 so a reverse proxy that overwrites e.g. ``X-Real-IP`` is respected.
@@ -195,48 +203,138 @@ def _credential_fingerprint(request: Request) -> str | None:
     return None
 
 
-_AUTH_LOGIN_PATHS = {
+_AUTH_LOGIN_PATHS = frozenset({
     "/api/v1/auth/login",
     "/api/v1/auth/api-keys",
-}
-_AUTH_REGISTER_PATHS = {
+})
+_AUTH_REGISTER_PATHS = frozenset({
     "/api/v1/auth/register",
-}
+})
+_HEALTH_PATHS = frozenset({
+    "/api/v1/health",
+    "/api/v1/health/",
+})
+
+# Public read-classified GET prefixes. POST searches are handled
+# separately because POST is normally mutating; only the explicit
+# ``.../search`` suffix on the scientific surface is read-classified.
+_PUBLIC_READ_GET_PREFIXES: tuple[str, ...] = (
+    "/api/v1/scientific/",
+    "/api/v1/workflow-tools",
+    "/api/v1/workflow-tool-releases",
+)
+
+_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _is_login_path(method: str, path: str) -> bool:
+    """True for the login + API-key-issuance routes."""
+    return method == "POST" and path in _AUTH_LOGIN_PATHS
+
+
+def _is_register_path(method: str, path: str) -> bool:
+    """True for the account registration route."""
+    return method == "POST" and path in _AUTH_REGISTER_PATHS
+
+
+def _is_health_path(path: str) -> bool:
+    """True for the operator health-check route(s)."""
+    return path in _HEALTH_PATHS
+
+
+def _is_public_read_path(method: str, path: str) -> bool:
+    """True when *path* is a public read or read-via-POST-search route.
+
+    GETs on the scientific and workflow-tool surfaces are reads. POSTs
+    are reads only when they target a scientific search endpoint
+    (``/api/v1/scientific/.../search``); the ``/scientific/`` namespace
+    is read-only by convention so this prefix+suffix test is safe.
+    Mutating sub-routes added under ``/scientific/`` in the future
+    would need to be excluded explicitly.
+    """
+    if method == "GET":
+        return any(path.startswith(p) for p in _PUBLIC_READ_GET_PREFIXES)
+    if method == "POST":
+        return path.startswith("/api/v1/scientific/") and path.endswith("/search")
+    return False
+
+
+def _is_mutating_method(method: str) -> bool:
+    """True for HTTP verbs that normally change server state.
+
+    Callers must first rule out routes that are reads despite using
+    POST (the scientific search endpoints).
+    """
+    return method in _MUTATING_METHODS
 
 
 def _classify(request: Request) -> tuple[str, int, int, str]:
-    """Pick (bucket_name, budget, window_seconds, identity) for *request*.
+    """Pick ``(bucket, budget, window_seconds, identity)`` for *request*.
 
-    Returns a 4-tuple even when the limiter is disabled — callers
-    check the master switch separately.
+    Policy invariant:
+
+    - ``auth_write`` is method-sensitive (any authenticated mutation).
+    - ``anon_read``  is route-sensitive (anonymous public read).
+    - ``auth_read``  is the authenticated fallback for everything not
+      caught by login/register/auth_write.
+    - ``anon_other`` is the anonymous fallback so anonymous mutating
+      requests never inherit the read budget.
+
+    Ordering matters: login/register are matched first because they
+    are POSTs and would otherwise drop through to the mutating branch.
+    Public-read classification is checked before the mutating-method
+    check so the scientific ``POST .../search`` endpoints are
+    correctly classified as reads.
     """
+    method = request.method.upper()
     path = request.url.path
     ip = _client_ip(request)
-    if path in _AUTH_LOGIN_PATHS:
+
+    if _is_login_path(method, path):
+        return ("login", settings.rate_limit_auth_login_per_minute, 60, ip)
+
+    if _is_register_path(method, path):
+        return ("register", settings.rate_limit_register_per_hour, 3600, ip)
+
+    credential = _credential_fingerprint(request)
+
+    if _is_public_read_path(method, path):
+        if credential is not None:
+            return (
+                "auth_read",
+                settings.rate_limit_auth_read_per_minute,
+                60,
+                credential,
+            )
         return (
-            "login",
-            settings.rate_limit_auth_login_per_minute,
+            "anon_read",
+            settings.rate_limit_anon_read_per_minute,
             60,
             ip,
         )
-    if path in _AUTH_REGISTER_PATHS:
-        return (
-            "register",
-            settings.rate_limit_register_per_hour,
-            3600,
-            ip,
-        )
-    credential = _credential_fingerprint(request)
+
     if credential is not None:
+        if _is_mutating_method(method):
+            return (
+                "auth_write",
+                settings.rate_limit_auth_write_per_minute,
+                60,
+                credential,
+            )
+        # Authenticated non-mutating, non-public-read fallback (e.g. a
+        # future admin/dashboard/status GET). Generous on purpose —
+        # add ``auth_other`` only when a real route class needs its
+        # own budget.
         return (
-            "auth",
-            settings.rate_limit_auth_per_minute,
+            "auth_read",
+            settings.rate_limit_auth_read_per_minute,
             60,
             credential,
         )
+
     return (
-        "anon",
-        settings.rate_limit_anon_per_minute,
+        "anon_other",
+        settings.rate_limit_anon_other_per_minute,
         60,
         ip,
     )
@@ -263,7 +361,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not settings.rate_limit_enabled:
             return await call_next(request)
         # Don't gate health checks — operators ping these on a loop.
-        if request.url.path in ("/api/v1/health", "/api/v1/health/"):
+        if _is_health_path(request.url.path):
             return await call_next(request)
 
         bucket, limit, window, identity = _classify(request)

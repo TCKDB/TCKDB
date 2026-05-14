@@ -11,7 +11,7 @@ client-side ranking.
 > expectations) before working through the recipes here.
 
 The corresponding runnable script is
-[`clients/python/tckdb-client/examples/query_cookbook.py`](../../clients/python/tckdb-client/examples/query_cookbook.py).
+[`clients/python/examples/query_cookbook.py`](../../clients/python/examples/query_cookbook.py).
 Each recipe in this guide maps 1:1 to a function named
 `recipe_<name>` in that script — pick one, lift it into your code,
 and it should work.

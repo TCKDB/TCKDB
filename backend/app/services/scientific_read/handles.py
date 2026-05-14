@@ -33,6 +33,7 @@ from app.db.models.geometry import Geometry
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.db.models.species import Species, SpeciesEntry
+from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.public_refs import PREFIXES
 
 if TYPE_CHECKING:
@@ -303,6 +304,30 @@ def resolve_geometry_handle(session: Session, handle: str) -> int:
     )
 
 
+def resolve_calculation_handle(session: Session, handle: str) -> int:
+    """Resolve a calculation path handle (int or ``calc_...``) → row id."""
+    return resolve_path_handle(
+        session, Calculation, handle, kind_label="calculation"
+    )
+
+
+def resolve_transition_state_handle(session: Session, handle: str) -> int:
+    """Resolve a transition-state path handle (int or ``ts_...``) → row id."""
+    return resolve_path_handle(
+        session, TransitionState, handle, kind_label="transition_state"
+    )
+
+
+def resolve_transition_state_entry_handle(session: Session, handle: str) -> int:
+    """Resolve a transition-state-entry path handle (int or ``tse_...``) → row id."""
+    return resolve_path_handle(
+        session,
+        TransitionStateEntry,
+        handle,
+        kind_label="transition_state_entry",
+    )
+
+
 def reconcile_species_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
 ) -> int | None | object:
@@ -399,6 +424,9 @@ __all__ = [
     "resolve_species_entry_handle",
     "resolve_reaction_entry_handle",
     "resolve_geometry_handle",
+    "resolve_calculation_handle",
+    "resolve_transition_state_handle",
+    "resolve_transition_state_entry_handle",
     "reconcile_species_pair",
     "reconcile_species_entry_pair",
     "reconcile_reaction_pair",

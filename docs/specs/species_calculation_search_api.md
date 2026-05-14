@@ -695,8 +695,8 @@ When this is implemented, the work will mirror Phase 6:
 | Route | `backend/app/api/routes/scientific/species_calculations_search.py` | GET + POST wrappers |
 | Tests | `backend/tests/services/scientific_read/test_search_species_calculations.py` | Service-layer behavior |
 | Tests | `backend/tests/api/scientific/test_api_species_calculations_search.py` | API wiring + OpenAPI |
-| Client | `clients/python/tckdb-client/src/tckdb_client/client.py` | New `client.search_species_calculations(...)` method |
-| Client tests | `clients/python/tckdb-client/tests/test_scientific_search.py` (extend) | Request construction + error surfacing |
+| Client | `clients/python/src/tckdb_client/client.py` | New `client.search_species_calculations(...)` method |
+| Client tests | `clients/python/tests/test_scientific_search.py` (extend) | Request construction + error surfacing |
 | Doc | `docs/guides/workflow_tool_scientific_reads.md` | New section: chemistry-first species calculation search |
 
 Estimated scope is comparable to Phase 6 (~1500 lines of code + tests

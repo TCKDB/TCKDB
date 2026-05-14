@@ -373,7 +373,19 @@ curl -X POST "$TCKDB_BASE_URL/uploads/calculations" \
 Workflow tools integrate by submitting structured TCKDB upload
 payloads to the appropriate `/api/v1/uploads/*` or `/api/v1/bundles/*`
 endpoint. The repo ships a thin Python HTTP client at
-[clients/python/tckdb-client/](clients/python/tckdb-client/).
+[clients/python/](clients/python/).
+
+Install it directly from the monorepo without cloning:
+
+```bash
+pip install "git+https://github.com/calvinp0/tckdbv2.git#subdirectory=clients/python"
+```
+
+For local editable development:
+
+```bash
+pip install -e ./clients/python
+```
 
 `tckdb-client` is intentionally chemistry-free — it knows how to
 authenticate, encode payloads, retry, and handle idempotency, but it
@@ -430,7 +442,7 @@ backend/                              FastAPI app, SQLAlchemy models,
                                       schemas, workflows, scripts, tests
 backend/scripts/                      Admin, auth, deployment, and
                                       diagnostic helpers
-clients/python/tckdb-client/          Thin Python HTTP client
+clients/python/          Thin Python HTTP client
 docs/                                 Curated documentation
                                       (deployment/, guides/, specs/, roadmaps/)
 examples/                             Deployment and client examples

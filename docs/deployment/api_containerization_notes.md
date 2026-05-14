@@ -188,5 +188,5 @@ Out of scope for this packaging pass:
   different `CMD`.
 - **Build context.** The current `backend/Dockerfile` plan assumes
   `context: backend/`. If the image needs anything from the repo root
-  (e.g. `clients/python/tckdb-client/` for an integrated build), bump
+  (e.g. `clients/python/` for an integrated build), bump
   to `context: .` and adjust paths.

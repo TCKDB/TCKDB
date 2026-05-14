@@ -48,8 +48,25 @@ class Settings(BaseSettings):
     # callers are keyed by client IP; authenticated callers are keyed
     # by API-key fingerprint or session cookie so concurrent users on
     # one IP don't share a bucket.
-    rate_limit_anon_per_minute: int = 60
-    rate_limit_auth_per_minute: int = 300
+    #
+    # The buckets are split by route class so a noisy uploader cannot
+    # starve the public read surface and an anonymous scraper does not
+    # accidentally inherit the generous read budget for writes:
+    #
+    # - ``anon_read``  — anonymous GET/POST-search against the public
+    #   scientific surface. Reasonably generous; IP-keyed.
+    # - ``auth_read``  — same routes but with a credential present.
+    #   The largest budget; credential-fingerprint-keyed.
+    # - ``auth_write`` — authenticated mutations (uploads, admin,
+    #   non-login POST/PUT/PATCH/DELETE). Tight on purpose; one
+    #   misbehaving uploader should not exhaust an entire deployment.
+    # - ``anon_other`` — anonymous everything-else, including stray
+    #   mutating requests. Smallest budget so anonymous abuse cannot
+    #   ride the read bucket.
+    rate_limit_anon_read_per_minute: int = 60
+    rate_limit_auth_read_per_minute: int = 300
+    rate_limit_auth_write_per_minute: int = 30
+    rate_limit_anon_other_per_minute: int = 20
 
     # Auth-surface throttles. These are deliberately tight: login is
     # the credential-stuffing target, and register is the account-spam

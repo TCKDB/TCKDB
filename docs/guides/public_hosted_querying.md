@@ -56,7 +56,7 @@ All paths are relative to the deployment's `/api/v1` base URL.
 Anonymous CLI call:
 
 ```bash
-python clients/python/tckdb-client/examples/query_cookbook.py \
+python clients/python/examples/query_cookbook.py \
   --base-url http://127.0.0.1:8010/api/v1 \
   --smiles "O" \
   --recipe thermo
@@ -65,7 +65,7 @@ python clients/python/tckdb-client/examples/query_cookbook.py \
 Authenticated CLI call (same recipe, attributed):
 
 ```bash
-python clients/python/tckdb-client/examples/query_cookbook.py \
+python clients/python/examples/query_cookbook.py \
   --base-url http://127.0.0.1:8010/api/v1 \
   --api-key "$TCKDB_API_KEY" \
   --smiles "O" \
@@ -190,23 +190,23 @@ client = TCKDBClient(
 ```
 
 Uploads, moderation, and admin endpoints always require an API key;
-see [`clients/python/tckdb-client/README.md`](../../clients/python/tckdb-client/README.md)
+see [`clients/python/README.md`](../../clients/python/README.md)
 for the full matrix.
 
 ## CLI examples
 
 Two ready-to-run example scripts ship with the client:
 
-- [`scientific_reads.py`](../../clients/python/tckdb-client/examples/scientific_reads.py) —
+- [`scientific_reads.py`](../../clients/python/examples/scientific_reads.py) —
   one-shot section-filterable read demo.
-- [`query_cookbook.py`](../../clients/python/tckdb-client/examples/query_cookbook.py) —
+- [`query_cookbook.py`](../../clients/python/examples/query_cookbook.py) —
   recipe-driven walkthrough that mirrors
   [`scientific_query_cookbook.md`](scientific_query_cookbook.md).
 
 Thermo only:
 
 ```bash
-python clients/python/tckdb-client/examples/scientific_reads.py \
+python clients/python/examples/scientific_reads.py \
   --base-url http://127.0.0.1:8010/api/v1 \
   --smiles "O" \
   --only thermo \
@@ -216,7 +216,7 @@ python clients/python/tckdb-client/examples/scientific_reads.py \
 OPT calculations plus geometry coordinates:
 
 ```bash
-python clients/python/tckdb-client/examples/scientific_reads.py \
+python clients/python/examples/scientific_reads.py \
   --base-url http://127.0.0.1:8010/api/v1 \
   --smiles "O" \
   --only calculations,geometry \
@@ -369,6 +369,6 @@ hosted querying.
 - [scientific_query_cookbook.md](scientific_query_cookbook.md) — recipe walkthrough.
 - [workflow_tool_scientific_reads.md](workflow_tool_scientific_reads.md) — workflow-tool integration patterns.
 - [scientific_read_demo_data.md](scientific_read_demo_data.md) — demo data setup.
-- [`clients/python/tckdb-client/README.md`](../../clients/python/tckdb-client/README.md) — client install, configure, auth matrix.
+- [`clients/python/README.md`](../../clients/python/README.md) — client install, configure, auth matrix.
 - [internal_ids_visibility_policy.md](../specs/internal_ids_visibility_policy.md) — internal-IDs contract.
 - [real_data_query_usability_audit.md](../audits/real_data_query_usability_audit.md) — usability audit and known follow-ups.

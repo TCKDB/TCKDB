@@ -379,10 +379,10 @@ The client already uses refs throughout (Phase C.1). For Phase D.1:
 
 Phase D.1 must update:
 
-- [`clients/python/tckdb-client/README.md`](../../clients/python/tckdb-client/README.md)
+- [`clients/python/README.md`](../../clients/python/README.md)
   — note that responses ship refs-only by default; show `include=
   ["internal_ids"]` as the compatibility/debug opt-in.
-- [`clients/python/tckdb-client/examples/scientific_reads.py`](../../clients/python/tckdb-client/examples/scientific_reads.py)
+- [`clients/python/examples/scientific_reads.py`](../../clients/python/examples/scientific_reads.py)
   — example's pretty-printers already handle `*_id` missing
   gracefully via `_ref_id()` (Phase C.1). Add a CLI flag
   `--include-internal-ids` that injects the token into every call.
@@ -436,7 +436,7 @@ exercises an internal helper, not a public response shape).
 | `test_api_reaction_full.py` | Asserts `reaction_entry_id`, `species_entry_id`, `transition_state_entry_id`, `calculation_id` | **M**. |
 | (new file) `test_api_phase_d_internal_ids.py` | n/a | **C** — new file. Verifies: (1) default response omits integer ids; (2) `include=internal_ids` restores them when allowed; (3) `include=internal_ids` is silently dropped (no 4xx) in the hosted default; (4) `include=all` does **not** include `internal_ids`. |
 
-### Client tests (`clients/python/tckdb-client/tests/`)
+### Client tests (`clients/python/tests/`)
 
 | File | Current ID dependency | Phase D.1 action |
 |---|---|---|
@@ -563,7 +563,7 @@ If OpenAPI consumers complain, revisit (c) for the next major version.
 
 8. **Client docs.**
    - Add a short "Internal IDs are opt-in" subsection to
-     `clients/python/tckdb-client/README.md`.
+     `clients/python/README.md`.
    - Extend `examples/scientific_reads.py` with an
      `--include-internal-ids` flag that injects the token into every
      call.

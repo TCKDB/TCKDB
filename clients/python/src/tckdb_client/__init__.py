@@ -1,5 +1,7 @@
 """Generic synchronous Python HTTP client for the TCKDB API."""
 
+from importlib.metadata import PackageNotFoundError, version
+
 from tckdb_client.client import TCKDBClient, TCKDBResponse, UPLOAD_ENDPOINTS
 from tckdb_client.errors import (
     TCKDBAuthenticationError,
@@ -39,4 +41,7 @@ __all__ = [
     "replay_bundle",
 ]
 
-__version__ = "0.11.0"
+try:
+    __version__ = version("tckdb-client")
+except PackageNotFoundError:
+    __version__ = "0.0.0+local"

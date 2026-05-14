@@ -23,7 +23,7 @@ Usage (run from ``backend/`` with PYTHONPATH set so ``app.*`` resolves)::
 
 After loading, verify the data via ``tckdb-client``::
 
-    python clients/python/tckdb-client/examples/scientific_reads.py \\
+    python clients/python/examples/scientific_reads.py \\
         --base-url http://127.0.0.1:8010/api/v1 --smiles "CH4"
 
 Removing the demo data is a manual SQL cleanup; see
@@ -599,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {table:<24s} {n}")
     print("\nVerify by running the runnable example, e.g.:")
     print(
-        "  python clients/python/tckdb-client/examples/scientific_reads.py"
+        "  python clients/python/examples/scientific_reads.py"
         " --base-url http://127.0.0.1:8010/api/v1 --smiles 'C'"
     )
     return 0

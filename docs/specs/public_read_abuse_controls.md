@@ -22,17 +22,66 @@ pair.
 
 ### Buckets
 
-| Bucket     | Identity                       | Window | Default budget |
-| ---------- | ------------------------------ | ------ | -------------- |
-| `anon`     | client IP                       | 60 s   | `RATE_LIMIT_ANON_PER_MINUTE` = 60 |
-| `auth`     | hash of `X-API-Key` or session  | 60 s   | `RATE_LIMIT_AUTH_PER_MINUTE` = 300 |
-| `login`    | client IP                       | 60 s   | `RATE_LIMIT_AUTH_LOGIN_PER_MINUTE` = 10 |
-| `register` | client IP                       | 3600 s | `RATE_LIMIT_REGISTER_PER_HOUR` = 10 |
+Buckets are split by route class so a noisy uploader cannot starve
+the public read surface and an anonymous scraper does not inherit the
+generous read budget for writes:
 
-A request enters the `auth` bucket if it bears any credential (an
-`X-API-Key` header or a `tckdb_session` cookie) even when that
+| Bucket        | Identity                       | Window | Default budget |
+| ------------- | ------------------------------ | ------ | -------------- |
+| `anon_read`   | client IP                       | 60 s   | `RATE_LIMIT_ANON_READ_PER_MINUTE` = 60 |
+| `auth_read`   | hash of `X-API-Key` or session  | 60 s   | `RATE_LIMIT_AUTH_READ_PER_MINUTE` = 300 |
+| `auth_write`  | hash of `X-API-Key` or session  | 60 s   | `RATE_LIMIT_AUTH_WRITE_PER_MINUTE` = 30 |
+| `anon_other`  | client IP                       | 60 s   | `RATE_LIMIT_ANON_OTHER_PER_MINUTE` = 20 |
+| `login`       | client IP                       | 60 s   | `RATE_LIMIT_AUTH_LOGIN_PER_MINUTE` = 10 |
+| `register`    | client IP                       | 3600 s | `RATE_LIMIT_REGISTER_PER_HOUR` = 10 |
+
+Classification rules:
+
+- **`anon_read` / `auth_read`** — public scientific reads (GET
+  `/api/v1/scientific/...`, POST `/api/v1/scientific/.../search`, GET
+  `/api/v1/workflow-tools`, GET `/api/v1/workflow-tool-releases`).
+  Split by whether a credential is present.
+- **`auth_write`** — authenticated mutating requests (POST/PUT/PATCH/
+  DELETE) on any non-login/register, non-public-read path.
+- **`auth_read`** also serves as the authenticated fallback for
+  non-mutating requests on non-public-read paths (e.g. authenticated
+  GET on `/api/v1/admin/...`). An `auth_other` bucket will be added
+  only when a concrete route class warrants its own budget.
+- **`anon_other`** — anonymous everything-else, including stray
+  mutating POSTs. Anonymous writes deliberately do **not** inherit
+  the read budget.
+
+A request enters an authenticated bucket if it bears any credential
+(an `X-API-Key` header or a `tckdb_session` cookie) even when that
 credential is invalid — the limiter only fingerprints the credential
 for bucket selection; the handler still returns 401 for a bad key.
+
+Storage is still in-process and single-worker only. Hosted
+multi-worker deployments will need a shared backend (Redis) — left as
+follow-up.
+
+### Migration from pre-split buckets
+
+Anonymous scientific reads, authenticated scientific reads,
+authenticated writes, and anonymous other requests now use separate
+buckets. External deployments whose `.env` predates this split must
+rename:
+
+```text
+RATE_LIMIT_ANON_PER_MINUTE -> RATE_LIMIT_ANON_READ_PER_MINUTE
+RATE_LIMIT_AUTH_PER_MINUTE -> RATE_LIMIT_AUTH_READ_PER_MINUTE
+```
+
+and optionally set the two new knobs (otherwise the defaults from
+`Settings` apply):
+
+```text
+RATE_LIMIT_AUTH_WRITE_PER_MINUTE=30
+RATE_LIMIT_ANON_OTHER_PER_MINUTE=20
+```
+
+There are no aliases — the old names are no-ops and Pydantic will
+silently ignore them.
 
 ### Trusted-proxy header
 
@@ -113,7 +162,7 @@ A rejected request returns HTTP 429 with the stable code
 {
   "detail": "Too many requests. Retry after the current rate-limit window expires.",
   "code": "rate_limit_exceeded",
-  "bucket": "anon",
+  "bucket": "anon_read",
   "retry_after_seconds": 47
 }
 ```

@@ -22,7 +22,7 @@ The engine is chemistry-blind: it does not parse payload content, does not valid
 
 | Component | Location | Status |
 |---|---|---|
-| `TCKDBClient` (HTTP transport) | `clients/python/tckdb-client/src/tckdb_client/client.py` | ✅ has `request_json(method, path, *, json, idempotency_key)` |
+| `TCKDBClient` (HTTP transport) | `clients/python/src/tckdb_client/client.py` | ✅ has `request_json(method, path, *, json, idempotency_key)` |
 | `IdempotencyInputs` / key derivation | `tckdb_client.idempotency` | ✅ producers reuse stored keys via the sidecar; engine doesn't compute keys |
 | Error classes (`TCKDBHTTPError`, etc.) | `tckdb_client.errors` | ✅ replay reuses for HTTP failures |
 | ARC adapter (Track A producer) | `arc/tckdb/adapter.py` (ARC repo, branch `tckdb-imp`) | ✅ writes payloads + sidecars to disk during live runs |
@@ -31,7 +31,7 @@ The engine is chemistry-blind: it does not parse payload content, does not valid
 | `bundle_format_version` field | — | ❌ does not exist yet; ARC must start emitting it |
 | Replay engine | — | ❌ this spec |
 | CLI entrypoint | — | ❌ this spec |
-| `[project.scripts]` table in `pyproject.toml` | `clients/python/tckdb-client/pyproject.toml` | ❌ this spec adds `tckdb-replay = "tckdb_client.cli:main"` |
+| `[project.scripts]` table in `pyproject.toml` | `clients/python/pyproject.toml` | ❌ this spec adds `tckdb-replay = "tckdb_client.cli:main"` |
 
 ## Bundle format v0 — sidecar contract
 
@@ -317,7 +317,7 @@ Exit codes:
 
 ### Change 5 — `pyproject.toml` — register the CLI
 
-Add to `clients/python/tckdb-client/pyproject.toml`:
+Add to `clients/python/pyproject.toml`:
 
 ```toml
 [project.scripts]
@@ -348,7 +348,7 @@ The backfill is a small operator script that walks an old bundle directory and a
 
 ## Test plan
 
-All tests live under `clients/python/tckdb-client/tests/test_replay.py` (engine) and `test_cli.py` (CLI).
+All tests live under `clients/python/tests/test_replay.py` (engine) and `test_cli.py` (CLI).
 
 ### Engine tests
 
