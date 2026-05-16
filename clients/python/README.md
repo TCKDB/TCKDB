@@ -493,6 +493,191 @@ python -m py_compile examples/basic_usage.py examples/upload_json_file.py exampl
 The test suite uses `httpx.MockTransport` and never contacts a live TCKDB
 instance.
 
+## Experimental builder layer
+
+The package includes an experimental builder layer under
+`tckdb_client.builders`. It constructs upload payloads from scientific
+Python objects and sends them through the existing thin client.
+
+Phase 1 supports computed species upload; Phase 2 adds computed reaction
+upload (transition state + Arrhenius / modified-Arrhenius kinetics).
+
+```python
+from tckdb_client import TCKDBClient
+from tckdb_client.builders import (
+    Calculation,
+    ComputedSpeciesUpload,
+    Geometry,
+    LevelOfTheory,
+    Species,
+    SoftwareRelease,
+)
+
+sr  = SoftwareRelease(software="Gaussian", version="16", revision="C.01")
+lot = LevelOfTheory(method="B3LYP", basis="6-31G(d)")
+opt = Calculation.opt(sr, lot, output_geometry=Geometry.from_xyz(out_xyz),
+                      final_energy_hartree=-76.4, converged=True)
+freq = Calculation.freq(sr, lot, input_geometry=Geometry.from_xyz(out_xyz),
+                        n_imag=0, zpe_hartree=0.0214, depends_on=opt)
+
+upload = ComputedSpeciesUpload(
+    species=Species(smiles="O", charge=0, multiplicity=1),
+    calculations=[opt, freq],
+)
+
+with TCKDBClient(base_url, api_key=api_key) as client:
+    result = client.upload(upload)
+```
+
+### Computed reaction (Phase 2 + 3A)
+
+```python
+from tckdb_client import TCKDBClient
+from tckdb_client.builders import (
+    Calculation,
+    ChemReaction,
+    ComputedReactionUpload,
+    Geometry,
+    Kinetics,
+    LevelOfTheory,
+    Species,
+    SoftwareRelease,
+    TransitionState,
+)
+
+sr  = SoftwareRelease(software="Gaussian", version="16")
+lot = LevelOfTheory(method="wb97xd", basis="def2tzvp")
+
+ts_geom = Geometry.from_xyz(ts_xyz)
+ts_opt  = Calculation.opt(sr, lot, output_geometry=ts_geom,
+                          final_energy_hartree=-270.55, converged=True)
+ts_freq = Calculation.freq(sr, lot, n_imag=1, imag_freq_cm1=-1200.0,
+                           zpe_hartree=0.201, depends_on=ts_opt)
+
+kin = Kinetics.modified_arrhenius(
+    A=1.2e13, A_units="cm3/mol/s", n=0.5,
+    Ea=10.0, Ea_units="kJ/mol",        # also accepts kcal/mol
+    Tmin=300, Tmax=2500,
+    source_calculations={"ts_energy": ts_opt, "freq": ts_freq},
+)
+
+rxn = ChemReaction(
+    reactants=[Species(smiles="[CH3]", charge=0, multiplicity=2),
+               Species(smiles="[H]",   charge=0, multiplicity=2)],
+    products =[Species(smiles="C",     charge=0, multiplicity=1)],
+    family="H_Abstraction",
+    transition_state=TransitionState(charge=0, multiplicity=2, geometry=ts_geom),
+    kinetics=[kin],
+)
+
+upload = ComputedReactionUpload(reaction=rxn, calculations=[ts_opt, ts_freq])
+
+with TCKDBClient(base_url, api_key=api_key) as client:
+    result = client.upload(upload)
+```
+
+#### Attaching reactant / product calculations (Phase 3A, experimental)
+
+Pass `species_calculations` to ship per-species opt / freq / sp records
+in the same upload. Each species gets one conformer anchored on its
+single opt; non-opt calcs attach to that conformer.
+
+```python
+ch3 = Species(smiles="[CH3]", charge=0, multiplicity=2)
+h   = Species(smiles="[H]",   charge=0, multiplicity=2)
+ch4 = Species(smiles="C",     charge=0, multiplicity=1)
+
+# (build species-side opt + sp builders per species, similar to TS side …)
+
+kin = Kinetics.modified_arrhenius(
+    A=1.2e13, A_units="cm3/mol/s", n=0.5, Ea=10.0, Ea_units="kJ/mol",
+    source_calculations={
+        "reactant_energy": [ch3_sp, h_sp],   # duplicate role: list value
+        "product_energy":  ch4_sp,
+        "ts_energy":       ts_opt,
+        "freq":            ts_freq,
+    },
+)
+rxn = ChemReaction(
+    reactants=[ch3, h], products=[ch4],
+    family="H_Abstraction",
+    transition_state=TransitionState(charge=0, multiplicity=2, geometry=ts_geom),
+    kinetics=[kin],
+)
+upload = ComputedReactionUpload(
+    reaction=rxn,
+    calculations=[ts_opt, ts_freq],
+    species_calculations={
+        ch3: [ch3_opt, ch3_sp],
+        h:   [h_opt,   h_sp],
+        ch4: [ch4_opt, ch4_sp],
+    },
+)
+```
+
+`source_calculations` accepts three shapes — a `dict[role, Calculation]`,
+a `dict[role, list[Calculation]]` (used above for the duplicate
+`reactant_energy`), or a `list[(role, Calculation)]` of explicit pairs.
+The Phase-3A builder supports **one opt per species**; multi-conformer
+uploads still need the raw payload form.
+
+#### Attaching thermo to reactant / product species (Phase 3B, experimental)
+
+Pass `species_thermo` to ship per-species thermo blocks. Three flavours
+are supported and map to the backend's `BundleThermoIn` shape:
+
+```python
+from tckdb_client.builders import Thermo
+
+# NASA 7-coefficient polynomial.
+ch4_thermo = Thermo.nasa(
+    coeffs_low =[a1, a2, a3, a4, a5, a6, a7],
+    coeffs_high=[b1, b2, b3, b4, b5, b6, b7],
+    t_low=200.0, t_mid=1000.0, t_high=5000.0,
+    h298_kj_mol=-74.6, s298_j_mol_k=186.3,
+)
+
+# Scalar h298 / s298 (at least one required).
+ch4_scalar = Thermo.scalar(h298_kj_mol=-74.6, s298_j_mol_k=186.3,
+                           tmin_k=200, tmax_k=2000)
+
+# Tabulated points.
+ch4_points = Thermo.points(
+    [{"temperature_k": 298.15, "cp_j_mol_k": 35.3, "h_kj_mol": 0.0,
+      "s_j_mol_k": 186.3}],
+    tmin_k=200, tmax_k=2000,
+)
+
+upload = ComputedReactionUpload(
+    reaction=rxn,
+    calculations=[ts_opt, ts_freq],
+    species_calculations={ch4: [ch4_opt, ch4_freq, ch4_sp]},
+    species_thermo={ch4: ch4_thermo},
+)
+```
+
+`Thermo` factories also accept a `source_calculations=` kwarg for
+forward compatibility with future thermo endpoints (the role names
+mirror the backend's `ThermoCalculationRole` enum:
+`opt` / `freq` / `sp` / `composite` / `imported`). The
+computed-reaction endpoint does not consume this field today, so it
+is **not emitted on the wire** — but the builder still validates that
+each referenced calculation belongs to the same species's bucket so
+producers don't ship inconsistent data.
+
+`Kinetics.modified_arrhenius` accepts user-friendly unit strings
+(`"cm3/mol/s"`, `"s^-1"`, `"kcal/mol"`, …) and normalises them to the
+backend's enum values before sending. `Ea` in `kcal/mol` is converted
+to `kJ/mol` automatically.
+
+`client.upload(builder)` and the long-standing
+`client.upload(endpoint, payload_dict)` stay structurally distinct —
+passing a raw dict into the single-argument form raises `TypeError`
+rather than guessing an endpoint. Thermo, statmech, and artifact
+helpers are deferred to Phase 3; see
+[`docs/builder_api_mvp.md`](docs/builder_api_mvp.md) for the full
+phased rollout and open design questions.
+
 ## Non-goals (v0)
 
 - no chemistry adapters / no ARC, RMG, RDKit, ASE, cclib, Arkane imports

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import (
     PaginationParams,
     can_modify_calculation_artifacts,
@@ -45,6 +46,7 @@ from app.db.models.calculation import (
     CalculationScanResult,
     CalculationSCFStability,
     CalculationSPResult,
+    CalculationWavefunctionDiagnostic,
 )
 from app.db.models.geometry import Geometry
 from app.db.models.common import CalculationQuality, CalculationType
@@ -70,6 +72,7 @@ from app.schemas.entities.calculation import (
     CalculationScanResultRead,
     CalculationSCFStabilityRead,
     CalculationSPResultRead,
+    CalculationWavefunctionDiagnosticRead,
 )
 
 router = APIRouter()
@@ -549,6 +552,7 @@ class ArtifactsUploadResult(BaseModel):
     "/{calculation_id}/artifacts",
     response_model=ArtifactsUploadResult,
     status_code=201,
+    dependencies=[Depends(require_supported_tckdb_client)],
 )
 def upload_calculation_artifacts(
     calculation_id: int,
@@ -690,3 +694,34 @@ def get_scf_stability(
             status="not_checked",
         )
     return CalculationSCFStabilityRead.model_validate(row)
+
+
+@router.get(
+    "/{calculation_id}/wavefunction-diagnostic",
+    response_model=CalculationWavefunctionDiagnosticRead,
+)
+def get_wavefunction_diagnostic(
+    calculation_id: int, session: Session = Depends(get_db)
+):
+    """Return parsed wavefunction diagnostics for a calculation.
+
+    Reports coupled-cluster / multireference scalar diagnostics
+    (T1, D1, T1 norm, largest T2 amplitude) parsed from the calculation
+    output. This is electronic-structure trustworthiness evidence, not
+    SCF stability and not species identity.
+
+    Missing rows return 404: absence means "not parsed / not applicable
+    / not reported" rather than the SCF-stability-style ``not_checked``
+    projection, because most calculations legitimately have no row here.
+    """
+    _get_calculation_or_404(calculation_id, session)
+    row = session.scalar(
+        select(CalculationWavefunctionDiagnostic).where(
+            CalculationWavefunctionDiagnostic.calculation_id == calculation_id
+        )
+    )
+    if row is None:
+        raise NotFoundError(
+            "Wavefunction diagnostic not found for the calculation"
+        )
+    return CalculationWavefunctionDiagnosticRead.model_validate(row)

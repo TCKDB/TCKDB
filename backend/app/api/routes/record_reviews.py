@@ -12,6 +12,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import (
     PaginationParams,
     get_current_user,
@@ -85,6 +86,7 @@ def read_review(
 @router.patch(
     "/{record_type}/{record_id}",
     response_model=RecordReviewRead,
+    dependencies=[Depends(require_supported_tckdb_client)],
 )
 def set_status(
     record_type: SubmissionRecordType,

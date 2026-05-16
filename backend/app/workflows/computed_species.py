@@ -159,6 +159,7 @@ def _to_calc_with_results_payload(
         sp_result=calc_in.sp_result,
         irc_result=calc_in.irc_result,
         path_search_result=calc_in.path_search_result,
+        wavefunction_diagnostic=calc_in.wavefunction_diagnostic,
         input_geometries=calc_in.input_geometries,
         output_geometries=calc_in.output_geometries,
         parameters=calc_in.parameters,

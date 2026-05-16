@@ -123,6 +123,15 @@ class Settings(BaseSettings):
     # ``docs/specs/public_read_abuse_controls.md``).
     db_statement_timeout_ms: int | None = 30_000
 
+    # Minimum ``tckdb-client`` version accepted on write/upload routes.
+    # Requests that identify themselves via ``X-TCKDB-Client-Name:
+    # tckdb-client`` and a lower ``X-TCKDB-Client-Version`` are rejected
+    # with ``426 Upgrade Required``. Raw HTTP callers that omit the
+    # client-name header are not blocked. Bump this when a coordinated
+    # client/server change makes older clients incompatible.
+    min_supported_tckdb_client_version: str = "0.11.0"
+    enforce_tckdb_client_version_on_writes: bool = True
+
     # CORS — empty allow-list means "no CORS middleware registered",
     # which is the correct hosted default. Production deployments set
     # ``CORS_ALLOW_ORIGINS="https://app.tckdb.org"`` (one or more

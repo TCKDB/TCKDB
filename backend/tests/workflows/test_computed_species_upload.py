@@ -20,6 +20,7 @@ from app.db.models.calculation import (
     CalculationInputGeometry,
     CalculationOutputGeometry,
     CalculationSPResult,
+    CalculationWavefunctionDiagnostic,
     CalculationScanCoordinate,
     CalculationScanPoint,
     CalculationScanPointCoordinateValue,
@@ -66,7 +67,13 @@ from app.workflows.computed_species import persist_computed_species_upload
 # ---------------------------------------------------------------------------
 
 
-def _calc(key: str, *, calc_type: str = "opt", **overrides) -> dict:
+def _calc(
+    key: str,
+    *,
+    calc_type: str = "opt",
+    wavefunction_diagnostic: dict | None = None,
+    **overrides,
+) -> dict:
     base: dict = {
         "key": key,
         "type": calc_type,
@@ -79,6 +86,8 @@ def _calc(key: str, *, calc_type: str = "opt", **overrides) -> dict:
         base.setdefault("freq_result", {"n_imag": 0})
     elif calc_type == "sp":
         base.setdefault("sp_result", {"electronic_energy_hartree": -76.4})
+    if wavefunction_diagnostic is not None:
+        base["wavefunction_diagnostic"] = wavefunction_diagnostic
     base.update(overrides)
     return base
 
@@ -134,6 +143,44 @@ def test_minimal_bundle_persists(db_engine) -> None:
         assert len(outcome.conformers) == 1
         assert outcome.conformers[0].primary_calculation.type == CalculationType.opt
         assert outcome.thermo is None
+
+
+def test_bundle_sp_calc_with_wavefunction_diagnostic_persists(
+    db_engine,
+) -> None:
+    """A bundle SP additional calc carrying ``wavefunction_diagnostic``
+    persists one ``calc_wavefunction_diagnostic`` row anchored to the SP
+    calculation row."""
+    with Session(db_engine) as session, session.begin():
+        user_id = _ensure_user(session, username="bundle_wfn_diag")
+        bundle = _hydrogen_bundle()
+        bundle.conformers[0].additional_calculations = [
+            type(bundle.conformers[0].primary_calculation)(
+                **_calc(
+                    "sp0",
+                    calc_type="sp",
+                    wavefunction_diagnostic={
+                        "t1_diagnostic": 0.0179,
+                        "d1_diagnostic": 0.045,
+                        "note": "ORCA CCSD(T)",
+                    },
+                )
+            ),
+        ]
+        outcome = persist_computed_species_upload(
+            session, bundle, created_by=user_id
+        )
+
+        sp_id = outcome.conformers[0].additional_calculations[0].id
+        rows = session.scalars(
+            select(CalculationWavefunctionDiagnostic).where(
+                CalculationWavefunctionDiagnostic.calculation_id == sp_id
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].t1_diagnostic == pytest.approx(0.0179)
+        assert rows[0].d1_diagnostic == pytest.approx(0.045)
+        assert rows[0].note == "ORCA CCSD(T)"
 
 
 def test_bundle_with_freq_and_sp_creates_auto_dependencies(db_engine) -> None:

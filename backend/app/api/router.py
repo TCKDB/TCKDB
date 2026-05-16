@@ -10,11 +10,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import require_auth_for_legacy_reads
 from app.api.routes import (
     admin,
     auth,
     bundles,
+    meta,
     calculations,
     conformers,
     energy_corrections,
@@ -42,17 +44,47 @@ from app.api.routes.scientific import scientific_router
 
 api_router = APIRouter()
 
+# Write/upload routers are gated on tckdb-client compatibility. A
+# request that identifies itself as ``tckdb-client`` via the
+# ``X-TCKDB-Client-Name`` header at a version below
+# ``MIN_SUPPORTED_TCKDB_CLIENT_VERSION`` is rejected with 426 before
+# any business logic runs. Raw HTTP callers (no client header) pass
+# through.
+_write_compat_dependency = [Depends(require_supported_tckdb_client)]
+
 # Routers that stay public regardless of the legacy-reads gate.
 api_router.include_router(health.router, tags=["health"])
+api_router.include_router(meta.router, tags=["meta"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
-api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_router.include_router(
+    admin.router,
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=_write_compat_dependency,
+)
+# jobs has both POST (enqueue) and GET (poll) — the per-route
+# decorators in routes/jobs.py attach the compat dep to the POST
+# handlers only so an old client can still poll job status while
+# the user upgrades.
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(lookup.router, prefix="/lookup", tags=["lookup"])
 api_router.include_router(
     scientific_router, prefix="/scientific", tags=["scientific"]
 )
-api_router.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
-api_router.include_router(bundles.router, prefix="/bundles", tags=["bundles"])
+api_router.include_router(
+    uploads.router,
+    prefix="/uploads",
+    tags=["uploads"],
+    dependencies=_write_compat_dependency,
+)
+api_router.include_router(
+    bundles.router,
+    prefix="/bundles",
+    tags=["bundles"],
+    dependencies=_write_compat_dependency,
+)
+# submissions and record_reviews mix GETs and writes — write
+# routes attach the compat dep per-decorator.
 api_router.include_router(
     submissions.router, prefix="/submissions", tags=["submissions"]
 )

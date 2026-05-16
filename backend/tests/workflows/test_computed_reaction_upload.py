@@ -22,6 +22,7 @@ from contextlib import contextmanager
 from typing import Iterator
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -80,7 +81,10 @@ from app.db.models.statmech import (
 )
 from app.db.models.thermo import Thermo, ThermoNASA
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
-from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
+from app.schemas.workflows.computed_reaction_upload import (
+    BundleKineticsIn,
+    ComputedReactionUploadRequest,
+)
 from app.workflows.computed_reaction import persist_computed_reaction_upload
 
 
@@ -3033,3 +3037,96 @@ def test_ts_side_scheme_bond_params_persist(db_engine) -> None:
             ("C-H", -0.11),
             ("C-C", -0.13),
         }
+
+
+# ---------------------------------------------------------------------------
+# Kinetics degeneracy on the bundle schema
+# ---------------------------------------------------------------------------
+
+
+def _bundle_kinetics_kwargs(**overrides) -> dict:
+    """Minimal valid BundleKineticsIn kwargs, with optional overrides."""
+    base = {
+        "reactant_keys": ["ch3", "h"],
+        "product_keys": ["ch4"],
+        "a": 1.2e13,
+        "a_units": "cm3_mol_s",
+        "n": 0.5,
+        "reported_ea": 10.0,
+        "reported_ea_units": "kj_mol",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_bundle_kinetics_accepts_degeneracy() -> None:
+    """BundleKineticsIn accepts a positive ``degeneracy`` value."""
+    kin = BundleKineticsIn(**_bundle_kinetics_kwargs(degeneracy=2.0))
+    assert kin.degeneracy == 2.0
+
+
+def test_bundle_kinetics_degeneracy_optional() -> None:
+    """``degeneracy`` is optional and defaults to ``None``."""
+    kin = BundleKineticsIn(**_bundle_kinetics_kwargs())
+    assert kin.degeneracy is None
+
+
+@pytest.mark.parametrize("bad_value", [0, 0.0, -1.0])
+def test_bundle_kinetics_rejects_non_positive_degeneracy(bad_value) -> None:
+    """Zero or negative ``degeneracy`` is a schema-level error."""
+    with pytest.raises(ValidationError):
+        BundleKineticsIn(**_bundle_kinetics_kwargs(degeneracy=bad_value))
+
+
+def test_computed_reaction_payload_accepts_degeneracy_regression() -> None:
+    """Regression: the previously-failing ARC payload now validates.
+
+    Before this change, ``BundleKineticsIn``'s ``extra="forbid"`` rejected
+    ``degeneracy`` with ``[type=extra_forbidden]``. The full
+    ``ComputedReactionUploadRequest`` must accept it end-to-end so ARC
+    computed-reaction uploads carrying reaction-path degeneracy succeed.
+    """
+    payload = _minimal_payload()
+    payload["kinetics"][0]["degeneracy"] = 2.0
+    request = ComputedReactionUploadRequest.model_validate(payload)
+    assert request.kinetics[0].degeneracy == 2.0
+
+
+def test_computed_reaction_persists_degeneracy(db_engine) -> None:
+    """``kinetics[].degeneracy`` is written to the kinetics row."""
+    payload = _minimal_payload()
+    payload["kinetics"][0]["degeneracy"] = 3.0
+
+    with _isolated_session(db_engine) as session:
+        session.add(AppUser(id=601, username="degeneracy_persist_tester"))
+        session.flush()
+
+        request = ComputedReactionUploadRequest(**payload)
+        summary = persist_computed_reaction_upload(
+            session, request, created_by=601
+        )
+
+        kin = session.scalars(
+            select(Kinetics).where(Kinetics.id.in_(summary["kinetics_ids"]))
+        ).one()
+        assert kin.degeneracy == 3.0
+
+
+def test_computed_reaction_persists_null_degeneracy_when_omitted(db_engine) -> None:
+    """Omitting ``degeneracy`` persists a NULL — never silently defaulted to 1.0."""
+    payload = _minimal_payload()
+    assert "degeneracy" not in payload["kinetics"][0]
+
+    with _isolated_session(db_engine) as session:
+        session.add(AppUser(id=602, username="degeneracy_null_tester"))
+        session.flush()
+
+        request = ComputedReactionUploadRequest(**payload)
+        summary = persist_computed_reaction_upload(
+            session, request, created_by=602
+        )
+
+        kin = session.scalars(
+            select(Kinetics).where(Kinetics.id.in_(summary["kinetics_ids"]))
+        ).one()
+        assert kin.degeneracy is None

@@ -1061,6 +1061,23 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['created_by'], ['app_user.id'], name=op.f('fk_calc_scf_stability_created_by_app_user'), initially='IMMEDIATE', deferrable=True),
     sa.PrimaryKeyConstraint('calculation_id', name=op.f('pk_calc_scf_stability'))
     )
+    op.create_table('calc_wavefunction_diagnostic',
+    sa.Column('calculation_id', sa.BigInteger(), nullable=False),
+    sa.Column('t1_diagnostic', sa.Float(), nullable=True),
+    sa.Column('d1_diagnostic', sa.Float(), nullable=True),
+    sa.Column('t1_norm', sa.Float(), nullable=True),
+    sa.Column('largest_t2_amplitude', sa.Float(), nullable=True),
+    sa.Column('note', sa.Text(), nullable=True),
+    sa.Column('created_by', sa.BigInteger(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.CheckConstraint('t1_diagnostic IS NULL OR t1_diagnostic >= 0', name=op.f('ck_calc_wavefunction_diagnostic_t1_diagnostic_ge_0')),
+    sa.CheckConstraint('d1_diagnostic IS NULL OR d1_diagnostic >= 0', name=op.f('ck_calc_wavefunction_diagnostic_d1_diagnostic_ge_0')),
+    sa.CheckConstraint('t1_norm IS NULL OR t1_norm >= 0', name=op.f('ck_calc_wavefunction_diagnostic_t1_norm_ge_0')),
+    sa.CheckConstraint('largest_t2_amplitude IS NULL OR largest_t2_amplitude >= 0', name=op.f('ck_calc_wavefunction_diagnostic_largest_t2_amplitude_ge_0')),
+    sa.ForeignKeyConstraint(['calculation_id'], ['calculation.id'], name=op.f('fk_calc_wavefunction_diagnostic_calculation_id_calculation'), initially='IMMEDIATE', deferrable=True),
+    sa.ForeignKeyConstraint(['created_by'], ['app_user.id'], name=op.f('fk_calc_wavefunction_diagnostic_created_by_app_user'), initially='IMMEDIATE', deferrable=True),
+    sa.PrimaryKeyConstraint('calculation_id', name=op.f('pk_calc_wavefunction_diagnostic'))
+    )
     op.create_table('calculation_parameter',
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('calculation_id', sa.BigInteger(), nullable=False),
@@ -1740,6 +1757,7 @@ def downgrade() -> None:
     op.drop_index('uq_calculation_dependency_child_calculation_id_optimized_from', table_name='calculation_dependency', postgresql_where=sa.text("dependency_role = 'optimized_from'"))
     op.drop_index('uq_calculation_dependency_child_calculation_id_freq_on', table_name='calculation_dependency', postgresql_where=sa.text("dependency_role = 'freq_on'"))
     op.drop_table('calculation_dependency')
+    op.drop_table('calc_wavefunction_diagnostic')
     op.drop_table('calc_scf_stability')
     op.execute("DROP TYPE IF EXISTS scf_stability_status")
     op.drop_table('calculation_artifact')

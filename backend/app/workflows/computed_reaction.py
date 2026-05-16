@@ -842,6 +842,7 @@ def persist_computed_reaction_upload(
             ea_uncertainty_kj_mol=ea_uncertainty_kj_mol,
             tmin_k=kin.tmin_k,
             tmax_k=kin.tmax_k,
+            degeneracy=kin.degeneracy,
             tunneling_model=kin.tunneling_model,
             note=kin.note,
             created_by=created_by,

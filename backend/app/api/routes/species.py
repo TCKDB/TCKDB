@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import (
     PaginationParams,
     get_db,
@@ -455,6 +456,7 @@ def list_transport_for_entry(
     "/{species_entry_id}/reviews",
     response_model=SpeciesEntryReviewRead,
     status_code=201,
+    dependencies=[Depends(require_supported_tckdb_client)],
 )
 def create_species_entry_review_endpoint(
     species_entry_id: int,

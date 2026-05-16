@@ -34,6 +34,30 @@ API_KEY_HEADER = "X-API-Key"
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed"
 
+# Sentinel used by :meth:`TCKDBClient.upload` to distinguish the
+# builder-form ``upload(builder)`` call from the legacy
+# ``upload(endpoint, payload)`` call without confusing it with a
+# caller-provided ``None`` payload.
+_UNSET: Any = object()
+
+# Client-identity headers sent on every request so the server can
+# enforce a minimum supported ``tckdb-client`` version on writes.
+# See backend/app/api/client_version.py for the matching server check.
+CLIENT_NAME_HEADER = "X-TCKDB-Client-Name"
+CLIENT_VERSION_HEADER = "X-TCKDB-Client-Version"
+CLIENT_NAME = "tckdb-client"
+
+
+def _resolve_client_version() -> str:
+    """Return the installed ``tckdb-client`` package version.
+
+    Lazily imports the package-level ``__version__`` to avoid an
+    ``__init__`` ↔ ``client`` import cycle at module load time.
+    """
+    from tckdb_client import __version__
+
+    return __version__
+
 UPLOAD_ENDPOINTS: dict[str, str] = {
     "conformer": "/uploads/conformers",
     "reaction": "/uploads/reactions",
@@ -45,6 +69,7 @@ UPLOAD_ENDPOINTS: dict[str, str] = {
     "network": "/uploads/networks",
     "network_pdep": "/uploads/networks/pdep",
     "computed_reaction": "/uploads/computed-reaction",
+    "computed_species": "/uploads/computed-species",
 }
 
 
@@ -167,7 +192,11 @@ class TCKDBClient:
         abuse limits server-side (rate limits, pagination caps, query
         timeouts, monitoring).
         """
-        headers: dict[str, str] = {"Accept": "application/json"}
+        headers: dict[str, str] = {
+            "Accept": "application/json",
+            CLIENT_NAME_HEADER: CLIENT_NAME,
+            CLIENT_VERSION_HEADER: _resolve_client_version(),
+        }
         if json_body:
             headers["Content-Type"] = "application/json"
         if authenticated and not self._api_key:
@@ -180,7 +209,13 @@ class TCKDBClient:
         if idempotency_key is not None:
             headers[IDEMPOTENCY_HEADER] = validate_idempotency_key(idempotency_key)
         if extra:
+            # Caller-provided headers take precedence so advanced users
+            # can override e.g. ``X-API-Key`` for a single request, but
+            # the client-identity headers stay attached so server-side
+            # compat checks still see them.
             headers.update(extra)
+            headers[CLIENT_NAME_HEADER] = CLIENT_NAME
+            headers[CLIENT_VERSION_HEADER] = _resolve_client_version()
         return headers
 
     # ------------------------------------------------------------------
@@ -325,25 +360,45 @@ class TCKDBClient:
 
     def upload(
         self,
-        endpoint: str,
-        payload: Any,
+        target: Any,
+        payload: Any = _UNSET,
         *,
         idempotency_key: str | None = None,
     ) -> Any:
-        """POST a payload to an upload endpoint.
+        """POST an upload payload.
 
-        ``endpoint`` accepts:
+        Two argument forms are supported:
 
-        - a known short name from :data:`UPLOAD_ENDPOINTS`
-          (e.g. ``"thermo"``, ``"kinetics"``, ``"conformer"``),
-        - an explicit path beginning with ``/``
-          (e.g. ``"/uploads/thermo"`` or a future endpoint),
-        - or an absolute URL for advanced use.
+        - ``client.upload(endpoint, payload_dict)`` — the long-standing
+          raw-dict form. ``endpoint`` accepts a short name from
+          :data:`UPLOAD_ENDPOINTS`, an explicit path starting with
+          ``/``, or an absolute URL.
+        - ``client.upload(builder_object)`` — Phase-1 builder form.
+          ``builder_object`` must expose ``upload_kind`` (matching a
+          key in :data:`UPLOAD_ENDPOINTS`) and a ``to_payload()``
+          method. The builder is asked once for its payload, which is
+          posted to the resolved endpoint.
 
-        Unknown short names are rejected client-side rather than being
-        silently rewritten to ``/uploads/<name>`` — that would mask
-        typos and could collide with future endpoints.
+        The two forms are kept structurally distinct on purpose: a raw
+        dict is **not** accepted by the single-arg form. Passing a
+        dict to the single-arg form raises ``TypeError`` rather than
+        guessing an endpoint from the payload shape — see
+        ``clients/python/docs/builder_api_mvp.md`` §7.
         """
+        if payload is _UNSET:
+            return self._upload_builder_object(
+                target, idempotency_key=idempotency_key
+            )
+
+        if not isinstance(target, str):
+            raise TypeError(
+                "client.upload(endpoint, payload) requires endpoint to be "
+                f"a string, got {type(target).__name__}. For builder "
+                "objects, call client.upload(builder_object) with a "
+                "single argument."
+            )
+
+        endpoint = target
         if endpoint in UPLOAD_ENDPOINTS:
             path = UPLOAD_ENDPOINTS[endpoint]
         elif endpoint.startswith(("/", "http://", "https://")):
@@ -355,6 +410,38 @@ class TCKDBClient:
                 f"{sorted(UPLOAD_ENDPOINTS)}."
             )
         return self.post_json(path, payload, idempotency_key=idempotency_key)
+
+    def _upload_builder_object(
+        self, obj: Any, *, idempotency_key: str | None
+    ) -> Any:
+        """Dispatch a builder upload object to its registered endpoint."""
+        if isinstance(obj, dict):
+            raise TypeError(
+                "client.upload(...) does not accept raw dicts in the "
+                "single-argument form. Use client.upload(endpoint, "
+                "payload_dict) for raw payloads."
+            )
+        if not hasattr(obj, "upload_kind") or not hasattr(obj, "to_payload"):
+            raise TypeError(
+                "Builder upload object must define an 'upload_kind' "
+                "string and a 'to_payload()' method. Got "
+                f"{type(obj).__name__}."
+            )
+        kind = obj.upload_kind
+        if not isinstance(kind, str) or kind not in UPLOAD_ENDPOINTS:
+            raise TypeError(
+                f"Unknown upload_kind {kind!r}; expected one of "
+                f"{sorted(UPLOAD_ENDPOINTS)}."
+            )
+        payload = obj.to_payload()
+        if not isinstance(payload, dict):
+            raise TypeError(
+                f"{type(obj).__name__}.to_payload() must return a dict, "
+                f"got {type(payload).__name__}."
+            )
+        return self.post_json(
+            UPLOAD_ENDPOINTS[kind], payload, idempotency_key=idempotency_key
+        )
 
     def bundle_dry_run(self, bundle: Any) -> Any:
         """POST a contribution bundle to ``/bundles/dry-run`` (no idempotency)."""
@@ -916,4 +1003,7 @@ __all__ = [
     "API_KEY_HEADER",
     "IDEMPOTENCY_HEADER",
     "IDEMPOTENCY_REPLAYED_HEADER",
+    "CLIENT_NAME",
+    "CLIENT_NAME_HEADER",
+    "CLIENT_VERSION_HEADER",
 ]

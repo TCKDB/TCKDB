@@ -314,6 +314,50 @@ class SCFStabilityPayload(SchemaBase):
         return self
 
 
+class WavefunctionDiagnosticPayload(SchemaBase):
+    """Optional inline wavefunction diagnostics parsed from a calculation's output.
+
+    Carries scalar coupled-cluster / multireference diagnostics — T1
+    (Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,
+    and the largest T2 amplitude. Spin-contamination ``<S^2>`` signals
+    are intentionally NOT included in this first slice.
+
+    Generic across calculation types that produce electronic-structure
+    output (typically ``sp``). The producer contract is to emit a block
+    only when at least one diagnostic was actually parsed from the
+    calculation; this payload rejects an all-null block with no note.
+
+    :param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).
+    :param d1_diagnostic: Janowski D1 diagnostic.
+    :param t1_norm: Norm of the T1 amplitude vector, when reported.
+    :param largest_t2_amplitude: Largest T2 amplitude magnitude, when
+        reported.
+    :param note: Optional free-text annotation.
+    """
+
+    t1_diagnostic: float | None = Field(default=None, ge=0)
+    d1_diagnostic: float | None = Field(default=None, ge=0)
+    t1_norm: float | None = Field(default=None, ge=0)
+    largest_t2_amplitude: float | None = Field(default=None, ge=0)
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_has_diagnostic_value(self) -> Self:
+        if (
+            self.t1_diagnostic is None
+            and self.d1_diagnostic is None
+            and self.t1_norm is None
+            and self.largest_t2_amplitude is None
+        ):
+            raise ValueError(
+                "wavefunction_diagnostic must include at least one of "
+                "t1_diagnostic, d1_diagnostic, t1_norm, "
+                "largest_t2_amplitude. Omit the block entirely if no "
+                "diagnostic was parsed."
+            )
+        return self
+
+
 class IRCPointPayload(SchemaBase):
     """Upload-facing inline payload for one IRC-path sampled point.
 
@@ -585,6 +629,7 @@ class CalculationWithResultsPayload(CalculationPayload):
     path_search_result: PathSearchResultPayload | None = None
 
     scf_stability: SCFStabilityPayload | None = None
+    wavefunction_diagnostic: WavefunctionDiagnosticPayload | None = None
 
     input_geometries: list[GeometryPayload] = Field(
         default_factory=list,

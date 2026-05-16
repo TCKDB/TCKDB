@@ -588,6 +588,9 @@ class BundleKineticsIn(SchemaBase):
     :param tmin_k: Minimum valid temperature.
     :param tmax_k: Maximum valid temperature.
     :param tunneling_model: Optional tunneling model label.
+    :param degeneracy: Optional multiplicative reaction-path degeneracy
+        associated with the reported kinetics expression. ``None`` means
+        no claim is made; do not interpret it as ``1.0``.
     :param note: Optional note.
     """
 
@@ -611,6 +614,7 @@ class BundleKineticsIn(SchemaBase):
     tmin_k: float | None = Field(default=None, gt=0)
     tmax_k: float | None = Field(default=None, gt=0)
 
+    degeneracy: float | None = Field(default=None, gt=0)
     tunneling_model: str | None = None
     note: str | None = None
 

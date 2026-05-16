@@ -37,6 +37,7 @@ from app.schemas.fragments.calculation import (
     OutputGeometryEntry,
     PathSearchResultPayload,
     SPResultPayload,
+    WavefunctionDiagnosticPayload,
 )
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
@@ -141,6 +142,8 @@ class CalculationInBundle(SchemaBase):
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
     scan_result: CalculationScanResultCreate | None = None
+
+    wavefunction_diagnostic: WavefunctionDiagnosticPayload | None = None
 
     input_geometries: list[GeometryPayload] = Field(
         default_factory=list,

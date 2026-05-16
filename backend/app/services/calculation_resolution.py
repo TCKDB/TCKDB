@@ -28,6 +28,7 @@ from app.db.models.calculation import (
     CalculationPathSearchResult,
     CalculationSCFStability,
     CalculationSPResult,
+    CalculationWavefunctionDiagnostic,
 )
 from app.db.models.common import (
     CalculationDependencyRole,
@@ -528,6 +529,19 @@ def persist_calculation_result(
                 source_calculation_id=scf.source_calculation_id,
                 source_artifact_id=scf.source_artifact_id,
                 note=scf.note,
+            )
+        )
+
+    if calc_upload.wavefunction_diagnostic is not None:
+        wfn = calc_upload.wavefunction_diagnostic
+        session.add(
+            CalculationWavefunctionDiagnostic(
+                calculation_id=calculation.id,
+                t1_diagnostic=wfn.t1_diagnostic,
+                d1_diagnostic=wfn.d1_diagnostic,
+                t1_norm=wfn.t1_norm,
+                largest_t2_amplitude=wfn.largest_t2_amplitude,
+                note=wfn.note,
             )
         )
 

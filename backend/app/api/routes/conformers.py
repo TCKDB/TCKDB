@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from sqlalchemy.orm import selectinload
 
+from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import (
     PaginationParams,
     get_db,
@@ -124,6 +125,7 @@ def list_conformer_group_selections(
     "/{conformer_group_id}/selections",
     response_model=ConformerSelectionRead,
     status_code=201,
+    dependencies=[Depends(require_supported_tckdb_client)],
 )
 def create_conformer_group_selection(
     conformer_group_id: int,

@@ -631,6 +631,37 @@ class CalculationGeometryValidationRead(ORMBaseSchema):
 # ---------------------------------------------------------------------------
 
 
+class CalculationWavefunctionDiagnosticBase(BaseModel):
+    """Shape for parsed wavefunction-diagnostic evidence on a calculation.
+
+    All fields are nullable because producers fill only what their parser
+    actually saw. At least one diagnostic value must be supplied — the
+    upload-fragment validator
+    (:class:`~app.schemas.fragments.calculation.WavefunctionDiagnosticPayload`)
+    enforces that contract; this read-shape stays permissive so it can
+    project rows persisted under future producer contracts.
+    """
+
+    t1_diagnostic: float | None = Field(default=None, ge=0)
+    d1_diagnostic: float | None = Field(default=None, ge=0)
+    t1_norm: float | None = Field(default=None, ge=0)
+    largest_t2_amplitude: float | None = Field(default=None, ge=0)
+    note: str | None = None
+
+
+class CalculationWavefunctionDiagnosticCreate(
+    CalculationWavefunctionDiagnosticBase, SchemaBase
+):
+    pass
+
+
+class CalculationWavefunctionDiagnosticRead(
+    CalculationWavefunctionDiagnosticBase, ORMBaseSchema
+):
+    calculation_id: int
+    created_at: datetime | None = None
+
+
 class CalculationSCFStabilityRead(ORMBaseSchema):
     """Read shape for SCF stability evidence.
 

@@ -1,8 +1,8 @@
 # Scientific Calculation Read & Search Endpoints
 
-**Status:** spec, not implementation
+**Status:** implementation in progress (see §1.1 Implementation status)
 **Audit basis:** [read_query_api_audit.md](read_query_api_audit.md)
-**Date:** 2026-05-14
+**Original spec date:** 2026-05-14
 **Scope:** Backend only. ARC and `tckdb-client` are out of scope. No schema
 or ingestion changes; no new ORM tables.
 
@@ -34,6 +34,162 @@ This spec defines the next scientific surface that closes both gaps:
 Same contract conventions as every other `/scientific/*` endpoint:
 public-handle envelope, review/trust badges, deterministic ordering,
 bounded pagination, validated includes, default-hidden rejected/deprecated.
+
+### 1.1 Implementation status
+
+The detail and search endpoints have shipped:
+
+- `GET /api/v1/scientific/calculations/{calculation_ref_or_id}` — implemented
+- `GET /api/v1/scientific/calculations/search` — implemented (MVP)
+- `POST /api/v1/scientific/calculations/search` — implemented (MVP)
+
+Heavy include tokens land one at a time. Current state:
+
+| Include token | Status | Notes |
+|---|---|---|
+| `results` | implemented | Primary result summary only (per-type SP/Opt/Freq/Scan/IRC/PathSearch sub-blocks; no point or mode arrays). |
+| `dependencies` | implemented | Direct parent/child edges with `direction` tag relative to the requested calc. |
+| `artifacts` | implemented | Metadata only (`kind`, `uri`, `filename`, `sha256`, `bytes`, `created_at`); no body bytes; no presigned URL. `artifact_ref` is `null` until `calculation_artifact` grows a `public_ref` column. |
+| `input_geometries` | implemented | Links only (`geometry_ref`, `input_order`, `natoms`, `geom_hash`); no XYZ inline — fetch via `/scientific/geometries/{geometry_ref}`. |
+| `output_geometries` | implemented | Same shape as inputs plus `output_order` and `role`. |
+| `geometry_validation` | implemented | Singleton list (`calculation_id` PK on the table); `atom_mapping` JSONB intentionally omitted. |
+| `scf_stability` | implemented | Singleton list; ORM-backed scalar fields only (`status`, `lowest_eigenvalue`, `instability_count`, …); `source_artifact_ref` is `null` until artifacts gain a public ref. |
+| `wavefunction_diagnostic` | implemented | Singleton list (`calculation_id` PK on the table); ORM-backed scalar coupled-cluster/multireference diagnostics (`t1_diagnostic`, `d1_diagnostic`, `t1_norm`, `largest_t2_amplitude`). Absence reads as "not parsed / not applicable / not reported". Heuristic thresholds for T1/D1 are deliberately not enforced or labelled by the database — readers and curators apply interpretation. |
+| `parameters` | implemented | Raw + canonical key/value pairs; vocab row not inlined. |
+| `constraints` | implemented | All four atom-index slots plus an `atom_indices` convenience list in arity order. |
+| `review` | implemented | Surfaced as `record.review_history` (zero-or-one list because the schema enforces `UNIQUE (record_type, record_id)`). Carries `note`, `submission_ref`, plus policy-gated `review_id`/`reviewer_id`/`submission_id`. The compact `RecordReviewBadge` on the calculation block is unaffected — it remains the always-present trust signal. |
+| `internal_ids` | implemented | Phase D policy-gated; explicit opt-in via the include token, only effective when `settings.allow_public_internal_ids = True`. |
+| `scan` | implemented (summary) | Bounded scan summary: result-row fields, ordered coordinate list, `coordinate_count`, `point_count`, energy MIN/MAX aggregates. **Per-point arrays and coordinate-value rows are intentionally NOT exposed by this include** — full scan trajectory data is available via the specialized endpoint `GET /api/v1/scientific/calculations/{calculation_ref_or_id}/scan` (paginated by point; see `scientific_calculation_path_includes.md` §8). The summary block returned by `include=scan` is byte-for-byte the same shape as `response.scan` from the specialized endpoint, so a caller can use the summary for cheap inventory and follow up with `/scan` only when they need the per-point trajectory. |
+| `irc` | implemented (summary) | Bounded IRC summary: result-row fields, directional point counts (`forward_point_count`, `reverse_point_count`, `ts_point_count`), energy and reaction-coordinate MIN/MAX aggregates. **Per-point arrays are intentionally NOT exposed by this include** — full IRC trajectory data is available via the specialized endpoint `GET /api/v1/scientific/calculations/{calculation_ref_or_id}/irc` (paginated by point; see `scientific_calculation_path_includes.md` §8). The summary block returned by `include=irc` is byte-for-byte the same shape as `response.irc` from the specialized endpoint. Direction-counting policy: `direction=both` and `direction IS NULL` rows (e.g. ORCA TS markers) do not count toward forward/reverse. |
+| `path_search` | implemented (summary) | Bounded path-search summary: result-row fields (`method`, `is_double_ended`, `converged`, `n_points`, `selected_ts_point_index`, `climbing_image_index`, `source_endpoint_count`), `stored_point_count` aggregate, energy + path-coordinate MIN/MAX aggregates, plus **two independent point-marker counts** (`ts_guess_count`, `climbing_image_count`) — the schema carries both `is_ts_guess` and `is_climbing_image` booleans which can be set independently, so the public summary keeps them separate rather than collapsing them into a single "TS marker" count. NEB usually sets both on the climbing image; GSM/string methods only set `is_ts_guess`. **Per-point arrays are intentionally NOT exposed** — full path-search trajectory data is deferred to the future specialized `/scientific/calculations/{calculation_ref_or_id}/path-search` endpoint. |
+| `all` | implemented | Deterministic expansion to every public heavy include token (see list above). **Never** expands to `internal_ids` — that token is always opt-in. **Never** triggers the specialized full-data endpoints; per-point arrays / artifact bodies / XYZ payloads remain accessible only via `/scientific/geometries/{geometry_ref}` and the planned `/scan` / `/irc` / `/path-search` URLs. `include=all,internal_ids` opts internal-id exposure in subject to the existing `allow_public_internal_ids` policy gate. |
+
+Search filters supported today:
+
+- **Owner**: `species_entry_ref`, `transition_state_entry_ref`, `species_ref`, `transition_state_ref`, `owner_kind`
+- **Calc**: `calculation_type`, `quality`, `has_result`, `has_artifacts`, `has_input_geometry`, `has_output_geometry`, `created_before`, `created_after`
+- **LoT**: `method`, `basis`, `lot_ref`, `lot_hash`
+- **Software/workflow**: `software`, `software_version`, `workflow_tool`, `workflow_tool_version`
+- **Validation**: `geometry_validation_status`, `scf_stability_status`
+- **Dependency graph**: `dependency_role`, `parent_calculation_ref`, `child_calculation_ref`
+- **Artifact**: `artifact_kind`
+- **Parameter**: `parameter_key`, `parameter_value`, `canonical_parameter_key`, `canonical_parameter_value`
+- **Review/quality**: `min_review_status`, `include_rejected`, `include_deprecated`, `include_rejected_quality`
+
+Filters still deferred (out of scope for the MVP/follow-up slices completed so far):
+chemistry filters (`smiles`, `inchi_key`, `formula`, `reactants`, `products`,
+`reaction_family`), reaction handles (`reaction_ref`, `reaction_entry_ref`),
+LoT extras (`aux_basis`, `cabs_basis`, `dispersion`, `solvent`,
+`solvent_model`), substructure / similarity, RDKit cartridge integration.
+
+#### What `include=all` resolves to
+
+Every individual heavy include token ships a bounded summary loader
+and `include=all` flips on as a deterministic expansion to that
+union. Concretely the resolved set equals
+`_LEGAL_INCLUDE_TOKENS - _INTERNAL_INCLUDE_TOKENS`, i.e., every
+public token enumerated in §1.1 above **minus** `internal_ids`.
+
+`include=all` deliberately **never** expands to `internal_ids` — that
+token is always opt-in and is additionally gated by
+`settings.allow_public_internal_ids`. To request both, supply
+`include=all,internal_ids`; the explicit `internal_ids` token then
+travels through the standard policy gate.
+
+`include=all` deliberately **never** triggers the specialized
+full-data endpoints. Per-trajectory point arrays, artifact body
+bytes, and full XYZ coordinate payloads remain accessible only via
+the dedicated `/scientific/geometries/{geometry_ref}` and the
+planned `/scan` / `/irc` / `/path-search` URLs. The summary blocks
+returned under `include=all` are byte-for-byte identical to the
+shapes individual `include=<token>` calls produce — `include=all` is
+notational sugar, not a separate response shape.
+
+(Historical note: an earlier `_reject_include_all` policy guard kept
+this token returning 422 while heavy includes were landing one at a
+time. The guard was removed when it was no longer doing useful work
+— legacy doc references that mention "the explicit
+`_reject_include_all` guard" are out of date.)
+
+> Historical context (rationale during rollout): every individual
+> heavy include token shipped one PR at a time. The `include=all`
+> token was held back deliberately so the wire-shape change happened
+> as a single explicit event (this PR) rather than as a side effect
+> of the last summary landing.
+
+### 1.2 Include implementation checklist
+
+Adding a new `include=<token>` to the scientific calculation
+detail/search surface touches six layers. Skipping a step doesn't
+always fail tests — the most common drift is a missing
+`_OMITTABLE_RECORD_KEYS` entry, which makes the field leak as `null`
+on default reads instead of being omitted entirely.
+
+> ⚠️ **A missing `_OMITTABLE_RECORD_KEYS` entry causes the field to
+> leak as `null` on default reads, violating the
+> omitted-unless-requested contract.** This is the failure mode the
+> `include=all` equivalence test catches in CI; without that test,
+> drift can ride into production silently. Wire the omittable map
+> entry every time you add a heavy include.
+
+When implementing a new heavy include, walk this list in order:
+
+1. **Schema** — add a per-include summary class in
+   `app/schemas/reads/scientific_calculation.py`, then add the
+   matching optional field to `ScientificCalculationRecord` (typed
+   as `<Summary> | None = None` for singletons or
+   `list[<Summary>] | None = None` for collections).
+2. **Summary shape** — reuse an existing summary fragment if one
+   exists (`LevelOfTheorySummary`, `RecordReviewBadge`, etc.); only
+   define a new one when the projection is genuinely calculation-
+   specific. Surface ORM-backed scalar fields only — no JSONB
+   blobs, no per-point arrays unless the include is explicitly
+   defined as a heavy "full data" surface.
+3. **Service builder** — add a `_build_<token>(session, calc_id)`
+   loader in `app/services/scientific_read/calculations.py` and
+   wire the conditional call into `build_record()` so the field is
+   populated only when the token is in the resolved include set.
+   For aggregate-style includes (counts, MIN/MAX), prefer a single
+   combined SQL aggregate over multiple round trips.
+4. **Legal token set** — add the token to `_LEGAL_INCLUDE_TOKENS`.
+   `validate_includes()` will then accept it, surface it in
+   `unknown_include_token` error messages, and include it in the
+   `include=all` expansion.
+5. **Not-implemented set** — if the token is registered as legal
+   *before* the loader ships (e.g., to publish the contract
+   early), add it to `_NOT_IMPLEMENTED_INCLUDE_TOKENS` so callers
+   get `include_not_implemented_yet` instead of an empty payload.
+   Remove the token from this set once the loader lands.
+6. **Omittable record keys** — add a `(token → record_key)` entry
+   to `_OMITTABLE_RECORD_KEYS` in
+   `app/api/routes/scientific/calculations.py`. Without this entry
+   the field appears in every default response as `null`,
+   violating the "omitted unless requested" contract.
+7. **`include=all` equivalence coverage** — if the token is
+   summary-safe, it is part of the `include=all` expansion. The
+   existing `_ALL_EXPANSION_TOKENS` constant in both
+   `tests/api/scientific/test_api_scientific_calculations.py` and
+   `tests/api/scientific/test_api_scientific_calculations_search.py`
+   plus the `test_detail_include_all_equivalent_to_full_enumeration`
+   test together pin the contract; **add the new token to that
+   constant**. The equivalence test will then prove that
+   `include=all` produces the same record as enumerating every
+   token explicitly — which is the property that catches drift
+   like a missing `_OMITTABLE_RECORD_KEYS` entry.
+8. **Forbidden-payload defense** — if the include could
+   accidentally surface large or sensitive payloads (artifact body
+   bytes, per-point arrays, raw XYZ, geometry-atom rows,
+   pre-signed URLs), add a recursive `_walk` test that asserts no
+   forbidden key appears at any depth in the response. The
+   existing `test_detail_include_all_does_not_expose_full_point_or_xyz_payloads`
+   pattern is the template; extend its `forbidden_keys` set if the
+   new token introduces a new payload-shape risk.
+9. **Status table** — update §1.1 above. Move the row from
+   "deferred" to "implemented" (or "implemented (summary)" when
+   the include is a bounded projection of a heavy resource), and
+   document any nuances callers need to know (singleton vs list
+   shape; counting policies; reused summary fragments; deferred
+   sub-payloads).
 
 ---
 
@@ -923,20 +1079,26 @@ existing `test_api_*.py` style. Fixtures reuse the upload helpers in
    fields and `available_sections`. No includes wired yet. Tests:
    detail-by-ref, detail-by-id, owner branches, internal-ids policy.
 4. **Detail endpoint includes (one PR per heavy include).**
-   `results`, then `dependencies`, then `parameters`, then
-   `constraints`, then `artifacts`, then geometries, then validation /
-   scf-stability, then `scan`/`irc`/`path_search`. Each PR adds its
+   `results`, then `dependencies`, then `artifacts`, then `input_geometries`/
+   `output_geometries`, then `geometry_validation`/`scf_stability`, then
+   `parameters`, then `constraints`, then `review`, then `scan`/`irc`/
+   `path_search` (each as a bounded summary per
+   `scientific_calculation_path_includes.md`). Each PR adds its
    include to `_LEGAL_INCLUDE_TOKENS` plus tests. Splitting like this
    keeps per-PR review scope small and lets us measure query cost
-   independently.
+   independently. **Status (see §1.1):** every individual heavy
+   include now ships a bounded summary loader. The remaining work is
+   the deliberate `include=all` flip + the specialized
+   `/scan` / `/irc` / `/path-search` full-data endpoints.
 5. **Search endpoint, owner + calculation-type filter only.** GET +
    POST. Tests for missing-filter, ordering, pagination, GET/POST
-   parity. No method/basis/parameter filters yet.
-6. **Search endpoint LoT/software/workflow filters.**
-7. **Search endpoint validation/parameter filters.**
+   parity. No method/basis/parameter filters yet. **Done.**
+6. **Search endpoint LoT/software/workflow filters.** **Done.**
+7. **Search endpoint validation/parameter filters.** **Done** (validation
+   + dependency-graph + artifact-kind + parameter raw/canonical filters).
 8. **Search endpoint chemistry filters** (`smiles`/`inchi_key` first,
-   `reactants`/`products`/`reaction_family` deferred to Phase 2).
-9. **Cross-endpoint shape parity test** + docs roll-up.
+   `reactants`/`products`/`reaction_family` deferred to Phase 2). **Pending.**
+9. **Cross-endpoint shape parity test** + docs roll-up. **Pending.**
 
 Each step is independently shippable behind feature flags only if
 needed; the audit indicates the existing pattern is ship-as-you-go

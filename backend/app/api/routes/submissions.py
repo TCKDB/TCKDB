@@ -20,6 +20,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import (
     get_current_user,
     get_db,
@@ -149,7 +150,11 @@ def read_record_links(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/{submission_id}/approve", response_model=SubmissionRead)
+@router.post(
+    "/{submission_id}/approve",
+    response_model=SubmissionRead,
+    dependencies=[Depends(require_supported_tckdb_client)],
+)
 def approve(
     submission_id: int,
     body: SubmissionApproveRequest | None = None,
@@ -164,7 +169,11 @@ def approve(
     return SubmissionRead.model_validate(submission)
 
 
-@router.post("/{submission_id}/reject", response_model=SubmissionRead)
+@router.post(
+    "/{submission_id}/reject",
+    response_model=SubmissionRead,
+    dependencies=[Depends(require_supported_tckdb_client)],
+)
 def reject(
     submission_id: int,
     body: SubmissionRejectRequest,
@@ -183,7 +192,11 @@ def reject(
     return SubmissionRead.model_validate(submission)
 
 
-@router.post("/{submission_id}/supersede", response_model=SubmissionRead)
+@router.post(
+    "/{submission_id}/supersede",
+    response_model=SubmissionRead,
+    dependencies=[Depends(require_supported_tckdb_client)],
+)
 def supersede(
     submission_id: int,
     body: SubmissionSupersedeRequest,

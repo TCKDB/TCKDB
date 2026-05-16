@@ -15,6 +15,9 @@ Sub-routers:
     species_calculations_search.router
                             → /scientific/species-calculations/search (GET, POST)
     geometries.router       → /scientific/geometries/{geometry_handle}
+    calculation_paths.router
+                            → /scientific/calculations/{calculation_ref_or_id}/scan
+                              (and future /irc, /path-search)
     calculations.router     → /scientific/calculations/{calculation_ref_or_id}
 """
 
@@ -23,6 +26,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.routes.scientific import (
+    calculation_paths,
     calculations,
     geometries,
     kinetics,
@@ -45,6 +49,12 @@ scientific_router.include_router(thermo_search.router)
 scientific_router.include_router(kinetics_search.router)
 scientific_router.include_router(species_calculations_search.router)
 scientific_router.include_router(geometries.router)
+# Specialized full-data path endpoints registered before the detail
+# router. Both share the ``/calculations`` prefix; FastAPI routes by
+# path structure (``/{handle}/scan`` is a deeper segment than
+# ``/{handle}``) so this ordering is for OpenAPI grouping rather than
+# correctness.
+scientific_router.include_router(calculation_paths.router)
 scientific_router.include_router(calculations.router)
 
 __all__ = ["scientific_router"]

@@ -226,6 +226,13 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    wavefunction_diagnostic: Mapped[
+        Optional["CalculationWavefunctionDiagnostic"]
+    ] = relationship(
+        back_populates="calculation",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     geometry_validation: Mapped[Optional["CalculationGeometryValidation"]] = relationship(
         back_populates="calculation",
         cascade="all, delete-orphan",
@@ -1287,5 +1294,63 @@ class CalculationSCFStability(Base, TimestampMixin, CreatedByMixin):
         CheckConstraint(
             "NOT (status = 'stabilized' AND instability_count = 0)",
             name="stabilized_has_instability",
+        ),
+    )
+
+
+class CalculationWavefunctionDiagnostic(Base, TimestampMixin, CreatedByMixin):
+    """Parsed coupled-cluster / multireference diagnostics for a calculation.
+
+    Carries scalar diagnostics emitted by the ESS at parse time — T1
+    (Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,
+    and the largest T2 amplitude. The row is producer-supplied evidence
+    about the reliability of the electronic-structure result; it is
+    deliberately not interpreted by the schema (no thresholds, no
+    "good/bad" labels) — readers and curators apply heuristics on top.
+
+    Producer contract (not enforced by DB):
+
+    * Emit a row only when at least one diagnostic was actually parsed
+      from the calculation output. Absence of a row reads as "not parsed
+      / not applicable / not reported" — there is no ``not_checked``
+      enum.
+    * Spin-contamination signals (``<S^2>``) are NOT carried here; they
+      will land in a separate diagnostic table once their schema is
+      reviewed.
+    """
+
+    __tablename__ = "calc_wavefunction_diagnostic"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    t1_diagnostic: Mapped[Optional[float]] = mapped_column(nullable=True)
+    d1_diagnostic: Mapped[Optional[float]] = mapped_column(nullable=True)
+    t1_norm: Mapped[Optional[float]] = mapped_column(nullable=True)
+    largest_t2_amplitude: Mapped[Optional[float]] = mapped_column(nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    calculation: Mapped["Calculation"] = relationship(
+        back_populates="wavefunction_diagnostic",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "t1_diagnostic IS NULL OR t1_diagnostic >= 0",
+            name="t1_diagnostic_ge_0",
+        ),
+        CheckConstraint(
+            "d1_diagnostic IS NULL OR d1_diagnostic >= 0",
+            name="d1_diagnostic_ge_0",
+        ),
+        CheckConstraint(
+            "t1_norm IS NULL OR t1_norm >= 0",
+            name="t1_norm_ge_0",
+        ),
+        CheckConstraint(
+            "largest_t2_amplitude IS NULL OR largest_t2_amplitude >= 0",
+            name="largest_t2_amplitude_ge_0",
         ),
     )
