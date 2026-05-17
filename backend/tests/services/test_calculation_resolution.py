@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation, CalculationConstraint
-from app.db.models.common import ConstraintKind
+from app.db.models.common import (
+    CalculationDependencyRole,
+    CalculationType,
+    ConstraintKind,
+)
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
@@ -13,6 +18,7 @@ from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
 )
 from app.services.calculation_resolution import (
+    assert_dependency_role_type_compatible,
     persist_calculation,
     resolve_and_persist_calculation_with_results,
     resolve_calculation_create_request,
@@ -222,3 +228,74 @@ def test_resolve_and_persist_no_constraints_writes_no_rows(db_engine) -> None:
                 )
             ).all()
             assert rows == []
+
+
+class _DummyCalc:
+    """Stand-in for an ORM ``Calculation`` row carrying only ``type``."""
+
+    def __init__(self, calc_type: CalculationType) -> None:
+        self.type = calc_type
+
+
+def test_dependency_role_type_compatible_rejects_wire_optimized_from_with_freq_parent() -> None:
+    """``optimized_from`` parent must be opt or path_search, even when the
+    role is the wire-mirror enum class from ``tckdb_schemas.enums``.
+
+    Regression: this comparison used ``is`` before the fix, which silently
+    returned False for the wire-enum member and skipped the parent-type
+    check in bundle workflows.
+    """
+    from tckdb_schemas.enums import (
+        CalculationDependencyRole as WireCalculationDependencyRole,
+    )
+
+    parent_calc = _DummyCalc(calc_type=CalculationType.freq)
+
+    with pytest.raises(ValueError, match="optimized_from"):
+        assert_dependency_role_type_compatible(
+            parent_calc=parent_calc,
+            role=WireCalculationDependencyRole.optimized_from,
+            context="test",
+        )
+
+
+def test_dependency_role_type_compatible_accepts_wire_optimized_from_with_opt_parent() -> None:
+    """Happy path with the wire-enum role: opt parent is allowed."""
+    from tckdb_schemas.enums import (
+        CalculationDependencyRole as WireCalculationDependencyRole,
+    )
+
+    parent_calc = _DummyCalc(calc_type=CalculationType.opt)
+
+    assert_dependency_role_type_compatible(
+        parent_calc=parent_calc,
+        role=WireCalculationDependencyRole.optimized_from,
+        context="test",
+    )
+
+
+def test_dependency_role_type_compatible_accepts_wire_optimized_from_with_path_search_parent() -> None:
+    """Happy path with the wire-enum role: path_search parent is allowed."""
+    from tckdb_schemas.enums import (
+        CalculationDependencyRole as WireCalculationDependencyRole,
+    )
+
+    parent_calc = _DummyCalc(calc_type=CalculationType.path_search)
+
+    assert_dependency_role_type_compatible(
+        parent_calc=parent_calc,
+        role=WireCalculationDependencyRole.optimized_from,
+        context="test",
+    )
+
+
+def test_dependency_role_type_compatible_accepts_backend_optimized_from_with_opt_parent() -> None:
+    """The fix preserves backend-enum-role behavior: opt parent still
+    allowed when the role is the backend enum class."""
+    parent_calc = _DummyCalc(calc_type=CalculationType.opt)
+
+    assert_dependency_role_type_compatible(
+        parent_calc=parent_calc,
+        role=CalculationDependencyRole.optimized_from,
+        context="test",
+    )

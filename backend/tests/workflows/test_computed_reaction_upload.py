@@ -2016,6 +2016,33 @@ def test_depends_on_persists_with_role(db_engine) -> None:
         assert edges[0].dependency_role == CalculationDependencyRole.single_point_on
 
 
+def test_depends_on_optimized_from_with_freq_parent_raises(db_engine) -> None:
+    """``optimized_from`` parent must be opt or path_search.
+
+    Regression: the bundle path delivers ``role`` as a wire-mirror enum
+    (``tckdb_schemas.enums.CalculationDependencyRole.optimized_from``);
+    the service-layer check previously used ``is`` against the backend
+    enum and silently skipped this validation for bundle workflows. With
+    the ``==`` fix, the workflow's call to
+    ``assert_dependency_role_type_compatible`` raises because
+    ``ts-freq`` is type=freq, not opt or path_search.
+
+    ``ts-sp`` is the third TS calc (index 2) in ``_payload_with_ts_irc``;
+    pointing its depends_on at ``ts-freq`` with role ``optimized_from``
+    is the regression scenario.
+    """
+    payload = _payload_with_ts_irc()
+    payload["transition_state"]["calculations"][2]["depends_on"] = [
+        {"parent_calculation_key": "ts-freq", "role": "optimized_from"},
+    ]
+
+    with _isolated_session(db_engine) as session:
+        request = ComputedReactionUploadRequest(**payload)
+        with pytest.raises(ValueError) as exc:
+            persist_computed_reaction_upload(session, request)
+        assert "optimized_from" in str(exc.value)
+
+
 def test_loose_roles_accept_any_calc_type_and_owner(db_engine) -> None:
     """master_equation and fit_source are intentionally unrestricted in v0.
 

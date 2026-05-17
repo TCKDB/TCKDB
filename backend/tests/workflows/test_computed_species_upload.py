@@ -831,6 +831,39 @@ def test_dependency_role_type_mismatch_raises(db_engine) -> None:
         assert "incompatible" in str(exc.value)
 
 
+def test_optimized_from_with_freq_parent_raises(db_engine) -> None:
+    """``optimized_from`` parent must be opt or path_search.
+
+    Regression: the bundle path delivers ``role`` as a wire-mirror enum
+    (``tckdb_schemas.enums.CalculationDependencyRole.optimized_from``);
+    the service-layer check previously used ``is`` against the backend
+    enum and silently skipped this validation. Pointing ``optimized_from``
+    at a freq parent must now raise 422-style ValueError.
+    """
+    with Session(db_engine) as session, session.begin():
+        bundle = _hydrogen_bundle()
+        klass = type(bundle.conformers[0].primary_calculation)
+        bundle.conformers[0].additional_calculations = [
+            klass(**_calc("freq0", calc_type="freq")),
+            klass(
+                **_calc(
+                    "freq1",
+                    calc_type="freq",
+                    depends_on=[
+                        {
+                            "parent_calculation_key": "freq0",
+                            "role": "optimized_from",
+                        }
+                    ],
+                )
+            ),
+        ]
+        with pytest.raises(ValueError) as exc:
+            persist_computed_species_upload(session, bundle)
+        assert "optimized_from" in str(exc.value)
+        assert "opt" in str(exc.value)
+
+
 # ---------------------------------------------------------------------------
 # Idempotent dependency-edge insertion
 # ---------------------------------------------------------------------------

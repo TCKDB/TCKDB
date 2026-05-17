@@ -788,7 +788,13 @@ def assert_dependency_role_type_compatible(
     or ``path_search`` (TS-guess generator). Bundle workflows surface
     incompatibilities as 422 to mirror DR-0028 error semantics.
     """
-    if role is CalculationDependencyRole.optimized_from:
+    # Use ``==`` rather than ``is`` so wire-enum role values from
+    # ``tckdb_schemas.enums`` (passed in via bundle workflows) compare
+    # equal to the backend DB enum member. Two mirrored enum classes
+    # share ``.value`` and ``__hash__`` but are distinct Python objects,
+    # so ``is`` silently returned False here and skipped the
+    # opt/path_search parent-type check for ``optimized_from`` edges.
+    if role == CalculationDependencyRole.optimized_from:
         if parent_calc.type not in _OPTIMIZED_FROM_PARENT_TYPES:
             raise ValueError(
                 f"{context}: role='optimized_from' requires a parent of "
