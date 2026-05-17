@@ -129,6 +129,15 @@ def _normalise_source_calculations(value: Any) -> list[tuple[str, Any]]:
     # import that would otherwise occur if Calculation grew a
     # reference to Kinetics in the future.
     from tckdb_client.builders.calculation import Calculation as _Calculation
+    from tckdb_client.builders.sources import SourceCalculations as _SourceCalculations
+
+    # Producers may pass a ``SourceCalculations`` helper directly; the
+    # canonical list-of-tuples shape it emits is exactly what the
+    # remainder of this function expects, so flatten and fall through.
+    if isinstance(value, _SourceCalculations):
+        value = value.as_list()
+        if not value:
+            return []
 
     pairs: list[tuple[str, Any]] = []
 

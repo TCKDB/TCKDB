@@ -2,7 +2,12 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from tckdb_client.client import TCKDBClient, TCKDBResponse, UPLOAD_ENDPOINTS
+from tckdb_client.client import (
+    ArtifactUploadBatchResult,
+    TCKDBClient,
+    TCKDBResponse,
+    UPLOAD_ENDPOINTS,
+)
 from tckdb_client.errors import (
     TCKDBAuthenticationError,
     TCKDBConflictError,
@@ -22,6 +27,7 @@ from tckdb_client.replay import (
 )
 
 __all__ = [
+    "ArtifactUploadBatchResult",
     "TCKDBClient",
     "TCKDBResponse",
     "UPLOAD_ENDPOINTS",

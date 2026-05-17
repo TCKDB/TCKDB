@@ -7,7 +7,7 @@ the ``get_write_db`` dependency (commit on success, rollback on exception).
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_write_db
@@ -145,6 +145,13 @@ class ComputedReactionUploadResult(BaseModel):
     thermo_ids: list[int]
     species_entry_ids: list[int]
     species_count: int
+    # Bundle-local calc key → assigned ``calculation.id`` for every
+    # calculation persisted (or reused) by this upload. Enables
+    # second-phase artifact uploads on the client: the builder mints
+    # the local key, the bundle workflow records the resolved id, and
+    # ``upload_artifacts(plan)`` glues the two together. Response-only
+    # field; the request payload shape is unchanged.
+    calculation_keys: dict[str, int] = Field(default_factory=dict)
     warnings: list[UploadWarning] = []
 
 

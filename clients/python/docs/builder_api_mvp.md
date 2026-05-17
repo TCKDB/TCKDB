@@ -4,6 +4,40 @@ Status: **Phase 0 — design only.** No code in this spec is implemented yet.
 Audience: TCKDB client maintainers and workflow-tool authors who want to
 contribute scientific data without learning the raw upload payload shape.
 
+> **Conformer boundary.** The builder intentionally models *one*
+> scientifically meaningful conformer / geometry per species
+> upload. See
+> [`conformer_semantic_boundary.md`](conformer_semantic_boundary.md)
+> for the rationale and the rejected alternatives.
+>
+> **Source-calculation ergonomics.** The opt-in `SourceCalculations`
+> helper designed in
+> [`source_calculation_ergonomics.md`](source_calculation_ergonomics.md)
+> shipped in `tckdb-client` 0.25.0. Explicit `source_calculations=`
+> lists keep working unchanged — the helper is purely additive.
+>
+> **Parser / validation boundary.** The base `tckdb-client` is and
+> remains parser-free; ESS file parsing (Gaussian / ORCA / Arkane /
+> RMG) is explicitly an upper layer above the builders. See
+> [`parser_validation_boundary.md`](parser_validation_boundary.md)
+> for the layering and what builders deliberately do *not* do.
+>
+> **Writing an adapter?** Start with the short
+> [`adapter_authoring_quickstart.md`](adapter_authoring_quickstart.md)
+> — it walks the layering, three boundary rules, minimal flow,
+> source-calculation use, two-phase artifacts, and the raw-payload
+> escape hatch in one document, with pointers to the worked
+> example demos.
+>
+> **Upload summary / describe API.** `upload.summary()` returning
+> an `UploadSummary` with `.to_text()` and `.to_dict()` shipped in
+> `tckdb-client` 0.26.0. Design rationale and stability layering
+> live in [`builder_summary_design.md`](builder_summary_design.md).
+> `.to_dict()` keys are public-beta stable; `.to_text()` formatting
+> may change between minor versions. The demos' local
+> `_payload_summary(...)` helpers have been removed in favour of
+> `upload.summary().to_text()`.
+
 ---
 
 ## 1. Purpose
@@ -306,9 +340,20 @@ expand them in coordination with the server schema.
   result-type-specific so the user doesn't have to know which result
   block matches which `type`.
 - **Constructors (MVP)** —
-  - `Calculation.opt(software_release, level_of_theory, *, input_geometry=None, output_geometry, final_energy_hartree, converged=True, depends_on=None, label=None)`
-  - `Calculation.freq(software_release, level_of_theory, *, input_geometry, frequencies_cm1, zpe_hartree=None, depends_on=None, label=None)`
-  - `Calculation.sp(software_release, level_of_theory, *, input_geometry, electronic_energy_hartree, depends_on=None, label=None)`
+  - `Calculation.opt(software_release, level_of_theory, *, input_geometry=None, output_geometry, final_energy_hartree, converged=True, depends_on=None, label=None, note=None)`
+  - `Calculation.freq(software_release, level_of_theory, *, input_geometry, frequencies_cm1, zpe_hartree=None, depends_on=None, label=None, note=None)`
+  - `Calculation.sp(software_release, level_of_theory, *, input_geometry, electronic_energy_hartree, depends_on=None, label=None, note=None)`
+
+  The new `note: str | None = None` kwarg (shipped in 0.26.3) is a
+  free-text annotation for producer/adapter ergonomics — e.g.
+  `"lowest-energy converged structure; conformer search history
+  retained as artifacts."`. It is preserved on the builder
+  (`calculation.note`, visible via `upload.iter_calculations()`)
+  but is **not emitted on the wire**: today's `CalculationInBundle`
+  schema has no per-calc note field, so the value stays local until
+  the backend grows the matching field. Producer conventions for
+  what belongs in a note (and what does not) live in
+  [`calculation_note_conventions.md`](calculation_note_conventions.md).
 - **Deferred** — `Calculation.irc(...)`, `Calculation.scan(...)`, `Calculation.neb(...)`, `Calculation.path_search(...)` (Phase 3+).
 - **Local validation** —
   - opt requires `output_geometry` and `final_energy_hartree`;
@@ -368,6 +413,188 @@ expand them in coordination with the server schema.
   `source_calculations` rewritten to `KineticsSourceCalculationIn` rows
   using local keys.
 
+### 8.7d Upload introspection helpers (Phase 8 — shipped)
+
+`ComputedSpeciesUpload` and `ComputedReactionUpload` expose the same
+four public helpers:
+
+- `iter_calculations(*, with_artifacts_only=False) -> Iterator[Calculation]`
+  — yields every calc in payload order (TS bucket first on the
+  reaction side, then species buckets in
+  `reaction.unique_species()` order).
+- `iter_calculation_entries(*, with_artifacts_only=False) -> Iterator[CalculationEntry]`
+  — same walk, but each entry carries its `bucket` label and
+  (where applicable) the `Species` builder it lives under. `CalculationEntry`
+  is a frozen dataclass exported from `tckdb_client.builders`.
+- `iter_artifacts() -> Iterator[tuple[Calculation, Artifact]]` —
+  yields one pair per attached artifact in walk order.
+- `artifact_plan_preview(*, starting_calculation_id=1000) -> list[PlannedArtifactUpload]`
+  — same return shape as `artifact_plan(real_server_response)`,
+  but feeds the upload through a synthesised response with
+  deterministic synthetic IDs. **Synthetic IDs are not real
+  server-side calculation primary keys**; the method exists for
+  offline demos, CI fixtures, and producer debugging.
+
+Producer code that walks the upload should always use these
+helpers instead of reaching into the upload's private internal
+state (`_species_calc_pairs`, `_species_thermo_pairs`, etc.). The
+public iteration order is part of the public-beta surface; see the
+stability policy.
+
+### 8.7c Two-phase artifact upload (Phase 7 — shipped)
+
+Files (input decks, output logs, checkpoints) ride on a separate POST
+per calculation after the scientific bundle creates the calculation
+rows. Attach via `Calculation.add_artifact(path, kind, *, label?,
+sha256?, bytes?)`; the bundle's `to_payload()` is byte-identical
+whether or not calculations have artifacts.
+
+Resolution at upload time:
+
+```python
+result = client.upload(upload)            # phase 1: scientific bundle
+plan   = upload.artifact_plan(result)     # list[PlannedArtifactUpload]
+
+# Default — one POST per artifact, easiest to debug.
+client.upload_artifacts(plan)
+
+# Optional — fewer HTTP requests, one batch per calculation.
+# Returns list[ArtifactUploadBatchResult] (one per calc group).
+client.upload_artifacts(plan, batch_by_calculation=True)
+```
+
+`batch_by_calculation=True` groups the plan by `calculation_id` and
+sends one POST per group to `/calculations/{id}/artifacts`. The
+endpoint is **batch-atomic** server-side: any per-artifact failure
+(decode, hash mismatch, ESS-signature, aggregate-size cap, or pass-2
+storage outage) rejects the whole batch with no DB rows and no S3
+leaks — see the backend's `persist_artifact_batch` two-pass design
+and its `TestBatchAtomicity` / `TestStorageFailure` suites in
+`backend/tests/api/test_api_calculation_artifacts.py`. The default
+remains sequential one-artifact-per-request; opt into batching once
+the simple flow works.
+
+Idempotency keys are per-artifact in the default mode
+(`f"{prefix}:{calculation_key}:{kind}"`) and per-batch in batch mode
+(`f"{prefix}:{first_calculation_key}:artifact-batch"`). Pre-dispatch
+validation in both modes raises *before* the first HTTP request
+fires if any plan item is malformed (bad `calculation_id`, missing
+path, non-file path, empty `kind`).
+
+`artifact_plan(result)` needs the response to carry a calc-key →
+calculation-id mapping:
+
+- `ComputedSpeciesUploadResult` already exposes the mapping nested
+  under each conformer (`primary_calculation`,
+  `additional_calculations`, each carrying `key` + `calculation_id`).
+- `ComputedReactionUploadResult.calculation_keys` was added in
+  `tckdb-backend` 0.22 as a response-only field. The builder raises
+  `TCKDBBuilderValidationError` with a clear message if the field is
+  missing — typically on an older server.
+
+`emission_diagnostics()` emits one
+`artifact_upload_requires_second_phase` warning per calculation with
+attached artifacts, so any producer pipeline that escalates warnings
+to errors during dev catches "I attached artifacts but never called
+the plan" cleanly.
+
+### 8.7b Emission diagnostics (Phase 6 — shipped)
+
+The builder layer accepts some fields for forward compatibility
+before the backend bundle schemas carry them. Validation by itself
+no longer implies wire emission — the assemblers may quietly drop
+data that the schema doesn't yet accept.
+
+Each top-level upload object exposes:
+
+```python
+upload.emission_diagnostics() -> list[Diagnostic]
+```
+
+A `Diagnostic` is a frozen dataclass with four fields:
+
+| Field | Meaning |
+|-------|---------|
+| `level` | `"info"` or `"warning"` |
+| `code`  | Stable machine-readable token (see `DIAG_CODES`) |
+| `message` | Human-readable explanation |
+| `path`  | Logical builder path, e.g. `species_transport[CH4]` |
+
+Currently defined warning codes:
+
+- `transport_not_emitted_in_computed_species_bundle`
+- `transport_not_emitted_in_computed_reaction_bundle`
+- `thermo_source_calculations_not_emitted_in_computed_reaction_bundle`
+
+`client.upload(upload_object, warn_on_dropped_fields=True)` re-emits
+every `level="warning"` diagnostic via `warnings.warn(...)` before
+dispatch; the default `warn_on_dropped_fields=False` stays silent so
+producers can opt in per-call. Codes are deliberately stable — when
+the bundle schemas grow the missing fields, the assemblers flip
+emission on and the corresponding diagnostics simply stop appearing,
+no API change required.
+
+### 8.8c `Transport` (Phase 5 — shipped, bundle wiring deferred)
+
+- **Purpose** — one transport-properties block for a species, mirrors
+  the inline shape from
+  ``app/schemas/workflows/transport_upload.py::TransportUploadPayload``
+  minus provenance refs.
+- **Constructor** — `Transport(sigma_angstrom?, epsilon_over_k_k?,
+  dipole_debye?, polarizability_angstrom3?, rotational_relaxation?,
+  source_calculations?, label?, note?)`.
+- **Local validation** — at least one transport value supplied;
+  Lennard-Jones pair both-or-neither (mirrors the server's
+  `TransportCreate.validate_lj_pair`); sigma/epsilon > 0 when present;
+  `rotational_relaxation` >= 0; remaining fields numeric; source-calc
+  role tokens in the backend `TransportCalculationRole` enum
+  (`full_transport`, `dipole`, `polarizability`,
+  `supporting_geometry`).
+- **`source_calculations`** — same three accepted shapes as
+  `Thermo` / `Statmech` / `Kinetics`.
+- **Wire emission** — `Transport.to_payload()` produces a dict that
+  validates against `TransportUploadPayload` (the primitive
+  `/uploads/transport` endpoint). The two bundle schemas
+  (`ComputedSpeciesUploadRequest`,
+  `ComputedReactionUploadRequest`) do not yet carry a transport
+  field; the corresponding upload assemblers accept `transport=…` /
+  `species_transport={…}` and validate locally but emit nothing on
+  the wire. When the bundle schemas grow the field, flip the
+  assembler in one place — the validation surface is already pinned.
+
+### 8.8b `Statmech` (Phase 4 — shipped)
+
+- **Purpose** — one statmech block attached to a species. Targets the
+  shared subset between `StatmechInBundle` (computed-species) and
+  `BundleStatmechIn` (computed-reaction).
+- **Constructor** — `Statmech(external_symmetry?, point_group?,
+  is_linear?, rigid_rotor_kind?, statmech_treatment?,
+  uses_projected_frequencies?, source_calculations?, label?, note?)`.
+  All fields optional; the bundle workflow may still require minimum
+  scientific content downstream.
+- **Enum-token fields** — `rigid_rotor_kind` is restricted to the
+  backend `RigidRotorKind` values (`atom`, `linear`, `spherical_top`,
+  `symmetric_top`, `asymmetric_top`); `statmech_treatment` is
+  restricted to the `StatmechTreatmentKind` values (`rrho`, `rrho_1d`,
+  `rrho_nd`, `rrho_1d_nd`, `rrho_ad`, `rrao`).
+- **`source_calculations`** — same three shapes as
+  `Thermo` / `Kinetics` (`dict[role, Calc]`,
+  `dict[role, list[Calc]]`, `list[(role, Calc)]`). Role tokens follow
+  the `StatmechCalculationRole` enum: `opt`, `freq`, `sp`, `scan`,
+  `composite`, `imported`.
+- **Wire emission** — both upload endpoints emit
+  `source_calculations` (unlike thermo, where only the
+  computed-species path does today). The upload-level assembler
+  supplies the `KeyMinter.lookup` so `calculation_key` values resolve
+  into the bundle's global calc namespace.
+- **Local validation** — `external_symmetry >= 1`, non-empty
+  `point_group`, bool checks on `is_linear` and
+  `uses_projected_frequencies`, token validation on enum fields,
+  role-vocabulary check on `source_calculations`.
+- **Payload contribution** — `species[i]["statmech"]` on the
+  computed-reaction wire; top-level `payload["statmech"]` on the
+  computed-species wire.
+
 ### 8.9 `Thermo` (Phase 3B — shipped)
 
 - **Purpose** — one thermo block attached to a species. Targets the
@@ -400,15 +627,38 @@ expand them in coordination with the server schema.
 ### 8.10 `ComputedSpeciesUpload`
 
 - **Purpose** — top-level upload object for `POST /uploads/computed-species`.
-- **Required** — `species: Species`, `calculations: list[Calculation]`,
-  `primary_calculation: Calculation`.
-- **Optional** — `thermo: list[Thermo]`, `statmech: list[Statmech]` (Phase 3),
-  `notes`.
+- **Required** — `species: Species`, `calculations: list[Calculation]`.
+- **Optional** — `primary_calculation: Calculation` (inferred as the first
+  opt when omitted), `thermo: Thermo | None` (Phase 3C), `statmech:
+  Statmech | None` (Phase 4), `transport: Transport | None` (Phase 5 —
+  validated locally, not yet emitted on the bundle wire), `note: str |
+  None`. Multiple thermo / statmech / transport records per species,
+  and `applied_energy_corrections`, are deferred.
 - **Local validation** — `primary_calculation in calculations`; every
   calculation `depends_on` target is itself in `calculations`; species
-  identity present.
+  identity present; `thermo`, if supplied, must be a `Thermo` builder
+  and its `source_calculations` must all resolve into the upload's
+  `calculations` (`is`-identity match).
 - **`upload_kind`** — `"computed_species"`.
-- **`to_payload()`** — emits `ComputedSpeciesUploadRequest` JSON.
+- **`to_payload()`** — emits `ComputedSpeciesUploadRequest` JSON. When
+  `thermo` is present, the assembler calls
+  `thermo.to_payload(allow_source_calculations=True,
+  calc_key_lookup=calc_keys.lookup)` so each thermo
+  `source_calculations` entry's `calculation_key` resolves to the
+  bundle-local key minted for the matching `Calculation`. The
+  backend's `ThermoInBundle` enforces uniqueness on
+  `(calculation_key, role)` pairs — the same `Calculation` can carry
+  multiple roles, and the same role can attach to multiple distinct
+  `Calculation`s, but a pair may not repeat.
+
+**Per-endpoint distinction with `ComputedReactionUpload`.** The same
+`Thermo` builder is reused by `ComputedReactionUpload.species_thermo`
+(Phase 3B), but the computed-reaction backend's `BundleThermoIn`
+schema does **not** carry `source_calculations`. The builder validates
+references locally either way; only the computed-species emission
+path turns the `source_calculations` wire field on (via
+`allow_source_calculations=True`). When the computed-reaction schema
+catches up, flip the same flag at the computed-reaction emission site.
 
 ### 8.11 `ComputedReactionUpload`
 
@@ -417,14 +667,19 @@ expand them in coordination with the server schema.
 - **Optional** — `calculations: list[Calculation]` (TS-side bucket),
   `species_calculations: dict[Species, list[Calculation]]` (Phase 3A —
   reactant/product bucket), `species_thermo: dict[Species, Thermo]`
-  (Phase 3B — per-species thermo), `primary_ts_calculation`, `note`.
+  (Phase 3B — per-species thermo), `species_statmech: dict[Species,
+  Statmech]` (Phase 4 — per-species statmech), `species_transport:
+  dict[Species, Transport]` (Phase 5 — validated locally, not yet
+  emitted on the bundle wire), `primary_ts_calculation`, `note`.
 - **Local validation** — every calculation referenced via the reaction's
   TS / kinetics / source-calculation chain resolves to *some* bucket in
   the upload (TS or species); TS-side `depends_on` stays inside the TS
   bucket; species-side `depends_on` stays inside the same species's
   bucket; `primary_ts_calculation` must be in the TS bucket;
   `species_calculations` keys must be `Species` objects appearing in
-  the reaction; one opt per species (multi-conformer deferred);
+  the reaction; one opt per species (the builder ships exactly one
+  conformer per species — see
+  [`conformer_semantic_boundary.md`](conformer_semantic_boundary.md));
   each species's non-opt calcs need at least one opt to anchor the
   conformer geometry.
 - **`upload_kind`** — `"computed_reaction"`.
@@ -958,8 +1213,11 @@ Documented now so they don't get hand-waved during implementation.
 10. **Conformer awareness.** The backend bundle schemas natively model
     conformer groups, observations, and assignment schemes. The MVP
     spec hides those behind the simpler `ComputedSpeciesUpload(species,
-    calculations, primary_calculation)` shape — the builder emits a
-    single-conformer bundle on the user's behalf. Multi-conformer
-    uploads are a Phase 3 extension that introduces a `Conformer`
-    builder; until then, users with multi-conformer datasets fall back
-    to raw payloads.
+    calculations, primary_calculation)` shape — the builder emits one
+    conformer per species, on purpose. The rationale and the rejected
+    alternatives are documented separately in
+    [`conformer_semantic_boundary.md`](conformer_semantic_boundary.md):
+    TCKDB is not a workflow-side conformer-search scratchpad, and
+    producers that genuinely need to submit several scientifically
+    meaningful records for the same species do so as independent
+    submissions, not as a candidate list bundled into one upload.

@@ -254,10 +254,23 @@ class TestThermoSourceCalculations:
         assert "source_calculations" not in t.to_payload()
 
     def test_to_payload_emits_source_calculations_when_opted_in(self):
-        """Future computed-species thermo path flips this on."""
+        """The computed-species thermo path flips this flag and supplies
+        a key lookup so ``calculation_key`` values resolve into the
+        bundle's global namespace."""
         opt = _opt()
         t = Thermo.scalar(h298_kj_mol=0.0, source_calculations={"opt": opt})
-        payload = t.to_payload(allow_source_calculations=True)
+        payload = t.to_payload(
+            allow_source_calculations=True,
+            calc_key_lookup=lambda calc: "calc_1" if calc is opt else "???",
+        )
         assert payload["source_calculations"] == [
-            {"calculation_key": "<unresolved>", "role": "opt"},
+            {"calculation_key": "calc_1", "role": "opt"},
         ]
+
+    def test_to_payload_requires_lookup_when_emitting_sources(self):
+        """Emitting sources without a lookup is a programming error —
+        the assembler must always pass its KeyMinter.lookup."""
+        opt = _opt()
+        t = Thermo.scalar(h298_kj_mol=0.0, source_calculations={"opt": opt})
+        with pytest.raises(TCKDBBuilderValidationError):
+            t.to_payload(allow_source_calculations=True)

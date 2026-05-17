@@ -933,4 +933,9 @@ def persist_computed_reaction_upload(
         "statmech_ids": statmech_ids,
         "species_entry_ids": [e.id for e in species_key_to_entry.values()],
         "species_count": len(request.species),
+        # Expose the bundle-local calc-key → assigned-id map so the
+        # client builder layer can plan second-phase artifact uploads
+        # without re-walking the bundle. Response-only; unchanged
+        # request payload.
+        "calculation_keys": dict(calculation_key_to_id),
     }

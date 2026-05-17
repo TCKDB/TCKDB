@@ -22,7 +22,7 @@ non-empty values rather than silently dropping them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from tckdb_client.builders.validation import (
     TCKDBBuilderValidationError,
@@ -81,6 +81,12 @@ def _normalise_thermo_source_calculations(value: Any) -> list[tuple[str, Any]]:
         return []
 
     from tckdb_client.builders.calculation import Calculation as _Calculation
+    from tckdb_client.builders.sources import SourceCalculations as _SourceCalculations
+
+    if isinstance(value, _SourceCalculations):
+        value = value.as_list()
+        if not value:
+            return []
 
     pairs: list[tuple[str, Any]] = []
 
@@ -190,6 +196,17 @@ class Thermo:
 
     # Tag for diagnostics / error messages; not emitted on the wire.
     _kind: str = field(default="generic", init=False, repr=False)
+
+    @property
+    def kind(self) -> str:
+        """Return the thermo representation kind.
+
+        One of ``"scalar"`` / ``"nasa"`` / ``"points"`` for instances
+        built through the matching factory; ``"generic"`` for the bare
+        constructor. The viewer surfaces consume this for previews
+        (see :class:`UploadSummary`); the wire shape is unaffected.
+        """
+        return self._kind
 
     def __post_init__(self) -> None:
         # The factories do the upfront validation; this default path
@@ -425,15 +442,29 @@ class Thermo:
         """Iterate over ``(role, Calculation)`` source-link entries."""
         yield from self.source_calculations
 
-    def to_payload(self, *, allow_source_calculations: bool = False) -> dict[str, Any]:
-        """Render the dict accepted by ``BundleThermoIn``.
+    def to_payload(
+        self,
+        *,
+        allow_source_calculations: bool = False,
+        calc_key_lookup: Callable[[Any], str] | None = None,
+    ) -> dict[str, Any]:
+        """Render the dict accepted by ``BundleThermoIn`` / ``ThermoInBundle``.
 
-        ``allow_source_calculations`` gates emission of the
-        ``source_calculations`` field. The computed-reaction
-        ``BundleThermoIn`` schema does not carry one, so the
-        computed-reaction upload assembler calls this with the default
-        ``False``. A future computed-species thermo path can flip the
-        flag to ``True`` and emit the field.
+        Two switches gate the most variable part of the wire shape:
+
+        - ``allow_source_calculations`` — emit the
+          ``source_calculations`` field when ``True``. The
+          computed-reaction ``BundleThermoIn`` schema does not carry
+          this field; the computed-species ``ThermoInBundle`` does.
+          The upload-level assembler passes the right flag for its
+          endpoint.
+        - ``calc_key_lookup`` — a callable that resolves a
+          :class:`Calculation` builder to its bundle-local key. Required
+          whenever ``allow_source_calculations`` is True and the
+          builder has registered source calculations; the assembler
+          forwards its :class:`KeyMinter` lookup here so the on-wire
+          ``calculation_key`` values resolve into the bundle's global
+          calc namespace without any ``id()`` use.
         """
         out: dict[str, Any] = {}
         if self.h298_kj_mol is not None:
@@ -451,13 +482,17 @@ class Thermo:
         if self.note is not None:
             out["note"] = self.note
         if allow_source_calculations and self.source_calculations:
-            # Reserved for the future computed-species thermo path; the
-            # ``BundleThermoIn`` schema in computed-reaction does not
-            # carry this field. Wire shape mirrors kinetics:
-            # [{"calculation_key": …, "role": …}, …]. Callers supply the
-            # role values as already-resolved wire enum tokens.
+            if calc_key_lookup is None:
+                raise TCKDBBuilderValidationError(
+                    "Thermo.to_payload(allow_source_calculations=True) "
+                    "requires a calc_key_lookup callable so source "
+                    "calculations resolve to bundle-local keys."
+                )
             out["source_calculations"] = [
-                {"calculation_key": "<unresolved>", "role": role}
-                for role, _calc in self.source_calculations
+                {
+                    "calculation_key": calc_key_lookup(calc),
+                    "role": role,
+                }
+                for role, calc in self.source_calculations
             ]
         return out

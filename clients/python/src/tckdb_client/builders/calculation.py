@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from tckdb_client.builders.artifact import Artifact
 from tckdb_client.builders.geometry import Geometry
 from tckdb_client.builders.validation import (
     TCKDBBuilderValidationError,
@@ -155,6 +156,14 @@ class Calculation:
     output_geometry: Geometry | None = None
     depends_on: list["Calculation"] = field(default_factory=list)
     label: str | None = None
+    # Local-only annotation kept on the builder for producer / adapter
+    # ergonomics (e.g. ARC-style "lowest-energy converged structure;
+    # conformer search history retained as artifacts"). Today's bundle
+    # schemas do NOT carry a per-calc note field — see
+    # ``_calc_payload`` in ``uploads.py`` — so this value is preserved
+    # locally but not emitted on the wire. Lift to the payload only
+    # once the backend schemas grow a matching field.
+    note: str | None = None
 
     # Result-block fields (one cluster per type).
     final_energy_hartree: float | None = None
@@ -167,6 +176,14 @@ class Calculation:
     zpe_hartree: float | None = None
 
     electronic_energy_hartree: float | None = None
+
+    # Builder-attached artifact metadata. Files are NOT embedded in
+    # the scientific upload payload — they are uploaded in a second
+    # phase via :meth:`ComputedSpeciesUpload.artifact_plan` /
+    # :meth:`ComputedReactionUpload.artifact_plan` once the server
+    # has assigned ``calculation.id`` values. See
+    # ``tckdb_client/builders/artifact.py``.
+    artifacts: list[Artifact] = field(default_factory=list)
 
     _validated: bool = field(default=False, init=False, repr=False)
 
@@ -215,7 +232,45 @@ class Calculation:
                         f"{type(freq).__name__}."
                     )
         self.label = ensure_optional_non_empty_str(self.label, field="label")
+        self.note = ensure_optional_non_empty_str(self.note, field="note")
+        for i, art in enumerate(self.artifacts):
+            if not isinstance(art, Artifact):
+                raise TCKDBBuilderValidationError(
+                    f"artifacts[{i}] must be an Artifact builder, got "
+                    f"{type(art).__name__}."
+                )
         self._validated = True
+
+    # ----- Artifact attachment --------------------------------------
+
+    def add_artifact(
+        self,
+        path: "str | Path",
+        kind: str,
+        *,
+        label: str | None = None,
+        sha256: str | None = None,
+        bytes: int | None = None,
+    ) -> Artifact:
+        """Attach a local file to this calculation for later upload.
+
+        File existence is not checked here — the path is materialised
+        when the artifact plan is executed (so reused manifests don't
+        fail at build time on a machine that hasn't downloaded the
+        files yet). The kind / sha256 / bytes are validated up front
+        because they form part of the artifact upload request shape;
+        catching typos here turns into a deterministic builder error
+        instead of a server-side 422.
+        """
+        artifact = Artifact(
+            path=path,
+            kind=kind,
+            label=label,
+            sha256=sha256,
+            bytes=bytes,
+        )
+        self.artifacts.append(artifact)
+        return artifact
 
     # ----- Factories ------------------------------------------------
 
@@ -232,8 +287,15 @@ class Calculation:
         n_steps: int | None = None,
         depends_on: "Calculation | list[Calculation] | None" = None,
         label: str | None = None,
+        note: str | None = None,
     ) -> "Calculation":
-        """Geometry-optimisation calculation."""
+        """Geometry-optimisation calculation.
+
+        ``note`` is a local-only free-text annotation; it is preserved
+        on the builder for producer/adapter ergonomics but is not
+        emitted on the wire (today's bundle schemas do not carry a
+        per-calc note field).
+        """
         return cls(
             type="opt",
             software_release=software_release,
@@ -242,6 +304,7 @@ class Calculation:
             output_geometry=output_geometry,
             depends_on=_normalise_depends_on(depends_on),
             label=label,
+            note=note,
             final_energy_hartree=final_energy_hartree,
             converged=converged,
             n_steps=n_steps,
@@ -261,8 +324,13 @@ class Calculation:
         zpe_hartree: float | None = None,
         depends_on: "Calculation | list[Calculation] | None" = None,
         label: str | None = None,
+        note: str | None = None,
     ) -> "Calculation":
-        """Harmonic-frequency calculation."""
+        """Harmonic-frequency calculation.
+
+        ``note`` is local-only — see :meth:`Calculation.opt` for the
+        emission caveat.
+        """
         return cls(
             type="freq",
             software_release=software_release,
@@ -271,6 +339,7 @@ class Calculation:
             output_geometry=output_geometry,
             depends_on=_normalise_depends_on(depends_on),
             label=label,
+            note=note,
             frequencies_cm1=(
                 list(frequencies_cm1) if frequencies_cm1 is not None else None
             ),
@@ -290,8 +359,13 @@ class Calculation:
         electronic_energy_hartree: float | None = None,
         depends_on: "Calculation | list[Calculation] | None" = None,
         label: str | None = None,
+        note: str | None = None,
     ) -> "Calculation":
-        """Single-point energy calculation."""
+        """Single-point energy calculation.
+
+        ``note`` is local-only — see :meth:`Calculation.opt` for the
+        emission caveat.
+        """
         return cls(
             type="sp",
             software_release=software_release,
@@ -300,6 +374,7 @@ class Calculation:
             output_geometry=output_geometry,
             depends_on=_normalise_depends_on(depends_on),
             label=label,
+            note=note,
             electronic_energy_hartree=electronic_energy_hartree,
         )
 

@@ -74,6 +74,31 @@ UPLOAD_ENDPOINTS: dict[str, str] = {
 
 
 @dataclass(frozen=True)
+class ArtifactUploadBatchResult:
+    """One server response from a batched artifact upload.
+
+    Returned (one per ``calculation_id`` group) by
+    :meth:`TCKDBClient.upload_artifacts` when
+    ``batch_by_calculation=True``. Carries the server's
+    ``ArtifactsUploadResult`` body verbatim alongside the
+    bundle-local ``calculation_keys`` the builder layer minted, so
+    producers can map a batch result back to their plan without
+    re-walking the original list.
+
+    Frozen so producers can safely store, sort, or aggregate batch
+    results across multiple uploads. ``calculation_keys`` is a tuple
+    in the same order as the items dispatched to the batch; the
+    first entry is the one used in the idempotency key (see
+    :meth:`TCKDBClient.upload_artifacts`).
+    """
+
+    calculation_id: int
+    calculation_keys: tuple[str, ...]
+    artifact_count: int
+    response: Any
+
+
+@dataclass(frozen=True)
 class TCKDBResponse:
     """Lightweight wrapper exposing status, headers, JSON, and replay flag.
 
@@ -364,6 +389,7 @@ class TCKDBClient:
         payload: Any = _UNSET,
         *,
         idempotency_key: str | None = None,
+        warn_on_dropped_fields: bool = False,
     ) -> Any:
         """POST an upload payload.
 
@@ -384,10 +410,20 @@ class TCKDBClient:
         dict to the single-arg form raises ``TypeError`` rather than
         guessing an endpoint from the payload shape — see
         ``clients/python/docs/builder_api_mvp.md`` §7.
+
+        ``warn_on_dropped_fields`` applies only to the builder form.
+        When True, the client calls ``upload_object.emission_diagnostics()``
+        (if defined) and re-emits any ``level="warning"`` entry through
+        :func:`warnings.warn` before dispatch. Use this on producer
+        code paths that aggregate user input — a builder object that
+        carries data the backend won't persist is usually a portability
+        risk worth surfacing.
         """
         if payload is _UNSET:
             return self._upload_builder_object(
-                target, idempotency_key=idempotency_key
+                target,
+                idempotency_key=idempotency_key,
+                warn_on_dropped_fields=warn_on_dropped_fields,
             )
 
         if not isinstance(target, str):
@@ -412,7 +448,11 @@ class TCKDBClient:
         return self.post_json(path, payload, idempotency_key=idempotency_key)
 
     def _upload_builder_object(
-        self, obj: Any, *, idempotency_key: str | None
+        self,
+        obj: Any,
+        *,
+        idempotency_key: str | None,
+        warn_on_dropped_fields: bool = False,
     ) -> Any:
         """Dispatch a builder upload object to its registered endpoint."""
         if isinstance(obj, dict):
@@ -433,6 +473,19 @@ class TCKDBClient:
                 f"Unknown upload_kind {kind!r}; expected one of "
                 f"{sorted(UPLOAD_ENDPOINTS)}."
             )
+        if warn_on_dropped_fields and hasattr(obj, "emission_diagnostics"):
+            # Surface each warning-level diagnostic via the standard
+            # ``warnings`` machinery so producer pipelines can filter,
+            # capture, or escalate them with the usual tools.
+            import warnings as _warnings
+
+            for diag in obj.emission_diagnostics():
+                if diag.level == "warning":
+                    _warnings.warn(
+                        f"[{diag.code}] {diag.path}: {diag.message}",
+                        UserWarning,
+                        stacklevel=3,
+                    )
         payload = obj.to_payload()
         if not isinstance(payload, dict):
             raise TypeError(
@@ -442,6 +495,255 @@ class TCKDBClient:
         return self.post_json(
             UPLOAD_ENDPOINTS[kind], payload, idempotency_key=idempotency_key
         )
+
+    # ------------------------------------------------------------------
+    # Artifact upload (second-phase)
+    # ------------------------------------------------------------------
+
+    def upload_artifact(
+        self,
+        calculation_id: int,
+        path: "str | Path",
+        kind: str,
+        *,
+        sha256: str | None = None,
+        bytes: int | None = None,
+        filename: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Any:
+        """POST a single artifact to a calculation.
+
+        Reads the local file at ``path``, base64-encodes its contents,
+        and posts the resulting ``ArtifactIn`` payload to
+        ``/api/v1/calculations/{calculation_id}/artifacts``. The
+        endpoint accepts an inline batch wrapper — this helper sends a
+        single-item batch.
+
+        ``filename`` defaults to the path's basename; supply an
+        explicit value when uploading from a temp file with a synthetic
+        name. The server's filename validation (extension allowlist,
+        no path separators, NFC-normalized) still applies.
+        """
+        import base64
+        import pathlib
+
+        src = pathlib.Path(path)
+        if not src.exists():
+            raise ValueError(f"artifact file does not exist: {src}")
+        if not src.is_file():
+            raise ValueError(f"artifact path is not a file: {src}")
+        content = src.read_bytes()
+        artifact_in: dict[str, Any] = {
+            "kind": kind,
+            "filename": filename or src.name,
+            "content_base64": base64.b64encode(content).decode("ascii"),
+        }
+        if sha256 is not None:
+            artifact_in["sha256"] = sha256
+        if bytes is not None:
+            artifact_in["bytes"] = bytes
+
+        return self.post_json(
+            f"/calculations/{calculation_id}/artifacts",
+            {"artifacts": [artifact_in]},
+            idempotency_key=idempotency_key,
+        )
+
+    def upload_artifacts(
+        self,
+        plan: "Iterable[Any]",
+        *,
+        idempotency_key_prefix: str | None = None,
+        batch_by_calculation: bool = False,
+    ) -> "list[Any] | list[ArtifactUploadBatchResult]":
+        """Execute a builder-produced artifact plan.
+
+        Each entry in ``plan`` must expose ``calculation_id``,
+        ``path``, ``kind``, and the optional ``sha256``, ``bytes``,
+        ``label``, ``calculation_key`` fields — i.e. the shape of
+        :class:`tckdb_client.builders.PlannedArtifactUpload`.
+
+        Two dispatch modes:
+
+        - **``batch_by_calculation=False`` (default).** Each item is
+          uploaded in its own POST, in caller order. The first
+          failure propagates immediately; partial progress is the
+          caller's responsibility to handle. Returns a list of
+          per-artifact server responses, one per plan item.
+        - **``batch_by_calculation=True``.** Items are grouped by
+          ``calculation_id`` (insertion-order-preserving) and each
+          group is sent in a single POST to
+          ``/calculations/{calculation_id}/artifacts``. The
+          per-calculation request is **atomic** server-side: any
+          per-artifact validation failure in the batch rejects the
+          whole batch with 422 and no DB rows or S3 writes survive,
+          and a pass-2 storage failure compensates earlier S3 writes
+          before returning 503. Returns a list of
+          :class:`ArtifactUploadBatchResult` records, one per
+          ``calculation_id`` group, preserving caller-supplied group
+          order and intra-group item order.
+
+        **Pre-dispatch validation** (both modes): every plan item
+        must be a ``PlannedArtifactUpload``-like object with a
+        non-empty string ``kind``, an int ``calculation_id``, and a
+        local ``path`` that exists and is a regular file. Any failure
+        raises ``TypeError`` / ``ValueError`` *before* the first HTTP
+        request is issued so a malformed plan cannot leave the
+        server in a half-uploaded state.
+
+        **Idempotency keys**:
+
+        - ``batch_by_calculation=False``:
+          ``f"{prefix}:{calculation_key}:{kind}"`` per artifact, same
+          as before.
+        - ``batch_by_calculation=True``:
+          ``f"{prefix}:{first_calculation_key}:artifact-batch"`` per
+          group — one key per batch POST. The ``first_calculation_key``
+          is the ``calculation_key`` of the first item in the group's
+          caller-order slice; deterministic for the same plan.
+
+        Server-side atomicity is the load-bearing premise for batch
+        mode. See the backend route
+        ``POST /api/v1/calculations/{calculation_id}/artifacts`` and
+        its tests in
+        ``backend/tests/api/test_api_calculation_artifacts.py``
+        (``TestBatchAtomicity`` + ``TestStorageFailure``).
+        """
+        import base64
+        import pathlib
+
+        from tckdb_client.idempotency import validate_idempotency_key
+
+        items = list(plan)
+
+        # --- Pre-dispatch validation (both modes) -------------------
+        # Validate every item up front so a malformed plan never
+        # leaves the server in a half-uploaded state.
+        for i, item in enumerate(items):
+            calc_id = getattr(item, "calculation_id", None)
+            if not isinstance(calc_id, int) or isinstance(calc_id, bool):
+                raise TypeError(
+                    f"upload_artifacts: plan[{i}].calculation_id must "
+                    f"be an int, got {type(calc_id).__name__}."
+                )
+            kind = getattr(item, "kind", None)
+            if not isinstance(kind, str) or not kind.strip():
+                raise ValueError(
+                    f"upload_artifacts: plan[{i}].kind must be a "
+                    f"non-empty string, got {kind!r}."
+                )
+            raw_path = getattr(item, "path", None)
+            if raw_path is None:
+                raise ValueError(
+                    f"upload_artifacts: plan[{i}].path is required."
+                )
+            src = pathlib.Path(raw_path)
+            if not src.exists():
+                raise ValueError(
+                    f"upload_artifacts: plan[{i}] artifact file does "
+                    f"not exist: {src}"
+                )
+            if not src.is_file():
+                raise ValueError(
+                    f"upload_artifacts: plan[{i}] artifact path is "
+                    f"not a regular file: {src}"
+                )
+
+        if not batch_by_calculation:
+            return self._upload_artifacts_sequential(
+                items, idempotency_key_prefix=idempotency_key_prefix
+            )
+
+        # --- Batch mode --------------------------------------------
+        # Group by calculation_id; insertion-order-preserving (Py 3.7+
+        # dict iteration order) so caller-supplied group order is
+        # stable across runs.
+        groups: dict[int, list[Any]] = {}
+        for item in items:
+            groups.setdefault(item.calculation_id, []).append(item)
+
+        results: list[ArtifactUploadBatchResult] = []
+        for calc_id, group_items in groups.items():
+            artifact_payloads: list[dict[str, Any]] = []
+            calc_keys: list[str] = []
+            for item in group_items:
+                src = pathlib.Path(item.path)
+                content = src.read_bytes()
+                artifact_in: dict[str, Any] = {
+                    "kind": item.kind,
+                    "filename": (
+                        getattr(item, "filename", None) or src.name
+                    ),
+                    "content_base64": (
+                        base64.b64encode(content).decode("ascii")
+                    ),
+                }
+                if getattr(item, "sha256", None) is not None:
+                    artifact_in["sha256"] = item.sha256
+                if getattr(item, "bytes", None) is not None:
+                    artifact_in["bytes"] = item.bytes
+                artifact_payloads.append(artifact_in)
+                calc_keys.append(
+                    getattr(item, "calculation_key", str(calc_id))
+                )
+
+            idem: str | None = None
+            if idempotency_key_prefix is not None:
+                first_key = calc_keys[0] if calc_keys else str(calc_id)
+                idem = validate_idempotency_key(
+                    f"{idempotency_key_prefix}:{first_key}:artifact-batch"
+                )
+
+            response = self.post_json(
+                f"/calculations/{calc_id}/artifacts",
+                {"artifacts": artifact_payloads},
+                idempotency_key=idem,
+            )
+            results.append(
+                ArtifactUploadBatchResult(
+                    calculation_id=calc_id,
+                    calculation_keys=tuple(calc_keys),
+                    artifact_count=len(artifact_payloads),
+                    response=response,
+                )
+            )
+        return results
+
+    def _upload_artifacts_sequential(
+        self,
+        items: "list[Any]",
+        *,
+        idempotency_key_prefix: str | None,
+    ) -> list[Any]:
+        """One POST per artifact (legacy default path).
+
+        Pre-dispatch validation in ``upload_artifacts`` has already
+        confirmed every item is well-formed and points at a real
+        file; this helper just dispatches.
+        """
+        from tckdb_client.idempotency import validate_idempotency_key
+
+        results: list[Any] = []
+        for item in items:
+            calc_id = item.calculation_id
+            idem: str | None = None
+            if idempotency_key_prefix is not None:
+                idem = validate_idempotency_key(
+                    f"{idempotency_key_prefix}:"
+                    f"{getattr(item, 'calculation_key', calc_id)}:"
+                    f"{item.kind}"
+                )
+            results.append(
+                self.upload_artifact(
+                    calc_id,
+                    item.path,
+                    item.kind,
+                    sha256=getattr(item, "sha256", None),
+                    bytes=getattr(item, "bytes", None),
+                    idempotency_key=idem,
+                )
+            )
+        return results
 
     def bundle_dry_run(self, bundle: Any) -> Any:
         """POST a contribution bundle to ``/bundles/dry-run`` (no idempotency)."""

@@ -10,23 +10,56 @@ aids, not parallel APIs — the server remains authoritative.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, Iterator
 
+from tckdb_client.builders.artifact import Artifact, PlannedArtifactUpload
 from tckdb_client.builders.base import KeyMinter
 from tckdb_client.builders.calculation import Calculation
+from tckdb_client.builders.diagnostics import DIAG_CODES, Diagnostic
 from tckdb_client.builders.geometry import Geometry
 from tckdb_client.builders.reaction import ChemReaction, TransitionState
 from tckdb_client.builders.species import Species
+from tckdb_client.builders.statmech import Statmech
 from tckdb_client.builders.thermo import Thermo
+from tckdb_client.builders.transport import Transport
 from tckdb_client.builders.validation import (
     TCKDBBuilderValidationError,
     ensure_optional_non_empty_str,
 )
 
+if TYPE_CHECKING:  # pragma: no cover — type-only import
+    from tckdb_client.builders.summary import UploadSummary
+
 __all__ = [
+    "CalculationEntry",
     "ComputedSpeciesUpload",
     "ComputedReactionUpload",
 ]
+
+
+@dataclass(frozen=True)
+class CalculationEntry:
+    """One `(bucket, species, calculation)` row from a builder walk.
+
+    Yielded by :meth:`ComputedSpeciesUpload.iter_calculation_entries`
+    and :meth:`ComputedReactionUpload.iter_calculation_entries` so
+    producer code can iterate every calc in an upload — and know
+    *which* bucket each calc lives in — without reaching into the
+    private ``_species_calc_pairs`` attribute.
+
+    - ``bucket`` is a short, human-readable label: ``"TS"`` for the
+      transition-state bucket on the reaction side, or the species's
+      ``label`` / ``smiles`` for species-side calcs.
+    - ``species`` is the :class:`Species` builder the calc is
+      attached to. ``None`` for TS-side reaction calculations.
+    - ``calculation`` is the :class:`Calculation` builder itself.
+
+    Frozen so producers can safely store, sort, or aggregate entries.
+    """
+
+    bucket: str
+    species: "Species | None"
+    calculation: Calculation
 
 
 @dataclass
@@ -43,6 +76,9 @@ class ComputedSpeciesUpload:
     species: Species
     calculations: list[Calculation]
     primary_calculation: Calculation | None = None
+    thermo: Thermo | None = None
+    statmech: Statmech | None = None
+    transport: Transport | None = None
     note: str | None = None
 
     upload_kind: str = field(default="computed_species", init=False)
@@ -83,6 +119,58 @@ class ComputedSpeciesUpload:
                 if not _is_in(dep, self.calculations):
                     raise TCKDBBuilderValidationError(
                         "every depends_on target must also be included in "
+                        "ComputedSpeciesUpload.calculations."
+                    )
+
+        if self.thermo is not None:
+            if not isinstance(self.thermo, Thermo):
+                raise TCKDBBuilderValidationError(
+                    "ComputedSpeciesUpload.thermo must be a Thermo builder."
+                )
+            # Thermo source_calculations (when supplied) must resolve
+            # against this upload's calculation bucket. The backend's
+            # ``ThermoInBundle`` schema accepts the field and validates
+            # uniqueness by (calculation_key, role), but does not know
+            # which calcs belong to which species — that's the bundle's
+            # bookkeeping and the builder's job.
+            for role, calc in self.thermo.source_calculations:
+                if not _is_in(calc, self.calculations):
+                    raise TCKDBBuilderValidationError(
+                        f"thermo.source_calculations role={role!r} "
+                        "references a Calculation that is not in "
+                        "ComputedSpeciesUpload.calculations."
+                    )
+
+        if self.statmech is not None:
+            if not isinstance(self.statmech, Statmech):
+                raise TCKDBBuilderValidationError(
+                    "ComputedSpeciesUpload.statmech must be a Statmech "
+                    "builder."
+                )
+            for role, calc in self.statmech.source_calculations:
+                if not _is_in(calc, self.calculations):
+                    raise TCKDBBuilderValidationError(
+                        f"statmech.source_calculations role={role!r} "
+                        "references a Calculation that is not in "
+                        "ComputedSpeciesUpload.calculations."
+                    )
+
+        if self.transport is not None:
+            # Forward-compat acceptance: the computed-species bundle
+            # schema does not yet carry a ``transport`` field, so this
+            # builder validates references locally but does not emit
+            # the block on the wire. See ``transport.py`` and the
+            # README's transport section for the rationale.
+            if not isinstance(self.transport, Transport):
+                raise TCKDBBuilderValidationError(
+                    "ComputedSpeciesUpload.transport must be a Transport "
+                    "builder."
+                )
+            for role, calc in self.transport.source_calculations:
+                if not _is_in(calc, self.calculations):
+                    raise TCKDBBuilderValidationError(
+                        f"transport.source_calculations role={role!r} "
+                        "references a Calculation that is not in "
                         "ComputedSpeciesUpload.calculations."
                     )
 
@@ -136,9 +224,168 @@ class ComputedSpeciesUpload:
                 }
             ],
         }
+        if self.thermo is not None:
+            # ``ThermoInBundle`` (computed-species) supports
+            # ``source_calculations`` natively — emit them, resolving
+            # each :class:`Calculation` against the calc keys we just
+            # minted. This is the key difference from the
+            # computed-reaction emission path, where the schema does
+            # not yet carry the field.
+            bundle["thermo"] = self.thermo.to_payload(
+                allow_source_calculations=True,
+                calc_key_lookup=calc_keys.lookup,
+            )
+        if self.statmech is not None:
+            # ``StatmechInBundle`` always carries ``source_calculations``;
+            # the builder unconditionally resolves and emits them.
+            bundle["statmech"] = self.statmech.to_payload(
+                allow_source_calculations=True,
+                calc_key_lookup=calc_keys.lookup,
+            )
         if self.note is not None:
             bundle["note"] = self.note
         return bundle
+
+    # ------------------------------------------------------------------
+    # Emission diagnostics
+    # ------------------------------------------------------------------
+
+    def emission_diagnostics(self) -> list[Diagnostic]:
+        """Report fields that the builder accepts but cannot send today.
+
+        Each entry is a :class:`Diagnostic` with a stable ``code``,
+        ``level``, ``message``, and ``path``. Producers can call this
+        before :meth:`to_payload` (or, better,
+        :meth:`tckdb_client.TCKDBClient.upload`) to see what data is
+        about to be dropped on the wire because of a schema gap.
+        Returns an empty list when every supplied field will be
+        emitted.
+        """
+        out: list[Diagnostic] = []
+        if self.transport is not None:
+            out.append(
+                Diagnostic(
+                    level="warning",
+                    code=DIAG_CODES.TRANSPORT_NOT_EMITTED_IN_COMPUTED_SPECIES_BUNDLE,
+                    message=(
+                        "Transport is accepted for forward compatibility but "
+                        "the computed-species bundle schema does not yet "
+                        "carry a transport field — the block will not be "
+                        "emitted on the wire. Use the standalone "
+                        "/uploads/transport endpoint to ship transport data "
+                        "today."
+                    ),
+                    path="transport",
+                )
+            )
+        for calc in self.calculations:
+            if calc.artifacts:
+                out.append(_artifact_second_phase_diag(calc))
+        return out
+
+    # ------------------------------------------------------------------
+    # Artifact plan
+    # ------------------------------------------------------------------
+
+    def artifact_plan(self, upload_result: Any) -> list[PlannedArtifactUpload]:
+        """Resolve attached artifacts against the server upload result.
+
+        Returns a list of :class:`PlannedArtifactUpload` records,
+        one per artifact, with ``calculation_id`` populated from the
+        server response. Pass the returned list to
+        :meth:`tckdb_client.TCKDBClient.upload_artifacts` to execute
+        the second-phase uploads.
+
+        Raises :class:`TCKDBBuilderValidationError` when:
+
+        - the response does not match the computed-species shape
+          (no ``conformers`` list with ``primary_calculation`` /
+          ``additional_calculations`` entries carrying ``key`` and
+          ``calculation_id``); the server may be older than the
+          builder, or the response was tampered with;
+        - a builder calculation has artifacts but its local key
+          doesn't appear in the response — typically a workflow bug.
+        """
+        key_to_id = _extract_computed_species_calc_keys(upload_result)
+        return _build_plan(self.calculations, key_to_id)
+
+    def artifact_plan_preview(
+        self, *, starting_calculation_id: int = 1000,
+    ) -> list[PlannedArtifactUpload]:
+        """Return the same shape as :meth:`artifact_plan` against
+        synthetic calculation IDs — useful for offline demos, CI
+        fixtures, and producer debugging.
+
+        Synthetic IDs are minted deterministically by walking the
+        upload's payload in payload order and assigning
+        ``starting_calculation_id, +1, +2, …``. Same upload state →
+        same preview, every time. The returned IDs are **not** real
+        server-side calculation primary keys; they exist solely to
+        let producers see what :meth:`artifact_plan` would produce
+        once the bundle has been uploaded for real.
+        """
+        synthetic_response = _build_species_preview_response(
+            self.to_payload(), start=starting_calculation_id,
+        )
+        return self.artifact_plan(synthetic_response)
+
+    # ------------------------------------------------------------------
+    # Public iteration
+    # ------------------------------------------------------------------
+
+    def iter_calculations(
+        self, *, with_artifacts_only: bool = False,
+    ) -> Iterator[Calculation]:
+        """Yield every :class:`Calculation` in this upload in payload
+        order. Set ``with_artifacts_only=True`` to skip calcs without
+        attached artifacts — convenient for second-phase artifact
+        planning."""
+        for calc in self.calculations:
+            if with_artifacts_only and not calc.artifacts:
+                continue
+            yield calc
+
+    def iter_calculation_entries(
+        self, *, with_artifacts_only: bool = False,
+    ) -> Iterator[CalculationEntry]:
+        """Yield :class:`CalculationEntry` rows tagged with their
+        bucket and (where applicable) the :class:`Species` they're
+        attached to.
+
+        For computed-species uploads every calc shares the same
+        bucket — the upload's species — so the entries carry that
+        species. The method mirrors
+        :meth:`ComputedReactionUpload.iter_calculation_entries`
+        so producer code that walks both upload kinds doesn't have
+        to branch on type.
+        """
+        bucket = self.species.label or self.species.smiles or "<species>"
+        for calc in self.iter_calculations(
+            with_artifacts_only=with_artifacts_only,
+        ):
+            yield CalculationEntry(
+                bucket=bucket, species=self.species, calculation=calc,
+            )
+
+    def iter_artifacts(self) -> Iterator[tuple[Calculation, Artifact]]:
+        """Yield ``(calculation, artifact)`` pairs, one per attached
+        artifact, in walk order."""
+        for calc in self.iter_calculations(with_artifacts_only=True):
+            for art in calc.artifacts:
+                yield calc, art
+
+    def summary(self) -> "UploadSummary":
+        """Return a small human- and machine-readable preview.
+
+        See ``clients/python/docs/builder_summary_design.md`` for the
+        stability contract; ``upload.to_payload()`` remains the
+        canonical wire representation.
+        """
+        from tckdb_client.builders.summary import (
+            summarise_computed_species_upload,
+        )
+
+        return summarise_computed_species_upload(self)
 
     # ------------------------------------------------------------------
     # Internals
@@ -230,6 +477,247 @@ def _is_in(target: object, items: list[object]) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Artifact plan helpers
+# ---------------------------------------------------------------------------
+
+
+def _artifact_second_phase_diag(calc: Calculation) -> Diagnostic:
+    """One ``artifact_upload_requires_second_phase`` diagnostic per calc."""
+    label = calc.label or calc.type
+    return Diagnostic(
+        level="warning",
+        code=DIAG_CODES.ARTIFACT_UPLOAD_REQUIRES_SECOND_PHASE,
+        message=(
+            f"Calculation {label!r} has "
+            f"{len(calc.artifacts)} attached artifact(s). Artifacts are "
+            "not included in the scientific upload payload — call "
+            "upload.artifact_plan(result) on the upload response and "
+            "pass the plan to client.upload_artifacts(plan)."
+        ),
+        path=f"calculations[{label}].artifacts",
+    )
+
+
+def _extract_computed_species_calc_keys(
+    upload_result: Any,
+) -> dict[str, int]:
+    """Walk a ``ComputedSpeciesUploadResult`` for calc-key → id pairs.
+
+    The computed-species response nests calc refs under each conformer
+    (``conformers[i].primary_calculation`` plus
+    ``conformers[i].additional_calculations``), every ref carrying
+    both ``key`` and ``calculation_id``. We assemble that into a flat
+    dict for plan resolution.
+    """
+    if not isinstance(upload_result, dict):
+        raise TCKDBBuilderValidationError(
+            "artifact_plan(upload_result) requires the server response "
+            "dict from client.upload(upload). Got "
+            f"{type(upload_result).__name__}."
+        )
+    conformers = upload_result.get("conformers")
+    if not isinstance(conformers, list):
+        raise TCKDBBuilderValidationError(
+            "artifact_plan: upload_result does not look like a "
+            "ComputedSpeciesUploadResult (missing 'conformers' list). "
+            "Pass the dict client.upload(...) returned."
+        )
+    out: dict[str, int] = {}
+    for ci, conf in enumerate(conformers):
+        if not isinstance(conf, dict):
+            raise TCKDBBuilderValidationError(
+                f"artifact_plan: conformers[{ci}] is not a dict."
+            )
+        for slot in ("primary_calculation",):
+            ref = conf.get(slot)
+            if ref is None:
+                continue
+            _record_calc_ref(out, ref, f"conformers[{ci}].{slot}")
+        for ai, ref in enumerate(conf.get("additional_calculations", [])):
+            _record_calc_ref(
+                out, ref,
+                f"conformers[{ci}].additional_calculations[{ai}]",
+            )
+    return out
+
+
+def _extract_computed_reaction_calc_keys(
+    upload_result: Any,
+) -> dict[str, int]:
+    """Read ``calculation_keys`` off a ``ComputedReactionUploadResult``.
+
+    Response-only field added alongside this PR. Servers older than
+    that change won't have the field and the builder raises clearly.
+    """
+    if not isinstance(upload_result, dict):
+        raise TCKDBBuilderValidationError(
+            "artifact_plan(upload_result) requires the server response "
+            "dict from client.upload(upload). Got "
+            f"{type(upload_result).__name__}."
+        )
+    mapping = upload_result.get("calculation_keys")
+    if not isinstance(mapping, dict):
+        raise TCKDBBuilderValidationError(
+            "artifact_plan: the computed-reaction upload response is "
+            "missing the 'calculation_keys' mapping. The server is "
+            "older than the tckdb-client artifact-planning feature; "
+            "upload artifacts directly via "
+            "client.upload_artifact(calculation_id, …) once you know "
+            "each calculation's server id."
+        )
+    out: dict[str, int] = {}
+    for key, value in mapping.items():
+        if not isinstance(key, str) or not isinstance(value, int):
+            raise TCKDBBuilderValidationError(
+                "artifact_plan: calculation_keys entries must be "
+                f"str → int, got {key!r} -> {type(value).__name__}."
+            )
+        out[key] = value
+    return out
+
+
+def _record_calc_ref(
+    out: dict[str, int], ref: Any, path: str,
+) -> None:
+    """Pull (key, calculation_id) off one ref entry into ``out``."""
+    if not isinstance(ref, dict):
+        raise TCKDBBuilderValidationError(
+            f"artifact_plan: {path} is not a dict."
+        )
+    key = ref.get("key")
+    calc_id = ref.get("calculation_id")
+    if not isinstance(key, str) or not isinstance(calc_id, int):
+        raise TCKDBBuilderValidationError(
+            f"artifact_plan: {path} is missing 'key' (str) or "
+            "'calculation_id' (int)."
+        )
+    out[key] = calc_id
+
+
+def _build_plan(
+    calculations: "list[Calculation]",
+    key_to_id: dict[str, int],
+) -> list[PlannedArtifactUpload]:
+    """Render one ``PlannedArtifactUpload`` per attached artifact.
+
+    The calculation's bundle-local key is recomputed from its label
+    via the same :class:`KeyMinter` rules the upload assembler uses
+    so the plan and the payload speak the same key vocabulary.
+    """
+    plan: list[PlannedArtifactUpload] = []
+    if not calculations:
+        return plan
+
+    minter = KeyMinter(prefix="calc")
+    for calc in calculations:
+        minter.mint(calc, label=calc.label)
+
+    for calc in calculations:
+        if not calc.artifacts:
+            continue
+        calc_key = minter.lookup(calc)
+        if calc_key not in key_to_id:
+            raise TCKDBBuilderValidationError(
+                f"artifact_plan: calculation key {calc_key!r} has "
+                "attached artifacts but the upload response does not "
+                "list it. The bundle may have skipped persisting the "
+                "calc, or the response was tampered with."
+            )
+        calc_id = key_to_id[calc_key]
+        for art in calc.artifacts:
+            plan.append(
+                PlannedArtifactUpload(
+                    calculation_key=calc_key,
+                    calculation_id=calc_id,
+                    path=art.path,
+                    kind=art.kind,
+                    label=art.label,
+                    sha256=art.sha256,
+                    bytes=art.bytes,
+                )
+            )
+    return plan
+
+
+def _build_species_preview_response(
+    payload: dict, *, start: int,
+) -> dict:
+    """Synthesise a ``ComputedSpeciesUploadResult``-shaped dict.
+
+    Walks ``payload["conformers"]`` (the computed-species wire shape)
+    and assigns ``start, start+1, …`` to every calc key in payload
+    order — primary first, then additionals per conformer. The
+    resulting dict is exactly what
+    :func:`_extract_computed_species_calc_keys` expects, so calling
+    :meth:`ComputedSpeciesUpload.artifact_plan` against it reproduces
+    the real artifact-plan path without server access.
+    """
+    next_id = start
+    conformers_resp: list[dict] = []
+    for conf in payload.get("conformers", []):
+        primary = conf["primary_calculation"]
+        primary_ref = {
+            "key": primary["key"],
+            "calculation_id": next_id,
+            "type": primary["type"],
+            "role": "primary",
+        }
+        next_id += 1
+        additional_refs: list[dict] = []
+        for extra in conf.get("additional_calculations", []):
+            additional_refs.append(
+                {
+                    "key": extra["key"],
+                    "calculation_id": next_id,
+                    "type": extra["type"],
+                    "role": "additional",
+                }
+            )
+            next_id += 1
+        conformers_resp.append(
+            {
+                "key": conf["key"],
+                "primary_calculation": primary_ref,
+                "additional_calculations": additional_refs,
+            }
+        )
+    return {
+        "type": "computed_species",
+        "species_entry_id": 0,
+        "conformers": conformers_resp,
+    }
+
+
+def _build_reaction_preview_response(
+    payload: dict, *, start: int,
+) -> dict:
+    """Synthesise a ``ComputedReactionUploadResult``-shaped dict.
+
+    Walks the computed-reaction wire shape (``transition_state``
+    then per-species ``conformers`` + ``calculations``) and assigns
+    ``start, start+1, …`` to every emitted calc key in payload
+    order. The returned dict carries the ``calculation_keys``
+    response field :func:`_extract_computed_reaction_calc_keys`
+    needs.
+    """
+    keys: list[str] = []
+    ts = payload.get("transition_state")
+    if ts is not None:
+        keys.append(ts["calculation"]["key"])
+        for extra in ts.get("calculations", []):
+            keys.append(extra["key"])
+    for sp in payload.get("species", []):
+        for conf in sp.get("conformers", []):
+            keys.append(conf["calculation"]["key"])
+        for extra in sp.get("calculations", []):
+            keys.append(extra["key"])
+    return {
+        "type": "computed_reaction",
+        "calculation_keys": {k: start + i for i, k in enumerate(keys)},
+    }
+
+
+# ---------------------------------------------------------------------------
 # Computed reaction (Phase 2)
 # ---------------------------------------------------------------------------
 
@@ -252,9 +740,11 @@ class ComputedReactionUpload:
       entry produces one conformer on the wire, anchored by its
       single opt; additional non-opt calcs attach to that conformer.
 
-    Multi-conformer species (more than one opt per species) and
-    thermo/statmech/transport blocks are still deferred — see
-    ``docs/builder_api_mvp.md`` §16.
+    Exactly one opt per species: the builder ships one scientifically
+    meaningful conformer per species upload by design — see
+    ``docs/conformer_semantic_boundary.md``. Producers wanting to
+    submit several records for the same species do so as independent
+    submissions, not as a candidate list bundled into one upload.
     """
 
     reaction: ChemReaction
@@ -262,6 +752,8 @@ class ComputedReactionUpload:
     primary_ts_calculation: Calculation | None = None
     species_calculations: dict[Species, list[Calculation]] | None = None
     species_thermo: dict[Species, Thermo] | None = None
+    species_statmech: dict[Species, Statmech] | None = None
+    species_transport: dict[Species, Transport] | None = None
     note: str | None = None
 
     upload_kind: str = field(default="computed_reaction", init=False)
@@ -277,6 +769,12 @@ class ComputedReactionUpload:
     # ``reaction.unique_species()`` so payload emission stays stable
     # regardless of caller dict order.
     _species_thermo_pairs: list[tuple[Species, Thermo]] = field(
+        default_factory=list, init=False, repr=False
+    )
+    _species_statmech_pairs: list[tuple[Species, Statmech]] = field(
+        default_factory=list, init=False, repr=False
+    )
+    _species_transport_pairs: list[tuple[Species, Transport]] = field(
         default_factory=list, init=False, repr=False
     )
 
@@ -296,6 +794,8 @@ class ComputedReactionUpload:
 
         self._species_calc_pairs = self._normalise_species_calculations()
         self._species_thermo_pairs = self._normalise_species_thermo()
+        self._species_statmech_pairs = self._normalise_species_statmech()
+        self._species_transport_pairs = self._normalise_species_transport()
 
         # Resolve / validate the TS primary calculation up front so
         # producers see a deterministic error before payload time.
@@ -384,6 +884,43 @@ class ComputedReactionUpload:
                         "not in species_calculations for the same species."
                     )
 
+        # Statmech source_calculations are carried on the wire by both
+        # ``StatmechInBundle`` and ``BundleStatmechIn``. Same scoping
+        # rule as thermo: each referenced calc must belong to that
+        # species's bucket so the bundle stays self-consistent.
+        for sp, sm in self._species_statmech_pairs:
+            if not sm.source_calculations:
+                continue
+            sp_label = sp.label or sp.smiles or "<species>"
+            sp_calcs = self._calculations_for(sp)
+            for role, calc in sm.source_calculations:
+                if not _is_in(calc, sp_calcs):
+                    raise TCKDBBuilderValidationError(
+                        f"species_statmech[{sp_label!r}] source_calculation "
+                        f"role={role!r} references a Calculation that is "
+                        "not in species_calculations for the same species."
+                    )
+
+        # Transport is forward-compat on the bundle endpoints: neither
+        # ``ComputedSpeciesUploadRequest`` nor
+        # ``ComputedReactionUploadRequest`` carries a transport field
+        # today. The builder validates that any source-calc references
+        # stay scoped to the same species bucket — exactly the rule the
+        # bundle workflow would enforce once the field lands — so
+        # producer code stays portable across the schema change.
+        for sp, tr in self._species_transport_pairs:
+            if not tr.source_calculations:
+                continue
+            sp_label = sp.label or sp.smiles or "<species>"
+            sp_calcs = self._calculations_for(sp)
+            for role, calc in tr.source_calculations:
+                if not _is_in(calc, sp_calcs):
+                    raise TCKDBBuilderValidationError(
+                        f"species_transport[{sp_label!r}] source_calculation "
+                        f"role={role!r} references a Calculation that is "
+                        "not in species_calculations for the same species."
+                    )
+
         self.note = ensure_optional_non_empty_str(self.note, field="note")
 
     # ------------------------------------------------------------------
@@ -446,19 +983,23 @@ class ComputedReactionUpload:
                     )
                 calcs.append(c)
 
-            # Multi-conformer species are explicitly deferred. The
-            # bundle schema allows multiple conformers, but until the
-            # builder ships a Conformer abstraction, accepting >1 opt
-            # per species would silently collapse rotamers into one
-            # observation.
+            # One scientifically meaningful conformer per species, by
+            # design — see ``docs/conformer_semantic_boundary.md``.
+            # The bundle schema accepts a list of conformers, but the
+            # builder deliberately does not expose that surface: TCKDB
+            # is not a workflow-side conformer-search scratchpad. A
+            # producer with several scientifically meaningful records
+            # for the same species submits them independently.
             n_opt = sum(1 for c in calcs if c.type == "opt")
             if n_opt > 1:
                 sp_label = sp_key.label or sp_key.smiles or "<species>"
                 raise TCKDBBuilderValidationError(
                     f"species_calculations[{sp_label!r}] contains "
-                    f"{n_opt} opt calculations; the Phase-3A builder "
-                    "supports one conformer per species. Use the raw "
-                    "payload form for multi-conformer uploads."
+                    f"{n_opt} opt calculations; the builder ships one "
+                    "scientifically meaningful conformer per species "
+                    "upload. Submit each as its own upload, or fall "
+                    "back to the raw payload form for the rare cases "
+                    "where bundling is genuinely required."
                 )
             flattened.append((sp_key, calcs))
 
@@ -530,6 +1071,113 @@ class ComputedReactionUpload:
                 return thermo
         return None
 
+    def _normalise_species_statmech(self) -> list[tuple[Species, Statmech]]:
+        """Convert ``species_statmech`` into a validated, ordered pair list.
+
+        Mirrors :meth:`_normalise_species_thermo` — same identity-hashed
+        contract, same ``reaction.unique_species()`` ordering, same
+        duplicate-key rejection.
+        """
+        if not self.species_statmech:
+            return []
+        if not isinstance(self.species_statmech, dict):
+            raise TCKDBBuilderValidationError(
+                "species_statmech must be a dict[Species, Statmech]."
+            )
+        reaction_species = self.reaction.unique_species()
+        flattened: list[tuple[Species, Statmech]] = []
+        seen_species: list[Species] = []
+        for sp_key, statmech in self.species_statmech.items():
+            if not isinstance(sp_key, Species):
+                raise TCKDBBuilderValidationError(
+                    "species_statmech keys must be Species builders, got "
+                    f"{type(sp_key).__name__}."
+                )
+            if not any(s is sp_key for s in reaction_species):
+                sp_label = sp_key.label or sp_key.smiles or "<species>"
+                raise TCKDBBuilderValidationError(
+                    f"species_statmech key {sp_label!r} is not one of the "
+                    "Species objects in reaction.reactants or "
+                    "reaction.products."
+                )
+            if any(s is sp_key for s in seen_species):
+                sp_label = sp_key.label or sp_key.smiles or "<species>"
+                raise TCKDBBuilderValidationError(
+                    f"species_statmech has duplicate Species {sp_label!r}."
+                )
+            seen_species.append(sp_key)
+            if not isinstance(statmech, Statmech):
+                raise TCKDBBuilderValidationError(
+                    "species_statmech values must be Statmech builders, "
+                    f"got {type(statmech).__name__}."
+                )
+            flattened.append((sp_key, statmech))
+
+        ordered: list[tuple[Species, Statmech]] = []
+        for sp in reaction_species:
+            for known, sm in flattened:
+                if known is sp:
+                    ordered.append((sp, sm))
+                    break
+        return ordered
+
+    def _statmech_for(self, sp: Species) -> Statmech | None:
+        for known, sm in self._species_statmech_pairs:
+            if known is sp:
+                return sm
+        return None
+
+    def _normalise_species_transport(self) -> list[tuple[Species, Transport]]:
+        """Convert ``species_transport`` into a validated, ordered pair list.
+
+        Same identity-hashed contract as the thermo / statmech
+        normalisers — Species keys must appear in the reaction, values
+        must be :class:`Transport` builders, duplicate keys (by
+        identity) rejected.
+        """
+        if not self.species_transport:
+            return []
+        if not isinstance(self.species_transport, dict):
+            raise TCKDBBuilderValidationError(
+                "species_transport must be a dict[Species, Transport]."
+            )
+        reaction_species = self.reaction.unique_species()
+        flattened: list[tuple[Species, Transport]] = []
+        seen_species: list[Species] = []
+        for sp_key, transport in self.species_transport.items():
+            if not isinstance(sp_key, Species):
+                raise TCKDBBuilderValidationError(
+                    "species_transport keys must be Species builders, got "
+                    f"{type(sp_key).__name__}."
+                )
+            if not any(s is sp_key for s in reaction_species):
+                sp_label = sp_key.label or sp_key.smiles or "<species>"
+                raise TCKDBBuilderValidationError(
+                    f"species_transport key {sp_label!r} is not one of the "
+                    "Species objects in reaction.reactants or "
+                    "reaction.products."
+                )
+            if any(s is sp_key for s in seen_species):
+                sp_label = sp_key.label or sp_key.smiles or "<species>"
+                raise TCKDBBuilderValidationError(
+                    f"species_transport has duplicate Species {sp_label!r}."
+                )
+            seen_species.append(sp_key)
+            if not isinstance(transport, Transport):
+                raise TCKDBBuilderValidationError(
+                    "species_transport values must be Transport builders, "
+                    f"got {type(transport).__name__}."
+                )
+            flattened.append((sp_key, transport))
+
+        ordered: list[tuple[Species, Transport]] = []
+        for sp in reaction_species:
+            for known, tr in flattened:
+                if known is sp:
+                    ordered.append((sp, tr))
+                    break
+        return ordered
+
     def _calc_anywhere(self, calc: Calculation) -> bool:
         """Return True if ``calc`` appears in the TS or any species bucket."""
         if _is_in(calc, self.calculations):
@@ -576,6 +1224,7 @@ class ComputedReactionUpload:
         """
         sp_calcs = self._calculations_for(sp)
         thermo = self._thermo_for(sp)
+        statmech = self._statmech_for(sp)
         block: dict[str, Any] = {
             "key": species_key,
             "species_entry": sp.to_identity_payload(),
@@ -590,6 +1239,14 @@ class ComputedReactionUpload:
             # any source calcs supplied resolve into the same species
             # bucket, so producers won't be surprised at upload time.
             block["thermo"] = thermo.to_payload(allow_source_calculations=False)
+        if statmech is not None:
+            # ``BundleStatmechIn`` in computed-reaction DOES carry
+            # ``source_calculations`` — emit them, resolving against
+            # the same calc-key minter the rest of the bundle uses.
+            block["statmech"] = statmech.to_payload(
+                allow_source_calculations=True,
+                calc_key_lookup=calc_keys.lookup,
+            )
         if not sp_calcs:
             return block
 
@@ -765,6 +1422,196 @@ class ComputedReactionUpload:
         if self.note is not None:
             payload["note"] = self.note
         return payload
+
+    # ------------------------------------------------------------------
+    # Emission diagnostics
+    # ------------------------------------------------------------------
+
+    def emission_diagnostics(self) -> list[Diagnostic]:
+        """Report fields the builder accepts but cannot send today.
+
+        Today's gaps:
+
+        - ``species_transport`` — bundle schema has no transport field.
+        - ``species_thermo[…].source_calculations`` — computed-reaction
+          ``BundleThermoIn`` lacks ``source_calculations`` (only the
+          computed-species ``ThermoInBundle`` carries it).
+
+        Other accepted blocks (``species_calculations``,
+        ``species_statmech`` including their source-calc references,
+        kinetics ``source_calculations``) DO emit on the wire and
+        therefore produce no diagnostic.
+        """
+        out: list[Diagnostic] = []
+        for sp, _transport in self._species_transport_pairs:
+            label = sp.label or sp.smiles or "<species>"
+            out.append(
+                Diagnostic(
+                    level="warning",
+                    code=DIAG_CODES.TRANSPORT_NOT_EMITTED_IN_COMPUTED_REACTION_BUNDLE,
+                    message=(
+                        "Transport is accepted for forward compatibility but "
+                        "the computed-reaction bundle schema does not yet "
+                        "carry a per-species transport field — the block "
+                        "will not be emitted on the wire. Use the "
+                        "standalone /uploads/transport endpoint to ship "
+                        "transport data today."
+                    ),
+                    path=f"species_transport[{label}]",
+                )
+            )
+        for sp, thermo in self._species_thermo_pairs:
+            if not thermo.source_calculations:
+                continue
+            label = sp.label or sp.smiles or "<species>"
+            out.append(
+                Diagnostic(
+                    level="warning",
+                    code=(
+                        DIAG_CODES
+                        .THERMO_SOURCE_CALCULATIONS_NOT_EMITTED_IN_COMPUTED_REACTION_BUNDLE
+                    ),
+                    message=(
+                        "Thermo source_calculations were validated locally "
+                        "but the computed-reaction BundleThermoIn schema "
+                        "does not carry that field — the references will "
+                        "not be emitted on the wire. The computed-species "
+                        "endpoint does emit them; if provenance is "
+                        "load-bearing, upload via /uploads/computed-species."
+                    ),
+                    path=f"species_thermo[{label}].source_calculations",
+                )
+            )
+        for calc in self._all_calculations_for_artifacts():
+            if calc.artifacts:
+                out.append(_artifact_second_phase_diag(calc))
+        return out
+
+    # ------------------------------------------------------------------
+    # Artifact plan
+    # ------------------------------------------------------------------
+
+    def artifact_plan(self, upload_result: Any) -> list[PlannedArtifactUpload]:
+        """Resolve attached artifacts against the server upload result.
+
+        Requires the computed-reaction response to expose the
+        ``calculation_keys: dict[str, int]`` field (added as a
+        response-only follow-up). Servers older than ``tckdb-backend``
+        0.22's response shape will trip a clear
+        :class:`TCKDBBuilderValidationError`.
+
+        Walks both the TS-side ``calculations`` bucket and every
+        ``species_calculations`` entry; one
+        :class:`PlannedArtifactUpload` per attached artifact, in
+        deterministic order (TS first, then species in
+        ``reaction.unique_species()`` order).
+        """
+        key_to_id = _extract_computed_reaction_calc_keys(upload_result)
+        plan: list[PlannedArtifactUpload] = []
+        plan.extend(_build_plan(self.calculations, key_to_id))
+        for _sp, sp_calcs in self._species_calc_pairs:
+            plan.extend(_build_plan(sp_calcs, key_to_id))
+        return plan
+
+    def artifact_plan_preview(
+        self, *, starting_calculation_id: int = 1000,
+    ) -> list[PlannedArtifactUpload]:
+        """Return the same shape as :meth:`artifact_plan` against
+        synthetic calculation IDs.
+
+        Walks the upload's payload, mints
+        ``starting_calculation_id, +1, +2, …`` against every emitted
+        bundle-local calc key in payload order, and feeds the
+        resulting ``{calc_key: synthetic_id}`` mapping through the
+        normal :meth:`artifact_plan` path. Same upload state → same
+        preview, every time. Useful for offline demos, CI fixtures,
+        and producer debugging; the returned IDs are **not** real
+        server-side primary keys.
+        """
+        synthetic_response = _build_reaction_preview_response(
+            self.to_payload(), start=starting_calculation_id,
+        )
+        return self.artifact_plan(synthetic_response)
+
+    # ------------------------------------------------------------------
+    # Public iteration
+    # ------------------------------------------------------------------
+
+    def iter_calculations(
+        self, *, with_artifacts_only: bool = False,
+    ) -> Iterator[Calculation]:
+        """Yield every :class:`Calculation` in this upload in payload
+        order — TS bucket first, then species buckets in
+        ``reaction.unique_species()`` order. Set
+        ``with_artifacts_only=True`` to skip calcs without attached
+        artifacts.
+        """
+        for calc in self.calculations:
+            if with_artifacts_only and not calc.artifacts:
+                continue
+            yield calc
+        for _sp, sp_calcs in self._species_calc_pairs:
+            for calc in sp_calcs:
+                if with_artifacts_only and not calc.artifacts:
+                    continue
+                yield calc
+
+    def iter_calculation_entries(
+        self, *, with_artifacts_only: bool = False,
+    ) -> Iterator[CalculationEntry]:
+        """Yield :class:`CalculationEntry` rows tagged with their
+        bucket and (where applicable) the :class:`Species` they're
+        attached to.
+
+        TS-side calcs come first with ``bucket="TS"`` and
+        ``species=None``. Species-side calcs follow in
+        ``reaction.unique_species()`` order with ``bucket`` set to
+        the species's ``label`` / ``smiles`` and ``species`` set to
+        the :class:`Species` builder.
+        """
+        for calc in self.calculations:
+            if with_artifacts_only and not calc.artifacts:
+                continue
+            yield CalculationEntry(
+                bucket="TS", species=None, calculation=calc,
+            )
+        for sp, sp_calcs in self._species_calc_pairs:
+            bucket = sp.label or sp.smiles or "<species>"
+            for calc in sp_calcs:
+                if with_artifacts_only and not calc.artifacts:
+                    continue
+                yield CalculationEntry(
+                    bucket=bucket, species=sp, calculation=calc,
+                )
+
+    def iter_artifacts(self) -> Iterator[tuple[Calculation, Artifact]]:
+        """Yield ``(calculation, artifact)`` pairs, one per attached
+        artifact, in walk order."""
+        for calc in self.iter_calculations(with_artifacts_only=True):
+            for art in calc.artifacts:
+                yield calc, art
+
+    def summary(self) -> "UploadSummary":
+        """Return a small human- and machine-readable preview.
+
+        See ``clients/python/docs/builder_summary_design.md`` for the
+        stability contract; ``upload.to_payload()`` remains the
+        canonical wire representation.
+        """
+        from tckdb_client.builders.summary import (
+            summarise_computed_reaction_upload,
+        )
+
+        return summarise_computed_reaction_upload(self)
+
+    def _all_calculations_for_artifacts(self) -> "list[Calculation]":
+        """Return every Calculation that could carry an artifact list.
+
+        Internal helper kept for the existing artifact emission
+        diagnostic. The public iteration API is
+        :meth:`iter_calculations` / :meth:`iter_calculation_entries`.
+        """
+        return list(self.iter_calculations())
 
     # ------------------------------------------------------------------
     # Internals

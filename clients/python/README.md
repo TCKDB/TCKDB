@@ -493,14 +493,128 @@ python -m py_compile examples/basic_usage.py examples/upload_json_file.py exampl
 The test suite uses `httpx.MockTransport` and never contacts a live TCKDB
 instance.
 
-## Experimental builder layer
+## Builder layer (public beta)
 
-The package includes an experimental builder layer under
-`tckdb_client.builders`. It constructs upload payloads from scientific
-Python objects and sends them through the existing thin client.
+The package ships a builder layer under `tckdb_client.builders` that
+constructs upload payloads from scientific Python objects and sends
+them through the existing thin client. The thin HTTP client is
+production-stable; the builder layer is **public beta / preview** —
+recommended for early adopters who want a typed, validated upload
+surface, with a known set of forward-compat gaps documented below.
 
-Phase 1 supports computed species upload; Phase 2 adds computed reaction
-upload (transition state + Arrhenius / modified-Arrhenius kinetics).
+The supported flows are computed-species upload (one species + its
+opt/freq/sp + optional thermo / statmech / transport) and
+computed-reaction upload (reactant/product species + TS + kinetics +
+per-species thermo / statmech / transport).
+
+See [`docs/builder_api_stability.md`](docs/builder_api_stability.md)
+for the public-beta API surface, deprecation policy, and the list of
+things that may still change before v1.
+
+### Conformer boundary
+
+The builder intentionally models one scientifically meaningful
+conformer/geometry per species upload. It is not intended for
+uploading every conformer candidate a workflow considered. See
+[`docs/conformer_semantic_boundary.md`](docs/conformer_semantic_boundary.md).
+
+### Source-calculation ergonomics
+
+`SourceCalculations` is an opt-in helper that lets producers tag
+calcs by role once and reuse them across `Thermo` / `Statmech` /
+`Kinetics` / `Transport` blocks:
+
+```python
+from tckdb_client.builders import SourceCalculations, Thermo, Statmech
+
+sources = SourceCalculations(opt=opt, freq=freq, sp=sp)
+
+thermo   = Thermo.nasa(..., source_calculations=sources.only("opt", "freq", "sp"))
+statmech = Statmech(...,    source_calculations=sources.only("opt", "freq"))
+```
+
+For duplicate-role cases (e.g. bimolecular kinetics with two
+reactant SPs) pass a list value:
+
+```python
+kin_sources = SourceCalculations(
+    reactant_energy=[ch3_sp, h_sp],
+    product_energy=ch4_sp,
+    ts_energy=ts_sp,
+    freq=ts_freq,
+)
+kinetics = Kinetics.modified_arrhenius(..., source_calculations=kin_sources.as_list())
+```
+
+`.only(*roles)` emits entries in caller-requested role order and
+raises on a misspelled role (typo guard). `.as_list()` emits all
+entries in insertion order. Use `.add("k-inf", calc)` for role
+tokens that aren't valid Python identifiers.
+
+Full design rationale and rejected alternatives:
+[`docs/source_calculation_ergonomics.md`](docs/source_calculation_ergonomics.md).
+Explicit lists, dicts, and dict-of-list shapes keep working
+unchanged — the helper is purely additive.
+
+### Parser / validation boundary
+
+The base `tckdb-client` is and remains **parser-free**. It does not
+read Gaussian, ORCA, Arkane, or RMG output files; it does not infer
+charge / multiplicity from logs; it does not run RDKit identity
+checks. ESS file parsing is an upper layer above the builders, and
+is intentionally **not** part of the base install. See
+[`docs/parser_validation_boundary.md`](docs/parser_validation_boundary.md)
+for the layering between builders, future parser helpers,
+workflow-tool adapters, and the backend.
+
+### `Calculation.note` conventions
+
+`Calculation.opt/freq/sp(..., note="…")` is a builder-local free-text
+annotation for producer/adapter ergonomics. It is preserved on the
+builder (visible via `upload.iter_calculations()`) but **not emitted
+on the wire** today. Producer conventions for what belongs in a note
+(short one-line *why*, never logs / candidate-conformer narratives /
+machine paths / scratchpad text) live in
+[`docs/calculation_note_conventions.md`](docs/calculation_note_conventions.md).
+
+### Writing a workflow-tool adapter?
+
+The
+[`docs/adapter_authoring_quickstart.md`](docs/adapter_authoring_quickstart.md)
+is the short producer-facing path. One document covers the four-layer
+model (workflow → adapter → builders → client → backend), the three
+boundary rules, the minimal six-step adapter flow, `SourceCalculations`
+use, the two-phase artifact upload contract, the pre-upload inspection
+surface (`summary()` + `emission_diagnostics()`), the raw-payload
+escape hatch, and pointers to the worked example demos.
+
+### Upload summary / describe API
+
+`upload.summary()` returns a small `UploadSummary` value with two
+emission methods — `.to_text()` (human-readable; formatting may
+change between minor versions) and `.to_dict()` (public-beta
+stable keys, JSON-serialisable). Both
+`ComputedSpeciesUpload.summary()` and
+`ComputedReactionUpload.summary()` are supported:
+
+```python
+summary = upload.summary()
+
+print(summary.to_text())          # CLI / notebook / log preview
+
+data = summary.to_dict()          # structured for tests + observability
+assert data["artifact_count"] == 2
+assert data["diagnostic_codes"]   # codes only — no long messages
+```
+
+The summary is a builder-side **viewer** of upload state; it is
+not a substitute for `upload.to_payload()`, which remains the
+canonical wire representation. Stability layering and the full
+field list (per upload kind) are documented in
+[`docs/builder_summary_design.md`](docs/builder_summary_design.md).
+No new dependencies, no impact on `to_payload()` — purely additive.
+
+### Quickstart
 
 ```python
 from tckdb_client import TCKDBClient
@@ -525,9 +639,212 @@ upload = ComputedSpeciesUpload(
     calculations=[opt, freq],
 )
 
+# Inspect what the bundle endpoint will / won't accept before sending.
+for diag in upload.emission_diagnostics():
+    print(f"[{diag.level}] {diag.code} @ {diag.path}: {diag.message}")
+
 with TCKDBClient(base_url, api_key=api_key) as client:
-    result = client.upload(upload)
+    # warn_on_dropped_fields=True re-emits each warning diagnostic via
+    # warnings.warn(...) before the request is dispatched.
+    result = client.upload(upload, warn_on_dropped_fields=True)
 ```
+
+End-to-end demos:
+
+- [`examples/builder_computed_species_demo.py`](examples/builder_computed_species_demo.py)
+  — **start here.** Simplest single-species upload: one `Species`,
+  one `opt + freq + sp` triple, one `Thermo`, one `Statmech`, one
+  `Transport`, two attached artifacts. ~250 lines of fully-typed
+  example code with no domain modelling beyond the molecule itself.
+- [`examples/builder_computed_reaction_demo.py`](examples/builder_computed_reaction_demo.py)
+  — multi-species reaction upload: three `Species` (CH3 + H → CH4),
+  a `TransitionState`, modified-Arrhenius `Kinetics` with duplicate
+  `reactant_energy` source roles, per-species thermo / statmech /
+  transport, and two TS / species-side artifacts. Use this once the
+  species demo makes sense.
+- [`examples/builder_computed_reaction_demo.ipynb`](examples/builder_computed_reaction_demo.ipynb)
+  — Jupyter notebook walk-through of the reaction demo, section
+  headings included, ideal for interactive exploration.
+- [`examples/builder_arc_style_dry_run.py`](examples/builder_arc_style_dry_run.py)
+  — **ARC-style dry-run example.** Workflow-shaped data — four
+  species (`CH4 + OH → CH3 + H2O`, H-abstraction), a TS, mixed
+  Gaussian-opt / ORCA-SP releases, modified-Arrhenius kinetics
+  with `SourceCalculations`, thermo + statmech on one product,
+  and two attached artifacts — mapped into builders without
+  requiring ARC itself. Demonstrates the `note=` kwarg on
+  `Calculation.opt/freq/sp` for workflow-side context (local-only;
+  not emitted on the wire). Uses only public APIs and respects the
+  one-conformer-per-species
+  [conformer boundary policy](docs/conformer_semantic_boundary.md).
+- [`examples/builder_arc_style_dry_run.ipynb`](examples/builder_arc_style_dry_run.ipynb)
+  — Jupyter notebook walk-through of the ARC-style dry-run, split
+  into twelve named sections (imports → workflow mapping → artifact
+  plan → optional live upload). Same flow as the `.py` sibling,
+  same public-API contract, ideal for stepping through cell-by-cell.
+
+All five demos:
+
+- print the payload summary, emission diagnostics, an attached-artifact
+  summary (via `upload.iter_calculation_entries(with_artifacts_only=True)`),
+  and a mock-IDs plan preview (via `upload.artifact_plan_preview()`);
+- short-circuit before any HTTP when `TCKDB_BASE_URL` /
+  `TCKDB_API_KEY` are not set;
+- with both env vars set, run the full two-phase flow —
+  `client.upload(upload, warn_on_dropped_fields=True)` followed by
+  `client.upload_artifacts(upload.artifact_plan(result), idempotency_key_prefix=…)`.
+
+### What emits today
+
+The matrix below is the source of truth for which blocks make it onto
+the wire on which endpoint. The same values appear in
+`emission_diagnostics()` and stay aligned with the diagnostic codes.
+
+| Block       | `ComputedSpeciesUpload`        | `ComputedReactionUpload`              |
+|-------------|--------------------------------|---------------------------------------|
+| `Thermo`    | emits + `source_calculations`  | emits, `source_calculations` not emitted ⚠️ |
+| `Statmech`  | emits + `source_calculations`  | emits + `source_calculations`         |
+| `Transport` | accepted, not emitted ⚠️       | accepted, not emitted ⚠️              |
+| `Kinetics`  | n/a                            | emits + `source_calculations`         |
+| Artifacts   | second-phase only ⚠️           | second-phase only ⚠️                  |
+
+⚠️ entries surface a warning-level entry in `emission_diagnostics()`
+with a stable code (see `tckdb_client.builders.DIAG_CODES`). When the
+backend bundle schemas grow the missing fields, the assemblers flip
+emission on and those diagnostics simply stop appearing — no client
+API change.
+
+### Two-phase artifact upload
+
+Scientific uploads create calculation rows; *files* (input decks,
+output logs, checkpoints) ride on a separate POST per calculation
+once the server has assigned `calculation.id` values. The bundle
+endpoints **do not** accept inline artifact bytes — keeping the
+scientific upload and the file transport split means a 503 on file
+storage never leaves scientific rows half-written, and the
+calculation payload stays small.
+
+Attach files to any `Calculation` before upload:
+
+```python
+opt = Calculation.opt(..., label="ethanol_opt")
+opt.add_artifact("ethanol_opt.gjf", kind="input")
+opt.add_artifact("ethanol_opt.log", kind="output_log")
+```
+
+Then upload in two phases:
+
+```python
+result = client.upload(upload)                  # phase 1: scientific bundle
+plan   = upload.artifact_plan(result)           # resolve calc keys → ids
+
+# Simple and easiest to debug: one POST per artifact.
+client.upload_artifacts(plan, idempotency_key_prefix="my-run:2026-05-16")
+
+# Or — fewer HTTP requests, one batch per calculation:
+client.upload_artifacts(plan, idempotency_key_prefix="my-run:2026-05-16",
+                        batch_by_calculation=True)
+```
+
+`batch_by_calculation=True` groups planned items by
+`calculation_id` and sends one POST per group to
+`/calculations/{id}/artifacts`. The server endpoint is **batch-atomic**:
+any per-artifact validation failure rejects the whole batch with 422
+(no DB rows, no S3 writes), and a pass-2 storage failure compensates
+earlier S3 writes before returning 503. Returns one
+`ArtifactUploadBatchResult(calculation_id, calculation_keys,
+artifact_count, response)` per group. Idempotency keys in batch mode
+are `f"{prefix}:{first_calculation_key}:artifact-batch"` (one per
+batch, deterministic across runs).
+
+The default remains sequential one-artifact-per-request — pick the
+batched form once you've confirmed the simple flow works.
+
+Supported artifact kinds match the backend `ArtifactKind` enum:
+`input`, `output_log`, `checkpoint`, `formatted_checkpoint`,
+`ancillary`. The server's per-kind extension allow-list (e.g.
+`.gjf`/`.in` for `input`, `.out`/`.log`/`.orca` for `output_log`)
+still applies on upload — `add_artifact(...)` does not pre-check
+extensions, but it does validate the `kind`, `sha256` (64 lowercase
+hex), and `bytes` (non-negative integer) up front so typos surface
+deterministically.
+
+`emission_diagnostics()` reports
+`artifact_upload_requires_second_phase` per calculation that has
+attached artifacts — it is intentionally a warning-level reminder,
+not an error, so the scientific upload can still go through.
+
+#### Introspection helpers
+
+Both upload classes expose four public iteration / preview helpers
+so producer code never has to reach into private state to walk
+their calculations or stage offline plans:
+
+```python
+# Walk every calc in the upload, in payload order.
+for calc in upload.iter_calculations():
+    ...
+
+# Same walk, but skip calcs without attached artifacts.
+for calc in upload.iter_calculations(with_artifacts_only=True):
+    ...
+
+# Walk with bucket / species context — TS-side vs species-side on
+# the reaction path, identity-only on the species path.
+for entry in upload.iter_calculation_entries(with_artifacts_only=True):
+    print(entry.bucket, entry.species, entry.calculation)
+
+# Pair every attached artifact with its calculation.
+for calc, artifact in upload.iter_artifacts():
+    ...
+
+# A real `artifact_plan(server_result)` against synthetic IDs —
+# useful for offline demos, CI fixtures, and producer debugging.
+# Same upload state, same preview, every time. The IDs are NOT
+# real server-side primary keys.
+plan_preview = upload.artifact_plan_preview()
+```
+
+### Builder validation is not the same as wire emission
+
+The builder layer accepts some fields for **forward compatibility**
+before the backend bundle schema carries them. Today's known gaps:
+
+- `ComputedSpeciesUpload.transport` — no bundle field yet
+- `ComputedReactionUpload.species_transport` — no bundle field yet
+- `ComputedReactionUpload.species_thermo[…].source_calculations` —
+  the computed-reaction `BundleThermoIn` lacks `source_calculations`
+  (only the computed-species `ThermoInBundle` carries it)
+
+Each upload object exposes `emission_diagnostics()` so producers can
+see what data has been validated locally but **will not** travel on
+the wire today:
+
+```python
+upload = ComputedReactionUpload(
+    reaction=rxn,
+    calculations=[ts_opt, ts_freq],
+    species_calculations={ch4: [ch4_opt, ch4_freq, ch4_sp]},
+    species_transport={ch4: Transport(sigma_angstrom=3.8, epsilon_over_k_k=141.4)},
+)
+for diag in upload.emission_diagnostics():
+    print(f"[{diag.level}] {diag.code} @ {diag.path}: {diag.message}")
+```
+
+Pass `warn_on_dropped_fields=True` to `client.upload(...)` to re-emit
+each warning-level diagnostic through `warnings.warn(...)` before
+dispatch — useful in producer pipelines that already filter / escalate
+Python warnings:
+
+```python
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("error")          # promote diagnostics to errors
+    client.upload(upload, warn_on_dropped_fields=True)
+```
+
+The diagnostic codes are stable strings — see
+[`docs/builder_api_stability.md`](docs/builder_api_stability.md) for
+the policy.
 
 ### Computed reaction (Phase 2 + 3A)
 
@@ -576,7 +893,125 @@ with TCKDBClient(base_url, api_key=api_key) as client:
     result = client.upload(upload)
 ```
 
-#### Attaching reactant / product calculations (Phase 3A, experimental)
+#### Attaching transport to a computed species (Phase 5)
+
+```python
+from tckdb_client.builders import Transport
+
+transport = Transport(
+    sigma_angstrom=3.8,
+    epsilon_over_k_k=150.0,
+    dipole_debye=0.1,
+    polarizability_angstrom3=2.6,
+    rotational_relaxation=13.0,
+    source_calculations=[("supporting_geometry", opt)],
+)
+
+upload = ComputedSpeciesUpload(
+    species=ethanol,
+    calculations=[opt, freq, sp],
+    primary_calculation=opt,
+    thermo=thermo,
+    statmech=statmech,
+    transport=transport,           # accepted, validated, NOT yet emitted
+)
+```
+
+`Transport` is also accepted on the computed-reaction path via
+`ComputedReactionUpload(..., species_transport={ch4: transport, ...})`.
+
+> **Forward-compat caveat.** The current bundle schemas
+> (`ComputedSpeciesUploadRequest`, `ComputedReactionUploadRequest`)
+> do **not** carry a transport field. The bundle assemblers accept
+> the `Transport` builder, validate its source-calc references
+> against the matching calculations bucket, and intentionally drop
+> the data on the wire so producer code stays portable across the
+> eventual schema change. Until then, the standalone
+> `/uploads/transport` endpoint is the way to ship transport data.
+> `Transport.to_payload()` produces a dict the primitive
+> `TransportUploadPayload` schema accepts:
+>
+> ```python
+> client.upload("transport", transport.to_payload())
+> ```
+
+#### Attaching statmech to a computed species (Phase 4)
+
+```python
+from tckdb_client.builders import Statmech
+
+statmech = Statmech(
+    external_symmetry=2,
+    point_group="C2v",
+    is_linear=False,
+    rigid_rotor_kind="asymmetric_top",     # see backend RigidRotorKind enum
+    statmech_treatment="rrho",             # see backend StatmechTreatmentKind enum
+    source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
+)
+
+upload = ComputedSpeciesUpload(
+    species=water_species,
+    calculations=[opt, freq, sp],
+    primary_calculation=opt,
+    thermo=thermo,
+    statmech=statmech,
+)
+```
+
+`Statmech` is also accepted on the computed-reaction path via
+`ComputedReactionUpload(..., species_statmech={ch4: statmech, ...})`.
+Unlike thermo on the reaction side, **statmech source_calculations
+are emitted on the wire** for both endpoints — the backend's
+`StatmechInBundle` and `BundleStatmechIn` both carry the field. The
+builder validates that each referenced calc belongs to the same
+species's bucket either way.
+
+#### Attaching thermo to a computed species (Phase 3C)
+
+```python
+from tckdb_client.builders import (
+    Calculation, ComputedSpeciesUpload, Geometry, LevelOfTheory,
+    Species, SoftwareRelease, Thermo,
+)
+
+opt  = Calculation.opt(sr, lot, output_geometry=geom,
+                       final_energy_hartree=-76.4, converged=True, label="opt")
+freq = Calculation.freq(sr, lot, n_imag=0, zpe_hartree=0.0214,
+                        depends_on=opt, label="freq")
+sp   = Calculation.sp(sr, lot, electronic_energy_hartree=-76.45,
+                      depends_on=opt, label="sp")
+
+thermo = Thermo.nasa(
+    coeffs_low =[a1, a2, a3, a4, a5, a6, a7],
+    coeffs_high=[b1, b2, b3, b4, b5, b6, b7],
+    t_low=300.0, t_mid=1000.0, t_high=3000.0,
+    h298_kj_mol=-241.8, s298_j_mol_k=188.8,
+    source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
+)
+
+upload = ComputedSpeciesUpload(
+    species=water_species,
+    calculations=[opt, freq, sp],
+    primary_calculation=opt,
+    thermo=thermo,
+)
+```
+
+The `ComputedSpeciesUpload.thermo` path emits `source_calculations`
+on the wire — each entry's `calculation_key` is resolved to the
+bundle-local key the builder minted for the corresponding
+`Calculation`. The backend's `ThermoInBundle` enforces uniqueness on
+`(calculation_key, role)` pairs.
+
+> **Per-endpoint distinction.** The same `Thermo` builder is used by
+> `ComputedReactionUpload.species_thermo` (Phase 3B), but the
+> computed-reaction backend's `BundleThermoIn` schema does **not**
+> carry `source_calculations` today. The builder still validates
+> source-calc references locally for the reaction path; they are
+> simply not emitted on the wire there. Only the computed-species
+> path emits them.
+
+#### Attaching reactant / product calculations (Phase 3A)
 
 Pass `species_calculations` to ship per-species opt / freq / sp records
 in the same upload. Each species gets one conformer anchored on its
@@ -618,10 +1053,10 @@ upload = ComputedReactionUpload(
 `source_calculations` accepts three shapes — a `dict[role, Calculation]`,
 a `dict[role, list[Calculation]]` (used above for the duplicate
 `reactant_energy`), or a `list[(role, Calculation)]` of explicit pairs.
-The Phase-3A builder supports **one opt per species**; multi-conformer
-uploads still need the raw payload form.
+The builder supports **one opt per species**, by design — see
+[`docs/conformer_semantic_boundary.md`](docs/conformer_semantic_boundary.md).
 
-#### Attaching thermo to reactant / product species (Phase 3B, experimental)
+#### Attaching thermo to reactant / product species (Phase 3B)
 
 Pass `species_thermo` to ship per-species thermo blocks. Three flavours
 are supported and map to the backend's `BundleThermoIn` shape:
