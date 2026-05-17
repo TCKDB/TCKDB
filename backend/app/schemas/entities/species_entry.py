@@ -1,37 +1,19 @@
-from typing import Self
+"""Backend hybrid module — identity validator mixin lives in
+``tckdb_schemas.fragments.identity``; backend-only ORM-read/CRUD shapes
+for ``species_entry`` remain here.
+"""
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
 from app.schemas.common import SchemaBase, TimestampedCreatedByReadSchema
-from app.schemas.utils import normalize_optional_text
-
-_IDENTITY_TEXT_FIELDS = (
-    "unmapped_smiles",
-    "stereo_label",
-    "electronic_state_label",
-    "term_symbol_raw",
-    "term_symbol",
-    "isotopologue_label",
+from tckdb_schemas.fragments.identity import (  # noqa: F401  (re-exported)
+    _IDENTITY_TEXT_FIELDS,
+    SpeciesEntryIdentityValidatorMixin,
 )
-
-
-class SpeciesEntryIdentityValidatorMixin:
-    @model_validator(mode="after")
-    def normalize_identity_text_fields(self) -> Self:
-        """Normalize optional identity text fields without imposing stricter semantics yet."""
-
-        for field_name in _IDENTITY_TEXT_FIELDS:
-            setattr(
-                self,
-                field_name,
-                normalize_optional_text(getattr(self, field_name, None)),
-            )
-
-        return self
 
 
 class SpeciesEntryBase(SpeciesEntryIdentityValidatorMixin, BaseModel):

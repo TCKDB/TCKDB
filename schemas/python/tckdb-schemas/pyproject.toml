@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tckdb-schemas"
+version = "0.1.0"
+description = "Pure Pydantic wire-contract schemas for TCKDB upload payloads."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "TCKDB" }]
+keywords = [
+    "tckdb",
+    "thermochemistry",
+    "kinetics",
+    "schemas",
+    "pydantic",
+    "wire-contract",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pydantic>=2.6",
+    "email-validator>=2",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+]
+
+[project.urls]
+Homepage = "https://github.com/calvinp0/tckdbv2"
+Repository = "https://github.com/calvinp0/tckdbv2"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tckdb_schemas*"]
+
+[tool.setuptools.package-data]
+tckdb_schemas = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,12 +1,14 @@
+"""Backend hybrid module — ``SchemaBase`` is re-exported from
+``tckdb_schemas.common``; ORM-read base schemas remain backend-side
+because they carry ``from_attributes=True`` for SQLAlchemy mapping and
+have no role in the upload wire contract.
+"""
+
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-
-class SchemaBase(BaseModel):
-    """Base Pydantic schema with strict input handling."""
-
-    model_config = ConfigDict(extra="forbid")
+from tckdb_schemas.common import SchemaBase  # noqa: F401  (re-exported)
 
 
 class ORMBaseSchema(BaseModel):

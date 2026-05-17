@@ -34,6 +34,9 @@ from app.schemas.fragments.refs import (
 )
 from app.schemas.utils import normalize_optional_text
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
+from tckdb_schemas.statmech_bits import (  # noqa: F401  (re-exported)
+    StatmechTorsionCoordinateIn,
+)
 
 
 class StatmechCalculationIn(SchemaBase):
@@ -61,35 +64,6 @@ class StatmechSourceCalculationIn(SchemaBase):
 
     calculation_key: str = Field(min_length=1)
     role: StatmechCalculationRole
-
-
-class StatmechTorsionCoordinateIn(SchemaBase):
-    """Atom indices for one torsional coordinate in a standalone upload.
-
-    :param coordinate_index: One-based coordinate number within the rotor.
-    :param atom1_index: First atom index.
-    :param atom2_index: Second atom index.
-    :param atom3_index: Third atom index.
-    :param atom4_index: Fourth atom index.
-    """
-
-    coordinate_index: int = Field(ge=1)
-    atom1_index: int = Field(ge=1)
-    atom2_index: int = Field(ge=1)
-    atom3_index: int = Field(ge=1)
-    atom4_index: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def validate_distinct_atoms(self) -> Self:
-        atoms = {
-            self.atom1_index,
-            self.atom2_index,
-            self.atom3_index,
-            self.atom4_index,
-        }
-        if len(atoms) != 4:
-            raise ValueError("Torsion coordinate atom indices must be distinct.")
-        return self
 
 
 class StatmechTorsionIn(SchemaBase):

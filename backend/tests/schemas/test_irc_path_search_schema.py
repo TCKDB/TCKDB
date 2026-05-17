@@ -113,7 +113,7 @@ def test_path_search_result_accepts_neb_payload():
             PathSearchPointPayload(point_index=2),
         ],
     )
-    assert payload.method is PathSearchMethod.neb
+    assert payload.method.value == PathSearchMethod.neb.value
     assert len(payload.points) == 3
 
 
@@ -129,7 +129,7 @@ def test_path_search_result_accepts_gsm_payload():
             PathSearchPointPayload(point_index=1, is_ts_guess=True),
         ],
     )
-    assert payload.method is PathSearchMethod.gsm
+    assert payload.method.value == PathSearchMethod.gsm.value
     assert payload.selected_ts_point_index == 1
 
 
@@ -227,7 +227,7 @@ def test_path_search_calculation_accepts_neb_method():
         ),
     )
     assert payload.path_search_result is not None
-    assert payload.path_search_result.method is PathSearchMethod.neb
+    assert payload.path_search_result.method.value == PathSearchMethod.neb.value
     assert len(payload.path_search_result.points) == 2
 
 
@@ -245,4 +245,4 @@ def test_path_search_calculation_accepts_gsm_method():
         ),
     )
     assert payload.path_search_result is not None
-    assert payload.path_search_result.method is PathSearchMethod.gsm
+    assert payload.path_search_result.method.value == PathSearchMethod.gsm.value
