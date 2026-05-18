@@ -50,6 +50,16 @@ The TS section therefore stays the natural starting point for a
 reaction-centric crawl; callers follow the refs to the scientific TS
 surface for the per-record detail without needing to issue a search.
 
+The same reaction-full response also exposes path-like calculation
+sections (`include=scans`, `include=irc`, `include=path_search`).
+Each item carries a `calculation_ref`, an `endpoint` hint, and a
+**summary-only** block byte-identical to the matching
+`include=scan|irc|path_search` projection on the calculation detail
+endpoint. Per-point trajectory arrays are never inlined under
+`/full` — they remain available only behind the specialized
+`/scientific/calculations/{ref}/scan|irc|path-search` endpoints. See
+`scientific_calculation_path_includes.md` §8.6 for details.
+
 The search surface returns records at the **TS-entry grain**: entries
 are the concrete objects carrying charge / multiplicity / status and
 calculation evidence. The parent TS-concept context travels along on

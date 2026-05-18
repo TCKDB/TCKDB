@@ -13,6 +13,11 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.db.models.common import RecordReviewStatus, TransitionStateEntryStatus
+from app.schemas.reads.scientific_calculation import (
+    CalculationIRCSummary,
+    CalculationPathSearchSummary,
+    CalculationScanSummary,
+)
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     PathSearchSummary,
@@ -149,6 +154,70 @@ class TransitionStateInFull(BaseModel):
     dependencies: list[TransitionStateDependency] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# Path-section items (scan / IRC / path-search) — summary-only
+# ---------------------------------------------------------------------------
+#
+# Each item is a per-calculation projection that mirrors the
+# corresponding ``include=scan|irc|path_search`` heavy-include block on
+# the calculation detail endpoint. The `summary` field is **byte-identical**
+# to ``record.scan|irc|path_search`` from the calc detail endpoint;
+# the path-data point arrays remain available **only** behind the
+# specialized endpoints below (the ``endpoint`` field is a public
+# navigation hint, not a payload):
+#
+# - ``GET /api/v1/scientific/calculations/{ref}/scan``
+# - ``GET /api/v1/scientific/calculations/{ref}/irc``
+# - ``GET /api/v1/scientific/calculations/{ref}/path-search``
+
+
+class ReactionFullScanItem(BaseModel):
+    """One scan calculation embedded under ``/full?include=scans``.
+
+    ``summary`` is the same shape that
+    ``GET /scientific/calculations/{ref}?include=scan`` returns under
+    ``record.scan`` — coordinate list + result-row fields + bounded
+    aggregates. No per-point arrays, no coordinate-value rows, no XYZ.
+    ``endpoint`` carries the ref-based navigation hint for the
+    specialized full-data endpoint.
+    """
+
+    calculation_id: int | None = None
+    calculation_ref: str
+    endpoint: str
+    summary: CalculationScanSummary | None = None
+
+
+class ReactionFullIRCItem(BaseModel):
+    """One IRC calculation embedded under ``/full?include=irc``.
+
+    ``summary`` is byte-identical to
+    ``GET /scientific/calculations/{ref}?include=irc`` under
+    ``record.irc``. Per-point arrays live behind the specialized
+    ``/irc`` endpoint.
+    """
+
+    calculation_id: int | None = None
+    calculation_ref: str
+    endpoint: str
+    summary: CalculationIRCSummary | None = None
+
+
+class ReactionFullPathSearchItem(BaseModel):
+    """One path-search calculation embedded under ``/full?include=path_search``.
+
+    ``summary`` is byte-identical to
+    ``GET /scientific/calculations/{ref}?include=path_search`` under
+    ``record.path_search``. Per-point arrays live behind the
+    specialized ``/path-search`` endpoint.
+    """
+
+    calculation_id: int | None = None
+    calculation_ref: str
+    endpoint: str
+    summary: CalculationPathSearchSummary | None = None
+
+
 class ReviewRecordEntry(BaseModel):
     """Audit-array entry returned only when ``include_review=full``."""
 
@@ -182,9 +251,9 @@ class ScientificReactionFullResponse(BaseModel):
     kinetics: list[KineticsRecord] | None = None
     transition_states: list[TransitionStateInFull] | None = None
     calculations: list[CalculationEvidenceSummary] | None = None
-    path_search: list[PathSearchSummary] | None = None
-    irc: list[dict[str, object]] | None = None
-    scans: list[dict[str, object]] | None = None
+    path_search: list[ReactionFullPathSearchItem] | None = None
+    irc: list[ReactionFullIRCItem] | None = None
+    scans: list[ReactionFullScanItem] | None = None
     conformers: list[dict[str, object]] | None = None
     artifacts: list[dict[str, object]] | None = None
 

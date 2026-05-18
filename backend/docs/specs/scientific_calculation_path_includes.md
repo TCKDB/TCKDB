@@ -388,6 +388,28 @@ It also matches the `/scientific/geometries/{geometry_ref}` precedent
 already in the codebase: heavy coordinate payloads live behind
 per-resource detail endpoints, not behind search-include expansion.
 
+### 8.6 Linking from `/reaction-entries/{id}/full`
+
+The reaction-full composite response embeds path summaries (under
+`include=scans`, `include=irc`, `include=path_search`) using exactly
+these summary projections — each item carries `calculation_ref`,
+the matching `CalculationScanSummary` / `CalculationIRCSummary` /
+`CalculationPathSearchSummary` block, and an `endpoint` ref-based
+hint pointing at the specialized full-data endpoint:
+
+```text
+/reaction-entries/{id}/full?include=scans          → list of {calculation_ref, endpoint, summary}
+/reaction-entries/{id}/full?include=irc            → list of {calculation_ref, endpoint, summary}
+/reaction-entries/{id}/full?include=path_search    → list of {calculation_ref, endpoint, summary}
+```
+
+Each `summary` block is byte-identical to `record.scan|irc|path_search`
+on the calculation detail endpoint — see the cross-endpoint equality
+tests in `tests/api/scientific/test_api_reaction_full.py`. Full
+per-point arrays remain available **only** behind the specialized
+calculation path endpoints; the reaction-full surface never inlines
+them.
+
 ### 8.5 Sorting
 
 `points` are returned in `point_index ASC` (the natural acquisition

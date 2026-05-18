@@ -47,7 +47,10 @@ from app.schemas.reads.scientific_common import (
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.schemas.reads.scientific_provenance import (
     ReactionEntrySummary,
+    ReactionFullIRCItem,
+    ReactionFullPathSearchItem,
     ReactionFullReadRequest,
+    ReactionFullScanItem,
     ReactionFullSpecies,
     ReactionFullSpeciesParticipant,
     RequestEcho,
@@ -67,6 +70,11 @@ from app.services.scientific_read.common import (
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
+)
+from app.services.scientific_read.calculations import (
+    _build_irc_include_summary,
+    _build_path_search_include_summary,
+    _build_scan_include_summary,
 )
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.transition_states import (
@@ -188,15 +196,17 @@ def get_reaction_full(
             session, reaction_entry_id
         )
 
-    path_search_block: list[PathSearchSummary] | None = None
+    path_search_block: list[ReactionFullPathSearchItem] | None = None
     if "path_search" in includes:
         path_search_block = _build_path_search_section(session, reaction_entry_id)
 
-    irc_block: list[dict] | None = None
+    irc_block: list[ReactionFullIRCItem] | None = None
     if "irc" in includes:
         irc_block = _build_irc_section(session, reaction_entry_id)
 
-    scans_block: list[dict] | None = [] if "scans" in includes else None
+    scans_block: list[ReactionFullScanItem] | None = None
+    if "scans" in includes:
+        scans_block = _build_scans_section(session, reaction_entry_id)
     conformers_block: list[dict] | None = [] if "conformers" in includes else None
     artifacts_block: list[dict] | None = [] if "artifacts" in includes else None
 
@@ -495,39 +505,15 @@ def _build_calculations_section(
     ]
 
 
-def _build_path_search_section(
-    session: Session, reaction_entry_id: int
-) -> list[PathSearchSummary]:
-    rows = session.execute(
-        select(Calculation.id, Calculation.public_ref, Calculation.parameters_json)
-        .join(
-            TransitionStateEntry,
-            TransitionStateEntry.id == Calculation.transition_state_entry_id,
-        )
-        .join(
-            TransitionState,
-            TransitionState.id == TransitionStateEntry.transition_state_id,
-        )
-        .where(
-            TransitionState.reaction_entry_id == reaction_entry_id,
-            Calculation.type == CalculationType.path_search,
-        )
-        .order_by(Calculation.id.desc())
-    ).all()
-    return [
-        PathSearchSummary(
-            calculation_id=cid,
-            calculation_ref=ref,
-            method=(params.get("method") if isinstance(params, dict) else None),
-            converged=None,
-        )
-        for cid, ref, params in rows
-    ]
-
-
-def _build_irc_section(
-    session: Session, reaction_entry_id: int
-) -> list[dict]:
+def _calcs_of_type_for_reaction(
+    session: Session,
+    reaction_entry_id: int,
+    calc_type: CalculationType,
+) -> list[tuple[int, str]]:
+    """Return ``[(calculation_id, calculation_ref), ...]`` for *calc_type*
+    calcs whose TS entry belongs to *reaction_entry_id*. Ordered newest-
+    first (id desc) — deterministic, no caller-supplied sort.
+    """
     rows = session.execute(
         select(Calculation.id, Calculation.public_ref)
         .join(
@@ -540,13 +526,91 @@ def _build_irc_section(
         )
         .where(
             TransitionState.reaction_entry_id == reaction_entry_id,
-            Calculation.type == CalculationType.irc,
+            Calculation.type == calc_type,
         )
         .order_by(Calculation.id.desc())
     ).all()
+    return [(row[0], row[1]) for row in rows]
+
+
+def _scan_endpoint(calc_ref: str) -> str:
+    return f"/api/v1/scientific/calculations/{calc_ref}/scan"
+
+
+def _irc_endpoint(calc_ref: str) -> str:
+    return f"/api/v1/scientific/calculations/{calc_ref}/irc"
+
+
+def _path_search_endpoint(calc_ref: str) -> str:
+    return f"/api/v1/scientific/calculations/{calc_ref}/path-search"
+
+
+def _build_scans_section(
+    session: Session, reaction_entry_id: int
+) -> list[ReactionFullScanItem]:
+    """Return one summary per scan calc reachable via this reaction entry's TS.
+
+    Each item is byte-identical to ``record.scan`` from the calculation
+    detail endpoint's ``include=scan`` projection — point arrays and
+    coordinate-value rows live only behind the specialized
+    ``/calculations/{ref}/scan`` endpoint (referenced by ``endpoint``).
+    """
     return [
-        {"calculation_id": cid, "calculation_ref": ref, "type": "irc"}
-        for cid, ref in rows
+        ReactionFullScanItem(
+            calculation_id=cid,
+            calculation_ref=ref,
+            endpoint=_scan_endpoint(ref),
+            summary=_build_scan_include_summary(session, cid),
+        )
+        for cid, ref in _calcs_of_type_for_reaction(
+            session, reaction_entry_id, CalculationType.scan
+        )
+    ]
+
+
+def _build_path_search_section(
+    session: Session, reaction_entry_id: int
+) -> list[ReactionFullPathSearchItem]:
+    """Return one summary per path-search calc for this reaction entry.
+
+    Each item carries the ``include=path_search`` summary projection
+    (method, n_points, ts_guess/climbing-image counts, energy and
+    path-coordinate MIN/MAX aggregates). Per-image point arrays live
+    only behind ``/calculations/{ref}/path-search``.
+    """
+    return [
+        ReactionFullPathSearchItem(
+            calculation_id=cid,
+            calculation_ref=ref,
+            endpoint=_path_search_endpoint(ref),
+            summary=_build_path_search_include_summary(session, cid),
+        )
+        for cid, ref in _calcs_of_type_for_reaction(
+            session, reaction_entry_id, CalculationType.path_search
+        )
+    ]
+
+
+def _build_irc_section(
+    session: Session, reaction_entry_id: int
+) -> list[ReactionFullIRCItem]:
+    """Return one summary per IRC calc for this reaction entry.
+
+    Each item carries the ``include=irc`` summary projection (direction,
+    forward/reverse counts, ts_point_count, energy + reaction-
+    coordinate envelopes). Per-point arrays live only behind
+    ``/calculations/{ref}/irc``.
+    """
+    return [
+        ReactionFullIRCItem(
+            calculation_id=cid,
+            calculation_ref=ref,
+            endpoint=_irc_endpoint(ref),
+            summary=_build_irc_include_summary(session, cid),
+        )
+        for cid, ref in _calcs_of_type_for_reaction(
+            session, reaction_entry_id, CalculationType.irc
+        )
     ]
 
 
