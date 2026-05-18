@@ -1068,3 +1068,83 @@ def test_search_no_forbidden_payload_keys(client, db_session):
                 _walk(item)
 
     _walk(body)
+
+
+# ---------------------------------------------------------------------------
+# Regression: explicit False boolean filters must count as meaningful
+# (was: 422 missing_filter — fixed by treating None vs False distinctly)
+# ---------------------------------------------------------------------------
+
+
+def test_search_has_calculations_false_does_not_return_missing_filter(
+    client, db_session
+):
+    """``has_calculations=false`` is a meaningful filter (TS entries
+    without any calculation evidence) and must not 422."""
+    resp = client.get(_search_url(has_calculations="false"))
+    assert resp.status_code == 200, resp.text
+
+
+def test_search_has_opt_false_does_not_return_missing_filter(client, db_session):
+    resp = client.get(_search_url(has_opt="false"))
+    assert resp.status_code == 200, resp.text
+
+
+def test_search_has_freq_false_does_not_return_missing_filter(
+    client, db_session
+):
+    resp = client.get(_search_url(has_freq="false"))
+    assert resp.status_code == 200, resp.text
+
+
+def test_search_has_sp_false_does_not_return_missing_filter(client, db_session):
+    resp = client.get(_search_url(has_sp="false"))
+    assert resp.status_code == 200, resp.text
+
+
+def test_search_has_irc_false_does_not_return_missing_filter(client, db_session):
+    resp = client.get(_search_url(has_irc="false"))
+    assert resp.status_code == 200, resp.text
+
+
+def test_search_has_path_search_false_does_not_return_missing_filter(
+    client, db_session
+):
+    resp = client.get(_search_url(has_path_search="false"))
+    assert resp.status_code == 200, resp.text
+
+
+def test_search_has_geometry_validation_false_does_not_return_missing_filter(
+    client, db_session
+):
+    resp = client.get(_search_url(has_geometry_validation="false"))
+    assert resp.status_code == 200, resp.text
+
+
+def test_search_has_scf_stability_false_does_not_return_missing_filter(
+    client, db_session
+):
+    resp = client.get(_search_url(has_scf_stability="false"))
+    assert resp.status_code == 200, resp.text
+
+
+def test_search_has_opt_false_narrows_to_entries_without_opt(client, db_session):
+    """End-to-end: ``has_opt=false`` returns TS entries that have no
+    opt-typed calculation, and excludes entries that do."""
+    _, _, _, entries_a = _make_reaction_with_ts(db_session)
+    _, _, _, entries_b = _make_reaction_with_ts(db_session)
+    _attach_calc(db_session, tse=entries_a[0], calc_type=CalculationType.opt)
+    # entries_b[0] gets no calculations.
+
+    true_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in client.get(_search_url(has_opt="true")).json()["records"]
+    }
+    false_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in client.get(_search_url(has_opt="false")).json()["records"]
+    }
+    assert entries_a[0].public_ref in true_refs
+    assert entries_a[0].public_ref not in false_refs
+    assert entries_b[0].public_ref not in true_refs
+    assert entries_b[0].public_ref in false_refs

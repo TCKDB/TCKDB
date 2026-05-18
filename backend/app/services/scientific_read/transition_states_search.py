@@ -246,12 +246,18 @@ def search_transition_states(
 def _enforce_at_least_one_filter(
     request: TransitionStatesSearchRequest,
 ) -> None:
-    """Reject requests with no meaningful filter."""
+    """Reject requests with no meaningful filter.
+
+    Bool filters in :class:`TransitionStatesSearchRequest` default to
+    ``None``; an explicit ``False`` from the caller is a meaningful
+    filter (e.g. ``has_opt=false`` selects TS entries *without* opt
+    evidence), so only ``None`` skips here. ``include_rejected`` and
+    friends are not in ``_MEANINGFUL_FILTER_FIELDS``, so their
+    ``bool = False`` defaults can't accidentally satisfy the gate.
+    """
     for name in _MEANINGFUL_FILTER_FIELDS:
         value = getattr(request, name)
         if value is None:
-            continue
-        if value is False:
             continue
         return
     raise ValueError(
