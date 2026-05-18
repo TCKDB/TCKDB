@@ -1,10 +1,229 @@
 # TCKDB Read/Query API Audit
 
-**Audit date:** 2026-05-13
+**Original audit date:** 2026-05-13
+**Status update:** 2026-05-18
 **Branch:** main
-**Scope:** Factual audit of the existing read/query surface in the TCKDB backend.
-No design changes, no implementation, no schema work. ARC and `tckdb-client`
-are out of scope.
+**Scope:** Factual audit of the existing read/query surface in the TCKDB
+backend, plus a current implementation-status update layered on top.
+The original sections (§1–§16) are preserved as historical context;
+the new §0 below reflects what shipped after the original audit.
+No design changes, no implementation, no schema work. ARC and
+`tckdb-client` are out of scope.
+
+---
+
+## 0. Current implementation status (2026-05-18 update)
+
+Since the original audit on 2026-05-13, the scientific read surface
+has expanded substantially. This section is the authoritative source
+for "what exists today"; §12 / §13 / §14 below are preserved as the
+original gap analysis and recommended order.
+
+### 0.1 Scientific surface matrix
+
+Surfaces marked **Implemented** are public, ref-based, review-aware,
+and Phase D internal-id-policy-gated. The "Endpoints" column lists
+the exact mounted paths (verified against
+`backend/app/api/routes/scientific/__init__.py`).
+
+| Surface | Status | Endpoints |
+|---|---|---|
+| Species search | Existing | `GET /scientific/species/search` |
+| Reaction search | Existing | `GET\|POST /scientific/reactions/search` |
+| Reaction-entry full | Existing | `GET /scientific/reaction-entries/{id}/full` |
+| Thermo search | Existing | `GET\|POST /scientific/thermo/search` |
+| Thermo per species_entry | Existing | `GET /scientific/species-entries/{id}/thermo` |
+| Kinetics search | Existing | `GET\|POST /scientific/kinetics/search` |
+| Kinetics per reaction_entry | Existing | `GET /scientific/reaction-entries/{id}/kinetics` |
+| Geometry detail | Existing | `GET /scientific/geometries/{geometry_handle}` |
+| Species-calculations search | Existing | `GET\|POST /scientific/species-calculations/search` |
+| Calculations detail/search | **Implemented** | `GET /scientific/calculations/{ref_or_id}`, `GET\|POST /scientific/calculations/search` |
+| Calculation scan endpoint | **Implemented** | `GET /scientific/calculations/{ref_or_id}/scan` |
+| Calculation IRC endpoint | **Implemented** | `GET /scientific/calculations/{ref_or_id}/irc` |
+| Calculation path-search endpoint | **Implemented** | `GET /scientific/calculations/{ref_or_id}/path-search` |
+| Transition states detail/search | **Implemented** | `GET /scientific/transition-states/{ref_or_id}`, `GET /scientific/transition-state-entries/{ref_or_id}`, `GET\|POST /scientific/transition-states/search` |
+| Conformers detail/search | **Implemented** | `GET /scientific/conformer-groups/{ref_or_id}`, `GET /scientific/conformer-observations/{ref_or_id}`, `GET\|POST /scientific/conformers/search` |
+| Statmech detail/search | **Implemented** | `GET /scientific/statmech/{ref_or_id}`, `GET\|POST /scientific/statmech/search` |
+| Transport detail/search | **Implemented** | `GET /scientific/transport/{ref_or_id}`, `GET\|POST /scientific/transport/search` |
+| Reaction-full TS links | **Implemented** | embedded refs + evidence summary under `/reaction-entries/{id}/full?include=transition_states` |
+| Reaction-full path summaries | **Implemented** | scan/irc/path_search summary projections under `include=scans` / `include=irc` / `include=path_search` |
+| Reaction-full artifacts | **Implemented** | per-calculation grouped artifact metadata under `include=artifacts` |
+| Reaction-full conformers | **Implemented** | participant-grouped conformer-group summaries under `include=conformers` |
+| Network / pdep reads | Missing | no `/scientific/networks/*` surface yet |
+| Literature-centered query | Missing | `/literature/{id}` returns the paper but no "records citing X" inverse query |
+| Energy-correction scheme / FSF query | Missing | no `/scientific/corrections/*` or `/scientific/frequency-scale-factors/*` surface |
+| Applied energy-correction reads | Missing | the schema carries `applied_energy_correction` rows; no scientific read surface |
+| Bulk export | Missing | no CSV/JSONL/Parquet bulk endpoint |
+| RDKit substructure / similarity search | Missing | the `mol` column type is in place; no endpoint uses it for substructure or similarity |
+| Standalone artifact search | Partial | exposed via calculation `include=artifacts` + reaction-full grouped artifacts; no `/scientific/artifacts/search` |
+| Curator review queue per-record | Partial | the existing `/record-reviews` listing is record-grain; no curator-oriented "to-be-reviewed" surface beyond the submission-grained `/submissions/for-review` |
+| Unified record provenance projection | Partial | reaction-entry `/full` is the only composite provenance read; no `/scientific/records/{type}/{id}/provenance` generic surface |
+
+### 0.2 Original gap list — closure status
+
+Each item below references the original §12 list. Items are tagged
+**closed** (a standalone surface ships), **partially closed** (data is
+reachable embedded under another surface but no dedicated endpoint
+exists), **still open**, or **deferred** (recorded but not on the
+priority list).
+
+| Gap | Status | Note |
+|---|---|---|
+| `/scientific/calculations/search` | **closed** | `GET\|POST /scientific/calculations/search`; multi-axis filters, deterministic ordering, `include=all`. See `scientific_calculation_reads.md`. |
+| `/scientific/transition-states/search` + detail | **closed** | TS-concept + TS-entry detail endpoints + GET/POST search. See `scientific_transition_state_reads.md`. |
+| `/scientific/conformers/*` | **closed** | `conformer-groups` + `conformer-observations` detail + `/conformers/search`. See `scientific_conformer_reads.md`. |
+| `/scientific/statmech/search` | **closed** | Detail + GET/POST search at statmech-record grain. See `scientific_statmech_reads.md`. |
+| `/scientific/transport/search` | **closed** | Detail + GET/POST search at transport-record grain. See `scientific_transport_reads.md`. |
+| `/scientific/networks/*` | **still open** | No PDep / network read surface yet. Next priority — see §0.4 below. |
+| Literature-centered query | **still open** | The "records citing this paper" inverse query has no surface. The `literature_id` FK is surfaced as `LiteratureSummary` on thermo / kinetics / statmech / transport / energy-correction reads, but there is no reverse-direction endpoint. |
+| Substructure / similarity search using RDKit cartridge | **still open** | The `mol` column type is in place on `species` / `transition_state_entry`; no endpoint uses it. |
+| Artifact search/download | **partially closed** | Metadata is exposed via calculation `include=artifacts` and reaction-full grouped artifacts. No standalone `/scientific/artifacts/search` and no body-fetch endpoint in the scientific surface. |
+| Applied-correction / scale-factor search by chemistry context | **still open** | `frequency_scale_factor` is surfaced *embedded* under statmech `include=frequencies` (via the scale factor pointer) but has no standalone `/scientific/frequency-scale-factors/*` surface. `applied_energy_correction` has no scientific read surface at all. |
+| `/scientific/records/{type}/{id}/provenance` unified projection | **still open** | Reaction-entry `/full` is the only composite. A generic provenance endpoint that works for any record type was not built. |
+| Bulk export endpoint | **still open** | No CSV/JSONL/Parquet bulk endpoint. |
+| Curator review queue beyond submissions | **deferred** | The existing `/record-reviews` listing covers the per-record path. A curator-oriented worklist was not implemented; treat as a UI / workflow concern rather than a read-API gap. |
+| NEB results | **deferred** | The `calc_path_search_result` / `calc_path_search_point` tables now cover NEB-style data, and the path-search endpoint surfaces them. The original audit's "would need schema work first" is partially resolved by the existing path-search schema; if a NEB-specific projection is wanted later, it ships as a path-search detail variant. |
+| `transition_state_selection` API | **deferred** | Still no ORM table; not a current schema concept. |
+
+### 0.3 Current scientific route inventory (by group)
+
+Verified against `backend/app/api/routes/scientific/__init__.py` on
+2026-05-18. Mounted under `/api/v1/scientific`.
+
+**Species / reactions / thermo / kinetics**
+- `GET /species/search` — species search (chemistry-first).
+- `GET\|POST /reactions/search` — reaction-graph + entry-grain search.
+- `GET /reaction-entries/{id}/kinetics` — per-reaction-entry kinetics.
+- `GET /reaction-entries/{id}/full` — composite provenance read.
+- `GET /species-entries/{id}/thermo` — per-species-entry thermo.
+- `GET\|POST /thermo/search` — thermo record-grain search.
+- `GET\|POST /kinetics/search` — kinetics record-grain search.
+
+**Calculations**
+- `GET /calculations/{ref_or_id}` — calculation detail + heavy includes (`results`, `dependencies`, `artifacts`, `input_geometries`, `output_geometries`, `geometry_validation`, `scf_stability`, `wavefunction_diagnostic`, `parameters`, `constraints`, `review`, `scan`, `irc`, `path_search`, `internal_ids`, `all`).
+- `GET\|POST /calculations/search` — multi-axis chemistry/method/provenance search (≈27 filters incl. `species_entry_ref`, `transition_state_entry_ref`, `species_ref`, `transition_state_ref`, `calculation_type`, `quality`, `has_result`, `has_artifacts`, `has_input_geometry`, `has_output_geometry`, `artifact_kind`, `method`, `basis`, `lot_ref`, `lot_hash`, `software`, `software_version`, `workflow_tool`, `workflow_tool_version`, `geometry_validation_status`, `scf_stability_status`, `dependency_role`, `parent_calculation_ref`, `child_calculation_ref`, `parameter_key`/`value`, `canonical_parameter_key`/`value`, `created_before`/`after`).
+- `GET /calculations/{ref_or_id}/scan` — full-data scan endpoint, paginates point array.
+- `GET /calculations/{ref_or_id}/irc` — full-data IRC endpoint, paginates point array.
+- `GET /calculations/{ref_or_id}/path-search` — full-data path-search endpoint, paginates point array.
+
+**Transition states**
+- `GET /transition-states/{ref_or_id}` — TS-concept detail (`include=entries`, `include=calculations`, `include=geometries`, `include=review`, `include=all`).
+- `GET /transition-state-entries/{ref_or_id}` — TS-entry detail.
+- `GET\|POST /transition-states/search` — TS-entry-grain search (≈22 filters).
+
+**Conformers**
+- `GET /conformer-groups/{ref_or_id}` — conformer-group detail (`include=observations`, `selections`, `calculations`, `geometries`, `review`, `all`).
+- `GET /conformer-observations/{ref_or_id}` — observation detail.
+- `GET\|POST /conformers/search` — group-grain search (22 filters).
+
+**Statmech**
+- `GET /statmech/{ref_or_id}` — statmech detail (`include=source_calculations`, `torsions`, `frequencies`, `conformers`, `review`, `all`). Frequencies are a pointer to the source freq calc refs, not inlined per-mode arrays.
+- `GET\|POST /statmech/search` — 16 filters incl. `model_kind`, `has_source_calculations`/`freq_calculation`/`rotor_scans`/`torsions`, method/basis/software/workflow filters.
+
+**Transport**
+- `GET /transport/{ref_or_id}` — transport detail (`include=source_calculations`, `review`, `all`).
+- `GET\|POST /transport/search` — 15 filters incl. `model_kind` (maps to `scientific_origin`), `has_lj_parameters`/`dipole_moment`/`polarizability`/`rotational_relaxation`/`source_calculations`, method/basis/software/workflow filters.
+
+**Reaction-full**
+- `GET /reaction-entries/{id}/full` — composite provenance read. Sections accept `include` tokens: `species`, `kinetics`, `transition_states`, `calculations`, `path_search`, `irc`, `scans`, `conformers`, `artifacts`, `review`, `internal_ids`, `all`. Embedded sections reuse the same summary builders as the standalone scientific surfaces (anti-drift verified by cross-endpoint equality tests).
+
+**Path-data endpoints** — see "Calculations" above.
+
+**Provenance (legacy mountpoint)** — `reactions.router` and `provenance.router` both mount under
+`/scientific`; see `app/api/routes/scientific/__init__.py` for the
+authoritative wiring.
+
+### 0.4 Recommended next priorities
+
+Order chosen by considering the closure status above plus what is
+load-bearing for downstream consumers. Each item is a *recommendation
+to evaluate and document*, not a commitment.
+
+1. **Network / pressure-dependent kinetics read/search.** The only
+   remaining major scientific product surface from the original §12
+   list that has no public read API. The `network` / `network_solve` /
+   `network_state` / `network_channel` ORM tables exist; a scientific
+   surface should follow the same identity-vs-result-vs-curation
+   pattern statmech / transport use.
+2. **Literature-centered query.** Inverse-direction "records citing
+   this paper" surface. The `literature_id` FK is already surfaced on
+   thermo / kinetics / statmech / transport reads — a simple
+   `GET /scientific/literature/{ref}/records` (or similar) would close
+   the loop with minimal new schema.
+3. **Energy-correction / frequency-scale-factor scientific reads.**
+   `frequency_scale_factor` and `energy_correction_scheme` carry
+   public refs (`fsf_`, `ecs_`) but no scientific read surface; their
+   provenance pointers appear only embedded under statmech /
+   calculation reads. A small standalone surface (detail + filter by
+   `level_of_theory_ref` / `software` / `scale_kind` / scheme `kind`)
+   closes the "find me the right scale factor / correction scheme"
+   workflow.
+4. **Standalone artifact search.** `/scientific/artifacts/search` over
+   calculation artifact metadata (kind / uri / sha256 / bytes / owning
+   calc ref). Body-fetch policy stays separate; this is metadata-only.
+5. **RDKit substructure / similarity search.** The `mol` cartridge
+   column is in place on `species` and `transition_state_entry`. A
+   scientific surface using the cartridge would be a new capability,
+   not a closure of existing gaps; treat as Phase 3+.
+6. **Bulk export / contribution-bundle reads.** No bulk
+   CSV/JSONL/Parquet surface exists. Useful for downstream model
+   training. Treat as a separate workstream from the per-record reads.
+
+### 0.5 Cross-surface anti-drift patterns
+
+The scientific surfaces shipped after the original audit converge on
+the same set of architectural patterns. Document them once so future
+PRs follow the same shape:
+
+- **Shared `build_*_record` helpers are reused between detail and
+  search.** Each surface exports a `build_<entity>_record(session, *,
+  …, includes)` helper that the detail endpoint calls once and the
+  search endpoint calls per page row. Search and detail return
+  byte-identical record payloads for the same include set by
+  construction. See `build_entry_record` (transition_states),
+  `build_group_record` (conformers), `build_statmech_record`,
+  `build_transport_record`.
+- **Reaction-full embedded summaries reuse the same summary builders
+  as the standalone detail endpoints.** The reaction-full sections for
+  scan / IRC / path-search / artifacts / conformers each delegate to
+  the same `_build_*_include_summary` / `_build_artifacts` /
+  `build_group_record(includes=set())` helpers as the per-record
+  scientific surfaces. No second projection path exists, so drift
+  is impossible without breaking an explicit cross-endpoint equality
+  test.
+- **Cross-endpoint equality tests assert byte-identical summary
+  blocks.** Every scientific surface that ships a search or
+  reaction-full embedded section also ships a test that compares the
+  embedded / search block to the standalone detail surface via dict
+  equality. Examples:
+  `test_full_scan_summary_matches_calc_detail_include_scan`,
+  `test_full_conformer_evidence_matches_conformer_detail`,
+  `test_search_record_shape_matches_detail` (statmech / transport).
+- **`include=all` expands only to summary-safe public tokens.** Across
+  every surface, `all` resolves to the legal include set minus
+  `internal_ids`; the heavy data tokens (full point arrays, artifact
+  bodies, large JSON blobs) never appear under any `include` value.
+  Full data lives behind dedicated specialized endpoints
+  (`/scan`, `/irc`, `/path-search`, `/geometries/{ref}`).
+- **Full path point arrays live behind specialized endpoints, not
+  calculation search or reaction-full.** The summary projections on
+  the search / `/full` surfaces are aggregate-only; per-point arrays
+  remain available only via the
+  `/calculations/{ref}/scan|irc|path-search` endpoints (paginated by
+  point with bounded limits).
+- **Internal IDs are opt-in and policy-gated.** Every surface routes
+  responses through `apply_internal_ids_visibility`; the
+  `include=internal_ids` token only takes effect when
+  `settings.allow_public_internal_ids` is true. Default responses
+  strip every `*_id` field recursively while preserving every
+  `*_ref` field.
+- **Explicit `False` boolean filters are meaningful.** The
+  at-least-one-filter rule on search surfaces treats only `None` as
+  "not supplied"; explicit `False` (e.g. `has_torsions=false`) is a
+  valid filter that selects rows *without* that evidence. The TS
+  surface originally skipped `False` and was fixed in commit
+  `da7c2fd`; all subsequent surfaces (conformer / statmech /
+  transport) ship with the correct semantics from the start.
 
 ---
 
