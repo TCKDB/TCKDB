@@ -797,3 +797,218 @@ def test_full_scan_section_empty_when_no_scan_calc(client, db_session):
     assert body["scans"] == []
     assert body["irc"] == []
     assert body["path_search"] == []
+
+
+# ---------------------------------------------------------------------------
+# Artifacts section alignment with calculation artifact summaries
+# ---------------------------------------------------------------------------
+
+
+def _attach_artifact(db_session, calc, **kw):
+    from tests.services.scientific_read._factories import attach_artifact
+
+    return attach_artifact(db_session, calculation=calc, **kw)
+
+
+def test_full_artifacts_section_empty_when_no_artifacts(client, db_session):
+    from app.db.models.common import CalculationType
+
+    entry, _, _, _ = _entry_with_ts_calc(
+        db_session, calc_type=CalculationType.opt
+    )
+    body = client.get(_full_url(entry.id, "artifacts")).json()
+    assert body["artifacts"] == []
+
+
+def test_full_artifacts_section_groups_by_calculation(client, db_session):
+    from app.db.models.common import ArtifactKind, CalculationType
+
+    entry, _, _, calc = _entry_with_ts_calc(
+        db_session, calc_type=CalculationType.opt
+    )
+    _attach_artifact(
+        db_session,
+        calc,
+        kind=ArtifactKind.output_log,
+        filename="opt.log",
+        uri="s3://bucket/opt.log",
+    )
+    _attach_artifact(
+        db_session,
+        calc,
+        kind=ArtifactKind.input,
+        filename="opt.in",
+        uri="s3://bucket/opt.in",
+    )
+    body = client.get(_full_url(entry.id, "artifacts")).json()
+    assert body["artifacts"] is not None
+    assert len(body["artifacts"]) == 1
+    group = body["artifacts"][0]
+    assert group["calculation_ref"] == calc.public_ref
+    assert group["calculation_type"] == "opt"
+    assert len(group["artifacts"]) == 2
+    kinds = {a["kind"] for a in group["artifacts"]}
+    assert kinds == {"output_log", "input"}
+
+
+def test_full_artifacts_item_carries_metadata_fields(client, db_session):
+    from app.db.models.common import ArtifactKind, CalculationType
+
+    entry, _, _, calc = _entry_with_ts_calc(
+        db_session, calc_type=CalculationType.freq
+    )
+    _attach_artifact(
+        db_session,
+        calc,
+        kind=ArtifactKind.output_log,
+        filename="freq.log",
+        uri="s3://bucket/freq.log",
+    )
+    body = client.get(_full_url(entry.id, "artifacts")).json()
+    art = body["artifacts"][0]["artifacts"][0]
+    # Always-present projection keys.
+    for key in ("kind", "uri", "filename", "sha256", "bytes", "created_at"):
+        assert key in art
+    assert art["kind"] == "output_log"
+    assert art["uri"] == "s3://bucket/freq.log"
+    assert art["filename"] == "freq.log"
+
+
+def test_full_artifacts_summary_matches_calc_detail_include_artifacts(
+    client, db_session
+):
+    """Cross-endpoint anti-drift: the artifact list under /full is the
+    same shape and values as ``record.artifacts`` from the calculation
+    detail endpoint with ``include=artifacts``."""
+    from app.db.models.common import ArtifactKind, CalculationType
+
+    entry, _, _, calc = _entry_with_ts_calc(
+        db_session, calc_type=CalculationType.sp
+    )
+    _attach_artifact(
+        db_session,
+        calc,
+        kind=ArtifactKind.output_log,
+        filename="sp.log",
+        uri="s3://bucket/sp.log",
+    )
+    _attach_artifact(
+        db_session,
+        calc,
+        kind=ArtifactKind.input,
+        filename="sp.in",
+        uri="s3://bucket/sp.in",
+    )
+    full = client.get(_full_url(entry.id, "artifacts")).json()
+    detail = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        "?include=artifacts"
+    ).json()
+    group = next(
+        g
+        for g in full["artifacts"]
+        if g["calculation_ref"] == calc.public_ref
+    )
+    assert group["artifacts"] == detail["record"]["artifacts"]
+
+
+def test_full_artifacts_section_hides_internal_ids_by_default(
+    client, db_session
+):
+    from app.db.models.common import CalculationType
+
+    entry, _, _, calc = _entry_with_ts_calc(
+        db_session, calc_type=CalculationType.opt
+    )
+    _attach_artifact(db_session, calc)
+    body = client.get(_full_url(entry.id, "artifacts")).json()
+    group = body["artifacts"][0]
+    assert "calculation_id" not in group
+    assert "calculation_ref" in group
+    art = group["artifacts"][0]
+    assert "artifact_id" not in art
+    assert "artifact_ref" in art  # the field exists; None today
+
+
+def test_full_artifacts_section_restores_ids_under_policy(
+    client, db_session, allow_internal_ids
+):
+    from app.db.models.common import CalculationType
+
+    entry, _, _, calc = _entry_with_ts_calc(
+        db_session, calc_type=CalculationType.opt
+    )
+    artifact = _attach_artifact(db_session, calc)
+    body = client.get(_full_url(entry.id, "artifacts", "internal_ids")).json()
+    group = body["artifacts"][0]
+    assert group["calculation_id"] == calc.id
+    assert group["artifacts"][0]["artifact_id"] == artifact.id
+
+
+def test_full_artifacts_section_does_not_expose_body_or_download(
+    client, db_session
+):
+    """Recursive walk: never inline artifact bytes, contents, or
+    download/presigned URLs under the /full artifacts section."""
+    from app.db.models.common import ArtifactKind, CalculationType
+
+    entry, _, _, calc = _entry_with_ts_calc(
+        db_session, calc_type=CalculationType.opt
+    )
+    _attach_artifact(
+        db_session,
+        calc,
+        kind=ArtifactKind.output_log,
+        filename="opt.log",
+        uri="s3://bucket/opt.log",
+    )
+    body = client.get(_full_url(entry.id, "artifacts")).json()
+    forbidden = {
+        "body",
+        "content",
+        "data",
+        "presigned_url",
+        "download_url",
+        "xyz_text",
+        "atoms",
+        "coords",
+        "symbols",
+    }
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                assert k not in forbidden, (
+                    f"/full artifacts section leaked forbidden key {k!r}"
+                )
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(body["artifacts"])
+
+
+def test_full_artifacts_section_omits_calcs_without_artifacts(
+    client, db_session
+):
+    """A reachable calc with no artifact rows must not produce an empty
+    grouping entry — only calcs with at least one artifact appear."""
+    from app.db.models.common import CalculationType
+
+    entry, _, tse, calc_with = _entry_with_ts_calc(
+        db_session, calc_type=CalculationType.opt
+    )
+    # Attach a second TS-owned calc without artifacts.
+    from tests.services.scientific_read._factories import make_calculation
+
+    calc_without = make_calculation(
+        db_session,
+        type=CalculationType.freq,
+        transition_state_entry_id=tse.id,
+    )
+    _attach_artifact(db_session, calc_with)
+    body = client.get(_full_url(entry.id, "artifacts")).json()
+    refs = {g["calculation_ref"] for g in body["artifacts"]}
+    assert calc_with.public_ref in refs
+    assert calc_without.public_ref not in refs

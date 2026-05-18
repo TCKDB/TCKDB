@@ -330,7 +330,7 @@ expands to every token **except** `internal_ids`. Unknown tokens → 422
 | `dependencies` | `dependencies: list[CalculationDependencySummary]` (parent + child links with role + ref) | `calculation_dependency` |
 | `parameters` | `parameters: list[CalculationParameterSummary]` (raw + canonical) | `calculation_parameter` |
 | `constraints` | `constraints: list[CalculationConstraintSummary]` | `calculation_constraint` |
-| `artifacts` | `artifacts: list[CalculationArtifactSummary]` (metadata only — no body bytes) | `calculation_artifact` |
+| `artifacts` | `artifacts: list[CalculationArtifactSummary]` (metadata only — no body bytes). Also embedded under `/reaction-entries/{id}/full?include=artifacts` as a list of per-calculation groups; each group's `artifacts` array is byte-identical to this projection. | `calculation_artifact` |
 | `input_geometries` | `input_geometries: list[CalculationGeometryLinkSummary]` | `calculation_input_geometry` |
 | `output_geometries` | `output_geometries: list[CalculationGeometryLinkSummary]` | `calculation_output_geometry` |
 | `geometry_validation` | `geometry_validation: list[CalculationGeometryValidationSummary]` | `calc_geometry_validation` |

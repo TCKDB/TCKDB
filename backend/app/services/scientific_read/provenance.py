@@ -47,6 +47,7 @@ from app.schemas.reads.scientific_common import (
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.schemas.reads.scientific_provenance import (
     ReactionEntrySummary,
+    ReactionFullCalculationArtifacts,
     ReactionFullIRCItem,
     ReactionFullPathSearchItem,
     ReactionFullReadRequest,
@@ -72,6 +73,7 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.calculations import (
+    _build_artifacts,
     _build_irc_include_summary,
     _build_path_search_include_summary,
     _build_scan_include_summary,
@@ -208,17 +210,25 @@ def get_reaction_full(
     if "scans" in includes:
         scans_block = _build_scans_section(session, reaction_entry_id)
     conformers_block: list[dict] | None = [] if "conformers" in includes else None
-    artifacts_block: list[dict] | None = [] if "artifacts" in includes else None
+    artifacts_block: list[ReactionFullCalculationArtifacts] | None = None
+    if "artifacts" in includes:
+        artifacts_block = _build_artifacts_section(session, reaction_entry_id)
 
     # Hosted abuse-control caps: reject responses that would expand
     # beyond the configured public limits. ``include=all`` is what
     # most often pushes a heavily-studied reaction over the edge, but
     # the cap applies regardless of how the section was requested so
-    # there is no way to bypass by enumerating tokens.
+    # there is no way to bypass by enumerating tokens. The artifacts
+    # cap counts individual artifact rows (the heavy payload), not the
+    # number of grouping calcs.
     _enforce_full_expansion_caps(
         calculations=calculations_block,
         geometries=None,  # geometries not currently expanded in /full
-        artifacts=artifacts_block,
+        artifacts=(
+            [a for group in artifacts_block for a in group.artifacts]
+            if artifacts_block is not None
+            else None
+        ),
     )
 
     review_records_block: list[ReviewRecordEntry] | None = None
@@ -503,6 +513,55 @@ def _build_calculations_section(
         )
         for row in rows
     ]
+
+
+def _build_artifacts_section(
+    session: Session, reaction_entry_id: int
+) -> list[ReactionFullCalculationArtifacts]:
+    """Group artifact metadata by reachable calculation.
+
+    Reachability matches ``_build_calculations_section`` (calcs whose
+    TS entry belongs to this reaction entry). Per-calc artifact rows
+    come from the same ``_build_artifacts`` helper that powers
+    ``include=artifacts`` on the calculation detail endpoint — the
+    grouped surface and the calc-detail surface stay in sync by
+    construction. Calcs with no artifact rows are omitted so empty
+    groups don't clutter the response.
+
+    Deterministic order:
+
+    - Outer (groups): ``calculation_id`` ASC.
+    - Inner (per-calc artifacts): inherited from ``_build_artifacts``
+      (``kind`` ASC, ``created_at`` ASC nulls last, ``id`` ASC).
+    """
+    calc_rows = session.execute(
+        select(Calculation.id, Calculation.public_ref, Calculation.type)
+        .join(
+            TransitionStateEntry,
+            TransitionStateEntry.id == Calculation.transition_state_entry_id,
+        )
+        .join(
+            TransitionState,
+            TransitionState.id == TransitionStateEntry.transition_state_id,
+        )
+        .where(TransitionState.reaction_entry_id == reaction_entry_id)
+        .order_by(Calculation.id.asc())
+    ).all()
+
+    out: list[ReactionFullCalculationArtifacts] = []
+    for cid, cref, ctype in calc_rows:
+        artifacts = _build_artifacts(session, cid)
+        if not artifacts:
+            continue
+        out.append(
+            ReactionFullCalculationArtifacts(
+                calculation_id=cid,
+                calculation_ref=cref,
+                calculation_type=ctype,
+                artifacts=artifacts,
+            )
+        )
+    return out
 
 
 def _calcs_of_type_for_reaction(

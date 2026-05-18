@@ -60,6 +60,16 @@ endpoint. Per-point trajectory arrays are never inlined under
 `/scientific/calculations/{ref}/scan|irc|path-search` endpoints. See
 `scientific_calculation_path_includes.md` §8.6 for details.
 
+`/full?include=artifacts` follows the same pattern: artifact metadata
+is grouped by owning calculation (`ReactionFullCalculationArtifacts`)
+and each group's `artifacts` list is byte-identical to
+`record.artifacts` from
+`GET /scientific/calculations/{ref}?include=artifacts`. Only metadata
+travels (kind / uri / filename / sha256 / bytes / created_at) —
+**no body bytes, no download or presigned URLs**. Calcs with no
+artifact rows are omitted from the group list so empty entries don't
+clutter the response.
+
 The search surface returns records at the **TS-entry grain**: entries
 are the concrete objects carrying charge / multiplicity / status and
 calculation evidence. The parent TS-concept context travels along on

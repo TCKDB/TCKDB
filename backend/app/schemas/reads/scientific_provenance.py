@@ -12,8 +12,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import RecordReviewStatus, TransitionStateEntryStatus
+from app.db.models.common import (
+    CalculationType,
+    RecordReviewStatus,
+    TransitionStateEntryStatus,
+)
 from app.schemas.reads.scientific_calculation import (
+    CalculationArtifactSummary,
     CalculationIRCSummary,
     CalculationPathSearchSummary,
     CalculationScanSummary,
@@ -218,6 +223,31 @@ class ReactionFullPathSearchItem(BaseModel):
     summary: CalculationPathSearchSummary | None = None
 
 
+class ReactionFullCalculationArtifacts(BaseModel):
+    """Artifact metadata grouped by owning calculation, embedded under
+    ``/reaction-entries/{id}/full?include=artifacts``.
+
+    Each entry covers one calculation reachable through the reaction's
+    TS graph that has at least one artifact row. The per-artifact
+    ``artifacts`` list is byte-identical to ``record.artifacts`` from
+    ``GET /scientific/calculations/{ref}?include=artifacts`` — same
+    ``CalculationArtifactSummary`` shape, same ordering.
+
+    Phase D internal-id policy gates both ``calculation_id`` and the
+    per-row ``artifact_id`` (stripped recursively by
+    :func:`apply_internal_ids_visibility`). Public refs and storage
+    URIs are always present; **never** does this surface inline body
+    bytes, content, file data, or downloadable URLs — clients resolve
+    ``uri`` through the artifact service when (and if) they need the
+    bytes.
+    """
+
+    calculation_id: int | None = None
+    calculation_ref: str
+    calculation_type: CalculationType | None = None
+    artifacts: list[CalculationArtifactSummary] = Field(default_factory=list)
+
+
 class ReviewRecordEntry(BaseModel):
     """Audit-array entry returned only when ``include_review=full``."""
 
@@ -255,7 +285,7 @@ class ScientificReactionFullResponse(BaseModel):
     irc: list[ReactionFullIRCItem] | None = None
     scans: list[ReactionFullScanItem] | None = None
     conformers: list[dict[str, object]] | None = None
-    artifacts: list[dict[str, object]] | None = None
+    artifacts: list[ReactionFullCalculationArtifacts] | None = None
 
     # Present only when include_review=full.
     review_records: list[ReviewRecordEntry] | None = None
