@@ -668,3 +668,703 @@ def test_co_detail_evidence_summary_with_validation_evidence(
     ev = body["record"]["evidence_summary"]
     assert ev["has_geometry_validation"] is True
     assert ev["has_scf_stability"] is True
+
+
+# ===========================================================================
+# Conformer search (group grain)
+# ===========================================================================
+
+
+def _search_url(**params) -> str:
+    base = "/api/v1/scientific/conformers/search"
+    if not params:
+        return base
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"{base}?{qs}"
+
+
+# --- empty filter -----------------------------------------------------------
+
+
+def test_search_missing_filter_returns_422_get(client, db_session):
+    resp = client.get(_search_url())
+    assert resp.status_code == 422
+    assert "missing_filter" in resp.text
+
+
+def test_search_missing_filter_returns_422_post(client, db_session):
+    resp = client.post(_search_url(), json={"limit": 50})
+    assert resp.status_code == 422
+    assert "missing_filter" in resp.text
+
+
+# --- identity filters -------------------------------------------------------
+
+
+def test_search_by_species_entry_ref(client, db_session):
+    species, entry = _make_species_entry(db_session)
+    cg = make_conformer_group(db_session, entry, label="basin_a")
+    make_conformer_observation(db_session, conformer_group=cg)
+    body = client.get(
+        _search_url(species_entry_ref=entry.public_ref)
+    ).json()
+    assert body["pagination"]["total"] == 1
+    assert body["records"][0]["conformer_group"]["conformer_group_ref"] == cg.public_ref
+
+
+def test_search_by_species_ref(client, db_session):
+    species, entry = _make_species_entry(db_session)
+    cg = make_conformer_group(db_session, entry)
+    body = client.get(_search_url(species_ref=species.public_ref)).json()
+    assert body["pagination"]["total"] == 1
+    assert body["records"][0]["conformer_group"]["conformer_group_ref"] == cg.public_ref
+
+
+def test_search_by_conformer_group_ref(client, db_session):
+    _, _, _ = _make_group_with_obs(db_session, label="a")
+    _, cg_b, _ = _make_group_with_obs(db_session, label="b")
+    body = client.get(
+        _search_url(conformer_group_ref=cg_b.public_ref)
+    ).json()
+    assert body["pagination"]["total"] == 1
+    assert body["records"][0]["conformer_group"]["conformer_group_ref"] == cg_b.public_ref
+
+
+def test_search_by_conformer_observation_ref(client, db_session):
+    _, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    body = client.get(
+        _search_url(conformer_observation_ref=obs_a[0].public_ref)
+    ).json()
+    assert body["pagination"]["total"] == 1
+    assert body["records"][0]["conformer_group"]["conformer_group_ref"] == cg_a.public_ref
+
+
+# --- curation filters -------------------------------------------------------
+
+
+def test_search_by_selection_kind(client, db_session):
+    _, cg_a, _ = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    attach_conformer_selection(
+        db_session,
+        conformer_group=cg_a,
+        selection_kind=ConformerSelectionKind.lowest_energy,
+    )
+    body = client.get(_search_url(selection_kind="lowest_energy")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_has_selection_true(client, db_session):
+    _, cg_a, _ = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    attach_conformer_selection(
+        db_session,
+        conformer_group=cg_a,
+        selection_kind=ConformerSelectionKind.curator_pick,
+    )
+    body = client.get(_search_url(has_selection="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_has_selection_false(client, db_session):
+    _, cg_a, _ = _make_group_with_obs(db_session, label="a")
+    _, cg_b, _ = _make_group_with_obs(db_session, label="b")
+    attach_conformer_selection(
+        db_session,
+        conformer_group=cg_a,
+        selection_kind=ConformerSelectionKind.curator_pick,
+    )
+    body = client.get(_search_url(has_selection="false")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert cg_b.public_ref in refs
+    assert cg_a.public_ref not in refs
+
+
+def test_search_by_assignment_scheme_ref(client, db_session):
+    from app.db.models.species import ConformerAssignmentScheme
+
+    _, cg_a, _ = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    scheme = ConformerAssignmentScheme(name="canon", version="v1")
+    db_session.add(scheme)
+    db_session.flush()
+    sel = attach_conformer_selection(
+        db_session,
+        conformer_group=cg_a,
+        selection_kind=ConformerSelectionKind.lowest_energy,
+    )
+    sel.assignment_scheme_id = scheme.id
+    db_session.flush()
+    body = client.get(
+        _search_url(assignment_scheme_ref=scheme.public_ref)
+    ).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+# --- evidence filters -------------------------------------------------------
+
+
+def test_search_by_has_observations(client, db_session):
+    _, cg_a, _ = _make_group_with_obs(db_session, label="a")
+    _, entry_b = _make_species_entry(db_session)
+    cg_b = make_conformer_group(db_session, entry_b, label="b")  # no obs
+    body = client.get(_search_url(has_observations="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert cg_a.public_ref in refs
+    assert cg_b.public_ref not in refs
+
+
+def test_search_by_has_calculations(client, db_session):
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    _attach_calc(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+        calc_type=CalculationType.opt,
+    )
+    body = client.get(_search_url(has_calculations="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_has_geometries(client, db_session):
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    _attach_calc(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+        with_geom=True,
+    )
+    body = client.get(_search_url(has_geometries="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_has_opt(client, db_session):
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    entry_b, cg_b, obs_b = _make_group_with_obs(db_session, label="b")
+    _attach_calc(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+        calc_type=CalculationType.opt,
+    )
+    _attach_calc(
+        db_session,
+        species_entry=entry_b,
+        conformer_observation=obs_b[0],
+        calc_type=CalculationType.sp,
+    )
+    body = client.get(_search_url(has_opt="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_has_freq(client, db_session):
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    _attach_calc(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+        calc_type=CalculationType.freq,
+    )
+    body = client.get(_search_url(has_freq="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_has_sp(client, db_session):
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    _attach_calc(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+        calc_type=CalculationType.sp,
+    )
+    body = client.get(_search_url(has_sp="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_has_geometry_validation(client, db_session):
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    calc, _ = _attach_calc(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+    )
+    attach_geometry_validation(db_session, calculation=calc)
+    body = client.get(_search_url(has_geometry_validation="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_has_scf_stability(client, db_session):
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    _, _, _ = _make_group_with_obs(db_session, label="b")
+    calc, _ = _attach_calc(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+    )
+    attach_scf_stability(db_session, calculation=calc)
+    body = client.get(_search_url(has_scf_stability="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+# --- provenance filters -----------------------------------------------------
+
+
+def test_search_by_scientific_origin(client, db_session):
+    _, cg_a, _ = _make_group_with_obs(
+        db_session, label="a", origin=ScientificOriginKind.experimental
+    )
+    _, _, _ = _make_group_with_obs(
+        db_session, label="b", origin=ScientificOriginKind.computed
+    )
+    body = client.get(_search_url(scientific_origin="experimental")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_method_and_basis(client, db_session):
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    entry_b, _, obs_b = _make_group_with_obs(db_session, label="b")
+    lot_a = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    lot_b = make_lot(db_session, method="b3lyp", basis="6-31g")
+    make_calculation_with_conformer(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+        type=CalculationType.opt,
+        lot_id=lot_a.id,
+    )
+    make_calculation_with_conformer(
+        db_session,
+        species_entry=entry_b,
+        conformer_observation=obs_b[0],
+        type=CalculationType.opt,
+        lot_id=lot_b.id,
+    )
+    body = client.get(
+        _search_url(method="wb97xd", basis="def2tzvp")
+    ).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_software_and_version(client, db_session):
+    from app.db.models.software import Software, SoftwareRelease
+
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    entry_b, _, obs_b = _make_group_with_obs(db_session, label="b")
+    sw_a = Software(name="gaussian")
+    sw_b = Software(name="orca")
+    db_session.add_all([sw_a, sw_b])
+    db_session.flush()
+    sr_a = SoftwareRelease(software_id=sw_a.id, version="g16.a03")
+    sr_b = SoftwareRelease(software_id=sw_b.id, version="5.0.4")
+    db_session.add_all([sr_a, sr_b])
+    db_session.flush()
+    calc_a = make_calculation_with_conformer(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+        type=CalculationType.opt,
+    )
+    calc_a.software_release_id = sr_a.id
+    calc_b = make_calculation_with_conformer(
+        db_session,
+        species_entry=entry_b,
+        conformer_observation=obs_b[0],
+        type=CalculationType.opt,
+    )
+    calc_b.software_release_id = sr_b.id
+    db_session.flush()
+    body = client.get(
+        _search_url(software="gaussian", software_version="g16.a03")
+    ).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+def test_search_by_workflow_tool_and_version(client, db_session):
+    from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+
+    entry_a, cg_a, obs_a = _make_group_with_obs(db_session, label="a")
+    entry_b, _, obs_b = _make_group_with_obs(db_session, label="b")
+    wt_a = WorkflowTool(name="arc")
+    wt_b = WorkflowTool(name="qcelemental")
+    db_session.add_all([wt_a, wt_b])
+    db_session.flush()
+    wtr_a = WorkflowToolRelease(workflow_tool_id=wt_a.id, version="1.2.3")
+    wtr_b = WorkflowToolRelease(workflow_tool_id=wt_b.id, version="0.27.0")
+    db_session.add_all([wtr_a, wtr_b])
+    db_session.flush()
+    calc_a = make_calculation_with_conformer(
+        db_session,
+        species_entry=entry_a,
+        conformer_observation=obs_a[0],
+        type=CalculationType.opt,
+    )
+    calc_a.workflow_tool_release_id = wtr_a.id
+    calc_b = make_calculation_with_conformer(
+        db_session,
+        species_entry=entry_b,
+        conformer_observation=obs_b[0],
+        type=CalculationType.opt,
+    )
+    calc_b.workflow_tool_release_id = wtr_b.id
+    db_session.flush()
+    body = client.get(
+        _search_url(workflow_tool="arc", workflow_tool_version="1.2.3")
+    ).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_a.public_ref}
+
+
+# --- review trust posture ---------------------------------------------------
+
+
+def test_search_default_hides_rejected(client, db_session):
+    _, cg_a, _ = _make_group_with_obs(db_session, label="a")
+    _, cg_b, _ = _make_group_with_obs(db_session, label="b")
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.conformer_group,
+        record_id=cg_b.id,
+        status=RecordReviewStatus.rejected,
+    )
+    body = client.get(_search_url(has_observations="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert cg_a.public_ref in refs
+    assert cg_b.public_ref not in refs
+
+
+def test_search_include_rejected_surfaces_them_last(client, db_session):
+    _, cg_a, _ = _make_group_with_obs(db_session, label="a")
+    _, cg_b, _ = _make_group_with_obs(db_session, label="b")
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.conformer_group,
+        record_id=cg_b.id,
+        status=RecordReviewStatus.rejected,
+    )
+    body = client.get(
+        _search_url(has_observations="true", include_rejected="true")
+    ).json()
+    refs = [
+        r["conformer_group"]["conformer_group_ref"] for r in body["records"]
+    ]
+    assert cg_a.public_ref in refs
+    assert cg_b.public_ref in refs
+    # Rejected sorts last (review_rank ASC).
+    assert refs[-1] == cg_b.public_ref
+
+
+# --- pagination + ordering --------------------------------------------------
+
+
+def test_search_pagination_envelope(client, db_session):
+    _, entry = _make_species_entry(db_session)
+    for i in range(4):
+        cg = make_conformer_group(db_session, entry, label=f"b{i}")
+        make_conformer_observation(db_session, conformer_group=cg)
+    body = client.get(
+        _search_url(species_entry_ref=entry.public_ref, limit=2, offset=0)
+    ).json()
+    p = body["pagination"]
+    assert p["limit"] == 2
+    assert p["offset"] == 0
+    assert p["returned"] == 2
+    assert p["total"] == 4
+
+
+def test_search_deterministic_ordering_review_then_created(client, db_session):
+    """Approved record wins over not_reviewed regardless of creation order."""
+    _, cg_a, _ = _make_group_with_obs(db_session, label="a")
+    _, cg_b, _ = _make_group_with_obs(db_session, label="b")
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.conformer_group,
+        record_id=cg_a.id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(_search_url(has_observations="true")).json()
+    refs = [
+        r["conformer_group"]["conformer_group_ref"] for r in body["records"]
+    ]
+    assert refs[0] == cg_a.public_ref
+
+
+def test_search_client_sort_rejected(client, db_session):
+    _, cg, _ = _make_group_with_obs(db_session)
+    resp = client.get(
+        _search_url(has_observations="true", sort="created_at")
+    )
+    assert resp.status_code == 422
+    assert "client_sort_not_supported" in resp.text
+
+
+# --- GET / POST parity ------------------------------------------------------
+
+
+def test_search_get_post_parity(client, db_session):
+    _, entry = _make_species_entry(db_session)
+    cg = make_conformer_group(db_session, entry, label="a")
+    make_conformer_observation(db_session, conformer_group=cg)
+    get_body = client.get(
+        _search_url(species_entry_ref=entry.public_ref)
+    ).json()
+    post_body = client.post(
+        _search_url(), json={"species_entry_ref": entry.public_ref}
+    ).json()
+    assert get_body["pagination"] == post_body["pagination"]
+    assert get_body["records"] == post_body["records"]
+
+
+def test_search_post_rejects_query_string_search_fields(client, db_session):
+    _, _, _ = _make_group_with_obs(db_session)
+    resp = client.post(
+        "/api/v1/scientific/conformers/search?limit=5",
+        json={"has_observations": True},
+    )
+    assert resp.status_code == 422
+    assert "post_search_fields_must_be_in_body" in resp.text
+
+
+# --- include behavior -------------------------------------------------------
+
+
+def test_search_include_observations_on_records(client, db_session):
+    _, cg, obs = _make_group_with_obs(db_session, n_observations=2)
+    body = client.get(
+        _search_url(
+            conformer_group_ref=cg.public_ref, include="observations"
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["observations"] is not None
+    assert len(rec["observations"]) == 2
+
+
+def test_search_include_selections_on_records(client, db_session):
+    _, cg, _ = _make_group_with_obs(db_session)
+    attach_conformer_selection(
+        db_session,
+        conformer_group=cg,
+        selection_kind=ConformerSelectionKind.lowest_energy,
+    )
+    body = client.get(
+        _search_url(
+            conformer_group_ref=cg.public_ref, include="selections"
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["selections"] is not None
+    assert rec["selections"][0]["selection_kind"] == "lowest_energy"
+
+
+def test_search_include_calculations_on_records(client, db_session):
+    entry, cg, obs = _make_group_with_obs(db_session)
+    lot = make_lot(db_session)
+    make_calculation_with_conformer(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        type=CalculationType.opt,
+        lot_id=lot.id,
+    )
+    body = client.get(
+        _search_url(
+            conformer_group_ref=cg.public_ref, include="calculations"
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["calculations"] is not None
+    assert len(rec["calculations"]) == 1
+    assert rec["calculations"][0]["type"] == "opt"
+
+
+def test_search_include_geometries_on_records(client, db_session):
+    entry, cg, obs = _make_group_with_obs(db_session)
+    _, geom = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        with_geom=True,
+    )
+    body = client.get(
+        _search_url(
+            conformer_group_ref=cg.public_ref, include="geometries"
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["geometries"] is not None
+    assert rec["geometries"][0]["geometry"]["geometry_ref"] == geom.public_ref
+
+
+def test_search_include_review_on_records(client, db_session):
+    _, cg, _ = _make_group_with_obs(db_session)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.conformer_group,
+        record_id=cg.id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(
+        _search_url(
+            conformer_group_ref=cg.public_ref, include="review"
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["review_history"] is not None
+    assert rec["review_history"][0]["status"] == "approved"
+
+
+def test_search_include_all_on_records(client, db_session):
+    _, cg, _ = _make_group_with_obs(db_session)
+    body = client.get(
+        _search_url(conformer_group_ref=cg.public_ref, include="all")
+    ).json()
+    inc = body["request"]["include"]
+    assert "observations" in inc
+    assert "selections" in inc
+    assert "calculations" in inc
+    assert "geometries" in inc
+    assert "review" in inc
+    assert "internal_ids" not in inc
+
+
+def test_search_include_all_does_not_restore_internal_ids(client, db_session):
+    _, cg, _ = _make_group_with_obs(db_session)
+    body = client.get(
+        _search_url(conformer_group_ref=cg.public_ref, include="all")
+    ).json()
+    assert "conformer_group_id" not in body["records"][0]["conformer_group"]
+
+
+def test_search_internal_ids_restored_when_policy_allows(
+    client, db_session, allow_internal_ids
+):
+    _, cg, _ = _make_group_with_obs(db_session)
+    body = client.get(
+        _search_url(
+            conformer_group_ref=cg.public_ref, include="internal_ids"
+        )
+    ).json()
+    assert body["records"][0]["conformer_group"]["conformer_group_id"] == cg.id
+
+
+def test_search_internal_ids_silently_dropped_when_disallowed(
+    client, db_session
+):
+    _, cg, _ = _make_group_with_obs(db_session)
+    body = client.get(
+        _search_url(
+            conformer_group_ref=cg.public_ref, include="internal_ids"
+        )
+    ).json()
+    assert body["request"]["include"] == []
+    assert "conformer_group_id" not in body["records"][0]["conformer_group"]
+
+
+# --- cross-endpoint record-shape parity -------------------------------------
+
+
+def test_search_record_shape_matches_group_detail(client, db_session):
+    """Per-record shape from /conformers/search must match
+    record-shape from /conformer-groups/{ref} for the same group and
+    include set."""
+    entry, cg, obs = _make_group_with_obs(db_session)
+    lot = make_lot(db_session)
+    make_calculation_with_conformer(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        type=CalculationType.opt,
+        lot_id=lot.id,
+    )
+    search_body = client.get(
+        _search_url(
+            conformer_group_ref=cg.public_ref,
+            include="calculations",
+        )
+    ).json()
+    detail_body = client.get(
+        _cg_url(cg.public_ref, include="calculations")
+    ).json()
+    assert search_body["records"][0] == detail_body["record"]
+
+
+# --- ref resolution edge cases ---------------------------------------------
+
+
+def test_search_unknown_ref_short_circuits_empty(client, db_session):
+    body = client.get(
+        _search_url(species_entry_ref="spe_doesnotexist00")
+    ).json()
+    assert body["pagination"]["total"] == 0
+    assert body["records"] == []
+
+
+def test_search_wrong_prefix_ref_returns_422(client, db_session):
+    resp = client.get(_search_url(species_entry_ref="cg_abcdef0123456789"))
+    assert resp.status_code == 422
+    assert "handle_type_mismatch" in resp.text
+
+
+# --- forbidden payload walk -------------------------------------------------
+
+
+def test_search_no_forbidden_payload_keys(client, db_session):
+    entry, cg, obs = _make_group_with_obs(db_session)
+    _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        with_geom=True,
+    )
+    body = client.get(
+        _search_url(
+            conformer_group_ref=cg.public_ref, include="all"
+        )
+    ).json()
+    forbidden = {
+        "representative_fingerprint_json",
+        "representative_coords_json",
+        "torsion_fingerprint_json",
+        "mol",
+        "xyz_text",
+        "atoms",
+        "coords",
+        "symbols",
+        "body",
+        "content",
+        "data",
+        "presigned_url",
+        "download_url",
+    }
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                assert k not in forbidden, (
+                    f"conformer search leaked forbidden key {k!r}"
+                )
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(body)

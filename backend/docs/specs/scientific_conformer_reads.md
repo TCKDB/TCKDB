@@ -711,16 +711,46 @@ Implementation deviations from the spec sketch worth flagging:
   token can surface them with explicit size bounds (open question
   §13.3 below).
 
-### Phase 2 — search
+### Phase 2 — search  ✓ implemented
 
-1. Add `app/services/scientific_read/conformers_search.py` mirroring
-   `transition_states_search.py`.
-2. Add search request / response schemas in
+1. ✓ `app/services/scientific_read/conformers_search.py` mirrors the
+   transition-state search service.
+2. ✓ Request / response schemas in
    `app/schemas/reads/scientific_conformer_search.py`.
-3. Wire GET + POST `/conformers/search`.
-4. Tests: per-filter happy path + 422 + missing-filter + sort
-   rejection + pagination + include behavior + cross-endpoint equality
-   + forbidden-payload walk.
+3. ✓ GET + POST `/conformers/search` wired via the new `search_router`
+   under `/conformers` (registered before the `cg_router` for OpenAPI
+   ordering; no path collisions since the prefixes differ).
+4. ✓ 42 tests in
+   `tests/api/scientific/test_api_scientific_conformers.py` covering
+   each implemented filter, empty-filter 422 (GET + POST), GET / POST
+   parity, POST rejects query-string fields, pagination envelope,
+   deterministic ordering, client-sort rejection, include behavior
+   (each token + `all` + internal-id policy), cross-endpoint record-
+   shape parity with `/conformer-groups/{ref}`, unknown-ref empty
+   short-circuit, wrong-prefix 422, and the recursive forbidden-payload
+   walk.
+
+The detail service was refactored to expose
+`build_group_record(session, *, cg, cg_badge, includes)` as the
+shared per-record materializer — the search service calls it for each
+page row so the search and detail surfaces produce the same record
+shape by construction.
+
+Implementation deviations from the spec sketch worth flagging:
+
+- **`has_*` bool filters treat explicit ``False`` as meaningful.**
+  Bool filter fields default to ``None``; only ``None`` skips the
+  at-least-one-filter check. This means `has_selection=false` (groups
+  without any selection) and friends are first-class filters — useful
+  for "show me uncurated basins" queries. The TS search has a latent
+  bug here (it skips ``False``); fixing that is a separate PR.
+- **`selection_kind` + `has_selection=False` is treated as
+  "no row of *that kind*".** Combining them is unusual but the
+  semantics are documented in the service: the EXISTS clause is
+  negated when `has_selection=False` is supplied alongside
+  `selection_kind` / `assignment_scheme_ref`.
+- **Default sort is `review_rank,created_at,id`.** Selection-priority
+  sorting is documented as deferred (open question §13.2).
 
 ### Phase 3 — reaction-full integration
 

@@ -65,6 +65,7 @@ scientific_router.include_router(calculation_paths.router)
 scientific_router.include_router(calculations.router)
 scientific_router.include_router(transition_states.ts_router)
 scientific_router.include_router(transition_states.tse_router)
+scientific_router.include_router(conformers.search_router)
 scientific_router.include_router(conformers.cg_router)
 scientific_router.include_router(conformers.co_router)
 

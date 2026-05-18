@@ -153,10 +153,38 @@ def get_conformer_group(
     cg_badge = _load_review_badge(
         session, SubmissionRecordType.conformer_group, cg.id
     )
+    record = build_group_record(
+        session, cg=cg, cg_badge=cg_badge, includes=includes
+    )
+    return ScientificConformerGroupDetailResponse(
+        request=RequestEcho(include=sorted(includes)),
+        review_summary=review_summary([cg_badge]),
+        record=record,
+    )
+
+
+def build_group_record(
+    session: Session,
+    *,
+    cg: ConformerGroup,
+    cg_badge: RecordReviewBadge,
+    includes: set[str],
+) -> ScientificConformerGroupRecord:
+    """Project one conformer group into the public scientific record shape.
+
+    Exported so the conformer search service can produce records with
+    the same shape as the group detail endpoint — search and detail
+    return identical per-record payloads for the same include set.
+
+    The caller is responsible for handing in the resolved include set
+    (post-`validate_includes`, post-Phase-D) and the group's review
+    badge. The default block (`species` / `observations_summary` /
+    `selection_summary` / `evidence_summary` / `available_sections`)
+    is always populated; heavy include blocks are populated only when
+    their tokens are present in *includes*.
+    """
     species_context = _build_species_context(session, cg.species_entry_id)
 
-    # Observation set for the group — drives evidence/observations
-    # summaries and several include blocks.
     obs_rows = session.scalars(
         select(ConformerObservation)
         .where(ConformerObservation.conformer_group_id == cg.id)
@@ -221,7 +249,7 @@ def get_conformer_group(
             session, SubmissionRecordType.conformer_group, cg.id
         )
 
-    record = ScientificConformerGroupRecord(
+    return ScientificConformerGroupRecord(
         conformer_group=cg_core,
         species=species_context,
         observations_summary=observations_summary,
@@ -233,12 +261,6 @@ def get_conformer_group(
         calculations=calculations_block,
         geometries=geometries_block,
         review_history=review_block,
-    )
-
-    return ScientificConformerGroupDetailResponse(
-        request=RequestEcho(include=sorted(includes)),
-        review_summary=review_summary([cg_badge]),
-        record=record,
     )
 
 
@@ -977,6 +999,7 @@ def _load_review_badge(
 __all__ = [
     "_INTERNAL_INCLUDE_TOKENS",
     "_LEGAL_INCLUDE_TOKENS",
+    "build_group_record",
     "get_conformer_group",
     "get_conformer_observation",
 ]
