@@ -60,7 +60,19 @@ from app.db.models.reaction import (
 from app.db.models.record_review import RecordReview
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
-from app.db.models.common import TransitionStateEntryStatus
+from app.db.models.common import (
+    ScientificOriginKind as _ScientificOriginKind,
+    StatmechCalculationRole,
+    StatmechTreatmentKind,
+    TorsionTreatmentKind,
+    TransitionStateEntryStatus,
+)
+from app.db.models.statmech import (
+    Statmech,
+    StatmechSourceCalculation,
+    StatmechTorsion,
+    StatmechTorsionDefinition,
+)
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 
 _INCHI_COUNTER = 0
@@ -637,3 +649,97 @@ def make_calculation_with_conformer(
     session.add(calc)
     session.flush()
     return calc
+
+
+def make_statmech(
+    session: Session,
+    *,
+    species_entry,
+    scientific_origin: _ScientificOriginKind = _ScientificOriginKind.computed,
+    external_symmetry: int | None = 1,
+    point_group: str | None = "C2v",
+    is_linear: bool | None = False,
+    statmech_treatment: StatmechTreatmentKind | None = StatmechTreatmentKind.rrho,
+    frequency_scale_factor_id: int | None = None,
+    software_release_id: int | None = None,
+    workflow_tool_release_id: int | None = None,
+    literature_id: int | None = None,
+    note: str | None = None,
+) -> Statmech:
+    """Create a Statmech row attached to a species entry."""
+    sm = Statmech(
+        species_entry_id=species_entry.id,
+        scientific_origin=scientific_origin,
+        external_symmetry=external_symmetry,
+        point_group=point_group,
+        is_linear=is_linear,
+        statmech_treatment=statmech_treatment,
+        frequency_scale_factor_id=frequency_scale_factor_id,
+        software_release_id=software_release_id,
+        workflow_tool_release_id=workflow_tool_release_id,
+        literature_id=literature_id,
+        note=note,
+    )
+    session.add(sm)
+    session.flush()
+    return sm
+
+
+def attach_statmech_source_calculation(
+    session: Session,
+    *,
+    statmech: Statmech,
+    calculation,
+    role: StatmechCalculationRole = StatmechCalculationRole.freq,
+) -> StatmechSourceCalculation:
+    """Link a Calculation to a Statmech with a given role."""
+    row = StatmechSourceCalculation(
+        statmech_id=statmech.id,
+        calculation_id=calculation.id,
+        role=role,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_statmech_torsion(
+    session: Session,
+    *,
+    statmech: Statmech,
+    torsion_index: int = 1,
+    treatment_kind: TorsionTreatmentKind | None = TorsionTreatmentKind.hindered_rotor,
+    dimension: int = 1,
+    symmetry_number: int | None = 1,
+    source_scan_calculation=None,
+    atoms: tuple[int, int, int, int] | None = (1, 2, 3, 4),
+    note: str | None = None,
+) -> StatmechTorsion:
+    """Create a StatmechTorsion + optional torsion definition row."""
+    row = StatmechTorsion(
+        statmech_id=statmech.id,
+        torsion_index=torsion_index,
+        treatment_kind=treatment_kind,
+        dimension=dimension,
+        symmetry_number=symmetry_number,
+        source_scan_calculation_id=(
+            source_scan_calculation.id if source_scan_calculation is not None else None
+        ),
+        note=note,
+    )
+    session.add(row)
+    session.flush()
+    if atoms is not None:
+        a1, a2, a3, a4 = atoms
+        session.add(
+            StatmechTorsionDefinition(
+                torsion_id=row.id,
+                coordinate_index=1,
+                atom1_index=a1,
+                atom2_index=a2,
+                atom3_index=a3,
+                atom4_index=a4,
+            )
+        )
+        session.flush()
+    return row

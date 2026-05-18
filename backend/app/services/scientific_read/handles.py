@@ -38,6 +38,7 @@ from app.db.models.species import (
     Species,
     SpeciesEntry,
 )
+from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.public_refs import PREFIXES
 
@@ -350,6 +351,13 @@ def resolve_conformer_observation_handle(session: Session, handle: str) -> int:
     )
 
 
+def resolve_statmech_handle(session: Session, handle: str) -> int:
+    """Resolve a statmech path handle (int or ``sm_...``) → row id."""
+    return resolve_path_handle(
+        session, Statmech, handle, kind_label="statmech"
+    )
+
+
 def reconcile_species_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
 ) -> int | None | object:
@@ -451,6 +459,7 @@ __all__ = [
     "resolve_transition_state_entry_handle",
     "resolve_conformer_group_handle",
     "resolve_conformer_observation_handle",
+    "resolve_statmech_handle",
     "reconcile_species_pair",
     "reconcile_species_entry_pair",
     "reconcile_reaction_pair",

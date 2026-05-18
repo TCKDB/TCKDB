@@ -41,6 +41,7 @@ from app.api.routes.scientific import (
     reactions,
     species,
     species_calculations_search,
+    statmech,
     thermo,
     thermo_search,
     transition_states,
@@ -68,5 +69,6 @@ scientific_router.include_router(transition_states.tse_router)
 scientific_router.include_router(conformers.search_router)
 scientific_router.include_router(conformers.cg_router)
 scientific_router.include_router(conformers.co_router)
+scientific_router.include_router(statmech.router)
 
 __all__ = ["scientific_router"]
