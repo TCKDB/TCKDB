@@ -1618,6 +1618,8 @@ _PUBLIC_REF_TABLES: tuple[tuple[str, str], ...] = (
     ("transport", "trn"),
     ("transition_state", "ts"),
     ("transition_state_entry", "tse"),
+    ("network", "net"),
+    ("network_solve", "nsolve"),
     ("level_of_theory", "lot"),
     ("software", "soft"),
     ("software_release", "srel"),

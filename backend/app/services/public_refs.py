@@ -76,6 +76,8 @@ PREFIXES: dict[str, str] = {
     "ConformerObservation": "co",
     "TransitionState": "ts",
     "TransitionStateEntry": "tse",
+    "Network": "net",
+    "NetworkSolve": "nsolve",
     "Submission": "sub",
 }
 

@@ -18,7 +18,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import CHAR, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     ArrheniusAUnits,
     NetworkChannelKind,
@@ -167,7 +167,7 @@ class NetworkChannel(Base):
 # ---------------------------------------------------------------------------
 
 
-class NetworkSolve(Base, TimestampMixin, CreatedByMixin):
+class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """One master-equation solution for a reaction network."""
 
     __tablename__ = "network_solve"

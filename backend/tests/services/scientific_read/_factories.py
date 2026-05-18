@@ -802,3 +802,287 @@ def attach_transport_source_calculation(
     session.add(row)
     session.flush()
     return row
+
+
+# ---------------------------------------------------------------------------
+# Network / PDep factories
+# ---------------------------------------------------------------------------
+
+
+def make_network(
+    session: Session,
+    *,
+    name: str | None = "test-network",
+    description: str | None = None,
+    literature_id: int | None = None,
+    software_release_id: int | None = None,
+    workflow_tool_release_id: int | None = None,
+):
+    """Create a Network row."""
+    from app.db.models.network import Network
+
+    n = Network(
+        name=name,
+        description=description,
+        literature_id=literature_id,
+        software_release_id=software_release_id,
+        workflow_tool_release_id=workflow_tool_release_id,
+    )
+    session.add(n)
+    session.flush()
+    return n
+
+
+def attach_network_species(
+    session: Session,
+    *,
+    network,
+    species_entry,
+    role,
+):
+    """Attach a SpeciesEntry to a Network with a given role."""
+    from app.db.models.network import NetworkSpecies
+
+    row = NetworkSpecies(
+        network_id=network.id,
+        species_entry_id=species_entry.id,
+        role=role,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_network_reaction(session: Session, *, network, reaction_entry):
+    """Attach a ReactionEntry to a Network."""
+    from app.db.models.network import NetworkReaction
+
+    row = NetworkReaction(
+        network_id=network.id,
+        reaction_entry_id=reaction_entry.id,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def make_network_state(
+    session: Session,
+    *,
+    network,
+    kind,
+    composition_hash: str,
+    label: str | None = None,
+):
+    from app.db.models.network_pdep import NetworkState
+
+    row = NetworkState(
+        network_id=network.id,
+        kind=kind,
+        composition_hash=composition_hash,
+        label=label,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_network_state_participant(
+    session: Session,
+    *,
+    state,
+    species_entry,
+    stoichiometry: int = 1,
+):
+    from app.db.models.network_pdep import NetworkStateParticipant
+
+    row = NetworkStateParticipant(
+        state_id=state.id,
+        species_entry_id=species_entry.id,
+        stoichiometry=stoichiometry,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def make_network_channel(
+    session: Session,
+    *,
+    network,
+    source_state,
+    sink_state,
+    kind,
+):
+    from app.db.models.network_pdep import NetworkChannel
+
+    row = NetworkChannel(
+        network_id=network.id,
+        source_state_id=source_state.id,
+        sink_state_id=sink_state.id,
+        kind=kind,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def make_network_solve(
+    session: Session,
+    *,
+    network,
+    me_method: str | None = "RRKM/ME",
+    tmin_k: float | None = 300.0,
+    tmax_k: float | None = 2000.0,
+    pmin_bar: float | None = 0.01,
+    pmax_bar: float | None = 100.0,
+    software_release_id: int | None = None,
+    workflow_tool_release_id: int | None = None,
+    literature_id: int | None = None,
+    note: str | None = None,
+):
+    from app.db.models.network_pdep import NetworkSolve
+
+    row = NetworkSolve(
+        network_id=network.id,
+        me_method=me_method,
+        tmin_k=tmin_k,
+        tmax_k=tmax_k,
+        pmin_bar=pmin_bar,
+        pmax_bar=pmax_bar,
+        software_release_id=software_release_id,
+        workflow_tool_release_id=workflow_tool_release_id,
+        literature_id=literature_id,
+        note=note,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_network_solve_source_calculation(
+    session: Session,
+    *,
+    solve,
+    calculation,
+    role,
+):
+    from app.db.models.network_pdep import NetworkSolveSourceCalculation
+
+    row = NetworkSolveSourceCalculation(
+        solve_id=solve.id,
+        calculation_id=calculation.id,
+        role=role,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_network_solve_bath_gas(
+    session: Session,
+    *,
+    solve,
+    species_entry,
+    mole_fraction: float = 1.0,
+):
+    from app.db.models.network_pdep import NetworkSolveBathGas
+
+    row = NetworkSolveBathGas(
+        solve_id=solve.id,
+        species_entry_id=species_entry.id,
+        mole_fraction=mole_fraction,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def make_network_kinetics(
+    session: Session,
+    *,
+    channel,
+    solve,
+    model_kind,
+    tmin_k: float | None = 300.0,
+    tmax_k: float | None = 2000.0,
+    pmin_bar: float | None = 0.01,
+    pmax_bar: float | None = 100.0,
+):
+    from app.db.models.network_pdep import NetworkKinetics
+
+    row = NetworkKinetics(
+        channel_id=channel.id,
+        solve_id=solve.id,
+        model_kind=model_kind,
+        tmin_k=tmin_k,
+        tmax_k=tmax_k,
+        pmin_bar=pmin_bar,
+        pmax_bar=pmax_bar,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_network_kinetics_chebyshev(
+    session: Session, *, kinetics, n_temperature: int = 6, n_pressure: int = 4,
+    coefficients: dict | None = None,
+):
+    from app.db.models.network_pdep import NetworkKineticsChebyshev
+
+    row = NetworkKineticsChebyshev(
+        network_kinetics_id=kinetics.id,
+        n_temperature=n_temperature,
+        n_pressure=n_pressure,
+        coefficients=coefficients or {"coeffs": [[0.0] * n_pressure] * n_temperature},
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_network_kinetics_plog(
+    session: Session,
+    *,
+    kinetics,
+    pressure_bar: float = 1.0,
+    entry_index: int = 1,
+    a: float = 1e12,
+    n: float = 0.0,
+    ea_kj_mol: float = 0.0,
+):
+    from app.db.models.network_pdep import NetworkKineticsPlog
+
+    row = NetworkKineticsPlog(
+        network_kinetics_id=kinetics.id,
+        pressure_bar=pressure_bar,
+        entry_index=entry_index,
+        a=a,
+        n=n,
+        ea_kj_mol=ea_kj_mol,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_network_kinetics_point(
+    session: Session,
+    *,
+    kinetics,
+    temperature_k: float,
+    pressure_bar: float,
+    rate_value: float,
+):
+    from app.db.models.network_pdep import NetworkKineticsPoint
+
+    row = NetworkKineticsPoint(
+        network_kinetics_id=kinetics.id,
+        temperature_k=temperature_k,
+        pressure_bar=pressure_bar,
+        rate_value=rate_value,
+    )
+    session.add(row)
+    session.flush()
+    return row
