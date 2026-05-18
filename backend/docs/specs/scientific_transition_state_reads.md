@@ -32,6 +32,24 @@ POST /api/v1/scientific/transition-states/search
 Handle prefixes: TS concept → `ts_…`, TS entry → `tse_…`. Wrong-prefix
 refs return 422 `handle_type_mismatch`; unknown refs / ids return 404.
 
+### Linking from `/reaction-entries/{id}/full`
+
+The composite reaction-full response embeds a TS section that surfaces
+the same public refs and evidence projection. Each entry in
+`transition_states[*]` carries:
+
+```text
+transition_state_ref      → GET /scientific/transition-states/{ref}
+transition_state_entry_ref → GET /scientific/transition-state-entries/{ref}
+status                    → TransitionStateEntryStatus
+evidence_summary          → byte-identical to record.evidence_summary
+                            from the TS-entry detail endpoint
+```
+
+The TS section therefore stays the natural starting point for a
+reaction-centric crawl; callers follow the refs to the scientific TS
+surface for the per-record detail without needing to issue a search.
+
 The search surface returns records at the **TS-entry grain**: entries
 are the concrete objects carrying charge / multiplicity / status and
 calculation evidence. The parent TS-concept context travels along on

@@ -69,6 +69,9 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.kinetics import get_reaction_kinetics
+from app.services.scientific_read.transition_states import (
+    _build_evidence_summary_for_entries,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "species",
@@ -349,6 +352,8 @@ def _build_transition_states_section(
     if not ts_rows:
         return []
 
+    ts_ref_by_id: dict[int, str] = {t.id: t.public_ref for t in ts_rows}
+
     ts_entry_rows = session.scalars(
         select(TransitionStateEntry).where(
             TransitionStateEntry.transition_state_id.in_([t.id for t in ts_rows])
@@ -373,11 +378,20 @@ def _build_transition_states_section(
             continue
         ts_calcs = calcs_by_ts_entry.get(ts_entry.id, [])
         calc_refs = {c.id: c.public_ref for c in ts_calcs}
+        # Reuse the evidence summary builder from the scientific TS
+        # surface so the block surfaced under /full is byte-identical
+        # to ``record.evidence_summary`` from
+        # ``GET /scientific/transition-state-entries/{ref}``.
+        evidence = _build_evidence_summary_for_entries(session, [ts_entry.id])
         out.append(
             TransitionStateInFull(
+                transition_state_id=ts_entry.transition_state_id,
+                transition_state_ref=ts_ref_by_id[ts_entry.transition_state_id],
                 transition_state_entry_id=ts_entry.id,
                 transition_state_entry_ref=ts_entry.public_ref,
+                status=ts_entry.status,
                 review=badge,
+                evidence_summary=evidence,
                 calculations=_format_ts_calc_slots(ts_calcs),
                 dependencies=_format_ts_deps(
                     deps_by_ts_entry.get(ts_entry.id, []), calc_refs

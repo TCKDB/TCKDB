@@ -12,7 +12,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import RecordReviewStatus
+from app.db.models.common import RecordReviewStatus, TransitionStateEntryStatus
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     PathSearchSummary,
@@ -20,6 +20,9 @@ from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
 )
 from app.schemas.reads.scientific_kinetics import KineticsRecord
+from app.schemas.reads.scientific_transition_state import (
+    TransitionStateCalculationEvidenceSummary,
+)
 
 
 class ReviewDetail(str, Enum):
@@ -119,13 +122,29 @@ class TransitionStateDependency(BaseModel):
 class TransitionStateInFull(BaseModel):
     """Transition-state record embedded in /full.
 
-    Phase B: ``transition_state_entry_ref`` is the public stable handle
-    alongside ``transition_state_entry_id``.
+    Carries the public refs that let a caller navigate to the new
+    scientific TS read surface:
+
+    - ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``
+    - ``transition_state_entry_ref`` →
+      ``GET /scientific/transition-state-entries/{ref}``
+    - ``calculations[*].calculation_ref`` →
+      ``GET /scientific/calculations/{ref}``
+
+    Integer ``*_id`` siblings are Phase D policy-gated. ``status``
+    and ``evidence_summary`` mirror the corresponding fields on
+    :class:`ScientificTransitionStateEntryRecord` so the
+    full-response block lines up byte-for-byte with the per-entry
+    detail endpoint (same counts, same booleans, same status enum).
     """
 
+    transition_state_id: int | None = None
+    transition_state_ref: str
     transition_state_entry_id: int
     transition_state_entry_ref: str
+    status: TransitionStateEntryStatus | None = None
     review: RecordReviewBadge
+    evidence_summary: TransitionStateCalculationEvidenceSummary
     calculations: dict[str, TransitionStateCalculationSlot] = Field(default_factory=dict)
     dependencies: list[TransitionStateDependency] = Field(default_factory=list)
 
