@@ -19,6 +19,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationCoreBlock,
     CalculationIRCSummary,
     CalculationOwnerSummary,
+    CalculationPathSearchSummary,
     CalculationScanSummary,
     ScanCoordinateSummary,
 )
@@ -181,6 +182,78 @@ class ScientificCalculationIRCResponse(BaseModel):
     pagination: Pagination
 
 
+class PathSearchRequestEcho(BaseModel):
+    """Echoes the parsed knobs the caller supplied to ``/path-search``.
+
+    Same shape as :class:`ScanRequestEcho` / :class:`IRCRequestEcho` so
+    a generic client parser can handle every per-point path-data
+    endpoint with one set of code.
+    """
+
+    include_geometries: bool = False
+    include: list[str] = Field(default_factory=list)
+    sort: str = ""
+    offset: int = 0
+    limit: int = 0
+
+
+class PathSearchPointDetail(BaseModel):
+    """One path-search point with its trajectory state, energy
+    projection, force/gradient norms, marker flags, and geometry link.
+
+    Mirrors :class:`ScanPointDetail` / :class:`IRCPointDetail` shape
+    conventions: bare ``geometry_ref`` always (when the underlying
+    geometry exists), ``geometry_id`` policy-gated, optional
+    ``geometry_link`` block only when the caller passed
+    ``include_geometries=true``.
+
+    ``is_ts_guess`` and ``is_climbing_image`` are two independent
+    per-point marker flags: ``is_ts_guess`` is the algorithm's own
+    picked TS candidate; ``is_climbing_image`` is the NEB
+    climbing-image flag. The two can overlap (NEB usually sets both on
+    the climbing image) but are conceptually distinct, so the public
+    detail keeps them separate.
+    """
+
+    point_index: int
+
+    path_coordinate: float | None = None
+    electronic_energy_hartree: float | None = None
+    relative_energy_kj_mol: float | None = None
+    max_force: float | None = None
+    rms_force: float | None = None
+    max_gradient: float | None = None
+    rms_gradient: float | None = None
+
+    is_ts_guess: bool = False
+    is_climbing_image: bool = False
+    note: str | None = None
+
+    geometry_id: int | None = None
+    geometry_ref: str | None = None
+    geometry_link: PointGeometryLink | None = None
+
+
+class ScientificCalculationPathSearchResponse(BaseModel):
+    """Full-data path-search response for one calculation.
+
+    Reuses ``CalculationCoreBlock`` / ``CalculationOwnerSummary`` /
+    ``CalculationPathSearchSummary`` from the detail-endpoint schemas
+    so a caller already parsing ``include=path_search`` can reuse
+    exactly the same parsing code for everything except the new
+    ``points`` array.
+
+    Pagination applies to ``points`` only.
+    """
+
+    request: PathSearchRequestEcho
+    calculation: CalculationCoreBlock
+    owner: CalculationOwnerSummary
+    path_search: CalculationPathSearchSummary
+    points: list[PathSearchPointDetail]
+    pagination: Pagination
+
+
 class ScientificCalculationScanResponse(BaseModel):
     """Full-data scan response for one calculation.
 
@@ -207,10 +280,13 @@ class ScientificCalculationScanResponse(BaseModel):
 __all__ = [
     "IRCPointDetail",
     "IRCRequestEcho",
+    "PathSearchPointDetail",
+    "PathSearchRequestEcho",
     "PointGeometryLink",
     "ScanPointCoordinateValueSummary",
     "ScanPointDetail",
     "ScanRequestEcho",
     "ScientificCalculationIRCResponse",
+    "ScientificCalculationPathSearchResponse",
     "ScientificCalculationScanResponse",
 ]

@@ -1,12 +1,14 @@
 """API tests for the specialized scientific calculation path-data
 endpoints.
 
-Currently covers:
+Covers:
 
 - ``GET /api/v1/scientific/calculations/{calculation_ref_or_id}/scan``
+- ``GET /api/v1/scientific/calculations/{calculation_ref_or_id}/irc``
+- ``GET /api/v1/scientific/calculations/{calculation_ref_or_id}/path-search``
 
-Future tests for ``/irc`` and ``/path-search`` will live in this file
-too, since they share the same path-data contract pattern.
+All three share the same path-data contract pattern (paginated points,
+shared geometry-link policy, shared internal-id visibility policy).
 """
 
 from __future__ import annotations
@@ -14,6 +16,8 @@ from __future__ import annotations
 from app.db.models.calculation import (
     CalculationIRCPoint,
     CalculationIRCResult,
+    CalculationPathSearchPoint,
+    CalculationPathSearchResult,
     CalculationScanCoordinate,
     CalculationScanPoint,
     CalculationScanPointCoordinateValue,
@@ -23,6 +27,7 @@ from app.db.models.common import (
     CalculationType,
     CoordinateUnit,
     IRCDirection,
+    PathSearchMethod,
     ScanCoordinateKind,
 )
 from tests.services.scientific_read._factories import (
@@ -1002,3 +1007,475 @@ def test_irc_endpoint_agrees_with_include_irc_summary(client, db_session):
     assert full_irc["max_electronic_energy_hartree"] == -99.5
     assert full_irc["min_reaction_coordinate"] == -1.0
     assert full_irc["max_reaction_coordinate"] == 1.0
+
+
+# ===========================================================================
+# /path-search endpoint
+# ===========================================================================
+
+
+def _make_path_search_calc(
+    db_session,
+    *,
+    method: PathSearchMethod = PathSearchMethod.neb,
+    is_double_ended: bool | None = True,
+    converged: bool | None = True,
+    n_points: int | None = None,
+    selected_ts_point_index: int | None = None,
+    climbing_image_index: int | None = None,
+    source_endpoint_count: int | None = 2,
+    note: str | None = None,
+):
+    """Build a calc + ``calc_path_search_result`` row."""
+    _, _, calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.path_search
+    )
+    db_session.add(
+        CalculationPathSearchResult(
+            calculation_id=calc.id,
+            method=method,
+            is_double_ended=is_double_ended,
+            converged=converged,
+            n_points=n_points,
+            selected_ts_point_index=selected_ts_point_index,
+            climbing_image_index=climbing_image_index,
+            source_endpoint_count=source_endpoint_count,
+            zero_energy_reference_hartree=-100.0,
+            note=note,
+        )
+    )
+    db_session.flush()
+    return calc
+
+
+def _attach_path_search_point(
+    db_session,
+    *,
+    calculation,
+    point_index: int,
+    path_coordinate: float | None = None,
+    electronic_energy_hartree: float | None = None,
+    relative_energy_kj_mol: float | None = None,
+    max_force: float | None = None,
+    rms_force: float | None = None,
+    max_gradient: float | None = None,
+    rms_gradient: float | None = None,
+    is_ts_guess: bool = False,
+    is_climbing_image: bool = False,
+    geometry=None,
+    note: str | None = None,
+):
+    row = CalculationPathSearchPoint(
+        calculation_id=calculation.id,
+        point_index=point_index,
+        path_coordinate=path_coordinate,
+        electronic_energy_hartree=electronic_energy_hartree,
+        relative_energy_kj_mol=relative_energy_kj_mol,
+        max_force=max_force,
+        rms_force=rms_force,
+        max_gradient=max_gradient,
+        rms_gradient=rms_gradient,
+        is_ts_guess=is_ts_guess,
+        is_climbing_image=is_climbing_image,
+        geometry_id=geometry.id if geometry is not None else None,
+        note=note,
+    )
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
+def _seed_neb_path_search(db_session):
+    """Five-image NEB: image 2 is the climbing image / TS guess.
+    Returns ``(calc, geom_for_ts)``.
+    """
+    calc = _make_path_search_calc(
+        db_session,
+        method=PathSearchMethod.neb,
+        is_double_ended=True,
+        converged=True,
+        n_points=5,
+        selected_ts_point_index=2,
+        climbing_image_index=2,
+        source_endpoint_count=2,
+        note="neb climb",
+    )
+    geom_ts = make_geometry(db_session, natoms=3)
+    # Reactant endpoint.
+    _attach_path_search_point(
+        db_session, calculation=calc, point_index=0,
+        path_coordinate=0.0,
+        electronic_energy_hartree=-100.0,
+        relative_energy_kj_mol=0.0,
+        max_force=1e-5, rms_force=5e-6,
+    )
+    _attach_path_search_point(
+        db_session, calculation=calc, point_index=1,
+        path_coordinate=0.25,
+        electronic_energy_hartree=-99.8,
+        relative_energy_kj_mol=10.0,
+        max_force=2e-4, rms_force=1e-4,
+    )
+    # Climbing image / TS guess.
+    _attach_path_search_point(
+        db_session, calculation=calc, point_index=2,
+        path_coordinate=0.5,
+        electronic_energy_hartree=-99.5,
+        relative_energy_kj_mol=25.0,
+        max_force=1e-4, rms_force=5e-5,
+        max_gradient=8e-5, rms_gradient=3e-5,
+        is_ts_guess=True, is_climbing_image=True,
+        geometry=geom_ts,
+        note="climbing image",
+    )
+    _attach_path_search_point(
+        db_session, calculation=calc, point_index=3,
+        path_coordinate=0.75,
+        electronic_energy_hartree=-99.9,
+        relative_energy_kj_mol=15.0,
+        max_force=2e-4, rms_force=1e-4,
+    )
+    # Product endpoint.
+    _attach_path_search_point(
+        db_session, calculation=calc, point_index=4,
+        path_coordinate=1.0,
+        electronic_energy_hartree=-100.2,
+        relative_energy_kj_mol=5.0,
+        max_force=1e-5, rms_force=5e-6,
+    )
+    return calc, geom_ts
+
+
+def _path_search_url(handle: str, **params) -> str:
+    base = f"/api/v1/scientific/calculations/{handle}/path-search"
+    if not params:
+        return base
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"{base}?{qs}"
+
+
+# ---------------------------------------------------------------------------
+# Happy-path + handle resolution
+# ---------------------------------------------------------------------------
+
+
+def test_path_search_endpoint_by_calculation_ref_returns_200(
+    client, db_session
+):
+    calc, _ = _seed_neb_path_search(db_session)
+    resp = client.get(_path_search_url(calc.public_ref))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["calculation"]["calculation_ref"] == calc.public_ref
+
+
+def test_path_search_endpoint_by_integer_id_works(client, db_session):
+    calc, _ = _seed_neb_path_search(db_session)
+    resp = client.get(_path_search_url(str(calc.id)))
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["calculation"]["calculation_ref"] == calc.public_ref
+
+
+def test_path_search_endpoint_unknown_calculation_returns_404(
+    client, db_session
+):
+    resp = client.get(
+        "/api/v1/scientific/calculations/calc_doesnotexist000/path-search"
+    )
+    assert resp.status_code == 404
+    assert "calculation not found" in resp.text.lower()
+
+
+def test_path_search_endpoint_wrong_prefix_returns_422(client, db_session):
+    resp = client.get(
+        "/api/v1/scientific/calculations/spe_abcdef0123456789/path-search"
+    )
+    assert resp.status_code == 422
+    assert "handle_type_mismatch" in resp.text
+
+
+def test_path_search_endpoint_malformed_handle_returns_422(
+    client, db_session
+):
+    resp = client.get(
+        "/api/v1/scientific/calculations/not-a-handle/path-search"
+    )
+    assert resp.status_code == 422
+    assert "invalid_handle" in resp.text
+
+
+def test_path_search_endpoint_no_path_search_result_returns_404(
+    client, db_session
+):
+    """Calc exists but has no calc_path_search_result row → 404
+    ``path_search_result_not_found``."""
+    _, _, calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.opt
+    )
+    resp = client.get(_path_search_url(calc.public_ref))
+    assert resp.status_code == 404
+    assert "path_search_result_not_found" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Response shape
+# ---------------------------------------------------------------------------
+
+
+def test_path_search_response_includes_core_block_with_review_badge(
+    client, db_session
+):
+    calc, _ = _seed_neb_path_search(db_session)
+    body = client.get(_path_search_url(calc.public_ref)).json()
+    core = body["calculation"]
+    assert core["calculation_ref"] == calc.public_ref
+    assert core["type"] == "path_search"
+    assert "review" in core
+    assert core["review"]["status"] == "not_reviewed"
+
+
+def test_path_search_response_includes_owner_summary(client, db_session):
+    calc, _ = _seed_neb_path_search(db_session)
+    body = client.get(_path_search_url(calc.public_ref)).json()
+    owner = body["owner"]
+    assert owner["kind"] == "species_entry"
+    assert "species_entry" in owner
+
+
+def test_path_search_response_includes_path_search_summary(
+    client, db_session
+):
+    calc, _ = _seed_neb_path_search(db_session)
+    body = client.get(_path_search_url(calc.public_ref)).json()
+    ps = body["path_search"]
+    assert ps["method"] == "neb"
+    assert ps["is_double_ended"] is True
+    assert ps["converged"] is True
+    assert ps["stored_point_count"] == 5
+    assert ps["ts_guess_count"] == 1
+    assert ps["climbing_image_count"] == 1
+
+
+def test_path_search_response_includes_paginated_points(
+    client, db_session
+):
+    calc, _ = _seed_neb_path_search(db_session)
+    body = client.get(_path_search_url(calc.public_ref)).json()
+    points = body["points"]
+    assert len(points) == 5
+    assert [p["point_index"] for p in points] == [0, 1, 2, 3, 4]
+
+
+def test_path_search_points_carry_full_per_point_state(client, db_session):
+    calc, _ = _seed_neb_path_search(db_session)
+    body = client.get(_path_search_url(calc.public_ref)).json()
+    by_idx = {p["point_index"]: p for p in body["points"]}
+    ts = by_idx[2]
+    assert ts["is_ts_guess"] is True
+    assert ts["is_climbing_image"] is True
+    assert ts["path_coordinate"] == 0.5
+    assert ts["electronic_energy_hartree"] == -99.5
+    assert ts["relative_energy_kj_mol"] == 25.0
+    assert ts["max_force"] == 1e-4
+    assert ts["rms_force"] == 5e-5
+    assert ts["max_gradient"] == 8e-5
+    assert ts["rms_gradient"] == 3e-5
+    assert ts["note"] == "climbing image"
+    # Non-TS row.
+    endpoint = by_idx[0]
+    assert endpoint["is_ts_guess"] is False
+    assert endpoint["is_climbing_image"] is False
+    assert endpoint["path_coordinate"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Ordering + pagination
+# ---------------------------------------------------------------------------
+
+
+def test_path_search_points_ordered_by_point_index(client, db_session):
+    calc = _make_path_search_calc(db_session)
+    # Insert out of order, not by energy.
+    for idx, energy in [(2, -99.0), (0, -100.0), (1, -99.5)]:
+        _attach_path_search_point(
+            db_session, calculation=calc, point_index=idx,
+            electronic_energy_hartree=energy,
+        )
+    body = client.get(_path_search_url(calc.public_ref)).json()
+    assert [p["point_index"] for p in body["points"]] == [0, 1, 2]
+
+
+def test_path_search_pagination_envelope_correct(client, db_session):
+    calc, _ = _seed_neb_path_search(db_session)
+    body = client.get(_path_search_url(calc.public_ref, limit=2)).json()
+    page = body["pagination"]
+    assert page["limit"] == 2
+    assert page["offset"] == 0
+    assert page["returned"] == 2
+    assert page["total"] == 5
+    assert len(body["points"]) == 2
+
+
+def test_path_search_pagination_second_page_disjoint(client, db_session):
+    calc, _ = _seed_neb_path_search(db_session)
+    body_a = client.get(
+        _path_search_url(calc.public_ref, limit=2, offset=0)
+    ).json()
+    body_b = client.get(
+        _path_search_url(calc.public_ref, limit=2, offset=2)
+    ).json()
+    a_ids = {p["point_index"] for p in body_a["points"]}
+    b_ids = {p["point_index"] for p in body_b["points"]}
+    assert a_ids.isdisjoint(b_ids)
+    assert a_ids == {0, 1}
+    assert b_ids == {2, 3}
+
+
+def test_path_search_limit_overrun_returns_422(client, db_session):
+    calc, _ = _seed_neb_path_search(db_session)
+    resp = client.get(_path_search_url(calc.public_ref, limit=999999))
+    assert resp.status_code == 422
+
+
+def test_path_search_sort_param_rejected(client, db_session):
+    calc, _ = _seed_neb_path_search(db_session)
+    resp = client.get(
+        _path_search_url(calc.public_ref, sort="electronic_energy_hartree")
+    )
+    assert resp.status_code == 422
+    assert "client_sort_not_supported" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Geometry behavior
+# ---------------------------------------------------------------------------
+
+
+def test_path_search_point_with_geometry_exposes_geometry_ref_by_default(
+    client, db_session
+):
+    calc, geom_ts = _seed_neb_path_search(db_session)
+    body = client.get(_path_search_url(calc.public_ref)).json()
+    ts = next(p for p in body["points"] if p["is_ts_guess"])
+    other = next(p for p in body["points"] if not p["is_ts_guess"])
+    assert ts["geometry_ref"] == geom_ts.public_ref
+    assert "geometry_id" not in ts
+    assert other["geometry_ref"] is None
+    assert ts.get("geometry_link") is None
+
+
+def test_path_search_geometry_id_restored_when_internal_ids_allowed(
+    client, db_session, allow_internal_ids
+):
+    calc, geom_ts = _seed_neb_path_search(db_session)
+    body = client.get(
+        _path_search_url(calc.public_ref, include="internal_ids")
+    ).json()
+    ts = next(p for p in body["points"] if p["is_ts_guess"])
+    assert ts["geometry_id"] == geom_ts.id
+    assert body["calculation"]["calculation_id"] == calc.id
+
+
+def test_path_search_internal_ids_silently_dropped_when_policy_disallows(
+    client, db_session
+):
+    calc, _ = _seed_neb_path_search(db_session)
+    body = client.get(
+        _path_search_url(calc.public_ref, include="internal_ids")
+    ).json()
+    assert body["request"]["include"] == []
+    assert "calculation_id" not in body["calculation"]
+
+
+def test_path_search_unknown_include_token_returns_422(client, db_session):
+    calc, _ = _seed_neb_path_search(db_session)
+    resp = client.get(_path_search_url(calc.public_ref, include="banana"))
+    assert resp.status_code == 422
+    assert "unknown_include_token" in resp.text
+
+
+def test_path_search_include_geometries_true_returns_lightweight_link(
+    client, db_session
+):
+    calc, geom_ts = _seed_neb_path_search(db_session)
+    body = client.get(
+        _path_search_url(calc.public_ref, include_geometries="true")
+    ).json()
+    ts = next(p for p in body["points"] if p["is_ts_guess"])
+    link = ts["geometry_link"]
+    assert link is not None
+    assert link["geometry_ref"] == geom_ts.public_ref
+    assert link["natoms"] == geom_ts.natoms
+    assert link["geom_hash"] == geom_ts.geom_hash
+    for forbidden in ("xyz_text", "atoms", "coords", "symbols"):
+        assert forbidden not in link
+
+
+# ---------------------------------------------------------------------------
+# Defense-in-depth: no full payload leakage
+# ---------------------------------------------------------------------------
+
+
+def test_path_search_response_does_not_leak_full_payload_keys(
+    client, db_session
+):
+    """Recursive walk: the path-search endpoint must never inline full
+    XYZ coordinates, atom rows, artifact bodies, or pre-signed URLs."""
+    calc, _ = _seed_neb_path_search(db_session)
+    body = client.get(
+        _path_search_url(calc.public_ref, include_geometries="true")
+    ).json()
+    forbidden_keys = {
+        "xyz_text",
+        "atoms",
+        "coords",
+        "symbols",
+        "body",
+        "content",
+        "data",
+        "presigned_url",
+        "download_url",
+    }
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                assert k not in forbidden_keys, (
+                    f"/path-search leaked forbidden key {k!r} into the response"
+                )
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(body)
+
+
+# ---------------------------------------------------------------------------
+# Cross-endpoint agreement with include=path_search summary
+# ---------------------------------------------------------------------------
+
+
+def test_path_search_endpoint_agrees_with_include_path_search_summary(
+    client, db_session
+):
+    """``response.path_search`` from ``/path-search`` is byte-identical
+    to ``record.path_search`` from the detail endpoint with
+    ``include=path_search``."""
+    calc, _ = _seed_neb_path_search(db_session)
+    detail = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        f"?include=path_search"
+    ).json()
+    full = client.get(_path_search_url(calc.public_ref)).json()
+    detail_ps = detail["record"]["path_search"]
+    full_ps = full["path_search"]
+    assert detail_ps == full_ps
+    assert full["pagination"]["total"] == 5
+    assert full_ps["stored_point_count"] == 5
+    assert full_ps["ts_guess_count"] == 1
+    assert full_ps["climbing_image_count"] == 1
+    assert full_ps["min_electronic_energy_hartree"] == -100.2
+    assert full_ps["max_electronic_energy_hartree"] == -99.5
+    assert full_ps["min_path_coordinate"] == 0.0
+    assert full_ps["max_path_coordinate"] == 1.0

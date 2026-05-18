@@ -22,6 +22,8 @@ from app.db.models.calculation import (
     Calculation,
     CalculationIRCPoint,
     CalculationIRCResult,
+    CalculationPathSearchPoint,
+    CalculationPathSearchResult,
     CalculationScanCoordinate,
     CalculationScanPoint,
     CalculationScanPointCoordinateValue,
@@ -36,16 +38,20 @@ from app.schemas.reads.scientific_calculation import (
 from app.schemas.reads.scientific_calculation_paths import (
     IRCPointDetail,
     IRCRequestEcho,
+    PathSearchPointDetail,
+    PathSearchRequestEcho,
     PointGeometryLink,
     ScanPointCoordinateValueSummary,
     ScanPointDetail,
     ScanRequestEcho,
     ScientificCalculationIRCResponse,
+    ScientificCalculationPathSearchResponse,
     ScientificCalculationScanResponse,
 )
 from app.services.scientific_read.calculations import (
     _build_irc_include_summary,
     _build_owner,
+    _build_path_search_include_summary,
     _build_scan_include_summary,
     _load_review_badge,
 )
@@ -466,7 +472,174 @@ def _build_irc_point_detail(
     )
 
 
+# ---------------------------------------------------------------------------
+# /path-search loader
+# ---------------------------------------------------------------------------
+
+
+def get_calculation_path_search(
+    session: Session,
+    *,
+    calculation_handle: str,
+    include_geometries: bool = False,
+    include: list[str] | None = None,
+    sort: str | None = None,
+    offset: int = 0,
+    limit: int = 50,
+) -> ScientificCalculationPathSearchResponse:
+    """Return full path-search data for one calculation, paginated by
+    point.
+
+    Same handle / pagination / sort / include / 404 contract as
+    :func:`get_calculation_scan` and :func:`get_calculation_irc`.
+    Calculations with no ``calc_path_search_result`` row return 404
+    ``path_search_result_not_found``.
+
+    The ``path_search`` block is byte-for-byte the same shape
+    ``include=path_search`` on the detail endpoint produces; per-point
+    arrays live in the paginated ``points`` array. Geometries follow
+    the same ref-only-by-default contract: passing
+    ``include_geometries=true`` adds a lightweight ``geometry_link``
+    block per point — never inlines XYZ.
+
+    :raises NotFoundError: 404 when the calculation does not exist
+        or has no path-search-result row.
+    :raises ValueError: 422 for malformed/wrong-prefix handles, sort
+        rejection, pagination overrun, or unknown include tokens.
+    """
+    reject_client_sort(sort)
+    offset, limit = validate_pagination(offset, limit)
+    includes = validate_includes(
+        include or [],
+        _PATH_LEGAL_INCLUDE_TOKENS,
+        "/scientific/calculations/{calculation_ref_or_id}/path-search",
+        internal_tokens=_PATH_INTERNAL_INCLUDE_TOKENS,
+    )
+    includes = filter_internal_ids_from_resolved(includes)
+
+    calculation_id = resolve_calculation_handle(session, calculation_handle)
+    calc = session.get(Calculation, calculation_id)
+    if calc is None:  # pragma: no cover — defended by resolver 404
+        raise NotFoundError(
+            f"calculation not found (calculation_id={calculation_id})",
+            code="handle_not_found",
+        )
+
+    path_search_summary = _build_path_search_include_summary(
+        session, calculation_id
+    )
+    if path_search_summary is None:
+        raise NotFoundError(
+            f"path-search result not found for calculation "
+            f"{calc.public_ref}",
+            code="path_search_result_not_found",
+        )
+
+    badge = _load_review_badge(session, calculation_id)
+    owner = _build_owner(session, calc)
+
+    # Pagination total comes from a fresh COUNT(*) on the point table.
+    # ``calc_path_search_result.n_points`` is the producer-reported
+    # value and may diverge from the actual stored count; the COUNT(*)
+    # is the right total for pagination semantics.
+    total_points = int(
+        session.scalar(
+            select(func.count())
+            .select_from(CalculationPathSearchPoint)
+            .where(CalculationPathSearchPoint.calculation_id == calculation_id)
+        )
+        or 0
+    )
+
+    point_rows = session.execute(
+        select(CalculationPathSearchPoint)
+        .where(CalculationPathSearchPoint.calculation_id == calculation_id)
+        .order_by(CalculationPathSearchPoint.point_index.asc())
+        .offset(offset)
+        .limit(limit)
+    ).scalars().all()
+
+    geometry_ids = {
+        row.geometry_id for row in point_rows if row.geometry_id is not None
+    }
+    geometry_meta_by_id = (
+        _load_geometry_metadata(session, geometry_ids)
+        if geometry_ids
+        else {}
+    )
+
+    points = [
+        _build_path_search_point_detail(
+            row,
+            geometry_meta=(
+                geometry_meta_by_id.get(row.geometry_id)
+                if row.geometry_id is not None
+                else None
+            ),
+            include_geometries=include_geometries,
+        )
+        for row in point_rows
+    ]
+
+    return ScientificCalculationPathSearchResponse(
+        request=PathSearchRequestEcho(
+            include_geometries=include_geometries,
+            include=sorted(includes),
+            sort="point_index",
+            offset=offset,
+            limit=limit,
+        ),
+        calculation=CalculationCoreBlock(
+            calculation_id=calc.id,
+            calculation_ref=calc.public_ref,
+            type=calc.type,
+            quality=calc.quality,
+            created_at=calc.created_at,
+            review=badge,
+        ),
+        owner=owner,
+        path_search=path_search_summary,
+        points=points,
+        pagination=build_pagination(
+            offset=offset,
+            limit=limit,
+            returned=len(points),
+            total=total_points,
+        ),
+    )
+
+
+def _build_path_search_point_detail(
+    row: CalculationPathSearchPoint,
+    *,
+    geometry_meta: PointGeometryLink | None,
+    include_geometries: bool,
+) -> PathSearchPointDetail:
+    """Project one path-search-point row into the public detail shape."""
+    geometry_ref = geometry_meta.geometry_ref if geometry_meta else None
+    geometry_link = (
+        geometry_meta if include_geometries and geometry_meta is not None else None
+    )
+    return PathSearchPointDetail(
+        point_index=row.point_index,
+        path_coordinate=row.path_coordinate,
+        electronic_energy_hartree=row.electronic_energy_hartree,
+        relative_energy_kj_mol=row.relative_energy_kj_mol,
+        max_force=row.max_force,
+        rms_force=row.rms_force,
+        max_gradient=row.max_gradient,
+        rms_gradient=row.rms_gradient,
+        is_ts_guess=row.is_ts_guess,
+        is_climbing_image=row.is_climbing_image,
+        note=row.note,
+        geometry_id=row.geometry_id,
+        geometry_ref=geometry_ref,
+        geometry_link=geometry_link,
+    )
+
+
 __all__ = [
     "get_calculation_irc",
+    "get_calculation_path_search",
     "get_calculation_scan",
 ]

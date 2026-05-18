@@ -6,8 +6,8 @@ returns bounded summary blocks under the heavy include tokens
 per-point trajectory data behind paginated, abuse-bound URLs:
 
 - ``GET /scientific/calculations/{calculation_ref_or_id}/scan``
-- (future) ``GET /scientific/calculations/{calculation_ref_or_id}/irc``
-- (future) ``GET /scientific/calculations/{calculation_ref_or_id}/path-search``
+- ``GET /scientific/calculations/{calculation_ref_or_id}/irc``
+- ``GET /scientific/calculations/{calculation_ref_or_id}/path-search``
 
 See ``backend/docs/specs/scientific_calculation_path_includes.md``.
 
@@ -29,10 +29,12 @@ from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.schemas.reads.scientific_calculation_paths import (
     ScientificCalculationIRCResponse,
+    ScientificCalculationPathSearchResponse,
     ScientificCalculationScanResponse,
 )
 from app.services.scientific_read.calculation_paths import (
     get_calculation_irc,
+    get_calculation_path_search,
     get_calculation_scan,
 )
 from app.services.scientific_read.internal_ids import (
@@ -121,6 +123,49 @@ def scientific_calculation_irc(
     ``include=internal_ids``.
     """
     payload = get_calculation_irc(
+        session,
+        calculation_handle=calculation_ref_or_id,
+        include_geometries=include_geometries,
+        include=parse_include(include),
+        sort=sort,
+        offset=offset,
+        limit=limit,
+    )
+    return apply_internal_ids_visibility(payload)
+
+
+@router.get(
+    "/{calculation_ref_or_id}/path-search",
+    response_model=ScientificCalculationPathSearchResponse,
+)
+def scientific_calculation_path_search(
+    calculation_ref_or_id: str = Path(..., min_length=1, max_length=64),
+    session: Session = Depends(get_db),
+    include_geometries: bool = Query(False),
+    include: list[str] | None = Query(None),
+    sort: str | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Return full path-search data for one calculation, paginated by
+    point.
+
+    Same handle / pagination / sort / include / 404 contract as
+    ``/scan`` and ``/irc``. Calcs with no ``calc_path_search_result``
+    row return 404 ``path_search_result_not_found``.
+
+    Pagination applies to the ``points`` array only; per-row energies,
+    forces/gradients, ``is_ts_guess`` / ``is_climbing_image`` markers,
+    and the per-point ``path_coordinate`` come through verbatim.
+    Per-point geometries appear as ``geometry_ref`` only by default;
+    ``include_geometries=true`` adds the lightweight ``geometry_link``
+    block (ref + natoms + geom_hash). Full coordinate payloads remain
+    accessible only via ``GET /scientific/geometries/{geometry_ref}``.
+
+    Internal-ID visibility follows the existing Phase D policy via
+    ``include=internal_ids``.
+    """
+    payload = get_calculation_path_search(
         session,
         calculation_handle=calculation_ref_or_id,
         include_geometries=include_geometries,

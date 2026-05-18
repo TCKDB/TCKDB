@@ -266,15 +266,21 @@ useful curator signal.
 
 ## 8. Specialized full-data endpoints
 
-**Status:** `/scan` and `/irc` implemented; `/path-search` pending.
+**Status:** `/scan`, `/irc`, and `/path-search` all implemented.
 
 Three public endpoints in this family:
 
 ```http
 GET /api/v1/scientific/calculations/{calculation_ref_or_id}/scan         # implemented
 GET /api/v1/scientific/calculations/{calculation_ref_or_id}/irc          # implemented
-GET /api/v1/scientific/calculations/{calculation_ref_or_id}/path-search  # pending
+GET /api/v1/scientific/calculations/{calculation_ref_or_id}/path-search  # implemented
 ```
+
+`include=path_search` on the detail/search surface remains
+summary-only (bounded aggregates only — no per-point arrays). The full
+per-point trajectory is paginated by the specialized
+`/path-search` endpoint; full geometry coordinate payloads remain
+available through `GET /scientific/geometries/{geometry_ref}`.
 
 The shipped scan endpoint lives in
 [`backend/app/api/routes/scientific/calculation_paths.py`](../../app/api/routes/scientific/calculation_paths.py)
@@ -363,11 +369,10 @@ detail endpoint.
 - Calculation has the result row but zero linked points: 200 with
   `scan` summary populated and `points = []`.
 
-(`/scan` and `/irc` both ship with this exact behavior —
-`scan_result_not_found` / `irc_result_not_found` on calcs without
-the matching result row, 200 with `points = []` on result rows with
-no point children. `/path-search` will follow the same convention
-when it ships.)
+(All three endpoints ship with this exact behavior —
+`scan_result_not_found` / `irc_result_not_found` /
+`path_search_result_not_found` on calcs without the matching result
+row, 200 with `points = []` on result rows with no point children.)
 
 ### 8.4 Why these are separate endpoints, not include flags
 
@@ -422,9 +427,9 @@ bound, not the `all` token.
 
 ## 10. Implementation phases
 
-Each phase is independently shippable. Phases 1–3 and 5 are now
-complete; phase 4 (specialized full-data endpoints) is the remaining
-work.
+Each phase is independently shippable. Phases 1–5 are now complete
+(scan / IRC / path-search summaries, all three specialized full-data
+endpoints, and the `include=all` flip).
 
 ### Phase 1 — `include=scan` summary
 
