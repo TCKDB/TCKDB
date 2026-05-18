@@ -33,6 +33,7 @@ from fastapi import APIRouter
 from app.api.routes.scientific import (
     calculation_paths,
     calculations,
+    conformers,
     geometries,
     kinetics,
     kinetics_search,
@@ -64,5 +65,7 @@ scientific_router.include_router(calculation_paths.router)
 scientific_router.include_router(calculations.router)
 scientific_router.include_router(transition_states.ts_router)
 scientific_router.include_router(transition_states.tse_router)
+scientific_router.include_router(conformers.cg_router)
+scientific_router.include_router(conformers.co_router)
 
 __all__ = ["scientific_router"]

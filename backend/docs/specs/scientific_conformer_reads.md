@@ -670,22 +670,46 @@ endpoints — `/full` carries the **grouped basin summary** and the
 
 Each phase is independently shippable.
 
-### Phase 1 — handles + detail endpoints
+### Phase 1 — handles + detail endpoints  ✓ implemented
 
-1. Add `resolve_conformer_group_handle` and
-   `resolve_conformer_observation_handle` wrappers in `handles.py`.
-2. Add fragment schemas in
-   `app/schemas/reads/scientific_conformer.py`.
-3. Add detail services in
-   `app/services/scientific_read/conformers.py` —
-   `get_conformer_group`, `get_conformer_observation`.
-4. Wire two routers (`conformer_groups_router`,
-   `conformer_observations_router`) into
+1. ✓ `resolve_conformer_group_handle` /
+   `resolve_conformer_observation_handle` in `handles.py`.
+2. ✓ Fragment schemas in `app/schemas/reads/scientific_conformer.py`.
+3. ✓ Detail services in `app/services/scientific_read/conformers.py`
+   (`get_conformer_group`, `get_conformer_observation`).
+4. ✓ Two routers (`cg_router`, `co_router`) mounted via
    `app/api/routes/scientific/__init__.py`.
-5. Tests: detail × {by ref, by id, unknown → 404, wrong prefix → 422,
-   malformed → 422, default shape, include × {observations, selections,
-   calculations, geometries, review, all, internal_ids}, mol blob /
-   xyz / coords leak check}.
+5. ✓ Tests in
+   `tests/api/scientific/test_api_scientific_conformers.py` (41 tests
+   covering detail × {by ref / by id / unknown 404 / wrong-prefix 422 /
+   malformed 422 / default shape / each include token / include=all /
+   internal-id policy / forbidden-payload walk}).
+
+Implementation deviations from the spec sketch worth flagging:
+
+- **Selection summary appears in two places on the group surface.**
+  The default response always carries `selection_summary` (bounded,
+  always-present curation snapshot); `include=selections` populates an
+  identical-content `selections` list. Both refer to the same selection
+  rows; the include block exists so callers can request "give me the
+  selection rich-detail explicitly" without inspecting the default
+  block. Future surfaces (search records) will mirror the same pattern.
+- **`include=selections` on the observation surface returns the parent
+  group's selections.** This is a useful UX choice: a caller landing
+  on an observation page typically wants to know whether the basin is
+  curated. Documented in the service docstring.
+- **`include=observations` on the observation surface is silently
+  dropped.** The token flows through `validate_includes` (legal), but
+  the observation record schema has no `observations` field, so it
+  produces no extra payload. Matches the TS surface's `entries` token.
+- **Geometry reachability is output-geometries only.** A future
+  `include=input_geometries` could split them; deferred until a real
+  consumer asks. Documented in §9 of this spec.
+- **`representative_fingerprint_json`, `representative_coords_json`,
+  `torsion_fingerprint_json` are all excluded from the default
+  surface and from `include=all`.** A future `include=fingerprints`
+  token can surface them with explicit size bounds (open question
+  §13.3 below).
 
 ### Phase 2 — search
 
