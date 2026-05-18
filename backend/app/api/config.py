@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     max_full_calculations_public: int = 100
     max_full_geometries_public: int = 100
     max_full_artifacts_public: int = 100
+    max_full_conformer_groups_public: int = 100
 
     # OpenAPI / Swagger / ReDoc exposure. Default on for local
     # development so the docs stay one URL away. Hosted deployments

@@ -1012,3 +1012,252 @@ def test_full_artifacts_section_omits_calcs_without_artifacts(
     refs = {g["calculation_ref"] for g in body["artifacts"]}
     assert calc_with.public_ref in refs
     assert calc_without.public_ref not in refs
+
+
+# ---------------------------------------------------------------------------
+# Conformers section alignment with scientific conformer reads
+# ---------------------------------------------------------------------------
+
+
+def _entry_with_reactant_conformer(
+    db_session, *, with_observation=True, with_calc=False
+):
+    """Build a reaction entry where the reactant species has a
+    conformer group + (optional) observation + (optional) calculation."""
+    from app.db.models.common import CalculationType
+    from tests.services.scientific_read._factories import (
+        make_calculation_with_conformer,
+        make_conformer_group,
+        make_conformer_observation,
+    )
+
+    entry = _entry(db_session)
+    # The reactant species_entry was created inline by _entry; look it
+    # up via the reaction-entry's structure participants so we can
+    # attach a conformer group to it.
+    from app.db.models.reaction import ReactionEntryStructureParticipant
+    from app.db.models.species import SpeciesEntry
+    from sqlalchemy import select as _select
+
+    reactant_entry_id = db_session.scalar(
+        _select(ReactionEntryStructureParticipant.species_entry_id)
+        .where(
+            ReactionEntryStructureParticipant.reaction_entry_id == entry.id,
+            ReactionEntryStructureParticipant.role
+            == _ReactionRole.reactant,
+        )
+        .limit(1)
+    )
+    reactant_entry = db_session.get(SpeciesEntry, reactant_entry_id)
+    cg = make_conformer_group(db_session, reactant_entry, label="basin_a")
+    obs = None
+    if with_observation:
+        obs = make_conformer_observation(db_session, conformer_group=cg)
+    calc = None
+    if with_calc and obs is not None:
+        calc = make_calculation_with_conformer(
+            db_session,
+            species_entry=reactant_entry,
+            conformer_observation=obs,
+            type=CalculationType.opt,
+        )
+    return entry, reactant_entry, cg, obs, calc
+
+
+# ReactionRole is needed but the file imports a `ReactionRole` from common;
+# keep the helper import close so the test file stays self-contained.
+from app.db.models.common import ReactionRole as _ReactionRole  # noqa: E402
+
+
+def test_full_conformers_section_groups_by_species_participant(
+    client, db_session
+):
+    entry, reactant_entry, cg, _, _ = _entry_with_reactant_conformer(db_session)
+    body = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full"
+        "?include=conformers"
+    ).json()
+    section = body["conformers"]
+    assert section is not None
+    # One participant for each side of the reaction (1 reactant + 1 product).
+    assert len(section) == 2
+    # The reactant participant carries the conformer group.
+    by_entry = {
+        p["species_entry_ref"]: p for p in section
+    }
+    reactant_block = by_entry[reactant_entry.public_ref]
+    assert reactant_block["role"] == "reactant"
+    assert len(reactant_block["conformer_groups"]) == 1
+    group_item = reactant_block["conformer_groups"][0]
+    assert group_item["conformer_group_ref"] == cg.public_ref
+
+
+def test_full_conformer_group_item_carries_summary_blocks(client, db_session):
+    entry, _, cg, _, _ = _entry_with_reactant_conformer(db_session)
+    body = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full"
+        "?include=conformers"
+    ).json()
+    group_item = next(
+        g
+        for p in body["conformers"]
+        for g in p["conformer_groups"]
+        if g["conformer_group_ref"] == cg.public_ref
+    )
+    assert "conformer_group" in group_item
+    assert "observations_summary" in group_item
+    assert "evidence_summary" in group_item
+    assert "selection_summary" in group_item
+    assert "available_sections" in group_item
+    # Endpoint hint is ref-based.
+    assert group_item["endpoint"] == (
+        f"/api/v1/scientific/conformer-groups/{cg.public_ref}"
+    )
+
+
+def test_full_conformer_group_endpoint_resolves(client, db_session):
+    """The ref-based endpoint hint must navigate to the live detail
+    surface and return the same conformer_group_ref."""
+    entry, _, cg, _, _ = _entry_with_reactant_conformer(db_session)
+    body = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full"
+        "?include=conformers"
+    ).json()
+    group_item = body["conformers"][0]["conformer_groups"][0] if (
+        body["conformers"][0]["conformer_groups"]
+    ) else body["conformers"][1]["conformer_groups"][0]
+    detail = client.get(group_item["endpoint"])
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["record"]["conformer_group"]["conformer_group_ref"] == cg.public_ref
+
+
+def test_full_conformer_evidence_matches_conformer_detail(
+    client, db_session
+):
+    """Anti-drift: the /full per-group evidence_summary +
+    selection_summary + observations_summary blocks are byte-identical
+    to the corresponding default-include blocks on the conformer
+    detail endpoint."""
+    entry, _, cg, _, _ = _entry_with_reactant_conformer(
+        db_session, with_calc=True
+    )
+    full_body = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full"
+        "?include=conformers"
+    ).json()
+    detail = client.get(
+        f"/api/v1/scientific/conformer-groups/{cg.public_ref}"
+    ).json()
+    group_item = next(
+        g
+        for p in full_body["conformers"]
+        for g in p["conformer_groups"]
+        if g["conformer_group_ref"] == cg.public_ref
+    )
+    detail_record = detail["record"]
+    assert group_item["evidence_summary"] == detail_record["evidence_summary"]
+    assert group_item["selection_summary"] == detail_record["selection_summary"]
+    assert group_item["observations_summary"] == detail_record["observations_summary"]
+    assert group_item["conformer_group"] == detail_record["conformer_group"]
+
+
+def test_full_conformers_section_empty_participants_listed(client, db_session):
+    """Reactant + product participants always appear; empty
+    conformer_groups list is the signal for 'no basins on this side'."""
+    entry = _entry(db_session)
+    body = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full"
+        "?include=conformers"
+    ).json()
+    assert body["conformers"] is not None
+    assert len(body["conformers"]) == 2
+    assert all(p["conformer_groups"] == [] for p in body["conformers"])
+
+
+def test_full_conformers_section_hides_internal_ids_by_default(
+    client, db_session
+):
+    entry, _, _, _, _ = _entry_with_reactant_conformer(db_session)
+    body = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full"
+        "?include=conformers"
+    ).json()
+    for participant in body["conformers"]:
+        assert "species_id" not in participant
+        assert "species_entry_id" not in participant
+        for group in participant["conformer_groups"]:
+            assert "conformer_group_id" not in group
+            assert "conformer_group_id" not in group["conformer_group"]
+
+
+def test_full_conformers_section_restores_ids_under_policy(
+    client, db_session, allow_internal_ids
+):
+    entry, reactant_entry, cg, _, _ = _entry_with_reactant_conformer(db_session)
+    body = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full"
+        "?include=conformers,internal_ids"
+    ).json()
+    reactant_block = next(
+        p
+        for p in body["conformers"]
+        if p["species_entry_ref"] == reactant_entry.public_ref
+    )
+    assert reactant_block["species_entry_id"] == reactant_entry.id
+    assert reactant_block["conformer_groups"][0]["conformer_group_id"] == cg.id
+
+
+def test_full_conformers_section_no_forbidden_payload_keys(
+    client, db_session
+):
+    """Recursive walk: never inline fingerprint / coords JSON or
+    geometry coordinate payloads under the conformers section."""
+    entry, _, _, _, _ = _entry_with_reactant_conformer(
+        db_session, with_calc=True
+    )
+    body = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full"
+        "?include=conformers"
+    ).json()
+    forbidden = {
+        "representative_fingerprint_json",
+        "representative_coords_json",
+        "torsion_fingerprint_json",
+        "mol",
+        "xyz_text",
+        "atoms",
+        "coords",
+        "symbols",
+        "body",
+        "content",
+        "data",
+        "presigned_url",
+        "download_url",
+        # /full conformer items must NOT carry heavy include blocks.
+        "observations",
+        "calculations",
+        "geometries",
+        "review_history",
+    }
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                assert k not in forbidden, (
+                    f"/full conformers section leaked forbidden key {k!r}"
+                )
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(body["conformers"])
+
+
+def test_full_conformers_section_omitted_by_default(client, db_session):
+    """Without ``include=conformers``, the section is null/absent."""
+    entry, _, _, _, _ = _entry_with_reactant_conformer(db_session)
+    body = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full"
+    ).json()
+    assert body["conformers"] is None

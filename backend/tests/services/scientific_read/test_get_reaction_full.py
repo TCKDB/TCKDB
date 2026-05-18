@@ -90,7 +90,13 @@ def test_include_all_populates_every_section(db_session):
     assert response.path_search == []
     assert response.irc == []
     assert response.scans == []
-    assert response.conformers == []
+    # The conformers section is participant-grouped: one entry per
+    # reactant/product species_entry, even when the participant has
+    # no conformer groups (its ``conformer_groups`` list is then ``[]``).
+    # See backend/docs/specs/scientific_conformer_reads.md §10.
+    assert response.conformers is not None
+    assert len(response.conformers) == 2  # one reactant + one product
+    assert all(p.conformer_groups == [] for p in response.conformers)
     assert response.artifacts == []
 
 

@@ -752,14 +752,48 @@ Implementation deviations from the spec sketch worth flagging:
 - **Default sort is `review_rank,created_at,id`.** Selection-priority
   sorting is documented as deferred (open question §13.2).
 
-### Phase 3 — reaction-full integration
+### Phase 3 — reaction-full integration  ✓ implemented
 
-1. Extend `provenance.py` `_build_conformers_section` to emit the
-   grouped summary shape from §10.
-2. Add `max_full_conformer_groups_public` setting.
-3. Cross-endpoint equality tests against the conformer detail
-   endpoint (same anti-drift pattern as TS / scan / IRC / path-search /
-   artifacts).
+1. ✓ `_build_conformers_section` in
+   `app/services/scientific_read/provenance.py` emits the grouped
+   summary shape from §10.
+2. ✓ `max_full_conformer_groups_public = 100` added to
+   `app/api/config.py` and threaded through
+   `_enforce_full_expansion_caps` (the cap counts flat conformer-group
+   leaf rows across all participant groupings, not the outer
+   participant rows).
+3. ✓ Cross-endpoint equality test
+   (`test_full_conformer_evidence_matches_conformer_detail`) compares
+   every per-group block to the conformer-group detail endpoint's
+   default record — `conformer_group`, `observations_summary`,
+   `evidence_summary`, `selection_summary` all assert dict-equal.
+
+Implementation notes worth flagging:
+
+- **Empty participants are listed.** Reactant / product
+  `species_entry` participants always appear in
+  `response.conformers` when `include=conformers` is requested; a
+  participant with no basins has `conformer_groups = []`. This is
+  symmetric with the species section and lets a caller distinguish
+  "no basins on this side" from "section not requested" without a
+  second round-trip. An existing service-level test
+  (`test_include_all_populates_every_section`) was updated to
+  reflect the new shape (it previously asserted
+  `response.conformers == []`).
+- **`build_group_record` is called with `includes=set()`.** The
+  `/full` projection is summary-safe by design: the per-group block
+  carries only the bounded default fields (core block + observations
+  summary + evidence summary + selection summary +
+  available_sections). Observations / calculations / geometries /
+  review history remain reachable only via the endpoint hint
+  (`/scientific/conformer-groups/{ref}?include=…`). The
+  forbidden-payload test asserts those heavy keys never appear under
+  the `/full` conformers section even on `include=all`.
+- **Rejected conformer-group badges are filtered out** of the `/full`
+  section by default (matches every other scientific surface's
+  default-trust posture). The visibility set comes from the
+  reaction-full request's existing `min_review_status` /
+  `include_rejected` / `include_deprecated` knobs.
 
 ### Phase 4 (deferred) — fingerprints / coords-json projection
 

@@ -34,7 +34,7 @@ from app.db.models.reaction import (
 )
 from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
-from app.db.models.species import Species, SpeciesEntry
+from app.db.models.species import ConformerGroup, Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
@@ -48,11 +48,13 @@ from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.schemas.reads.scientific_provenance import (
     ReactionEntrySummary,
     ReactionFullCalculationArtifacts,
+    ReactionFullConformerGroupItem,
     ReactionFullIRCItem,
     ReactionFullPathSearchItem,
     ReactionFullReadRequest,
     ReactionFullScanItem,
     ReactionFullSpecies,
+    ReactionFullSpeciesConformers,
     ReactionFullSpeciesParticipant,
     RequestEcho,
     ReviewDetail,
@@ -78,6 +80,7 @@ from app.services.scientific_read.calculations import (
     _build_path_search_include_summary,
     _build_scan_include_summary,
 )
+from app.services.scientific_read.conformers import build_group_record
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.transition_states import (
     _build_evidence_summary_for_entries,
@@ -209,7 +212,11 @@ def get_reaction_full(
     scans_block: list[ReactionFullScanItem] | None = None
     if "scans" in includes:
         scans_block = _build_scans_section(session, reaction_entry_id)
-    conformers_block: list[dict] | None = [] if "conformers" in includes else None
+    conformers_block: list[ReactionFullSpeciesConformers] | None = None
+    if "conformers" in includes:
+        conformers_block = _build_conformers_section(
+            session, reaction_entry_id, visible
+        )
     artifacts_block: list[ReactionFullCalculationArtifacts] | None = None
     if "artifacts" in includes:
         artifacts_block = _build_artifacts_section(session, reaction_entry_id)
@@ -219,14 +226,23 @@ def get_reaction_full(
     # most often pushes a heavily-studied reaction over the edge, but
     # the cap applies regardless of how the section was requested so
     # there is no way to bypass by enumerating tokens. The artifacts
-    # cap counts individual artifact rows (the heavy payload), not the
-    # number of grouping calcs.
+    # and conformers caps count the heavy *leaf* rows (individual
+    # artifact / conformer-group rows), not the grouping outer rows.
     _enforce_full_expansion_caps(
         calculations=calculations_block,
         geometries=None,  # geometries not currently expanded in /full
         artifacts=(
             [a for group in artifacts_block for a in group.artifacts]
             if artifacts_block is not None
+            else None
+        ),
+        conformer_groups=(
+            [
+                g
+                for participant in conformers_block
+                for g in participant.conformer_groups
+            ]
+            if conformers_block is not None
             else None
         ),
     )
@@ -513,6 +529,142 @@ def _build_calculations_section(
         )
         for row in rows
     ]
+
+
+def _conformer_group_endpoint(group_ref: str) -> str:
+    return f"/api/v1/scientific/conformer-groups/{group_ref}"
+
+
+def _build_conformers_section(
+    session: Session,
+    reaction_entry_id: int,
+    visible_review_statuses: set,
+) -> list[ReactionFullSpeciesConformers]:
+    """Group conformer-group summaries by reaction participant species entry.
+
+    Reachability: walk
+    ``reaction_entry_structure_participant`` → ``species_entry`` →
+    ``conformer_group`` (the ORM relationship is direct). One outer row
+    per participant slot from the reaction-entry; if a participant has
+    no conformer groups, the participant still appears with
+    ``conformer_groups = []`` — symmetric with how the bounded
+    available-sections / summary blocks elsewhere distinguish "section
+    was requested but empty" from "section was not requested".
+
+    Per-group items reuse the conformer detail surface's
+    :func:`build_group_record` helper and then project to the smaller
+    ``/full``-safe shape (core block + observations summary + evidence
+    summary + selection summary + available_sections). Observation
+    lists / calculation lists / geometry links / review history remain
+    behind ``GET /scientific/conformer-groups/{ref}``.
+
+    Participants whose species-entry review badge is outside the
+    visible-statuses set are dropped, matching the species-section
+    treatment.
+    """
+    participant_rows = session.execute(
+        select(
+            ReactionEntryStructureParticipant.species_entry_id,
+            SpeciesEntry.id.label("entry_id"),
+            SpeciesEntry.public_ref.label("entry_ref"),
+            SpeciesEntry.species_id.label("species_id"),
+            Species.public_ref.label("species_ref"),
+            ReactionEntryStructureParticipant.role,
+            ReactionEntryStructureParticipant.participant_index,
+        )
+        .join(
+            SpeciesEntry,
+            SpeciesEntry.id == ReactionEntryStructureParticipant.species_entry_id,
+        )
+        .join(Species, Species.id == SpeciesEntry.species_id)
+        .where(
+            ReactionEntryStructureParticipant.reaction_entry_id == reaction_entry_id
+        )
+        .order_by(
+            ReactionEntryStructureParticipant.role.asc(),
+            ReactionEntryStructureParticipant.participant_index.asc(),
+        )
+    ).all()
+    if not participant_rows:
+        return []
+
+    species_entry_ids = [row.entry_id for row in participant_rows]
+    se_badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.species_entry,
+        record_ids=species_entry_ids,
+    )
+
+    # Bulk-load conformer groups per species_entry. The relationship is
+    # one species_entry → 0..N conformer_groups.
+    cg_rows = session.scalars(
+        select(ConformerGroup)
+        .where(ConformerGroup.species_entry_id.in_(species_entry_ids))
+        .order_by(
+            ConformerGroup.species_entry_id.asc(),
+            ConformerGroup.id.asc(),
+        )
+    ).all()
+    groups_by_entry: dict[int, list[ConformerGroup]] = {
+        sid: [] for sid in species_entry_ids
+    }
+    for g in cg_rows:
+        groups_by_entry.setdefault(g.species_entry_id, []).append(g)
+
+    # Bulk-load conformer-group review badges so the visibility filter
+    # applies at group grain too (rejected groups disappear from /full
+    # by default, matching the rest of the scientific surface).
+    all_group_ids = [g.id for g in cg_rows]
+    cg_badges = (
+        fetch_review_badges(
+            session,
+            record_type=SubmissionRecordType.conformer_group,
+            record_ids=all_group_ids,
+        )
+        if all_group_ids
+        else {}
+    )
+
+    out: list[ReactionFullSpeciesConformers] = []
+    for row in participant_rows:
+        se_badge = se_badges[row.entry_id]
+        if se_badge.status not in visible_review_statuses:
+            continue
+        items: list[ReactionFullConformerGroupItem] = []
+        for cg in groups_by_entry.get(row.entry_id, []):
+            cg_badge = cg_badges[cg.id]
+            if cg_badge.status not in visible_review_statuses:
+                continue
+            full_record = build_group_record(
+                session,
+                cg=cg,
+                cg_badge=cg_badge,
+                includes=set(),  # /full keeps the summary-safe default shape
+            )
+            items.append(
+                ReactionFullConformerGroupItem(
+                    conformer_group_id=cg.id,
+                    conformer_group_ref=cg.public_ref,
+                    endpoint=_conformer_group_endpoint(cg.public_ref),
+                    conformer_group=full_record.conformer_group,
+                    observations_summary=full_record.observations_summary,
+                    evidence_summary=full_record.evidence_summary,
+                    selection_summary=full_record.selection_summary,
+                    available_sections=full_record.available_sections,
+                )
+            )
+        out.append(
+            ReactionFullSpeciesConformers(
+                species_id=row.species_id,
+                species_ref=row.species_ref,
+                species_entry_id=row.entry_id,
+                species_entry_ref=row.entry_ref,
+                role=row.role,
+                participant_index=row.participant_index,
+                conformer_groups=items,
+            )
+        )
+    return out
 
 
 def _build_artifacts_section(
@@ -826,6 +978,7 @@ def _enforce_full_expansion_caps(
     calculations: list | None,
     geometries: list | None,
     artifacts: list | None,
+    conformer_groups: list | None = None,
 ) -> None:
     """Reject /full responses whose expanded sub-arrays exceed the caps.
 
@@ -833,11 +986,21 @@ def _enforce_full_expansion_caps(
     section that breaches it so the caller knows exactly which
     sub-array is the offender. The 422 ``query_too_expensive`` code
     is stable.
+
+    ``conformer_groups`` is a flat list of individual group items
+    (heavy leaf rows), not the species-participant grouping list — the
+    cap counts conformer-group rows so a heavily-studied species with
+    many basins can't tunnel past it via a single participant.
     """
     pairs: list[tuple[str, list | None, int]] = [
         ("calculations", calculations, settings.max_full_calculations_public),
         ("geometries", geometries, settings.max_full_geometries_public),
         ("artifacts", artifacts, settings.max_full_artifacts_public),
+        (
+            "conformer_groups",
+            conformer_groups,
+            settings.max_full_conformer_groups_public,
+        ),
     ]
     for section_name, block, cap in pairs:
         if block is None or cap <= 0:

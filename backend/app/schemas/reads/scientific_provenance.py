@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from app.db.models.common import (
     CalculationType,
+    ReactionRole,
     RecordReviewStatus,
     TransitionStateEntryStatus,
 )
@@ -22,6 +23,13 @@ from app.schemas.reads.scientific_calculation import (
     CalculationIRCSummary,
     CalculationPathSearchSummary,
     CalculationScanSummary,
+)
+from app.schemas.reads.scientific_conformer import (
+    AvailableConformerSections,
+    ConformerCalculationEvidenceSummary,
+    ConformerGroupCoreBlock,
+    ConformerObservationsSummary,
+    ConformerSelectionSummary,
 )
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
@@ -248,6 +256,61 @@ class ReactionFullCalculationArtifacts(BaseModel):
     artifacts: list[CalculationArtifactSummary] = Field(default_factory=list)
 
 
+class ReactionFullConformerGroupItem(BaseModel):
+    """One conformer-group projection embedded under
+    ``/reaction-entries/{id}/full?include=conformers``.
+
+    The block is summary-safe: it carries the same per-group bounded
+    projection that the default ``/scientific/conformer-groups/{ref}``
+    detail response produces (core block + observations summary +
+    evidence summary + selection summary + available_sections),
+    **never** observation lists, calculation lists, geometry links, or
+    review history. Callers who want those follow ``endpoint`` to the
+    detail endpoint:
+
+    ``GET /scientific/conformer-groups/{conformer_group_ref}?include=all``
+
+    Phase D internal-id policy gates ``conformer_group_id`` (and every
+    nested ``*_id`` inside the summary blocks).
+    """
+
+    conformer_group_id: int | None = None
+    conformer_group_ref: str
+    endpoint: str
+    conformer_group: ConformerGroupCoreBlock
+    observations_summary: ConformerObservationsSummary
+    evidence_summary: ConformerCalculationEvidenceSummary
+    selection_summary: list[ConformerSelectionSummary] = Field(default_factory=list)
+    available_sections: AvailableConformerSections
+
+
+class ReactionFullSpeciesConformers(BaseModel):
+    """Conformer groups for one reaction-entry participant species.
+
+    Participants are addressed via ``species_entry_ref`` (the entry the
+    reaction-entry actually carries — not the species concept), with
+    ``species_ref`` available as the parent species pointer.
+
+    ``role`` (``reactant`` / ``product``) and ``participant_index``
+    come from the ``reaction_entry_structure_participant`` row and let
+    the caller render the group on the right side of the equation
+    without re-querying.
+
+    Participants with no conformer groups are still listed, with
+    ``conformer_groups = []`` — symmetric with how the bounded
+    available-sections / summary blocks elsewhere distinguish "section
+    was requested but empty" from "section was not requested".
+    """
+
+    species_id: int | None = None
+    species_ref: str
+    species_entry_id: int | None = None
+    species_entry_ref: str
+    role: ReactionRole
+    participant_index: int
+    conformer_groups: list[ReactionFullConformerGroupItem] = Field(default_factory=list)
+
+
 class ReviewRecordEntry(BaseModel):
     """Audit-array entry returned only when ``include_review=full``."""
 
@@ -284,7 +347,7 @@ class ScientificReactionFullResponse(BaseModel):
     path_search: list[ReactionFullPathSearchItem] | None = None
     irc: list[ReactionFullIRCItem] | None = None
     scans: list[ReactionFullScanItem] | None = None
-    conformers: list[dict[str, object]] | None = None
+    conformers: list[ReactionFullSpeciesConformers] | None = None
     artifacts: list[ReactionFullCalculationArtifacts] | None = None
 
     # Present only when include_review=full.
