@@ -38,18 +38,20 @@ What review/trust state does each network have?
 GET  /api/v1/scientific/networks/{network_ref_or_id}
 GET  /api/v1/scientific/networks/search
 POST /api/v1/scientific/networks/search
+GET  /api/v1/scientific/network-solves/{network_solve_ref_or_id}
 ```
 
-Handle prefix: `net_…`. Wrong-prefix refs return 422
-`handle_type_mismatch`; unknown refs / ids return 404. `/search` is
-registered before `/{handle}` so FastAPI doesn't route the search
-path through the catch-all detail handler.
+Handle prefixes: `net_…` (Network), `nsolve_…` (NetworkSolve).
+Wrong-prefix refs return 422 `handle_type_mismatch`; unknown refs /
+ids return 404. `/search` is registered before `/{handle}` so
+FastAPI doesn't route the search path through the catch-all detail
+handler.
 
 **Deferred** to a future PR (see §11 open questions):
 
 ```http
-GET  /api/v1/scientific/network-solves/{network_solve_ref_or_id}
-GET  /api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}
+GET/POST /api/v1/scientific/network-solves/search
+GET      /api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}
 GET/POST /api/v1/scientific/network-kinetics/search
 ```
 
@@ -313,15 +315,23 @@ inside the state. A future filter `state_contains_species_ref=…`
 could narrow to networks containing a specific basin or
 bimolecular-set composition. Out of scope for v0.
 
-### 11.5 NetworkSolve standalone detail endpoint
+### 11.5 NetworkSolve standalone detail endpoint  ✓ implemented
 
-`NetworkSolve` already carries `nsolve_…`. A small standalone
-detail endpoint
-(`GET /scientific/network-solves/{network_solve_ref_or_id}`) would
-let callers fetch a specific solve without going through the
-network detail. The embedded `include=solves` block on the network
-detail already carries all the per-solve information at v0; the
-standalone surface is a future PR.
+`GET /scientific/network-solves/{network_solve_ref_or_id}` ships
+alongside this surface (handle prefix `nsolve_…`). Default response
+carries the solve core block + parent-network context + bounded
+evidence + available_sections summaries. Include tokens:
+`bath_gas`, `energy_transfer`, `source_calculations`, `kinetics`,
+`review`, `internal_ids`, `all`. The `kinetics` include surfaces
+the same shape-metadata-only projection as the network detail
+surface (no coefficient payloads). Anti-drift cross-endpoint test
+asserts the per-solve kinetics block on this surface is dict-equal
+to the kinetics block embedded under
+`/networks/{ref}?include=kinetics`.
+
+A standalone search endpoint (`GET/POST /network-solves/search`)
+remains deferred — callers can filter solves via the network
+search's `has_solves` / T-P envelope filters today.
 
 ## 12. Implementation status
 
@@ -329,7 +339,7 @@ standalone surface is a future PR.
 Phase 1 — schema (PublicRefMixin on Network, NetworkSolve)  ✓ implemented
 Phase 2 — network detail endpoint                            ✓ implemented
 Phase 3 — network search                                     ✓ implemented
-Phase 4 — network-solve standalone detail                    deferred
+Phase 4 — network-solve standalone detail                    ✓ implemented
 Phase 5 — network-kinetics public_ref + standalone surface   deferred
 Phase 6 — coefficient/point full-data endpoints              deferred
 ```

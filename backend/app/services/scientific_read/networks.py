@@ -65,13 +65,18 @@ from app.schemas.reads.scientific_common import (
 )
 from app.schemas.reads.scientific_network import (
     AvailableNetworkSections,
+    AvailableNetworkSolveSections,
     NetworkChannelSummary,
+    NetworkContextSummary,
     NetworkCoreBlock,
     NetworkEvidenceSummary,
     NetworkKineticsSummary,
     NetworkReactionSummary,
     NetworkReviewEntry,
     NetworkSolveBathGasSummary,
+    NetworkSolveCoreBlock,
+    NetworkSolveEnergyTransferSummary,
+    NetworkSolveEvidenceSummary,
     NetworkSolveSummary,
     NetworkSourceCalculationSummary,
     NetworkSpeciesSummary,
@@ -79,13 +84,18 @@ from app.schemas.reads.scientific_network import (
     RequestEcho,
     ScientificNetworkDetailResponse,
     ScientificNetworkRecord,
+    ScientificNetworkSolveDetailResponse,
+    ScientificNetworkSolveRecord,
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
     validate_includes,
 )
-from app.services.scientific_read.handles import resolve_network_handle
+from app.services.scientific_read.handles import (
+    resolve_network_handle,
+    resolve_network_solve_handle,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -974,6 +984,282 @@ def _load_review_badge(session: Session, network_id: int) -> RecordReviewBadge:
 __all__ = [
     "_INTERNAL_INCLUDE_TOKENS",
     "_LEGAL_INCLUDE_TOKENS",
+    "_SOLVE_INTERNAL_INCLUDE_TOKENS",
+    "_SOLVE_LEGAL_INCLUDE_TOKENS",
     "build_network_record",
+    "build_network_solve_record",
     "get_network",
+    "get_network_solve",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Network-solve standalone detail
+# ---------------------------------------------------------------------------
+
+
+_SOLVE_LEGAL_INCLUDE_TOKENS: set[str] = {
+    "bath_gas",
+    "energy_transfer",
+    "source_calculations",
+    "kinetics",
+    "review",
+    "internal_ids",
+    "all",
+}
+_SOLVE_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+
+
+def get_network_solve(
+    session: Session,
+    *,
+    network_solve_handle: str,
+    include: list[str] | None = None,
+) -> ScientificNetworkSolveDetailResponse:
+    """Resolve a network-solve handle and return its scientific projection.
+
+    Path-handle semantics match the rest of the scientific read API:
+
+    - Integer string: SELECT by id.
+    - Public ref ``nsolve_…``: SELECT by ``public_ref``.
+    - Wrong prefix: 422 ``handle_type_mismatch``.
+    - Malformed: 422 ``invalid_handle``.
+    - Missing row: 404.
+
+    Default response carries the solve core block + parent-network
+    context + bounded evidence / available_sections summaries.
+    Optional includes (``bath_gas`` / ``energy_transfer`` /
+    ``source_calculations`` / ``kinetics`` / ``review``) expand the
+    response. Kinetics under ``include=kinetics`` carries only shape
+    metadata (chebyshev_shape / plog_entry_count / point_count) —
+    coefficient payloads remain deferred until a
+    ``/scientific/network-kinetics/{ref}`` endpoint ships.
+    """
+    includes = validate_includes(
+        include or [],
+        _SOLVE_LEGAL_INCLUDE_TOKENS,
+        "/scientific/network-solves/{network_solve_ref_or_id}",
+        internal_tokens=_SOLVE_INTERNAL_INCLUDE_TOKENS,
+    )
+    includes = filter_internal_ids_from_resolved(includes)
+
+    solve_id = resolve_network_solve_handle(session, network_solve_handle)
+    s = session.get(NetworkSolve, solve_id)
+    if s is None:  # pragma: no cover — defended by resolver 404
+        raise NotFoundError(
+            f"network_solve not found (network_solve_id={solve_id})",
+            code="handle_not_found",
+        )
+
+    badge = _load_solve_review_badge(session, s.id)
+    record = build_network_solve_record(
+        session, s=s, badge=badge, includes=includes
+    )
+    return ScientificNetworkSolveDetailResponse(
+        request=RequestEcho(include=sorted(includes)),
+        review_summary=review_summary([badge]),
+        record=record,
+    )
+
+
+def build_network_solve_record(
+    session: Session,
+    *,
+    s: NetworkSolve,
+    badge: RecordReviewBadge,
+    includes: set[str],
+) -> ScientificNetworkSolveRecord:
+    """Project one NetworkSolve row into the public scientific record shape."""
+    parent = session.get(Network, s.network_id)
+    network_ctx = NetworkContextSummary(
+        network_id=parent.id if parent is not None else None,
+        network_ref=parent.public_ref if parent is not None else "",
+        name=parent.name if parent is not None else None,
+        description=parent.description if parent is not None else None,
+    )
+
+    # Cheap counts for evidence + available_sections.
+    bath_gas_count = _count(
+        session,
+        NetworkSolveBathGas,
+        NetworkSolveBathGas.solve_id == s.id,
+    )
+    energy_transfer_count = _count(
+        session,
+        NetworkSolveEnergyTransfer,
+        NetworkSolveEnergyTransfer.solve_id == s.id,
+    )
+    source_calculation_count = _count(
+        session,
+        NetworkSolveSourceCalculation,
+        NetworkSolveSourceCalculation.solve_id == s.id,
+    )
+    kinetics_count = _count(
+        session,
+        NetworkKinetics,
+        NetworkKinetics.solve_id == s.id,
+    )
+    has_cheb, has_plog, has_point = _kinetics_kind_presence(session, [s.id])
+
+    core = NetworkSolveCoreBlock(
+        network_solve_id=s.id,
+        network_solve_ref=s.public_ref,
+        me_method=s.me_method,
+        interpolation_model=s.interpolation_model,
+        grain_size_cm_inv=s.grain_size_cm_inv,
+        grain_count=s.grain_count,
+        emax_kj_mol=s.emax_kj_mol,
+        tmin_k=s.tmin_k,
+        tmax_k=s.tmax_k,
+        pmin_bar=s.pmin_bar,
+        pmax_bar=s.pmax_bar,
+        note=s.note,
+        created_at=s.created_at,
+        review=badge,
+    )
+
+    sw_summary = _build_software_summary(session, s.software_release_id)
+    wf_summary = _build_workflow_summary(session, s.workflow_tool_release_id)
+    lit_summary = _build_literature_summary(session, s.literature_id)
+
+    evidence = NetworkSolveEvidenceSummary(
+        bath_gas_count=bath_gas_count,
+        energy_transfer_count=energy_transfer_count,
+        source_calculation_count=source_calculation_count,
+        kinetics_count=kinetics_count,
+        has_chebyshev=has_cheb,
+        has_plog=has_plog,
+        has_point_kinetics=has_point,
+    )
+    available = AvailableNetworkSolveSections(
+        has_bath_gas=bath_gas_count > 0,
+        has_energy_transfer=energy_transfer_count > 0,
+        has_source_calculations=source_calculation_count > 0,
+        has_kinetics=kinetics_count > 0,
+        has_review=_exists_review_for(
+            session, SubmissionRecordType.network_solve, s.id
+        ),
+    )
+
+    bath_gas_block: list[NetworkSolveBathGasSummary] | None = None
+    if "bath_gas" in includes:
+        bath_gas_block = _build_bath_gas_for_solve(session, s.id)
+
+    et_block: list[NetworkSolveEnergyTransferSummary] | None = None
+    if "energy_transfer" in includes:
+        et_block = _build_energy_transfer_for_solve(session, s.id)
+
+    sources_block: list[NetworkSourceCalculationSummary] | None = None
+    if "source_calculations" in includes:
+        sources_block = _build_source_calculations(session, [s])
+
+    kinetics_block: list[NetworkKineticsSummary] | None = None
+    if "kinetics" in includes:
+        kinetics_block = _build_kinetics(session, [s.id])
+
+    review_block: list[NetworkReviewEntry] | None = None
+    if "review" in includes:
+        review_block = _build_solve_review_history(session, s.id)
+
+    return ScientificNetworkSolveRecord(
+        network_solve=core,
+        network=network_ctx,
+        software_release=sw_summary,
+        workflow_tool_release=wf_summary,
+        literature=lit_summary,
+        evidence_summary=evidence,
+        available_sections=available,
+        bath_gas=bath_gas_block,
+        energy_transfer=et_block,
+        source_calculations=sources_block,
+        kinetics=kinetics_block,
+        review_history=review_block,
+    )
+
+
+def _build_bath_gas_for_solve(
+    session: Session, solve_id: int
+) -> list[NetworkSolveBathGasSummary]:
+    rows = session.execute(
+        select(
+            NetworkSolveBathGas.species_entry_id,
+            SpeciesEntry.public_ref,
+            NetworkSolveBathGas.mole_fraction,
+        )
+        .join(
+            SpeciesEntry,
+            SpeciesEntry.id == NetworkSolveBathGas.species_entry_id,
+        )
+        .where(NetworkSolveBathGas.solve_id == solve_id)
+        .order_by(
+            NetworkSolveBathGas.species_entry_id.asc(),
+        )
+    ).all()
+    return [
+        NetworkSolveBathGasSummary(
+            species_entry_id=r.species_entry_id,
+            species_entry_ref=r.public_ref,
+            mole_fraction=r.mole_fraction,
+        )
+        for r in rows
+    ]
+
+
+def _build_energy_transfer_for_solve(
+    session: Session, solve_id: int
+) -> list[NetworkSolveEnergyTransferSummary]:
+    rows = session.scalars(
+        select(NetworkSolveEnergyTransfer)
+        .where(NetworkSolveEnergyTransfer.solve_id == solve_id)
+        .order_by(NetworkSolveEnergyTransfer.id.asc())
+    ).all()
+    return [
+        NetworkSolveEnergyTransferSummary(
+            energy_transfer_id=r.id,
+            model=r.model,
+            alpha0_cm_inv=r.alpha0_cm_inv,
+            t_exponent=r.t_exponent,
+            t_ref_k=r.t_ref_k,
+            note=r.note,
+        )
+        for r in rows
+    ]
+
+
+def _build_solve_review_history(
+    session: Session, solve_id: int
+) -> list[NetworkReviewEntry]:
+    rows = session.scalars(
+        select(RecordReview)
+        .where(
+            RecordReview.record_type == SubmissionRecordType.network_solve,
+            RecordReview.record_id == solve_id,
+        )
+        .order_by(RecordReview.reviewed_at.asc().nulls_last())
+    ).all()
+    return [
+        NetworkReviewEntry(
+            status=(
+                row.status.value
+                if hasattr(row.status, "value")
+                else str(row.status)
+            ),
+            reviewed_at=row.reviewed_at,
+            reviewed_by=row.reviewed_by,
+            note=row.note,
+        )
+        for row in rows
+    ]
+
+
+def _load_solve_review_badge(
+    session: Session, solve_id: int
+) -> RecordReviewBadge:
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.network_solve,
+        record_ids=[solve_id],
+    )
+    return badges.get(
+        solve_id, RecordReviewBadge(status=RecordReviewStatus.not_reviewed)
+    )

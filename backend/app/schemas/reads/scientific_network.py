@@ -332,9 +332,131 @@ class ScientificNetworkDetailResponse(BaseModel):
     record: ScientificNetworkRecord
 
 
+# ---------------------------------------------------------------------------
+# Network-solve standalone detail surface
+# ---------------------------------------------------------------------------
+
+
+class NetworkSolveCoreBlock(BaseModel):
+    """Direct ``network_solve`` row metadata for the standalone solve
+    detail surface.
+
+    Larger than :class:`NetworkSolveSummary` (which is the embedded
+    projection on the network detail surface): the core block carries
+    only the row-level scalars and review badge; the bath-gas list /
+    child counts that the embedded summary inlines move to per-include
+    blocks on the solve surface.
+    """
+
+    network_solve_id: int | None = None
+    network_solve_ref: str
+    me_method: str | None = None
+    interpolation_model: str | None = None
+    grain_size_cm_inv: float | None = None
+    grain_count: int | None = None
+    emax_kj_mol: float | None = None
+    tmin_k: float | None = None
+    tmax_k: float | None = None
+    pmin_bar: float | None = None
+    pmax_bar: float | None = None
+    note: str | None = None
+    created_at: datetime
+    review: RecordReviewBadge
+
+
+class NetworkContextSummary(BaseModel):
+    """Lightweight parent-network pointer for a solve record.
+
+    The full network detail remains at
+    ``GET /scientific/networks/{network_ref}``.
+    """
+
+    network_id: int | None = None
+    network_ref: str
+    name: str | None = None
+    description: str | None = None
+
+
+class NetworkSolveEnergyTransferSummary(BaseModel):
+    """One ``network_solve_energy_transfer`` row projected for
+    ``include=energy_transfer`` on the solve detail.
+
+    ORM fields: ``model`` (free text), ``alpha0_cm_inv`` (Å — actually
+    cm⁻¹ for an exponential-down model's α₀), ``t_exponent``
+    (dimensionless power-law exponent on T/T_ref),
+    ``t_ref_k`` (reference temperature in K), ``note``.
+    """
+
+    energy_transfer_id: int | None = None
+    model: str | None = None
+    alpha0_cm_inv: float | None = None
+    t_exponent: float | None = None
+    t_ref_k: float | None = None
+    note: str | None = None
+
+
+class NetworkSolveEvidenceSummary(BaseModel):
+    """Bounded evidence projection for one network solve."""
+
+    bath_gas_count: int
+    energy_transfer_count: int
+    source_calculation_count: int
+    kinetics_count: int
+    has_chebyshev: bool
+    has_plog: bool
+    has_point_kinetics: bool
+
+
+class AvailableNetworkSolveSections(BaseModel):
+    """Boolean map describing which include sections have data."""
+
+    has_bath_gas: bool
+    has_energy_transfer: bool
+    has_source_calculations: bool
+    has_kinetics: bool
+    has_review: bool
+
+
+class ScientificNetworkSolveRecord(BaseModel):
+    """One ``network_solve`` projected as a scientific record.
+
+    Default response: solve core block + parent-network context +
+    bounded evidence and available_sections summaries. Include tokens
+    expand to bath-gas list, energy-transfer rows, source calculation
+    summaries, kinetics summaries (model_kind + shape metadata only —
+    coefficient payloads are deferred to a future
+    ``/scientific/network-kinetics/{ref}`` endpoint).
+    """
+
+    network_solve: NetworkSolveCoreBlock
+    network: NetworkContextSummary
+    software_release: SoftwareReleaseSummary | None = None
+    workflow_tool_release: WorkflowToolReleaseSummary | None = None
+    literature: LiteratureSummary | None = None
+    evidence_summary: NetworkSolveEvidenceSummary
+    available_sections: AvailableNetworkSolveSections
+
+    bath_gas: list[NetworkSolveBathGasSummary] | None = None
+    energy_transfer: list[NetworkSolveEnergyTransferSummary] | None = None
+    source_calculations: list[NetworkSourceCalculationSummary] | None = None
+    kinetics: list[NetworkKineticsSummary] | None = None
+    review_history: list[NetworkReviewEntry] | None = None
+
+
+class ScientificNetworkSolveDetailResponse(BaseModel):
+    """Response envelope for
+    ``GET /scientific/network-solves/{handle}``."""
+
+    request: RequestEcho
+    review_summary: ReviewStatusSummary
+    record: ScientificNetworkSolveRecord
+
+
 __all__ = [
     "AvailableNetworkSections",
+    "AvailableNetworkSolveSections",
     "NetworkChannelSummary",
+    "NetworkContextSummary",
     "NetworkCoreBlock",
     "NetworkDetailRequest",
     "NetworkEvidenceSummary",
@@ -342,6 +464,9 @@ __all__ = [
     "NetworkReactionSummary",
     "NetworkReviewEntry",
     "NetworkSolveBathGasSummary",
+    "NetworkSolveCoreBlock",
+    "NetworkSolveEnergyTransferSummary",
+    "NetworkSolveEvidenceSummary",
     "NetworkSolveSummary",
     "NetworkSourceCalculationSummary",
     "NetworkSpeciesSummary",
@@ -349,4 +474,6 @@ __all__ = [
     "RequestEcho",
     "ScientificNetworkDetailResponse",
     "ScientificNetworkRecord",
+    "ScientificNetworkSolveDetailResponse",
+    "ScientificNetworkSolveRecord",
 ]

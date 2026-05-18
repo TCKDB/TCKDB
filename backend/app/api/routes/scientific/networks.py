@@ -10,6 +10,7 @@ from app.api.routes.scientific._common import parse_include
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_network import (
     ScientificNetworkDetailResponse,
+    ScientificNetworkSolveDetailResponse,
 )
 from app.schemas.reads.scientific_network_search import (
     NetworkSearchRequest,
@@ -18,11 +19,12 @@ from app.schemas.reads.scientific_network_search import (
 from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
-from app.services.scientific_read.networks import get_network
+from app.services.scientific_read.networks import get_network, get_network_solve
 from app.services.scientific_read.networks_search import search_networks
 
 
 router = APIRouter(prefix="/networks")
+solve_router = APIRouter(prefix="/network-solves")
 
 
 _POST_ALLOWED_QS_KEYS: set[str] = set()
@@ -150,6 +152,30 @@ def scientific_network_detail(
         get_network(
             session,
             network_handle=network_ref_or_id,
+            include=parse_include(include),
+        )
+    )
+
+
+@solve_router.get(
+    "/{network_solve_ref_or_id}",
+    response_model=ScientificNetworkSolveDetailResponse,
+)
+def scientific_network_solve_detail(
+    network_solve_ref_or_id: str = Path(..., min_length=1, max_length=64),
+    session: Session = Depends(get_db),
+    include: list[str] | None = Query(None),
+):
+    """Return one network-solve as a scientific record.
+
+    Path handle accepts an integer ``network_solve.id`` or a public
+    ref of the form ``nsolve_…``. Wrong-prefix refs return 422
+    ``handle_type_mismatch``; unknown refs / ids return 404.
+    """
+    return apply_internal_ids_visibility(
+        get_network_solve(
+            session,
+            network_solve_handle=network_solve_ref_or_id,
             include=parse_include(include),
         )
     )
