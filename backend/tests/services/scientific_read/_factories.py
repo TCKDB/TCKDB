@@ -60,6 +60,8 @@ from app.db.models.reaction import (
 from app.db.models.record_review import RecordReview
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
+from app.db.models.common import TransitionStateEntryStatus
+from app.db.models.transition_state import TransitionState, TransitionStateEntry
 
 _INCHI_COUNTER = 0
 
@@ -271,6 +273,46 @@ def make_reaction_entry(
         )
     session.flush()
     return entry
+
+
+def make_transition_state(
+    session: Session,
+    *,
+    reaction_entry: ReactionEntry,
+    label: str | None = None,
+    note: str | None = None,
+) -> TransitionState:
+    """Create a TransitionState attached to *reaction_entry*."""
+    ts = TransitionState(
+        reaction_entry_id=reaction_entry.id,
+        label=label,
+        note=note,
+    )
+    session.add(ts)
+    session.flush()
+    return ts
+
+
+def make_transition_state_entry(
+    session: Session,
+    *,
+    transition_state: TransitionState,
+    charge: int = 0,
+    multiplicity: int = 2,
+    status: TransitionStateEntryStatus = TransitionStateEntryStatus.optimized,
+    unmapped_smiles: str | None = None,
+) -> TransitionStateEntry:
+    """Create a TransitionStateEntry attached to *transition_state*."""
+    tse = TransitionStateEntry(
+        transition_state_id=transition_state.id,
+        charge=charge,
+        multiplicity=multiplicity,
+        status=status,
+        unmapped_smiles=unmapped_smiles,
+    )
+    session.add(tse)
+    session.flush()
+    return tse
 
 
 def make_kinetics(

@@ -17,8 +17,13 @@ Sub-routers:
     geometries.router       → /scientific/geometries/{geometry_handle}
     calculation_paths.router
                             → /scientific/calculations/{calculation_ref_or_id}/scan
-                              (and future /irc, /path-search)
+                              /irc and /path-search
     calculations.router     → /scientific/calculations/{calculation_ref_or_id}
+    transition_states.ts_router
+                            → /scientific/transition-states/search +
+                              /scientific/transition-states/{ref_or_id}
+    transition_states.tse_router
+                            → /scientific/transition-state-entries/{ref_or_id}
 """
 
 from __future__ import annotations
@@ -37,6 +42,7 @@ from app.api.routes.scientific import (
     species_calculations_search,
     thermo,
     thermo_search,
+    transition_states,
 )
 
 scientific_router = APIRouter()
@@ -56,5 +62,7 @@ scientific_router.include_router(geometries.router)
 # correctness.
 scientific_router.include_router(calculation_paths.router)
 scientific_router.include_router(calculations.router)
+scientific_router.include_router(transition_states.ts_router)
+scientific_router.include_router(transition_states.tse_router)
 
 __all__ = ["scientific_router"]
