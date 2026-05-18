@@ -73,6 +73,8 @@ from app.db.models.statmech import (
     StatmechTorsion,
     StatmechTorsionDefinition,
 )
+from app.db.models.common import TransportCalculationRole
+from app.db.models.transport import Transport, TransportSourceCalculation
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 
 _INCHI_COUNTER = 0
@@ -742,4 +744,61 @@ def attach_statmech_torsion(
             )
         )
         session.flush()
+    return row
+
+
+def make_transport(
+    session: Session,
+    *,
+    species_entry,
+    scientific_origin: _ScientificOriginKind = _ScientificOriginKind.computed,
+    sigma_angstrom: float | None = 3.5,
+    epsilon_over_k_k: float | None = 200.0,
+    dipole_debye: float | None = None,
+    polarizability_angstrom3: float | None = None,
+    rotational_relaxation: float | None = None,
+    software_release_id: int | None = None,
+    workflow_tool_release_id: int | None = None,
+    literature_id: int | None = None,
+    note: str | None = None,
+) -> Transport:
+    """Create a Transport row attached to a species entry.
+
+    Defaults populate the LJ pair (sigma + epsilon_over_k_k) so the
+    schema's ``lj_pair_both_or_neither`` constraint is satisfied. Pass
+    both as ``None`` to create a transport row without LJ params.
+    """
+    tr = Transport(
+        species_entry_id=species_entry.id,
+        scientific_origin=scientific_origin,
+        sigma_angstrom=sigma_angstrom,
+        epsilon_over_k_k=epsilon_over_k_k,
+        dipole_debye=dipole_debye,
+        polarizability_angstrom3=polarizability_angstrom3,
+        rotational_relaxation=rotational_relaxation,
+        software_release_id=software_release_id,
+        workflow_tool_release_id=workflow_tool_release_id,
+        literature_id=literature_id,
+        note=note,
+    )
+    session.add(tr)
+    session.flush()
+    return tr
+
+
+def attach_transport_source_calculation(
+    session: Session,
+    *,
+    transport: Transport,
+    calculation,
+    role: TransportCalculationRole = TransportCalculationRole.full_transport,
+) -> TransportSourceCalculation:
+    """Link a Calculation to a Transport with a given role."""
+    row = TransportSourceCalculation(
+        transport_id=transport.id,
+        calculation_id=calculation.id,
+        role=role,
+    )
+    session.add(row)
+    session.flush()
     return row

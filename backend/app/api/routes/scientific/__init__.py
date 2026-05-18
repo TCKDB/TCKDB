@@ -45,6 +45,7 @@ from app.api.routes.scientific import (
     thermo,
     thermo_search,
     transition_states,
+    transport,
 )
 
 scientific_router = APIRouter()
@@ -70,5 +71,6 @@ scientific_router.include_router(conformers.search_router)
 scientific_router.include_router(conformers.cg_router)
 scientific_router.include_router(conformers.co_router)
 scientific_router.include_router(statmech.router)
+scientific_router.include_router(transport.router)
 
 __all__ = ["scientific_router"]
