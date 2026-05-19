@@ -39,6 +39,8 @@ GET  /api/v1/scientific/networks/{network_ref_or_id}
 GET  /api/v1/scientific/networks/search
 POST /api/v1/scientific/networks/search
 GET  /api/v1/scientific/network-solves/{network_solve_ref_or_id}
+GET  /api/v1/scientific/network-solves/search
+POST /api/v1/scientific/network-solves/search
 ```
 
 Handle prefixes: `net_…` (Network), `nsolve_…` (NetworkSolve).
@@ -50,7 +52,6 @@ handler.
 **Deferred** to a future PR (see §11 open questions):
 
 ```http
-GET/POST /api/v1/scientific/network-solves/search
 GET      /api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}
 GET/POST /api/v1/scientific/network-kinetics/search
 ```
@@ -329,9 +330,19 @@ asserts the per-solve kinetics block on this surface is dict-equal
 to the kinetics block embedded under
 `/networks/{ref}?include=kinetics`.
 
-A standalone search endpoint (`GET/POST /network-solves/search`)
-remains deferred — callers can filter solves via the network
-search's `has_solves` / T-P envelope filters today.
+A standalone search endpoint
+(`GET/POST /scientific/network-solves/search`) **also ships** now —
+20 filters covering identity (`network_solve_ref`, `network_ref`),
+`solve_method` (`NetworkSolve.me_method`, the ME algorithm), T/P
+envelope (overlap semantics matching the network search surface),
+evidence booleans (each accepting explicit `False`), and provenance
+filters routed through the source-calc graph
+(`method` / `basis` / `software` / `software_version` /
+`workflow_tool` / `workflow_tool_version`). Records reuse
+`ScientificNetworkSolveRecord` via the shared
+`build_network_solve_record` helper — cross-endpoint anti-drift
+test asserts search records are byte-identical to detail records
+for the same solve and include set.
 
 ## 12. Implementation status
 

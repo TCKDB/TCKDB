@@ -1398,3 +1398,678 @@ def test_solve_detail_source_calc_summary_matches_network_detail(
         if sc["network_solve_ref"] == fx["solve"].public_ref
     ]
     assert solve_sc == matching
+
+
+# ===========================================================================
+# Network-solve search endpoint
+# ===========================================================================
+
+
+def _solve_search_url(**params) -> str:
+    base = "/api/v1/scientific/network-solves/search"
+    if not params:
+        return base
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"{base}?{qs}"
+
+
+def test_solve_search_missing_filter_returns_422_get(client, db_session):
+    resp = client.get(_solve_search_url())
+    assert resp.status_code == 422
+    assert "missing_filter" in resp.text
+
+
+def test_solve_search_missing_filter_returns_422_post(client, db_session):
+    resp = client.post(_solve_search_url(), json={"limit": 50})
+    assert resp.status_code == 422
+    assert "missing_filter" in resp.text
+
+
+def test_solve_search_by_network_solve_ref(client, db_session):
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    _make_simple_network(db_session, with_solve=True)
+    body = client.get(
+        _solve_search_url(network_solve_ref=fx_a["solve"].public_ref)
+    ).json()
+    refs = {
+        r["network_solve"]["network_solve_ref"] for r in body["records"]
+    }
+    assert refs == {fx_a["solve"].public_ref}
+
+
+def test_solve_search_by_network_ref(client, db_session):
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    _make_simple_network(db_session, with_solve=True)
+    body = client.get(
+        _solve_search_url(network_ref=fx_a["network"].public_ref)
+    ).json()
+    refs = {
+        r["network_solve"]["network_solve_ref"] for r in body["records"]
+    }
+    assert refs == {fx_a["solve"].public_ref}
+
+
+def test_solve_search_by_solve_method(client, db_session):
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    fx_a["solve"].me_method = "RRKM/ME"
+    fx_b["solve"].me_method = "CSE"
+    db_session.flush()
+    body = client.get(_solve_search_url(solve_method="CSE")).json()
+    refs = {
+        r["network_solve"]["network_solve_ref"] for r in body["records"]
+    }
+    assert refs == {fx_b["solve"].public_ref}
+
+
+def test_solve_search_by_temperature_range(client, db_session):
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    # Default factory sets tmin/tmax = 300/2000; bump fx_b out of [200,500].
+    fx_b["solve"].tmin_k = 3000.0
+    fx_b["solve"].tmax_k = 4000.0
+    db_session.flush()
+    body = client.get(
+        _solve_search_url(temperature_min=200.0, temperature_max=500.0)
+    ).json()
+    refs = {
+        r["network_solve"]["network_solve_ref"] for r in body["records"]
+    }
+    assert fx_a["solve"].public_ref in refs
+    assert fx_b["solve"].public_ref not in refs
+
+
+def test_solve_search_by_pressure_range(client, db_session):
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    fx_b["solve"].pmin_bar = 500.0
+    fx_b["solve"].pmax_bar = 1000.0
+    db_session.flush()
+    body = client.get(
+        _solve_search_url(pressure_min=0.1, pressure_max=10.0)
+    ).json()
+    refs = {
+        r["network_solve"]["network_solve_ref"] for r in body["records"]
+    }
+    assert fx_a["solve"].public_ref in refs
+    assert fx_b["solve"].public_ref not in refs
+
+
+def test_solve_search_by_has_bath_gas_true_and_false(client, db_session):
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    bath_sp = make_species(
+        db_session, smiles="[N]", inchi_key=next_inchi_key("NSB")
+    )
+    bath_se = make_species_entry(db_session, bath_sp)
+    attach_network_solve_bath_gas(
+        db_session, solve=fx_a["solve"], species_entry=bath_se
+    )
+    true_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_bath_gas="true")).json()[
+            "records"
+        ]
+    }
+    false_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_bath_gas="false")).json()[
+            "records"
+        ]
+    }
+    assert fx_a["solve"].public_ref in true_refs
+    assert fx_b["solve"].public_ref in false_refs
+
+
+def test_solve_search_by_has_energy_transfer_true_and_false(
+    client, db_session
+):
+    from app.db.models.network_pdep import NetworkSolveEnergyTransfer
+
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    db_session.add(
+        NetworkSolveEnergyTransfer(
+            solve_id=fx_a["solve"].id,
+            model="exponential_down",
+            alpha0_cm_inv=300.0,
+        )
+    )
+    db_session.flush()
+    true_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(has_energy_transfer="true")
+        ).json()["records"]
+    }
+    false_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(has_energy_transfer="false")
+        ).json()["records"]
+    }
+    assert fx_a["solve"].public_ref in true_refs
+    assert fx_b["solve"].public_ref in false_refs
+
+
+def test_solve_search_by_has_source_calculations_true_and_false(
+    client, db_session
+):
+    fx_a = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    true_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(has_source_calculations="true")
+        ).json()["records"]
+    }
+    false_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(has_source_calculations="false")
+        ).json()["records"]
+    }
+    assert fx_a["solve"].public_ref in true_refs
+    assert fx_b["solve"].public_ref in false_refs
+
+
+def test_solve_search_by_has_kinetics_true_and_false(client, db_session):
+    fx_a = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.chebyshev
+    )
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    true_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_kinetics="true")).json()[
+            "records"
+        ]
+    }
+    false_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_kinetics="false")).json()[
+            "records"
+        ]
+    }
+    assert fx_a["solve"].public_ref in true_refs
+    assert fx_b["solve"].public_ref in false_refs
+
+
+def test_solve_search_by_has_chebyshev_true_and_false(client, db_session):
+    fx_a = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.chebyshev
+    )
+    fx_b = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.plog
+    )
+    true_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_chebyshev="true")).json()[
+            "records"
+        ]
+    }
+    false_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_chebyshev="false")).json()[
+            "records"
+        ]
+    }
+    assert fx_a["solve"].public_ref in true_refs
+    assert fx_b["solve"].public_ref in false_refs
+
+
+def test_solve_search_by_has_plog_true_and_false(client, db_session):
+    fx_a = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.plog
+    )
+    fx_b = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.chebyshev
+    )
+    true_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_plog="true")).json()[
+            "records"
+        ]
+    }
+    false_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_plog="false")).json()[
+            "records"
+        ]
+    }
+    assert fx_a["solve"].public_ref in true_refs
+    assert fx_b["solve"].public_ref in false_refs
+
+
+def test_solve_search_by_has_point_kinetics_true_and_false(client, db_session):
+    fx_a = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.tabulated
+    )
+    fx_b = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.chebyshev
+    )
+    true_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(has_point_kinetics="true")
+        ).json()["records"]
+    }
+    false_refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(has_point_kinetics="false")
+        ).json()["records"]
+    }
+    assert fx_a["solve"].public_ref in true_refs
+    assert fx_b["solve"].public_ref in false_refs
+
+
+def test_solve_search_by_method_and_basis(client, db_session):
+    lot_a = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    lot_b = make_lot(db_session, method="b3lyp", basis="6-31g")
+    fx_a = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+        source_calc_lot=lot_a,
+    )
+    fx_b = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+        source_calc_lot=lot_b,
+    )
+    refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(method="wb97xd", basis="def2tzvp")
+        ).json()["records"]
+    }
+    assert refs == {fx_a["solve"].public_ref}
+
+
+def test_solve_search_by_software_and_version(client, db_session):
+    fx_a = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    fx_b = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    sw_a = Software(name="gaussian")
+    sw_b = Software(name="orca")
+    db_session.add_all([sw_a, sw_b])
+    db_session.flush()
+    sr_a = SoftwareRelease(software_id=sw_a.id, version="g16.a03")
+    sr_b = SoftwareRelease(software_id=sw_b.id, version="5.0.4")
+    db_session.add_all([sr_a, sr_b])
+    db_session.flush()
+    fx_a["source_calculation"].software_release_id = sr_a.id
+    fx_b["source_calculation"].software_release_id = sr_b.id
+    db_session.flush()
+    refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(software="gaussian", software_version="g16.a03")
+        ).json()["records"]
+    }
+    assert refs == {fx_a["solve"].public_ref}
+
+
+def test_solve_search_by_workflow_tool_and_version(client, db_session):
+    fx_a = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    fx_b = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    wt_a = WorkflowTool(name="arc")
+    wt_b = WorkflowTool(name="qcelemental")
+    db_session.add_all([wt_a, wt_b])
+    db_session.flush()
+    wtr_a = WorkflowToolRelease(workflow_tool_id=wt_a.id, version="1.2.3")
+    wtr_b = WorkflowToolRelease(workflow_tool_id=wt_b.id, version="0.27.0")
+    db_session.add_all([wtr_a, wtr_b])
+    db_session.flush()
+    fx_a["source_calculation"].workflow_tool_release_id = wtr_a.id
+    fx_b["source_calculation"].workflow_tool_release_id = wtr_b.id
+    db_session.flush()
+    refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(workflow_tool="arc", workflow_tool_version="1.2.3")
+        ).json()["records"]
+    }
+    assert refs == {fx_a["solve"].public_ref}
+
+
+def test_solve_search_default_hides_rejected(client, db_session):
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.network_solve,
+        record_id=fx_b["solve"].id,
+        status=RecordReviewStatus.rejected,
+    )
+    refs = {
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_kinetics="false")).json()[
+            "records"
+        ]
+    }
+    assert fx_a["solve"].public_ref in refs
+    assert fx_b["solve"].public_ref not in refs
+
+
+def test_solve_search_include_rejected_sorts_them_last(client, db_session):
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.network_solve,
+        record_id=fx_b["solve"].id,
+        status=RecordReviewStatus.rejected,
+    )
+    refs = [
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(
+            _solve_search_url(has_kinetics="false", include_rejected="true")
+        ).json()["records"]
+    ]
+    assert fx_a["solve"].public_ref in refs
+    assert fx_b["solve"].public_ref in refs
+    assert refs[-1] == fx_b["solve"].public_ref
+
+
+def test_solve_search_pagination_envelope(client, db_session):
+    fx = _make_simple_network(db_session)
+    # Attach 4 solves to the same network so the network_ref filter
+    # returns a stable candidate set.
+    for _ in range(4):
+        make_network_solve(db_session, network=fx["network"])
+    body = client.get(
+        _solve_search_url(
+            network_ref=fx["network"].public_ref, limit=2, offset=0
+        )
+    ).json()
+    p = body["pagination"]
+    assert p["limit"] == 2
+    assert p["offset"] == 0
+    assert p["returned"] == 2
+    assert p["total"] == 4
+
+
+def test_solve_search_deterministic_ordering_review_then_created(
+    client, db_session
+):
+    fx_a = _make_simple_network(db_session, with_solve=True)
+    fx_b = _make_simple_network(db_session, with_solve=True)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.network_solve,
+        record_id=fx_a["solve"].id,
+        status=RecordReviewStatus.approved,
+    )
+    refs = [
+        r["network_solve"]["network_solve_ref"]
+        for r in client.get(_solve_search_url(has_kinetics="false")).json()[
+            "records"
+        ]
+    ]
+    assert refs[0] == fx_a["solve"].public_ref
+
+
+def test_solve_search_client_sort_rejected(client, db_session):
+    _make_simple_network(db_session, with_solve=True)
+    resp = client.get(
+        _solve_search_url(has_kinetics="false", sort="created_at")
+    )
+    assert resp.status_code == 422
+    assert "client_sort_not_supported" in resp.text
+
+
+def test_solve_search_get_post_parity(client, db_session):
+    fx = _make_simple_network(db_session, with_solve=True)
+    get_body = client.get(
+        _solve_search_url(network_solve_ref=fx["solve"].public_ref)
+    ).json()
+    post_body = client.post(
+        _solve_search_url(),
+        json={"network_solve_ref": fx["solve"].public_ref},
+    ).json()
+    assert get_body["pagination"] == post_body["pagination"]
+    assert get_body["records"] == post_body["records"]
+
+
+def test_solve_search_post_rejects_query_string_search_fields(
+    client, db_session
+):
+    _make_simple_network(db_session, with_solve=True)
+    resp = client.post(
+        "/api/v1/scientific/network-solves/search?limit=5",
+        json={"has_kinetics": True},
+    )
+    assert resp.status_code == 422
+    assert "post_search_fields_must_be_in_body" in resp.text
+
+
+def test_solve_search_include_bath_gas_on_records(client, db_session):
+    fx = _make_simple_network(db_session, with_solve=True)
+    bath_sp = make_species(
+        db_session, smiles="[N]", inchi_key=next_inchi_key("NSBG")
+    )
+    bath_se = make_species_entry(db_session, bath_sp)
+    attach_network_solve_bath_gas(
+        db_session, solve=fx["solve"], species_entry=bath_se
+    )
+    body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref, include="bath_gas"
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["bath_gas"] is not None
+    assert len(rec["bath_gas"]) == 1
+
+
+def test_solve_search_include_energy_transfer_on_records(client, db_session):
+    from app.db.models.network_pdep import NetworkSolveEnergyTransfer
+
+    fx = _make_simple_network(db_session, with_solve=True)
+    db_session.add(
+        NetworkSolveEnergyTransfer(
+            solve_id=fx["solve"].id, model="exponential_down"
+        )
+    )
+    db_session.flush()
+    body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref,
+            include="energy_transfer",
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["energy_transfer"] is not None
+    assert len(rec["energy_transfer"]) == 1
+
+
+def test_solve_search_include_source_calculations_on_records(client, db_session):
+    fx = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref,
+            include="source_calculations",
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["source_calculations"] is not None
+    assert len(rec["source_calculations"]) == 1
+
+
+def test_solve_search_include_kinetics_on_records(client, db_session):
+    fx = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.chebyshev
+    )
+    body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref, include="kinetics"
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["kinetics"] is not None
+    assert rec["kinetics"][0]["chebyshev_shape"] == "6x4"
+    # Coefficients must not inline under search either.
+    assert "coefficients" not in rec["kinetics"][0]
+
+
+def test_solve_search_include_review_on_records(client, db_session):
+    fx = _make_simple_network(db_session, with_solve=True)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.network_solve,
+        record_id=fx["solve"].id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref, include="review"
+        )
+    ).json()
+    rec = body["records"][0]
+    assert rec["review_history"] is not None
+    assert rec["review_history"][0]["status"] == "approved"
+
+
+def test_solve_search_include_all_on_records(client, db_session):
+    fx = _make_simple_network(db_session, with_solve=True)
+    body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref, include="all"
+        )
+    ).json()
+    inc = body["request"]["include"]
+    for token in (
+        "bath_gas",
+        "energy_transfer",
+        "source_calculations",
+        "kinetics",
+        "review",
+    ):
+        assert token in inc
+    assert "internal_ids" not in inc
+
+
+def test_solve_search_include_all_does_not_restore_internal_ids(
+    client, db_session
+):
+    fx = _make_simple_network(db_session, with_solve=True)
+    body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref, include="all"
+        )
+    ).json()
+    assert "network_solve_id" not in body["records"][0]["network_solve"]
+
+
+def test_solve_search_internal_ids_restored_when_policy_allows(
+    client, db_session, allow_internal_ids
+):
+    fx = _make_simple_network(db_session, with_solve=True)
+    body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref, include="internal_ids"
+        )
+    ).json()
+    assert (
+        body["records"][0]["network_solve"]["network_solve_id"]
+        == fx["solve"].id
+    )
+
+
+def test_solve_search_record_shape_matches_detail(client, db_session):
+    """Cross-endpoint anti-drift: same solve, same include set → identical."""
+    fx = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    search_body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref, include="all"
+        )
+    ).json()
+    detail_body = client.get(
+        _solve_url(fx["solve"].public_ref, include="all")
+    ).json()
+    assert search_body["records"][0] == detail_body["record"]
+
+
+def test_solve_search_unknown_ref_short_circuits_empty(client, db_session):
+    body = client.get(
+        _solve_search_url(network_solve_ref="nsolve_doesnotexist00")
+    ).json()
+    assert body["pagination"]["total"] == 0
+    assert body["records"] == []
+
+
+def test_solve_search_wrong_prefix_ref_returns_422(client, db_session):
+    resp = client.get(_solve_search_url(network_solve_ref="net_abcdef0123"))
+    assert resp.status_code == 422
+
+
+def test_solve_search_no_forbidden_payload_keys(client, db_session):
+    fx = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    body = client.get(
+        _solve_search_url(
+            network_solve_ref=fx["solve"].public_ref, include="all"
+        )
+    ).json()
+    forbidden = {
+        "coefficients",
+        "chebyshev_coefficients",
+        "plog_entries",
+        "entries",
+        "points",
+        "kinetics_points",
+        "xyz_text",
+        "atoms",
+        "coords",
+        "symbols",
+        "body",
+        "content",
+        "data",
+        "presigned_url",
+        "download_url",
+    }
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                assert k not in forbidden, (
+                    f"network-solve search leaked forbidden key {k!r}"
+                )
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(body)

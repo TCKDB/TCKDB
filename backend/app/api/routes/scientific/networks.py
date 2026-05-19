@@ -16,8 +16,15 @@ from app.schemas.reads.scientific_network_search import (
     NetworkSearchRequest,
     ScientificNetworkSearchResponse,
 )
+from app.schemas.reads.scientific_network_solve_search import (
+    NetworkSolveSearchRequest,
+    ScientificNetworkSolveSearchResponse,
+)
 from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
+)
+from app.services.scientific_read.network_solves_search import (
+    search_network_solves,
 )
 from app.services.scientific_read.networks import get_network, get_network_solve
 from app.services.scientific_read.networks_search import search_networks
@@ -154,6 +161,105 @@ def scientific_network_detail(
             network_handle=network_ref_or_id,
             include=parse_include(include),
         )
+    )
+
+
+@solve_router.get(
+    "/search", response_model=ScientificNetworkSolveSearchResponse
+)
+def scientific_network_solves_search_get(
+    session: Session = Depends(get_db),
+    network_solve_ref: str | None = Query(None),
+    network_ref: str | None = Query(None),
+    solve_method: str | None = Query(None),
+    temperature_min: float | None = Query(None),
+    temperature_max: float | None = Query(None),
+    pressure_min: float | None = Query(None),
+    pressure_max: float | None = Query(None),
+    has_bath_gas: bool | None = Query(None),
+    has_energy_transfer: bool | None = Query(None),
+    has_source_calculations: bool | None = Query(None),
+    has_kinetics: bool | None = Query(None),
+    has_chebyshev: bool | None = Query(None),
+    has_plog: bool | None = Query(None),
+    has_point_kinetics: bool | None = Query(None),
+    method: str | None = Query(None),
+    basis: str | None = Query(None),
+    software: str | None = Query(None),
+    software_version: str | None = Query(None),
+    workflow_tool: str | None = Query(None),
+    workflow_tool_version: str | None = Query(None),
+    min_review_status: RecordReviewStatus | None = Query(None),
+    include_rejected: bool = Query(False),
+    include_deprecated: bool = Query(False),
+    sort: str | None = Query(None),
+    include: list[str] | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """MVP scientific network-solve search.
+
+    AND-combines the supplied filters; at least one meaningful
+    filter required. Explicit ``False`` bool filter values count as
+    meaningful. ``solve_method`` filters ``NetworkSolve.me_method``
+    (the master-equation algorithm); ``method`` / ``basis`` filter
+    through the source-calculation level-of-theory join.
+    """
+    request_obj = NetworkSolveSearchRequest(
+        network_solve_ref=network_solve_ref,
+        network_ref=network_ref,
+        solve_method=solve_method,
+        temperature_min=temperature_min,
+        temperature_max=temperature_max,
+        pressure_min=pressure_min,
+        pressure_max=pressure_max,
+        has_bath_gas=has_bath_gas,
+        has_energy_transfer=has_energy_transfer,
+        has_source_calculations=has_source_calculations,
+        has_kinetics=has_kinetics,
+        has_chebyshev=has_chebyshev,
+        has_plog=has_plog,
+        has_point_kinetics=has_point_kinetics,
+        method=method,
+        basis=basis,
+        software=software,
+        software_version=software_version,
+        workflow_tool=workflow_tool,
+        workflow_tool_version=workflow_tool_version,
+        min_review_status=min_review_status,
+        include_rejected=include_rejected,
+        include_deprecated=include_deprecated,
+        sort=sort,
+        include=parse_include(include),
+        offset=offset,
+        limit=limit,
+    )
+    return apply_internal_ids_visibility(
+        search_network_solves(session, request_obj)
+    )
+
+
+@solve_router.post(
+    "/search", response_model=ScientificNetworkSolveSearchResponse
+)
+def scientific_network_solves_search_post(
+    request: Request,
+    body: NetworkSolveSearchRequest,
+    session: Session = Depends(get_db),
+):
+    """JSON-body variant of /scientific/network-solves/search."""
+    forbidden = set(request.query_params.keys()) - _POST_ALLOWED_QS_KEYS
+    if forbidden:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "post_search_fields_must_be_in_body: query-string keys "
+                f"{sorted(forbidden)!r} are not accepted on POST; supply "
+                "all search fields in the JSON body."
+            ),
+        )
+    return apply_internal_ids_visibility(
+        search_network_solves(session, body)
     )
 
 
