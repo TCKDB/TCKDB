@@ -1,7 +1,7 @@
 # Scientific Network / PDep Read/Search Surface
 
 **Status:** implemented (network + network-solve + network-kinetics
-detail; network-kinetics search deferred)
+detail + search across all three grains)
 **Companion to:**
 - [scientific_calculation_reads.md](scientific_calculation_reads.md)
 - [scientific_statmech_reads.md](scientific_statmech_reads.md)
@@ -44,6 +44,8 @@ GET  /api/v1/scientific/network-solves/{network_solve_ref_or_id}
 GET  /api/v1/scientific/network-solves/search
 POST /api/v1/scientific/network-solves/search
 GET  /api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}
+GET  /api/v1/scientific/network-kinetics/search
+POST /api/v1/scientific/network-kinetics/search
 ```
 
 Handle prefixes: `net_…` (Network), `nsolve_…` (NetworkSolve),
@@ -51,12 +53,6 @@ Handle prefixes: `net_…` (Network), `nsolve_…` (NetworkSolve),
 `handle_type_mismatch`; unknown refs / ids return 404. `/search` is
 registered before `/{handle}` so FastAPI doesn't route the search
 path through the catch-all detail handler.
-
-**Deferred** to a future PR (see §11 open questions):
-
-```http
-GET/POST /api/v1/scientific/network-kinetics/search
-```
 
 ## 3. Schema change
 
@@ -322,10 +318,70 @@ public-limit setting; the response surfaces `points_truncated` so
 callers can detect when the cap kicked in. A future endpoint can
 expose dedicated paginated point retrieval if usage justifies it.
 
-Network-kinetics search is still deferred — the kinetics-level
-filters (model_kind, T/P overlap, has_chebyshev / has_plog /
-has_point_kinetics) already live on the network and network-solve
-search surfaces and cover most discovery use cases.
+Network-kinetics search ships at the kinetics grain
+(`GET|POST /scientific/network-kinetics/search`). Filters:
+
+```text
+network_kinetics_ref
+network_ref
+network_solve_ref
+model_kind                — chebyshev | plog | tabulated
+temperature_min           — overlap semantics (records whose tmax_k ≥ X)
+temperature_max           — overlap semantics (records whose tmin_k ≤ X)
+pressure_min              — overlap semantics
+pressure_max              — overlap semantics
+has_chebyshev             — explicit False is meaningful
+has_plog                  — explicit False is meaningful
+has_points                — explicit False is meaningful
+has_source_calculations   — explicit False is meaningful
+method                    — narrows by parent solve's source-calc LoT
+basis                     — narrows by parent solve's source-calc LoT
+software                  — narrows by parent solve's source-calc software
+software_version
+workflow_tool             — narrows by parent solve's workflow tool
+workflow_tool_version
+min_review_status         — inherited from parent solve
+include_rejected          — inherited from parent solve
+include_deprecated        — inherited from parent solve
+include
+offset / limit
+sort                      — non-None → 422 client_sort_not_supported
+```
+
+`network_channel_ref` is deferred — `NetworkChannel` has no public
+ref today (composite-PK row addressed by source/sink
+composition_hash inside the parent network). When (if) `NetworkChannel`
+gains a public ref the filter plugs in directly. Channel-id filters
+are not exposed at the public surface.
+
+Default deterministic ordering:
+
+```text
+review_rank ASC          — inherited from parent solve
+created_at DESC          — NetworkKinetics carries TimestampMixin
+network_kinetics_id DESC
+```
+
+Records reuse :class:`ScientificNetworkKineticsRecord` via the
+shared :func:`build_network_kinetics_record` helper — cross-endpoint
+anti-drift test asserts search records are byte-identical to detail
+records for the same kinetics record and include set
+(including `include=all`).
+
+Include behavior matches the detail endpoint:
+
+```text
+include=all expands to coefficients / plog / source_calculations / review
+include=all excludes points (require explicit opt-in)
+include=all excludes internal_ids (require explicit opt-in)
+include=points remains capped at settings.public_max_limit with
+                points_truncated + point_count_total surfaced
+```
+
+Review state inherits from the parent solve (`NetworkKinetics` is
+not independently reviewable). Search hides `rejected` /
+`deprecated` parent-solve states by default; `include_rejected` /
+`include_deprecated` opt them in.
 
 ### 11.3 Tight T/P envelope filters
 
@@ -377,8 +433,9 @@ Phase 2 — network detail endpoint                            ✓ implemented
 Phase 3 — network search                                     ✓ implemented
 Phase 4 — network-solve standalone detail                    ✓ implemented
 Phase 5 — network-kinetics public_ref + standalone detail    ✓ implemented
-Phase 6 — network-kinetics search                            deferred
+Phase 6 — network-kinetics search                            ✓ implemented
 Phase 7 — paginated coefficient/point full-data endpoints    deferred
+Phase 8 — network_channel public_ref + channel-grain queries deferred
 ```
 
 ## 13. Test plan

@@ -137,19 +137,43 @@ def get_network_kinetics(
             code="handle_not_found",
         )
 
-    # Bulk-load parent rows up-front.
+    # ``NetworkKinetics`` itself is not a reviewable record type; the
+    # parent solve carries the badge. Falls back to ``not_reviewed`` when
+    # the solve has no review row.
+    badge = _load_parent_solve_badge(session, nk.solve_id)
+
+    record = build_network_kinetics_record(
+        session, nk=nk, badge=badge, includes=includes
+    )
+    return ScientificNetworkKineticsDetailResponse(
+        request=RequestEcho(include=sorted(includes)),
+        review_summary=review_summary([badge]),
+        record=record,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Shared per-record builder (reused by search)
+# ---------------------------------------------------------------------------
+
+
+def build_network_kinetics_record(
+    session: Session,
+    *,
+    nk: NetworkKinetics,
+    badge: RecordReviewBadge,
+    includes: set[str],
+) -> ScientificNetworkKineticsRecord:
+    """Project one ``NetworkKinetics`` row into the public scientific
+    record shape. Shared between detail and search so both produce
+    byte-identical per-record payloads for the same include set.
+    """
     solve = session.get(NetworkSolve, nk.solve_id)
     channel = session.get(NetworkChannel, nk.channel_id)
     network = (
         session.get(Network, solve.network_id) if solve is not None else None
     )
-
-    # ``NetworkKinetics`` itself is not a reviewable record type; the
-    # parent solve carries the badge. Falls back to ``not_reviewed`` when
-    # the solve has no review row.
-    badge = _load_parent_solve_badge(session, solve.id if solve else None)
-
-    record = _build_network_kinetics_record(
+    return _build_network_kinetics_record(
         session,
         nk=nk,
         solve=solve,
@@ -157,11 +181,6 @@ def get_network_kinetics(
         network=network,
         badge=badge,
         includes=includes,
-    )
-    return ScientificNetworkKineticsDetailResponse(
-        request=RequestEcho(include=sorted(includes)),
-        review_summary=review_summary([badge]),
-        record=record,
     )
 
 
@@ -522,5 +541,6 @@ def _exists_solve_review(session: Session, solve_id: int | None) -> bool:
 __all__ = [
     "_INTERNAL_INCLUDE_TOKENS",
     "_LEGAL_INCLUDE_TOKENS",
+    "build_network_kinetics_record",
     "get_network_kinetics",
 ]
