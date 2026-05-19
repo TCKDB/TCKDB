@@ -1,7 +1,7 @@
 # Scientific Network / PDep Read/Search Surface
 
-**Status:** implemented (network + network-solve + network-kinetics
-detail + search across all three grains)
+**Status:** v0 complete — detail + search ship at every grain
+(network, network-solve, network-kinetics).
 **Companion to:**
 - [scientific_calculation_reads.md](scientific_calculation_reads.md)
 - [scientific_statmech_reads.md](scientific_statmech_reads.md)
@@ -15,6 +15,17 @@ ingestion schemas out of scope. Three small schema changes:
 `NetworkKinetics` (new `public_ref` columns with prefixes
 `net_…` / `nsolve_…` / `nkin_…`); all three folded into the single
 initial migration per CLAUDE.md.
+
+**Deferred for follow-up (not v0 blockers):**
+
+- `network_channel_ref` filter — `NetworkChannel` carries no public
+  ref today; channel-grain query surface ships when that lands.
+- Paginated coefficient / point full-data endpoints — `include=points`
+  is capped at `settings.public_max_limit` with `points_truncated`
+  signaling overflow; a dedicated paginated endpoint can lift the cap.
+- Independent `NetworkKinetics` reviewability — review state currently
+  inherits from the parent solve (`NetworkKinetics` is not in
+  `SubmissionRecordType`).
 
 ---
 

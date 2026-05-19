@@ -1,7 +1,7 @@
 # TCKDB Read/Query API Audit
 
 **Original audit date:** 2026-05-13
-**Status update:** 2026-05-18
+**Status update:** 2026-05-19
 **Branch:** main
 **Scope:** Factual audit of the existing read/query surface in the TCKDB
 backend, plus a current implementation-status update layered on top.
@@ -12,12 +12,21 @@ No design changes, no implementation, no schema work. ARC and
 
 ---
 
-## 0. Current implementation status (2026-05-18 update)
+## 0. Current implementation status (2026-05-19 update)
 
 Since the original audit on 2026-05-13, the scientific read surface
 has expanded substantially. This section is the authoritative source
 for "what exists today"; §12 / §13 / §14 below are preserved as the
 original gap analysis and recommended order.
+
+**Network/PDep v0 is now complete** across the network, network-solve,
+and network-kinetics grains. Detail and search ship at every grain,
+embedded bounded summaries cover the child tables, network-kinetics
+exposes Chebyshev and PLOG payloads under explicit include tokens and
+point-tabulated payloads under an explicit and capped
+`include=points`, and network-kinetics review state inherits from
+the parent solve. Remaining items are refinements rather than v0
+blockers — see "deferred refinements" in §0.4 below.
 
 ### 0.1 Scientific surface matrix
 
@@ -140,28 +149,12 @@ Order chosen by considering the closure status above plus what is
 load-bearing for downstream consumers. Each item is a *recommendation
 to evaluate and document*, not a commitment.
 
-1. **PDep channel-grain query and paginated payloads.** The full
-   PDep read/search stack ships: networks
-   (`GET /scientific/networks/{ref}`,
-   `GET|POST /scientific/networks/search`), network-solves
-   (`GET /scientific/network-solves/{ref}`,
-   `GET|POST /scientific/network-solves/search`), and network-kinetics
-   (`GET /scientific/network-kinetics/{ref}` and
-   `GET|POST /scientific/network-kinetics/search`). Chebyshev,
-   PLOG, and point-tabulated payloads surface behind explicit include
-   tokens; point payload is capped at the public limit with
-   `points_truncated` / `point_count_total` signaling overflow. Open
-   follow-ups: (a) a channel-grain query surface (requires
-   `network_channel.public_ref`, currently only composite-PK
-   composition-hash addressing) and (b) paginated coefficient/point
-   retrieval for unbounded tabulated data. See
-   `scientific_network_reads.md` §11.
-2. **Literature-centered query.** Inverse-direction "records citing
+1. **Literature-centered query.** Inverse-direction "records citing
    this paper" surface. The `literature_id` FK is already surfaced on
    thermo / kinetics / statmech / transport reads — a simple
    `GET /scientific/literature/{ref}/records` (or similar) would close
    the loop with minimal new schema.
-3. **Energy-correction / frequency-scale-factor scientific reads.**
+2. **Energy-correction / frequency-scale-factor scientific reads.**
    `frequency_scale_factor` and `energy_correction_scheme` carry
    public refs (`fsf_`, `ecs_`) but no scientific read surface; their
    provenance pointers appear only embedded under statmech /
@@ -169,16 +162,40 @@ to evaluate and document*, not a commitment.
    `level_of_theory_ref` / `software` / `scale_kind` / scheme `kind`)
    closes the "find me the right scale factor / correction scheme"
    workflow.
-4. **Standalone artifact search.** `/scientific/artifacts/search` over
+3. **Standalone artifact search.** `/scientific/artifacts/search` over
    calculation artifact metadata (kind / uri / sha256 / bytes / owning
    calc ref). Body-fetch policy stays separate; this is metadata-only.
-5. **RDKit substructure / similarity search.** The `mol` cartridge
+4. **RDKit substructure / similarity search.** The `mol` cartridge
    column is in place on `species` and `transition_state_entry`. A
    scientific surface using the cartridge would be a new capability,
    not a closure of existing gaps; treat as Phase 3+.
-6. **Bulk export / contribution-bundle reads.** No bulk
+5. **Bulk export / contribution-bundle reads.** No bulk
    CSV/JSONL/Parquet surface exists. Useful for downstream model
    training. Treat as a separate workstream from the per-record reads.
+6. **Network/PDep refinements.** The Network/PDep v0 read/search
+   stack is complete (see §0.1 / §0.2). The remaining items are
+   refinements, not v0 blockers:
+   - **Channel-grain query surface.** `NetworkChannel` carries no
+     public ref today (composite-PK row addressed by source/sink
+     composition hash inside the parent network). A
+     `network_channel_ref` filter and a `/scientific/network-channels`
+     surface would plug in cleanly once a `nch_…`-style public ref
+     ships on `NetworkChannel`.
+   - **Paginated coefficient / point full-data endpoints.**
+     `include=points` on the network-kinetics detail/search surfaces
+     is capped at `settings.public_max_limit` with
+     `points_truncated` / `point_count_total` signaling overflow.
+     A dedicated paginated endpoint (analogous to
+     `/calculations/{ref}/scan|irc|path-search`) would surface the
+     full tabulated payload without bumping the public include cap.
+   - **Independent `NetworkKinetics` reviewability.** Today
+     network-kinetics review state inherits from the parent solve;
+     `NetworkKinetics` is not in `SubmissionRecordType`. Promoting it
+     to an independently reviewable record type would let curators
+     approve/reject individual fits without affecting the whole
+     solve.
+
+   See `scientific_network_reads.md` §11 for the per-item rationale.
 
 ### 0.5 Cross-surface anti-drift patterns
 
