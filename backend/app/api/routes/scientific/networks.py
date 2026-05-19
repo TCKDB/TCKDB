@@ -12,6 +12,9 @@ from app.schemas.reads.scientific_network import (
     ScientificNetworkDetailResponse,
     ScientificNetworkSolveDetailResponse,
 )
+from app.schemas.reads.scientific_network_kinetics import (
+    ScientificNetworkKineticsDetailResponse,
+)
 from app.schemas.reads.scientific_network_search import (
     NetworkSearchRequest,
     ScientificNetworkSearchResponse,
@@ -23,6 +26,9 @@ from app.schemas.reads.scientific_network_solve_search import (
 from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
+from app.services.scientific_read.network_kinetics import (
+    get_network_kinetics,
+)
 from app.services.scientific_read.network_solves_search import (
     search_network_solves,
 )
@@ -32,6 +38,7 @@ from app.services.scientific_read.networks_search import search_networks
 
 router = APIRouter(prefix="/networks")
 solve_router = APIRouter(prefix="/network-solves")
+kinetics_router = APIRouter(prefix="/network-kinetics")
 
 
 _POST_ALLOWED_QS_KEYS: set[str] = set()
@@ -282,6 +289,39 @@ def scientific_network_solve_detail(
         get_network_solve(
             session,
             network_solve_handle=network_solve_ref_or_id,
+            include=parse_include(include),
+        )
+    )
+
+
+@kinetics_router.get(
+    "/{network_kinetics_ref_or_id}",
+    response_model=ScientificNetworkKineticsDetailResponse,
+)
+def scientific_network_kinetics_detail(
+    network_kinetics_ref_or_id: str = Path(..., min_length=1, max_length=64),
+    session: Session = Depends(get_db),
+    include: list[str] | None = Query(None),
+):
+    """Return one network-kinetics record as a scientific projection.
+
+    Path handle accepts an integer ``network_kinetics.id`` or a public
+    ref of the form ``nkin_…``. Wrong-prefix refs return 422
+    ``handle_type_mismatch``; unknown refs / ids return 404.
+
+    Default response carries the kinetics core block + parent network,
+    solve, and channel context + bounded evidence and
+    available_sections summaries. The model-specific payloads
+    (Chebyshev coefficient matrix, PLOG rows, point-tabulated triples)
+    are deferred behind explicit include tokens. ``include=points`` is
+    capped at ``settings.public_max_limit`` rows; the response carries
+    ``points_truncated`` + ``point_count_total`` so callers can detect
+    the cap and refine their request.
+    """
+    return apply_internal_ids_visibility(
+        get_network_kinetics(
+            session,
+            network_kinetics_handle=network_kinetics_ref_or_id,
             include=parse_include(include),
         )
     )

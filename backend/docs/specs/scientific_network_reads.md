@@ -1,18 +1,20 @@
 # Scientific Network / PDep Read/Search Surface
 
-**Status:** implemented (v0 — network grain only; network-kinetics standalone surface deferred)
+**Status:** implemented (network + network-solve + network-kinetics
+detail; network-kinetics search deferred)
 **Companion to:**
 - [scientific_calculation_reads.md](scientific_calculation_reads.md)
 - [scientific_statmech_reads.md](scientific_statmech_reads.md)
 - [scientific_transport_reads.md](scientific_transport_reads.md)
 
-**Date:** 2026-05-18
+**Date:** 2026-05-19
 **Scope:** Backend only. Public scientific read surface for
 pressure-dependent reaction networks. ARC, `tckdb-client`, and
-ingestion schemas out of scope. Two **small** schema changes:
-`PublicRefMixin` added to `Network` and `NetworkSolve` (new
-`public_ref` columns with prefixes `net_…` / `nsolve_…`); both
-folded into the single initial migration per CLAUDE.md.
+ingestion schemas out of scope. Three small schema changes:
+`PublicRefMixin` added to `Network`, `NetworkSolve`, and
+`NetworkKinetics` (new `public_ref` columns with prefixes
+`net_…` / `nsolve_…` / `nkin_…`); all three folded into the single
+initial migration per CLAUDE.md.
 
 ---
 
@@ -41,33 +43,28 @@ POST /api/v1/scientific/networks/search
 GET  /api/v1/scientific/network-solves/{network_solve_ref_or_id}
 GET  /api/v1/scientific/network-solves/search
 POST /api/v1/scientific/network-solves/search
+GET  /api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}
 ```
 
-Handle prefixes: `net_…` (Network), `nsolve_…` (NetworkSolve).
-Wrong-prefix refs return 422 `handle_type_mismatch`; unknown refs /
-ids return 404. `/search` is registered before `/{handle}` so
-FastAPI doesn't route the search path through the catch-all detail
-handler.
+Handle prefixes: `net_…` (Network), `nsolve_…` (NetworkSolve),
+`nkin_…` (NetworkKinetics). Wrong-prefix refs return 422
+`handle_type_mismatch`; unknown refs / ids return 404. `/search` is
+registered before `/{handle}` so FastAPI doesn't route the search
+path through the catch-all detail handler.
 
 **Deferred** to a future PR (see §11 open questions):
 
 ```http
-GET      /api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}
 GET/POST /api/v1/scientific/network-kinetics/search
 ```
 
-`NetworkSolve` already has its own `nsolve_…` public ref (added by
-the same PR that ships this surface), so a standalone solve detail
-endpoint is a small follow-up. `NetworkKinetics` does **not** have a
-public ref — adding it is a Phase A schema change that should ship
-alongside the kinetics standalone surface, not before.
+## 3. Schema change
 
-## 3. Schema change in this PR
-
-Two ORM rows gained `PublicRefMixin`:
+Three ORM rows carry `PublicRefMixin`:
 
 - `Network` → prefix `net`
 - `NetworkSolve` → prefix `nsolve`
+- `NetworkKinetics` → prefix `nkin`
 
 Mechanism (matches the pattern used by every other ref-bearing
 table in the initial migration):
@@ -273,34 +270,62 @@ size policies.
 
 ## 11. Open questions
 
-### 11.1 `NetworkKinetics` has no public_ref
+### 11.1 `NetworkKinetics` has public_ref ✓ implemented
 
-`network_kinetics`, `network_kinetics_chebyshev`,
-`network_kinetics_plog`, `network_kinetics_point`,
-`network_state`, `network_channel`, `network_state_participant`,
+`network_kinetics` now carries `PublicRefMixin` with prefix
+`nkin_…`. The remaining child tables — `network_kinetics_chebyshev`,
+`network_kinetics_plog`, `network_kinetics_point`, `network_state`,
+`network_channel`, `network_state_participant`,
 `network_solve_bath_gas`, `network_solve_energy_transfer`,
 `network_solve_source_calculation`, `network_species`,
-`network_reaction` — **none** of these child tables have public_refs.
-v0 ships them as embedded summaries only. A future PR can add
-`PublicRefMixin` to `NetworkKinetics` (prefix candidate: `nkin`)
-and ship the standalone surface; the other child tables are
-composite-PK rows that are naturally embedded.
+`network_reaction` — remain composite-PK rows that are naturally
+embedded under their parent's detail.
 
-### 11.2 Standalone `/scientific/network-kinetics/{ref}` endpoint
+### 11.2 Standalone `/scientific/network-kinetics/{ref}` endpoint ✓ implemented
 
-When the above public_ref lands, the standalone surface should
-expose:
+`GET /scientific/network-kinetics/{network_kinetics_ref_or_id}`
+ships alongside the `NetworkKinetics.public_ref` schema change.
 
-- Default: kinetics core block + channel context + solve context +
-  T/P envelope.
-- `include=coefficients`: for `model_kind=chebyshev` returns the
-  coefficient matrix (small, bounded by n_temperature × n_pressure,
-  already JSONB on the row); for `model_kind=plog` returns the
-  pressure-specific Arrhenius rows; for `model_kind=tabulated`
-  returns the bounded T/P/k triples *if* the count is below a cap,
-  otherwise links to a paginated specialized endpoint.
-- `include=source_calculations`: per-channel source-calc summaries
-  (the solve's source calc graph filtered to this channel's role).
+Default response:
+
+- `network_kinetics` core block: model_kind discriminator + T/P
+  envelope + unit fields (`rate_units` / `pressure_units` /
+  `temperature_units` / `stores_log10_k`) + shape metadata
+  (`chebyshev_shape`, `plog_entry_count`, `point_count`) + review
+  badge (inherited from the parent solve — `NetworkKinetics` itself
+  is not in `SubmissionRecordType`).
+- `network` / `network_solve` / `network_channel` context blocks
+  (composition-hash pair for the channel; `NetworkChannel` has no
+  public_ref so `network_channel_ref` is always `None`).
+- `evidence_summary` + `available_sections` boolean maps.
+
+Include tokens:
+
+```text
+coefficients         — Chebyshev coefficient rows (None for non-Chebyshev)
+plog                 — PLOG entries (empty list for non-PLOG)
+points               — point-tabulated (T, P, k) rows, capped at
+                       settings.public_max_limit; response carries
+                       points_truncated + point_count_total
+source_calculations  — compact source-calc summaries from the parent solve
+review               — review history for the parent solve (None if
+                       not reviewable)
+internal_ids
+all
+```
+
+`include=all` covers `coefficients` / `plog` /
+`source_calculations` / `review` but explicitly **not** `points` —
+tabulated kinetics can grow large and require an explicit opt-in
+even when `all` is requested. Point payloads are bounded by the
+public-limit setting; the response surfaces `points_truncated` so
+callers can detect when the cap kicked in. A future endpoint can
+expose dedicated paginated point retrieval if usage justifies it.
+
+Network-kinetics search is still deferred — the kinetics-level
+filters (model_kind, T/P overlap, has_chebyshev / has_plog /
+has_point_kinetics) already live on the network and network-solve
+search surfaces and cover most discovery use cases.
 
 ### 11.3 Tight T/P envelope filters
 
@@ -347,12 +372,13 @@ for the same solve and include set.
 ## 12. Implementation status
 
 ```text
-Phase 1 — schema (PublicRefMixin on Network, NetworkSolve)  ✓ implemented
+Phase 1 — schema (PublicRefMixin on Network, NetworkSolve)   ✓ implemented
 Phase 2 — network detail endpoint                            ✓ implemented
 Phase 3 — network search                                     ✓ implemented
 Phase 4 — network-solve standalone detail                    ✓ implemented
-Phase 5 — network-kinetics public_ref + standalone surface   deferred
-Phase 6 — coefficient/point full-data endpoints              deferred
+Phase 5 — network-kinetics public_ref + standalone detail    ✓ implemented
+Phase 6 — network-kinetics search                            deferred
+Phase 7 — paginated coefficient/point full-data endpoints    deferred
 ```
 
 ## 13. Test plan

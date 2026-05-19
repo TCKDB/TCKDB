@@ -45,12 +45,12 @@ the exact mounted paths (verified against
 | Conformers detail/search | **Implemented** | `GET /scientific/conformer-groups/{ref_or_id}`, `GET /scientific/conformer-observations/{ref_or_id}`, `GET\|POST /scientific/conformers/search` |
 | Statmech detail/search | **Implemented** | `GET /scientific/statmech/{ref_or_id}`, `GET\|POST /scientific/statmech/search` |
 | Transport detail/search | **Implemented** | `GET /scientific/transport/{ref_or_id}`, `GET\|POST /scientific/transport/search` |
-| Networks detail/search (PDep) | **Implemented** | `GET /scientific/networks/{ref_or_id}`, `GET\|POST /scientific/networks/search`, `GET /scientific/network-solves/{ref_or_id}`, `GET\|POST /scientific/network-solves/search`. Network-kinetics standalone surface deferred — child tables embed only. |
+| Networks detail/search (PDep) | **Implemented** | `GET /scientific/networks/{ref_or_id}`, `GET\|POST /scientific/networks/search`, `GET /scientific/network-solves/{ref_or_id}`, `GET\|POST /scientific/network-solves/search`, `GET /scientific/network-kinetics/{ref_or_id}` (Chebyshev / PLOG / point payloads behind explicit include tokens; point payload capped at the public limit). Network-kinetics search deferred. |
 | Reaction-full TS links | **Implemented** | embedded refs + evidence summary under `/reaction-entries/{id}/full?include=transition_states` |
 | Reaction-full path summaries | **Implemented** | scan/irc/path_search summary projections under `include=scans` / `include=irc` / `include=path_search` |
 | Reaction-full artifacts | **Implemented** | per-calculation grouped artifact metadata under `include=artifacts` |
 | Reaction-full conformers | **Implemented** | participant-grouped conformer-group summaries under `include=conformers` |
-| Network / pdep reads | **Partially closed** | Network detail + search + the `network-solves` detail + search surfaces ship (both network grain and per-solve grain). Channels, states, kinetics summaries embed via include tokens. Standalone `network-kinetics` detail/search + full Chebyshev / PLOG / point payload retrieval remain open — see `scientific_network_reads.md` §11. |
+| Network / pdep reads | **Partially closed** | Network detail + search, `network-solves` detail + search, and `network-kinetics` standalone detail (Chebyshev / PLOG / point payloads behind explicit includes; point payload capped) all ship. Network-kinetics search remains open — see `scientific_network_reads.md` §11. |
 | Literature-centered query | Missing | `/literature/{id}` returns the paper but no "records citing X" inverse query |
 | Energy-correction scheme / FSF query | Missing | no `/scientific/corrections/*` or `/scientific/frequency-scale-factors/*` surface |
 | Applied energy-correction reads | Missing | the schema carries `applied_energy_correction` rows; no scientific read surface |
@@ -75,7 +75,7 @@ priority list).
 | `/scientific/conformers/*` | **closed** | `conformer-groups` + `conformer-observations` detail + `/conformers/search`. See `scientific_conformer_reads.md`. |
 | `/scientific/statmech/search` | **closed** | Detail + GET/POST search at statmech-record grain. See `scientific_statmech_reads.md`. |
 | `/scientific/transport/search` | **closed** | Detail + GET/POST search at transport-record grain. See `scientific_transport_reads.md`. |
-| `/scientific/networks/*` | **partially closed** | Network detail + search + the `network-solves` detail + search surfaces have shipped (network grain + per-solve grain). Channels, states, kinetics summaries embed via include tokens. Standalone `network-kinetics` detail/search + full Chebyshev / PLOG / point coefficient payloads remain open. See `scientific_network_reads.md` §11. |
+| `/scientific/networks/*` | **partially closed** | Network detail + search, `network-solves` detail + search, and `network-kinetics` standalone detail (Chebyshev / PLOG / point payloads behind explicit includes; point payload capped at the public limit) have shipped. Network-kinetics search remains open. See `scientific_network_reads.md` §11. |
 | Literature-centered query | **still open** | The "records citing this paper" inverse query has no surface. The `literature_id` FK is surfaced as `LiteratureSummary` on thermo / kinetics / statmech / transport / energy-correction reads, but there is no reverse-direction endpoint. |
 | Substructure / similarity search using RDKit cartridge | **still open** | The `mol` column type is in place on `species` / `transition_state_entry`; no endpoint uses it. |
 | Artifact search/download | **partially closed** | Metadata is exposed via calculation `include=artifacts` and reaction-full grouped artifacts. No standalone `/scientific/artifacts/search` and no body-fetch endpoint in the scientific surface. |
@@ -140,19 +140,21 @@ Order chosen by considering the closure status above plus what is
 load-bearing for downstream consumers. Each item is a *recommendation
 to evaluate and document*, not a commitment.
 
-1. **Network-kinetics standalone surface.** Network detail + search
-   shipped at the network grain (`GET /scientific/networks/{ref}`,
-   `GET|POST /scientific/networks/search`) plus the per-solve
-   detail + search surface (`GET /scientific/network-solves/{ref}`,
-   `GET|POST /scientific/network-solves/search`) — channels,
-   states, kinetics are embedded as bounded summaries with shape
-   metadata only. The remaining work is the standalone
-   `/scientific/network-kinetics/{ref}` surface (full Chebyshev
-   coefficient matrix / PLOG rows / point triples). Requires a
-   `network_kinetics.public_ref` column (small schema change
-   following the same pattern as the recent
-   `Network` / `NetworkSolve` additions). See
-   `scientific_network_reads.md` §11.
+1. **Network-kinetics search.** Network detail + search shipped at
+   the network grain (`GET /scientific/networks/{ref}`,
+   `GET|POST /scientific/networks/search`), the per-solve detail +
+   search surface (`GET /scientific/network-solves/{ref}`,
+   `GET|POST /scientific/network-solves/search`), and the standalone
+   network-kinetics detail (`GET /scientific/network-kinetics/{ref}`
+   with `nkin_…` public ref; Chebyshev coefficient matrix, PLOG rows,
+   and point-tabulated triples surface behind explicit include
+   tokens, with the point payload capped at the public limit and
+   `points_truncated` / `point_count_total` signaling overflow). The
+   remaining work is a `network-kinetics` search surface
+   (`GET|POST /scientific/network-kinetics/search`); the kinetics-level
+   filters (model_kind, T/P overlap, has_* booleans) already exist on
+   the network and network-solve search surfaces and cover most
+   discovery cases. See `scientific_network_reads.md` §11.
 2. **Literature-centered query.** Inverse-direction "records citing
    this paper" surface. The `literature_id` FK is already surfaced on
    thermo / kinetics / statmech / transport reads — a simple

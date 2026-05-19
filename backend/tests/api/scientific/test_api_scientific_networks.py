@@ -2073,3 +2073,577 @@ def test_solve_search_no_forbidden_payload_keys(client, db_session):
                 _walk(item)
 
     _walk(body)
+
+
+# ===========================================================================
+# Network-kinetics standalone detail endpoint
+# ===========================================================================
+
+
+def _nkin_detail_url(handle: str, **params) -> str:
+    base = f"/api/v1/scientific/network-kinetics/{handle}"
+    if not params:
+        return base
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"{base}?{qs}"
+
+
+def _make_kinetics(db_session, model_kind, *, with_source_calc: bool = False):
+    """Build a network + minimal solve/channel + one kinetics record of the
+    requested ``model_kind``. Returns the same dict shape as
+    ``_make_simple_network`` so call sites can reach refs.
+    """
+    return _make_simple_network(
+        db_session,
+        with_kinetics_kind=model_kind,
+        with_source_calc=with_source_calc,
+    )
+
+
+def test_nkin_detail_by_ref_returns_record(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    kin = fx["kinetics"]
+    body = client.get(_nkin_detail_url(kin.public_ref)).json()
+    assert body["record"]["network_kinetics"]["network_kinetics_ref"] == (
+        kin.public_ref
+    )
+    assert body["record"]["network_kinetics"]["model_kind"] == "chebyshev"
+
+
+def test_nkin_detail_by_integer_id_works(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.plog)
+    resp = client.get(_nkin_detail_url(str(fx["kinetics"].id)))
+    assert resp.status_code == 200
+
+
+def test_nkin_detail_unknown_handle_returns_404(client, db_session):
+    resp = client.get(_nkin_detail_url("nkin_doesnotexist0000"))
+    assert resp.status_code == 404
+    assert "network_kinetics not found" in resp.text
+
+
+def test_nkin_detail_wrong_prefix_returns_422(client, db_session):
+    resp = client.get(_nkin_detail_url("nsolve_abcdef0123456789"))
+    assert resp.status_code == 422
+    assert "handle_type_mismatch" in resp.text
+
+
+def test_nkin_detail_malformed_handle_returns_422(client, db_session):
+    resp = client.get(_nkin_detail_url("not-a-handle"))
+    assert resp.status_code == 422
+
+
+def test_nkin_detail_default_response_shape(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
+    record = body["record"]
+    for key in (
+        "network_kinetics",
+        "network",
+        "network_solve",
+        "network_channel",
+        "evidence_summary",
+        "available_sections",
+    ):
+        assert key in record
+    # Heavy includes default to None.
+    for key in (
+        "coefficients",
+        "plog",
+        "points",
+        "source_calculations",
+        "review_history",
+    ):
+        assert record[key] is None
+
+
+def test_nkin_detail_parent_network_context_present(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
+    assert body["record"]["network"]["network_ref"] == fx["network"].public_ref
+
+
+def test_nkin_detail_parent_solve_context_present(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
+    assert body["record"]["network_solve"]["network_solve_ref"] == (
+        fx["solve"].public_ref
+    )
+
+
+def test_nkin_detail_channel_context_present(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
+    channel_ctx = body["record"]["network_channel"]
+    assert channel_ctx["channel_kind"] == "isomerization"
+    assert (
+        channel_ctx["source_state_composition_hash"]
+        == fx["state_a"].composition_hash
+    )
+    assert (
+        channel_ctx["sink_state_composition_hash"]
+        == fx["state_b"].composition_hash
+    )
+    # No public_ref on NetworkChannel today.
+    assert channel_ctx["network_channel_ref"] is None
+
+
+def test_nkin_detail_evidence_summary_present(client, db_session):
+    fx = _make_kinetics(
+        db_session,
+        NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    ev = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()[
+        "record"
+    ]["evidence_summary"]
+    assert ev["has_chebyshev_coefficients"] is True
+    # factory builds a 6x4 zero matrix → 24 coefficients
+    assert ev["chebyshev_coefficient_count"] == 24
+    assert ev["has_plog_entries"] is False
+    assert ev["plog_entry_count"] == 0
+    assert ev["has_point_entries"] is False
+    assert ev["point_count"] == 0
+    assert ev["source_calculation_count"] == 1
+
+
+def test_nkin_detail_available_sections_present(client, db_session):
+    fx = _make_kinetics(
+        db_session,
+        NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    av = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()[
+        "record"
+    ]["available_sections"]
+    assert av["has_coefficients"] is True
+    assert av["has_plog"] is False
+    assert av["has_points"] is False
+    assert av["has_source_calculations"] is True
+    assert av["has_review"] is False
+
+
+def test_nkin_detail_review_badge_present(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
+    # NetworkKinetics inherits the parent solve's badge; default solve has
+    # no review row → not_reviewed.
+    assert body["record"]["network_kinetics"]["review"]["status"] == (
+        "not_reviewed"
+    )
+
+
+def test_nkin_detail_include_coefficients_chebyshev(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="coefficients")
+    ).json()
+    coeffs = body["record"]["coefficients"]
+    assert coeffs is not None
+    assert coeffs["n_temperature"] == 6
+    assert coeffs["n_pressure"] == 4
+    # Factory builds a 6x4 matrix → 24 coefficient rows.
+    assert len(coeffs["coefficients"]) == 24
+    # First row has zero-order indices.
+    first = coeffs["coefficients"][0]
+    assert first["temperature_order"] == 0
+    assert first["pressure_order"] == 0
+    assert first["coefficient"] == 0.0
+
+
+def test_nkin_detail_include_coefficients_non_chebyshev_is_none(
+    client, db_session
+):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.plog)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="coefficients")
+    ).json()
+    assert body["record"]["coefficients"] is None
+
+
+def test_nkin_detail_include_plog(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.plog)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="plog")
+    ).json()
+    plog = body["record"]["plog"]
+    assert plog is not None
+    assert len(plog) == 1
+    assert plog[0]["pressure_bar"] == 1.0
+    assert plog[0]["a"] == 1e12
+
+
+def test_nkin_detail_include_plog_non_plog_is_empty(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="plog")
+    ).json()
+    assert body["record"]["plog"] == []
+
+
+def test_nkin_detail_include_points(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.tabulated)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="points")
+    ).json()
+    rec = body["record"]
+    assert rec["points"] is not None
+    assert len(rec["points"]) == 1
+    assert rec["points"][0]["temperature_k"] == 500.0
+    assert rec["points"][0]["pressure_bar"] == 1.0
+    assert rec["points"][0]["rate_value"] == 1.0
+    assert rec["point_count_total"] == 1
+    assert rec["points_truncated"] is False
+
+
+def test_nkin_detail_include_points_capped(client, db_session, monkeypatch):
+    """Point payload caps at settings.public_max_limit and signals truncation."""
+    from app.api.config import settings as _settings
+    from tests.services.scientific_read._factories import (
+        attach_network_kinetics_point,
+    )
+
+    # Build a tabulated kinetics record with several extra point rows.
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.tabulated)
+    kin = fx["kinetics"]
+    for i in range(5):
+        attach_network_kinetics_point(
+            db_session,
+            kinetics=kin,
+            temperature_k=500.0 + (i + 1) * 10,
+            pressure_bar=1.0 + (i + 1) * 0.1,
+            rate_value=1.0 + i,
+        )
+    # Drop the cap to 2 so we exercise the truncation branch deterministically.
+    monkeypatch.setattr(_settings, "public_max_limit", 2)
+    body = client.get(
+        _nkin_detail_url(kin.public_ref, include="points")
+    ).json()
+    rec = body["record"]
+    assert len(rec["points"]) == 2
+    assert rec["points_truncated"] is True
+    assert rec["point_count_total"] == 6
+
+
+def test_nkin_detail_include_source_calculations(client, db_session):
+    fx = _make_kinetics(
+        db_session,
+        NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    body = client.get(
+        _nkin_detail_url(
+            fx["kinetics"].public_ref, include="source_calculations"
+        )
+    ).json()
+    sc = body["record"]["source_calculations"]
+    assert sc is not None
+    assert len(sc) == 1
+    assert sc[0]["calculation_ref"] == fx["source_calculation"].public_ref
+    assert sc[0]["role"] == "fit_source"
+
+
+def test_nkin_detail_include_review_uses_parent_solve(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.network_solve,
+        record_id=fx["solve"].id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="review")
+    ).json()
+    rh = body["record"]["review_history"]
+    assert rh is not None
+    assert rh[0]["status"] == "approved"
+
+
+def test_nkin_detail_include_all_expands_public_tokens_without_points(
+    client, db_session
+):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    inc = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="all")
+    ).json()["request"]["include"]
+    for token in ("coefficients", "plog", "source_calculations", "review"):
+        assert token in inc, f"include=all dropped public token {token!r}"
+    # ``all`` must not silently restore internal_ids or pull in the
+    # unbounded ``points`` payload.
+    assert "internal_ids" not in inc
+    assert "points" not in inc
+
+
+def test_nkin_detail_include_all_does_not_restore_internal_ids(
+    client, db_session
+):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="all")
+    ).json()
+    assert "network_kinetics_id" not in body["record"]["network_kinetics"]
+
+
+def test_nkin_detail_include_all_does_not_include_points(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.tabulated)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="all")
+    ).json()
+    # ``points`` must require explicit opt-in even with ``all``.
+    assert body["record"]["points"] is None
+
+
+def test_nkin_detail_internal_ids_restored_when_policy_allows(
+    client, db_session, allow_internal_ids
+):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="internal_ids")
+    ).json()
+    assert body["record"]["network_kinetics"]["network_kinetics_id"] == (
+        fx["kinetics"].id
+    )
+
+
+def test_nkin_detail_internal_ids_silently_dropped_when_disallowed(
+    client, db_session
+):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="internal_ids")
+    ).json()
+    assert body["request"]["include"] == []
+    assert "network_kinetics_id" not in body["record"]["network_kinetics"]
+
+
+def test_nkin_detail_unknown_include_token_returns_422(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    resp = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="banana")
+    )
+    assert resp.status_code == 422
+
+
+def test_nkin_detail_plog_ordering_deterministic(client, db_session):
+    """PLOG rows return sorted by (pressure_bar ASC, entry_index ASC)."""
+    from tests.services.scientific_read._factories import (
+        attach_network_kinetics_plog,
+    )
+
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.plog)
+    kin = fx["kinetics"]
+    attach_network_kinetics_plog(
+        db_session, kinetics=kin, pressure_bar=10.0, entry_index=1,
+        a=2e12, n=0.0, ea_kj_mol=0.0,
+    )
+    attach_network_kinetics_plog(
+        db_session, kinetics=kin, pressure_bar=0.1, entry_index=1,
+        a=3e12, n=0.0, ea_kj_mol=0.0,
+    )
+    body = client.get(
+        _nkin_detail_url(kin.public_ref, include="plog")
+    ).json()
+    pressures = [row["pressure_bar"] for row in body["record"]["plog"]]
+    assert pressures == sorted(pressures)
+
+
+def test_nkin_detail_point_ordering_deterministic(client, db_session):
+    """Point rows return sorted by (temperature_k ASC, pressure_bar ASC)."""
+    from tests.services.scientific_read._factories import (
+        attach_network_kinetics_point,
+    )
+
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.tabulated)
+    kin = fx["kinetics"]
+    attach_network_kinetics_point(
+        db_session, kinetics=kin, temperature_k=800.0, pressure_bar=0.5,
+        rate_value=2.0,
+    )
+    attach_network_kinetics_point(
+        db_session, kinetics=kin, temperature_k=400.0, pressure_bar=5.0,
+        rate_value=3.0,
+    )
+    body = client.get(
+        _nkin_detail_url(kin.public_ref, include="points")
+    ).json()
+    temps = [r["temperature_k"] for r in body["record"]["points"]]
+    assert temps == sorted(temps)
+
+
+def test_nkin_detail_coefficient_ordering_deterministic(client, db_session):
+    """Chebyshev coefficient rows return sorted by (temperature_order,
+    pressure_order)."""
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="coefficients")
+    ).json()
+    indices = [
+        (c["temperature_order"], c["pressure_order"])
+        for c in body["record"]["coefficients"]["coefficients"]
+    ]
+    assert indices == sorted(indices)
+
+
+def test_nkin_detail_source_calc_ordering_deterministic(client, db_session):
+    """source_calculations sort by (role, calculation_id)."""
+    fx = _make_kinetics(
+        db_session,
+        NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    # Add a second source calculation under a different role.
+    from tests.services.scientific_read._factories import (
+        attach_network_solve_source_calculation,
+        make_calculation,
+    )
+
+    second_calc = make_calculation(
+        db_session,
+        type=CalculationType.sp,
+        species_entry_id=fx["species_entry"].id,
+    )
+    attach_network_solve_source_calculation(
+        db_session,
+        solve=fx["solve"],
+        calculation=second_calc,
+        role=NetworkSolveCalculationRole.well_energy,
+    )
+    # Ordering is deterministic — PostgreSQL enum sorts by declaration
+    # order, so well_energy (declared before fit_source) comes first.
+    body_a = client.get(
+        _nkin_detail_url(
+            fx["kinetics"].public_ref, include="source_calculations"
+        )
+    ).json()
+    body_b = client.get(
+        _nkin_detail_url(
+            fx["kinetics"].public_ref, include="source_calculations"
+        )
+    ).json()
+    roles_a = [row["role"] for row in body_a["record"]["source_calculations"]]
+    roles_b = [row["role"] for row in body_b["record"]["source_calculations"]]
+    assert roles_a == roles_b
+    assert len(roles_a) == 2
+    assert set(roles_a) == {"fit_source", "well_energy"}
+
+
+def test_nkin_detail_rejected_parent_solve_returns_record_with_badge(
+    client, db_session
+):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.network_solve,
+        record_id=fx["solve"].id,
+        status=RecordReviewStatus.rejected,
+    )
+    body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
+    # Detail endpoints don't filter by review state — record still returns
+    # with the rejected badge.
+    assert body["record"]["network_kinetics"]["review"]["status"] == (
+        "rejected"
+    )
+
+
+def test_nkin_detail_no_forbidden_payload_keys(client, db_session):
+    """Recursive forbidden-key walk over an ``include=all`` response.
+
+    ``coefficients`` / ``plog`` / ``points`` are the *purpose* of this
+    endpoint and are excluded from the forbidden list — they're tested
+    individually for include-gating instead.
+    """
+    fx = _make_kinetics(
+        db_session,
+        NetworkKineticsModelKind.chebyshev,
+        with_source_calc=True,
+    )
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="all")
+    ).json()
+    forbidden = {
+        "xyz_text",
+        "atoms",
+        "coords",
+        "symbols",
+        "body",
+        "content",
+        "data",
+        "presigned_url",
+        "download_url",
+    }
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                assert k not in forbidden, (
+                    f"network-kinetics detail leaked forbidden key {k!r}"
+                )
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(body)
+
+
+def test_nkin_detail_payload_keys_only_appear_when_requested(
+    client, db_session
+):
+    """Coefficient/plog/point payloads must not leak into the default response."""
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.tabulated)
+    body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
+    rec = body["record"]
+    for key in ("coefficients", "plog", "points"):
+        assert rec[key] is None
+
+
+# ---------------------------------------------------------------------------
+# Cross-surface agreement: the standalone kinetics core's shape metadata
+# must match the embedded NetworkKineticsSummary on the network and
+# network-solve surfaces for the shared subset of fields.
+# ---------------------------------------------------------------------------
+
+
+def _shared_kinetics_fields(summary: dict) -> dict:
+    """Project the fields the standalone core and the embedded summary
+    agree on (the standalone core has extra unit fields)."""
+    return {
+        k: summary.get(k)
+        for k in (
+            "model_kind",
+            "tmin_k",
+            "tmax_k",
+            "pmin_bar",
+            "pmax_bar",
+            "chebyshev_shape",
+            "plog_entry_count",
+            "point_count",
+        )
+    }
+
+
+def test_nkin_detail_summary_matches_network_embedded(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    standalone = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref)
+    ).json()["record"]["network_kinetics"]
+    embedded = client.get(
+        _detail_url(fx["network"].public_ref, include="kinetics")
+    ).json()["record"]["kinetics"][0]
+    assert _shared_kinetics_fields(standalone) == _shared_kinetics_fields(
+        embedded
+    )
+
+
+def test_nkin_detail_summary_matches_solve_embedded(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.plog)
+    standalone = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref)
+    ).json()["record"]["network_kinetics"]
+    embedded = client.get(
+        f"/api/v1/scientific/network-solves/{fx['solve'].public_ref}"
+        "?include=kinetics"
+    ).json()["record"]["kinetics"][0]
+    assert _shared_kinetics_fields(standalone) == _shared_kinetics_fields(
+        embedded
+    )

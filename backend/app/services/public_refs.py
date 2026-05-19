@@ -78,6 +78,7 @@ PREFIXES: dict[str, str] = {
     "TransitionStateEntry": "tse",
     "Network": "net",
     "NetworkSolve": "nsolve",
+    "NetworkKinetics": "nkin",
     "Submission": "sub",
 }
 

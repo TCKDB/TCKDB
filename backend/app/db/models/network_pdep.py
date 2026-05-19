@@ -340,7 +340,7 @@ class NetworkSolveSourceCalculation(Base):
 # ---------------------------------------------------------------------------
 
 
-class NetworkKinetics(Base, TimestampMixin):
+class NetworkKinetics(Base, TimestampMixin, PublicRefMixin):
     """One fitted phenomenological k(T,P) for a channel from a specific solve."""
 
     __tablename__ = "network_kinetics"

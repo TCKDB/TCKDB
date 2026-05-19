@@ -39,7 +39,7 @@ from app.db.models.species import (
     SpeciesEntry,
 )
 from app.db.models.network import Network
-from app.db.models.network_pdep import NetworkSolve
+from app.db.models.network_pdep import NetworkKinetics, NetworkSolve
 from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
@@ -380,6 +380,13 @@ def resolve_network_solve_handle(session: Session, handle: str) -> int:
     )
 
 
+def resolve_network_kinetics_handle(session: Session, handle: str) -> int:
+    """Resolve a network-kinetics path handle (int or ``nkin_...``) → row id."""
+    return resolve_path_handle(
+        session, NetworkKinetics, handle, kind_label="network_kinetics"
+    )
+
+
 def reconcile_species_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
 ) -> int | None | object:
@@ -485,6 +492,7 @@ __all__ = [
     "resolve_transport_handle",
     "resolve_network_handle",
     "resolve_network_solve_handle",
+    "resolve_network_kinetics_handle",
     "reconcile_species_pair",
     "reconcile_species_entry_pair",
     "reconcile_reaction_pair",
