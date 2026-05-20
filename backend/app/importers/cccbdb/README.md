@@ -260,6 +260,33 @@ The runner is deliberately tolerant:
 - The runner exits nonzero only when every target failed, or when
   `--strict` is passed and any record had an error.
 
+### URL contract and the unverified-URL guard
+
+CCCBDB does **not** expose stable per-species GET URLs for the
+single-molecule data flow. ``exp1x.asp`` is a POST form whose results
+are served via server-side session state, not a query string:
+
+* `exp1x.asp?formula=H2O` returns the form, not data.
+* `exp1x.asp?casno=...` is unrecognized; Cloudflare returns 1015
+  ("rate limited" — but really "URL pattern not served") even for a
+  single request.
+
+So every ``CrawlTarget`` in [crawl_plan.py](crawl_plan.py) carries an
+explicit ``is_validated_url`` flag, defaulting to ``False`` on the
+placeholder URLs. The snapshot CLI refuses to live-fetch any
+unvalidated URL unless ``--allow-unverified-urls`` is passed,
+returning exit code 2 with a precise error listing each offending
+target. Tests with injected ``FixtureFetcher`` bypass the guard.
+
+To make the snapshot actually fetch live data, the next person will
+need to either:
+
+1. add a session-aware fetcher (POST the formula form, follow cookies
+   to the data page), or
+2. pivot to cross-species property tables such as
+   ``xp1x.asp?prop=1`` (stable GET URLs but a different page kind
+   that the current parser does not handle).
+
 ### Why downloaded archives are ignored by git
 
 `data/external/cccbdb/` is in the repository `.gitignore`. Hand-authored

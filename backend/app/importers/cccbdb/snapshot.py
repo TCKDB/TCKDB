@@ -34,9 +34,11 @@ from app.importers.cccbdb import (
     SOURCE_RELEASE,
 )
 from app.importers.cccbdb.crawl_plan import (
+    EXPERIMENTAL_PILOT,
     PILOTS,
     CrawlTarget,
-    EXPERIMENTAL_PILOT,
+    UnverifiedUrlError,
+    assert_all_validated,
 )
 from app.importers.cccbdb.parsers import parse_experimental_species_page
 
@@ -217,7 +219,15 @@ def _find_cached_raw_html(
 
 @dataclass
 class SnapshotConfig:
-    """Caller-tunable snapshot behavior."""
+    """Caller-tunable snapshot behavior.
+
+    ``dry_run`` suppresses *both* file writes and network fetches. When
+    set, the runner serves every target from the cache if available
+    and records a ``fetch_warnings`` entry for any target that is not
+    already cached. This makes ``--dry-run`` safe to invoke against an
+    upstream that rate-limits aggressively (CCCBDB's Cloudflare layer
+    will issue 1015 even for a single unrecognized URL pattern).
+    """
 
     output_dir: Path
     fetcher: Fetcher
@@ -289,7 +299,14 @@ def run_snapshot(
         for r in records
     ):
         raise SnapshotFailed("Strict mode: at least one record had an error")
-    if records and all(r.content_sha256 is None for r in records):
+    # The "all records failed" guard is a real-fetch concern only;
+    # a dry-run against a cold cache legitimately produces zero
+    # content and is not a failure.
+    if (
+        not config.dry_run
+        and records
+        and all(r.content_sha256 is None for r in records)
+    ):
         raise SnapshotFailed("All records failed to fetch")
 
     return manifest
@@ -414,6 +431,18 @@ def _resolve_html(
             result.http_status = None
             return cached_path.read_text(encoding="utf-8"), True
 
+    if config.dry_run:
+        # Dry-run is fully offline: we already missed the cache above,
+        # so the only honest outcome is to record a fetch warning and
+        # move on. We deliberately do NOT call the live fetcher here —
+        # a single rejected URL is enough to trip the upstream rate
+        # limiter, so making dry-run touch the network would defeat
+        # the safety story.
+        result.fetch_warnings.append(
+            "dry-run: no cached raw HTML and network is suppressed"
+        )
+        return None, False
+
     fetch = config.fetcher(target.source_url)
     result.retrieved_at = _now_utc_iso()
     result.http_status = fetch.http_status
@@ -455,6 +484,16 @@ def _build_arg_parser():  # pragma: no cover - thin argparse wrapping
     p.add_argument("--force-refresh", action="store_true")
     p.add_argument("--write-payloads", action="store_true")
     p.add_argument("--strict", action="store_true")
+    p.add_argument(
+        "--allow-unverified-urls",
+        action="store_true",
+        help=(
+            "Override the CCCBDB URL guardrail. Without this flag the CLI "
+            "refuses to fetch any CrawlTarget whose is_validated_url is "
+            "False. Current Phase 2b allowlist URLs are all unverified — "
+            "see crawl_plan.py for context."
+        ),
+    )
     p.add_argument("--max-pages", type=int, default=None)
     p.add_argument("--sleep-seconds", type=float, default=2.0)
     p.add_argument("--timeout-seconds", type=float, default=20.0)
@@ -470,6 +509,18 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     targets = PILOTS[args.pilot]
+
+    # Guard the live network path. ``--dry-run`` is fully offline by
+    # design (see SnapshotConfig docstring), so it does not need the
+    # URL guard — but we keep the check unconditional for an honest
+    # error message when someone removes ``--dry-run`` later.
+    if not args.allow_unverified_urls and not args.dry_run:
+        try:
+            assert_all_validated(targets)
+        except UnverifiedUrlError as exc:
+            _logger.error("%s", exc)
+            return 2
+
     fetcher = HttpFetcher(
         user_agent=args.user_agent,
         timeout_seconds=args.timeout_seconds,

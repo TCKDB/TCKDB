@@ -334,20 +334,61 @@ def test_strict_mode_raises_on_any_error(tmp_path, monkeypatch):
 
 class TestDryRun:
     def test_dry_run_writes_no_files(self, tmp_path):
+        # Pre-seed the cache so dry-run has something to serve. Real
+        # dry-run usage is typically against an existing archive
+        # (regenerate payloads from cached HTML without re-fetching);
+        # the on-cold-cache behavior is exercised separately below.
         fetcher = FixtureFetcher.make()
+        run_snapshot(
+            EXPERIMENTAL_PILOT,
+            _make_config(tmp_path, fetcher),
+        )
+
+        dry_fetcher_calls = []
+
+        def exploding_fetcher(url):
+            dry_fetcher_calls.append(url)
+            raise AssertionError(
+                f"dry-run must not touch the network; got {url}"
+            )
+
         manifest = run_snapshot(
             EXPERIMENTAL_PILOT,
-            _make_config(tmp_path, fetcher, dry_run=True, write_payloads=True),
+            _make_config(
+                tmp_path,
+                exploding_fetcher,
+                dry_run=True,
+                write_payloads=True,
+            ),
         )
-        # Archive root should not even exist.
-        assert not (tmp_path / "manifest.json").exists()
-        assert not (tmp_path / "raw_html").exists()
-        assert not (tmp_path / "parsed").exists()
-        assert not (tmp_path / "payloads").exists()
-        # But the manifest dict is still produced and well-formed.
+        # No fetcher calls at all.
+        assert dry_fetcher_calls == []
+        # Manifest is well-formed (served from cache).
         assert len(manifest["records"]) == 3
         for rec in manifest["records"]:
             assert rec["content_sha256"] is not None
+            assert rec["cache_hit"] is True
+
+    def test_dry_run_with_cold_cache_records_fetch_warning(self, tmp_path):
+        """When dry-run is invoked without a pre-warmed cache, every
+        target should land in fetch_warnings, no fetcher call, no
+        files written."""
+
+        called = []
+
+        def exploding_fetcher(url):
+            called.append(url)
+            raise AssertionError("dry-run must not touch the network")
+
+        manifest = run_snapshot(
+            EXPERIMENTAL_PILOT,
+            _make_config(tmp_path, exploding_fetcher, dry_run=True),
+        )
+        assert called == []
+        assert not (tmp_path / "manifest.json").exists()
+        for rec in manifest["records"]:
+            assert rec["content_sha256"] is None
+            assert any("dry-run" in w for w in rec["fetch_warnings"])
 
 
 # ---------------------------------------------------------------------------
