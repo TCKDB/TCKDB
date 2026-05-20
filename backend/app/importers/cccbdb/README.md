@@ -270,9 +270,66 @@ churns with each CCCBDB release — checking it in would tie the repo's
 state to NIST's release schedule and could mislead reviewers about
 whose code is whose. The archive lives next to the repo, not inside it.
 
+## Phase 2c — disk-payload round-trip validation
+
+Phase 2c adds round-trip integration tests at
+[backend/tests/importers/cccbdb/test_snapshot_payload_roundtrip.py](../../../tests/importers/cccbdb/test_snapshot_payload_roundtrip.py)
+that run the snapshot end-to-end with `write_payloads=True`, read the
+manifest from the temporary archive, open each `payload_json_path`
+from disk, and validate the sub-payloads against the real upload
+models:
+
+| Sub-payload | Real model |
+|---|---|
+| `payload["species_entry_payload"]` | `tckdb_schemas.fragments.identity.SpeciesEntryIdentityPayload` |
+| `payload["thermo_payload"]`        | `app.schemas.workflows.thermo_upload.ThermoUploadRequest`     |
+| `payload["statmech_payload"]`      | `app.schemas.workflows.statmech_upload.StatmechUploadRequest` |
+| `payload["geometry_payload"]`      | `tckdb_schemas.fragments.geometry.GeometryPayload`            |
+
+This makes the archive **replayable after a DB wipe**: every payload
+artifact on disk is an honest workflow-ready upload request (or
+explicitly flagged otherwise — see below). The tests do not write to
+the database and do not fetch CCCBDB.
+
+### Validity gates for partial inputs
+
+When a CCCBDB experimental page omits required identity fields
+(e.g. H2 has no SMILES), the builder still emits the scientific
+content (h298 / s298 / point group / per-value refs), but flips
+explicit validity gates so the round-trip test knows to skip
+strict validation:
+
+```text
+species_entry_payload_is_valid   # gates SpeciesEntryIdentityPayload
+thermo_payload_is_valid          # gates ThermoUploadRequest (also needs species_entry)
+statmech_payload_is_valid        # gates StatmechUploadRequest
+```
+
+When `*_is_valid=False`, the sub-payload is preserved on disk for
+inspection but is not promised to satisfy the upload schema. A future
+identity-resolution layer (InChIKey-based matching, manual SMILES
+backfill, …) can re-build the payload from the parsed JSON without
+re-fetching.
+
+### Drift caught by the round-trip
+
+The round-trip already caught two real issues during its first run:
+
+1. The geometry builder shipped a `natoms` extra field that
+   `GeometryPayload` (`extra="forbid"`) rejects. Fixed: atom count
+   now lives only on line 0 of the XYZ block.
+2. The thermo/statmech builders embedded a partial `species_entry`
+   for species without SMILES, which produced a `ThermoUploadRequest`
+   that fails validation. Fixed by adding `thermo_payload_is_valid`
+   / `statmech_payload_is_valid` flags so the contract is explicit.
+
+Both bugs were invisible to the Phase 2a in-memory tests because
+those tests indexed into the built dicts directly. The on-disk
+boundary catches what in-memory access skips.
+
 ### Where future builder/upload code goes
 
-Phase 2c+ / Phase 3 may add:
+Phase 3 may add:
 
 ```text
 backend/app/importers/cccbdb/builders/

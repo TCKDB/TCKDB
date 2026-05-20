@@ -71,11 +71,21 @@ def build_experimental_species_payload(
     external_source.per_value_references = per_value_refs
     external_source.unparsed = unparsed
 
+    # A thermo or statmech upload payload is only workflow-ready when
+    # its embedded ``species_entry`` is itself workflow-ready. The
+    # builder still emits the partial payload (so callers can inspect
+    # scientific values and per-value references), but the validity
+    # flag is the single source of truth for round-trip validation.
+    thermo_valid = thermo_payload is not None and species_valid
+    statmech_valid = statmech_payload is not None and species_valid
+
     return BuildResult(
         species_entry_payload=species_entry_payload,
         species_entry_payload_is_valid=species_valid,
         thermo_payload=thermo_payload,
+        thermo_payload_is_valid=thermo_valid,
         statmech_payload=statmech_payload,
+        statmech_payload_is_valid=statmech_valid,
         geometry_payload=geometry_payload,
         external_source=external_source,
         warnings=warnings,

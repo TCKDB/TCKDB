@@ -103,7 +103,13 @@ class BuildResult(BaseModel):
     species_entry_payload: dict[str, Any] | None = None
     species_entry_payload_is_valid: bool = False
     thermo_payload: dict[str, Any] | None = None
+    # ``ThermoUploadRequest`` requires ``species_entry``; this flag
+    # mirrors ``species_entry_payload_is_valid`` so a downstream
+    # consumer can tell at a glance whether the thermo dict is
+    # workflow-ready or just a scientific snapshot of values.
+    thermo_payload_is_valid: bool = False
     statmech_payload: dict[str, Any] | None = None
+    statmech_payload_is_valid: bool = False
     geometry_payload: dict[str, Any] | None = None
     external_source: ExternalSourceMetadata
     warnings: list[str] = Field(default_factory=list)

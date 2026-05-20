@@ -44,7 +44,7 @@ def build_geometry_payload(
             f"{atom.y_angstrom:.6f} "
             f"{atom.z_angstrom:.6f}"
         )
-    return {
-        "xyz_text": "\n".join(lines) + "\n",
-        "natoms": natoms,
-    }
+    # ``GeometryPayload`` accepts only ``xyz_text`` (extra fields are
+    # forbidden), so the atom count lives on line 0 of the XYZ block
+    # — readers can parse it back if they need it.
+    return {"xyz_text": "\n".join(lines) + "\n"}

@@ -36,10 +36,19 @@ class TestH2TopLevel:
             for w in result.warnings
         )
 
-    def test_thermo_and_statmech_payloads_present(self, h2_record):
+    def test_thermo_and_statmech_payloads_present_but_not_workflow_ready(
+        self, h2_record
+    ):
+        """Scientific values are still built so callers can inspect
+        them (per-value refs, h298, point group), but the validity
+        flags track the embedded species_entry: H2 has no SMILES, so
+        nothing that embeds species_entry is workflow-ready."""
+
         result = _build(h2_record)
         assert result.thermo_payload is not None
+        assert result.thermo_payload_is_valid is False
         assert result.statmech_payload is not None
+        assert result.statmech_payload_is_valid is False
 
     def test_geometry_payload_absent(self, h2_record):
         result = _build(h2_record)

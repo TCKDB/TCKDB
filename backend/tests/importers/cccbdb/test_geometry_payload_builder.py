@@ -11,7 +11,9 @@ class TestH2OGeometry:
     def test_xyz_text_well_formed(self, h2o_record):
         payload = build_geometry_payload(h2o_record)
         assert payload is not None
-        assert payload["natoms"] == 3
+        # ``GeometryPayload`` only accepts ``xyz_text`` — atom count
+        # lives on line 0 of the XYZ block.
+        assert set(payload.keys()) == {"xyz_text"}
 
         lines = payload["xyz_text"].splitlines()
         assert lines[0] == "3"
