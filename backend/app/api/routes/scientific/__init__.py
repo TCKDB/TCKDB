@@ -37,6 +37,7 @@ from app.api.routes.scientific import (
     geometries,
     kinetics,
     kinetics_search,
+    literature,
     networks,
     provenance,
     reactions,
@@ -76,5 +77,6 @@ scientific_router.include_router(transport.router)
 scientific_router.include_router(networks.router)
 scientific_router.include_router(networks.solve_router)
 scientific_router.include_router(networks.kinetics_router)
+scientific_router.include_router(literature.router)
 
 __all__ = ["scientific_router"]
