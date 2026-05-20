@@ -283,3 +283,8 @@ backend/cookies.txt
 .vexb/workspace.json
 .vexb/index.sqlite
 .vexb/config.json
+
+# CCCBDB snapshot archives (downloaded raw HTML + parsed JSON + payloads).
+# Hand-authored fixtures under backend/app/importers/cccbdb/fixtures/
+# remain tracked; only the live snapshot output is ignored.
+data/external/cccbdb/

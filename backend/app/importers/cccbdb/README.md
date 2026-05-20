@@ -157,9 +157,122 @@ the real `ThermoUploadRequest`, `StatmechUploadRequest`, and
 upload schemas ever drift away from what the importer produces,
 those tests fail loudly.
 
+## Phase 2b — snapshot archive
+
+The hand-authored fixtures under [fixtures/](fixtures/) are great for
+unit tests but they are *our* tables, not NIST's. The
+[snapshot.py](snapshot.py) command captures the actual CCCBDB pages
+into a durable, content-addressed archive so payloads can be
+regenerated later even if the website changes or disappears.
+
+### Why raw snapshots are the durable source of truth
+
+```
+CCCBDB page  ─→  raw_html/*.html    ←── content-addressed by SHA256;
+                                        the immutable artifact NIST
+                                        actually served us.
+
+raw_html  ─→  parsed/*.json         ←── Phase 1 parser output;
+                                        regeneratable from raw_html.
+
+parsed    ─→  payloads/*.json       ←── Phase 2a builder output;
+                                        regeneratable from parsed.
+
+payloads  ─→  TCKDB DB rows         ←── Phase 3+ upload workflow
+                                        (does not exist yet).
+```
+
+Each downstream artifact is **regeneratable** from the previous one.
+Only the raw HTML must be archived; everything else is a function of
+it plus a versioned parser/builder. A future schema change or parser
+fix can be applied by re-running the snapshot's `--write-payloads`
+step without re-fetching CCCBDB.
+
+### How to run a 3-page snapshot
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_snapshot \
+    --output-dir data/external/cccbdb \
+    --pilot experimental \
+    --write-payloads \
+    --sleep-seconds 2
+```
+
+This fetches H2, H2O, and benzene (with a 2-second pause between
+requests), writes `data/external/cccbdb/raw_html/`,
+`data/external/cccbdb/parsed/`, and `data/external/cccbdb/payloads/`,
+and emits a deterministic `data/external/cccbdb/manifest.json`.
+
+Useful flags:
+
+| Flag | Effect |
+|---|---|
+| `--dry-run` | Compute everything in memory; write nothing. |
+| `--force-refresh` | Re-fetch raw HTML even when cached. |
+| `--max-pages N` | Cap the snapshot to the first `N` targets. |
+| `--sleep-seconds S` | Polite gap between fetches (default 2.0). |
+| `--timeout-seconds S` | Per-request timeout (default 20.0). |
+| `--strict` | Exit nonzero if any target had a parser/builder error. |
+
+### How to regenerate payloads from saved snapshots
+
+Re-running the command without `--force-refresh` reuses cached
+`raw_html/*.html` for every species already on disk:
+
+```bash
+# Re-build payloads with an updated parser/builder, no re-fetch:
+conda run -n tckdb_env python -m scripts.cccbdb_snapshot \
+    --output-dir data/external/cccbdb \
+    --pilot experimental \
+    --write-payloads
+```
+
+The runner re-hashes the cached HTML, re-runs the Phase 1 parser and
+Phase 2a builder, and rewrites `parsed/` and `payloads/` (and the
+manifest) with the latest parser/builder versions.
+
+### Manifest shape
+
+`manifest.json` records, per target:
+
+```text
+species_key, page_kind, source_url, source_record_key,
+retrieved_at, http_status, content_sha256,
+raw_html_path, parsed_json_path, payload_json_path,
+parser_warnings, builder_warnings, fetch_warnings,
+parser_error, builder_error, cache_hit
+```
+
+Plus top-level fields: `source`, `source_release`,
+`source_database_doi`, `snapshot_version`, `created_at`,
+`parser_version`, `builder_version`. All paths are relative to the
+archive root, so an archive can be moved or zipped without rewriting.
+
+### Failure handling
+
+The runner is deliberately tolerant:
+
+- A **fetch failure** records `fetch_warnings` and skips parser/builder
+  steps for that target.
+- A **parser failure** still saves raw HTML and records `parser_error`
+  in the manifest, so the bad page can be diagnosed offline later.
+- A **builder failure** still saves raw HTML and parsed JSON.
+- The runner exits nonzero only when every target failed, or when
+  `--strict` is passed and any record had an error.
+
+### Why downloaded archives are ignored by git
+
+`data/external/cccbdb/` is in the repository `.gitignore`. Hand-authored
+sanitized fixtures under [fixtures/](fixtures/) remain tracked because
+they back the unit tests and have a stable license story. Live NIST
+HTML, by contrast, may carry implicit terms-of-use considerations and
+churns with each CCCBDB release — checking it in would tie the repo's
+state to NIST's release schedule and could mislead reviewers about
+whose code is whose. The archive lives next to the repo, not inside it.
+
 ### Where future builder/upload code goes
 
-Phase 2b/3 may add:
+Phase 2c+ / Phase 3 may add:
 
 ```text
 backend/app/importers/cccbdb/builders/
