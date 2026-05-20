@@ -1,0 +1,53 @@
+<!--
+  Sanitized fixture mimicking the *real-shape* CCCBDB formula-entry
+  page that the Phase 5a classifier previously misclassified as
+  ``molecule_data_page``.
+
+  The deceptive parts:
+    - ``<TITLE>CCCBDB All data for one molecule</TITLE>`` — sounds
+      like a per-species page; isn't.
+    - ``<H1>All data (experiment and calculated) for one species</H1>``
+      — same.
+    - Menu and form labels mention "CAS" / "InChI" / "SMILES" as
+      *concepts*, not as data values.
+
+  The smoking guns (these and only these are real per-form signals):
+    - "Select a species by entering a chemical formula."
+    - ``<FORM ACTION = "getformx.asp" METHOD="post">``
+    - ``<input ... name="formula">``
+    - "Rules for chemical formula."
+
+  Source page (informational only — NOT fetched by tests):
+    https://cccbdb.nist.gov/alldata2x.asp?casno=<various>
+    (the actual served URL after redirect is exp1x.asp).
+-->
+<HTML>
+<HEAD><TITLE>CCCBDB All data for one molecule</TITLE></HEAD>
+<BODY>
+<H1>All data (experiment and calculated) for one species</H1>
+<P>Select a species by entering a chemical formula.</P>
+
+<FORM ACTION = "getformx.asp" METHOD="post" id=form1 name=form1>
+  <input type="hidden" name="sid" value="abc">
+  <input type="text" name="formula" value="" size="40">
+  <input type="submit" name="go" value="Submit">
+</FORM>
+
+<H2>Rules for chemical formula</H2>
+<UL>
+  <LI>Enter element symbols followed by counts: CH4, C6H6.</LI>
+  <LI>Ions: place + or - at the end.</LI>
+</UL>
+
+<H2>Available properties</H2>
+<UL>
+  <LI><A href="expgeom1x.asp">Experimental geometries</A></LI>
+  <LI><A href="expvibs1x.asp">Experimental vibrations</A></LI>
+  <LI><A href="hf0kx.asp">Hf at 0 K</A></LI>
+  <LI><A href="inchix.asp">InChI catalog</A></LI>
+</UL>
+
+<P>Identifier conventions: CAS Registry Numbers, InChI strings,
+InChIKey 27-character hashes, SMILES line notation.</P>
+</BODY>
+</HTML>

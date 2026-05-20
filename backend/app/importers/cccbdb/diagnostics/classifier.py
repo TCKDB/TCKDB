@@ -51,9 +51,32 @@ _FORMULA_ENTRY_PATTERNS = (
     "enter a sequence of element symbols followed by numbers",
 )
 
-# Hallmarks of an actual molecule data page (all-data-for-one-species
-# style). We require BOTH a molecule-page heading idiom AND at least
-# one identifier label so a plain redirect doesn't get misread.
+# Phase 5b: *strong* formula-entry signals. These outrank every
+# molecule-data heading (including the deceptive
+# ``<TITLE>CCCBDB All data for one molecule</TITLE>`` on the form
+# page itself, which was the bug this hardening fixes). Any of
+# these substrings is sufficient on its own.
+#
+# Each pattern is matched against the lowercased HTML body. We
+# include both the literal form-attribute and the form-text idioms
+# so we catch markup variants like ``ACTION = "getformx.asp"``
+# (with whitespace around ``=``) as well as plain-text "Rules for
+# chemical formula" sidebars.
+_STRONG_FORMULA_ENTRY_PATTERNS = (
+    "select a species by entering a chemical formula",
+    "getformx.asp",
+    'name="formula"',
+    'name=formula',  # CCCBDB occasionally omits the quotes
+    "rules for chemical formula",
+)
+
+# Hallmarks of an actual molecule data page. We no longer accept
+# "all data for one species" as a sufficient heading — CCCBDB's
+# form-entry page *also* carries that title. Instead, a real
+# molecule-data page must show evidence of *populated identifier
+# values*: a real InChI string, a real InChIKey (14-10-1 caps), or
+# a real CAS-number pattern. Identifier *labels* like the bare word
+# "CAS" no longer count.
 _MOLECULE_DATA_HEADINGS = (
     "all data for one species",
     "all experimental data for one molecule",
@@ -61,12 +84,11 @@ _MOLECULE_DATA_HEADINGS = (
     "experimental data for",
 )
 
-_MOLECULE_DATA_IDENTIFIERS = (
-    "inchi=",
-    "inchikey",
-    "cas",
-    "smiles",
-)
+# Strict identifier-value patterns: each one is a smoking gun that
+# only appears on real per-species pages.
+_REAL_INCHI_RE = re.compile(r"inchi=1s/[\w/\-+,]+", re.IGNORECASE)
+_REAL_INCHIKEY_RE = re.compile(r"\b[A-Z]{14}-[A-Z]{10}-[A-Z]\b")
+_REAL_CAS_NUMBER_RE = re.compile(r"\b\d{2,7}-\d{2}-\d\b")
 
 # Property-table hallmarks (Phase 3a-style cross-species pages).
 _PROPERTY_TABLE_HEADINGS = (
@@ -139,30 +161,53 @@ def classify_html(
                 "property-table heading/units + populated <table>",
             )
 
-    # 3) Molecule data page: a per-species heading AND at least one
-    # identifier label. Either alone is too weak: the formula-entry
-    # form *also* mentions "CAS", and a stray "InChI" in marketing
-    # text shouldn't trip the check.
-    has_data_heading = _contains_any(lowered, _MOLECULE_DATA_HEADINGS)
-    has_identifier = _contains_any(lowered, _MOLECULE_DATA_IDENTIFIERS)
-    if has_data_heading and has_identifier:
-        return ClassificationResult(
-            Classification.molecule_data_page,
-            "per-species heading + identifier label present",
+    # 3) Formula-entry page: must outrank molecule-data because the
+    # CCCBDB form page carries the deceptive title
+    # ``CCCBDB All data for one molecule``. ANY strong signal is
+    # enough — none of these appear on real per-species pages.
+    formula_entry_hit = next(
+        (p for p in _STRONG_FORMULA_ENTRY_PATTERNS if p in lowered),
+        None,
+    )
+    if formula_entry_hit is None:
+        formula_entry_hit = next(
+            (p for p in _FORMULA_ENTRY_PATTERNS if p in lowered), None
         )
-
-    # 4) Formula-entry page: deterministic CCCBDB form text.
-    if _contains_any(lowered, _FORMULA_ENTRY_PATTERNS):
-        # If the request was for something other than the form page
-        # and we landed on a form, this is the redirect-landing case.
+    if formula_entry_hit is not None:
         if final_url is not None and final_url != attempted_url:
             return ClassificationResult(
                 Classification.redirect_landing_page,
-                "served formula-entry form at a different URL than requested",
+                f"served formula-entry form ({formula_entry_hit!r}) at "
+                f"{final_url!r} (attempted {attempted_url!r})",
             )
         return ClassificationResult(
             Classification.formula_entry_page,
-            "matched formula-entry form text",
+            f"matched strong formula-entry signal {formula_entry_hit!r}",
+        )
+
+    # 4) Molecule data page: a per-species heading AND evidence of
+    # populated identifier *values* (real InChI, real InChIKey, real
+    # CAS number pattern). The previous check accepted bare labels
+    # like "CAS" or "InChIKey" — that fired on the form page's menu
+    # and was the bug this hardening fixes.
+    has_data_heading = _contains_any(lowered, _MOLECULE_DATA_HEADINGS)
+    has_real_inchi = bool(_REAL_INCHI_RE.search(html))
+    has_real_inchikey = bool(_REAL_INCHIKEY_RE.search(html))
+    has_real_cas = bool(_REAL_CAS_NUMBER_RE.search(html))
+    has_specific_identifier = (
+        has_real_inchi or has_real_inchikey or has_real_cas
+    )
+    if has_data_heading and has_specific_identifier:
+        which = (
+            "real InChI"
+            if has_real_inchi
+            else "real InChIKey"
+            if has_real_inchikey
+            else "real CAS number"
+        )
+        return ClassificationResult(
+            Classification.molecule_data_page,
+            f"per-species heading + {which} pattern in body",
         )
 
     # 5) Generic redirect landing: the URL moved AND content is

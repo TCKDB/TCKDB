@@ -603,6 +603,48 @@ record of what the parser could see.
   upload payloads. No `MolecularPropertyObservationCreate` (or
   any other upload schema) is built from them in this phase.
 
+### Classifier-hardening note (Phase 5b)
+
+CCCBDB's formula-entry page carries a deceptively-similar title:
+
+```
+<TITLE>CCCBDB All data for one molecule</TITLE>
+<H1>All data (experiment and calculated) for one species</H1>
+<FORM ACTION = "getformx.asp" METHOD="post">
+```
+
+An earlier Phase 5a classifier accepted this page as
+`molecule_data_page` because the heading + the bare word "CAS"
+appearing in menu/form labels was enough. That bug is fixed:
+
+- Formula-entry signals (any of `select a species by entering a
+  chemical formula`, `getformx.asp`, `name="formula"`, `rules for
+  chemical formula`) **outrank** molecule-data signals.
+- `molecule_data_page` now requires evidence of a **populated
+  identifier value** in the body — a real `InChI=…` string, a real
+  InChIKey (14-10-1 caps), or a real CAS-number pattern
+  (`\d{2,7}-\d{2}-\d`). The bare label "CAS" no longer fires.
+
+#### Finding bad archived pages
+
+If a snapshot was run before the hardening landed, contaminated
+`raw_html/` pages may exist. Manual sweep:
+
+```bash
+# Find raw species_alldata pages that are actually formula-entry forms
+grep -RIl "Select a species by entering a chemical formula" \
+  data/external/cccbdb/raw_html/species_alldata_*.html
+
+# Also worth checking:
+grep -RIl "getformx.asp" \
+  data/external/cccbdb/raw_html/species_alldata_*.html
+```
+
+Any match is a bad archive — delete or move out, then re-run the
+snapshot. The fixed classifier will route it to `rejected_html/`
+(or drop it entirely without `--save-rejected-html`).
+
+
 ## Resolver diagnostics
 
 CCCBDB's per-species data flow is not what its URL patterns suggest:
