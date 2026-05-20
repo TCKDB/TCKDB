@@ -1,0 +1,78 @@
+<!--
+  Sanitized, hand-authored fixture mimicking the structure of a CCCBDB
+  experimental species page for H2.
+
+  Source page (informational only — NOT fetched by tests):
+    https://cccbdb.nist.gov/exp1x.asp?casno=1333740
+
+  Phase 1 parser-only fixture. Values are illustrative and approximate;
+  do not cite from these fixtures.
+-->
+<html>
+<head><title>CCCBDB Experimental Data: Hydrogen (H2)</title></head>
+<body>
+  <h1>Experimental data for H2</h1>
+
+  <section id="identity">
+    <h2>Identity</h2>
+    <table class="identity">
+      <tr><th>Name</th><td>Hydrogen</td></tr>
+      <tr><th>Other names</th><td>Dihydrogen; molecular hydrogen</td></tr>
+      <tr><th>Formula</th><td>H2</td></tr>
+      <tr><th>CAS</th><td>1333-74-0</td></tr>
+      <tr><th>InChI</th><td>InChI=1S/H2/h1H</td></tr>
+      <tr><th>InChIKey</th><td>UFHFLCQGNIYNRP-UHFFFAOYSA-N</td></tr>
+      <tr><th>Charge</th><td>0</td></tr>
+      <tr><th>Multiplicity</th><td>1</td></tr>
+      <tr><th>State</th><td>X 1Sigmag+</td></tr>
+    </table>
+  </section>
+
+  <section id="thermo">
+    <h2>Experimental Thermochemistry</h2>
+    <table class="thermo">
+      <tr>
+        <th>Property</th><th>Value</th><th>Units</th>
+        <th>Uncertainty</th><th>Reference</th>
+      </tr>
+      <tr>
+        <td>Hf(0 K)</td><td>0.000</td><td>kJ/mol</td>
+        <td>-</td><td>Gurvich</td>
+      </tr>
+      <tr>
+        <td>Hf(298.15 K)</td><td>0.000</td><td>kJ/mol</td>
+        <td>-</td><td>Gurvich</td>
+      </tr>
+      <tr>
+        <td>S(298.15 K)</td><td>130.680</td><td>J/mol/K</td>
+        <td>0.003</td><td>Gurvich</td>
+      </tr>
+      <tr>
+        <td>Cp(298.15 K)</td><td>28.836</td><td>J/mol/K</td>
+        <td>-</td><td>Gurvich</td>
+      </tr>
+      <tr>
+        <td>H(298.15 K) - H(0 K)</td><td>8.468</td><td>kJ/mol</td>
+        <td>-</td><td>Gurvich</td>
+      </tr>
+    </table>
+  </section>
+
+  <section id="statmech">
+    <h2>Experimental Statmech</h2>
+    <table class="statmech-summary">
+      <tr><th>Property</th><th>Value</th></tr>
+      <tr><td>Point group</td><td>D*h</td></tr>
+      <tr><td>Symmetry number</td><td>2</td></tr>
+    </table>
+
+    <h3>Vibrational frequencies</h3>
+    <table class="frequencies">
+      <tr>
+        <th>Mode</th><th>Symmetry</th><th>Frequency</th><th>Units</th>
+      </tr>
+      <tr><td>1</td><td>Sigmag</td><td>4401.21</td><td>cm^-1</td></tr>
+    </table>
+  </section>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!--
+  Sanitized, hand-authored fixture mimicking the structure of a CCCBDB
+  experimental species page for benzene. Exercises a non-trivial state
+  label, mixed identity fields, and thermochemistry values reported in
+  alternative units (kcal/mol, cal/mol/K) so the unit normalizer is
+  exercised end-to-end.
+
+  Source page (informational only — NOT fetched by tests):
+    https://cccbdb.nist.gov/exp1x.asp?casno=71432
+-->
+<html>
+<head><title>CCCBDB Experimental Data: Benzene (C6H6)</title></head>
+<body>
+  <h1>Experimental data for benzene</h1>
+
+  <section id="identity">
+    <h2>Identity</h2>
+    <table class="identity">
+      <tr><th>Name</th><td>Benzene</td></tr>
+      <tr><th>Other names</th><td>1,3,5-cyclohexatriene; phene</td></tr>
+      <tr><th>Formula</th><td>C6H6</td></tr>
+      <tr><th>CAS</th><td>71-43-2</td></tr>
+      <tr><th>InChI</th><td>InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H</td></tr>
+      <tr><th>InChIKey</th><td>UHOVQNZJYSORNB-UHFFFAOYSA-N</td></tr>
+      <tr><th>SMILES</th><td>c1ccccc1</td></tr>
+      <tr><th>Charge</th><td>0</td></tr>
+      <tr><th>Multiplicity</th><td>1</td></tr>
+      <tr><th>State</th><td>X 1A1g (planar, D6h)</td></tr>
+    </table>
+  </section>
+
+  <section id="thermo">
+    <h2>Experimental Thermochemistry</h2>
+    <table class="thermo">
+      <tr>
+        <th>Property</th><th>Value</th><th>Units</th>
+        <th>Uncertainty</th><th>Reference</th>
+      </tr>
+      <tr>
+        <td>Hf(298.15 K)</td><td>19.820</td><td>kcal/mol</td>
+        <td>0.120</td><td>Pedley</td>
+      </tr>
+      <tr>
+        <td>S(298.15 K)</td><td>64.340</td><td>cal/mol/K</td>
+        <td>-</td><td>TRC</td>
+      </tr>
+      <tr>
+        <td>Cp(298.15 K)</td><td>81.700</td><td>J/mol/K</td>
+        <td>-</td><td>TRC</td>
+      </tr>
+    </table>
+  </section>
+
+  <section id="statmech">
+    <h2>Experimental Statmech</h2>
+    <table class="statmech-summary">
+      <tr><th>Property</th><th>Value</th></tr>
+      <tr><td>Point group</td><td>D6h</td></tr>
+      <tr><td>Symmetry number</td><td>12</td></tr>
+    </table>
+  </section>
+</body>
+</html>

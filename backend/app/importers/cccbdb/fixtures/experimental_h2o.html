@@ -1,0 +1,96 @@
+<!--
+  Sanitized, hand-authored fixture mimicking the structure of a CCCBDB
+  experimental species page for H2O. Includes identity (with InChI,
+  InChIKey, SMILES), full thermo table, statmech summary, rotational
+  constants, vibrational frequencies, and a geometry block.
+
+  Source page (informational only — NOT fetched by tests):
+    https://cccbdb.nist.gov/exp1x.asp?casno=7732185
+-->
+<html>
+<head><title>CCCBDB Experimental Data: Water (H2O)</title></head>
+<body>
+  <h1>Experimental data for H2O</h1>
+
+  <section id="identity">
+    <h2>Identity</h2>
+    <table class="identity">
+      <tr><th>Name</th><td>Water</td></tr>
+      <tr><th>Other names</th><td>Dihydrogen monoxide; H2O; oxidane</td></tr>
+      <tr><th>Formula</th><td>H2O</td></tr>
+      <tr><th>CAS</th><td>7732-18-5</td></tr>
+      <tr><th>InChI</th><td>InChI=1S/H2O/h1H2</td></tr>
+      <tr><th>InChIKey</th><td>XLYOFNOQVPJJNP-UHFFFAOYSA-N</td></tr>
+      <tr><th>SMILES</th><td>O</td></tr>
+      <tr><th>Charge</th><td>0</td></tr>
+      <tr><th>Multiplicity</th><td>1</td></tr>
+      <tr><th>State</th><td>X 1A1</td></tr>
+    </table>
+  </section>
+
+  <section id="thermo">
+    <h2>Experimental Thermochemistry</h2>
+    <table class="thermo">
+      <tr>
+        <th>Property</th><th>Value</th><th>Units</th>
+        <th>Uncertainty</th><th>Reference</th>
+      </tr>
+      <tr>
+        <td>Hf(298.15 K)</td><td>-241.826</td><td>kJ/mol</td>
+        <td>0.040</td><td>Gurvich</td>
+      </tr>
+      <tr>
+        <td>Hf(0 K)</td><td>-238.921</td><td>kJ/mol</td>
+        <td>0.040</td><td>Gurvich</td>
+      </tr>
+      <tr>
+        <td>S(298.15 K)</td><td>188.834</td><td>J/mol/K</td>
+        <td>0.040</td><td>Gurvich</td>
+      </tr>
+      <tr>
+        <td>Cp(298.15 K)</td><td>33.590</td><td>J/mol/K</td>
+        <td>-</td><td>Gurvich</td>
+      </tr>
+      <tr>
+        <td>H(298.15 K) - H(0 K)</td><td>9.905</td><td>kJ/mol</td>
+        <td>-</td><td>Gurvich</td>
+      </tr>
+    </table>
+  </section>
+
+  <section id="statmech">
+    <h2>Experimental Statmech</h2>
+    <table class="statmech-summary">
+      <tr><th>Property</th><th>Value</th></tr>
+      <tr><td>Point group</td><td>C2v</td></tr>
+      <tr><td>Symmetry number</td><td>2</td></tr>
+    </table>
+
+    <h3>Rotational constants</h3>
+    <table class="rotational">
+      <tr><th>A</th><th>B</th><th>C</th><th>Units</th></tr>
+      <tr><td>835.840</td><td>435.351</td><td>278.140</td><td>GHz</td></tr>
+    </table>
+
+    <h3>Vibrational frequencies</h3>
+    <table class="frequencies">
+      <tr>
+        <th>Mode</th><th>Symmetry</th><th>Frequency</th><th>Units</th>
+      </tr>
+      <tr><td>1</td><td>A1</td><td>3657</td><td>cm^-1</td></tr>
+      <tr><td>2</td><td>A1</td><td>1595</td><td>cm^-1</td></tr>
+      <tr><td>3</td><td>B2</td><td>3756</td><td>cm^-1</td></tr>
+    </table>
+  </section>
+
+  <section id="geometry">
+    <h2>Experimental Geometry</h2>
+    <table class="geometry">
+      <tr><th>Atom</th><th>X</th><th>Y</th><th>Z</th><th>Units</th></tr>
+      <tr><td>O</td><td>0.0000</td><td>0.0000</td><td>0.1173</td><td>angstrom</td></tr>
+      <tr><td>H</td><td>0.0000</td><td>0.7572</td><td>-0.4692</td><td>angstrom</td></tr>
+      <tr><td>H</td><td>0.0000</td><td>-0.7572</td><td>-0.4692</td><td>angstrom</td></tr>
+    </table>
+  </section>
+</body>
+</html>
