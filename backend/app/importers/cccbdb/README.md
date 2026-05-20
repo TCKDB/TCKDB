@@ -271,21 +271,86 @@ are served via server-side session state, not a query string:
   ("rate limited" — but really "URL pattern not served") even for a
   single request.
 
-So every ``CrawlTarget`` in [crawl_plan.py](crawl_plan.py) carries an
-explicit ``is_validated_url`` flag, defaulting to ``False`` on the
-placeholder URLs. The snapshot CLI refuses to live-fetch any
-unvalidated URL unless ``--allow-unverified-urls`` is passed,
-returning exit code 2 with a precise error listing each offending
-target. Tests with injected ``FixtureFetcher`` bypass the guard.
+So every per-species ``CrawlTarget`` in [crawl_plan.py](crawl_plan.py)
+carries an explicit ``is_validated_url`` flag, defaulting to
+``False``. The snapshot CLI refuses to live-fetch any unvalidated URL
+unless ``--allow-unverified-urls`` is passed, returning exit code 2
+with a precise error listing each offending target. Tests with
+injected ``FixtureFetcher`` bypass the guard.
 
-To make the snapshot actually fetch live data, the next person will
-need to either:
+The ``experimental-properties`` pilot (Phase 3a, below) sidesteps this
+problem entirely by using cross-species flat-table URLs that don't
+need session state, so its targets are marked
+``is_validated_url=True`` and run unguarded.
 
-1. add a session-aware fetcher (POST the formula form, follow cookies
-   to the data page), or
-2. pivot to cross-species property tables such as
-   ``xp1x.asp?prop=1`` (stable GET URLs but a different page kind
-   that the current parser does not handle).
+## Phase 3a — cross-species property tables
+
+[crawl_plan.py](crawl_plan.py) exposes a second pilot,
+``experimental-properties``, that targets CCCBDB's flat property-table
+pages (one URL = one wide table = many species rows for one
+property). These URLs are empirically verified single-GET resources
+(WebFetch survey, May 2026):
+
+| URL | property_kind | Units | Columns |
+|---|---|---|---|
+| `hf0kx.asp` | `hf_0` | kJ/mol | Species, Name, Hfg 0K, Reference, DOI |
+| `goodlistx.asp` | `hf_0_with_uncertainty` | kJ/mol | Element, Species, Enthalpy 0K, unc |
+| `diplistx.asp` | `dipole` | Debye | Molecule, name, state, x, y, z, tot, squib, comment |
+| `expdiatomicsx.asp` | `diatomic_spectroscopic` | cm⁻¹ | Species, name, ωe, ωexe, ωeye, Be, De, αe, reference |
+
+> `inchix.asp` is **molecule catalog only**. Its links are not trusted
+> as property-table URLs — every property-table target above is
+> explicitly allowlisted with a confirmed URL pattern.
+
+Run the property pilot with:
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_snapshot \
+    --output-dir data/external/cccbdb \
+    --pilot experimental-properties
+```
+
+Files in the archive use the ``property_<key>_<sha12>.html`` /
+``property_<key>_<sha12>.json`` prefix so they coexist with the
+``experimental_<species>_…`` per-species files without collision.
+
+### Parser architecture
+
+[parsers/experimental_property_table.py](parsers/experimental_property_table.py)
+ships **one** generic flat-table parser. It locates the largest
+``<table>`` on the page, extracts the header + rows into a generic
+``(column_names, rows-as-strings)`` structure, and a per-property
+:class:`PropertyTableConfig` maps the raw columns onto
+:class:`CCCBDBExperimentalPropertyRow` fields. Adding a new property
+table is a two-line change: a config entry keyed by ``property_kind``
+plus a ``CrawlTarget`` in [crawl_plan.py](crawl_plan.py). No new
+parser code.
+
+Per-row references and any non-first-class columns (x/y/z dipole
+components, ωexe / Be / De / αe for diatomics, the DOI column on
+`hf0kx.asp`, …) survive in ``CCCBDBExperimentalPropertyRow.raw_row``
+and ``.reference`` so downstream code can lift them later without
+re-fetching.
+
+### Why property-table payloads aren't built yet
+
+Phase 2a payload builders target per-species `Thermo` / `Statmech` /
+`Geometry` upload schemas. Cross-species property rows need a
+different upload destination — a ``molecular_property_observation``
+table that's still a Schema Gap (see [Phase 0 spec §7](../../../docs/specs/cccbdb_importer.md#schema-gaps)).
+Until that lands, the property-table snapshot **stops at parsed JSON**:
+running with ``--write-payloads`` skips builder generation for these
+targets and records a ``builder_warnings`` entry pointing at the gap.
+
+### Why session-aware POST is deferred
+
+Reaching CCCBDB's per-species data would require a session-aware
+fetcher (POST the formula form, follow `Set-Cookie` headers, GET the
+data page). That's significant work and the property tables already
+give us most of the high-value experimental data we need without it.
+Per-species POST fetching is intentionally deferred to a later phase.
+
+
 
 ### Why downloaded archives are ignored by git
 

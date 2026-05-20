@@ -43,7 +43,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-PageKind = Literal["experimental_species"]
+PageKind = Literal["experimental_species", "experimental_property_table"]
 
 
 @dataclass(frozen=True)
@@ -61,6 +61,10 @@ class CrawlTarget:
         the empirical confirmation. The CLI refuses to fetch an
         unvalidated URL unless ``--allow-unverified-urls`` is passed.
     :param notes: Free-text rationale for maintainers.
+    :param property_kind: For ``experimental_property_table`` targets,
+        a machine token naming the property the table represents
+        (``hf_0``, ``hf_0_with_uncertainty``, ``dipole``,
+        ``diatomic_spectroscopic``). Ignored for other page kinds.
     """
 
     species_key: str
@@ -68,6 +72,7 @@ class CrawlTarget:
     page_kind: PageKind = "experimental_species"
     is_validated_url: bool = False
     notes: str = ""
+    property_kind: str | None = None
 
 
 # These URLs are placeholders pending a session-aware fetcher or a
@@ -93,8 +98,54 @@ EXPERIMENTAL_PILOT: tuple[CrawlTarget, ...] = (
 )
 
 
+# Cross-species property-table URLs (the "xp1x.asp-family"). These
+# are the *durable* CCCBDB data path: one URL = one wide table = many
+# species' rows for one property. Empirically confirmed flat single-GET
+# resources (May 2026 WebFetch survey) — no session state, no form
+# submission needed.
+#
+# Each entry's ``species_key`` is a target identifier used in archive
+# filenames (``property_<species_key>_<sha12>.html``); for property
+# tables it doubles as the property-table identifier.
+EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
+    CrawlTarget(
+        species_key="hf_0",
+        source_url="https://cccbdb.nist.gov/hf0kx.asp",
+        page_kind="experimental_property_table",
+        property_kind="hf_0",
+        is_validated_url=True,
+        notes="Hf(0K) flat table; kJ/mol; columns Species|Name|Hfg 0K|Reference|DOI",
+    ),
+    CrawlTarget(
+        species_key="hf_0_with_uncertainty",
+        source_url="https://cccbdb.nist.gov/goodlistx.asp",
+        page_kind="experimental_property_table",
+        property_kind="hf_0_with_uncertainty",
+        is_validated_url=True,
+        notes="Well-known Hf(0K) + unc; kJ/mol; columns Element|Species|Enthalpy 0K|unc",
+    ),
+    CrawlTarget(
+        species_key="dipole",
+        source_url="https://cccbdb.nist.gov/diplistx.asp",
+        page_kind="experimental_property_table",
+        property_kind="dipole",
+        is_validated_url=True,
+        notes="Experimental dipoles; Debye; tot=magnitude; columns Molecule|name|state|x|y|z|tot|squib|comment",
+    ),
+    CrawlTarget(
+        species_key="diatomic_spectroscopic",
+        source_url="https://cccbdb.nist.gov/expdiatomicsx.asp",
+        page_kind="experimental_property_table",
+        property_kind="diatomic_spectroscopic",
+        is_validated_url=True,
+        notes="Diatomic spectroscopic constants; cm^-1; columns Species|name|we|wexe|weye|Be|De|alphae|reference",
+    ),
+)
+
+
 PILOTS: dict[str, tuple[CrawlTarget, ...]] = {
     "experimental": EXPERIMENTAL_PILOT,
+    "experimental-properties": EXPERIMENTAL_PROPERTIES_PILOT,
 }
 
 

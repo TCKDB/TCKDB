@@ -40,7 +40,10 @@ from app.importers.cccbdb.crawl_plan import (
     UnverifiedUrlError,
     assert_all_validated,
 )
-from app.importers.cccbdb.parsers import parse_experimental_species_page
+from app.importers.cccbdb.parsers import (
+    parse_experimental_property_table_page,
+    parse_experimental_species_page,
+)
 
 SNAPSHOT_VERSION = 1
 BUILDER_VERSION = "cccbdb-experimental-payload-builder/0.1.0"
@@ -199,16 +202,21 @@ def _atomic_write_json(path: Path, data: Any) -> None:
 
 
 def _find_cached_raw_html(
-    raw_dir: Path, species_key: str
+    raw_dir: Path, species_key: str, page_kind: str
 ) -> tuple[Path, str] | None:
-    """Return the most-recent cached raw HTML for a species, if any.
+    """Return the most-recent cached raw HTML for a target, if any.
 
-    Cached files are named ``<species_key>_<sha12>.html``. We pick the
-    lexicographically last one (sha order, deterministic) — there
-    should normally be exactly one per species per release.
+    Cached files are named ``<prefix>_<species_key>_<sha12>.html``
+    where ``<prefix>`` is ``experimental`` for species pages and
+    ``property`` for cross-species property tables. We pick the
+    lexicographically last match (sha order, deterministic) — there
+    should normally be exactly one per target per CCCBDB release.
     """
 
-    candidates = sorted(raw_dir.glob(f"experimental_{species_key}_*.html"))
+    prefix = (
+        "property" if page_kind == "experimental_property_table" else "experimental"
+    )
+    candidates = sorted(raw_dir.glob(f"{prefix}_{species_key}_*.html"))
     if not candidates:
         return None
     path = candidates[-1]
@@ -324,7 +332,10 @@ def _snapshot_one(
     parsed_dir: Path,
     payload_dir: Path,
 ) -> RecordResult:
-    base_name = f"experimental_{target.species_key}"
+    if target.page_kind == "experimental_property_table":
+        base_name = f"property_{target.species_key}"
+    else:
+        base_name = f"experimental_{target.species_key}"
     result = RecordResult(
         species_key=target.species_key,
         page_kind=target.page_kind,
@@ -362,11 +373,24 @@ def _snapshot_one(
 
     # --- Parse ----------------------------------------------------------
     try:
-        record = parse_experimental_species_page(
-            html,
-            source_url=target.source_url,
-            source_record_key=target.species_key,
-        )
+        if target.page_kind == "experimental_property_table":
+            if target.property_kind is None:
+                raise ValueError(
+                    "property_kind is required for "
+                    "experimental_property_table targets"
+                )
+            record = parse_experimental_property_table_page(
+                html,
+                property_kind=target.property_kind,
+                source_url=target.source_url,
+                source_record_key=target.species_key,
+            )
+        else:
+            record = parse_experimental_species_page(
+                html,
+                source_url=target.source_url,
+                source_record_key=target.species_key,
+            )
     except Exception as exc:  # noqa: BLE001 - we want to log + continue
         result.parser_error = f"{type(exc).__name__}: {exc}"
         _logger.warning(
@@ -383,7 +407,19 @@ def _snapshot_one(
     result.parsed_json_path = str(parsed_path.relative_to(config.output_dir))
 
     # --- Build (optional) ----------------------------------------------
-    if config.write_payloads and payload_path is not None:
+    # Builders are species-page-specific. Cross-species property
+    # tables stop at parsed JSON for now — molecular_property_observation
+    # is still a schema gap (see docs/specs/cccbdb_importer.md §7 Gap 1).
+    if (
+        config.write_payloads
+        and payload_path is not None
+        and target.page_kind == "experimental_property_table"
+    ):
+        result.builder_warnings.append(
+            "experimental_property_table payloads are deferred until "
+            "molecular_property_observation lands"
+        )
+    elif config.write_payloads and payload_path is not None:
         try:
             from app.importers.cccbdb.builders import (
                 build_experimental_species_payload,
@@ -424,7 +460,9 @@ def _resolve_html(
     """
 
     if not config.force_refresh:
-        cached = _find_cached_raw_html(raw_dir, target.species_key)
+        cached = _find_cached_raw_html(
+            raw_dir, target.species_key, target.page_kind
+        )
         if cached is not None:
             cached_path, sha = cached
             result.retrieved_at = None  # cache-served: no fresh retrieval

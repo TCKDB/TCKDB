@@ -1,0 +1,49 @@
+<!--
+  Sanitized fixture for CCCBDB's diplistx.asp ("Experimental
+  Dipoles") flat table.
+
+  Source page (informational only — not fetched by tests):
+    https://cccbdb.nist.gov/diplistx.asp
+
+  Real columns observed (May 2026):
+    Molecule | name | state | x | y | z | tot | squib | commment
+  (note: "commment" appears with a triple-m typo on the real page;
+  the fixture preserves the typo so the parser exercises the same
+  column-name path the live page uses).
+
+  ``tot`` is the total dipole moment magnitude in Debye.
+-->
+<html>
+<head><title>CCCBDB: Experimental Dipoles</title></head>
+<body>
+<h2>Experimental Dipoles</h2>
+<p>Dipole moments in Debye</p>
+<table>
+<tr>
+  <th>Molecule</th><th>name</th><th>state</th>
+  <th>x</th><th>y</th><th>z</th><th>tot</th>
+  <th>squib</th><th>commment</th>
+</tr>
+<tr>
+  <td>H2</td><td>Hydrogen diatomic</td><td>1Σg</td>
+  <td>0.000</td><td>0.000</td><td>0.000</td><td>0.000</td>
+  <td>NSRDS-NBS10</td><td></td>
+</tr>
+<tr>
+  <td>LiH</td><td>Lithium Hydride</td><td>1Σ</td>
+  <td></td><td></td><td></td><td>5.880</td>
+  <td>NSRDS-NBS10</td><td>MB</td>
+</tr>
+<tr>
+  <td>CN</td><td>Cyano radical</td><td>2Σ</td>
+  <td>0.000</td><td>0.000</td><td>-1.450</td><td>1.450</td>
+  <td>1968Tho/Dal:2815</td><td></td>
+</tr>
+<tr>
+  <td>H2O</td><td>Water</td><td>1A1</td>
+  <td>0.000</td><td>0.000</td><td>-1.855</td><td>1.855</td>
+  <td>NSRDS-NBS10</td><td></td>
+</tr>
+</table>
+</body>
+</html>

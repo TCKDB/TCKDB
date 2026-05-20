@@ -216,3 +216,82 @@ class CCCBDBExperimentalSpeciesRecord(BaseModel):
     source_metadata: CCCBDBSourceMetadata
     raw_sections: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Cross-species experimental property tables (xp1x.asp-family pages)
+# ---------------------------------------------------------------------------
+
+
+class CCCBDBPropertyTableSourceMetadata(BaseModel):
+    """Provenance for one CCCBDB cross-species property-table page.
+
+    Parallel to :class:`CCCBDBSourceMetadata` but with
+    ``page_kind="experimental_property_table"``. ``property_kind`` is
+    a machine token (``hf_0``, ``dipole``, ``diatomic_spectroscopic``,
+    …) so a downstream consumer can dispatch on it without parsing
+    the raw page title.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Literal["CCCBDB"] = "CCCBDB"
+    source_release: str = "22"
+    source_database_doi: str = "10.18434/T47C7Z"
+    source_url: str
+    source_record_key: str | None = None
+    page_kind: Literal["experimental_property_table"] = (
+        "experimental_property_table"
+    )
+    property_kind: str
+    retrieved_at: datetime | None = None
+    content_sha256: str
+    parser_version: str
+
+
+class CCCBDBExperimentalPropertyRow(BaseModel):
+    """One row from a CCCBDB cross-species property table.
+
+    Identifier fields are independently optional: CCCBDB rows vary in
+    which identifier columns they carry (some have Species formula
+    only, some add Name, etc.). Both raw and normalized value/unit
+    pairs are preserved so a downstream consumer can confirm
+    conversion or fall back to the raw text.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    row_index: int
+    name: str | None = None
+    formula: str | None = None
+    cas_number: str | None = None
+    inchi: str | None = None
+    inchikey: str | None = None
+    smiles: str | None = None
+    state_label_raw: str | None = None
+
+    value: float | None = None
+    unit: str | None = None
+    normalized_value: float | None = None
+    normalized_unit: str | None = None
+    uncertainty: float | None = None
+    normalized_uncertainty: float | None = None
+
+    reference: CCCBDBValueRef | None = None
+    raw_row: dict[str, str] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class CCCBDBExperimentalPropertyTable(BaseModel):
+    """Result of parsing one CCCBDB cross-species property-table page."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    property_kind: str
+    title: str | None = None
+    raw_units: str | None = None
+    canonical_unit: str | None = None
+    column_names: list[str] = Field(default_factory=list)
+    rows: list[CCCBDBExperimentalPropertyRow] = Field(default_factory=list)
+    source_metadata: CCCBDBPropertyTableSourceMetadata
+    warnings: list[str] = Field(default_factory=list)
