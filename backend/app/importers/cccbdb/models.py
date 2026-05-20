@@ -396,6 +396,51 @@ class CCCBDBCatalogMatchConfidence(str, Enum):
     low = "low"
 
 
+# ---------------------------------------------------------------------------
+# Per-species "all data" pages (Phase 5a)
+# ---------------------------------------------------------------------------
+
+
+class CCCBDBSpeciesAllDataSourceMetadata(BaseModel):
+    """Provenance for a parsed ``alldata2x.asp?casno=...`` snapshot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Literal["CCCBDB"] = "CCCBDB"
+    source_release: str = "22"
+    source_database_doi: str = "10.18434/T47C7Z"
+    source_url: str
+    source_record_key: str | None = None
+    page_kind: Literal["species_all_data"] = "species_all_data"
+    cas_number: str | None = None
+    retrieved_at: datetime | None = None
+    content_sha256: str
+    parser_version: str
+
+
+class CCCBDBSpeciesAllDataRecord(BaseModel):
+    """Minimal parsed view of one CCCBDB per-species page.
+
+    Phase 5a deliberately ships a *small* parser: enough to make the
+    archive useful for triage (title, section headings, any
+    identifiers we can pluck from the body via regex) but not a full
+    property extractor. The raw HTML is the durable artifact; richer
+    parsing is a later phase.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    detected_name: str | None = None
+    detected_formula: str | None = None
+    detected_inchi: str | None = None
+    detected_inchikey: str | None = None
+    detected_smiles: str | None = None
+    section_headings: list[str] = Field(default_factory=list)
+    source_metadata: CCCBDBSpeciesAllDataSourceMetadata
+    warnings: list[str] = Field(default_factory=list)
+
+
 class CCCBDBCatalogMatch(BaseModel):
     """One scored candidate identity-enrichment for a property row.
 

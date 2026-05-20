@@ -40,10 +40,15 @@ from app.importers.cccbdb.crawl_plan import (
     UnverifiedUrlError,
     assert_all_validated,
 )
+from app.importers.cccbdb.diagnostics.classifier import (
+    Classification,
+    classify_html,
+)
 from app.importers.cccbdb.parsers import (
     parse_experimental_property_table_page,
     parse_experimental_species_page,
     parse_molecule_catalog_page,
+    parse_species_all_data_page,
 )
 
 SNAPSHOT_VERSION = 1
@@ -71,11 +76,15 @@ class FetchResult:
     Either ``text`` is non-``None`` (success) or ``error`` is
     non-``None`` (failure). ``http_status`` may be ``None`` for
     transport errors that never reached an HTTP exchange.
+    ``final_url`` is the URL the response was *served from* after
+    HTTP redirects; ``None`` when the transport did not surface one
+    (e.g. for cache-served responses).
     """
 
     text: str | None
     http_status: int | None
     error: str | None
+    final_url: str | None = None
 
 
 class Fetcher(Protocol):
@@ -119,7 +128,12 @@ class HttpFetcher:
                 )
                 last_status = response.status_code
                 response.raise_for_status()
-                return FetchResult(response.text, response.status_code, None)
+                return FetchResult(
+                    text=response.text,
+                    http_status=response.status_code,
+                    error=None,
+                    final_url=response.url,
+                )
             except Exception as exc:  # noqa: BLE001 - keep retry logic broad
                 last_error = f"{type(exc).__name__}: {exc}"
                 if attempt < self.retries:
@@ -135,7 +149,24 @@ class HttpFetcher:
 
 @dataclass
 class RecordResult:
-    """One target's per-record outcome, written to the manifest."""
+    """One target's per-record outcome, written to the manifest.
+
+    Phase 5a additions (species_all_data only; defaults are safe for
+    every other page kind):
+
+    * ``final_url``: URL the response was served from after redirects.
+    * ``classification`` / ``classification_reason``: classifier
+      verdict on the fetched body. Populated for every page kind that
+      runs through the classification gate; ``None`` otherwise.
+    * ``accepted_as_data``: ``None`` for ungated page kinds,
+      ``True`` when the gate passed, ``False`` when the gate
+      rejected the response.
+    * ``rejected_html_path``: relative path to ``rejected_html/`` if
+      the response was rejected and ``--save-rejected-html`` was set.
+    * ``resolver_strategy`` / ``resolver_warnings``: machine token
+      naming the resolver path that produced this record and any
+      resolver-level warnings (gate verdict, missing CAS, etc.).
+    """
 
     species_key: str
     page_kind: str
@@ -153,6 +184,13 @@ class RecordResult:
     parser_error: str | None = None
     builder_error: str | None = None
     cache_hit: bool = False
+    final_url: str | None = None
+    classification: str | None = None
+    classification_reason: str | None = None
+    accepted_as_data: bool | None = None
+    rejected_html_path: str | None = None
+    resolver_strategy: str | None = None
+    resolver_warnings: list[str] = field(default_factory=list)
 
     def to_manifest(self) -> dict[str, Any]:
         return {
@@ -162,10 +200,17 @@ class RecordResult:
             "source_record_key": self.source_record_key,
             "retrieved_at": self.retrieved_at,
             "http_status": self.http_status,
+            "final_url": self.final_url,
             "content_sha256": self.content_sha256,
             "raw_html_path": self.raw_html_path,
+            "rejected_html_path": self.rejected_html_path,
             "parsed_json_path": self.parsed_json_path,
             "payload_json_path": self.payload_json_path,
+            "classification": self.classification,
+            "classification_reason": self.classification_reason,
+            "accepted_as_data": self.accepted_as_data,
+            "resolver_strategy": self.resolver_strategy,
+            "resolver_warnings": self.resolver_warnings,
             "parser_warnings": self.parser_warnings,
             "builder_warnings": self.builder_warnings,
             "fetch_warnings": self.fetch_warnings,
@@ -218,6 +263,8 @@ def _find_cached_raw_html(
         prefix = "property"
     elif page_kind == "molecule_catalog_inchi_index":
         prefix = "catalog"
+    elif page_kind == "species_all_data":
+        prefix = "species_alldata"
     else:
         prefix = "experimental"
     candidates = sorted(raw_dir.glob(f"{prefix}_{species_key}_*.html"))
@@ -249,6 +296,7 @@ class SnapshotConfig:
     dry_run: bool = False
     max_pages: int | None = None
     strict: bool = False
+    save_rejected_html: bool = False
 
 
 def run_snapshot(
@@ -271,12 +319,16 @@ def run_snapshot(
     if config.max_pages is not None:
         targets = targets[: config.max_pages]
 
+    rejected_dir = archive_root / "rejected_html"
+
     if not config.dry_run:
         archive_root.mkdir(parents=True, exist_ok=True)
         raw_dir.mkdir(parents=True, exist_ok=True)
         parsed_dir.mkdir(parents=True, exist_ok=True)
         if config.write_payloads:
             payload_dir.mkdir(parents=True, exist_ok=True)
+        if config.save_rejected_html:
+            rejected_dir.mkdir(parents=True, exist_ok=True)
 
     records: list[RecordResult] = []
     for i, target in enumerate(targets):
@@ -289,6 +341,7 @@ def run_snapshot(
                 raw_dir=raw_dir,
                 parsed_dir=parsed_dir,
                 payload_dir=payload_dir,
+                rejected_dir=rejected_dir,
             )
         )
 
@@ -335,11 +388,14 @@ def _snapshot_one(
     raw_dir: Path,
     parsed_dir: Path,
     payload_dir: Path,
+    rejected_dir: Path,
 ) -> RecordResult:
     if target.page_kind == "experimental_property_table":
         base_name = f"property_{target.species_key}"
     elif target.page_kind == "molecule_catalog_inchi_index":
         base_name = f"catalog_{target.species_key}"
+    elif target.page_kind == "species_all_data":
+        base_name = f"species_alldata_{target.species_key}"
     else:
         base_name = f"experimental_{target.species_key}"
     result = RecordResult(
@@ -363,6 +419,7 @@ def _snapshot_one(
     content_sha256 = hashlib.sha256(html.encode("utf-8")).hexdigest()
     short = _short_sha(content_sha256)
     raw_path = raw_dir / f"{base_name}_{short}.html"
+    rejected_path = rejected_dir / f"{base_name}_{short}.html"
     parsed_path = parsed_dir / f"{base_name}_{short}.json"
     payload_path = (
         payload_dir / f"{base_name}_{short}.json"
@@ -370,11 +427,44 @@ def _snapshot_one(
         else None
     )
 
+    result.content_sha256 = content_sha256
+    result.cache_hit = cache_hit
+
+    # ----- Classification gate (species_all_data only) -----------------
+    # The direct-CAS resolver path (Phase 5a) has known silent-failure
+    # modes — most importantly, ``alldata2x.asp?casno=...`` sometimes
+    # 302s to the formula-entry form, returning HTTP 200 with HTML
+    # that *looks* fine until you read it. We refuse to save such
+    # responses as raw_html, because doing so would let a future
+    # parser run treat them as real per-species data.
+    if target.page_kind == "species_all_data":
+        result.resolver_strategy = "direct_alldata2x_casno"
+        verdict = classify_html(
+            html,
+            attempted_url=target.source_url,
+            final_url=result.final_url,
+        )
+        result.classification = verdict.classification.value
+        result.classification_reason = verdict.reason
+        if verdict.classification != Classification.molecule_data_page:
+            result.accepted_as_data = False
+            result.resolver_warnings.append(
+                f"rejected by classification gate: "
+                f"{verdict.classification.value} ({verdict.reason})"
+            )
+            if config.save_rejected_html and not config.dry_run and not cache_hit:
+                _atomic_write_text(rejected_path, html)
+                result.rejected_html_path = str(
+                    rejected_path.relative_to(config.output_dir)
+                )
+            # Rejected pages do NOT land in raw_html/ and are not
+            # parsed. Skip the rest of the pipeline.
+            return result
+        result.accepted_as_data = True
+
     if not config.dry_run and not cache_hit:
         _atomic_write_text(raw_path, html)
 
-    result.content_sha256 = content_sha256
-    result.cache_hit = cache_hit
     result.raw_html_path = str(raw_path.relative_to(config.output_dir))
 
     # --- Parse ----------------------------------------------------------
@@ -395,6 +485,13 @@ def _snapshot_one(
             record = parse_molecule_catalog_page(
                 html,
                 source_url=target.source_url,
+                source_record_key=target.species_key,
+            )
+        elif target.page_kind == "species_all_data":
+            record = parse_species_all_data_page(
+                html,
+                source_url=target.source_url,
+                cas_number=target.cas_number,
                 source_record_key=target.species_key,
             )
         else:
@@ -507,6 +604,7 @@ def _resolve_html(
     fetch = config.fetcher(target.source_url)
     result.retrieved_at = _now_utc_iso()
     result.http_status = fetch.http_status
+    result.final_url = fetch.final_url
     if fetch.text is None:
         result.fetch_warnings.append(fetch.error or "unknown fetch error")
         result.parser_error = None  # we did not even reach the parser
@@ -545,6 +643,18 @@ def _build_arg_parser():  # pragma: no cover - thin argparse wrapping
     p.add_argument("--force-refresh", action="store_true")
     p.add_argument("--write-payloads", action="store_true")
     p.add_argument("--strict", action="store_true")
+    p.add_argument(
+        "--save-rejected-html",
+        action="store_true",
+        help=(
+            "For ``species_all_data`` targets whose response fails "
+            "the classifier gate (redirect to formula-entry, "
+            "rate-limit page, etc.), save the rejected HTML to "
+            "rejected_html/ for forensic inspection. Without this "
+            "flag, rejected bodies are dropped — only the manifest "
+            "records the verdict."
+        ),
+    )
     p.add_argument(
         "--allow-unverified-urls",
         action="store_true",
@@ -595,6 +705,7 @@ def main(argv: list[str] | None = None) -> int:
         dry_run=args.dry_run,
         max_pages=args.max_pages,
         strict=args.strict,
+        save_rejected_html=args.save_rejected_html,
     )
 
     try:

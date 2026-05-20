@@ -1,0 +1,25 @@
+<!--
+  Sanitized fixture mimicking what CCCBDB returns when
+  ``alldata2x.asp?casno=<digits>`` does not resolve and the server
+  serves the formula-entry form at a different URL (``exp1x.asp``).
+
+  This is the failure mode the live resolver diagnostic observed
+  for 1 of the 5 pilot molecules. The Phase 5a classification gate
+  must reject it.
+
+  Source page (informational only — not fetched by tests):
+    https://cccbdb.nist.gov/exp1x.asp  (served after redirect)
+-->
+<html>
+<head><title>CCCBDB: One molecule with all properties</title></head>
+<body>
+<h1>One molecule with all properties</h1>
+<form method="POST" action="getformx.asp">
+  <input type="hidden" name="sid" value="abc123">
+  <input type="text" name="formula" value="">
+  <input type="submit" name="go" value="Submit">
+</form>
+<p>Please enter the chemical formula.</p>
+<p>Enter a sequence of element symbols followed by numbers, e.g. C6H6.</p>
+</body>
+</html>

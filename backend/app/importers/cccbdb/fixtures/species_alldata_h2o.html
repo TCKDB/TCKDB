@@ -1,0 +1,39 @@
+<!--
+  Sanitized fixture mimicking the structure of CCCBDB's
+  ``alldata2x.asp?casno=7732185`` per-species page for H2O when the
+  resolver hits the molecule-data path.
+
+  Source page (informational only — not fetched by tests):
+    https://cccbdb.nist.gov/alldata2x.asp?casno=7732185
+
+  Phase 5a parser only extracts triage fields (title, headings,
+  detected identifiers). The raw HTML is the durable artifact.
+-->
+<html>
+<head><title>All data for one species: H2O</title></head>
+<body>
+<h1>All data for one species</h1>
+
+<h2>Identifiers</h2>
+<table>
+  <tr><th>Name</th><td>Water</td></tr>
+  <tr><th>Formula</th><td>H2O</td></tr>
+  <tr><th>CAS</th><td>7732-18-5</td></tr>
+  <tr><th>InChI</th><td>InChI=1S/H2O/h1H2</td></tr>
+  <tr><th>InChIKey</th><td>XLYOFNOQVPJJNP-UHFFFAOYSA-N</td></tr>
+  <tr><th>SMILES</th><td>O</td></tr>
+</table>
+
+<h2>Experimental thermochemistry</h2>
+<p>Hf(298 K) = -241.826 kJ/mol (Gurvich)</p>
+
+<h2>Experimental geometry</h2>
+<p>Point group: C2v</p>
+
+<h2>Experimental vibrations</h2>
+<p>Three normal modes in cm-1.</p>
+
+<h2>Computed data</h2>
+<p>Many method/basis combinations available; not parsed in this phase.</p>
+</body>
+</html>

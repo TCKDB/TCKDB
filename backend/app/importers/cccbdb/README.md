@@ -518,6 +518,91 @@ route or persist anything. The builder returns
 plus identity hints and warnings; an upload service is a separate
 Phase 4b decision.
 
+## Phase 5a — direct-CAS per-species snapshots
+
+The resolver diagnostic (previous section) found that
+`alldata2x.asp?casno=<digits>` returns a real `molecule_data_page`
+for **4 of 5** pilot molecules, while form-POST strategies all hit
+Cloudflare. The Phase 5a snapshot mode exploits that finding —
+carefully.
+
+Run with:
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_snapshot \
+    --output-dir data/external/cccbdb \
+    --pilot species-alldata-cas \
+    --sleep-seconds 5
+```
+
+### What "carefully" means: the classification gate
+
+`alldata2x.asp?casno=...` has a silent-failure mode. For some CAS
+numbers (1 in 5 in the live diagnostic) it returns HTTP 200 with
+the formula-entry form served from `exp1x.asp` after a redirect.
+The response *looks* fine until you read the body.
+
+So the runner does not blindly save HTML for `species_all_data`
+targets. Every response is passed through
+[`classify_html`](diagnostics/classifier.py) and **only**
+`molecule_data_page` responses are accepted as data:
+
+| Classification | `accepted_as_data` | `raw_html` written? |
+|---|---|---|
+| `molecule_data_page` | `True` | yes — `raw_html/species_alldata_<key>_<sha>.html` |
+| `redirect_landing_page` | `False` | no (optionally `rejected_html/` with `--save-rejected-html`) |
+| `formula_entry_page` | `False` | no |
+| `rate_limit_or_error_page` | `False` | no |
+| `unknown` | `False` | no |
+| (any other page kind) | `None` (gate not invoked) | yes |
+
+Rejected responses still produce a manifest record with
+`classification`, `classification_reason`, `final_url`, and a
+`resolver_warnings` entry — so the failure is forensic, not
+silent.
+
+### Archive layout
+
+```
+data/external/cccbdb/
+├── manifest.json
+├── raw_html/
+│   └── species_alldata_<species_key>_<sha12>.html      (accepted only)
+├── rejected_html/                                       (--save-rejected-html only)
+│   └── species_alldata_<species_key>_<sha12>.html
+└── parsed/
+    └── species_alldata_<species_key>_<sha12>.json
+```
+
+The `species_alldata_` prefix keeps these files distinct from
+`experimental_*`, `property_*`, and `catalog_*`. Cache lookups are
+page-kind-aware; tests pin the non-collision invariant in all three
+directions.
+
+### Parser scope
+
+The Phase 5a parser is **triage-only**: title, ordered section
+headings, and any InChI / InChIKey / SMILES / formula / molecule
+name the regex sniffs can find in the body text. Full thermochemistry
+/ geometry / vibrational extraction is deferred. The durable artifact
+is the raw HTML; the parsed JSON is a fast-lookup convenience and a
+record of what the parser could see.
+
+### Policy contract
+
+- `inchix.asp` hyperlinks remain catalog-only and untrusted
+  (Phase 3b).
+- Session-aware form POST stays deferred: the live diagnostic showed
+  `exp1x_form_post` triggering rate-limit responses on every pilot
+  molecule.
+- The direct-CAS URL is only used when an explicit `cas_number` is
+  supplied on the `CrawlTarget`.
+- Catalog `raw_href` values are never used to construct
+  `species_all_data` URLs.
+- `species_all_data` snapshots are raw archival inputs, not TCKDB
+  upload payloads. No `MolecularPropertyObservationCreate` (or
+  any other upload schema) is built from them in this phase.
+
 ## Resolver diagnostics
 
 CCCBDB's per-species data flow is not what its URL patterns suggest:

@@ -47,6 +47,7 @@ PageKind = Literal[
     "experimental_species",
     "experimental_property_table",
     "molecule_catalog_inchi_index",
+    "species_all_data",
 ]
 
 
@@ -69,6 +70,9 @@ class CrawlTarget:
         a machine token naming the property the table represents
         (``hf_0``, ``hf_0_with_uncertainty``, ``dipole``,
         ``diatomic_spectroscopic``). Ignored for other page kinds.
+    :param cas_number: CAS Registry Number (digits only, e.g.
+        ``"7732185"``) for ``species_all_data`` targets. Required by
+        the direct-CAS resolver; ignored for other page kinds.
     """
 
     species_key: str
@@ -77,6 +81,7 @@ class CrawlTarget:
     is_validated_url: bool = False
     notes: str = ""
     property_kind: str | None = None
+    cas_number: str | None = None
 
 
 # These URLs are placeholders pending a session-aware fetcher or a
@@ -147,6 +152,65 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
 )
 
 
+# Per-species pages via direct CAS URLs. The live resolver diagnostic
+# (Phase 5a) found ``alldata2x.asp?casno=<digits>`` returns
+# ``molecule_data_page`` for 4 of 5 pilot molecules — promising
+# enough to be the current per-species path, but the snapshot runner
+# *must* gate on the classifier verdict because the failure mode for
+# the 5th molecule is a silent redirect to the formula-entry form.
+#
+# Form POST resolvers stay deferred: the live diagnostic showed
+# ``exp1x_form_post`` triggering ``rate_limit_or_error_page`` for all
+# 5 pilot molecules, presumably because Cloudflare treats programmatic
+# form POSTs as bot traffic.
+SPECIES_ALLDATA_CAS_PILOT: tuple[CrawlTarget, ...] = (
+    CrawlTarget(
+        species_key="h2o",
+        source_url="https://cccbdb.nist.gov/alldata2x.asp?casno=7732185",
+        page_kind="species_all_data",
+        is_validated_url=True,
+        cas_number="7732185",
+        notes="direct-CAS resolver path; live diagnostic = molecule_data_page",
+    ),
+    CrawlTarget(
+        species_key="h2",
+        source_url="https://cccbdb.nist.gov/alldata2x.asp?casno=1333740",
+        page_kind="species_all_data",
+        is_validated_url=True,
+        cas_number="1333740",
+        notes="direct-CAS resolver path; live diagnostic = molecule_data_page",
+    ),
+    CrawlTarget(
+        species_key="ch4",
+        source_url="https://cccbdb.nist.gov/alldata2x.asp?casno=74828",
+        page_kind="species_all_data",
+        is_validated_url=True,
+        cas_number="74828",
+        notes="direct-CAS resolver path; live diagnostic = molecule_data_page",
+    ),
+    CrawlTarget(
+        species_key="benzene",
+        source_url="https://cccbdb.nist.gov/alldata2x.asp?casno=71432",
+        page_kind="species_all_data",
+        is_validated_url=True,
+        cas_number="71432",
+        notes="direct-CAS resolver path; live diagnostic = molecule_data_page",
+    ),
+    CrawlTarget(
+        species_key="ethanol",
+        source_url="https://cccbdb.nist.gov/alldata2x.asp?casno=64175",
+        page_kind="species_all_data",
+        is_validated_url=True,
+        cas_number="64175",
+        notes=(
+            "direct-CAS resolver path; live diagnostic showed this one "
+            "as redirect_landing_page — kept as negative-control target "
+            "so the gate is exercised against a real failure"
+        ),
+    ),
+)
+
+
 # Molecule catalog (IDENTITY UNIVERSE ONLY). The ``inchix.asp`` page
 # enumerates molecules with formula / name / InChI / InChIKey /
 # SMILES. Its outbound links are NOT trusted as data-page URLs — see
@@ -168,6 +232,7 @@ PILOTS: dict[str, tuple[CrawlTarget, ...]] = {
     "experimental": EXPERIMENTAL_PILOT,
     "experimental-properties": EXPERIMENTAL_PROPERTIES_PILOT,
     "catalog": CATALOG_PILOT,
+    "species-alldata-cas": SPECIES_ALLDATA_CAS_PILOT,
 }
 
 
