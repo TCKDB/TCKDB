@@ -149,6 +149,20 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
         is_validated_url=True,
         notes="Diatomic spectroscopic constants; cm^-1; columns Species|name|we|wexe|weye|Be|De|alphae|reference",
     ),
+    CrawlTarget(
+        species_key="polarizability_iso",
+        source_url="https://cccbdb.nist.gov/pollistx.asp",
+        page_kind="experimental_property_table",
+        property_kind="polarizability_iso",
+        # Confirmed flat-table sibling of diplistx.asp by the
+        # May 2026 WebFetch survey; the per-column shape is inferred
+        # from the dipole page (Molecule|name|state|xx|yy|zz|iso|...).
+        # If a live fetch reveals different columns, update
+        # PROPERTY_CONFIGS["polarizability_iso"] in
+        # parsers/experimental_property_table.py — not this file.
+        is_validated_url=True,
+        notes="Isotropic experimental polarizabilities; Bohr^3; live column shape inferred from diplistx sibling",
+    ),
 )
 
 

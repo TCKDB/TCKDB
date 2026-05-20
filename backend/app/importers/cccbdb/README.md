@@ -782,6 +782,81 @@ churns with each CCCBDB release — checking it in would tie the repo's
 state to NIST's release schedule and could mislead reviewers about
 whose code is whose. The archive lives next to the repo, not inside it.
 
+## Class-shaped property-table ingestion façade
+
+Phase 3a shipped the cross-species property-table parser. Phase 4a
+shipped the `molecular_property_observation` schema + the row → upload
+builder. Phase 5c adds a small **façade module** that exposes the
+three steps as composable classes — easier to plug into a pipeline,
+easier to swap one step in a test:
+
+```python
+from app.importers.cccbdb.property_table_ingest import (
+    PropertyTableFetcher,
+    PropertyTableParser,
+    PropertyTableIngestor,
+    ingest_property_pilot,
+)
+```
+
+| Class | Wraps | Job |
+|---|---|---|
+| `PropertyTableFetcher` | `run_snapshot` | Polite cache-first fetching for one or more property-table targets. Honors the existing rate-limit / dry-run / Cloudflare-aware policies. Default `sleep_seconds=5.0`. |
+| `PropertyTableParser` | `parse_experimental_property_table_page` | Parses one already-fetched table into a `CCCBDBExperimentalPropertyTable`. Validates the target's `property_kind` is registered. |
+| `PropertyTableIngestor` | `build_molecular_property_payloads_from_property_table` | Converts parsed rows into `MolecularPropertyObservationCreate` payloads. Carries an optional `catalog` for identity-hint enrichment. |
+| `ingest_property_pilot()` | All three | One-shot end-to-end runner that fetches, parses, and ingests the full `EXPERIMENTAL_PROPERTIES_PILOT`. Returns aggregate `PilotIngestionResult` with `manifest`, `per_target`, `workflow_ready_count()`, `warning_summary()`. |
+
+### Property-kind inventory
+
+The allowlist now covers **5 cross-species experimental tables**:
+
+| `property_kind` | URL | Units | `MolecularPropertyKind` |
+|---|---|---|---|
+| `hf_0` | `hf0kx.asp` | kJ/mol | `enthalpy_of_formation` |
+| `hf_0_with_uncertainty` | `goodlistx.asp` | kJ/mol (+ unc) | `enthalpy_of_formation` |
+| `dipole` | `diplistx.asp` | Debye | `dipole_moment` |
+| `diatomic_spectroscopic` | `expdiatomicsx.asp` | cm⁻¹ | `spectroscopic_constant` |
+| `polarizability_iso` | `pollistx.asp` *(new in 5c)* | Bohr³ | `polarizability_iso` |
+
+The `polarizability_iso` column shape (`Molecule | name | state | xx
+| yy | zz | iso | squib | commment`) is inferred from the
+`diplistx.asp` sibling — confirmed flat-table single-fetch by the
+May 2026 WebFetch survey but not column-verified live. If a live
+fetch reveals different column headers, update
+[`PROPERTY_CONFIGS["polarizability_iso"]`](parsers/experimental_property_table.py)
+— the parser itself is column-name-driven and doesn't need to change.
+
+### Adding a new property table
+
+1. Confirm the URL is a flat single-GET resource (no session state).
+2. Append a `PropertyTableConfig(...)` entry to `PROPERTY_CONFIGS` in
+   [`parsers/experimental_property_table.py`](parsers/experimental_property_table.py).
+3. Append a `CrawlTarget(..., property_kind=<token>, is_validated_url=True)`
+   to `EXPERIMENTAL_PROPERTIES_PILOT` in
+   [`crawl_plan.py`](crawl_plan.py).
+4. If the property fits an existing `MolecularPropertyKind` enum
+   value, register the mapping in `_PROPERTY_KIND_MAP` in
+   [`builders/molecular_property_payload.py`](builders/molecular_property_payload.py);
+   otherwise the row falls through to `MolecularPropertyKind.other`
+   with the raw kind preserved as `property_label`.
+5. Add a fixture under `fixtures/property_<kind>.html`.
+6. Run `pytest backend/tests/importers/cccbdb -q`.
+
+No new parser code. No new builder code. No schema migration unless
+the property needs a new `MolecularPropertyKind` enum value.
+
+### Properties intentionally NOT yet allowlisted
+
+`ionization_energy`, `electron_affinity`, `proton_affinity`,
+`atomization_energy`, `quadrupole_moment`, full-tensor
+`polarizability`, `homo_energy`, `lumo_energy`, `homo_lumo_gap`,
+`rotational_constant` — these `MolecularPropertyKind` enum values
+exist in `common.py` but no `PropertyTableConfig` or `CrawlTarget` is
+registered. The URLs are referenced in CCCBDB navigation but their
+exact paths haven't been verified as flat single-fetch resources.
+Add them following the recipe above when a maintainer has time to
+verify each URL.
+
 ## Phase 2c — disk-payload round-trip validation
 
 Phase 2c adds round-trip integration tests at

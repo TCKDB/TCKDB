@@ -37,6 +37,8 @@ _FIXTURE_BY_URL = {
     "https://cccbdb.nist.gov/goodlistx.asp": "property_hf_0_with_uncertainty.html",
     "https://cccbdb.nist.gov/diplistx.asp": "property_dipoles.html",
     "https://cccbdb.nist.gov/expdiatomicsx.asp": "property_diatomic_spectroscopic.html",
+    # Phase 5c: polarizability_iso added to the pilot.
+    "https://cccbdb.nist.gov/pollistx.asp": "property_polarizability_iso.html",
 }
 
 
@@ -74,7 +76,7 @@ class TestPropertyPilotHappyPath:
             EXPERIMENTAL_PROPERTIES_PILOT, _make_config(tmp_path, fetcher)
         )
         raw_files = sorted((tmp_path / "raw_html").iterdir())
-        assert len(raw_files) == 4
+        assert len(raw_files) == len(EXPERIMENTAL_PROPERTIES_PILOT)
         # Property-table archives use the ``property_<key>_<sha>.html``
         # prefix so a single archive root can mix page kinds without
         # filename collisions.
@@ -87,7 +89,7 @@ class TestPropertyPilotHappyPath:
             EXPERIMENTAL_PROPERTIES_PILOT, _make_config(tmp_path, fetcher)
         )
         parsed_files = sorted((tmp_path / "parsed").iterdir())
-        assert len(parsed_files) == 4
+        assert len(parsed_files) == len(EXPERIMENTAL_PROPERTIES_PILOT)
         kinds = {
             json.loads(p.read_text())["source_metadata"]["property_kind"]
             for p in parsed_files
@@ -97,6 +99,7 @@ class TestPropertyPilotHappyPath:
             "hf_0_with_uncertainty",
             "dipole",
             "diatomic_spectroscopic",
+            "polarizability_iso",
         }
 
     def test_manifest_records_page_kind(self, tmp_path):

@@ -111,6 +111,22 @@ PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
         name_column="name",
         reference_column="reference",
     ),
+    "polarizability_iso": PropertyTableConfig(
+        # Phase 5c: isotropic polarizability (Bohr^3 on CCCBDB's
+        # pollistx.asp). Sibling URL of diplistx.asp; live column
+        # shape inferred from the dipole page and verified against
+        # the bundled fixture. If a live fetch shows different
+        # column headers, only this config needs updating — the
+        # parser doesn't change.
+        value_column="iso",
+        default_raw_unit="Bohr^3",
+        dimension=None,  # no Bohr^3 normalizer; raw value preserved
+        formula_column="Molecule",
+        name_column="name",
+        state_column="state",
+        reference_column="squib",
+        comment_column="commment",
+    ),
 }
 
 
