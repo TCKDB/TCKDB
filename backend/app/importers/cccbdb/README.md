@@ -782,6 +782,125 @@ churns with each CCCBDB release — checking it in would tie the repo's
 state to NIST's release schedule and could mislead reviewers about
 whose code is whose. The archive lives next to the repo, not inside it.
 
+## Dry-run payload exporter
+
+The Phase 5c façade (`PropertyTableFetcher` + `PropertyTableParser` +
+`PropertyTableIngestor`) gives you a path from raw HTML to
+`MolecularPropertyObservationCreate` payloads, but it doesn't write
+them anywhere. **Phase 5d adds a dry-run exporter** that runs the
+pipeline end-to-end and dumps the payloads as JSON for offline
+inspection:
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_property_payload_dryrun \
+    --archive-dir data/external/cccbdb \
+    --output-dir data/external/cccbdb/payloads_dryrun \
+    --use-cache-only
+```
+
+Output layout (one file per property kind + an aggregate summary):
+
+```
+data/external/cccbdb/payloads_dryrun/
+├── summary.json
+├── hf_0.json
+├── hf_0_with_uncertainty.json
+├── dipole.json
+├── diatomic_spectroscopic.json
+└── polarizability_iso.json
+```
+
+Each per-target file has the shape:
+
+```json
+{
+  "property_kind": "dipole",
+  "source_url": "https://cccbdb.nist.gov/diplistx.asp",
+  "detected_headers": ["Molecule", "name", "state", ...],
+  "parsed_row_count": 4,
+  "payload_count": 4,
+  "invalid_payload_count": 0,
+  "warning_count": 0,
+  "skipped_missing_cache": false,
+  "warnings": [],
+  "payloads": [/* MolecularPropertyObservationCreate dicts */]
+}
+```
+
+`summary.json` aggregates counts plus a `per_target` array and a
+`warning_summary` map for at-a-glance inspection of which property
+kinds need attention.
+
+### How this differs from DB persistence
+
+The dry-run **never writes to TCKDB**. Every emitted payload is a
+`MolecularPropertyObservationCreate` dict that has round-tripped
+through `model_dump(mode="json")` → `model_validate(...)`. A future
+upload service can consume these dicts; persistence is a separate
+concern. If a row's payload fails validation, the dry-run records
+the row in `invalid_payload_count` + a warning and continues — it
+never crashes the whole run.
+
+### Why `species_entry_id` is always null
+
+The ingestor never invents database IDs. When the catalog has an
+unambiguous match for a row's `(formula, name)`, the InChI / InChIKey
+/ SMILES go into `raw_payload_json["identity_hint"]`; when the match
+is ambiguous (isomers like C2H6O), the candidates land in
+`raw_payload_json["catalog_candidates"]` with per-row warnings. The
+workflow layer that eventually persists these payloads is
+responsible for translating an InChIKey hint into a real
+`species_entry_id` (find an existing `species_entry` row by
+InChIKey) — or leaving the row as identity-unresolved.
+
+### How `identity_hint` is consumed later
+
+A future upload service should:
+
+1. Read `raw_payload_json["identity_hint"]["inchikey"]` from the
+   payload.
+2. Look up the matching `species_entry` row.
+3. If found, set `species_entry_id` on the
+   `MolecularPropertyObservationCreate` before persisting.
+4. If not found, persist with `species_entry_id=None` and a
+   `species_unresolved` warning — a maintainer can resolve later.
+
+### Cache-only flag
+
+`--use-cache-only` makes the exporter refuse to touch the network:
+
+```bash
+# Run against an already-warmed archive, no fetches
+python -m scripts.cccbdb_property_payload_dryrun \
+    --archive-dir data/external/cccbdb \
+    --output-dir /tmp/dryrun-only \
+    --use-cache-only
+```
+
+Targets whose raw HTML isn't already in `archive_dir/raw_html/` are
+recorded as `skipped_missing_cache=True` with a warning. The run
+still exits 0 — the goal is to inspect what's currently archived,
+not to drive a fresh fetch.
+
+### Inspecting the output
+
+Useful one-liners (no live network):
+
+```bash
+# Which property kinds produced any payloads?
+jq -r '.per_target[] | "\(.property_kind): \(.payload_count) payloads"' \
+    data/external/cccbdb/payloads_dryrun/summary.json
+
+# What detected headers does polarizability_iso surface?
+# (catches column drift on pollistx.asp before it bites)
+jq '.detected_headers' \
+    data/external/cccbdb/payloads_dryrun/polarizability_iso.json
+
+# Which rows had catalog-ambiguity warnings?
+jq -r '.warnings[]' \
+    data/external/cccbdb/payloads_dryrun/dipole.json | grep ambiguity
+```
+
 ## Class-shaped property-table ingestion façade
 
 Phase 3a shipped the cross-species property-table parser. Phase 4a
