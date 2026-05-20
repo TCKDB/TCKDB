@@ -71,19 +71,102 @@ local parser-drift checking, not for reproducible CI validation.
 4. **Reproducibility.** A fixture's SHA256 is a stable identity. A
    live page's identity drifts with NIST's release schedule.
 
-## Where future builder/upload code goes
+## Phase 2a — payload builders
 
-Phase 2 will add:
+Phase 2a adds [builders/](builders/) that map Phase 1 records onto
+existing TCKDB upload schemas. Builders are pure: no DB writes, no
+network, no ORM dependencies.
+
+Top-level entry point:
+
+```python
+from app.importers.cccbdb.parsers import parse_experimental_species_page
+from app.importers.cccbdb.builders import build_experimental_species_payload
+
+record = parse_experimental_species_page(html, source_url=url)
+result = build_experimental_species_payload(record)
+# result.species_entry_payload     -> SpeciesEntryIdentityPayload dict (or None / partial)
+# result.thermo_payload            -> ThermoUploadRequest dict (or None)
+# result.statmech_payload          -> StatmechUploadRequest dict (or None)
+# result.geometry_payload          -> GeometryPayload dict (or None)
+# result.external_source           -> CCCBDB-level provenance + per-value refs + unparsed
+# result.warnings                  -> human-readable notes about unmapped values
+```
+
+### What maps to first-class TCKDB fields
+
+| Phase 1 value             | First-class TCKDB field                            |
+|---------------------------|----------------------------------------------------|
+| `identity.smiles`         | `SpeciesEntryIdentityPayload.smiles`               |
+| `identity.charge`         | `SpeciesEntryIdentityPayload.charge`               |
+| `identity.multiplicity`   | `SpeciesEntryIdentityPayload.multiplicity`         |
+| `identity.state_label`    | `SpeciesEntryIdentityPayload.term_symbol_raw`      |
+| `thermo.hf_298`           | `ThermoUploadRequest.h298_kj_mol`                  |
+| `thermo.hf_298.uncertainty` | `ThermoUploadRequest.h298_uncertainty_kj_mol`    |
+| `thermo.s_298`            | `ThermoUploadRequest.s298_j_mol_k`                 |
+| `thermo.s_298.uncertainty`| `ThermoUploadRequest.s298_uncertainty_j_mol_k`     |
+| `thermo.cp_298`           | `ThermoPointCreate.cp_j_mol_k` (at T=298.15 K)     |
+| `thermo.h_298_minus_h_0`  | `ThermoPointCreate.h_kj_mol` (at T=298.15 K)       |
+| `statmech.point_group`    | `StatmechUploadRequest.point_group`                |
+| `statmech.symmetry_number`| `StatmechUploadRequest.external_symmetry`          |
+| `geometry.atoms`          | `GeometryPayload.xyz_text` (formatted)             |
+
+Every product payload is stamped with `scientific_origin = "experimental"`.
+
+### What remains as metadata/warnings
+
+These Phase 1 values have no clean first-class home on the existing
+upload schemas. The builder preserves each in
+`result.external_source.unparsed` and emits a corresponding
+`result.warnings` entry pointing at the side-channel key:
+
+- `thermo.hf_0` — `ThermoUploadRequest` has no Hf(0 K) field.
+- `statmech.frequencies` — experimental vibrational modes have no
+  TCKDB destination yet. They are **not** routed into
+  `calc_freq_mode`: that table is calculation-scoped, and creating a
+  placeholder `Calculation` row just to host experimental data would
+  violate the spec's "no fake calculations" rule.
+- `statmech.rotational_constants` — no first-class A/B/C fields on
+  `statmech` (see Schema Gap 3 in
+  `backend/docs/specs/cccbdb_importer.md`).
+- `statmech.zpe_kj_mol` — no experimental ZPE field.
+
+Per-value reference labels (`Gurvich`, `TRC`, `Pedley`, …) also have
+no per-value home on `ThermoUploadRequest`/`ThermoPointCreate`, so
+they are kept in `result.external_source.per_value_references`,
+keyed by the Phase 1 `property_kind` token.
+
+### Why no DB writes yet
+
+The schema gaps above need to be closed before some imported values
+have first-class destinations. Until they are, the builders produce
+*validated* dicts for the parts that fit cleanly and *structured
+side-channel* data for the rest. A future upload-workflow step can
+consume the dicts; the side-channel data informs the schema-gap
+migrations.
+
+### How to run builder tests
+
+```bash
+conda run -n tckdb_env pytest backend/tests/importers/cccbdb -v
+```
+
+The builder tests include schema-validation checks that instantiate
+the real `ThermoUploadRequest`, `StatmechUploadRequest`, and
+`SpeciesEntryIdentityPayload` against the built dicts. If the
+upload schemas ever drift away from what the importer produces,
+those tests fail loudly.
+
+### Where future builder/upload code goes
+
+Phase 2b/3 may add:
 
 ```text
 backend/app/importers/cccbdb/builders/
-    thermo_payload.py         # CCCBDBThermoRecord  -> thermo upload payload
-    statmech_payload.py       # CCCBDBStatmechRecord -> statmech upload payload
-    geometry_payload.py       # CCCBDBGeometryRecord -> conformer / geometry payload
+    calculation_payload.py    # computed method/basis -> calculation upload
+    property_payload.py       # dipole/IE/EA/PA/... (needs Schema Gap 1)
 ```
 
-Builders consume the Phase 1 intermediate records and emit
-TCKDB **workflow-layer upload payloads** — they do not write to ORM
-directly. See `backend/docs/specs/cccbdb_importer.md` §9 for the full
-target layout, and Schema Gaps §7 for the tables that need to land
-before some builders can produce final payloads.
+See `backend/docs/specs/cccbdb_importer.md` §9 for the full target
+layout, and Schema Gaps §7 for the tables that need to land before
+some builders can produce final payloads.
