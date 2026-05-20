@@ -20,6 +20,7 @@ Design notes:
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -295,3 +296,121 @@ class CCCBDBExperimentalPropertyTable(BaseModel):
     rows: list[CCCBDBExperimentalPropertyRow] = Field(default_factory=list)
     source_metadata: CCCBDBPropertyTableSourceMetadata
     warnings: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Molecule catalog (inchix.asp) — IDENTITY UNIVERSE ONLY
+# ---------------------------------------------------------------------------
+#
+# CRITICAL: The INChI index page is **catalog-only**. Its hyperlinks
+# are preserved as raw audit metadata but MUST NOT be trusted as
+# data-page URLs:
+#
+#   * Phase 2b confirmed that `exp1x.asp?casno=...` URL patterns do
+#     not resolve.
+#   * The actual data path is the cross-species property-table family
+#     (Phase 3a, ``xp1x.asp``-style flat tables).
+#   * A future search/form resolver may eventually translate a catalog
+#     entry into a real data URL via CCCBDB's POST flow — but that
+#     resolver does not exist yet.
+#
+# Therefore ``trusted_property_url`` / ``trusted_species_url`` on
+# ``CCCBDBCatalogEntry`` are deliberately typed ``None`` and the
+# Phase 3b parser never populates them. Future resolver work will set
+# them; until then, ``raw_href`` is debug data only.
+
+
+class CCCBDBCatalogEntry(BaseModel):
+    """One row from CCCBDB's molecule catalog (``inchix.asp``).
+
+    Identifier fields are independently optional. The page may carry
+    several formulas with the same name, several names per formula
+    (isomers!), or rows with no identifiers at all. The parser
+    populates whatever it sees and warns rather than discarding.
+
+    ``raw_href`` is preserved verbatim for audit/debugging but is NOT
+    trusted as a data-page URL. ``trusted_property_url`` and
+    ``trusted_species_url`` are reserved for a future resolver and
+    are always ``None`` in Phase 3b.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    catalog_index: int
+    formula: str | None = None
+    name: str | None = None
+    inchi: str | None = None
+    inchikey: str | None = None
+    smiles: str | None = None
+    cas_number: str | None = None
+    raw_text: str | None = None
+    raw_href: str | None = None
+    trusted_property_url: None = None
+    trusted_species_url: None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class CCCBDBCatalogSourceMetadata(BaseModel):
+    """Provenance for a parsed ``inchix.asp`` snapshot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Literal["CCCBDB"] = "CCCBDB"
+    source_release: str = "22"
+    source_database_doi: str = "10.18434/T47C7Z"
+    source_url: str
+    source_record_key: str | None = None
+    page_kind: Literal["molecule_catalog_inchi_index"] = (
+        "molecule_catalog_inchi_index"
+    )
+    retrieved_at: datetime | None = None
+    content_sha256: str
+    parser_version: str
+
+
+class CCCBDBMoleculeCatalog(BaseModel):
+    """Result of parsing one CCCBDB ``inchix.asp`` snapshot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    column_names: list[str] = Field(default_factory=list)
+    entries: list[CCCBDBCatalogEntry] = Field(default_factory=list)
+    source_metadata: CCCBDBCatalogSourceMetadata
+    warnings: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Catalog-based identity enrichment for property-table rows
+# ---------------------------------------------------------------------------
+#
+# Enrichment is a *candidate-proposal* layer, not identity resolution.
+# A property-table row may match zero, one, or many catalog entries;
+# the helper returns all of them with a confidence score and the
+# reasons that produced the score, never silently picking one.
+
+
+class CCCBDBCatalogMatchConfidence(str, Enum):
+    high = "high"
+    medium = "medium"
+    low = "low"
+
+
+class CCCBDBCatalogMatch(BaseModel):
+    """One scored candidate identity-enrichment for a property row.
+
+    ``is_unambiguous`` is ``True`` only when this is the single
+    candidate returned for its source row AND the score is at least
+    medium. Formula-only ties are explicitly ambiguous regardless of
+    score so isomers do not get silently merged (C2H6O could be
+    ethanol or dimethyl ether; C3H6 could be propene or cyclopropane;
+    C4H10 could be n-butane or isobutane).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    catalog_entry: CCCBDBCatalogEntry
+    score: CCCBDBCatalogMatchConfidence
+    match_reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    is_unambiguous: bool = False

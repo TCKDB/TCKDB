@@ -43,7 +43,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-PageKind = Literal["experimental_species", "experimental_property_table"]
+PageKind = Literal[
+    "experimental_species",
+    "experimental_property_table",
+    "molecule_catalog_inchi_index",
+]
 
 
 @dataclass(frozen=True)
@@ -143,9 +147,27 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
 )
 
 
+# Molecule catalog (IDENTITY UNIVERSE ONLY). The ``inchix.asp`` page
+# enumerates molecules with formula / name / InChI / InChIKey /
+# SMILES. Its outbound links are NOT trusted as data-page URLs — see
+# CCCBDBCatalogEntry's docstring and the README. A future search/form
+# resolver may translate catalog entries into real data URLs; until
+# then the catalog is enrichment metadata only.
+CATALOG_PILOT: tuple[CrawlTarget, ...] = (
+    CrawlTarget(
+        species_key="inchix",
+        source_url="https://cccbdb.nist.gov/inchix.asp",
+        page_kind="molecule_catalog_inchi_index",
+        is_validated_url=True,
+        notes="CCCBDB molecule catalog (identity universe); links inside are NOT trusted as data URLs",
+    ),
+)
+
+
 PILOTS: dict[str, tuple[CrawlTarget, ...]] = {
     "experimental": EXPERIMENTAL_PILOT,
     "experimental-properties": EXPERIMENTAL_PROPERTIES_PILOT,
+    "catalog": CATALOG_PILOT,
 }
 
 

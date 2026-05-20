@@ -1,0 +1,96 @@
+<!--
+  Sanitized, hand-authored fixture mimicking the structure of
+  CCCBDB's inchix.asp molecule catalog page.
+
+  Source page (informational only — NOT fetched by tests):
+    https://cccbdb.nist.gov/inchix.asp
+
+  Composition rationale:
+
+  * Rows 0-2 are unambiguous identifiers (formula uniquely matches
+    one entry).
+  * Rows 3-4 are an isomer pair (C2H6O = ethanol vs dimethyl ether)
+    used by enrichment tests to verify ambiguity handling.
+  * Row 5 is another isomer pair (C3H6 = propene vs cyclopropane).
+  * Row 6 carries a hyperlink with a relative href that the parser
+    must record as raw_href but MUST NOT promote to a trusted URL.
+  * Row 7 carries a "broken" href (no .asp suffix; absolute http URL
+    pointing somewhere unrelated) to exercise the audit-warning path.
+  * Row 8 is a blank row (whitespace cells) that the parser must
+    drop with a warning, not crash on.
+  * Row 9 has only an InChI/InChIKey (no formula, no name) to verify
+    that partial rows are still kept.
+-->
+<html>
+<head><title>CCCBDB Catalog: InChI Index</title></head>
+<body>
+<h2>CCCBDB Molecule Catalog</h2>
+<table>
+<tr>
+  <th>Formula</th><th>Name</th>
+  <th>InChI</th><th>InChIKey</th>
+  <th>SMILES</th><th>CAS</th>
+</tr>
+<tr>
+  <td>H2</td><td>Hydrogen diatomic</td>
+  <td>InChI=1S/H2/h1H</td><td>UFHFLCQGNIYNRP-UHFFFAOYSA-N</td>
+  <td>[HH]</td><td>1333-74-0</td>
+</tr>
+<tr>
+  <td>H2O</td><td>Water</td>
+  <td>InChI=1S/H2O/h1H2</td><td>XLYOFNOQVPJJNP-UHFFFAOYSA-N</td>
+  <td>O</td><td>7732-18-5</td>
+</tr>
+<tr>
+  <td>C6H6</td><td>Benzene</td>
+  <td>InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H</td>
+  <td>UHOVQNZJYSORNB-UHFFFAOYSA-N</td>
+  <td>c1ccccc1</td><td>71-43-2</td>
+</tr>
+<tr>
+  <td>C2H6O</td><td>Ethanol</td>
+  <td>InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3</td>
+  <td>LFQSCWFLJHTTHZ-UHFFFAOYSA-N</td>
+  <td>CCO</td><td>64-17-5</td>
+</tr>
+<tr>
+  <td>C2H6O</td><td>Dimethyl ether</td>
+  <td>InChI=1S/C2H6O/c1-3-2/h1-2H3</td>
+  <td>LCGLNKUTAGEVQW-UHFFFAOYSA-N</td>
+  <td>COC</td><td>115-10-6</td>
+</tr>
+<tr>
+  <td>C3H6</td><td>Propene</td>
+  <td>InChI=1S/C3H6/c1-3-2/h3H,1H2,2H3</td>
+  <td>QQONPFPTGQHPMA-UHFFFAOYSA-N</td>
+  <td>CC=C</td><td>115-07-1</td>
+</tr>
+<tr>
+  <td>C3H6</td><td>Cyclopropane</td>
+  <td>InChI=1S/C3H6/c1-2-3-1/h1-3H2</td>
+  <td>LVZWSLJZHVFIQJ-UHFFFAOYSA-N</td>
+  <td>C1CC1</td><td>75-19-4</td>
+</tr>
+<tr>
+  <td><a href="exp1.asp?casno=64175">CH4</a></td><td>Methane</td>
+  <td>InChI=1S/CH4/h1H4</td><td>VNWKTOKETHGBQD-UHFFFAOYSA-N</td>
+  <td>C</td><td>74-82-8</td>
+</tr>
+<tr>
+  <td><a href="https://example.invalid/not-a-cccbdb-page">CO</a></td>
+  <td>Carbon monoxide</td>
+  <td>InChI=1S/CO/c1-2</td><td>UGFAIRIUMAVXCW-UHFFFAOYSA-N</td>
+  <td>[C-]#[O+]</td><td>630-08-0</td>
+</tr>
+<tr>
+  <td>   </td><td>   </td><td>   </td><td>   </td><td>   </td><td>   </td>
+</tr>
+<tr>
+  <td></td><td></td>
+  <td>InChI=1S/C2H4/c1-2/h1-2H2</td>
+  <td>VGGSQFUCUMXWEO-UHFFFAOYSA-N</td>
+  <td></td><td></td>
+</tr>
+</table>
+</body>
+</html>

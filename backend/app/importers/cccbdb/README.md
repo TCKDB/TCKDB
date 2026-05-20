@@ -350,6 +350,87 @@ data page). That's significant work and the property tables already
 give us most of the high-value experimental data we need without it.
 Per-species POST fetching is intentionally deferred to a later phase.
 
+## Phase 3b — molecule catalog (identity universe)
+
+`inchix.asp` lists every molecule CCCBDB knows about with
+formula / name / InChI / InChIKey / SMILES / CAS identifiers. It is
+the **identity universe** for the catalog — what CCCBDB *can*
+describe, independent of which property pages actually serve data
+for any given molecule.
+
+Run the catalog snapshot with:
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_snapshot \
+    --output-dir data/external/cccbdb \
+    --pilot catalog
+```
+
+Files land under `raw_html/catalog_inchix_<sha12>.html` and
+`parsed/catalog_inchix_<sha12>.json`. No payload files — catalog
+entries are not TCKDB upload payloads. Manifest records
+`page_kind="molecule_catalog_inchi_index"`.
+
+### `inchix.asp` is catalog-only — its links are not data URLs
+
+**Important policy.** The hyperlinks inside `inchix.asp` rows are
+**preserved as raw audit metadata only**. Each
+`CCCBDBCatalogEntry.raw_href` keeps whatever the row pointed at —
+but the importer never trusts that href as a data URL.
+
+- `trusted_property_url` and `trusted_species_url` on
+  `CCCBDBCatalogEntry` are **always `None`** in Phase 3b. They are
+  reserved for a future search/form resolver.
+- The Phase 2b confirmation that `exp1x.asp?casno=…` URL patterns
+  don't resolve still stands. Constructing a property URL from a
+  catalog href would just produce another Cloudflare 1015.
+- Actual data retrieval continues to use either (a) the cross-species
+  property-table URLs from Phase 3a, or (b) a future search/form
+  resolver (placeholder in `parsers/molecule_catalog.py` —
+  `resolve_species_data_page_from_search` deliberately raises
+  `NotImplementedError`).
+
+If an href looks like an absolute URL or a non-CCCBDB target, the
+parser emits an audit warning on the entry. The warning is informational
+only — the parser never fetches the href.
+
+### Catalog-based identity enrichment for property rows
+
+[enrichment.py](enrichment.py) exposes
+`propose_catalog_matches(property_row, catalog)` which returns a
+list of `CCCBDBCatalogMatch` candidates. It is **candidate proposal,
+not identity resolution**:
+
+| Property-row signal | Score | Unambiguous? |
+|---|---|---|
+| formula + name both match | `high` | iff only candidate |
+| formula match + name alias/substring | `medium` | iff only candidate |
+| formula match only, unique catalog formula | `low` | yes |
+| formula match only, isomers in catalog | `low` | **no** (warning) |
+| name match only, unique | `medium` | yes |
+| name match only, non-unique | `low` | no |
+| conflicting formula | not returned | n/a |
+
+Rules baked into the helper:
+
+- **Formula-only matches with multiple isomers in the catalog are
+  always ambiguous, regardless of score.** C2H6O is ethanol *or*
+  dimethyl ether; C3H6 is propene *or* cyclopropane; C4H10 is
+  n-butane *or* isobutane. Silently picking one would be a
+  correctness bug.
+- The original property row is never mutated.
+- Ambiguous candidates are never dropped — callers receive them all
+  with a warning and decide whether to trust any of them.
+- `is_unambiguous=True` only when the candidate is the single match
+  or the single high-confidence match in the proposal set.
+
+### Why no payloads for catalog entries
+
+Catalog entries are identifiers, not science. They have no
+`Thermo` / `Statmech` / `Geometry` upload destination. They feed
+identity-resolution decisions for *other* records that do produce
+upload payloads.
+
 
 
 ### Why downloaded archives are ignored by git

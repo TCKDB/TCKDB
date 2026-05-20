@@ -43,6 +43,7 @@ from app.importers.cccbdb.crawl_plan import (
 from app.importers.cccbdb.parsers import (
     parse_experimental_property_table_page,
     parse_experimental_species_page,
+    parse_molecule_catalog_page,
 )
 
 SNAPSHOT_VERSION = 1
@@ -213,9 +214,12 @@ def _find_cached_raw_html(
     should normally be exactly one per target per CCCBDB release.
     """
 
-    prefix = (
-        "property" if page_kind == "experimental_property_table" else "experimental"
-    )
+    if page_kind == "experimental_property_table":
+        prefix = "property"
+    elif page_kind == "molecule_catalog_inchi_index":
+        prefix = "catalog"
+    else:
+        prefix = "experimental"
     candidates = sorted(raw_dir.glob(f"{prefix}_{species_key}_*.html"))
     if not candidates:
         return None
@@ -334,6 +338,8 @@ def _snapshot_one(
 ) -> RecordResult:
     if target.page_kind == "experimental_property_table":
         base_name = f"property_{target.species_key}"
+    elif target.page_kind == "molecule_catalog_inchi_index":
+        base_name = f"catalog_{target.species_key}"
     else:
         base_name = f"experimental_{target.species_key}"
     result = RecordResult(
@@ -385,6 +391,12 @@ def _snapshot_one(
                 source_url=target.source_url,
                 source_record_key=target.species_key,
             )
+        elif target.page_kind == "molecule_catalog_inchi_index":
+            record = parse_molecule_catalog_page(
+                html,
+                source_url=target.source_url,
+                source_record_key=target.species_key,
+            )
         else:
             record = parse_experimental_species_page(
                 html,
@@ -410,6 +422,8 @@ def _snapshot_one(
     # Builders are species-page-specific. Cross-species property
     # tables stop at parsed JSON for now — molecular_property_observation
     # is still a schema gap (see docs/specs/cccbdb_importer.md §7 Gap 1).
+    # Molecule-catalog snapshots are identity universe only and never
+    # produce TCKDB upload payloads.
     if (
         config.write_payloads
         and payload_path is not None
@@ -418,6 +432,15 @@ def _snapshot_one(
         result.builder_warnings.append(
             "experimental_property_table payloads are deferred until "
             "molecular_property_observation lands"
+        )
+    elif (
+        config.write_payloads
+        and payload_path is not None
+        and target.page_kind == "molecule_catalog_inchi_index"
+    ):
+        result.builder_warnings.append(
+            "molecule_catalog_inchi_index is identity-universe-only; "
+            "catalog entries are not TCKDB upload payloads"
         )
     elif config.write_payloads and payload_path is not None:
         try:
