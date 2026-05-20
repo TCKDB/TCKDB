@@ -29,6 +29,31 @@ class ScientificOriginKind(str, Enum):
     estimated = "estimated"
 
 
+class MolecularPropertyKind(str, Enum):
+    """Molecular-property observation kinds (CCCBDB Schema Gap 1).
+
+    Scalar/vector/tensor properties that don't belong on ``thermo``,
+    ``statmech``, or ``transport``. Names are machine tokens, not
+    display labels (see feedback_enum_values memory).
+    """
+
+    dipole_moment = "dipole_moment"
+    quadrupole_moment = "quadrupole_moment"
+    polarizability = "polarizability"
+    polarizability_iso = "polarizability_iso"
+    ionization_energy = "ionization_energy"
+    electron_affinity = "electron_affinity"
+    proton_affinity = "proton_affinity"
+    enthalpy_of_formation = "enthalpy_of_formation"
+    atomization_energy = "atomization_energy"
+    homo_energy = "homo_energy"
+    lumo_energy = "lumo_energy"
+    homo_lumo_gap = "homo_lumo_gap"
+    rotational_constant = "rotational_constant"
+    spectroscopic_constant = "spectroscopic_constant"
+    other = "other"
+
+
 class SpeciesEntryReviewRole(str, Enum):
     curator = "curator"
     reviewer = "reviewer"

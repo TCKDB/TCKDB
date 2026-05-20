@@ -431,6 +431,92 @@ Catalog entries are identifiers, not science. They have no
 identity-resolution decisions for *other* records that do produce
 upload payloads.
 
+## Phase 4a — `molecular_property_observation` + property-table builder
+
+Phase 4a closes CCCBDB **Schema Gap 1**. The new
+`molecular_property_observation` table is the first-class home for
+scalar / vector / tensor molecular properties — dipoles, IE/EA/PA,
+HOMO/LUMO, atomization energies, enthalpies of formation,
+spectroscopic constants, etc. These do **not** belong on
+`transport` (which is Lennard-Jones / collision data) and do **not**
+belong on `thermo` / `statmech` either.
+
+### Schema
+
+The model lives at
+[app/db/models/molecular_property_observation.py](../../db/models/molecular_property_observation.py).
+The Alembic migration is
+[alembic/versions/a1b2c3d4e5f6_add_molecular_property_observation.py](../../../alembic/versions/a1b2c3d4e5f6_add_molecular_property_observation.py)
+— an **additive** revision on top of `d861dfd60891`. This is a
+deliberate policy departure from the historical
+"single initial migration" rule: from Phase 4a onward, additive
+schema changes ship as discrete revisions rather than folding into
+the initial migration. The historical rule still applies to changes
+that would modify existing tables; only purely additive changes
+qualify for the new path.
+
+Key design choices:
+
+- `species_entry_id` is **nullable**. CCCBDB property rows only have
+  formula+name; catalog enrichment is often ambiguous (isomers).
+  Forcing a non-null FK would push the importer into fabricating
+  species entries, which is worse than carrying an
+  identity-unresolved row.
+- Scalars get first-class columns. Vectors/tensors live in JSONB —
+  pragmatic given current CCCBDB inputs, forward-compatible for SI
+  promotion later.
+- External-source provenance has dedicated columns
+  (`external_source_*`) rather than a side-table, so an observation
+  is self-describing for replay from a wiped archive.
+- The dedupe `UniqueConstraint` uses
+  `postgresql_nulls_not_distinct=True` so unresolved rows still
+  dedupe by content + source + reference.
+
+### Property-kind mapping
+
+| Phase 3a `property_kind` | `MolecularPropertyKind` |
+|---|---|
+| `hf_0` | `enthalpy_of_formation` ⚠ NOT `atomization_energy` |
+| `hf_0_with_uncertainty` | `enthalpy_of_formation` |
+| `dipole` | `dipole_moment` |
+| `diatomic_spectroscopic` | `spectroscopic_constant` |
+
+`hf_0` is **enthalpy of formation at 0 K** — confusing it with
+atomization energy would be a real scientific bug. Unknown
+`property_kind` tokens fall through to
+`MolecularPropertyKind.other` with the raw token preserved as
+`property_label`.
+
+### Identity enrichment policy
+
+`build_molecular_property_payloads_from_property_table(table, catalog=...)`
+calls the Phase 3b enrichment helper. Identity gets surfaced *only*
+when the catalog produces an unambiguous match:
+
+- **Unambiguous match**: identity hint (formula/name/InChI/InChIKey/
+  SMILES) is attached to `raw_payload_json["identity_hint"]`.
+  `species_entry_id` is **still left unset** — translating a catalog
+  identifier into a real `species_entry_id` is the workflow layer's
+  job, gated on dedup against existing rows.
+- **Ambiguous match** (isomers): no identity hint surfaces. The
+  candidate list is preserved in
+  `raw_payload_json["catalog_candidates"]` with per-candidate
+  scores and a row-level warning naming each isomer.
+- **No match**: identity stays at `formula` / `name` in the raw
+  payload; identity hint is `None`.
+
+`raw_href` from catalog entries is **never** used. Phase 3b's policy
+applies all the way through.
+
+### Why no upload route yet
+
+Phase 4a ships the schema, the Pydantic model, and the
+property-table → payload builder. It does **not** add an upload
+route or persist anything. The builder returns
+`CCCBDBMolecularPropertyBuildResult.payload` (a
+`MolecularPropertyObservationCreate` ready for the workflow layer)
+plus identity hints and warnings; an upload service is a separate
+Phase 4b decision.
 
 
 ### Why downloaded archives are ignored by git

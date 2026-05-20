@@ -22,6 +22,10 @@ from app.importers.cccbdb.builders.experimental_species_payload import (
 from app.importers.cccbdb.builders.geometry_payload import (
     build_geometry_payload,
 )
+from app.importers.cccbdb.builders.molecular_property_payload import (
+    CCCBDBMolecularPropertyBuildResult,
+    build_molecular_property_payloads_from_property_table,
+)
 from app.importers.cccbdb.builders.species_payload import (
     build_species_entry_identity_payload,
 )
@@ -34,9 +38,11 @@ from app.importers.cccbdb.builders.thermo_payload import (
 
 __all__ = [
     "BuildResult",
+    "CCCBDBMolecularPropertyBuildResult",
     "ExternalSourceMetadata",
     "build_experimental_species_payload",
     "build_geometry_payload",
+    "build_molecular_property_payloads_from_property_table",
     "build_species_entry_identity_payload",
     "build_statmech_payload",
     "build_thermo_payload",
