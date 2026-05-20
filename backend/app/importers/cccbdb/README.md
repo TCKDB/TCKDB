@@ -518,6 +518,58 @@ route or persist anything. The builder returns
 plus identity hints and warnings; an upload service is a separate
 Phase 4b decision.
 
+## Resolver diagnostics
+
+CCCBDB's per-species data flow is not what its URL patterns suggest:
+
+- `inchix.asp` hyperlinks are catalog metadata only — Phase 3b
+  preserves them as `raw_href` for audit and forbids using them as
+  data URLs.
+- `alldata2x.asp?casno=…` URLs look like direct per-species GETs but
+  empirically redirect to the formula-entry form (`exp1x.asp`); the
+  `casno` query parameter is not honored.
+- A manual browser lookup works — which means the real path is a
+  form/session workflow (POST + ASP cookie), not a query-string GET.
+
+[`app/importers/cccbdb/diagnostics/`](diagnostics/) is a small,
+opt-in debugging tool that characterizes what CCCBDB actually
+returns for a handful of probe URLs and form submissions, **before**
+anyone implements a session-aware resolver. It is deliberately not
+production crawling and never writes a snapshot.
+
+Run with:
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_resolver_diagnostics \
+    --output-json /tmp/cccbdb_resolver_diagnostics.json \
+    --sleep-seconds 2
+```
+
+What it does:
+
+1. Fetches `exp1x.asp` once and discovers its `<form>` (action,
+   method, hidden fields, named inputs, select options).
+2. For each of the 5 hardcoded probe molecules (H2O, H2, CH4,
+   benzene, ethanol), runs up to four strategies, sharing one
+   `requests.Session` so cookies persist:
+   - `direct_alldata2x_casno` — GET `alldata2x.asp?casno=...`
+   - `exp1x_get_with_formula` — GET `exp1x.asp?formula=...`
+   - `exp1x_form_post` — POST the discovered form with the formula
+     in the discovered text input + every hidden field's default
+   - `exp1x_form_post_with_name` — same, with the molecule name
+3. Classifies each response into one of:
+   `formula_entry_page`, `molecule_data_page`, `property_table_page`,
+   `rate_limit_or_error_page`, `redirect_landing_page`, `unknown`.
+4. Writes a JSON report with attempted URL, final URL after
+   redirects, classification, content SHA256, page title, and a
+   short diagnostic reason.
+
+Live runs hit `cccbdb.nist.gov`; the script is **never** run in CI.
+Offline tests under
+[tests/importers/cccbdb/test_resolver_diagnostics.py](../../../tests/importers/cccbdb/test_resolver_diagnostics.py)
+exercise the classifier, form discovery, and runner orchestration
+with hand-rolled synthetic HTML and a fake transport.
+
 
 ### Why downloaded archives are ignored by git
 
