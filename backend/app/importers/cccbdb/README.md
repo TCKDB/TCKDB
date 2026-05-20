@@ -603,6 +603,80 @@ record of what the parser could see.
   upload payloads. No `MolecularPropertyObservationCreate` (or
   any other upload schema) is built from them in this phase.
 
+## Browser-assisted species-page import
+
+Scripted CCCBDB fetches don't reliably reach per-species data:
+
+- `alldata2x.asp?casno=...` may serve the formula-entry form
+  (the bug the Phase 5b classifier hardening protects against).
+- `exp1x.asp` / `alldata1x.asp` are themselves the form pages.
+- `getformx.asp` is the real form workflow but Python `requests`
+  triggers Cloudflare rate-limit / bot-detection behavior.
+
+A human in a browser, however, gets a real per-species page. The
+**browser-assisted importer** lets a maintainer save the rendered
+HTML from their browser and import that local file into the standard
+CCCBDB archive — same `raw_html/` layout, same classifier gate,
+same parsed JSON output. No network at all.
+
+### How to manually save a page
+
+1. Open the per-species page in your browser (e.g. find H2O via
+   CCCBDB's normal navigation flow).
+2. **Right-click → Save Page As → HTML, complete** (or the
+   browser-specific equivalent).
+3. Note the final URL from the browser address bar — that's the
+   `--source-url` you'll pass.
+
+### How to import the saved file
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_import_saved_species_page \
+    --input-html /tmp/h2o_saved.html \
+    --output-dir data/external/cccbdb \
+    --species-key h2o \
+    --source-url "https://cccbdb.nist.gov/<page url from browser>" \
+    --cas-number 7732-18-5 \
+    --note "Saved via Firefox manual lookup"
+```
+
+What happens:
+
+1. The HTML is classified using the same hardened classifier the
+   regular snapshot uses. **No file is written to `raw_html/`**
+   if the HTML is a formula-entry / rate-limit / redirect-landing
+   page — the gate still applies.
+2. Accepted pages are copied to
+   `raw_html/species_alldata_<key>_<sha12>.html`, parsed into
+   `parsed/species_alldata_<key>_<sha12>.json`, and a manifest
+   record is appended with `resolver_strategy="browser_saved_html"`.
+3. Re-importing the exact same content is **idempotent** — dedupe
+   key is `(species_key, page_kind, content_sha256)`. A fresh save
+   of the same species (different SHA) appends a new record
+   alongside.
+4. Rejected pages produce a manifest record but no `raw_html/`
+   entry. With `--save-rejected-html` the body is copied to
+   `rejected_html/` for forensic inspection.
+
+### Optional flags
+
+| Flag | Effect |
+|---|---|
+| `--allow-unknown` | Accept `Classification.unknown` responses as data — escape hatch for pages that lack strict identifier patterns. |
+| `--save-rejected-html` | Copy rejected bodies to `rejected_html/` (off by default). |
+| `--note "..."` | Free-text note recorded on the manifest record. |
+| `--resolver-strategy ...` | Override `browser_saved_html` (e.g. if you used a session-aware curl recipe). |
+
+### Why this avoids the legacy-link and Cloudflare problems
+
+Scripted fetches give CCCBDB three things that may flag them as
+bot traffic: the User-Agent, the absence of browser fingerprint
+state, and the lack of session cookies from the form submission
+flow. The browser already supplies all three. Importing the
+already-rendered HTML keeps the archive's classifier gate +
+provenance discipline while sidestepping the request layer
+entirely.
+
 ### Classifier-hardening note (Phase 5b)
 
 CCCBDB's formula-entry page carries a deceptively-similar title:
