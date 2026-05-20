@@ -200,10 +200,17 @@ class TestRawPayloadForensics:
             for r in results
             if r.payload and r.payload.raw_payload_json["row_formula"] == "H2"
         )
+        # After the Phase 5e configured_column_names fix, the
+        # diatomic table uses stable ASCII column tokens (not the
+        # Unicode "ωexe" / "De" that the old fixture's <th> row
+        # supplied). The values still flow through unchanged.
         raw_row = h2.payload.raw_payload_json["raw_row"]
-        assert raw_row["ωexe"] == "121.336"
+        assert raw_row["wexe"] == "121.336"
         assert raw_row["Be"] == "60.853"
-        assert raw_row["De"] == "3.0622"
+        # Position 7 in the H2 row carries 3.0622 (configured as "re";
+        # the live page's column key here is uncertain — see the
+        # PROPERTY_CONFIGS comment).
+        assert raw_row["re"] == "3.0622"
 
     def test_raw_payload_contains_normalized_and_raw_fields(self):
         table = _table("property_dipoles.html", "dipole")

@@ -56,6 +56,25 @@ class PropertyTableConfig:
     column on this page". ``dimension`` is the unit normalizer
     dimension, or ``None`` to preserve the raw value without
     conversion.
+
+    Header handling
+    ---------------
+
+    Most CCCBDB tables emit a proper ``<tr><th>...</th></tr>`` header
+    row; the parser infers ``column_names`` from that row. Some live
+    pages (notably ``expdiatomicsx.asp``) ship with **no header row at
+    all** — every row is plain ``<td>``. For those pages, set
+    ``configured_column_names`` to an explicit tuple of N names; the
+    parser then:
+
+    * uses the configured tuple as ``column_names`` verbatim,
+    * keeps every row in the table as a *data* row (no first-row
+      skip), and
+    * warns when a row's cell count differs from the configured
+      column count.
+
+    When ``configured_column_names`` is ``None`` (the default), the
+    parser falls back to the historical inferred-header behavior.
     """
 
     value_column: str
@@ -68,6 +87,7 @@ class PropertyTableConfig:
     reference_column: str | None = None
     comment_column: str | None = None
     doi_column: str | None = None
+    configured_column_names: tuple[str, ...] | None = None
 
 
 PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
@@ -101,15 +121,38 @@ PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
         comment_column="commment",  # CCCBDB header has the typo
     ),
     "diatomic_spectroscopic": PropertyTableConfig(
-        # Diatomic ωe (cm^-1). Other spectroscopic constants (ωexe,
-        # Be, De, αe) ride along in ``raw_row`` and are addressed in
-        # later phases.
-        value_column="ωe",
+        # The live ``expdiatomicsx.asp`` page emits no ``<th>`` header
+        # row — every row is plain ``<td>``. Without
+        # ``configured_column_names``, the H2 data row would be
+        # treated as the column header (which was the Phase 5d bug
+        # ``payloads_dryrun/diatomic_spectroscopic.json`` surfaced).
+        #
+        # Column meanings: positions 0-2 + 8 are confidently the
+        # molecule formula, name, ωe (vibrational frequency), and
+        # the reference squib. Positions 3-7 are spectroscopic
+        # constants whose exact mapping (ωexe vs De, αe vs re, …)
+        # is uncertain without a live-verified column key on the
+        # page itself. The names below are stable *lookup tokens*,
+        # not authoritative scientific labels — a maintainer who
+        # confirms the live column shape can rename them without
+        # touching parser code.
+        value_column="we",
         default_raw_unit="cm^-1",
         dimension="frequency",
-        formula_column="Species",
+        formula_column="Molecule",
         name_column="name",
-        reference_column="reference",
+        reference_column="squib",
+        configured_column_names=(
+            "Molecule",
+            "name",
+            "we",
+            "wexe",
+            "weye",
+            "Be",
+            "alpha_e",
+            "re",
+            "squib",
+        ),
     ),
     "polarizability_iso": PropertyTableConfig(
         # Phase 5c: isotropic polarizability (Bohr^3 on CCCBDB's
@@ -345,10 +388,31 @@ def parse_experimental_property_table_page(
     warnings: list[str] = []
     table = _largest_table(extractor.tables)
 
-    if table is None or len(table) < 2:
+    column_names: list[str]
+    body: list[list[str]]
+    if config.configured_column_names is not None:
+        # Property explicitly declared its column layout (because the
+        # live page has no <th> header row to infer from). Every
+        # row of the table — including the first — is data; the
+        # configured tuple becomes the column names verbatim.
+        column_names = list(config.configured_column_names)
+        if table is None or not table:
+            warnings.append("no data table found on page")
+            body = []
+        else:
+            body = list(table)
+            expected_len = len(column_names)
+            short_count = sum(1 for row in body if len(row) != expected_len)
+            if short_count:
+                warnings.append(
+                    f"{short_count} row(s) have a cell count that does not "
+                    f"match the {expected_len} configured columns; "
+                    f"raw_row keys past the configured tuple are dropped"
+                )
+    elif table is None or len(table) < 2:
         warnings.append("no data table found on page")
-        column_names: list[str] = []
-        body: list[list[str]] = []
+        column_names = []
+        body = []
     else:
         column_names = list(table[0])
         body = list(table[1:])

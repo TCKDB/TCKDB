@@ -184,7 +184,11 @@ class TestDipoleTable:
 
 
 # ---------------------------------------------------------------------------
-# Diatomic spectroscopic — multi-column wide table; only ωe maps to value
+# Diatomic spectroscopic — live page has no <th> header row, so the
+# parser uses ``configured_column_names`` on PROPERTY_CONFIGS rather
+# than inferring from the first row. These tests pin the Phase 5e
+# fix against regression to the original bug (row 0 / H2 being eaten
+# as the column header).
 # ---------------------------------------------------------------------------
 
 
@@ -206,12 +210,107 @@ class TestDiatomicSpectroscopicTable:
         assert row.normalized_unit == "cm^-1"
 
     def test_secondary_constants_in_raw_row(self, table):
-        # ωexe, Be, etc. are not first-class fields; they live in
-        # raw_row keyed by column name so downstream code can lift
-        # them later without re-parsing.
+        # wexe, Be, etc. are not first-class fields; they live in
+        # raw_row keyed by the *configured* column name so downstream
+        # code can lift them later without re-parsing.
         h2 = next(r for r in table.rows if r.formula == "H2")
-        assert h2.raw_row["ωexe"] == "121.336"
+        assert h2.raw_row["wexe"] == "121.336"
         assert h2.raw_row["Be"] == "60.853"
+
+    def test_column_names_come_from_configured_tuple_not_first_row(
+        self, table
+    ):
+        """Regression for the Phase 5d bug where the H2 data row was
+        eaten as the table header. column_names must match the
+        configured tuple, never the values from the first data row."""
+
+        assert table.column_names == [
+            "Molecule",
+            "name",
+            "we",
+            "wexe",
+            "weye",
+            "Be",
+            "alpha_e",
+            "re",
+            "squib",
+        ]
+        # Specifically: "H2" must NOT appear as a column name.
+        assert "H2" not in table.column_names
+        # Same for the H2 ωe value, which previously became a column.
+        assert "4401.213" not in table.column_names
+
+    def test_first_row_is_h2_data_not_header(self, table):
+        """Before the fix, table.rows[0] was D2 (because H2 had been
+        consumed as the header). After the fix, row_index 0 is H2."""
+
+        assert table.rows[0].row_index == 0
+        h2 = table.rows[0]
+        assert h2.formula == "H2"
+        assert h2.name == "Hydrogen diatomic"
+        assert h2.value == pytest.approx(4401.213)
+        assert h2.normalized_value == pytest.approx(4401.213)
+        assert h2.unit == "cm^-1"
+        assert h2.reference is not None
+        assert h2.reference.reference_label == "2007Iri:389"
+
+    def test_h2_plus_cation_row_parses(self, table):
+        """The H2+ cation row in the fixture proves the first-row /
+        second-row distinction isn't being silently scrambled."""
+
+        h2_plus = next(r for r in table.rows if r.formula == "H2+")
+        assert h2_plus.name == "Hydrogen cation"
+        assert h2_plus.value == pytest.approx(2321.7)
+        assert h2_plus.reference is not None
+        assert h2_plus.reference.reference_label == "NSRDS-NBS31"
+
+    def test_raw_row_keys_match_configured_names_not_data_values(
+        self, table
+    ):
+        """raw_row keys are the *configured* column names. The pre-fix
+        bug produced keys like ``"4401.213"`` (the H2 we value) — we
+        explicitly assert that anti-shape."""
+
+        h2 = table.rows[0]
+        # Configured names appear as raw_row keys.
+        assert set(h2.raw_row.keys()) == {
+            "Molecule",
+            "name",
+            "we",
+            "wexe",
+            "weye",
+            "Be",
+            "alpha_e",
+            "re",
+            "squib",
+        }
+        # Data values do NOT appear as raw_row keys.
+        for value_key in ("H2", "Hydrogen diatomic", "4401.213"):
+            assert value_key not in h2.raw_row
+
+    def test_warning_when_row_cell_count_differs(self):
+        """If a row in the table has fewer (or more) cells than the
+        configured tuple, the parser emits a single table-level
+        warning naming the count. This is a defensive guard against
+        future CCCBDB layout drift."""
+
+        # Build a synthetic page with one short row.
+        html = """
+        <html><body><table>
+          <tr><td>H2</td><td>Hydrogen diatomic</td><td>4401.213</td>
+              <td>121.336</td><td>0.8129</td><td>60.853</td>
+              <td></td><td>3.0622</td><td>2007Iri:389</td></tr>
+          <tr><td>X</td><td>shortrow</td><td>1.0</td></tr>
+        </table></body></html>
+        """
+        result = parse_experimental_property_table_page(
+            html,
+            property_kind="diatomic_spectroscopic",
+            source_url="https://example.invalid/diatomic",
+        )
+        assert any(
+            "cell count that does not match" in w for w in result.warnings
+        )
 
 
 # ---------------------------------------------------------------------------

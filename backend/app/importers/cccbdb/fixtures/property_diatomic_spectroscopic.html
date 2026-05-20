@@ -1,15 +1,29 @@
 <!--
-  Sanitized fixture for CCCBDB's expdiatomicsx.asp ("Experimental
-  Diatomic Data") flat table.
+  Sanitized fixture matching the LIVE shape of CCCBDB's
+  expdiatomicsx.asp ("Experimental Diatomic Data") flat table.
 
-  Source page (informational only — not fetched by tests):
+  Crucially, the live page emits NO ``<th>`` header row — every row is
+  plain ``<td>``. The parser would otherwise treat the first H2 data
+  row as the column header (the Phase 5d dry-run dropped this bug
+  into ``payloads_dryrun/diatomic_spectroscopic.json``). The parser
+  config now declares ``configured_column_names`` for this table so
+  parsing works against the real page shape; this fixture mirrors
+  that shape.
+
+  Source page (informational only — NOT fetched by tests):
     https://cccbdb.nist.gov/expdiatomicsx.asp
 
-  Real columns observed (May 2026):
-    Species | name | ωe | ωexe | ωeye | Be | De | αe | reference
-  All in cm^-1.
+  Column meanings: positions 0-2 and 8 are confidently Molecule, name,
+  ωe (cm^-1), and reference squib. Positions 3-7 are spectroscopic
+  constants whose exact mapping isn't column-keyed on the live page;
+  the configured names ``wexe / weye / Be / alpha_e / re`` are stable
+  lookup tokens, not authoritative labels.
 
-  Values are real-but-rounded; do not cite.
+  Values are real-but-rounded; do not cite from this fixture.
+
+  H2+ is included so a test can pin row-1 parsing as a regression
+  against the original bug (where row 0 was eaten by header inference
+  and row 1 became row 0 with garbage column keys).
 -->
 <html>
 <head><title>CCCBDB: Experimental Diatomic Data</title></head>
@@ -18,27 +32,27 @@
 <p>Values in cm^-1</p>
 <table>
 <tr>
-  <th>Species</th><th>name</th>
-  <th>ωe</th><th>ωexe</th><th>ωeye</th>
-  <th>Be</th><th>De</th><th>αe</th>
-  <th>reference</th>
-</tr>
-<tr>
   <td>H2</td><td>Hydrogen diatomic</td>
   <td>4401.213</td><td>121.336</td><td>0.8129</td>
-  <td>60.853</td><td>3.0622</td><td></td>
+  <td>60.853</td><td></td><td>3.0622</td>
   <td>2007Iri:389</td>
+</tr>
+<tr>
+  <td>H2+</td><td>Hydrogen cation</td>
+  <td>2321.7</td><td>67.5</td><td></td>
+  <td>30.21</td><td></td><td></td>
+  <td>NSRDS-NBS31</td>
 </tr>
 <tr>
   <td>D2</td><td>Deuterium diatomic</td>
   <td>3115.5</td><td>61.82</td><td>0.562</td>
-  <td>30.4436</td><td>1.0786</td><td></td>
+  <td>30.4436</td><td></td><td>1.0786</td>
   <td>2007Iri:389</td>
 </tr>
 <tr>
   <td>LiH</td><td>Lithium Hydride</td>
   <td>1405.498</td><td>23.1679</td><td>0.170928</td>
-  <td>7.513731</td><td>0.2163911</td><td></td>
+  <td>7.513731</td><td></td><td>0.2163911</td>
   <td>2007Iri:389</td>
 </tr>
 </table>
