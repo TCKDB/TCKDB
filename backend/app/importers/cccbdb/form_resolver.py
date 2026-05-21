@@ -939,6 +939,19 @@ def _archive_parsed(
         ],
         "warnings": list(parsed.warnings),
     }
+    # Preserve the selection-stage metadata on disk so the downstream
+    # form-payload builder can carry it forward into
+    # ``raw_payload_json["selection"]`` without re-running the resolver.
+    if result.selection_policy is not None:
+        payload["selection"] = {
+            "selection_policy": result.selection_policy,
+            "selection_status": result.selection_status,
+            "selection_match_basis": result.selection_match_basis,
+            "selection_candidate_count": result.selection_candidate_count,
+            "selected_name": result.selected_name,
+            "selected_cas_number": result.selected_cas_number,
+            "selection_warnings": list(result.selection_warnings),
+        }
     path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

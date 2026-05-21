@@ -1314,6 +1314,145 @@ and the page is accepted, the raw HTML is archived but no
 `parsed/...json` file is written, and the manifest carries a
 `parser_warnings` entry naming the unsupported target.
 
+## Phase 8 — form-result payload builder
+
+The form resolver writes per-target parsed JSON files under
+``parsed/form_<target_kind>_<species_key>_<sha>.json``. Phase 8 adds a
+builder that converts those parsed files into
+``MolecularPropertyObservationCreate`` payloads — closing the loop
+from form workflow to the same observation channel the flat
+property-table builder feeds.
+
+### Parsed JSON → payload pipeline
+
+```
+ea1x.asp form workflow
+  → form resolver (Phase 6)
+  → parsed/form_atomization_energy_<key>_<sha>.json
+  → cccbdb_form_payload_dryrun.py
+  → form_payloads_dryrun/atomization_energy.json
+      with MolecularPropertyObservationCreate payloads inside.
+```
+
+The builder ([form_payload_builder.py](form_payload_builder.py))
+exposes one supported target_kind in Phase 8:
+
+* ``atomization_energy`` (CCCBDB ``ea2x.asp``)
+
+Other supported_target_kinds parse fine but the builder skips them
+with an "unsupported" warning until each one earns its own per-target
+builder.
+
+### Running the form-payload dry-run
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_form_payload_dryrun \
+  --archive-dir data/external/cccbdb \
+  --output-dir data/external/cccbdb/form_payloads_dryrun
+```
+
+Output:
+
+```
+form_payloads_dryrun/
+  summary.json            # aggregate health + counts
+  atomization_energy.json # per-target payloads + warnings
+```
+
+Health gate:
+
+* ``healthy`` — every supported target either had no parsed files at
+  all, or produced at least one workflow-ready payload.
+* ``unhealthy`` — at least one target had parsed files but emitted
+  zero payloads (silent-empty scenario; almost always a column
+  drift or a row missing a 0 K value).
+
+### Why ``atomization_energy`` uses 0 K as ``scalar_value``
+
+CCCBDB's ``ea2x.asp`` reports two values per species: the
+atomization energy at 0 K and at 298 K (both in kJ/mol). The
+builder treats the 0 K value as the canonical scalar because:
+
+* it matches the 0 K convention used by the flat ``hf0kx.asp`` /
+  ``goodlistx.asp`` enthalpy tables;
+* the 0 K value is the one CCCBDB reports without thermal
+  contributions — purer experimental observation.
+
+The 298 K value is preserved verbatim under
+``raw_payload_json["secondary_values"]["298K"]``. If a future
+workflow needs both temperatures as first-class observations, it
+can derive a second `MolecularPropertyObservationCreate` from the
+same row.
+
+### Why ``temperature_k`` is ``None``
+
+The ``MolecularPropertyObservationCreate`` schema validates
+``temperature_k > 0``, so we cannot store the literal value
+``0.0``. The 0 K condition is encoded via
+``property_label="atomization_energy_0k"`` alongside
+``temperature_k=None``. The label is the durable hint a downstream
+consumer can dispatch on.
+
+### How selection metadata is preserved
+
+When the form resolver hit a ``choosex.asp`` selection page, its
+verdict is written into the parsed JSON file's top-level
+``selection`` field. The builder copies it verbatim into
+``raw_payload_json["selection"]`` so every emitted payload carries
+provenance back to the exact ``fixchoicex.asp`` POST that produced
+it.
+
+Shape:
+
+```json
+{
+  "selection": {
+    "selection_policy": "exact_match",
+    "selection_status": "selected",
+    "selection_match_basis": "formula+name",
+    "selection_candidate_count": 3,
+    "selected_name": "Ethanol",
+    "selected_cas_number": "64175",
+    "selection_warnings": []
+  }
+}
+```
+
+### Why ``species_entry_id`` remains ``null``
+
+Phase 8 stops short of identity resolution. Every emitted payload
+sets ``species_entry_id=None`` and surfaces identity hints inside
+``raw_payload_json["identity_hint"]``:
+
+```json
+{
+  "identity_hint": {
+    "formula": "H2O",
+    "name": "Water"
+  }
+}
+```
+
+The workflow layer (a separate phase) resolves these hints against
+``species_entry`` rows in the database, gated on existing-row
+dedup. Doing identity resolution inside the importer would
+quietly create or mis-attach species rows — explicitly out of
+scope.
+
+### Skip rules
+
+Rows the builder skips (with a warning, never an exception):
+
+| Reason | Warning text |
+|---|---|
+| No numeric 0 K value | ``no numeric 0 K atomization energy on this row; payload not built`` |
+| Missing unit | ``missing unit; payload not built`` |
+| Pydantic validation failure | ``pydantic validation failed: ...`` |
+
+Each skipped row contributes a per-target ``warnings`` entry in
+``atomization_energy.json``; the dry-run health gate marks the
+target ``unhealthy`` if every parsed file produces only skips.
+
 ### How the experimental-index audit guides future allowlisting
 
 The audit module is the single source of truth for "what's the next
