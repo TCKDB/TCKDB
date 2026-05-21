@@ -115,7 +115,10 @@ class TestPolarizabilityIsoTable:
         assert table.canonical_unit == "Bohr^3"
         assert table.source_metadata.property_kind == "polarizability_iso"
 
-    def test_isotropic_iso_value_is_value_column(self, table):
+    def test_isotropic_alpha_value_is_value_column(self, table):
+        """Live pollistx.asp uses ``alpha`` (not ``iso``) for the
+        isotropic polarizability."""
+
         h2o = next(
             r
             for r in table.rows
@@ -123,10 +126,15 @@ class TestPolarizabilityIsoTable:
         )
         assert h2o.value == pytest.approx(9.90)
         assert h2o.unit == "Bohr^3"
+        # The detected header is the live one, not the
+        # previously-inferred xx/yy/zz/iso shape.
+        assert "alpha" in table.column_names
+        assert "xx" not in table.column_names
 
-    def test_lih_partial_components_does_not_crash(self, table):
-        """LiH row has blank xx/yy/zz cells but a populated iso value
-        + comment 'MB'. The parser must tolerate this."""
+    def test_lih_row_has_comment_and_state(self, table):
+        """LiH row carries a non-empty reference comment ('MB') and
+        a populated electronic state. Both must survive the parse
+        through the live-shape columns."""
 
         lih = next(
             r
@@ -134,11 +142,13 @@ class TestPolarizabilityIsoTable:
             if r.raw_row["Molecule"] == "LiH"
         )
         assert lih.value == pytest.approx(23.74)
-        assert lih.raw_row["xx"] == ""
-        assert lih.raw_row["yy"] == ""
-        assert lih.raw_row["zz"] == ""
         assert lih.reference is not None
         assert lih.reference.reference_comment == "MB"
+        # ``State`` lookup is case-insensitive, so the row's
+        # ``state_label_raw`` ends up populated from the ``State``
+        # column even though the config spells it ``state_column="State"``.
+        assert lih.state_label_raw is not None
+        assert "Conformation" in table.column_names
 
     def test_full_pilot_includes_polarizability(self):
         kinds = {t.property_kind for t in EXPERIMENTAL_PROPERTIES_PILOT}

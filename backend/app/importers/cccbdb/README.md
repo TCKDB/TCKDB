@@ -935,15 +935,93 @@ The allowlist now covers **5 cross-species experimental tables**:
 | `hf_0_with_uncertainty` | `goodlistx.asp` | kJ/mol (+ unc) | `enthalpy_of_formation` |
 | `dipole` | `diplistx.asp` | Debye | `dipole_moment` |
 | `diatomic_spectroscopic` | `expdiatomicsx.asp` | cm⁻¹ | `spectroscopic_constant` |
-| `polarizability_iso` | `pollistx.asp` *(new in 5c)* | Bohr³ | `polarizability_iso` |
+| `polarizability_iso` | `pollistx.asp` *(live-verified in 5d)* | Bohr³ | `polarizability_iso` |
 
-The `polarizability_iso` column shape (`Molecule | name | state | xx
-| yy | zz | iso | squib | commment`) is inferred from the
-`diplistx.asp` sibling — confirmed flat-table single-fetch by the
-May 2026 WebFetch survey but not column-verified live. If a live
-fetch reveals different column headers, update
+The live `pollistx.asp` page header is
+`Molecule | name | State | Conformation | alpha | squib | commment`
+— the earlier Phase 5c inferred shape (`xx | yy | zz | iso | …`) was
+extrapolated from the `diplistx.asp` sibling and was wrong. The
+configured `value_column` is now `alpha`. If a live fetch reveals a
+different column header again, update
 [`PROPERTY_CONFIGS["polarizability_iso"]`](parsers/experimental_property_table.py)
 — the parser itself is column-name-driven and doesn't need to change.
+
+### `hf_0` vs `hf_0_with_uncertainty`
+
+These are intentionally **both** kept in the pilot and are NOT
+duplicates:
+
+| Target | Source | Coverage | Uncertainty |
+|---|---|---|---|
+| `hf_0` | `hf0kx.asp` | all species CCCBDB has at 0 K (~450 rows) | none |
+| `hf_0_with_uncertainty` | `goodlistx.asp` | "well-known" curated subset (~31 rows) | yes |
+
+The goodlist is a curated subset of `hf_0`, not a superset — dropping
+either target loses information. Both feed
+`molecular_property_observation` as `enthalpy_of_formation` payloads;
+the goodlist subset is distinguishable downstream by a non-null
+`scalar_uncertainty`. (This decision is pinned by tests in
+[`tests/importers/cccbdb/test_property_payload_dryrun.py::TestHfZeroOutcome`](../../../tests/importers/cccbdb/test_property_payload_dryrun.py).)
+
+A May 2026 cache-lookup bug caused `hf_0` to silently parse against
+the goodlist's HTML (the glob `property_hf_0_*.html` matched
+`property_hf_0_with_uncertainty_*.html`); see the regex anchor in
+[`snapshot._find_cached_raw_html`](snapshot.py).
+
+## Experimental index discovery (`exp2x.asp` / `exp1x.asp`)
+
+`https://cccbdb.nist.gov/exp2x.asp` (redirects to `exp1x.asp`) is
+CCCBDB's canonical "Experimental" sub-menu. It is **not** a data
+page — it is a *discovery page* that lists every experimental
+property table the database advertises. We parse it to (a) verify
+the URLs the importer fetches are still advertised by CCCBDB and
+(b) surface new property tables that the pilot doesn't configure
+yet.
+
+* Parser: [`parsers/experimental_index.py`](parsers/experimental_index.py)
+  → `ExperimentalIndex.links: list[ExperimentalIndexLink]`.
+* Each link carries `section_path`, `label`, `href`,
+  `absolute_url`, and a static `target_guess` (`property_kind`
+  token) for the well-known data pages.
+* The parser does **not** crawl the discovered links — it's
+  read-only metadata for maintainer use.
+
+### Running the property-config audit
+
+```python
+from pathlib import Path
+from app.importers.cccbdb.parsers.experimental_index import parse_experimental_index_page
+from app.importers.cccbdb.property_config_audit import audit_property_configs
+
+html = Path("path/to/exp2x.html").read_text(encoding="utf-8")
+index = parse_experimental_index_page(html, source_url="https://cccbdb.nist.gov/exp2x.asp")
+audit = audit_property_configs(index)
+
+print(audit.matched_targets)                  # configured AND advertised
+print(audit.unmatched_configured_targets)     # configured URL has gone stale
+print([link.label for link in audit.unconfigured_experimental_links])  # extension candidates
+```
+
+The audit is a diagnostic only; it never fails the run.
+
+### Interpreting dry-run health
+
+Each target's per-JSON file now carries a `health` field with one of
+four values:
+
+| `health` | meaning |
+|---|---|
+| `healthy` | parsed rows produced payloads (or zero rows seen) |
+| `unhealthy` | `parsed_row_count > 0` AND `payload_count == 0` — almost always a column-config drift |
+| `quarantined` | same row/payload shape as unhealthy, but the target's `CrawlTarget.workflow_ready=False` so it's intentionally deferred |
+| `skipped` | no cached HTML in the archive (only with `--use-cache-only`) |
+
+The aggregate `summary.json` exposes `unhealthy_count`,
+`quarantined_count`, and a `health_summary` map keyed by
+`property_kind`. The default pilot should always be
+`unhealthy_count == 0` — if it isn't, the CLI logs a WARNING with
+the offending targets, but exit code stays `0` so individual
+column drifts don't break automated workflows.
 
 ### Adding a new property table
 

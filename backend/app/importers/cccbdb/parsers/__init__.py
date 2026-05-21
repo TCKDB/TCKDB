@@ -1,5 +1,11 @@
 """CCCBDB HTML parsers (Phase 1: experimental species pages only)."""
 
+from app.importers.cccbdb.parsers.experimental_index import (
+    EXPERIMENTAL_INDEX_URLS,
+    ExperimentalIndex,
+    ExperimentalIndexLink,
+    parse_experimental_index_page,
+)
 from app.importers.cccbdb.parsers.experimental_property_table import (
     PROPERTY_CONFIGS,
     parse_experimental_property_table_page,
@@ -16,7 +22,11 @@ from app.importers.cccbdb.parsers.species_all_data import (
 )
 
 __all__ = [
+    "EXPERIMENTAL_INDEX_URLS",
+    "ExperimentalIndex",
+    "ExperimentalIndexLink",
     "PROPERTY_CONFIGS",
+    "parse_experimental_index_page",
     "parse_experimental_property_table_page",
     "parse_experimental_species_page",
     "parse_molecule_catalog_page",

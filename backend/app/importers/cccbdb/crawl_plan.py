@@ -73,6 +73,14 @@ class CrawlTarget:
     :param cas_number: CAS Registry Number (digits only, e.g.
         ``"7732185"``) for ``species_all_data`` targets. Required by
         the direct-CAS resolver; ignored for other page kinds.
+    :param workflow_ready: When ``True`` (the default), the dry-run
+        health gate expects this target to emit at least one payload
+        per parsed row. Set to ``False`` to quarantine a target whose
+        parsing works but whose payload-build is intentionally
+        deferred (e.g. a page that belongs in ``thermo`` rather than
+        ``molecular_property_observation``). Quarantined targets are
+        still parsed; they just don't trigger the
+        ``parsed > 0, payloads == 0`` unhealthy verdict.
     """
 
     species_key: str
@@ -82,6 +90,7 @@ class CrawlTarget:
     notes: str = ""
     property_kind: str | None = None
     cas_number: str | None = None
+    workflow_ready: bool = True
 
 
 # These URLs are placeholders pending a session-aware fetcher or a
@@ -123,6 +132,19 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
         page_kind="experimental_property_table",
         property_kind="hf_0",
         is_validated_url=True,
+        # hf_0 and hf_0_with_uncertainty are intentionally BOTH kept
+        # in the pilot. They are NOT duplicates:
+        #
+        #   hf_0  (hf0kx.asp)          — 450 species, no uncertainty
+        #   hf_0_with_uncertainty
+        #         (goodlistx.asp)      — 31 "well-known" species, ±unc
+        #
+        # The goodlist is a curated subset, not a superset, so dropping
+        # hf_0 would lose ~419 species worth of Hf(0K) observations.
+        # Both feed molecular_property_observation as
+        # ``enthalpy_of_formation`` payloads; the goodlist subset is
+        # distinguishable downstream by the presence of
+        # ``scalar_uncertainty``.
         notes="Hf(0K) flat table; kJ/mol; columns Species|Name|Hfg 0K|Reference|DOI",
     ),
     CrawlTarget(

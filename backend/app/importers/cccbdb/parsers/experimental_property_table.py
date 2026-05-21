@@ -155,18 +155,30 @@ PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
         ),
     ),
     "polarizability_iso": PropertyTableConfig(
-        # Phase 5c: isotropic polarizability (Bohr^3 on CCCBDB's
-        # pollistx.asp). Sibling URL of diplistx.asp; live column
-        # shape inferred from the dipole page and verified against
-        # the bundled fixture. If a live fetch shows different
-        # column headers, only this config needs updating — the
-        # parser doesn't change.
-        value_column="iso",
+        # Isotropic polarizability from CCCBDB's pollistx.asp. The
+        # live page header (verified by re-fetching pollistx.asp in
+        # May 2026) is:
+        #
+        #   Molecule | name | State | Conformation | alpha | squib | commment
+        #
+        # so the isotropic value column is ``alpha`` (Bohr^3), NOT the
+        # dipole-sibling ``iso`` that the Phase 5c inferred shape
+        # assumed. Per-axis xx/yy/zz components are *not* on this
+        # page (those live on pollistx2.asp / pollistx3.asp); the
+        # tensor anisotropy table is deferred work.
+        #
+        # Note: ``State`` is the electronic state; ``Conformation`` is
+        # the point group / vibrational configuration. Both are
+        # preserved on the row's ``raw_row`` for downstream review,
+        # but only the electronic state is mapped to
+        # ``state_label_raw`` (case-insensitive lookup, so "State"
+        # vs "state" doesn't matter for matching).
+        value_column="alpha",
         default_raw_unit="Bohr^3",
         dimension=None,  # no Bohr^3 normalizer; raw value preserved
         formula_column="Molecule",
         name_column="name",
-        state_column="state",
+        state_column="State",
         reference_column="squib",
         comment_column="commment",
     ),

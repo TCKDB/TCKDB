@@ -5,20 +5,24 @@
   Source page (informational only — NOT fetched by tests):
     https://cccbdb.nist.gov/pollistx.asp
 
-  Column shape is INFERRED from the diplistx.asp sibling
-  (Molecule|name|state|xx|yy|zz|iso|squib|commment). The May 2026
-  WebFetch survey confirmed pollistx.asp exists as a flat single-fetch
-  table but did not enumerate columns. If a live fetch shows
-  different columns, update PROPERTY_CONFIGS["polarizability_iso"]
-  — the parser itself is column-name-driven and won't change.
+  Column shape was re-verified from the LIVE pollistx.asp page
+  in May 2026:
+
+    Molecule | name | State | Conformation | alpha | squib | commment
+
+  The earlier inferred shape (Molecule|name|state|xx|yy|zz|iso|...)
+  was wrong — it was extrapolated from the diplistx.asp sibling.
+  This fixture now matches the live page header. If a live fetch
+  shows different columns again, update
+  PROPERTY_CONFIGS["polarizability_iso"] — the parser itself is
+  column-name-driven and won't change.
 
   Polarizabilities are conventionally reported in Bohr^3 (atomic
-  units) or in Å^3; CCCBDB historically uses Bohr^3. Values below
-  are real-but-rounded; do not cite.
+  units) or in Å^3; CCCBDB uses Bohr^3 on pollistx.asp. Values
+  below are real-but-rounded; do not cite.
 
   Note: the typo "commment" (three m's) is preserved deliberately —
-  the dipole sibling has it on the live page, and the polarizability
-  page likely shares the template.
+  the live page has it.
 -->
 <html>
 <head><title>CCCBDB: Experimental Polarizabilities</title></head>
@@ -27,29 +31,32 @@
 <p>Polarizabilities in Bohr^3</p>
 <table>
 <tr>
-  <th>Molecule</th><th>name</th><th>state</th>
-  <th>xx</th><th>yy</th><th>zz</th><th>iso</th>
-  <th>squib</th><th>commment</th>
+  <th>Molecule</th><th>name</th><th>State</th><th>Conformation</th>
+  <th>alpha</th><th>squib</th><th>commment</th>
 </tr>
 <tr>
-  <td>H2</td><td>Hydrogen diatomic</td><td>1Σg</td>
-  <td>4.835</td><td>4.835</td><td>6.379</td><td>5.350</td>
-  <td>NSRDS-NBS10</td><td></td>
+  <td>H</td><td>Hydrogen atom</td><td>1S</td><td>Kh</td>
+  <td>0.667</td><td>1977Mil/Bed:1</td><td></td>
 </tr>
 <tr>
-  <td>H2O</td><td>Water</td><td>1A1</td>
-  <td>9.83</td><td>10.31</td><td>9.55</td><td>9.90</td>
-  <td>NSRDS-NBS10</td><td></td>
+  <td>He</td><td>Helium atom</td><td>1S</td><td>Kh</td>
+  <td>0.208</td><td>1997Oln/Can:59</td><td></td>
 </tr>
 <tr>
-  <td>CH4</td><td>Methane</td><td>1A1</td>
-  <td>17.27</td><td>17.27</td><td>17.27</td><td>17.27</td>
-  <td>NSRDS-NBS10</td><td></td>
+  <td>H2</td><td>Hydrogen diatomic</td><td>1&#931;g</td><td>D&#8734;h</td>
+  <td>5.350</td><td>NSRDS-NBS10</td><td></td>
 </tr>
 <tr>
-  <td>LiH</td><td>Lithium Hydride</td><td>1Σ</td>
-  <td></td><td></td><td></td><td>23.74</td>
-  <td>1968Tho/Dal:2815</td><td>MB</td>
+  <td>H2O</td><td>Water</td><td>1A1</td><td>C2v</td>
+  <td>9.90</td><td>NSRDS-NBS10</td><td></td>
+</tr>
+<tr>
+  <td>CH4</td><td>Methane</td><td>1A1</td><td>Td</td>
+  <td>17.27</td><td>NSRDS-NBS10</td><td></td>
+</tr>
+<tr>
+  <td>LiH</td><td>Lithium Hydride</td><td>1&#931;</td><td>C&#8734;v</td>
+  <td>23.74</td><td>1968Tho/Dal:2815</td><td>MB</td>
 </tr>
 </table>
 </body>

@@ -76,6 +76,12 @@ from app.schemas.entities.molecular_property_observation import (
 _logger = logging.getLogger(__name__)
 
 
+HEALTHY = "healthy"
+UNHEALTHY = "unhealthy"
+QUARANTINED = "quarantined"
+SKIPPED = "skipped"
+
+
 @dataclass
 class TargetDryRunResult:
     """One property-table target's dry-run outcome."""
@@ -88,6 +94,9 @@ class TargetDryRunResult:
     invalid_payload_count: int = 0
     warning_count: int = 0
     skipped_missing_cache: bool = False
+    workflow_ready: bool = True
+    health: str = HEALTHY
+    health_reason: str | None = None
     warnings: list[str] = field(default_factory=list)
     payloads: list[dict[str, Any]] = field(default_factory=list)
 
@@ -101,9 +110,42 @@ class TargetDryRunResult:
             "invalid_payload_count": self.invalid_payload_count,
             "warning_count": self.warning_count,
             "skipped_missing_cache": self.skipped_missing_cache,
+            "workflow_ready": self.workflow_ready,
+            "health": self.health,
+            "health_reason": self.health_reason,
             "warnings": list(self.warnings),
             "payloads": list(self.payloads),
         }
+
+    def resolve_health(self) -> None:
+        """Set ``health`` + ``health_reason`` from the current counts.
+
+        A target is unhealthy when it parsed rows but emitted no
+        workflow-ready payloads, *unless* the target is explicitly
+        marked ``workflow_ready=False`` — in which case it's
+        ``quarantined`` rather than ``unhealthy``. A target that
+        couldn't be served from cache is ``skipped`` (informational,
+        not a failure).
+        """
+
+        if self.skipped_missing_cache:
+            self.health = SKIPPED
+            self.health_reason = "no cached HTML in archive"
+            return
+        if self.parsed_row_count > 0 and self.payload_count == 0:
+            if not self.workflow_ready:
+                self.health = QUARANTINED
+                self.health_reason = (
+                    "target is explicitly marked workflow_ready=False"
+                )
+            else:
+                self.health = UNHEALTHY
+                self.health_reason = (
+                    "parsed rows but emitted zero payloads"
+                )
+            return
+        self.health = HEALTHY
+        self.health_reason = None
 
 
 @dataclass
@@ -115,10 +157,13 @@ class DryRunSummary:
     total_invalid_payload_count: int = 0
     total_warning_count: int = 0
     skipped_count: int = 0
+    unhealthy_count: int = 0
+    quarantined_count: int = 0
     use_cache_only: bool = False
     created_at: str = ""
     per_target: list[dict[str, Any]] = field(default_factory=list)
     warning_summary: dict[str, int] = field(default_factory=dict)
+    health_summary: dict[str, str] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -129,9 +174,18 @@ class DryRunSummary:
             "total_invalid_payload_count": self.total_invalid_payload_count,
             "total_warning_count": self.total_warning_count,
             "skipped_count": self.skipped_count,
+            "unhealthy_count": self.unhealthy_count,
+            "quarantined_count": self.quarantined_count,
             "per_target": list(self.per_target),
             "warning_summary": dict(self.warning_summary),
+            "health_summary": dict(self.health_summary),
         }
+
+    def unhealthy_targets(self) -> list[str]:
+        return [
+            kind for kind, health in self.health_summary.items()
+            if health == UNHEALTHY
+        ]
 
 
 def _select_targets(
@@ -262,7 +316,12 @@ def run_payload_dryrun(
         summary.total_warning_count += result.warning_count
         if result.skipped_missing_cache:
             summary.skipped_count += 1
+        if result.health == UNHEALTHY:
+            summary.unhealthy_count += 1
+        elif result.health == QUARANTINED:
+            summary.quarantined_count += 1
         summary.warning_summary[result.property_kind] = result.warning_count
+        summary.health_summary[result.property_kind] = result.health
 
     summary_path = output_dir / "summary.json"
     summary_path.write_text(
@@ -286,6 +345,7 @@ def _run_one_target(
     result = TargetDryRunResult(
         property_kind=property_kind,
         source_url=target.source_url,
+        workflow_ready=target.workflow_ready,
     )
 
     html = fetcher_obj.load_cached_html(target)
@@ -297,6 +357,7 @@ def _run_one_target(
                 "--use-cache-only is set"
             )
             result.warning_count = len(result.warnings)
+            result.resolve_health()
             _write_target_json(output_dir, result)
             return result
         # Non-cache-only with no HTML usually means the snapshot
@@ -305,6 +366,7 @@ def _run_one_target(
             "no cached HTML even after fetch attempt; see manifest.json"
         )
         result.warning_count = len(result.warnings)
+        result.resolve_health()
         _write_target_json(output_dir, result)
         return result
 
@@ -313,6 +375,7 @@ def _run_one_target(
     except Exception as exc:  # noqa: BLE001 - keep going across targets
         result.warnings.append(f"parser_error: {type(exc).__name__}: {exc}")
         result.warning_count = len(result.warnings)
+        result.resolve_health()
         _write_target_json(output_dir, result)
         return result
 
@@ -352,6 +415,7 @@ def _run_one_target(
         )
 
     result.warning_count = len(result.warnings)
+    result.resolve_health()
     _write_target_json(output_dir, result)
     return result
 
@@ -450,11 +514,19 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     _logger.info(
-        "Dry-run complete: %d target(s), %d payloads, %d invalid, %d skipped",
+        "Dry-run complete: %d target(s), %d payloads, %d invalid, "
+        "%d skipped, %d unhealthy, %d quarantined",
         summary.target_count,
         summary.total_payload_count,
         summary.total_invalid_payload_count,
         summary.skipped_count,
+        summary.unhealthy_count,
+        summary.quarantined_count,
     )
+    if summary.unhealthy_targets():
+        _logger.warning(
+            "Unhealthy targets (parsed rows but emitted zero payloads): %s",
+            ", ".join(summary.unhealthy_targets()),
+        )
     _logger.info("Wrote summary to %s", args.output_dir / "summary.json")
     return 0

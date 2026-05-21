@@ -376,8 +376,13 @@ class TestCli:
 
 class TestPolarizabilityIsoSurface:
     """The dry-run report must surface enough information about the
-    inferred-but-not-live-verified polarizability_iso table that a
-    maintainer can spot column drift quickly."""
+    live-verified polarizability_iso table that a maintainer can
+    spot column drift quickly.
+
+    The live pollistx.asp header (May 2026) is
+    ``Molecule | name | State | Conformation | alpha | squib | commment``
+    — see PROPERTY_CONFIGS["polarizability_iso"] for the rationale.
+    """
 
     def test_detected_headers_populated(self, tmp_path):
         archive = tmp_path / "archive"
@@ -387,7 +392,8 @@ class TestPolarizabilityIsoSurface:
             archive_dir=archive, output_dir=out, use_cache_only=True
         )
         data = json.loads((out / "polarizability_iso.json").read_text())
-        assert "iso" in data["detected_headers"]
+        # Live header is "alpha", not the previously-inferred "iso".
+        assert "alpha" in data["detected_headers"]
         assert "Molecule" in data["detected_headers"]
         assert data["parsed_row_count"] > 0
 
@@ -404,10 +410,198 @@ class TestPolarizabilityIsoSurface:
             assert payload["scalar_unit"] == "Bohr^3"
             assert payload["scientific_origin"] == "experimental"
 
+    def test_polarizability_iso_emits_payloads(self, tmp_path):
+        """Regression: pollistx.asp must not be parsed-but-empty.
+
+        Before May 2026 the configured value_column was ``iso`` but
+        the live page exposes the isotropic polarizability as
+        ``alpha``; the dry-run silently produced zero payloads.
+        """
+
+        archive = tmp_path / "archive"
+        out = tmp_path / "out"
+        _populate_cache(archive, kinds=["polarizability_iso"])
+        summary = run_payload_dryrun(
+            archive_dir=archive,
+            output_dir=out,
+            property_kinds=("polarizability_iso",),
+            use_cache_only=True,
+        )
+        data = json.loads((out / "polarizability_iso.json").read_text())
+        assert data["parsed_row_count"] > 0
+        assert data["payload_count"] > 0
+        assert data["invalid_payload_count"] == 0
+        assert data["health"] == "healthy"
+        assert summary.unhealthy_count == 0
+        # First real row must have formula + name + a scalar value.
+        first = data["payloads"][0]
+        assert first["raw_payload_json"]["row_formula"]
+        assert first["raw_payload_json"]["row_name"]
+        assert first["scalar_value"] is not None
+
 
 # ---------------------------------------------------------------------------
 # No-DB / no-network invariants
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Health gate + hf_0 outcome pin (Part D / Part E)
+# ---------------------------------------------------------------------------
+
+
+class TestHealthGate:
+    """``parsed_row_count > 0 and payload_count == 0`` should
+    surface as ``health == "unhealthy"`` unless the target is
+    explicitly ``workflow_ready=False``."""
+
+    def test_default_pilot_has_no_unhealthy_targets(self, tmp_path):
+        archive = tmp_path / "archive"
+        out = tmp_path / "out"
+        _populate_cache(archive)
+        summary = run_payload_dryrun(
+            archive_dir=archive, output_dir=out, use_cache_only=True
+        )
+        assert summary.unhealthy_count == 0, (
+            f"default pilot is unhealthy: {summary.unhealthy_targets()}"
+        )
+        for entry in summary.per_target:
+            assert entry["health"] in {"healthy", "quarantined", "skipped"}, (
+                f"unexpected health for {entry['property_kind']}: "
+                f"{entry['health']} ({entry['health_reason']})"
+            )
+
+    def test_parsed_but_zero_payloads_is_unhealthy(self, tmp_path, monkeypatch):
+        """Force every row to fail to produce a payload (no scalar)
+        and confirm the dry-run marks the target unhealthy. Uses
+        the in-memory facade rather than monkey-patching the
+        scalar parser — simpler and avoids surprising other tests."""
+
+        from app.importers.cccbdb.property_payload_dryrun import (
+            TargetDryRunResult,
+        )
+
+        result = TargetDryRunResult(
+            property_kind="dipole",
+            source_url="https://cccbdb.nist.gov/diplistx.asp",
+            parsed_row_count=10,
+            payload_count=0,
+        )
+        result.resolve_health()
+        assert result.health == "unhealthy"
+        assert result.health_reason == (
+            "parsed rows but emitted zero payloads"
+        )
+
+    def test_quarantined_when_workflow_ready_is_false(self):
+        from app.importers.cccbdb.property_payload_dryrun import (
+            TargetDryRunResult,
+        )
+
+        result = TargetDryRunResult(
+            property_kind="future_kind",
+            source_url="https://cccbdb.nist.gov/futurex.asp",
+            parsed_row_count=10,
+            payload_count=0,
+            workflow_ready=False,
+        )
+        result.resolve_health()
+        assert result.health == "quarantined"
+
+    def test_skipped_missing_cache_resolves_to_skipped(self):
+        from app.importers.cccbdb.property_payload_dryrun import (
+            TargetDryRunResult,
+        )
+
+        result = TargetDryRunResult(
+            property_kind="dipole",
+            source_url="https://cccbdb.nist.gov/diplistx.asp",
+            skipped_missing_cache=True,
+        )
+        result.resolve_health()
+        assert result.health == "skipped"
+
+    def test_summary_health_map_populated(self, tmp_path):
+        archive = tmp_path / "archive"
+        out = tmp_path / "out"
+        _populate_cache(archive)
+        summary = run_payload_dryrun(
+            archive_dir=archive, output_dir=out, use_cache_only=True
+        )
+        assert set(summary.health_summary.keys()) == set(_FIXTURE_BY_KIND)
+        for kind, health in summary.health_summary.items():
+            assert health in {"healthy", "unhealthy", "quarantined", "skipped"}
+
+
+class TestHfZeroOutcome:
+    """Pin Part D's decision: hf_0 (hf0kx.asp) stays in the pilot as
+    a non-duplicate of hf_0_with_uncertainty (goodlistx.asp). Both
+    pages produce ``enthalpy_of_formation`` payloads; goodlist is
+    the curated subset with uncertainties."""
+
+    def test_both_hf_targets_present_in_pilot(self):
+        from app.importers.cccbdb.crawl_plan import (
+            EXPERIMENTAL_PROPERTIES_PILOT,
+        )
+
+        kinds = {t.property_kind for t in EXPERIMENTAL_PROPERTIES_PILOT}
+        assert "hf_0" in kinds
+        assert "hf_0_with_uncertainty" in kinds
+
+    def test_hf_targets_have_distinct_source_urls(self):
+        from app.importers.cccbdb.crawl_plan import (
+            EXPERIMENTAL_PROPERTIES_PILOT,
+        )
+
+        by_kind = {t.property_kind: t for t in EXPERIMENTAL_PROPERTIES_PILOT}
+        assert by_kind["hf_0"].source_url != \
+            by_kind["hf_0_with_uncertainty"].source_url
+        assert "hf0kx.asp" in by_kind["hf_0"].source_url
+        assert "goodlistx.asp" in by_kind["hf_0_with_uncertainty"].source_url
+
+    def test_hf_0_emits_payloads_from_fixture(self, tmp_path):
+        archive = tmp_path / "archive"
+        out = tmp_path / "out"
+        _populate_cache(archive, kinds=["hf_0"])
+        summary = run_payload_dryrun(
+            archive_dir=archive,
+            output_dir=out,
+            property_kinds=("hf_0",),
+            use_cache_only=True,
+        )
+        data = json.loads((out / "hf_0.json").read_text())
+        assert data["parsed_row_count"] > 0
+        assert data["payload_count"] > 0
+        assert data["health"] == "healthy"
+        assert summary.unhealthy_count == 0
+
+    def test_hf_0_cache_lookup_does_not_collide_with_hf_0_with_uncertainty(
+        self, tmp_path
+    ):
+        """Regression for the May 2026 bug: the cached-HTML glob
+        was too loose (``property_hf_0_*.html`` matched
+        ``property_hf_0_with_uncertainty_<sha>.html``), so the hf_0
+        target was silently parsed against the goodlist's 31-row
+        HTML and emitted zero payloads. The fix anchors the regex
+        on the trailing ``_<sha12>.html`` suffix."""
+
+        archive = tmp_path / "archive"
+        out = tmp_path / "out"
+        _populate_cache(archive, kinds=["hf_0", "hf_0_with_uncertainty"])
+        run_payload_dryrun(
+            archive_dir=archive, output_dir=out, use_cache_only=True
+        )
+        hf_0 = json.loads((out / "hf_0.json").read_text())
+        hf_unc = json.loads(
+            (out / "hf_0_with_uncertainty.json").read_text()
+        )
+        # The two targets must report independent row counts —
+        # if the glob collided, hf_0's payload count would mirror
+        # hf_unc's (or vanish).
+        assert hf_0["parsed_row_count"] != hf_unc["parsed_row_count"] \
+            or hf_0["detected_headers"] != hf_unc["detected_headers"]
+        assert hf_0["payload_count"] > 0
+        assert hf_unc["payload_count"] > 0
 
 
 def test_dryrun_module_imports_no_orm_sessions():

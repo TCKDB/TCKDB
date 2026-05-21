@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -257,6 +258,11 @@ def _find_cached_raw_html(
     ``property`` for cross-species property tables. We pick the
     lexicographically last match (sha order, deterministic) — there
     should normally be exactly one per target per CCCBDB release.
+
+    The match must be EXACT on ``species_key``: a glob alone would
+    let ``species_key="hf_0"`` collide with
+    ``property_hf_0_with_uncertainty_*.html``. We post-filter the
+    glob results with a regex anchored on the 12-hex sha suffix.
     """
 
     if page_kind == "experimental_property_table":
@@ -267,7 +273,14 @@ def _find_cached_raw_html(
         prefix = "species_alldata"
     else:
         prefix = "experimental"
-    candidates = sorted(raw_dir.glob(f"{prefix}_{species_key}_*.html"))
+    exact_pattern = re.compile(
+        rf"^{re.escape(prefix)}_{re.escape(species_key)}_[0-9a-f]{{12}}\.html$"
+    )
+    candidates = sorted(
+        p
+        for p in raw_dir.glob(f"{prefix}_{species_key}_*.html")
+        if exact_pattern.match(p.name)
+    )
     if not candidates:
         return None
     path = candidates[-1]
