@@ -1453,6 +1453,158 @@ Each skipped row contributes a per-target ``warnings`` entry in
 ``atomization_energy.json``; the dry-run health gate marks the
 target ``unhealthy`` if every parsed file produces only skips.
 
+## Phase 9 — DB import workflow
+
+The first CCCBDB phase that touches the database. Reads validated
+``MolecularPropertyObservationCreate`` payloads from both dry-run
+lanes (flat property-table + form-result) and persists them
+idempotently with conservative identity resolution.
+
+### Where the payload JSON files come from
+
+| Lane | Producer | Output |
+|---|---|---|
+| Flat property-table | `cccbdb_property_payload_dryrun.py` | `payloads_dryrun/<property_kind>.json` |
+| Form-result | `cccbdb_form_payload_dryrun.py` | `form_payloads_dryrun/<target_kind>.json` |
+
+Both produce JSON files with the same per-target shape — a
+``"payloads"`` list whose entries validate against
+``MolecularPropertyObservationCreate``. The import service consumes
+either or both directories uniformly.
+
+### Dry-run vs commit
+
+By default the import is a **dry-run**: every payload is validated,
+identity resolution runs against the current DB state, and would-be
+inserts are counted, but the session rolls back at the end. No rows
+are written.
+
+```bash
+# Dry-run (default)
+conda run -n tckdb_env python -m scripts.cccbdb_import_molecular_property_payloads \
+  --flat-payload-dir data/external/cccbdb/payloads_dryrun \
+  --form-payload-dir data/external/cccbdb/form_payloads_dryrun
+```
+
+Pass ``--commit`` to actually persist:
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_import_molecular_property_payloads \
+  --flat-payload-dir data/external/cccbdb/payloads_dryrun \
+  --form-payload-dir data/external/cccbdb/form_payloads_dryrun \
+  --commit
+```
+
+Supported flags: ``--flat-payload-dir``, ``--form-payload-dir``,
+``--property-kind`` (repeatable), ``--commit``, ``--no-resolve-identity``,
+``--created-by``, ``--fail-on-invalid``, ``--limit``, ``--summary-path``.
+
+### Why unresolved ``species_entry_id`` is allowed
+
+The DB schema declares
+``molecular_property_observation.species_entry_id`` nullable for
+exactly this reason: CCCBDB rows often arrive with at most a
+formula and a name, and the catalog enrichment is frequently
+ambiguous (isomers). Forcing a non-null FK would push the importer
+into fabricating species entries — a worse outcome than carrying an
+identity-unresolved observation with its CCCBDB provenance intact.
+
+A row imported with ``species_entry_id=NULL`` is still
+self-describing thanks to the ``external_source_*`` columns plus
+``raw_payload_json["identity_hint"]``. A future curator (or a
+later resolution pass) can UPDATE the FK when an unambiguous
+match becomes available.
+
+### What identity resolution is automatic
+
+Only **exact InChIKey** match. The service:
+
+1. Reads ``raw_payload_json["identity_hint"]["inchikey"]``.
+2. Looks up the single ``Species`` row with that ``inchi_key``.
+3. Finds the single compatible ``SpeciesEntry`` for that species
+   (``kind=minimum`` + ``electronic_state_kind=ground``).
+4. Sets ``species_entry_id`` only when both lookups return exactly
+   one row.
+
+Anything else (no match, multiple species sharing the key,
+multiple compatible entries) leaves ``species_entry_id=NULL`` and
+records the reason in the disposition's ``warnings``.
+
+### What identity resolution is proposal-only
+
+These fields are surfaced in the dispositions' warnings but never
+auto-resolve:
+
+* **formula** — too many species share a formula.
+* **formula + name** — name normalization is brittle; high false-match risk.
+* **CAS** — TCKDB has no normalized CAS-identity table today.
+  When/if such a table arrives, the service can extend the
+  ``_resolve_identity`` ``cas_number`` branch.
+* **formula + name + …** combinations — same reasoning.
+
+If you've manually curated an identity, populate ``species_entry_id``
+on the payload itself before calling the service — the resolver
+preserves any non-null value verbatim.
+
+### Idempotency
+
+A repeated import of the same payloads must NOT create duplicate
+rows. Idempotency rides on the existing DB-level unique constraint
+``mpo_dedupe_key`` (``postgresql_nulls_not_distinct=True``):
+
+| Column | Role |
+|---|---|
+| species_entry_id | resolved or NULL |
+| property_kind | atomization_energy, dipole_moment, … |
+| scientific_origin | experimental |
+| external_source_name | CCCBDB |
+| external_source_release | "22" |
+| external_source_url | per-target page URL |
+| external_source_record_key | per-row identity |
+| reference_label | row "squib" |
+| scalar_value | per-row value |
+| temperature_k | usually NULL |
+
+The service pre-checks this key with ``IS NOT DISTINCT FROM`` for
+each row, so duplicates are reported as
+``action="duplicate"`` instead of failing the run. A race-condition
+``IntegrityError`` on the unique constraint is caught and
+also classified as ``duplicate``.
+
+### How to inspect dispositions
+
+The CLI prints the full result (including per-row dispositions) to
+stdout as JSON, and optionally writes the same JSON to
+``--summary-path``. A disposition looks like::
+
+    {
+      "property_kind": "atomization_energy",
+      "property_label": "atomization_energy_0k",
+      "external_source_record_key": "h2o",
+      "identity_status": "resolved",
+      "species_entry_id": 42,
+      "action": "inserted",
+      "warnings": [],
+      "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
+      "source_path": "data/external/cccbdb/form_payloads_dryrun/atomization_energy.json"
+    }
+
+| ``identity_status`` | meaning |
+|---|---|
+| ``resolved`` | InChIKey matched exactly one compatible species_entry |
+| ``unresolved`` | no InChIKey on the payload |
+| ``ambiguous`` | InChIKey matched but >1 compatible species or species_entry |
+| ``not_found`` | InChIKey present but no matching species in DB |
+| ``skipped`` | invalid payload — not eligible for resolution |
+
+| ``action`` | meaning |
+|---|---|
+| ``would_insert`` | dry-run: row would be inserted |
+| ``inserted`` | commit: row was inserted |
+| ``duplicate`` | dedupe key already exists |
+| ``invalid`` | pydantic validation failed |
+| ``skipped`` | insert failed for another reason; check ``warnings`` |
+
 ### How the experimental-index audit guides future allowlisting
 
 The audit module is the single source of truth for "what's the next
