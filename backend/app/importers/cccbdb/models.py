@@ -345,6 +345,13 @@ class CCCBDBCatalogEntry(BaseModel):
     cas_number: str | None = None
     raw_text: str | None = None
     raw_href: str | None = None
+    other_names: list[str] = Field(default_factory=list)
+    """
+    Catalog-supplied synonyms for this species (CCCBDB's
+    "other names" column on ``inchix.asp``). Semicolon-separated on
+    the live page; the parser splits, trims, and dedupes. Audit-only
+    enrichment — the catalog never invents identity from these.
+    """
     trusted_property_url: None = None
     trusted_species_url: None = None
     warnings: list[str] = Field(default_factory=list)

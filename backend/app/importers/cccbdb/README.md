@@ -1166,6 +1166,74 @@ The CLI exits `2` on bad config / unparseable queue, `0` otherwise.
 Per-record verdicts land in `manifest.json` under the same key shape
 as the property-snapshot manifest.
 
+## Catalog snapshot + parsed JSON
+
+The catalog snapshot uses CCCBDB's `inchix.asp` "Index of species by
+InChI" page as a single-GET identity source:
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_snapshot \
+  --pilot catalog \
+  --output-dir data/external/cccbdb \
+  --sleep-seconds 5
+```
+
+This writes two files per snapshot, keyed by content-sha12:
+
+| Path | Purpose |
+|---|---|
+| `raw_html/catalog_inchix_<sha12>.html` | Verbatim live HTML |
+| `parsed/catalog_inchix_<sha12>.json` | Parsed `CCCBDBMoleculeCatalog` (entries list) |
+
+The parser tolerates CCCBDB's occasional ASP timeout, which leaves
+the catalog `<table>` UNCLOSED at EOF. A close-time flush captures
+every row written before the truncation point; without it the
+parser silently dropped the entire table (~1839 entries → 0).
+
+### Quick sanity check
+
+```bash
+CATALOG_JSON="$(ls -t data/external/cccbdb/parsed/catalog_inchix_*.json | head -1)"
+jq '(.entries // .records) | length' "$CATALOG_JSON"
+# expect: a positive number (~1800 on Release 22)
+```
+
+A returned `0` means the snapshot HTML truncated before any data
+row, OR the parser's close-time flush regressed. Re-run the
+snapshot before declaring the catalog broken.
+
+### `raw_href` is audit-only
+
+Each catalog row carries a `raw_href` field pointing at the
+`alldata2x.asp?casno=…` link CCCBDB embeds on the species name.
+The parser preserves these verbatim, but **they are NEVER fetched
+as data URLs**. They exist for human audit. The "trusted" URL
+fields (`trusted_property_url`, `trusted_species_url`) are
+permanently `None` in this phase. The form-queue generator
+explicitly refuses to copy `raw_href` into the queue's
+`entry_url` field — the maintainer-supplied URL (e.g.
+`ea1x.asp`) is the only data endpoint the queue points at.
+
+### Queue generation needs parsed JSON
+
+The queue generator (`scripts/cccbdb_generate_form_queue.py`)
+consumes the **parsed JSON**, not the raw HTML. If you ran the
+snapshot before this phase landed, re-run it (or re-parse the
+existing raw HTML) so the parsed JSON has populated `entries`:
+
+```bash
+conda run -n tckdb_env python -c "
+from pathlib import Path
+from app.importers.cccbdb.parsers.molecule_catalog import parse_molecule_catalog_page
+raw = Path('data/external/cccbdb/raw_html/catalog_inchix_<sha>.html')
+html = raw.read_text()
+cat = parse_molecule_catalog_page(html, source_url='https://cccbdb.nist.gov/inchix.asp')
+out = Path('data/external/cccbdb/parsed') / (raw.stem + '.json')
+out.write_text(cat.model_dump_json(indent=2) + '\n')
+print('rewrote', out, 'entries=', len(cat.entries))
+"
+```
+
 ### Generating form queues from the InChI catalog
 
 CCCBDB's ``inchix.asp`` (the "molecule catalog") is an **identity**

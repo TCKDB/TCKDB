@@ -61,6 +61,7 @@ _COLUMN_ALIASES: dict[str, set[str]] = {
     "inchikey": {"inchikey", "inchi key"},
     "smiles": {"smiles"},
     "cas_number": {"cas", "casno", "cas number", "cas no", "cas registry"},
+    "other_names": {"other names", "othernames", "synonyms", "other"},
 }
 
 
@@ -149,6 +150,42 @@ class _CatalogTableExtractor(HTMLParser):
             self._cell_text_buf.append(data)
         elif self._capture_heading is not None:
             self._heading_buf.append(data)
+
+    def close(self) -> None:
+        """End-of-input flush.
+
+        CCCBDB's ``inchix.asp`` is large enough that its ASP backend
+        occasionally times out mid-response — the server emits the
+        full menu, then dumps ~1800 ``<tr>`` rows of the catalog
+        table, then bails with an "ASP 0113 Script timed out" page
+        WITHOUT closing the data ``<table>``. With the table-end
+        path being the only place :attr:`tables` was previously
+        appended to, the entire catalog table was silently dropped.
+
+        This close-time flush recovers from that truncation: any
+        in-flight cell / row / table is finalized into
+        :attr:`tables` so downstream callers see what was parsed.
+        """
+
+        if self._in_cell:
+            # Implicit close of the last cell.
+            self._current_row.append(
+                {
+                    "text": _clean_text("".join(self._cell_text_buf)),
+                    "href": self._cell_href,
+                }
+            )
+            self._in_cell = False
+            self._cell_text_buf = []
+            self._cell_href = None
+        if self._current_row:
+            self._current_table.append(self._current_row)
+            self._current_row = []
+        if self._in_table and self._current_table:
+            self.tables.append(self._current_table)
+            self._current_table = []
+            self._in_table = False
+        super().close()
 
 
 def _largest_table(
@@ -289,6 +326,9 @@ def _build_entry(
     cas_number = id_norm.normalize_cas(
         _cell_text(row, indices.get("cas_number"))
     )
+    other_names = _parse_other_names(
+        _cell_text(row, indices.get("other_names"))
+    )
 
     # Drop genuinely empty rows. We keep rows where any single
     # identifier landed; the prompt is explicit that "missing fields
@@ -313,12 +353,38 @@ def _build_entry(
         cas_number=cas_number,
         raw_text=_row_raw_text(row),
         raw_href=raw_href,
+        other_names=other_names,
         # trusted_property_url and trusted_species_url are *deliberately*
         # left None — see CCCBDBCatalogEntry docstring + module banner.
         trusted_property_url=None,
         trusted_species_url=None,
         warnings=row_warnings,
     )
+
+
+def _parse_other_names(text: str | None) -> list[str]:
+    """Split CCCBDB's ``other names`` cell into a deduplicated list.
+
+    The live ``inchix.asp`` "other names" cell typically opens with
+    ``&nbsp;`` (which the ``convert_charrefs=True`` HTMLParser turns
+    into a space) followed by semicolon-separated synonyms. Some
+    rows contain only a single synonym with no semicolons. Empty
+    cells (e.g. ``"&nbsp;"`` alone) return an empty list.
+    """
+
+    if not text:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for chunk in text.split(";"):
+        cleaned = _clean_text(chunk)
+        if not cleaned:
+            continue
+        if cleaned in seen:
+            continue
+        seen.add(cleaned)
+        out.append(cleaned)
+    return out
 
 
 def _looks_like_relative_url(href: str) -> bool:

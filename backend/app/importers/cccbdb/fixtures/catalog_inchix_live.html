@@ -1,0 +1,213 @@
+<!--
+  Sanitized fixture mirroring the LIVE shape of CCCBDB's
+  ``inchix.asp`` molecule catalog as observed in May 2026
+  (raw_html/catalog_inchix_5dec4a21036f.html).
+
+  Live shape differences from the older hand-authored fixture
+  (catalog_inchix.html):
+
+  * Eight columns: ``casno | formula | name | InChI | InChIkey |
+    SMILES | sketch | other names``.
+  * ``formula`` cells contain HTML sub/sup markup
+    (``H<sub>2</sub>O``, ``H<sup>+</sup>``, ``CH<sub>3</sub><sup>-</sup>``).
+  * ``name`` cells wrap the text in
+    ``<a href="alldata2x.asp?casno=...">…</a>``. The href is preserved
+    on the parsed entry as ``raw_href`` for audit only.
+  * ``other names`` cells start with ``&nbsp;`` and carry
+    semicolon-separated synonyms (sometimes a single name with no
+    semicolons; sometimes blank).
+  * **Critical**: CCCBDB's ASP backend occasionally times out partway
+    through the response, leaving the data ``<table>`` UNCLOSED at
+    EOF. This fixture deliberately omits the closing ``</table>`` to
+    exercise the parser's close-time flush. The trailing ASP error
+    block is preserved verbatim — the parser must tolerate it.
+
+  Values below are real CCCBDB Release 22 catalog rows, rounded
+  where appropriate and de-duplicated for the fixture. Do not cite.
+-->
+<HTML>
+<HEAD><TITLE>CCCBDB inchix index (live-shape fixture)</TITLE></HEAD>
+<BODY>
+<table class="noborder"><tr><td>menu navigation (elided)</td></tr></table>
+<h1>Index of species in the CCCBDB by IUPAC International Chemical Identifier (INChI)</h1>
+click on the name in the following table.
+<table border="1">
+<tr>
+<th>casno</th>
+<th>formula</th>
+<th>name</th>
+<th>InChI</th>
+<th>InChIkey</th>
+<th>SMILES</th>
+<th>sketch</th>
+<th>other names</th>
+</tr>
+
+<tr>
+<td>12385136</td>
+<td>H<sup>-</sup></td>
+<td><a href="alldata2x.asp?casno=12385136">Hydrogen atom anion</a></td>
+<td>InChI=1S/H/q-1</td>
+<td>KLGZELKXQMTEMM-UHFFFAOYSA-N</td>
+<td>[H-]</td>
+<td>H-</td>
+<td>&nbsp;
+hydride
+</td>
+</tr>
+
+<tr>
+<td>12385136</td>
+<td>H</td>
+<td><a href="alldata2x.asp?casno=12385136">Hydrogen atom</a></td>
+<td>InChI=1S/H</td>
+<td>YZCKVEUIGOORGS-UHFFFAOYSA-N</td>
+<td>[H]</td>
+<td>H</td>
+<td>&nbsp;
+H-atom; Hydrogen; Hydrogen atom; Hydrogen radical
+</td>
+</tr>
+
+<tr>
+<td>12385136</td>
+<td>H<sup>+</sup></td>
+<td><a href="alldata2x.asp?casno=12385136">Hydrogen atom cation</a></td>
+<td>InChI=1S/p+1</td>
+<td>GPRLSGONYQIRFK-UHFFFAOYSA-N</td>
+<td>[H+]</td>
+<td>H+</td>
+<td>&nbsp;
+</td>
+</tr>
+
+<tr>
+<td>16873179</td>
+<td>D</td>
+<td><a href="alldata2x.asp?casno=16873179">Deuterium atom</a></td>
+<td>InChI=1S/H/i1+1</td>
+<td>YZCKVEUIGOORGS-OUBTZVSYSA-N</td>
+<td>[2H]</td>
+<td>D</td>
+<td>&nbsp;
+</td>
+</tr>
+
+<tr>
+<td>7782390</td>
+<td>D<sub>2</sub></td>
+<td><a href="alldata2x.asp?casno=7782390">Deuterium diatomic</a></td>
+<td>InChI=1S/H2/h1H/i1+1D</td>
+<td>UFHFLCQGNIYNRP-VVKOMZTBSA-N</td>
+<td>[2H][2H]</td>
+<td>D2</td>
+<td>&nbsp;
+</td>
+</tr>
+
+<tr>
+<td>7789200</td>
+<td>D<sub>2</sub>O</td>
+<td><a href="alldata2x.asp?casno=7789200">Heavy water</a></td>
+<td>InChI=1S/H2O/h1H2/i/hD</td>
+<td>XLYOFNOQVPJJNP-XOJOLFKBSA-N</td>
+<td>[2H]O[2H]</td>
+<td>D2O</td>
+<td>&nbsp;
+Deuterium oxide
+</td>
+</tr>
+
+<tr>
+<td>7732185</td>
+<td>H<sub>2</sub>O</td>
+<td><a href="alldata2x.asp?casno=7732185">Water</a></td>
+<td>InChI=1S/H2O/h1H2</td>
+<td>XLYOFNOQVPJJNP-UHFFFAOYSA-N</td>
+<td>O</td>
+<td>H2O</td>
+<td>&nbsp;
+Dihydrogen oxide; Distilled water; Ice; Water vapor; Water; oxidane
+</td>
+</tr>
+
+<tr>
+<td>74828</td>
+<td>CH<sub>4</sub></td>
+<td><a href="alldata2x.asp?casno=74828">Methane</a></td>
+<td>InChI=1S/CH4/h1H4</td>
+<td>VNWKTOKETHGBQD-UHFFFAOYSA-N</td>
+<td>C</td>
+<td>CH4</td>
+<td>&nbsp;
+Marsh gas; Methyl hydride; Natural gas
+</td>
+</tr>
+
+<tr>
+<td>14760</td>
+<td>CH<sub>3</sub><sup>-</sup></td>
+<td><a href="alldata2x.asp?casno=14760">Methyl anion</a></td>
+<td>InChI=1S/CH3/h1H3/q-1</td>
+<td>OLZFXRYWMVOXCT-UHFFFAOYSA-N</td>
+<td>[CH3-]</td>
+<td>CH3-</td>
+<td>&nbsp;
+methide; methide anion
+</td>
+</tr>
+
+<tr>
+<td>14531534</td>
+<td>H<sub>2</sub>O<sup>+</sup></td>
+<td><a href="alldata2x.asp?casno=14531534">Water cation</a></td>
+<td>InChI=1S/H2O/h1H2/q+1</td>
+<td></td>
+<td>[OH2+]</td>
+<td>H2O+</td>
+<td>&nbsp;
+</td>
+</tr>
+
+<tr>
+<td>64175</td>
+<td>C<sub>2</sub>H<sub>6</sub>O</td>
+<td><a href="alldata2x.asp?casno=64175">Ethanol</a></td>
+<td>InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3</td>
+<td>LFQSCWFLJHTTHZ-UHFFFAOYSA-N</td>
+<td>CCO</td>
+<td>C2H6O</td>
+<td>&nbsp;
+Ethyl alcohol; absolute alcohol
+</td>
+</tr>
+
+<tr>
+<td>115106</td>
+<td>C<sub>2</sub>H<sub>6</sub>O</td>
+<td><a href="alldata2x.asp?casno=115106">Dimethyl ether</a></td>
+<td>InChI=1S/C2H6O/c1-3-2/h1-2H3</td>
+<td>LCGLNKUTAGEVQW-UHFFFAOYSA-N</td>
+<td>COC</td>
+<td>C2H6O</td>
+<td>&nbsp;
+DME; Methyl ether
+</td>
+</tr>
+
+<tr>
+<td>99999999</td>
+<td>X</td>
+<td><a href="alldata2x.asp?casno=99999999">Truncated row</a></td>
+<td>InChI=1S/X
+<!--
+  Trailing ASP error block (verbatim shape from the live page).
+  The parser must finalize the catalog table even though no
+  closing </table> ever arrives.
+-->
+ <font face="Arial" size=2>
+<p>Active Server Pages</font> <font face="Arial" size=2>error 'ASP 0113'</font>
+<p>
+<font face="Arial" size=2>Script timed out</font>
+</BODY>
+</HTML>
