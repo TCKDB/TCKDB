@@ -1166,6 +1166,98 @@ The CLI exits `2` on bad config / unparseable queue, `0` otherwise.
 Per-record verdicts land in `manifest.json` under the same key shape
 as the property-snapshot manifest.
 
+### Generating form queues from the InChI catalog
+
+CCCBDB's ``inchix.asp`` (the "molecule catalog") is an **identity**
+source — it enumerates formulas + names + InChI + InChIKey + SMILES +
+CAS for the species the database knows about. It is NOT a data-page
+URL source. Each catalog row carries a ``raw_href`` field that the
+parser preserves verbatim for audit, but those hrefs are NEVER
+trusted as fetchable data URLs (see ``CCCBDBCatalogEntry``'s
+docstring).
+
+The form-resolver workflow is therefore three steps:
+
+1. Generate a queue from the catalog.
+2. Run the form resolver against the queue.
+3. Build payloads from accepted result pages.
+
+#### Step 1 — generate the queue
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_generate_form_queue \
+  --catalog-json data/external/cccbdb/parsed/catalog_inchix.json \
+  --output data/external/cccbdb/form_queue.json \
+  --target-kind atomization_energy \
+  --entry-url https://cccbdb.nist.gov/ea1x.asp \
+  --limit 20
+```
+
+The script accepts either ``{"entries": [...]}`` (the parser's
+native shape from ``CCCBDBMoleculeCatalog.model_dump_json``) or
+``{"records": [...]}`` (the queue-input shape) at the catalog
+file's top level. Every record on the resulting queue carries the
+maintainer-supplied ``target_kind`` + ``entry_url`` — NOT
+``raw_href``.
+
+Supported filters today:
+
+| Flag | Behavior |
+|---|---|
+| ``--limit N`` | Stop after N distinct queue records. |
+| ``--offset N`` | Skip the first N entries that passed filtering. |
+| ``--formula F`` (repeatable) | Restrict to one or more formulas. |
+| ``--name-contains TEXT`` | Keep entries whose name contains TEXT (case-insensitive). |
+| ``--require-inchikey`` | Skip entries without an InChIKey. |
+
+Future filters (deferred): ``--elements C,H,O,N``,
+``--max-heavy-atoms N``, ``--include-ions``, ``--exclude-ions``,
+``--include-isotopologues``, ``--exclude-isotopologues``. These are
+documented in the prompt but require an element parser the importer
+doesn't yet host.
+
+#### Step 2 — run the form resolver
+
+The generator prints the next command after a successful write:
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_resolve_form_page \
+  --queue-file data/external/cccbdb/form_queue.json \
+  --output-dir data/external/cccbdb \
+  --max-pages 3 \
+  --sleep-seconds 15 \
+  --selection-policy exact-match \
+  --save-rejected-html
+```
+
+#### Step 3 — build payloads
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_form_payload_dryrun \
+  --archive-dir data/external/cccbdb \
+  --output-dir data/external/cccbdb/form_payloads_dryrun
+```
+
+#### Why queue-based crawling is safer than spidering
+
+CCCBDB rate-limits aggressively (Cloudflare 1015 on bot traffic) and
+the form-only pages need session-cookied POSTs. Spidering from
+``inchix.asp`` links would:
+
+* Use ``raw_href`` values that are not validated as data URLs (the
+  parser explicitly distrusts them).
+* Burn the rate-limit budget on every species, ambiguous-isomer
+  page, and selection-redirect — much faster than the recommended
+  ``--sleep-seconds 15`` per request.
+* Lose the maintainer-curated mapping between (species, target
+  property), because CCCBDB's session state encodes the requested
+  property type via the entry page, not the formula POST body.
+
+Queue-based crawling keeps every step explicit: a small, audited
+``form_queue.json`` lists exactly what the resolver will touch.
+``--max-pages 3`` plus ``--sleep-seconds 15`` keeps live runs well
+inside CCCBDB's polite-use budget.
+
 ### Species-selection (`choosex.asp`) and selection policies
 
 A formula like `C2H6O` matches multiple isomers (ethanol, dimethyl
