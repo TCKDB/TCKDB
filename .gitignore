@@ -288,3 +288,6 @@ backend/cookies.txt
 # Hand-authored fixtures under backend/app/importers/cccbdb/fixtures/
 # remain tracked; only the live snapshot output is ignored.
 data/external/cccbdb/
+.vtrace/state.json
+.vtrace/index.sqlite
+.vtrace/config.json
