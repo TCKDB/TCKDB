@@ -34,6 +34,7 @@ from app.api.routes.scientific import (
     calculation_paths,
     calculations,
     conformers,
+    corrections,
     geometries,
     kinetics,
     kinetics_search,
@@ -78,5 +79,7 @@ scientific_router.include_router(networks.router)
 scientific_router.include_router(networks.solve_router)
 scientific_router.include_router(networks.kinetics_router)
 scientific_router.include_router(literature.router)
+scientific_router.include_router(corrections.fsf_router)
+scientific_router.include_router(corrections.ecs_router)
 
 __all__ = ["scientific_router"]

@@ -74,8 +74,26 @@ from app.db.models.statmech import (
     StatmechTorsionDefinition,
 )
 from app.db.models.common import TransportCalculationRole
+from app.db.models.common import (
+    EnergyCorrectionApplicationRole,
+    EnergyCorrectionSchemeKind,
+    EnergyUnit,
+    FrequencyScaleKind,
+    MeliusBacComponentKind,
+)
+from app.db.models.energy_correction import (
+    AppliedEnergyCorrection,
+    EnergyCorrectionScheme,
+    EnergyCorrectionSchemeAtomParam,
+    EnergyCorrectionSchemeBondParam,
+    EnergyCorrectionSchemeComponentParam,
+    FrequencyScaleFactor,
+)
+from app.db.models.literature import Literature
+from app.db.models.software import Software
 from app.db.models.transport import Transport, TransportSourceCalculation
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 
 _INCHI_COUNTER = 0
 
@@ -182,15 +200,23 @@ def set_review(
 def make_lot(
     session: Session, *, method: str = "wb97xd", basis: str | None = "def2tzvp"
 ) -> LevelOfTheory:
-    """Create a LevelOfTheory row."""
+    """Create or fetch a LevelOfTheory row.
+
+    The ``lot_hash`` column is uniquely constrained; repeated calls with
+    the same (method, basis) reuse the existing row so factory callers
+    don't trip the constraint when they don't care which LOT they get.
+    """
     import hashlib
+    from sqlalchemy import select as _select
 
     raw = f"{method}|{basis or ''}".encode()
-    lot = LevelOfTheory(
-        method=method,
-        basis=basis,
-        lot_hash=hashlib.sha256(raw).hexdigest(),
+    lot_hash = hashlib.sha256(raw).hexdigest()
+    existing = session.scalar(
+        _select(LevelOfTheory).where(LevelOfTheory.lot_hash == lot_hash)
     )
+    if existing is not None:
+        return existing
+    lot = LevelOfTheory(method=method, basis=basis, lot_hash=lot_hash)
     session.add(lot)
     session.flush()
     return lot
@@ -1082,6 +1108,240 @@ def attach_network_kinetics_point(
         temperature_k=temperature_k,
         pressure_bar=pressure_bar,
         rate_value=rate_value,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+# ---------------------------------------------------------------------------
+# Energy correction / frequency scale factor factories
+# ---------------------------------------------------------------------------
+
+
+_FSF_COUNTER = 0
+
+
+def _next_fsf_value() -> float:
+    """Return a unique-ish FSF value so the natural-identity index does
+    not collide across factory calls."""
+    global _FSF_COUNTER
+    _FSF_COUNTER += 1
+    # Keep within a realistic range while still unique per call.
+    return 0.9000 + _FSF_COUNTER * 0.0001
+
+
+def make_literature(
+    session: Session,
+    *,
+    title: str = "Test paper",
+    doi: str | None = None,
+    year: int | None = 2024,
+) -> Literature:
+    """Create a Literature row. DOI defaults to a unique counter-derived value."""
+    from app.db.models.common import LiteratureKind
+
+    doi = doi or f"10.0000/test-{_next_fsf_value():.4f}"
+    lit = Literature(
+        kind=LiteratureKind.article,
+        title=title,
+        year=year,
+        doi=doi,
+    )
+    session.add(lit)
+    session.flush()
+    return lit
+
+
+def make_software(session: Session, *, name: str = "gaussian") -> Software:
+    """Create a Software row."""
+    sw = Software(name=name)
+    session.add(sw)
+    session.flush()
+    return sw
+
+
+def make_workflow_tool_release(
+    session: Session, *, name: str = "arc", version: str = "1.2.3"
+) -> WorkflowToolRelease:
+    """Create a WorkflowTool + WorkflowToolRelease pair, returning the release."""
+    wt = WorkflowTool(name=name)
+    session.add(wt)
+    session.flush()
+    wtr = WorkflowToolRelease(workflow_tool_id=wt.id, version=version)
+    session.add(wtr)
+    session.flush()
+    return wtr
+
+
+def make_frequency_scale_factor(
+    session: Session,
+    *,
+    lot: LevelOfTheory | None = None,
+    software: Software | None = None,
+    scale_kind: FrequencyScaleKind = FrequencyScaleKind.fundamental,
+    value: float | None = None,
+    source_literature: Literature | None = None,
+    workflow_tool_release: WorkflowToolRelease | None = None,
+    note: str | None = None,
+) -> FrequencyScaleFactor:
+    """Create a FrequencyScaleFactor row.
+
+    The natural-identity uniqueness index covers (lot, software,
+    scale_kind, value, source_literature, workflow_tool_release); the
+    factory bumps ``value`` per call by default so successive calls
+    with identical other-keys still insert successfully.
+    """
+    if lot is None:
+        lot = make_lot(session)
+    fsf = FrequencyScaleFactor(
+        level_of_theory_id=lot.id,
+        software_id=software.id if software is not None else None,
+        scale_kind=scale_kind,
+        value=value if value is not None else _next_fsf_value(),
+        source_literature_id=(
+            source_literature.id if source_literature is not None else None
+        ),
+        workflow_tool_release_id=(
+            workflow_tool_release.id
+            if workflow_tool_release is not None
+            else None
+        ),
+        note=note,
+    )
+    session.add(fsf)
+    session.flush()
+    return fsf
+
+
+def make_energy_correction_scheme(
+    session: Session,
+    *,
+    name: str = "test_scheme",
+    kind: EnergyCorrectionSchemeKind = EnergyCorrectionSchemeKind.bac_petersson,
+    lot: LevelOfTheory | None = None,
+    source_literature: Literature | None = None,
+    version: str | None = None,
+    units: EnergyUnit | None = EnergyUnit.hartree,
+    note: str | None = None,
+) -> EnergyCorrectionScheme:
+    """Create an EnergyCorrectionScheme row."""
+    ecs = EnergyCorrectionScheme(
+        kind=kind,
+        name=name,
+        level_of_theory_id=lot.id if lot is not None else None,
+        source_literature_id=(
+            source_literature.id if source_literature is not None else None
+        ),
+        version=version,
+        units=units,
+        note=note,
+    )
+    session.add(ecs)
+    session.flush()
+    return ecs
+
+
+def attach_ecs_atom_param(
+    session: Session,
+    *,
+    scheme: EnergyCorrectionScheme,
+    element: str,
+    value: float,
+) -> EnergyCorrectionSchemeAtomParam:
+    row = EnergyCorrectionSchemeAtomParam(
+        scheme_id=scheme.id, element=element, value=value
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_ecs_bond_param(
+    session: Session,
+    *,
+    scheme: EnergyCorrectionScheme,
+    bond_key: str,
+    value: float,
+) -> EnergyCorrectionSchemeBondParam:
+    row = EnergyCorrectionSchemeBondParam(
+        scheme_id=scheme.id, bond_key=bond_key, value=value
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_ecs_component_param(
+    session: Session,
+    *,
+    scheme: EnergyCorrectionScheme,
+    component_kind: MeliusBacComponentKind,
+    key: str,
+    value: float,
+) -> EnergyCorrectionSchemeComponentParam:
+    row = EnergyCorrectionSchemeComponentParam(
+        scheme_id=scheme.id,
+        component_kind=component_kind,
+        key=key,
+        value=value,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def make_applied_energy_correction(
+    session: Session,
+    *,
+    target_species_entry=None,
+    target_reaction_entry=None,
+    target_transition_state_entry=None,
+    scheme: EnergyCorrectionScheme | None = None,
+    frequency_scale_factor: FrequencyScaleFactor | None = None,
+    application_role: EnergyCorrectionApplicationRole = (
+        EnergyCorrectionApplicationRole.bac_total
+    ),
+    value: float = 0.001,
+    value_unit: EnergyUnit = EnergyUnit.hartree,
+    source_calculation=None,
+    source_conformer_observation=None,
+    temperature_k: float | None = None,
+) -> AppliedEnergyCorrection:
+    """Create an AppliedEnergyCorrection row with the requested provenance.
+
+    Exactly one of ``target_*_entry`` and exactly one of ``scheme`` /
+    ``frequency_scale_factor`` must be supplied (db CHECK enforces this).
+    """
+    row = AppliedEnergyCorrection(
+        target_species_entry_id=(
+            target_species_entry.id if target_species_entry is not None else None
+        ),
+        target_reaction_entry_id=(
+            target_reaction_entry.id if target_reaction_entry is not None else None
+        ),
+        target_transition_state_entry_id=(
+            target_transition_state_entry.id
+            if target_transition_state_entry is not None
+            else None
+        ),
+        scheme_id=scheme.id if scheme is not None else None,
+        frequency_scale_factor_id=(
+            frequency_scale_factor.id
+            if frequency_scale_factor is not None
+            else None
+        ),
+        application_role=application_role,
+        value=value,
+        value_unit=value_unit,
+        source_calculation_id=(
+            source_calculation.id if source_calculation is not None else None
+        ),
+        source_conformer_observation_id=(
+            source_conformer_observation.id
+            if source_conformer_observation is not None
+            else None
+        ),
+        temperature_k=temperature_k,
     )
     session.add(row)
     session.flush()

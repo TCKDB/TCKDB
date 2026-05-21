@@ -61,8 +61,8 @@ the exact mounted paths (verified against
 | Reaction-full conformers | **Implemented** | participant-grouped conformer-group summaries under `include=conformers` |
 | Network / pdep reads | **Closed for v0** | Network detail + search, `network-solves` detail + search, and `network-kinetics` detail + search all ship. Model-specific payloads (Chebyshev coefficient matrix, PLOG rows, point-tabulated triples) surface behind explicit include tokens with point payload capped at the public limit. Channel-grain query and paginated point retrieval remain open follow-ups (see `scientific_network_reads.md` §11). |
 | Literature-centered query | **Implemented (v0)** | `GET /scientific/literature/{ref_or_id}` and `GET /scientific/literature/{ref_or_id}/records` — direct-link inverse query over `calculation` / `thermo` / `kinetics` / `statmech` / `transport` / `network` / `network_solve`. See `scientific_literature_reads.md`. Search endpoint deferred. |
-| Energy-correction scheme / FSF query | Missing | no `/scientific/corrections/*` or `/scientific/frequency-scale-factors/*` surface |
-| Applied energy-correction reads | Missing | the schema carries `applied_energy_correction` rows; no scientific read surface |
+| Energy-correction scheme / FSF query | **Implemented (v0)** | `GET /scientific/frequency-scale-factors/{ref_or_id}` + `/search` (GET/POST) and `GET /scientific/energy-correction-schemes/{ref_or_id}` + `/search` (GET/POST). Includes `used_by` inverse-link summaries (statmech for FSF; species/reaction/TS entries via `applied_energy_correction` for both). FSF and ECS are non-reviewable; documented as such. See `scientific_correction_reads.md`. |
+| Applied energy-correction reads | Partial | inverse links to `applied_energy_correction` rows surface through the FSF / ECS `include=used_by` blocks; no standalone `applied_energy_correction` detail endpoint yet |
 | Bulk export | Missing | no CSV/JSONL/Parquet bulk endpoint |
 | RDKit substructure / similarity search | Missing | the `mol` column type is in place; no endpoint uses it for substructure or similarity |
 | Standalone artifact search | Partial | exposed via calculation `include=artifacts` + reaction-full grouped artifacts; no `/scientific/artifacts/search` |
@@ -155,13 +155,15 @@ to evaluate and document*, not a commitment.
    `GET /scientific/literature/{ref}/records` (or similar) would close
    the loop with minimal new schema.
 2. **Energy-correction / frequency-scale-factor scientific reads.**
-   `frequency_scale_factor` and `energy_correction_scheme` carry
-   public refs (`fsf_`, `ecs_`) but no scientific read surface; their
-   provenance pointers appear only embedded under statmech /
-   calculation reads. A small standalone surface (detail + filter by
-   `level_of_theory_ref` / `software` / `scale_kind` / scheme `kind`)
-   closes the "find me the right scale factor / correction scheme"
-   workflow.
+   ~~Open.~~ **Implemented (v0).** `frequency_scale_factor` and
+   `energy_correction_scheme` carry public refs (`fsf_`, `ecs_`) and
+   ship with `GET /scientific/frequency-scale-factors/{ref_or_id}` +
+   `/search` and `GET /scientific/energy-correction-schemes/{ref_or_id}` +
+   `/search`. Both expose `include=used_by` inverse-link summaries.
+   See `scientific_correction_reads.md` for the include vocabulary,
+   search filter matrix, and the deferred-filter list (e.g.
+   `model_kind`, `software_version` on FSF; `software`,
+   `used_by_thermo` on ECS).
 3. **Standalone artifact search.** `/scientific/artifacts/search` over
    calculation artifact metadata (kind / uri / sha256 / bytes / owning
    calc ref). Body-fetch policy stays separate; this is metadata-only.
@@ -544,8 +546,8 @@ Tests column lists representative test files (not exhaustive).
 | `network_state`, `network_channel` | (via network) | (via network) | — | nested reads | `test_api_network_reads.py` | — |
 | `network_kinetics`/`_chebyshev`/`_plog`/`_point` | (via solve) | — | — | nested reads | `test_api_network_reads.py` | — |
 | Other network children | E | — | E | embedded | — | — |
-| `frequency_scale_factor` | ✓ | ✓ | — | `FrequencyScaleFactorRead` | — | Light coverage |
-| `energy_correction_scheme` | ✓ | ✓ | — | `EnergyCorrectionSchemeRead` | — | Light coverage |
+| `frequency_scale_factor` | ✓ | ✓ | ✓ scientific | `FrequencyScaleFactorRead`, `ScientificFrequencyScaleFactorRecord` | — | `/scientific/frequency-scale-factors/{ref}` + `/search` (GET/POST). `include=used_by` covers statmech + applied targets. |
+| `energy_correction_scheme` | ✓ | ✓ | ✓ scientific | `EnergyCorrectionSchemeRead`, `ScientificEnergyCorrectionSchemeRecord` | — | `/scientific/energy-correction-schemes/{ref}` + `/search` (GET/POST). `include=corrections` unifies atom/bond/component params. |
 | `energy_correction_scheme_*_param` | E | — | E | embedded | — | — |
 | `applied_energy_correction` | ✓ | ✓ | (only via includes) | `AppliedEnergyCorrectionRead` | — | **No scientific search** |
 | `applied_energy_correction_component` | E | — | E | embedded | — | — |

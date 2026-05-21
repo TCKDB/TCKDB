@@ -29,6 +29,10 @@ from app.api.errors import NotFoundError
 
 logger = logging.getLogger(__name__)
 from app.db.models.calculation import Calculation
+from app.db.models.energy_correction import (
+    EnergyCorrectionScheme,
+    FrequencyScaleFactor,
+)
 from app.db.models.geometry import Geometry
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
@@ -395,6 +399,28 @@ def resolve_literature_handle(session: Session, handle: str) -> int:
     )
 
 
+def resolve_frequency_scale_factor_handle(session: Session, handle: str) -> int:
+    """Resolve a frequency-scale-factor path handle (int or ``fsf_...``) → row id."""
+    return resolve_path_handle(
+        session,
+        FrequencyScaleFactor,
+        handle,
+        kind_label="frequency_scale_factor",
+    )
+
+
+def resolve_energy_correction_scheme_handle(
+    session: Session, handle: str
+) -> int:
+    """Resolve an energy-correction-scheme path handle (int or ``ecs_...``) → row id."""
+    return resolve_path_handle(
+        session,
+        EnergyCorrectionScheme,
+        handle,
+        kind_label="energy_correction_scheme",
+    )
+
+
 def reconcile_species_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
 ) -> int | None | object:
@@ -502,6 +528,8 @@ __all__ = [
     "resolve_network_solve_handle",
     "resolve_network_kinetics_handle",
     "resolve_literature_handle",
+    "resolve_frequency_scale_factor_handle",
+    "resolve_energy_correction_scheme_handle",
     "reconcile_species_pair",
     "reconcile_species_entry_pair",
     "reconcile_reaction_pair",
