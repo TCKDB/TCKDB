@@ -38,6 +38,7 @@ _FIXTURE_BY_KIND = {
     "dipole": "property_dipoles.html",
     "diatomic_spectroscopic": "property_diatomic_spectroscopic.html",
     "polarizability_iso": "property_polarizability_iso.html",
+    "quadrupole_moment": "property_quadrupole.html",
 }
 
 
@@ -143,7 +144,7 @@ class TestCacheOnlyRun:
             output_dir=out,
             use_cache_only=True,
         )
-        assert summary.target_count == 5
+        assert summary.target_count == len(EXPERIMENTAL_PROPERTIES_PILOT)
         assert summary.total_payload_count > 0
         assert summary.total_invalid_payload_count == 0
         # Summary JSON on disk matches the in-memory object.
@@ -157,8 +158,8 @@ class TestCacheOnlyMissingCache:
     def test_missing_cache_target_is_skipped_not_errored(self, tmp_path):
         archive = tmp_path / "archive"
         out = tmp_path / "out"
-        # Populate only one of the five targets so the rest miss the
-        # cache and must classify as skipped_missing_cache.
+        # Populate only one target so the rest miss the cache and
+        # must classify as skipped_missing_cache.
         _populate_cache(archive, kinds=["dipole"])
 
         summary = run_payload_dryrun(
@@ -167,7 +168,7 @@ class TestCacheOnlyMissingCache:
             use_cache_only=True,
             fetcher=_ExplodingFetcher(),
         )
-        assert summary.skipped_count == 4
+        assert summary.skipped_count == len(EXPERIMENTAL_PROPERTIES_PILOT) - 1
         # Per-target JSON file is still written for each skipped target.
         for kind in _FIXTURE_BY_KIND:
             assert (out / f"{kind}.json").exists()

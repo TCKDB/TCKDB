@@ -65,16 +65,41 @@ def test_no_unmatched_configured_targets(audit: PropertyConfigAuditResult):
     assert audit.unmatched_configured_targets == []
 
 
-def test_unconfigured_links_surface_at_least_one_high_value_page(
+def test_unconfigured_links_surface_at_least_one_extension_target(
     audit: PropertyConfigAuditResult,
 ):
-    """The audit should surface obvious extension targets (quadrupole
-    list, atomization energy, …) that the pilot has not configured
-    yet. Tests one specific landmark so the audit is not silently
-    swallowing the unconfigured list."""
+    """The audit should surface obvious extension targets that the
+    pilot has not configured yet. ``refstatex.asp`` (thermochemical
+    reference states) and ``elecspinx.asp`` (spin splittings) are
+    stable flat tables that we know exist but haven't pulled in;
+    they should appear in the unconfigured list as a landmark
+    proving the audit isn't silently swallowing the list."""
 
     hrefs = {link.href for link in audit.unconfigured_experimental_links}
-    assert "quadlistx.asp" in hrefs
+    assert "refstatex.asp" in hrefs or "elecspinx.asp" in hrefs
+
+
+def test_form_only_links_split_into_deferred_bucket(
+    audit: PropertyConfigAuditResult,
+):
+    """Form-only pages (POST against ``getformx.asp``) cannot be
+    handled by the single-GET property-table importer. They must
+    land in ``form_only_deferred_links``, not be presented as
+    addressable today's-work."""
+
+    form_only_hrefs = {
+        link.href for link in audit.form_only_deferred_links
+    }
+    assert "exprot1x.asp" in form_only_hrefs
+    assert "expvibs1x.asp" in form_only_hrefs
+    assert "ea1x.asp" in form_only_hrefs
+
+    # Every form_only_deferred entry must also appear in the broader
+    # unconfigured list (form-only is a subset, not a substitute).
+    unconfigured_hrefs = {
+        link.href for link in audit.unconfigured_experimental_links
+    }
+    assert form_only_hrefs <= unconfigured_hrefs
 
 
 # ---------------------------------------------------------------------------

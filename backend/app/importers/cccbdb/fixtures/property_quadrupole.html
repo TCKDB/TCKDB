@@ -1,0 +1,82 @@
+<!--
+  Sanitized fixture for CCCBDB's quadlistx.asp ("Experimental
+  Quadrupoles") flat table.
+
+  Source page (informational only — NOT fetched by tests):
+    https://cccbdb.nist.gov/quadlistx.asp
+
+  Column shape is live-verified (May 2026):
+
+    Molecule | name | xx | yy | zz | squib | commment
+
+  Notes:
+   * The page reports the diagonal traceless quadrupole tensor
+     components only (xx/yy/zz). There is no isotropic / scalar
+     ``iso`` column — quadrupole moments are intrinsically tensor
+     properties, and CCCBDB does not publish a derived scalar here.
+   * Units are not stated on the page; per CCCBDB's Help → Units →
+     Dipole and Quadrupole, experimental quadrupole moments are
+     conventionally reported in Debye·Angstrom (a.k.a. Buckingham,
+     symbol B = D·Å).
+   * The typo "commment" (three m's) is preserved verbatim — the
+     live page has it.
+   * Values below are sampled and rounded; do not cite.
+
+  Workflow gating:
+   * ``workflow_ready=False``: the parser captures xx/yy/zz/squib/
+     comment in raw_row, but the builder must not collapse tensor
+     components into a single ``scalar_value`` — that would silently
+     misrepresent the data. Quadrupole tensors will land properly
+     when ``molecular_property_observation`` gains a tensor channel
+     (or a dedicated quadrupole table arrives).
+-->
+<html>
+<head><title>CCCBDB: Experimental Quadrupoles</title></head>
+<body>
+<h2>Experimental Quadrupoles</h2>
+<p>Quadrupole moments in Debye-Angstrom</p>
+<table>
+<tr>
+  <th>Molecule</th><th>name</th>
+  <th>xx</th><th>yy</th><th>zz</th>
+  <th>squib</th><th>commment</th>
+</tr>
+<tr>
+  <td>H2CO</td><td>Formaldehyde</td>
+  <td>-0.270</td><td>0.330</td><td>-0.060</td>
+  <td>1974Hel/Hel(II/6)</td>
+  <td>aa=-0.06 +-0.16 bb=0.33 +-E28 cc=-0.27 +-0.2</td>
+</tr>
+<tr>
+  <td>HCOOH</td><td>Formic acid</td>
+  <td>-5.300</td><td>5.200</td><td>0.100</td>
+  <td>1984Gra/Gub</td>
+  <td>x y switched from ref +-0.6, +-0.6, +-0.6</td>
+</tr>
+<tr>
+  <td>C6H6</td><td>Benzene</td>
+  <td>3.180</td><td>3.180</td><td>-6.360</td>
+  <td>1981Bat/Buc:421</td>
+  <td></td>
+</tr>
+<tr>
+  <td>HF</td><td>Hydrogen fluoride</td>
+  <td>1.275</td><td>1.275</td><td>-2.550</td>
+  <td>1962Stogryn</td>
+  <td></td>
+</tr>
+<tr>
+  <td>N2</td><td>Nitrogen diatomic</td>
+  <td>0.745</td><td>0.745</td><td>-1.490</td>
+  <td>1973Buc/Dis</td>
+  <td></td>
+</tr>
+<tr>
+  <td>CO</td><td>Carbon monoxide</td>
+  <td>1.250</td><td>1.250</td><td>-2.500</td>
+  <td>1969Buc/Dis</td>
+  <td></td>
+</tr>
+</table>
+</body>
+</html>

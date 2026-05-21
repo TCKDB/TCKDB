@@ -172,6 +172,25 @@ EXPERIMENTAL_PROPERTIES_PILOT: tuple[CrawlTarget, ...] = (
         notes="Diatomic spectroscopic constants; cm^-1; columns Species|name|we|wexe|weye|Be|De|alphae|reference",
     ),
     CrawlTarget(
+        species_key="quadrupole_moment",
+        source_url="https://cccbdb.nist.gov/quadlistx.asp",
+        page_kind="experimental_property_table",
+        property_kind="quadrupole_moment",
+        is_validated_url=True,
+        # ``quadlistx.asp`` publishes the diagonal traceless tensor
+        # only (xx/yy/zz) — no isotropic scalar. The parser captures
+        # all three components in raw_row, but the builder cannot
+        # safely collapse them to a single ``scalar_value``, so the
+        # target is intentionally NOT workflow-ready. A future
+        # tensor-aware molecular_property_observation channel (or a
+        # dedicated quadrupole table) will flip this to True.
+        workflow_ready=False,
+        notes=(
+            "Experimental quadrupole tensor; Debye*Angstrom; "
+            "xx|yy|zz only, no scalar; deferred to tensor-aware schema"
+        ),
+    ),
+    CrawlTarget(
         species_key="polarizability_iso",
         source_url="https://cccbdb.nist.gov/pollistx.asp",
         page_kind="experimental_property_table",

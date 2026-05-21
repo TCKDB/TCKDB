@@ -927,15 +927,66 @@ from app.importers.cccbdb.property_table_ingest import (
 
 ### Property-kind inventory
 
-The allowlist now covers **5 cross-species experimental tables**:
+The allowlist now covers **6 cross-species experimental tables**:
 
-| `property_kind` | URL | Units | `MolecularPropertyKind` |
-|---|---|---|---|
-| `hf_0` | `hf0kx.asp` | kJ/mol | `enthalpy_of_formation` |
-| `hf_0_with_uncertainty` | `goodlistx.asp` | kJ/mol (+ unc) | `enthalpy_of_formation` |
-| `dipole` | `diplistx.asp` | Debye | `dipole_moment` |
-| `diatomic_spectroscopic` | `expdiatomicsx.asp` | cm⁻¹ | `spectroscopic_constant` |
-| `polarizability_iso` | `pollistx.asp` *(live-verified in 5d)* | Bohr³ | `polarizability_iso` |
+| `property_kind` | URL | Units | `MolecularPropertyKind` | `workflow_ready` |
+|---|---|---|---|---|
+| `hf_0` | `hf0kx.asp` | kJ/mol | `enthalpy_of_formation` | true |
+| `hf_0_with_uncertainty` | `goodlistx.asp` | kJ/mol (+ unc) | `enthalpy_of_formation` | true |
+| `dipole` | `diplistx.asp` | Debye | `dipole_moment` | true |
+| `diatomic_spectroscopic` | `expdiatomicsx.asp` | cm⁻¹ | `spectroscopic_constant` | true |
+| `polarizability_iso` | `pollistx.asp` *(live-verified in 5d)* | Bohr³ | `polarizability_iso` | true |
+| `quadrupole_moment` | `quadlistx.asp` *(new in 5e)* | Debye·Å | `quadrupole_moment` | **false** (parsed-only) |
+
+#### Parsed-only (tensor-only) targets
+
+`quadrupole_moment` is the project's first ``workflow_ready=False``
+target. The page (`quadlistx.asp`) publishes only the diagonal
+traceless tensor (`xx | yy | zz`) — there is no isotropic / "main"
+scalar column. Collapsing the three components into a single number
+would silently misrepresent the physics, so the builder emits NO
+``MolecularPropertyObservationCreate`` payload. The parser still
+captures every row in ``raw_row`` (xx/yy/zz/squib/comment), and the
+dry-run reports `health="quarantined"` instead of `"unhealthy"`.
+
+The full tensor channel for quadrupole observations is deferred —
+either via a future tensor field on ``molecular_property_observation``
+or via a dedicated quadrupole table.
+
+#### Deferred experimental pages (CCCBDB form-only)
+
+These pages exist on CCCBDB's Experimental index but cannot be
+ingested by the property-table importer because they are FORM
+pages — they post to ``getformx.asp`` and require session state to
+return data, never a flat single-GET table:
+
+| Page | Title | Reason deferred |
+|---|---|---|
+| `exprot1x.asp` | Experimental Rotational Constants | form-only |
+| `expvibs1x.asp` | Experimental Vibrational Frequencies | form-only |
+| `ea1x.asp` | Atomization Energies | form-only |
+| `expgeom1x.asp` | Experimental Geometries | form-only |
+| `expbondlengths1x.asp` | Internal Coordinates by type | form-only |
+| `expangle1x.asp` | Bond angles | form-only |
+| `exppg1x.asp` | Experimental Point Groups | form-only |
+| `exptriatomicsx.asp` | Triatomics (vibrations) | form-only |
+| `exprotbarx.asp` | Internal Rotation barriers | form-only |
+| `exp1x.asp` / `xpx.asp` | One molecule / property browser | form-only |
+
+The audit module reports these explicitly under
+``form_only_deferred_links`` so the maintainer's "what's left" view
+distinguishes "doable today" from "needs a session-aware POST
+resolver first." See ``parsers/experimental_index.FORM_ONLY_HREFS``.
+
+#### Additional flat-table candidates surfaced by the audit
+
+Verified-flat but not yet configured (future work):
+
+| URL | Title | Notes |
+|---|---|---|
+| `refstatex.asp` | Reference States | flat 26-row table; ``Element`` / ``Reference State`` / ``H(298)-H(0)`` / ``unc`` |
+| `elecspinx.asp` | Electronic Spin Splitting Corrections | flat 86-row table; multi-unit row (cm⁻¹ / hartree / kJ mol⁻¹) needs unit-policy work |
+| `diatomicexpbondx.asp` | Diatomic bond lengths | **matrix** layout (row = X element, col = Y element); not a flat row-per-observation shape — needs a separate parser |
 
 The live `pollistx.asp` page header is
 `Molecule | name | State | Conformation | alpha | squib | commment`
@@ -1012,8 +1063,8 @@ four values:
 | `health` | meaning |
 |---|---|
 | `healthy` | parsed rows produced payloads (or zero rows seen) |
-| `unhealthy` | `parsed_row_count > 0` AND `payload_count == 0` — almost always a column-config drift |
-| `quarantined` | same row/payload shape as unhealthy, but the target's `CrawlTarget.workflow_ready=False` so it's intentionally deferred |
+| `unhealthy` | `parsed_row_count > 0` AND `payload_count == 0` for a workflow-ready target — almost always a column-config drift |
+| `quarantined` | same row/payload shape as unhealthy, but the target's `CrawlTarget.workflow_ready=False` so it's intentionally parsed-only (e.g. `quadrupole_moment`) |
 | `skipped` | no cached HTML in the archive (only with `--use-cache-only`) |
 
 The aggregate `summary.json` exposes `unhealthy_count`,
@@ -1022,6 +1073,40 @@ The aggregate `summary.json` exposes `unhealthy_count`,
 `unhealthy_count == 0` — if it isn't, the CLI logs a WARNING with
 the offending targets, but exit code stays `0` so individual
 column drifts don't break automated workflows.
+
+`workflow_ready=False` is a deliberate "we parsed it, but we don't
+have a safe schema home for it yet" verdict. Reasons today:
+
+* **Tensor properties** with no published scalar (e.g. `quadrupole_moment`).
+  The components live in `raw_row`; the builder emits no payload.
+* **Future-schema candidates** — properties (rotational constants,
+  vibrational frequencies, multi-unit corrections) where the safe
+  representation needs new schema work before payload-building can
+  be reasoned about.
+
+A `workflow_ready=False` target with `parsed_row_count > 0` and
+`payload_count == 0` is the *expected* shape; the gate flags it as
+`quarantined`, not `unhealthy`. Only flip `workflow_ready=True`
+when the builder's emitted payloads are scientifically correct.
+
+### How the experimental-index audit guides future allowlisting
+
+The audit module is the single source of truth for "what's the next
+page to consider." Its three output buckets answer different
+questions:
+
+| Bucket | Question it answers |
+|---|---|
+| `matched_targets` | "Which configured pages are still advertised?" — staleness check |
+| `unmatched_configured_targets` | "Which configured URLs has CCCBDB removed?" — stale-URL alarm |
+| `unconfigured_experimental_links` | "What does CCCBDB advertise that we don't yet parse?" — extension menu |
+| `form_only_deferred_links` | "Of the unconfigured links, which are POST-only and need a future resolver?" — distinguishes "do later" from "do today" |
+
+When picking the next target, prefer items in
+`unconfigured_experimental_links` that are NOT in
+`form_only_deferred_links`. Those are the flat single-GET pages
+that the property-table importer can ingest with only a config + a
+fixture — no new infrastructure.
 
 ### Adding a new property table
 

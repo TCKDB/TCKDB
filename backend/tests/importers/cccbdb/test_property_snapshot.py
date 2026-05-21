@@ -39,6 +39,8 @@ _FIXTURE_BY_URL = {
     "https://cccbdb.nist.gov/expdiatomicsx.asp": "property_diatomic_spectroscopic.html",
     # Phase 5c: polarizability_iso added to the pilot.
     "https://cccbdb.nist.gov/pollistx.asp": "property_polarizability_iso.html",
+    # Phase 5e: quadrupole tensor (parsed-only, workflow_ready=False).
+    "https://cccbdb.nist.gov/quadlistx.asp": "property_quadrupole.html",
 }
 
 
@@ -100,6 +102,7 @@ class TestPropertyPilotHappyPath:
             "dipole",
             "diatomic_spectroscopic",
             "polarizability_iso",
+            "quadrupole_moment",
         }
 
     def test_manifest_records_page_kind(self, tmp_path):

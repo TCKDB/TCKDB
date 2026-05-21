@@ -77,7 +77,7 @@ class PropertyTableConfig:
     parser falls back to the historical inferred-header behavior.
     """
 
-    value_column: str
+    value_column: str | None
     default_raw_unit: str
     dimension: str | None
     formula_column: str | None = None
@@ -88,6 +88,15 @@ class PropertyTableConfig:
     comment_column: str | None = None
     doi_column: str | None = None
     configured_column_names: tuple[str, ...] | None = None
+    tensor_component_columns: tuple[str, ...] | None = None
+    """
+    For tensor-only tables (``value_column=None``), the list of
+    columns whose values should be preserved as the tensor
+    components in ``raw_payload_json["tensor_components"]``. The
+    parser does NOT collapse these into a scalar — the row's
+    ``value`` stays ``None`` and the builder yields no payload (the
+    CrawlTarget should also be marked ``workflow_ready=False``).
+    """
 
 
 PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
@@ -153,6 +162,35 @@ PROPERTY_CONFIGS: dict[str, PropertyTableConfig] = {
             "re",
             "squib",
         ),
+    ),
+    "quadrupole_moment": PropertyTableConfig(
+        # Experimental quadrupole moments from CCCBDB's quadlistx.asp.
+        # Live header (May 2026):
+        #
+        #   Molecule | name | xx | yy | zz | squib | commment
+        #
+        # The page publishes the diagonal traceless tensor (xx/yy/zz)
+        # and does NOT report an isotropic / "main" scalar. Collapsing
+        # the three components to a single number would silently
+        # misrepresent the physics. The config therefore declares
+        # ``value_column=None`` — no scalar — and lists the tensor
+        # component columns so the builder can surface them under
+        # ``raw_payload_json["tensor_components"]``. Pair this with
+        # ``workflow_ready=False`` on the CrawlTarget so the dry-run
+        # health gate classifies the target as ``quarantined``
+        # rather than ``unhealthy``.
+        #
+        # Units: CCCBDB doesn't print the unit on the page, but its
+        # own Units → "Dipole and Quadrupole" reference convention
+        # is Debye·Å (= Buckingham B).
+        value_column=None,
+        default_raw_unit="Debye*Angstrom",
+        dimension=None,
+        formula_column="Molecule",
+        name_column="name",
+        reference_column="squib",
+        comment_column="commment",
+        tensor_component_columns=("xx", "yy", "zz"),
     ),
     "polarizability_iso": PropertyTableConfig(
         # Isotropic polarizability from CCCBDB's pollistx.asp. The
@@ -430,7 +468,7 @@ def parse_experimental_property_table_page(
         body = list(table[1:])
 
     value_idx = _column_index(column_names, config.value_column)
-    if column_names and value_idx is None:
+    if column_names and value_idx is None and config.value_column is not None:
         warnings.append(
             f"value column {config.value_column!r} not found "
             f"in header {column_names!r}"

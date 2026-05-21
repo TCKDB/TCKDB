@@ -371,10 +371,19 @@ class TestParserBehavior:
         assert row.reference is not None
         assert row.reference.reference_label == "Gurvich"
 
-    def test_property_configs_all_have_value_column(self):
-        # Sanity: every registered config must name a value column.
+    def test_property_configs_all_have_value_column_or_tensor_components(self):
+        # Sanity: every registered config must EITHER name a scalar
+        # ``value_column`` (the workflow-ready case) OR declare a
+        # ``tensor_component_columns`` tuple (the tensor-only case,
+        # paired with ``workflow_ready=False`` on the CrawlTarget).
+        # A config with neither is a maintainer bug.
         for kind, cfg in PROPERTY_CONFIGS.items():
-            assert cfg.value_column, f"missing value_column for {kind}"
+            has_scalar = bool(cfg.value_column)
+            has_tensor = bool(cfg.tensor_component_columns)
+            assert has_scalar or has_tensor, (
+                f"PROPERTY_CONFIGS[{kind!r}] declares neither "
+                f"value_column nor tensor_component_columns"
+            )
 
     def test_deterministic_content_sha(self):
         html = _load("property_hf_0.html")

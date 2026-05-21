@@ -47,7 +47,7 @@ _HREF_TO_TARGET_GUESS: dict[str, str] = {
     "goodlistx.asp": "hf_0_with_uncertainty",
     "diplistx.asp": "dipole",
     "pollistx.asp": "polarizability_iso",
-    "quadlistx.asp": "quadrupole",
+    "quadlistx.asp": "quadrupole_moment",
     "expdiatomicsx.asp": "diatomic_spectroscopic",
     "exprot1x.asp": "rotational_constant_experimental",
     "expgeom1x.asp": "experimental_geometries",
@@ -64,6 +64,37 @@ _HREF_TO_TARGET_GUESS: dict[str, str] = {
     "exp1x.asp": "experimental_per_species",
     "xpx.asp": "experimental_property_index",
 }
+
+
+# Hrefs known to require a POST against ``getformx.asp`` (CCCBDB
+# form-only pages). The audit reports these as deferred rather than
+# treating them as missing flat-table configs — the property-table
+# importer is single-GET only and cannot drive a session-aware form.
+FORM_ONLY_HREFS: frozenset[str] = frozenset({
+    "exprot1x.asp",
+    "expvibs1x.asp",
+    "ea1x.asp",
+    "expgeom1x.asp",
+    "expbondlengths1x.asp",
+    "expangle1x.asp",
+    "exppg1x.asp",
+    "exptriatomicsx.asp",
+    "exprotbarx.asp",
+    "exp1x.asp",
+    "xpx.asp",
+})
+
+
+def is_form_only(href: str) -> bool:
+    """Return True if ``href`` is one of the CCCBDB form-only pages
+    that the property-table importer cannot ingest without a
+    session-aware POST resolver."""
+
+    if not href:
+        return False
+    cleaned = href.split("?", 1)[0].split("#", 1)[0]
+    cleaned = cleaned.rsplit("/", 1)[-1].lower()
+    return cleaned in FORM_ONLY_HREFS
 
 
 def _guess_target(href: str) -> str | None:

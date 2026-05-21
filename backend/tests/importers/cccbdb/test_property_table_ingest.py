@@ -54,6 +54,7 @@ _HF_URL = "https://cccbdb.nist.gov/hf0kx.asp"
 _GOODLIST_URL = "https://cccbdb.nist.gov/goodlistx.asp"
 _DIPOLE_URL = "https://cccbdb.nist.gov/diplistx.asp"
 _DIATOMIC_URL = "https://cccbdb.nist.gov/expdiatomicsx.asp"
+_QUADRUPOLE_URL = "https://cccbdb.nist.gov/quadlistx.asp"
 
 
 @dataclass
@@ -74,6 +75,7 @@ class _FixtureFetcher:
             _DIPOLE_URL: "property_dipoles.html",
             _DIATOMIC_URL: "property_diatomic_spectroscopic.html",
             _POL_URL: "property_polarizability_iso.html",
+            _QUADRUPOLE_URL: "property_quadrupole.html",
         }
         if url not in mapping:
             return FetchResult(None, 404, f"unallowlisted URL {url}")
@@ -290,11 +292,11 @@ class TestPilotIngestion:
             catalog=catalog,
             sleep_seconds=0.0,
         )
-        # All 5 targets fired through the fetcher (4 from Phase 3a +
-        # polarizability from Phase 5c).
-        assert len(fetcher.calls) == 5
-        # And all 5 produced parsed tables + payloads.
-        assert len(result.per_target) == 5
+        # Every pilot target must fire through the fetcher and
+        # produce a parsed table — the count is whatever
+        # EXPERIMENTAL_PROPERTIES_PILOT currently declares.
+        assert len(fetcher.calls) == len(EXPERIMENTAL_PROPERTIES_PILOT)
+        assert len(result.per_target) == len(EXPERIMENTAL_PROPERTIES_PILOT)
         # Aggregate workflow-ready count rolls up correctly.
         assert result.workflow_ready_count() > 0
 

@@ -28,6 +28,7 @@ from app.importers.cccbdb.crawl_plan import (
 from app.importers.cccbdb.parsers.experimental_index import (
     ExperimentalIndex,
     ExperimentalIndexLink,
+    is_form_only,
 )
 from app.importers.cccbdb.parsers.experimental_property_table import (
     PROPERTY_CONFIGS,
@@ -64,6 +65,17 @@ class PropertyConfigAuditResult:
     unconfigured_experimental_links: list[ExperimentalIndexLink] = field(
         default_factory=list
     )
+    form_only_deferred_links: list[ExperimentalIndexLink] = field(
+        default_factory=list
+    )
+    """
+    Subset of ``unconfigured_experimental_links`` that are CCCBDB
+    form-only pages (POST against ``getformx.asp``). These are NOT
+    candidates for the single-GET property-table importer — they
+    need a future session-aware resolver. The audit splits them out
+    so the maintainer's "what's left" view is honest about which
+    links are addressable today.
+    """
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -77,6 +89,9 @@ class PropertyConfigAuditResult:
             ),
             "unconfigured_experimental_links": [
                 link.to_json() for link in self.unconfigured_experimental_links
+            ],
+            "form_only_deferred_links": [
+                link.to_json() for link in self.form_only_deferred_links
             ],
         }
 
@@ -125,12 +140,15 @@ def audit_property_configs(
 
     matched: set[str] = set()
     unconfigured: list[ExperimentalIndexLink] = []
+    form_only: list[ExperimentalIndexLink] = []
     for link in index.links:
         guess = link.target_guess
         if guess is not None and guess in configured_kinds:
             matched.add(guess)
-        else:
-            unconfigured.append(link)
+            continue
+        unconfigured.append(link)
+        if is_form_only(link.href):
+            form_only.append(link)
 
     unmatched = sorted(configured_kinds - matched)
 
@@ -140,6 +158,7 @@ def audit_property_configs(
         matched_targets=sorted(matched),
         unmatched_configured_targets=unmatched,
         unconfigured_experimental_links=unconfigured,
+        form_only_deferred_links=form_only,
     )
 
 
