@@ -30,9 +30,20 @@ from pathlib import Path
 from app.importers.cccbdb.form_resolver import (
     DEFAULT_USER_AGENT,
     FormResolverConfig,
+    SelectionPolicy,
     load_queue_file,
     run_form_resolver_queue,
 )
+
+# CLI-friendly aliases that swap underscores for dashes. The user
+# can type ``--selection-policy exact-match`` and the resolver still
+# gets the canonical enum value.
+_SELECTION_POLICY_ALIASES: dict[str, SelectionPolicy] = {
+    "reject-ambiguous": SelectionPolicy.REJECT_AMBIGUOUS,
+    "reject_ambiguous": SelectionPolicy.REJECT_AMBIGUOUS,
+    "exact-match": SelectionPolicy.EXACT_MATCH,
+    "exact_match": SelectionPolicy.EXACT_MATCH,
+}
 
 _logger = logging.getLogger(__name__)
 
@@ -77,6 +88,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--user-agent", default=DEFAULT_USER_AGENT,
         help="Override the HTTP User-Agent string.",
     )
+    p.add_argument(
+        "--selection-policy",
+        default="reject-ambiguous",
+        help=(
+            "How to handle CCCBDB ``choosex.asp`` species-selection "
+            "pages. ``reject-ambiguous`` (default) rejects every "
+            "selection page outright. ``exact-match`` parses the "
+            "candidates and selects exactly one only if the queue "
+            "record matches it unambiguously on formula+name, "
+            "formula+CAS, or formula+InChIKey."
+        ),
+    )
     return p
 
 
@@ -98,6 +121,16 @@ def main(argv: list[str] | None = None) -> int:
         _logger.error("queue file has no records")
         return 2
 
+    policy_key = args.selection_policy.lower().strip()
+    selection_policy = _SELECTION_POLICY_ALIASES.get(policy_key)
+    if selection_policy is None:
+        _logger.error(
+            "unknown --selection-policy %r; expected one of: %s",
+            args.selection_policy,
+            ", ".join(sorted({k for k in _SELECTION_POLICY_ALIASES if "-" in k})),
+        )
+        return 2
+
     config = FormResolverConfig(
         output_dir=args.output_dir,
         sleep_seconds=args.sleep_seconds,
@@ -105,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         save_rejected_html=args.save_rejected_html,
         allow_unknown=args.allow_unknown,
         user_agent=args.user_agent,
+        selection_policy=selection_policy,
     )
 
     summary = run_form_resolver_queue(records, config)

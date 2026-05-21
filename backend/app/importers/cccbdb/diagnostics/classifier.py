@@ -47,10 +47,15 @@ class ClassificationResult:
 
 # Anything that smells like Cloudflare/Akamai/access-denied static
 # content lands here. Cheap regex screen before more expensive checks.
+#
+# IMPORTANT: each pattern must be SPECIFIC to an error/block page —
+# bare brand names ("cloudflare") false-positive on regular pages
+# that simply ship Cloudflare analytics beacons in their script tags.
+# Patterns are matched against the lowercased body.
 _RATE_LIMIT_PATTERNS = (
     "you are being rate limited",
     "error 1015",
-    "cloudflare",
+    "cloudflare ray id",  # only present on real CF block/error pages
     "access denied",
     "request blocked",
     "request unsuccessful",

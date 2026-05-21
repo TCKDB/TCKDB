@@ -36,6 +36,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable, Protocol
@@ -52,8 +53,15 @@ from app.importers.cccbdb.diagnostics.classifier import (
     classify_html,
 )
 from app.importers.cccbdb.parsers import (
+    CCCBDBSelectionCandidate,
+    CCCBDBSpeciesSelectionPage,
     SUPPORTED_TARGET_KINDS,
+    canonicalize_cas,
     parse_form_result_page,
+    parse_species_selection_page,
+)
+from app.importers.cccbdb.parsers.species_selection import (
+    structural_to_hill_formula,
 )
 
 _logger = logging.getLogger(__name__)
@@ -123,9 +131,18 @@ class FormResolveResult:
     parser_warnings: list[str] = field(default_factory=list)
     resolver_warnings: list[str] = field(default_factory=list)
     retrieved_at: str | None = None
+    # Selection metadata (populated only when the request hit a
+    # ``choosex.asp`` page).
+    selection_policy: str | None = None
+    selection_status: str | None = None
+    selection_match_basis: str | None = None
+    selection_candidate_count: int | None = None
+    selected_name: str | None = None
+    selected_cas_number: str | None = None
+    selection_warnings: list[str] = field(default_factory=list)
 
     def to_manifest_entry(self) -> dict[str, Any]:
-        return {
+        entry: dict[str, Any] = {
             "species_key": self.species_key,
             "formula": self.formula,
             "name": self.name,
@@ -145,6 +162,18 @@ class FormResolveResult:
             "resolver_warnings": list(self.resolver_warnings),
             "retrieved_at": self.retrieved_at,
         }
+        # Only emit selection_* keys when the resolver actually
+        # engaged the selection branch — otherwise the manifest stays
+        # backwards-compatible with prior runs.
+        if self.selection_policy is not None:
+            entry["selection_policy"] = self.selection_policy
+            entry["selection_status"] = self.selection_status
+            entry["selection_match_basis"] = self.selection_match_basis
+            entry["selection_candidate_count"] = self.selection_candidate_count
+            entry["selected_name"] = self.selected_name
+            entry["selected_cas_number"] = self.selected_cas_number
+            entry["selection_warnings"] = list(self.selection_warnings)
+        return entry
 
 
 # ---------------------------------------------------------------------------
@@ -294,15 +323,218 @@ def discover_form(html: str, base_url: str) -> DiscoveredForm | None:
 # ---------------------------------------------------------------------------
 
 
-class SelectionPolicy(str):
-    """Marker class for selection-handling policies.
+class SelectionPolicy(str, Enum):
+    """How the resolver handles ``choosex.asp`` species-selection pages.
 
-    Today we ship one policy: REJECT_AMBIGUOUS. A future policy may
-    parse choosex.asp candidate rows and POST to fixchoicex.asp only
-    when an exact match on formula+name (or formula+CAS) is found.
+    * :attr:`REJECT_AMBIGUOUS` — the conservative default. Any
+      ``choosex.asp`` response is treated as a rejection. No POST to
+      ``fixchoicex.asp`` is attempted.
+    * :attr:`EXACT_MATCH` — parse the candidates and select exactly one
+      *only* if the queue record carries enough identity to match on
+      ``formula+name``, ``formula+cas_number``, or ``formula+inchikey``.
+      Zero or multiple unrelated matches → reject as ambiguous.
+      Multiple matches that resolve to the SAME form-field value
+      (e.g. two conformers of the same species sharing one CAS) are
+      treated as a single unambiguous selection.
+
+    Formula-only matching is NEVER allowed. Picking the first
+    candidate is NEVER allowed.
     """
 
     REJECT_AMBIGUOUS = "reject_ambiguous"
+    EXACT_MATCH = "exact_match"
+
+
+@dataclass(frozen=True)
+class SelectionOutcome:
+    """Result of applying a :class:`SelectionPolicy` to a parsed
+    ``choosex.asp`` page against one queue record."""
+
+    selected: CCCBDBSelectionCandidate | None
+    status: str  # "selected" | "ambiguous_or_no_match" | "no_candidates"
+    match_basis: str | None  # e.g. "formula+name"
+    candidate_count: int
+    matched_candidate_count: int
+    matched_choice_values: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+
+_PUNCT_RE = re.compile(r"[\s\-_,.]+")
+
+
+def _normalize_name(name: str | None) -> str | None:
+    if not name:
+        return None
+    folded = name.casefold().strip()
+    # Strip trailing punctuation CCCBDB sometimes appends to display
+    # names ("Ethanol ", "Dimethyl ether ", etc.).
+    return _PUNCT_RE.sub(" ", folded).strip() or None
+
+
+def _normalize_formula(formula: str | None) -> str | None:
+    if not formula:
+        return None
+    # Strip whitespace + lowercase; we trust the parser to have
+    # already collapsed ``<sub>2</sub>`` → ``2`` etc.
+    return _PUNCT_RE.sub("", formula.strip()).lower() or None
+
+
+def _normalize_inchikey(key: str | None) -> str | None:
+    if not key:
+        return None
+    return key.strip().upper() or None
+
+
+def _candidate_matches(
+    candidate: CCCBDBSelectionCandidate, record: "FormQueueRecord"
+) -> str | None:
+    """Return the match-basis label (e.g. ``"formula+name"``) if the
+    candidate unambiguously matches ``record``, else ``None``.
+
+    Formula is required on both sides; one of (name, cas, inchikey)
+    must match in addition. Order is deterministic — CAS beats name
+    when both match, because CAS is the stronger identifier; name
+    beats inchikey when CCCBDB exposes name but not inchikey.
+
+    Formula comparison is forgiving in one specific way: CCCBDB's
+    ``choosex.asp`` table shows the *structural* formula
+    (``CH3CH2OH``) while queue records typically carry the *molecular*
+    formula (``C2H6O``). The matcher therefore compares the queue
+    formula against the candidate's literal formula AND against its
+    derived Hill-system molecular formula. Both must agree on the
+    same canonical form (Hill is preferred when derivable).
+    """
+
+    rec_formula = _normalize_formula(record.formula)
+    cand_formula = _normalize_formula(candidate.formula)
+    if rec_formula is None or cand_formula is None:
+        return None
+    if rec_formula != cand_formula:
+        # Try the structural→Hill derivation.
+        cand_hill = _normalize_formula(
+            structural_to_hill_formula(candidate.formula)
+        )
+        rec_hill = _normalize_formula(
+            structural_to_hill_formula(record.formula)
+        )
+        if not (
+            (cand_hill is not None and rec_formula == cand_hill)
+            or (rec_hill is not None and rec_hill == cand_formula)
+            or (
+                cand_hill is not None
+                and rec_hill is not None
+                and rec_hill == cand_hill
+            )
+        ):
+            return None
+
+    # CAS first (strongest identifier).
+    rec_cas = canonicalize_cas(record.cas_number)
+    cand_cas = canonicalize_cas(candidate.cas_number)
+    if rec_cas is not None and cand_cas is not None and rec_cas == cand_cas:
+        return "formula+cas"
+
+    # Name second.
+    rec_name = _normalize_name(record.name)
+    cand_name = _normalize_name(candidate.name)
+    if rec_name is not None and cand_name is not None and rec_name == cand_name:
+        return "formula+name"
+
+    # InChIKey last (choosex.asp does not surface it today, but the
+    # matcher supports it for forward compatibility / future per-row
+    # enrichment).
+    rec_key = _normalize_inchikey(record.inchikey)
+    cand_key = _normalize_inchikey(candidate.inchikey)
+    if rec_key is not None and cand_key is not None and rec_key == cand_key:
+        return "formula+inchikey"
+
+    return None
+
+
+def select_candidate(
+    page: CCCBDBSpeciesSelectionPage,
+    record: "FormQueueRecord",
+    policy: SelectionPolicy,
+) -> SelectionOutcome:
+    """Apply the configured selection policy to a parsed selection page.
+
+    With :attr:`SelectionPolicy.REJECT_AMBIGUOUS`, every selection
+    page is rejected outright — no parsing of candidates required.
+    With :attr:`SelectionPolicy.EXACT_MATCH`, candidates are filtered
+    by :func:`_candidate_matches`; if exactly one (deduplicated by
+    form-field value) survives, it's the selection.
+    """
+
+    if policy == SelectionPolicy.REJECT_AMBIGUOUS:
+        return SelectionOutcome(
+            selected=None,
+            status="ambiguous_or_no_match",
+            match_basis=None,
+            candidate_count=len(page.candidates),
+            matched_candidate_count=0,
+            warnings=(
+                "selection_policy=reject_ambiguous; selection page rejected "
+                "without parsing candidates",
+            ),
+        )
+
+    if not page.candidates:
+        return SelectionOutcome(
+            selected=None,
+            status="no_candidates",
+            match_basis=None,
+            candidate_count=0,
+            matched_candidate_count=0,
+            warnings=("selection page contains no candidate rows",),
+        )
+
+    matches: list[tuple[CCCBDBSelectionCandidate, str]] = []
+    for candidate in page.candidates:
+        basis = _candidate_matches(candidate, record)
+        if basis is not None:
+            matches.append((candidate, basis))
+
+    if not matches:
+        return SelectionOutcome(
+            selected=None,
+            status="ambiguous_or_no_match",
+            match_basis=None,
+            candidate_count=len(page.candidates),
+            matched_candidate_count=0,
+            warnings=(
+                "no candidate matched on formula+name, formula+cas, or "
+                "formula+inchikey; formula-only selection is not allowed",
+            ),
+        )
+
+    # Deduplicate by form-field value: if every match maps to the
+    # same POST payload, they're really one selection (e.g. two
+    # conformers of the same species sharing one CAS on CCCBDB).
+    distinct_values = {c.form_field_value for c, _ in matches}
+    if len(distinct_values) != 1:
+        return SelectionOutcome(
+            selected=None,
+            status="ambiguous_or_no_match",
+            match_basis=None,
+            candidate_count=len(page.candidates),
+            matched_candidate_count=len(matches),
+            matched_choice_values=tuple(sorted(distinct_values)),
+            warnings=(
+                f"{len(matches)} candidates matched the queue record but "
+                f"resolved to {len(distinct_values)} distinct choice values; "
+                "selection rejected as ambiguous",
+            ),
+        )
+
+    selected, basis = matches[0]
+    return SelectionOutcome(
+        selected=selected,
+        status="selected",
+        match_basis=basis,
+        candidate_count=len(page.candidates),
+        matched_candidate_count=len(matches),
+        matched_choice_values=(selected.form_field_value,),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +556,7 @@ class FormResolverConfig:
     stop_after_rate_limit_errors: int = 1
     save_rejected_html: bool = False
     allow_unknown: bool = False
-    selection_policy: str = SelectionPolicy.REJECT_AMBIGUOUS
+    selection_policy: SelectionPolicy = SelectionPolicy.REJECT_AMBIGUOUS
     user_agent: str = DEFAULT_USER_AGENT
 
 
@@ -494,6 +726,78 @@ def resolve_one_record(
     )
     result.classification = verdict.classification.value
     result.classification_reason = verdict.reason
+
+    # Selection branch: species_selection_page may be re-resolved by
+    # following the choosex.asp → fixchoicex.asp POST when the
+    # selection policy allows AND the queue record carries enough
+    # identity to match a single candidate unambiguously.
+    if verdict.classification == Classification.species_selection_page:
+        selection_page = parse_species_selection_page(
+            post_resp.text, base_url=post_resp.url
+        )
+        outcome = select_candidate(
+            selection_page, record, config.selection_policy
+        )
+        result.selection_policy = config.selection_policy.value
+        result.selection_status = outcome.status
+        result.selection_match_basis = outcome.match_basis
+        result.selection_candidate_count = outcome.candidate_count
+        if outcome.selected is not None:
+            result.selected_name = outcome.selected.name
+            result.selected_cas_number = outcome.selected.cas_number
+        result.selection_warnings.extend(outcome.warnings)
+
+        if outcome.selected is None:
+            # Selection rejected — leave the original page as the
+            # archived artifact (rejected_html if --save-rejected-html).
+            if config.save_rejected_html:
+                result.rejected_html_path = _archive_rejected(
+                    config.output_dir, record, result, post_resp.text
+                )
+            return result
+
+        # Selection accepted — POST the selected candidate to the
+        # form's action URL (fixchoicex.asp), then carry on as if the
+        # response had come back directly.
+        if selection_page.form_action_url is None:
+            result.resolver_warnings.append(
+                "selection candidate matched but no form action URL "
+                "discovered on the page; cannot POST selection"
+            )
+            return result
+        try:
+            selection_resp = session.post(
+                selection_page.form_action_url,
+                data=outcome.selected.form_fields(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            result.resolver_warnings.append(
+                f"POST {selection_page.form_action_url} failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            return result
+        if selection_resp.status_code != 200:
+            result.resolver_warnings.append(
+                f"selection POST returned HTTP {selection_resp.status_code}"
+            )
+            return result
+
+        # Re-point the result to the selection follow-up page.
+        result.final_url = selection_resp.url
+        result.content_sha256 = hashlib.sha256(
+            selection_resp.text.encode("utf-8")
+        ).hexdigest()
+        verdict = classify_html(
+            selection_resp.text,
+            attempted_url=selection_page.form_action_url,
+            final_url=selection_resp.url,
+        )
+        result.classification = verdict.classification.value
+        result.classification_reason = verdict.reason
+        # Reassign the local POST response so the archive/parse branch
+        # below works against the selection-follow-up page, not the
+        # choosex.asp page.
+        post_resp = selection_resp
 
     accept = verdict.classification.value in _ACCEPTED_CLASSIFICATIONS
     if not accept and config.allow_unknown and \

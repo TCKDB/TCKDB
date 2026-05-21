@@ -1,0 +1,66 @@
+<!--
+  Sanitized fixture mirroring the LIVE choosex.asp shape for
+  formula=C2H6O (May 2026):
+
+  * Three candidate rows: dimethyl ether (CAS 115106), ethanol-config1
+    and ethanol-config2 (both CAS 64175).
+  * Form action is ``fixchoicex.asp`` (relative URL, resolved against
+    the page's serving URL by the parser).
+  * Checkbox ``name="choice"`` with ``value=<casno-digits>``.
+  * Each row carries the structural formula in column index 2
+    (``CH<sub>3</sub>OCH<sub>3</sub>`` etc.), the name in column 6,
+    and the CAS in column 7.
+
+  Used by the selection-matcher tests to prove that the resolver can
+  pick ethanol via exact-match on formula+name without picking the
+  first row (dimethyl ether).
+-->
+<HTML>
+<HEAD>
+<TITLE>CCCBDB choose from several molecules</TITLE>
+</HEAD>
+<BODY>
+<H1>Choose which species</H1>
+<FORM ACTION="choosex.asp" METHOD="POST" id="formc">
+  <INPUT TYPE="submit" VALUE="Clear_All" name="formclear">
+</FORM>
+<FORM ACTION="fixchoicex.asp" METHOD="post" id="form1">
+<input TYPE="submit" VALUE="Choose All" name="submitall">
+<input TYPE="submit" VALUE="Select" name="submitselect">
+<table border="1">
+<TR>
+  <TD COLSPAN=3>Choose which species</TD>
+  <TD>charge</TD><TD>state</TD><TD>config</TD>
+  <TD>name</TD><TD>casno</TD><TD>sketch</TD>
+</TR>
+<TR>
+  <TD>1</TD>
+  <TD><input TYPE="checkbox" NAME="choice" VALUE="115106" CHECKED></TD>
+  <TD>CH<sub>3</sub>OCH<sub>3</sub></TD>
+  <TD>0</TD><TD>1</TD><TD>1</TD>
+  <TD>Dimethyl ether</TD>
+  <TD class="num">115106</TD>
+  <TD>(sketch)</TD>
+</TR>
+<TR>
+  <TD>2</TD>
+  <TD><input TYPE="checkbox" NAME="choice" VALUE="64175" CHECKED></TD>
+  <TD>CH<sub>3</sub>CH<sub>2</sub>OH</TD>
+  <TD>0</TD><TD>1</TD><TD>1</TD>
+  <TD>Ethanol</TD>
+  <TD class="num">64175</TD>
+  <TD>(sketch)</TD>
+</TR>
+<TR>
+  <TD>3</TD>
+  <TD><input TYPE="checkbox" NAME="choice" VALUE="64175" CHECKED></TD>
+  <TD>CH<sub>3</sub>CH<sub>2</sub>OH</TD>
+  <TD>0</TD><TD>1</TD><TD>2</TD>
+  <TD>Ethanol</TD>
+  <TD class="num">64175</TD>
+  <TD>(sketch)</TD>
+</TR>
+</table>
+</FORM>
+</BODY>
+</HTML>

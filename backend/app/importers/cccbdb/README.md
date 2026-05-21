@@ -1166,18 +1166,132 @@ The CLI exits `2` on bad config / unparseable queue, `0` otherwise.
 Per-record verdicts land in `manifest.json` under the same key shape
 as the property-snapshot manifest.
 
-### Why species-selection pages are rejected unless unambiguous
+### Species-selection (`choosex.asp`) and selection policies
 
 A formula like `C2H6O` matches multiple isomers (ethanol, dimethyl
-ether). CCCBDB then returns ``choosex.asp`` ("Choose which species")
-instead of a data page. The resolver detects this as
-``species_selection_page`` and rejects the record — picking the
-first row would silently grab the wrong isomer.
+ether). CCCBDB then redirects from ``getformx.asp`` to ``choosex.asp``
+with a list of candidates and a ``<form action="fixchoicex.asp">``
+checkbox table.
 
-A future selection policy could parse `choosex.asp` candidates and
-POST to ``fixchoicex.asp`` only when an unambiguous exact match
-exists on formula + name (or formula + CAS, or formula + InChIKey).
-Today's policy (`SelectionPolicy.REJECT_AMBIGUOUS`) is conservative.
+The resolver supports two policies, selected via
+``--selection-policy``:
+
+| Policy | Behavior |
+|---|---|
+| `reject-ambiguous` (default) | Any ``choosex.asp`` response is rejected without parsing candidates. Manifest records `selection_status="ambiguous_or_no_match"`. |
+| `exact-match` | Parses candidate rows. Selects exactly one only if the queue record matches it unambiguously on `formula+name`, `formula+CAS`, or `formula+InChIKey`. Multiple candidates sharing the same `choice` value (e.g. two conformers of one species under the same CAS) count as a single selection. Otherwise rejects as ambiguous. |
+
+Formula-only matching is NEVER allowed. The first candidate is
+NEVER auto-picked.
+
+#### Acceptable queue-side identity fields
+
+| Match basis | Required fields |
+|---|---|
+| `formula+cas` (strongest) | `formula` + `cas_number` |
+| `formula+name` | `formula` + `name` |
+| `formula+inchikey` | `formula` + `inchikey` *(CCCBDB doesn't surface InChIKey on `choosex.asp` today; supported for forward-compatibility)* |
+
+CAS canonicalization strips hyphens, so `"64-17-5"` and `"64175"`
+both match.
+
+#### Why formula alone is forbidden
+
+Selecting by formula alone would always grab the first candidate
+when CCCBDB serves multiple isomers — silently picking the wrong
+molecule. Phase 7 enforces this at the matcher layer: even with
+`--selection-policy exact-match`, a queue record without a name /
+CAS / InChIKey rejects on every `choosex.asp` page.
+
+#### Structural vs molecular formula handling
+
+CCCBDB's `choosex.asp` candidate column shows the *structural*
+formula (`CH3CH2OH`, `CH3OCH3`), but queue records typically carry
+the *molecular* formula (`C2H6O`, the same string the maintainer
+POSTed to `getformx.asp`). The matcher derives the Hill-system
+molecular formula from each candidate's structural formula
+(`CH3CH2OH` → `C2H6O`) and compares both literal and derived forms
+on both sides. The maintainer can supply either form.
+
+The derivation handles unparenthesized atomic chains only. For
+formulas with parens / charges / dots, the matcher falls back to
+literal string comparison.
+
+#### Example queue records
+
+Distinguish ethanol from dimethyl ether by name:
+
+```json
+{
+  "records": [
+    {
+      "species_key": "ethanol",
+      "formula": "C2H6O",
+      "name": "Ethanol",
+      "target_kind": "atomization_energy",
+      "entry_url": "https://cccbdb.nist.gov/ea1x.asp"
+    },
+    {
+      "species_key": "dimethyl_ether",
+      "formula": "C2H6O",
+      "name": "Dimethyl ether",
+      "target_kind": "atomization_energy",
+      "entry_url": "https://cccbdb.nist.gov/ea1x.asp"
+    }
+  ]
+}
+```
+
+Or by CAS (preferred when names drift between CCCBDB releases):
+
+```json
+{
+  "species_key": "ethanol",
+  "formula": "C2H6O",
+  "cas_number": "64-17-5",
+  "target_kind": "atomization_energy",
+  "entry_url": "https://cccbdb.nist.gov/ea1x.asp"
+}
+```
+
+#### Running with exact-match selection
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_resolve_form_page \
+  --queue-file data/external/cccbdb/form_queue.json \
+  --output-dir data/external/cccbdb \
+  --selection-policy exact-match \
+  --max-pages 3 --sleep-seconds 15
+```
+
+The default remains `--selection-policy reject-ambiguous`. Opting
+into `exact-match` is an explicit choice the maintainer makes when
+they trust the queue's identity fields.
+
+#### Manifest selection metadata
+
+Every record that hit a `choosex.asp` page carries selection
+metadata (whether accepted or rejected):
+
+```json
+{
+  "selection_policy": "exact-match",
+  "selection_status": "selected",
+  "selection_match_basis": "formula+name",
+  "selection_candidate_count": 3,
+  "selected_name": "Ethanol",
+  "selected_cas_number": "64175",
+  "selection_warnings": []
+}
+```
+
+`selection_status` values:
+
+* `selected` — exact match found, fixchoicex.asp POSTed, follow-up
+  page accepted.
+* `ambiguous_or_no_match` — zero matches, multiple distinct-CAS
+  matches, or `reject-ambiguous` policy.
+* `no_candidates` — selection page parsed empty (page-shape drift).
 
 ### Why geometry / vibrations / rotational constants are parsed-only
 
