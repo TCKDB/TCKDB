@@ -1,0 +1,48 @@
+<!--
+  Sanitized fixture: the page served by CCCBDB's getformx.asp form
+  flow after POSTing formula=H2O against the ea1x.asp entry page.
+
+  Live response (May 2026) — observed transport:
+    GET  https://cccbdb.nist.gov/ea1x.asp
+    POST https://cccbdb.nist.gov/getformx.asp
+         body: formula=H2O&SUBMIT1=Submit
+    → 200 https://cccbdb.nist.gov/ea2x.asp
+
+  The result page carries:
+    * <TITLE>CCCBDB experimental atomization energies</TITLE>
+    * <H1>Experimental Atomization Energies</H1>
+    * Units paragraph: "Atomization Energies in kJ mol^-1"
+    * A small 5-column table:
+        Species | Name | 0K | 298K | unc.
+
+  Values are real (CCCBDB Release 22) and used for parser testing.
+-->
+<HTML>
+<HEAD>
+<TITLE>CCCBDB experimental atomization energies</TITLE>
+</HEAD>
+<BODY>
+<table class="noborder">
+<tr><td class="noborder">menu navigation (elided)</td></tr>
+<tr><td class="noborder">
+You are here: <b>Experimental &gt; Energy &gt; Atomization Energy</b>
+</td></tr>
+</table>
+<H1>Experimental Atomization Energies</H1>
+Atomization Energies in kJ mol<sup>-1</sup>
+<BR>
+<A HREF="unitsx.asp">(Change default energy units)</A>
+<table border="1">
+<TR>
+  <TH>Species</TH><TH>Name</TH><TH>0K</TH><TH>298K</TH><TH>unc.</TH>
+</TR>
+<TR>
+  <TD>H<sub>2</sub>O</TD>
+  <TD>Water</TD>
+  <TD class="num">917.8</TD>
+  <TD class="num">927.0</TD>
+  <TD class="num">0.1</TD>
+</TR>
+</table>
+</BODY>
+</HTML>

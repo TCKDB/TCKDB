@@ -1,0 +1,59 @@
+<!--
+  Sanitized fixture: the species-selection page CCCBDB serves when
+  the formula matches multiple isomers. Reproducible against the live
+  site with formula=C2H6O (ethanol vs dimethyl ether).
+
+  Live transport:
+    POST https://cccbdb.nist.gov/getformx.asp body=formula=C2H6O
+    → 200 https://cccbdb.nist.gov/choosex.asp
+
+  Hallmarks the classifier should match:
+    * <TITLE>CCCBDB choose from several molecules</TITLE>
+    * "<H1>Choose which species</H1>" heading
+    * "Choose which species" body text
+    * <FORM ACTION="fixchoicex.asp" METHOD="post">
+
+  The classifier should classify this as ``species_selection_page``
+  and the resolver should REJECT it (cannot safely pick one row
+  without an unambiguous match on formula + name / CAS / InChI).
+-->
+<HTML>
+<HEAD>
+<TITLE>CCCBDB choose from several molecules</TITLE>
+</HEAD>
+<BODY>
+<H1>Choose which species</H1>
+<FORM ACTION="choosex.asp" METHOD=POST id="formc">
+  <INPUT TYPE="submit" VALUE="Clear_All" name="formclear">
+</FORM>
+<FORM ACTION="fixchoicex.asp" METHOD="post" id="form1">
+<input TYPE="submit" VALUE="Choose All" name="submitall">
+<input TYPE="submit" VALUE="Select" name="submitselect">
+<table border="1">
+<TR>
+  <TD COLSPAN=3>Choose which species</td>
+  <td>charge</td><td>state</td><td>config</td>
+  <td>name</td><td>casno</td><td>sketch</td>
+</TR>
+<TR>
+  <TD>1</td>
+  <TD><input TYPE="checkbox" NAME="choice" VALUE="115106" CHECKED></TD>
+  <TD>CH<sub>3</sub>OCH<sub>3</sub></TD>
+  <td>0</td><td>1</td><td>1</td>
+  <TD>Dimethyl ether</TD>
+  <TD class="num">115106</TD>
+  <td>(sketch elided)</td>
+</TR>
+<TR>
+  <TD>2</td>
+  <TD><input TYPE="checkbox" NAME="choice" VALUE="64175" CHECKED></TD>
+  <TD>CH<sub>3</sub>CH<sub>2</sub>OH</TD>
+  <td>0</td><td>1</td><td>1</td>
+  <TD>Ethanol</TD>
+  <TD class="num">64175</TD>
+  <td>(sketch elided)</td>
+</TR>
+</table>
+</FORM>
+</BODY>
+</HTML>

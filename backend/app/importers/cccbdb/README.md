@@ -1089,6 +1089,117 @@ A `workflow_ready=False` target with `parsed_row_count > 0` and
 `quarantined`, not `unhealthy`. Only flip `workflow_ready=True`
 when the builder's emitted payloads are scientifically correct.
 
+## Phase 6 — session-aware form-page resolver
+
+The flat property-table importer cannot reach CCCBDB's form-only
+experimental pages (`ea1x.asp`, `exprot1x.asp`, `expvibs1x.asp`, …).
+Those pages POST to ``getformx.asp`` and require session cookies
+from the entry-page GET to return data. Phase 6 adds a separate,
+conservative resolver to drive that flow programmatically.
+
+### Flat property pages vs form-only pages
+
+| | Flat property table | Form-only experimental page |
+|---|---|---|
+| Example | `diplistx.asp`, `hf0kx.asp`, `quadlistx.asp` | `ea1x.asp`, `exprot1x.asp`, `expvibs1x.asp` |
+| Transport | single GET | GET entry → POST `getformx.asp` (session cookies) |
+| Coverage | many species per page | one (or a chosen) species per request |
+| Handled by | `property_table_ingest.PropertyTableFetcher` | `form_resolver.run_form_resolver_queue` |
+| Throughput | one page = many payloads | one page = one (or zero) payload |
+
+### Why ``getformx.asp`` needs a session-aware resolver
+
+CCCBDB's `<form action="getformx.asp">` carries no `prop=N` argument
+in the POST body — the server reads the requested property from the
+session state established by the GET on the entry page. A blind
+POST against ``getformx.asp`` without an ``ASPSESSIONIDxxx`` cookie
+either redirects to a formula-entry page or hits Cloudflare's
+rate-limit gate. The resolver uses ``requests.Session`` to propagate
+those cookies automatically.
+
+### Creating a tiny form queue
+
+The resolver consumes an explicit JSON queue file — no auto-expansion
+from the catalog. Minimal shape:
+
+```json
+{
+  "records": [
+    {
+      "species_key": "h2o",
+      "formula": "H2O",
+      "name": "Water",
+      "target_kind": "atomization_energy",
+      "entry_url": "https://cccbdb.nist.gov/ea1x.asp"
+    }
+  ]
+}
+```
+
+Required fields: `species_key`, `formula`, `target_kind`,
+`entry_url`. Optional: `name`, `cas_number`, `inchikey`.
+
+### Running the resolver
+
+```bash
+conda run -n tckdb_env python -m scripts.cccbdb_resolve_form_page \
+  --queue-file data/external/cccbdb/form_queue.json \
+  --output-dir data/external/cccbdb \
+  --max-pages 3 \
+  --sleep-seconds 15 \
+  --save-rejected-html
+```
+
+Flags:
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--queue-file` | required | JSON queue (records list) |
+| `--output-dir` | required | Archive root (raw_html/, parsed/, manifest.json) |
+| `--max-pages` | 3 | Hard cap on records resolved per run |
+| `--sleep-seconds` | 15 | Polite delay between POSTs |
+| `--save-rejected-html` | off | Archive rejected pages under `rejected_html/` |
+| `--allow-unknown` | off | Accept pages whose classification is `unknown` (diagnostic use) |
+| `--user-agent` | TCKDB UA | Override the HTTP User-Agent |
+
+The CLI exits `2` on bad config / unparseable queue, `0` otherwise.
+Per-record verdicts land in `manifest.json` under the same key shape
+as the property-snapshot manifest.
+
+### Why species-selection pages are rejected unless unambiguous
+
+A formula like `C2H6O` matches multiple isomers (ethanol, dimethyl
+ether). CCCBDB then returns ``choosex.asp`` ("Choose which species")
+instead of a data page. The resolver detects this as
+``species_selection_page`` and rejects the record — picking the
+first row would silently grab the wrong isomer.
+
+A future selection policy could parse `choosex.asp` candidates and
+POST to ``fixchoicex.asp`` only when an unambiguous exact match
+exists on formula + name (or formula + CAS, or formula + InChIKey).
+Today's policy (`SelectionPolicy.REJECT_AMBIGUOUS`) is conservative.
+
+### Why geometry / vibrations / rotational constants are parsed-only
+
+Phase 6 supports exactly one `target_kind`:
+
+```text
+atomization_energy
+```
+
+The other form-only pages (`exprot1x.asp`, `expvibs1x.asp`,
+`expgeom1x.asp`, …) return multi-row, multi-unit data that does NOT
+fit cleanly into a single `MolecularPropertyObservation` scalar.
+Forcing them would silently produce wrong observations. When their
+schema home arrives (tensor channel for vibrations + rotational
+constants, geometry sub-payload for structural data), each will get
+its own per-target parser in `parsers/form_result.py`.
+
+For now: if the resolver is asked for one of these `target_kind`s
+and the page is accepted, the raw HTML is archived but no
+`parsed/...json` file is written, and the manifest carries a
+`parser_warnings` entry naming the unsupported target.
+
 ### How the experimental-index audit guides future allowlisting
 
 The audit module is the single source of truth for "what's the next

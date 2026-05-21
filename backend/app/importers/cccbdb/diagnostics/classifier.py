@@ -20,6 +20,20 @@ class Classification(str, Enum):
     property_table_page = "property_table_page"
     rate_limit_or_error_page = "rate_limit_or_error_page"
     redirect_landing_page = "redirect_landing_page"
+    # Phase 6: shapes the form-page resolver produces.
+    form_result_data_page = "form_result_data_page"
+    """
+    A page reached via ``getformx.asp`` that carries one
+    species-specific result table (atomization energy, vibrational
+    frequencies, …). The resolver keeps these.
+    """
+    species_selection_page = "species_selection_page"
+    """
+    CCCBDB's ``choosex.asp`` "Choose which species" page, served when
+    the submitted formula matches multiple isomers. The resolver
+    rejects this unless an unambiguous exact-match selector is
+    implemented (see ``form_resolver.SelectionPolicy``).
+    """
     unknown = "unknown"
 
 
@@ -89,6 +103,27 @@ _MOLECULE_DATA_HEADINGS = (
 _REAL_INCHI_RE = re.compile(r"inchi=1s/[\w/\-+,]+", re.IGNORECASE)
 _REAL_INCHIKEY_RE = re.compile(r"\b[A-Z]{14}-[A-Z]{10}-[A-Z]\b")
 _REAL_CAS_NUMBER_RE = re.compile(r"\b\d{2,7}-\d{2}-\d\b")
+
+# Hallmarks of CCCBDB's species-selection page (choosex.asp), served
+# when the submitted formula matches multiple isomers. The resolver
+# rejects these by default.
+_SPECIES_SELECTION_PATTERNS = (
+    "choose which species",
+    "cccbdb choose from several molecules",
+    'action="fixchoicex.asp"',
+    'action = "fixchoicex.asp"',
+    'action="choosex.asp"',
+    'action = "choosex.asp"',
+)
+
+# Hallmarks of form-result data pages (per-species view served via
+# getformx.asp). These vary by property, so we look for the breadcrumb
+# "You are here: Experimental > ..." plus a species-specific heading
+# AND a table — the heading list is intentionally narrow so we only
+# match shapes the parser actually understands.
+_FORM_RESULT_HEADINGS = (
+    "experimental atomization energies",
+)
 
 # Property-table hallmarks (Phase 3a-style cross-species pages).
 _PROPERTY_TABLE_HEADINGS = (
@@ -160,6 +195,35 @@ def classify_html(
                 Classification.property_table_page,
                 "property-table heading/units + populated <table>",
             )
+
+    # 2b) Form-result data page: a per-species result returned via
+    # CCCBDB's getformx.asp flow. The heading list is intentionally
+    # narrow — only shapes the form-result parser supports today
+    # (atomization_energy in Phase 6). The check runs BEFORE
+    # formula-entry detection because the form-result page's menu
+    # sidebar still contains the ``getformx.asp`` anchor that would
+    # otherwise mis-fire the formula-entry classifier.
+    form_result_hit = next(
+        (p for p in _FORM_RESULT_HEADINGS if p in lowered), None
+    )
+    if form_result_hit is not None and "<table" in lowered:
+        return ClassificationResult(
+            Classification.form_result_data_page,
+            f"form-result heading {form_result_hit!r} + <table>",
+        )
+
+    # 2c) Species selection page (choosex.asp): served when the
+    # submitted formula matches multiple isomers. Detected by its
+    # heading + the fixchoicex.asp form action. Same precedence
+    # reason as form-result above.
+    selection_hit = next(
+        (p for p in _SPECIES_SELECTION_PATTERNS if p in lowered), None
+    )
+    if selection_hit is not None:
+        return ClassificationResult(
+            Classification.species_selection_page,
+            f"species-selection signal {selection_hit!r}",
+        )
 
     # 3) Formula-entry page: must outrank molecule-data because the
     # CCCBDB form page carries the deceptive title
