@@ -253,9 +253,30 @@ def make_chem_reaction(
     reactants: list[Species],
     products: list[Species],
     reversible: bool = True,
+    stoichiometry_hash: str | None = None,
 ) -> ChemReaction:
-    """Create a ChemReaction with participants."""
-    reaction = ChemReaction(reversible=reversible)
+    """Create a ChemReaction with participants.
+
+    Populates ``stoichiometry_hash`` from the participants by default
+    (mirroring ``app.services.reaction_resolution``) so the public-ref
+    listener takes the deterministic content-derived path instead of
+    the ``id(obj)`` fallback — that fallback collides when factory
+    instances are garbage collected and Python recycles addresses
+    between successive ``make_chem_reaction`` calls in one test.
+    """
+    if stoichiometry_hash is None:
+        from app.services.reaction_resolution import reaction_stoichiometry_hash
+        from collections import Counter
+
+        stoichiometry_hash = reaction_stoichiometry_hash(
+            reversible=reversible,
+            reactants=dict(Counter(sp.id for sp in reactants)),
+            products=dict(Counter(sp.id for sp in products)),
+        )
+    reaction = ChemReaction(
+        reversible=reversible,
+        stoichiometry_hash=stoichiometry_hash,
+    )
     session.add(reaction)
     session.flush()
 
