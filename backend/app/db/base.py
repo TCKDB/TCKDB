@@ -43,8 +43,10 @@ class PublicRefMixin:
     ref-bearing ORM model adds ``PublicRefMixin`` to its inheritance.
     See ``docs/specs/public_identifier_policy.md``.
 
-    Format: ``{prefix}_{26-char base32 lowercase}`` (≤31 chars). Stored
-    as ``String(40)`` for headroom; ``UNIQUE`` and ``NOT NULL``.
+    Format: ``{prefix}_{26-char base32 lowercase}``. Stored as
+    ``String(40)`` — fits the current prefix registry (longest prefix
+    ``nsolve``/6 chars → 33 total) with headroom for future prefixes.
+    ``UNIQUE`` and ``NOT NULL``.
     """
 
     public_ref: Mapped[str] = mapped_column(

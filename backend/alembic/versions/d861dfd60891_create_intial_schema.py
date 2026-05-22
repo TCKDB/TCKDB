@@ -1665,7 +1665,7 @@ def _add_public_ref_columns_and_indexes() -> None:
         # Strip hyphens and truncate to 26 chars so the placeholder body
         # matches the ORM-generated body length and the whole ref fits
         # inside ``String(40)`` for any prefix in _PUBLIC_REF_TABLES
-        # (longest prefix = 4 chars → 4 + 1 + 26 = 31 chars).
+        # (current longest prefix ``nsolve`` = 6 chars → 6 + 1 + 26 = 33).
         op.add_column(
             table,
             sa.Column(

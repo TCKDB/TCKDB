@@ -98,8 +98,12 @@ _CONTENT_DERIVED: set[str] = {
     "EnergyCorrectionScheme",
 }
 
-# Maximum stored length: longest prefix (4 chars) + underscore + 26 chars body.
-PUBLIC_REF_LEN = 32
+# Maximum stored length. Must match the ``String(length=...)`` of
+# ``PublicRefMixin.public_ref`` and the migration column. Sized for the
+# longest prefix in :data:`PREFIXES` + underscore + 26-char body, with
+# headroom for future prefixes (current longest is ``nsolve`` at 6 chars
+# → 6 + 1 + 26 = 33).
+PUBLIC_REF_LEN = 40
 
 
 # ---------------------------------------------------------------------------
