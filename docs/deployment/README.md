@@ -101,3 +101,4 @@ This is the rule the rest of this directory follows.
 - [DR-0022 — Auth and Roles v1](../decisions/0022-auth-and-roles-v1.md) — auth model used by every deployment
 - [DR-0023 — Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md) — same-schema commitment
 - [Implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md) — milestone tracking
+- [Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md) — operator runbook for `alembic upgrade` on a real database (bootstrap, upgrade, backup, rollback, public-ref backfill)

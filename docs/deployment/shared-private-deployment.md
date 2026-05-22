@@ -308,6 +308,13 @@ There are **three** distinct things to back up:
 3. **Configuration** — `.env`, reverse-proxy config, and any
    institution-specific overrides.
 
+For the operator runbook covering `alembic upgrade head` on a real
+database — pending-revision checks, pre-upgrade `pg_dump`, public-ref
+backfill, rollback expectations, and the operator checklist — see
+[Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md).
+That playbook is the source of truth for any schema upgrade against a
+lab-shared DB.
+
 ### Database
 
 Use `pg_dump`. The output is plain SQL and survives major Postgres

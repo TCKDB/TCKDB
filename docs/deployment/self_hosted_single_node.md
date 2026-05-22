@@ -490,7 +490,12 @@ sudo -u tckdb $EDITOR .env.selfhosted        # fill in every change-me-* value
 # 1. Bring up the data plane
 docker compose --env-file .env.selfhosted up -d db minio
 
-# 2. Run migrations
+# 2. Run migrations.
+#    For first bootstrap of an empty DB this is straightforward.
+#    For upgrades against a DB that already holds data, follow the
+#    operator runbook in
+#    backend/docs/deployment/migrations.md (pg_dump first, read
+#    revision docstrings, upgrade, smoke-test).
 cd backend
 DB_NAME=$(grep ^DB_NAME ../.env.selfhosted | cut -d= -f2) \
 DB_USER=$(grep ^DB_USER ../.env.selfhosted | cut -d= -f2) \
