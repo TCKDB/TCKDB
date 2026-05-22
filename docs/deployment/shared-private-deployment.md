@@ -19,6 +19,11 @@ This is a deployment-guidance document. It does **not** ship new
 runtime code, container images, or installer automation. See
 [Non-goals](#non-goals).
 
+> **Before you expose the deployment:** confirm every row of the
+> [Production checklist](production_checklist.md) is satisfied. That
+> page is the canonical list of env vars and pre-flight checks for
+> hosted / shared / public deployments.
+
 ---
 
 ## Where this scenario fits

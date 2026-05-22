@@ -42,6 +42,12 @@ application, same schema, same auth model — what changes is the
 > The backend code is the same code the rest of the deployment
 > scenarios run.
 
+> **Before you expose the deployment:** confirm every row of the
+> [Production checklist](production_checklist.md) is satisfied. The
+> `.env.selfhosted.example` referenced above already encodes every
+> required value; the checklist is the page you use to verify it on
+> the actual deploy.
+
 ---
 
 ## Where this scenario fits

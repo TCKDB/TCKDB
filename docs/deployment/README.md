@@ -97,6 +97,7 @@ This is the rule the rest of this directory follows.
 
 ## See also
 
+- [Production checklist](production_checklist.md) — the canonical list of env vars and pre-flight checks that must hold before any hosted / shared / public deployment is exposed
 - [Generic client targeting](../clients/generic-client-targeting.md) — the canonical `base_url` + `api_key` client model
 - [DR-0022 — Auth and Roles v1](../decisions/0022-auth-and-roles-v1.md) — auth model used by every deployment
 - [DR-0023 — Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md) — same-schema commitment
