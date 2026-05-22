@@ -31,6 +31,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.routes.scientific import (
+    artifacts,
     calculation_paths,
     calculations,
     conformers,
@@ -81,5 +82,6 @@ scientific_router.include_router(networks.kinetics_router)
 scientific_router.include_router(literature.router)
 scientific_router.include_router(corrections.fsf_router)
 scientific_router.include_router(corrections.ecs_router)
+scientific_router.include_router(artifacts.router)
 
 __all__ = ["scientific_router"]

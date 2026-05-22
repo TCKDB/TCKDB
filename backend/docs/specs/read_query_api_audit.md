@@ -65,7 +65,7 @@ the exact mounted paths (verified against
 | Applied energy-correction reads | Partial | inverse links to `applied_energy_correction` rows surface through the FSF / ECS `include=used_by` blocks; no standalone `applied_energy_correction` detail endpoint yet |
 | Bulk export | Missing | no CSV/JSONL/Parquet bulk endpoint |
 | RDKit substructure / similarity search | Missing | the `mol` column type is in place; no endpoint uses it for substructure or similarity |
-| Standalone artifact search | Partial | exposed via calculation `include=artifacts` + reaction-full grouped artifacts; no `/scientific/artifacts/search` |
+| Standalone artifact search | **Implemented (metadata-only)** | `GET\|POST /scientific/artifacts/search`. Artifact body download remains out of scope for the scientific read surface. See `scientific_artifact_reads.md`. |
 | Curator review queue per-record | Partial | the existing `/record-reviews` listing is record-grain; no curator-oriented "to-be-reviewed" surface beyond the submission-grained `/submissions/for-review` |
 | Unified record provenance projection | Partial | reaction-entry `/full` is the only composite provenance read; no `/scientific/records/{type}/{id}/provenance` generic surface |
 
@@ -87,7 +87,7 @@ priority list).
 | `/scientific/networks/*` | **closed for v0** | Network detail + search, `network-solves` detail + search, and `network-kinetics` detail + search have all shipped. Model-specific payloads (Chebyshev coefficient matrix, PLOG rows, point-tabulated triples) live behind explicit include tokens; point payload capped at the public limit. Open follow-ups: channel-grain query (needs `network_channel.public_ref`) and paginated point retrieval. See `scientific_network_reads.md` §11. |
 | Literature-centered query | **closed for v0** | `GET /scientific/literature/{ref_or_id}` + `GET /scientific/literature/{ref_or_id}/records` ship. Records endpoint flattens direct-link record types (`calculation`, `thermo`, `kinetics`, `statmech`, `transport`, `network`, `network_solve`) into a paginated public-ref list with review visibility and a `record_type` filter. Standalone literature search endpoint deferred. See `scientific_literature_reads.md`. |
 | Substructure / similarity search using RDKit cartridge | **still open** | The `mol` column type is in place on `species` / `transition_state_entry`; no endpoint uses it. |
-| Artifact search/download | **partially closed** | Metadata is exposed via calculation `include=artifacts` and reaction-full grouped artifacts. No standalone `/scientific/artifacts/search` and no body-fetch endpoint in the scientific surface. |
+| Artifact search/download | **partially closed (metadata-only)** | `GET\|POST /scientific/artifacts/search` ships as a metadata-only surface (filters by `artifact_kind`, `filename`/`filename_contains`, `sha256`, `has_sha256`/`has_bytes`, `bytes_min`/`bytes_max`, owning calc / LoT / software / workflow context, owner species/TS entry, conformer observation, and time range). Artifact body fetch remains out of scope for the scientific read surface. See `scientific_artifact_reads.md`. |
 | Applied-correction / scale-factor search by chemistry context | **still open** | `frequency_scale_factor` is surfaced *embedded* under statmech `include=frequencies` (via the scale factor pointer) but has no standalone `/scientific/frequency-scale-factors/*` surface. `applied_energy_correction` has no scientific read surface at all. |
 | `/scientific/records/{type}/{id}/provenance` unified projection | **still open** | Reaction-entry `/full` is the only composite. A generic provenance endpoint that works for any record type was not built. |
 | Bulk export endpoint | **still open** | No CSV/JSONL/Parquet bulk endpoint. |
@@ -115,6 +115,9 @@ Verified against `backend/app/api/routes/scientific/__init__.py` on
 - `GET /calculations/{ref_or_id}/scan` — full-data scan endpoint, paginates point array.
 - `GET /calculations/{ref_or_id}/irc` — full-data IRC endpoint, paginates point array.
 - `GET /calculations/{ref_or_id}/path-search` — full-data path-search endpoint, paginates point array.
+
+**Artifacts**
+- `GET\|POST /artifacts/search` — standalone artifact metadata search. Filters on artifact attributes (`artifact_kind`, `filename`/`filename_contains`, `sha256`, `has_sha256`/`has_bytes`, `bytes_min`/`bytes_max`, `created_after`/`before`) and owning-calculation provenance (`calculation_ref`, `calculation_type`, `quality`, `method`, `basis`, `software`/`version`, `workflow_tool`/`version`, `species_entry_ref`, `transition_state_entry_ref`, `conformer_observation_ref`). Metadata only — no body bytes, no presigned download URLs. See `scientific_artifact_reads.md`.
 
 **Transition states**
 - `GET /transition-states/{ref_or_id}` — TS-concept detail (`include=entries`, `include=calculations`, `include=geometries`, `include=review`, `include=all`).
