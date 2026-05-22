@@ -72,16 +72,19 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         BigInteger,
         ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+        index=True,
     )
     transition_state_entry_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("transition_state_entry.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+        index=True,
     )
 
     software_release_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("software_release.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+        index=True,
     )
     workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("workflow_tool_release.id", deferrable=True, initially="IMMEDIATE"),
@@ -90,11 +93,13 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     lot_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("level_of_theory.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+        index=True,
     )
 
     literature_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("literature.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+        index=True,
     )
 
     conformer_observation_id: Mapped[Optional[int]] = mapped_column(
@@ -103,6 +108,7 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
             "conformer_observation.id", deferrable=True, initially="IMMEDIATE"
         ),
         nullable=True,
+        index=True,
         doc="Optional anchor to the specific conformer observation this calculation belongs to.",
     )
 
