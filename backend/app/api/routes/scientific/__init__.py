@@ -46,6 +46,7 @@ from app.api.routes.scientific import (
     species,
     species_calculations_search,
     statmech,
+    structure,
     thermo,
     thermo_search,
     transition_states,
@@ -53,6 +54,11 @@ from app.api.routes.scientific import (
 )
 
 scientific_router = APIRouter()
+# Register the RDKit-backed structure search router before the
+# identity-search router so that /species/structure-search resolves
+# before any future generic /species/{handle} catch-all that might be
+# added under the species namespace.
+scientific_router.include_router(structure.router)
 scientific_router.include_router(species.router)
 scientific_router.include_router(reactions.router)
 scientific_router.include_router(kinetics.router)

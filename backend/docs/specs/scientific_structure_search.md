@@ -1,0 +1,374 @@
+# Scientific Structure Search (RDKit Cartridge)
+
+**Original spec date:** 2026-05-22
+**Status:** Implemented (v0)
+**Scope:** Public chemistry-structure search over species entries,
+backed by the PostgreSQL RDKit cartridge.
+
+This is the first read endpoint to lean on the RDKit cartridge for
+matching, rather than equality / range filters over scalar columns.
+It is deliberately discovery-oriented: callers find species entries by
+structural query and chain to the existing per-entry detail endpoints
+for the heavy scientific payloads.
+
+---
+
+## Purpose
+
+Let API consumers ask three structural questions about species in
+TCKDB:
+
+1. **Substructure** — "Which species entries contain this fragment?"
+2. **Similarity** — "Which species entries are chemically similar to
+   this query?"
+3. **Exact** — "Which species entries are this exact molecule?"
+
+The endpoint does not duplicate the identity-search surface on
+`/scientific/species/search` (which AND-combines equality filters over
+SMILES / InChIKey / formula / charge / multiplicity). Use this endpoint
+when the query is a structural pattern, not a literal identity tuple.
+
+---
+
+## Endpoint list
+
+| Method | Path | Notes |
+|---|---|---|
+| GET  | `/api/v1/scientific/species/structure-search` | Query-string form |
+| POST | `/api/v1/scientific/species/structure-search` | JSON-body form |
+
+The endpoint lives under the `/species` prefix so it sits beside
+`/species/search` as a discovery surface over the same grain. Both
+forms share the same service implementation (`search_species_by_structure`)
+and return the same response envelope.
+
+---
+
+## Search grain
+
+Records are returned at **`species_entry`** grain.
+
+Rationale:
+
+- `species_entry` is the curation/provenance-bearing record surfaced
+  throughout the rest of the scientific read API. Returning entries (not
+  bare `species`) lets callers see review state and chain into the
+  existing entry-grain detail endpoints.
+- Matching is computed on `species.smiles` (the parent species' identity
+  SMILES) since that is the column populated for every row in the
+  database today. The result still surfaces at `species_entry` grain so
+  each entry's per-record review badge is included.
+
+For substructure / similarity queries, every entry under a matching
+parent species is returned. Callers who want one-record-per-species
+should consume `/species/search` instead.
+
+---
+
+## Query input
+
+The request accepts exactly one of these query fields:
+
+| Field | Substructure | Similarity | Exact |
+|---|---|---|---|
+| `query_smiles`     | yes | yes | yes |
+| `query_smarts`     | yes | no  | no  |
+| `query_inchi`      | no  | yes | yes |
+| `query_inchi_key`  | no  | no  | yes |
+
+If zero query fields are supplied, the response is `422
+missing_structure_query`. If more than one is supplied, the response is
+`422 multiple_structure_queries`. A mode / query-field mismatch (e.g.
+`mode=similarity` with `query_smarts`) is `422 invalid_structure_query`.
+
+RDKit parses every structure query before it reaches the cartridge:
+
+- `query_smiles` and `query_inchi` are canonicalized to canonical
+  SMILES via `Chem.MolToSmiles(Chem.MolFromSmiles(...))` /
+  `Chem.MolFromInchi(...)`.
+- `query_smarts` is parsed with `Chem.MolFromSmarts` to surface a 422
+  before the SQL runs; the original text is passed to
+  `qmol_from_smarts()` server-side.
+- `query_inchi_key` is taken verbatim for the exact-match lookup. For
+  exact mode supplied as SMILES or InChI, the InChIKey is computed
+  client-side via `rdkit.Chem.inchi.MolToInchiKey`.
+
+A parse failure at any step is `422 invalid_structure_query`.
+
+### Mode-specific knobs
+
+- `mode` defaults to `substructure`.
+- `similarity_threshold` is accepted only in similarity mode; the
+  default (and echoed value when omitted) is **0.5**. Range
+  `[0.0, 1.0]` enforced by the request schema.
+- Sort vocabulary is v0-frozen; supplying `sort=` yields `422
+  client_sort_not_supported`. The per-mode default deterministic sort
+  always applies.
+
+---
+
+## Substructure semantics
+
+For substructure mode the SQL is shaped as:
+
+```sql
+SELECT se.id, sp.id
+FROM species_entry se
+JOIN species sp ON sp.id = se.species_id
+WHERE mol_from_smiles(sp.smiles) IS NOT NULL
+  AND mol_from_smiles(sp.smiles) @> <query_mol>
+```
+
+`<query_mol>` is `qmol_from_smarts(:q)` for a SMARTS query or
+`mol_from_smiles(:q)` for a SMILES query (after canonicalization on the
+Python side). All matching is computed database-side — there is no
+Python-side iteration over species.
+
+The `IS NOT NULL` guard ensures species rows whose SMILES happens to be
+unparseable by the cartridge are skipped silently rather than raising.
+
+---
+
+## Similarity semantics
+
+Similarity uses the cartridge's Tanimoto coefficient over Morgan-bit
+fingerprints:
+
+```sql
+tanimoto_sml(
+  morganbv_fp(mol_from_smiles(sp.smiles)),
+  morganbv_fp(mol_from_smiles(:q))
+) AS similarity_score
+```
+
+The threshold filter is applied database-side as `>= :threshold`. The
+returned `similarity_score` is a `float`, surfaced on every similarity
+record so callers can rank or filter further client-side.
+
+Default sort:
+
+1. `similarity_score DESC`
+2. `review_rank ASC`
+3. `species_entry_id DESC`
+
+---
+
+## Exact-match semantics
+
+Exact mode normalizes the query to a canonical InChIKey on the Python
+side (via RDKit) and looks up the indexed `species.inchi_key` column
+directly:
+
+```sql
+WHERE sp.inchi_key = :computed_inchi_key
+```
+
+Why InChIKey:
+
+- `species.inchi_key` is uniquely constrained and indexed, so this is
+  the fastest exact-match available without a cartridge call.
+- It is the single canonical identity that survives stereochemistry and
+  SMILES-aliasing ambiguity, so "exact" has an unambiguous meaning even
+  when callers supply a SMILES variant.
+
+SMARTS is rejected for exact mode (`422 invalid_structure_query`); a
+SMARTS pattern is by definition not a literal identity.
+
+---
+
+## Response shape
+
+```json
+{
+  "request": { "filter": {...}, "mode": "...", "sort": "...", "include": [...] },
+  "review_summary": { "approved": 0, ... },
+  "records": [
+    {
+      "species_ref": "spec_...",
+      "species_id": 17,
+      "species_entry_ref": "se_...",
+      "species_entry_id": 42,
+      "smiles": "CCO",
+      "inchi_key": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
+      "charge": 0,
+      "multiplicity": 1,
+      "species_entry_kind": "minimum",
+      "electronic_state_kind": "ground",
+      "match": {
+        "mode": "similarity",
+        "similarity_score": 0.83,
+        "matched_query": "CCO",
+        "matched_query_kind": "smiles"
+      },
+      "review": { "status": "not_reviewed", ... },
+      "endpoint": "/api/v1/scientific/species-entries/se_..."
+    }
+  ],
+  "pagination": { "offset": 0, "limit": 50, "returned": 1, "total": 1 }
+}
+```
+
+`endpoint` is a convenience deep-link to the matching species entry's
+canonical detail URL — useful for UI consumers building structure-search
+result lists.
+
+---
+
+## include behavior
+
+Legal `include=` tokens (v0):
+
+- `review`
+- `internal_ids`
+- `all`
+
+`include=all` expands to `review` only — it never auto-includes
+`internal_ids`. The internal-ID opt-in must be supplied explicitly
+(`include=all,internal_ids`) **and** the deployment must allow it
+(`settings.allow_public_internal_ids`).
+
+The structure-search endpoint is deliberately discovery-shaped: heavy
+scientific projections (thermo / kinetics / statmech / transport /
+conformers) are out of scope here. Callers chain via
+`species_entry_ref` to the existing per-entry detail endpoints when
+they want those payloads. This keeps response sizes bounded for the
+search use case, where dozens of hits per query are typical.
+
+---
+
+## Review / trust behavior
+
+The default-trust posture matches the rest of the scientific read API:
+
+- `rejected` and `deprecated` entries are hidden by default.
+- `include_rejected=true` / `include_deprecated=true` restore them.
+- Each record carries a compact `review` badge.
+- `review_summary` counts the candidate set **before** pagination.
+
+Restored rejected / deprecated entries sort after their better-reviewed
+peers because `review_rank` is the first (substructure / exact) or
+second (similarity) tie-breaker in the default sort.
+
+---
+
+## Internal-ID behavior
+
+Internal integer IDs (`species_id`, `species_entry_id`) are stripped
+from the response by default. The Phase D internal-ID policy applies
+unchanged:
+
+- Refs (`species_ref`, `species_entry_ref`) are always visible.
+- IDs return only when `include=internal_ids` is set **and** the
+  deployment's `allow_public_internal_ids` setting is on.
+
+---
+
+## Performance / index requirements
+
+The v0 implementation computes the cartridge molecule object inline as
+`mol_from_smiles(sp.smiles)` at query time. This works against the
+existing schema without any additional columns or indexes, and uses
+the indexed `species.inchi_key` column for exact-mode lookups.
+
+The natural performance upgrade — once the species table grows beyond
+the v0 working-dataset size — is to materialize the cartridge molecule
+into the existing `species_entry.mol` column and add a GIST index:
+
+```sql
+CREATE INDEX ix_species_entry_mol_gist
+ON species_entry USING gist (mol);
+```
+
+The endpoint would then prefer the indexed column when populated and
+fall back to `mol_from_smiles(sp.smiles)` otherwise. This is a
+straightforward forward-compatible change; the existing endpoint
+signature does not need to move.
+
+Similarity mode benefits separately from a fingerprint-cache column
+plus its own GIST index — also a forward-compatible extension.
+
+Both are deferred for v0; the public surface ships first, and indexing
+work follows when query volume justifies it.
+
+---
+
+## Payload safety
+
+The response intentionally exposes only identity-level fields. Forbidden
+keys that would betray a heavier payload — `mol`, `molblock`,
+`rdkit_binary`, `geometry`, `coordinates`, `coords`, `xyz_text`,
+`atoms`, `body`, `content`, `data` — are absent at every level of the
+response tree, verified by a recursive payload-safety test
+(`test_payload_does_not_leak_forbidden_keys`).
+
+Artifact bodies, geometry coordinates, and per-conformer details are
+all unavailable through this endpoint — chain to the appropriate
+detail / artifact / geometry endpoint if those are required.
+
+---
+
+## Non-goals (v0)
+
+- **Reaction substructure search.** Reactions are matched by
+  participant species, which would require a separate aggregation pass.
+- **Retrosynthesis / reaction-template search.**
+- **Drawn-molecule / image-based search.**
+- **3D / geometry similarity** (RMSD, shape descriptors).
+- **Conformer shape similarity.**
+- **Bulk export.**
+- **Artifact body download.**
+- **Schema redesign beyond the documented GIST-index follow-up.**
+- **ARC changes.**
+- **`tckdb-client` changes.**
+
+---
+
+## Implementation status
+
+Implemented and shipped on `main` as of 2026-05-22.
+
+Files:
+
+- `backend/app/api/routes/scientific/structure.py` — GET / POST routes
+- `backend/app/services/scientific_read/structure_search.py` — service
+- `backend/app/schemas/reads/scientific_structure_search.py` — schemas
+- `backend/tests/api/scientific/test_api_scientific_structure_search.py`
+  — API tests (31 cases)
+
+The router is registered before the species identity-search router in
+`backend/app/api/routes/scientific/__init__.py` so that future generic
+catch-all routes on the `/species/{handle}` segment cannot shadow
+`/species/structure-search`.
+
+---
+
+## Test plan
+
+Covered by the API test module:
+
+- Input validation: missing query, multiple queries, invalid SMILES,
+  invalid SMARTS, mode-specific rejection of incompatible query fields,
+  client sort rejection, unknown include token.
+- Substructure: SMARTS match, SMILES match, non-match.
+- Similarity: self-match score, threshold filter, score-ordering, default
+  threshold echoed.
+- Exact: InChIKey match, SMILES match.
+- Trust: default hides rejected, `include_rejected` restores them at the
+  end of the result.
+- Pagination envelope and deterministic ordering.
+- GET / POST parity; POST rejects query-string filters.
+- Include: `review`, `all`, `all` + `internal_ids` policy gate (off and on).
+- Payload safety: recursive walk for forbidden keys.
+
+---
+
+## Open questions
+
+- **GIST-indexed `species_entry.mol`.** When does query volume justify
+  the index? Best monitored once the public surface ships and the
+  cartridge query runtime is observable.
+- **Reaction substructure search.** Likely a v1 ask — design hinges on
+  how participant-level structural matches roll up to a reaction-level
+  hit. Out of scope here.
+- **Pre-computed fingerprint column for similarity.** Same trade-off as
+  the GIST index; defer until observed runtime warrants it.
