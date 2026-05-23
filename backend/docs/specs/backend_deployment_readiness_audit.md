@@ -48,7 +48,7 @@ Legacy entity routes (`/api/v1/{thermo,kinetics,geometries,...}`) are guarded by
 | API-key model | A− | SHA-256 hashed, session-bootstrapped, no per-key scope |
 | Authorization (admin / curator / review) | A | Role enum + dependency guards consistently applied |
 | Public read safety (pagination, internal IDs, status filters) | A | Hard cap 200; `include=all` fan-out guarded; `internal_ids` dual-gated |
-| OpenAPI surface | B | Tags + response models present; no frozen golden snapshot; sparse field-level docs |
+| OpenAPI surface | A- | Tags + response models present; full schema frozen via golden snapshot (`tests/api/test_openapi_snapshot.py`); sparse field-level docs remain a P2 |
 | Response/error envelope consistency | A | Unified shape across search endpoints; no PK/FK leaks in `detail` |
 | Rate limiting | B | Per-bucket + IP + path classification, but **in-process store** — partitions per worker |
 | DB schema invariants & constraint coverage | B+ | Cascades sometimes app-only; a few should-be-NOT-NULL columns on `network` |
@@ -89,7 +89,7 @@ The following must be addressed before broad public exposure. None block a close
 | P1-5 | No JSON / structured logs | (config) | Switch to a JSON log handler for the hosted profile. |
 | P1-6 | `Network.name` is nullable; no unique constraint on provenance tuple | [backend/app/db/models/network.py:28](backend/app/db/models/network.py#L28) | Make name NOT NULL or add `(literature_id, name)` unique constraint to prevent silent dupes. |
 | P1-7 | FK `ON DELETE` defaults to `RESTRICT` at DB level even where ORM cascades `delete-orphan`; deletion paths must orphan-delete carefully | [backend/alembic/versions/d861dfd60891_create_intial_schema.py](backend/alembic/versions/d861dfd60891_create_intial_schema.py) | Audit code paths that delete `Species` / `Calculation` / `ConformerObservation`; align DB-level ON DELETE rules with intended ORM semantics. |
-| P1-8 | OpenAPI has no frozen golden snapshot — only path-presence tests | [backend/tests/api/scientific/test_api_openapi.py](backend/tests/api/scientific/test_api_openapi.py) | Add a snapshot test on `/openapi.json` so field renames / response-shape regressions fail loudly. |
+| P1-8 ✅ addressed | OpenAPI has no frozen golden snapshot — only path-presence tests | [backend/tests/api/scientific/test_api_openapi.py](backend/tests/api/scientific/test_api_openapi.py) | **Done.** [backend/tests/api/test_openapi_snapshot.py](backend/tests/api/test_openapi_snapshot.py) freezes the full normalized `/openapi.json` in [backend/tests/api/golden/openapi.json](backend/tests/api/golden/openapi.json). Regenerate intentionally with `UPDATE_OPENAPI_GOLDEN=1 pytest tests/api/test_openapi_snapshot.py`. Review the diff. |
 | P1-9 | Chebyshev / PLOG coefficient payload has no explicit truncation cap | [backend/app/services/scientific_read/network_kinetics.py:396-399](backend/app/services/scientific_read/network_kinetics.py#L396-L399) | Cap by `np.prod(shape)` or coefficient count and surface a truncation flag. |
 
 ---
@@ -240,7 +240,7 @@ Classification scheme:
 - Test factories use a process-global `_INCHI_COUNTER` ([_factories.py:98-106](backend/tests/services/scientific_read/_factories.py#L98-L106)). Never reset between sessions. Tests partition the key space with distinct prefixes (`AKR`, `MR1`, …), but parallelization (`pytest-xdist`) would need a worker-aware counter — flag for CI.
 
 **Missing**:
-- No frozen OpenAPI golden snapshot (P1-8).
+- ~~No frozen OpenAPI golden snapshot (P1-8).~~ Addressed — see `tests/api/test_openapi_snapshot.py` + `tests/api/golden/openapi.json`.
 - No explicit response-level test for `apply_internal_ids_visibility` end-to-end (P3 — covered indirectly via integration).
 
 ---
@@ -256,7 +256,7 @@ Classification scheme:
 - Public-ref column type is `String(40)` with stable prefix scheme — safe for client parsing.
 
 **Gaps**:
-- **P1-8**: No frozen golden `/openapi.json` snapshot. Path-presence tests exist but won't catch field renames or response-shape drift.
+- **P1-8** ✅ addressed: Golden `/openapi.json` snapshot frozen at `tests/api/golden/openapi.json`; drift is caught by `tests/api/test_openapi_snapshot.py`. Update intentionally with `UPDATE_OPENAPI_GOLDEN=1`.
 - **P2**: Search request schemas don't set `model_config = ConfigDict(extra="forbid")`. Unknown POST body fields are silently ignored (Pydantic v2 default). Route-level query-string guard catches the common confusion, but defense in depth would harden this.
 - **P2**: Sparse field-level `Field(description=...)` / `examples=` on response schemas — Swagger UI experience is functional but not informative.
 
@@ -271,7 +271,7 @@ Ordered by impact-per-effort, drawing from the P0/P1 list:
 3. **Hot-path FK indexes on `calculation` (P1-2)** — half-day. Add `index=True` to `lot_id`, `software_release_id`, `conformer_observation_id`, `species_entry_id`, `transition_state_entry_id`, `literature_id`. Fold into the right migration (depends on outcome of #1).
 4. **Readiness + observability minimum (P0-4, P1-4, P1-5)** — one day. `/readyz`, request-ID middleware, JSON logs. These are the smallest single change that makes the deployment actually operable under traffic.
 5. **Stored mol column + GiST index for structure search (P1-3)** — one to two days. Add a populated `mol` column on `species_entry`, GiST index, backfill, and migrate `structure_search.py` to use the indexed column. Needed before public exposure if catalog grows past ~50k species; ahead of that it's a perf improvement, not a blocker.
-6. **OpenAPI golden snapshot (P1-8)** — quick. Prevents accidental client-breaking schema drift.
+6. ~~**OpenAPI golden snapshot (P1-8)** — quick. Prevents accidental client-breaking schema drift.~~ ✅ Done — see `tests/api/test_openapi_snapshot.py`.
 7. **Rate-limit Redis backend (P1-1)** — only when scaling past one worker. Until then, the in-process store is honest.
 8. **Sentry integration (P2)** — defer until first real user traffic; integrate before public launch.
 
@@ -283,7 +283,7 @@ Ordered by impact-per-effort, drawing from the P0/P1 list:
 | Standalone bulk export endpoint | **Defer** — no real consumer demand yet; pagination + client looping suffices. Add only when a downstream pipeline asks. |
 | Artifact URI exposure policy | **Already correct** — documented design; URIs are storage keys, not signed URLs. Reaffirm in deploy docs; no code change. |
 | Migration strategy cleanup for deployed DB | **Yes** — P0-2/P0-3, top priority. |
-| OpenAPI contract freeze | **Yes** — P1-8, cheap and high-value. |
+| OpenAPI contract freeze | ✅ Done — P1-8, see `tests/api/test_openapi_snapshot.py`. |
 | Rate-limit budget review | **Partial** — cost-weighted buckets for structure-search / `include=all` would help; full Redis migration only at scale (P1-1). |
 | Backup/restore deployment docs | **Already mostly there** — extend with a shipped `pg_dump` cron template. |
 | Health/readiness endpoint hardening | **Yes** — P0-4, immediate. |

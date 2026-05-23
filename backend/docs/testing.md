@@ -168,6 +168,39 @@ then, treat `make test-profile` output as informational.
 - The CI configuration (TBD) should run Tier 4. Local Tier 4 is the
   pre-push insurance.
 
+## OpenAPI golden snapshot
+
+[`tests/api/test_openapi_snapshot.py`](../tests/api/test_openapi_snapshot.py)
+freezes the full normalized `/openapi.json` schema in a golden file at
+[`tests/api/golden/openapi.json`](../tests/api/golden/openapi.json).
+Any change to a path, request/response schema, parameter, enum, or
+operation id surfaces as a diff against the golden file — accidental
+contract drift fails the test loudly, intentional changes show up
+field-level in the PR diff.
+
+The existing path-presence checks in
+[`tests/api/scientific/test_api_openapi.py`](../tests/api/scientific/test_api_openapi.py)
+only verify that a handful of routes exist; they cannot catch field
+renames, response-shape changes, or enum-value drift on routes that
+*are* present. The snapshot closes that gap.
+
+**Update workflow.** When you have intentionally changed a route or
+schema, regenerate the golden:
+
+```bash
+UPDATE_OPENAPI_GOLDEN=1 conda run -n tckdb_env pytest \
+    tests/api/test_openapi_snapshot.py
+```
+
+Then `git diff tests/api/golden/openapi.json` and review every
+changed line in the PR. The diff is the contract change — treat it
+as part of the review surface, not as boilerplate to wave through.
+
+**Normalization.** The helper sorts dict keys recursively and dumps
+with `indent=2`, `sort_keys=True`, and a trailing newline. Arrays
+are intentionally left in generation order — `required`, `allOf` /
+`oneOf`, `enum`, and path parameter lists all have semantic order.
+
 ## Pytest markers (follow-up, not in this slice)
 
 The repo currently uses only standard pytest markers (`skipif`,
