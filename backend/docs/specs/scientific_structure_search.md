@@ -265,30 +265,44 @@ unchanged:
 
 ## Performance / index requirements
 
-The v0 implementation computes the cartridge molecule object inline as
-`mol_from_smiles(sp.smiles)` at query time. This works against the
-existing schema without any additional columns or indexes, and uses
-the indexed `species.inchi_key` column for exact-mode lookups.
-
-The natural performance upgrade — once the species table grows beyond
-the v0 working-dataset size — is to materialize the cartridge molecule
-into the existing `species_entry.mol` column and add a GIST index:
+Substructure and similarity queries read from the materialized
+`species_entry.mol` cartridge column. The write path
+(`app/services/species_resolution.py`) canonicalizes the parent
+species's SMILES into `mol` at insert time, and Alembic migration
+`d4e5f6a7b8c9_add_species_entry_mol_gist_index` adds a GiST index on
+the column and backfills any pre-existing NULL rows:
 
 ```sql
 CREATE INDEX ix_species_entry_mol_gist
 ON species_entry USING gist (mol);
 ```
 
-The endpoint would then prefer the indexed column when populated and
-fall back to `mol_from_smiles(sp.smiles)` otherwise. This is a
-straightforward forward-compatible change; the existing endpoint
-signature does not need to move.
+The service issues:
 
-Similarity mode benefits separately from a fingerprint-cache column
-plus its own GIST index — also a forward-compatible extension.
+```text
+… WHERE se.mol IS NOT NULL AND se.mol @> mol_from_smiles(:query_text)
+```
 
-Both are deferred for v0; the public surface ships first, and indexing
-work follows when query volume justifies it.
+so the GiST index drives the scan. Rows whose `mol` is NULL (for
+example, SMILES the cartridge could not parse) are excluded from
+match results — adding a per-row `mol_from_smiles(sp.smiles)`
+fallback would force a seq-scan and silently defeat the index. A
+guard test (`test_structure_search_uses_stored_mol_column_not_inline_conversion`)
+fails if the inline-conversion pattern reappears in the cartridge
+SQL builders.
+
+Exact mode keeps the indexed `species.inchi_key` lookup path — it
+does not touch the cartridge.
+
+**Deferred follow-ups:**
+
+- Pre-computed Morgan fingerprint column for similarity, plus its
+  own GiST index. The query currently materializes
+  `morganbv_fp(se.mol)` per row; for a busy workload, storing the
+  fingerprint and indexing it would be the next refinement.
+- Bulk reindex / `VACUUM ANALYZE` runbook for the
+  `ix_species_entry_mol_gist` index once query volume warrants
+  re-profiling.
 
 ---
 
@@ -317,7 +331,7 @@ detail / artifact / geometry endpoint if those are required.
 - **Conformer shape similarity.**
 - **Bulk export.**
 - **Artifact body download.**
-- **Schema redesign beyond the documented GIST-index follow-up.**
+- **Schema redesign beyond the shipped GIST-index migration.**
 - **ARC changes.**
 - **`tckdb-client` changes.**
 
@@ -364,11 +378,10 @@ Covered by the API test module:
 
 ## Open questions
 
-- **GIST-indexed `species_entry.mol`.** When does query volume justify
-  the index? Best monitored once the public surface ships and the
-  cartridge query runtime is observable.
 - **Reaction substructure search.** Likely a v1 ask — design hinges on
   how participant-level structural matches roll up to a reaction-level
   hit. Out of scope here.
-- **Pre-computed fingerprint column for similarity.** Same trade-off as
-  the GIST index; defer until observed runtime warrants it.
+- **Pre-computed fingerprint column for similarity.** The substructure
+  GiST index is shipped (P1-3); a separate fingerprint-cache column
+  with its own GiST opclass is the natural next step once similarity
+  query volume justifies the extra storage. Defer until observed.

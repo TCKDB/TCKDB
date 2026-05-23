@@ -136,11 +136,31 @@ def make_species_entry(
     kind: StationaryPointKind = StationaryPointKind.minimum,
     electronic_state_kind: SpeciesEntryStateKind = SpeciesEntryStateKind.ground,
 ) -> SpeciesEntry:
-    """Create a SpeciesEntry row attached to a Species."""
+    """Create a SpeciesEntry row attached to a Species.
+
+    Populates the RDKit cartridge ``mol`` column from the parent
+    species's SMILES so structure-search tests exercise the same
+    indexed path as production (the real resolver does the same on
+    insert via :mod:`app.services.species_resolution`).
+
+    Some tests use placeholder SMILES (e.g. ``"C1"``) that the
+    cartridge cannot parse; for those we leave ``mol`` NULL — same as
+    the migration backfill behavior and the structure-search service
+    treats NULL ``mol`` rows as un-searchable.
+    """
+    from rdkit import Chem
+
+    mol_value: str | None = None
+    if species.smiles is not None:
+        parsed = Chem.MolFromSmiles(species.smiles)
+        if parsed is not None:
+            mol_value = Chem.MolToSmiles(parsed, canonical=True)
+
     entry = SpeciesEntry(
         species_id=species.id,
         kind=kind,
         electronic_state_kind=electronic_state_kind,
+        mol=mol_value,
     )
     session.add(entry)
     session.flush()

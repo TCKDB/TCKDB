@@ -183,6 +183,27 @@ Public refs currently fit `String(40)`. The longest observed prefix (`nsolve`, 6
 
 ---
 
+## RDKit GiST index migration (d4e5f6a7b8c9)
+
+Revision `d4e5f6a7b8c9_add_species_entry_mol_gist_index` does two things:
+
+1. **Backfills `species_entry.mol`** for any row whose `mol` is NULL but whose parent `species.smiles` is parseable. The backfill uses the cartridge's `mol_from_smiles(sp.smiles)` against the canonical SMILES via a join update; rows where the cartridge cannot parse the SMILES stay NULL and are excluded from structure-search results.
+2. **Creates `ix_species_entry_mol_gist`**, a GiST index on `species_entry(mol)`. This is what lets substructure (`@>`) and similarity (`tanimoto_sml(morganbv_fp(...), ...)`) queries scan the index instead of every row.
+
+Operator notes:
+
+- Both steps run inside the Alembic transaction. On a small / self-hosted DB the build is essentially instant. On a larger deployed DB the GiST `CREATE INDEX` and the join-update backfill can take noticeable time — run during a low-traffic window and watch `pg_stat_activity` for long-running queries.
+- Downgrade drops only the index. The `mol` column predates this revision (it was created in `d861dfd60891`) and is not dropped on downgrade — application reads keep working against the back-populated column.
+- The structure-search service (`app/services/scientific_read/structure_search.py`) reads from `se.mol` directly. After the upgrade, run a quick smoke check:
+
+  ```bash
+  curl -fsS "http://127.0.0.1:8000/api/v1/scientific/species/structure-search?query_smiles=CCO&mode=substructure&limit=5" | jq '.pagination.total'
+  ```
+
+  A non-zero total on a populated catalog confirms the index path is wired.
+
+---
+
 ## Network / PDep exception
 
 While no real production network or PDep data exists, schema work on the `network*` and PDep tables is allowed to be more flexible than the default rule. See the dedicated section in [`.claude/rules/migration-rules.md`](../../../.claude/rules/migration-rules.md) for what that means; the operator-side implications are:

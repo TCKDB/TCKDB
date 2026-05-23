@@ -548,3 +548,45 @@ def test_payload_does_not_leak_forbidden_keys(client, db_session):
         if key in _FORBIDDEN_KEYS
     ]
     assert bad == [], f"Forbidden keys leaked: {bad!r}"
+
+
+# ---------------------------------------------------------------------------
+# Stored-mol-column / GiST index path (audit P1-3)
+#
+# Substructure and similarity SQL builders must read from the stored
+# ``species_entry.mol`` cartridge column so the GiST index created in
+# migration ``d4e5f6a7b8c9`` drives the scan. Inlining
+# ``mol_from_smiles(sp.smiles)`` per row would force a sequential scan
+# and silently defeat the index — this guard fails fast if a future
+# refactor reintroduces it.
+# ---------------------------------------------------------------------------
+
+
+def test_structure_search_uses_stored_mol_column_not_inline_conversion():
+    from pathlib import Path
+
+    from app.services.scientific_read import structure_search as svc
+
+    assert svc._STORED_MOL_EXPR == "se.mol", (
+        f"_STORED_MOL_EXPR must be the stored column, got "
+        f"{svc._STORED_MOL_EXPR!r}"
+    )
+
+    # Check the SQL builder regions of the service source. Inspecting
+    # source text (rather than a runtime SQL render) keeps the assertion
+    # robust: we don't have to second-guess SQLAlchemy ``text()``
+    # rendering or paste literal SQL into the test that drifts when the
+    # service evolves.
+    source = Path(svc.__file__).read_text(encoding="utf-8")
+    sub_start = source.index("def _run_substructure_query")
+    sim_start = source.index("def _run_similarity_query")
+    exact_start = source.index("def _run_exact_query")
+    cartridge_builders = source[sub_start:exact_start]
+    assert "mol_from_smiles(sp.smiles)" not in cartridge_builders, (
+        "Substructure/similarity builders must not inline "
+        "mol_from_smiles(sp.smiles) — that defeats the GiST index. "
+        "Read from se.mol via _STORED_MOL_EXPR instead."
+    )
+    # Sanity: both builders reference the stored column expression.
+    assert "_STORED_MOL_EXPR" in source[sub_start:sim_start]
+    assert "_STORED_MOL_EXPR" in source[sim_start:exact_start]

@@ -12,13 +12,16 @@ into a parameterized SQL statement that performs the actual filter and
 score computation database-side. We never load every species row into
 Python — that would defeat the cartridge.
 
-The stored molecule for each species is computed at query time as
-``mol_from_smiles(species.smiles)`` so the search works against the
-existing populated identity columns without depending on the
-``species_entry.mol`` column being populated for every row. A future
-performance refinement is documented in
-``backend/docs/specs/scientific_structure_search.md``: add a GIST index
-on ``species_entry.mol`` and use it directly when populated.
+Substructure and similarity queries read from the stored
+``species_entry.mol`` cartridge column. The write path
+(``app/services/species_resolution.py``) canonicalizes SMILES into
+``mol`` on insert, and the
+``d4e5f6a7b8c9_add_species_entry_mol_gist_index`` migration creates a
+GiST index on the column and backfills any pre-existing NULL rows.
+Rows whose ``mol`` is NULL (e.g. a SMILES the cartridge cannot parse)
+are excluded from results — a single seq-scan-per-row fallback would
+defeat the index. Exact mode keeps the indexed ``species.inchi_key``
+path; it does not need the cartridge.
 
 See ``backend/docs/specs/scientific_structure_search.md`` for the full
 contract.
@@ -373,13 +376,15 @@ def _inchi_key_from_query(
 # ---------------------------------------------------------------------------
 
 
-# Common SELECT fragment. The RDKit cartridge's ``mol_from_smiles`` and
-# ``qmol_from_smarts`` accept ``text`` directly on the cartridge versions
-# we target, so we let psycopg's parameter binding pass the bound value
-# through as ``text`` without an explicit ``::cstring`` cast — the cast
-# is also incompatible with SQLAlchemy's ``:name`` parameter syntax,
-# which conflicts with the ``::`` Postgres cast operator.
-_STORED_MOL_EXPR = "mol_from_smiles(sp.smiles)"
+# Stored cartridge column. Reading from ``se.mol`` directly lets the
+# GiST index (``ix_species_entry_mol_gist``) drive substructure /
+# similarity queries instead of running ``mol_from_smiles(sp.smiles)``
+# per row at request time. The write path (``species_resolution.py``)
+# populates the column on insert; the d4e5f6a7b8c9 migration backfilled
+# any pre-existing NULL rows and created the index. NULL ``se.mol``
+# rows (e.g. unparseable SMILES) are excluded from matches in the
+# ``WHERE`` clause below — a row-level fallback would defeat the index.
+_STORED_MOL_EXPR = "se.mol"
 
 
 def _run_substructure_query(

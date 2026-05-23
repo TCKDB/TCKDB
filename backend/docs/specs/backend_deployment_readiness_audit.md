@@ -54,7 +54,7 @@ Legacy entity routes (`/api/v1/{thermo,kinetics,geometries,...}`) are guarded by
 | DB schema invariants & constraint coverage | B+ | Cascades sometimes app-only; a few should-be-NOT-NULL columns on `network` |
 | Indexing for read filters | C+ | **No indexes** on `calculation.lot_id`, `calculation.software_release_id`, `calculation.conformer_observation_id` |
 | Migration strategy for deployed DB | C | Single-migration policy already relaxed; no documented prod migration playbook |
-| Structure search performance | C | Inline `mol_from_smiles(sp.smiles)`; no GiST index — O(N) per query |
+| Structure search performance | A- | Stored `species_entry.mol` cartridge column with GiST index (migration `d4e5f6a7b8c9`); service reads directly from `se.mol`. Fingerprint cache for similarity remains deferred. |
 | Health / readiness / liveness | C+ | `/health` exists and pings DB; no `/readyz`, no startup grace, no socket-hang guard |
 | Structured logging / request IDs | C | Plain-text logs; no correlation IDs; no JSON output |
 | External error/perf monitoring | D | No Sentry / OpenTelemetry / APM integration |
@@ -84,7 +84,7 @@ The following must be addressed before broad public exposure. None block a close
 |---|---|---|---|
 | P1-1 | Rate-limit store is in-process — multi-worker deployments partition the budget per worker | [backend/app/api/rate_limit.py:34](backend/app/api/rate_limit.py#L34) | Add Redis-backed store before scaling past one worker. Budget is otherwise honest. |
 | P1-2 | No FK indexes on hot Calculation filter columns: `lot_id`, `software_release_id`, `conformer_observation_id`, `species_entry_id`, `transition_state_entry_id`, `literature_id` | [backend/app/db/models/calculation.py:71-107](backend/app/db/models/calculation.py#L71-L107) | **Addressed (2026-05-23).** Indexes added via additive migration `c3d4e5f6a7b8_add_calculation_fk_indexes` and `index=True` on the model columns. |
-| P1-3 | Structure search runs `mol_from_smiles(sp.smiles)` inline — O(N rows) per query, no GiST index | [backend/app/services/scientific_read/structure_search.py:382](backend/app/services/scientific_read/structure_search.py#L382) | Add a stored `mol` column (already typed in `types.py`) + GiST index + a backfill. Safe at <50k species; bad above. |
+| P1-3 ✅ addressed | Structure search runs `mol_from_smiles(sp.smiles)` inline — O(N rows) per query, no GiST index | [backend/app/services/scientific_read/structure_search.py](backend/app/services/scientific_read/structure_search.py) | **Done.** Migration `d4e5f6a7b8c9` backfills `species_entry.mol` and creates `ix_species_entry_mol_gist`. The service now reads `se.mol` directly; substructure/similarity queries hit the GiST index. A guard test (`test_structure_search_uses_stored_mol_column_not_inline_conversion`) fails if the inline-conversion pattern reappears. |
 | P1-4 | No request-ID / correlation ID in logs | [backend/app/api/errors.py](backend/app/api/errors.py) | Add middleware that emits `X-Request-ID` and injects it into logging context. |
 | P1-5 | No JSON / structured logs | (config) | Switch to a JSON log handler for the hosted profile. |
 | P1-6 | `Network.name` is nullable; no unique constraint on provenance tuple | [backend/app/db/models/network.py:28](backend/app/db/models/network.py#L28) | Make name NOT NULL or add `(literature_id, name)` unique constraint to prevent silent dupes. |
@@ -170,7 +170,7 @@ The following must be addressed before broad public exposure. None block a close
 
 | Hot path | Risk | Classification |
 |---|---|---|
-| `mol_from_smiles(species.smiles)` substructure search | O(N) per query, no GiST | P1 — needs stored `mol` column + GiST index before opening to public |
+| Structure search (`se.mol @> qmol`) | GiST-indexed substructure / Tanimoto similarity | ✅ P1-3 done — see migration `d4e5f6a7b8c9` |
 | `calculation/search?include=all` | Heavy includes; no `selectinload()` of nested artifacts/geometries observed | P2 — benchmark first; add `selectinload` if N+1 measured |
 | `network/PDep` `include=points` | Capped at 200 rows; truncation flag exposed | Safe for v0 |
 | `network/PDep` Chebyshev / PLOG coefficient matrices | No size cap | P2 — add a sanity cap |
@@ -270,7 +270,7 @@ Ordered by impact-per-effort, drawing from the P0/P1 list:
 2. **Production env hygiene (P0-1, P0-5)** — quick. Add a deployment checklist (env vars: `AUTH_ALLOW_OPEN_REGISTRATION=false`, `EXPOSE_API_DOCS=false`, `LEGACY_READS_REQUIRE_AUTH=true`, `SESSION_COOKIE_SECURE=true`, `ALLOW_PUBLIC_INTERNAL_IDS=false`). Optionally add a startup assertion that refuses to boot in `hosted` profile when these are misconfigured.
 3. **Hot-path FK indexes on `calculation` (P1-2)** — half-day. Add `index=True` to `lot_id`, `software_release_id`, `conformer_observation_id`, `species_entry_id`, `transition_state_entry_id`, `literature_id`. Fold into the right migration (depends on outcome of #1).
 4. **Readiness + observability minimum (P0-4, P1-4, P1-5)** — one day. `/readyz`, request-ID middleware, JSON logs. These are the smallest single change that makes the deployment actually operable under traffic.
-5. **Stored mol column + GiST index for structure search (P1-3)** — one to two days. Add a populated `mol` column on `species_entry`, GiST index, backfill, and migrate `structure_search.py` to use the indexed column. Needed before public exposure if catalog grows past ~50k species; ahead of that it's a perf improvement, not a blocker.
+5. ~~**Stored mol column + GiST index for structure search (P1-3)** — one to two days. Add a populated `mol` column on `species_entry`, GiST index, backfill, and migrate `structure_search.py` to use the indexed column.~~ ✅ Done — migration `d4e5f6a7b8c9`; service uses `se.mol` directly.
 6. ~~**OpenAPI golden snapshot (P1-8)** — quick. Prevents accidental client-breaking schema drift.~~ ✅ Done — see `tests/api/test_openapi_snapshot.py`.
 7. **Rate-limit Redis backend (P1-1)** — only when scaling past one worker. Until then, the in-process store is honest.
 8. **Sentry integration (P2)** — defer until first real user traffic; integrate before public launch.
@@ -279,7 +279,7 @@ Ordered by impact-per-effort, drawing from the P0/P1 list:
 
 | Suggested task | Verdict |
 |---|---|
-| Materialized/indexed RDKit mol column for structure search | **Yes** — P1-3, do before public exposure or first big catalog grow. |
+| Materialized/indexed RDKit mol column for structure search | ✅ Done — P1-3, migration `d4e5f6a7b8c9`. |
 | Standalone bulk export endpoint | **Defer** — no real consumer demand yet; pagination + client looping suffices. Add only when a downstream pipeline asks. |
 | Artifact URI exposure policy | **Already correct** — documented design; URIs are storage keys, not signed URLs. Reaffirm in deploy docs; no code change. |
 | Migration strategy cleanup for deployed DB | **Yes** — P0-2/P0-3, top priority. |
