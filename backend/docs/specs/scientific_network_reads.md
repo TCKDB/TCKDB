@@ -20,9 +20,11 @@ initial migration per CLAUDE.md.
 
 - `network_channel_ref` filter — `NetworkChannel` carries no public
   ref today; channel-grain query surface ships when that lands.
-- Paginated coefficient / point full-data endpoints — `include=points`
-  is capped at `settings.public_max_limit` with `points_truncated`
-  signaling overflow; a dedicated paginated endpoint can lift the cap.
+- Paginated coefficient / PLOG / point full-data endpoints —
+  `include=coefficients` / `include=plog` / `include=points` are
+  each capped at `settings.public_max_limit` with their respective
+  ``*_truncated`` flags signaling overflow; a dedicated paginated
+  endpoint can lift the cap if a real consumer asks.
 - Independent `NetworkKinetics` reviewability — review state currently
   inherits from the parent solve (`NetworkKinetics` is not in
   `SubmissionRecordType`).
@@ -309,8 +311,12 @@ Default response:
 Include tokens:
 
 ```text
-coefficients         — Chebyshev coefficient rows (None for non-Chebyshev)
-plog                 — PLOG entries (empty list for non-PLOG)
+coefficients         — Chebyshev coefficient rows (None for non-Chebyshev).
+                       Capped at settings.public_max_limit; payload carries
+                       coefficient_count_total + coefficients_truncated.
+plog                 — PLOG entries (empty entries for non-PLOG).
+                       Capped at settings.public_max_limit; payload carries
+                       plog_entry_count_total + plog_entries_truncated.
 points               — point-tabulated (T, P, k) rows, capped at
                        settings.public_max_limit; response carries
                        points_truncated + point_count_total
@@ -321,13 +327,21 @@ internal_ids
 all
 ```
 
+All three per-kinetics payloads (`coefficients` / `plog` / `points`)
+share the same cap — `settings.public_max_limit` — and surface
+``*_truncated`` + ``*_count_total`` so callers can detect the cap
+without a second request. Coefficients flatten in
+``(temperature_order ASC, pressure_order ASC)`` order; PLOG entries
+order by ``(pressure_bar ASC, entry_index ASC)`` (the primary-key
+tuple, guaranteed unique per kinetics record).
+
 `include=all` covers `coefficients` / `plog` /
 `source_calculations` / `review` but explicitly **not** `points` —
-tabulated kinetics can grow large and require an explicit opt-in
-even when `all` is requested. Point payloads are bounded by the
-public-limit setting; the response surfaces `points_truncated` so
-callers can detect when the cap kicked in. A future endpoint can
-expose dedicated paginated point retrieval if usage justifies it.
+tabulated kinetics can grow much larger than the cap permits and
+require an explicit opt-in even when `all` is requested. Chebyshev
+and PLOG payloads are now capped, so leaving them in `all` is safe.
+A future endpoint can expose dedicated paginated coefficient/PLOG/point
+retrieval if usage justifies it.
 
 Network-kinetics search ships at the kinetics grain
 (`GET|POST /scientific/network-kinetics/search`). Filters:
@@ -385,8 +399,12 @@ Include behavior matches the detail endpoint:
 include=all expands to coefficients / plog / source_calculations / review
 include=all excludes points (require explicit opt-in)
 include=all excludes internal_ids (require explicit opt-in)
-include=points remains capped at settings.public_max_limit with
-                points_truncated + point_count_total surfaced
+include=coefficients capped at settings.public_max_limit with
+                     coefficient_count_total + coefficients_truncated
+include=plog capped at settings.public_max_limit with
+             plog_entry_count_total + plog_entries_truncated
+include=points capped at settings.public_max_limit with
+               points_truncated + point_count_total surfaced
 ```
 
 Review state inherits from the parent solve (`NetworkKinetics` is

@@ -90,7 +90,7 @@ The following must be addressed before broad public exposure. None block a close
 | P1-6 | `Network.name` is nullable; no unique constraint on provenance tuple | [backend/app/db/models/network.py:28](backend/app/db/models/network.py#L28) | Make name NOT NULL or add `(literature_id, name)` unique constraint to prevent silent dupes. |
 | P1-7 | FK `ON DELETE` defaults to `RESTRICT` at DB level even where ORM cascades `delete-orphan`; deletion paths must orphan-delete carefully | [backend/alembic/versions/d861dfd60891_create_intial_schema.py](backend/alembic/versions/d861dfd60891_create_intial_schema.py) | Audit code paths that delete `Species` / `Calculation` / `ConformerObservation`; align DB-level ON DELETE rules with intended ORM semantics. |
 | P1-8 ✅ addressed | OpenAPI has no frozen golden snapshot — only path-presence tests | [backend/tests/api/scientific/test_api_openapi.py](backend/tests/api/scientific/test_api_openapi.py) | **Done.** [backend/tests/api/test_openapi_snapshot.py](backend/tests/api/test_openapi_snapshot.py) freezes the full normalized `/openapi.json` in [backend/tests/api/golden/openapi.json](backend/tests/api/golden/openapi.json). Regenerate intentionally with `UPDATE_OPENAPI_GOLDEN=1 pytest tests/api/test_openapi_snapshot.py`. Review the diff. |
-| P1-9 | Chebyshev / PLOG coefficient payload has no explicit truncation cap | [backend/app/services/scientific_read/network_kinetics.py:396-399](backend/app/services/scientific_read/network_kinetics.py#L396-L399) | Cap by `np.prod(shape)` or coefficient count and surface a truncation flag. |
+| P1-9 ✅ addressed | Chebyshev / PLOG coefficient payload has no explicit truncation cap | [backend/app/services/scientific_read/network_kinetics.py](backend/app/services/scientific_read/network_kinetics.py) | **Done.** Chebyshev `include=coefficients` flattens in `(temperature_order, pressure_order)` order and is capped at `settings.public_max_limit`; payload exposes `coefficient_count_total` + `coefficients_truncated`. PLOG `include=plog` is now a wrapper with `entries` capped at the same limit and surfaces `plog_entry_count_total` + `plog_entries_truncated`. `include=all` still excludes `points`. |
 
 ---
 
@@ -183,7 +183,7 @@ Classification scheme:
 
 - **Safe for v0**: pagination bounded; no relationship fan-out.
 - **Needs index**: P1-2 (Calculation FKs).
-- **Needs cap**: P1-9 (Chebyshev / PLOG coefficient size).
+- ~~**Needs cap**: P1-9 (Chebyshev / PLOG coefficient size).~~ ✅ Addressed — both payloads now capped at `settings.public_max_limit` with truncation metadata.
 - **Needs async / export endpoint**: not currently required; revisit if/when bulk export is requested.
 - **Needs benchmark**: `calculation/search?include=all` at realistic catalog sizes.
 
@@ -202,7 +202,7 @@ Classification scheme:
 
 **Artifact URIs**: Storage keys (e.g., `s3://bucket/key`) are exposed verbatim. This is **by design** — they are storage paths, not signed URLs, and the artifact-service layer resolves them. Documented in `scientific_artifact_reads.md`. P0-acceptable.
 
-**Gap**: P1-9 above — Chebyshev / PLOG coefficient matrix size is unbounded.
+**Gap closed**: P1-9 above — Chebyshev / PLOG payloads are now capped at `settings.public_max_limit` with truncation metadata (`coefficient_count_total` / `coefficients_truncated`, `plog_entry_count_total` / `plog_entries_truncated`).
 
 ---
 

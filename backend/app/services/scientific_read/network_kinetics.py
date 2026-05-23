@@ -55,6 +55,7 @@ from app.schemas.reads.scientific_network_kinetics import (
     NetworkKineticsEvidenceSummary,
     NetworkKineticsNetworkContext,
     NetworkKineticsPLOGEntry,
+    NetworkKineticsPLOGPayload,
     NetworkKineticsPointEntry,
     NetworkKineticsSolveContext,
     ScientificNetworkKineticsDetailResponse,
@@ -313,19 +314,26 @@ def _build_network_kinetics_record(
     )
 
     # ---- conditional include blocks ---------------------------------------
+    # ``public_max_limit`` is the shared cap across all bounded
+    # per-kinetics payloads (coefficients / plog / points). Keeping
+    # one knob makes the safety story uniform; individual cap settings
+    # are not warranted until a real consumer needs different bounds.
+    cap = max(1, int(settings.public_max_limit))
+
     coefficients_block: NetworkKineticsChebyshevPayload | None = None
     if "coefficients" in includes:
-        coefficients_block = _build_chebyshev_payload(cheb_row)
+        coefficients_block = _build_chebyshev_payload(cheb_row, cap=cap)
 
-    plog_block: list[NetworkKineticsPLOGEntry] | None = None
+    plog_block: NetworkKineticsPLOGPayload | None = None
     if "plog" in includes:
-        plog_block = _build_plog_entries(session, nk.id)
+        plog_block = _build_plog_payload(
+            session, nk.id, total=plog_count, cap=cap
+        )
 
     points_block: list[NetworkKineticsPointEntry] | None = None
     points_truncated: bool | None = None
     point_count_total: int | None = None
     if "points" in includes:
-        cap = max(1, int(settings.public_max_limit))
         points_block, points_truncated = _build_point_entries(
             session, nk.id, cap=cap
         )
@@ -403,40 +411,62 @@ def _chebyshev_coefficient_count(cheb_row: Any) -> int:
 
 
 def _build_chebyshev_payload(
-    cheb_row: Any,
+    cheb_row: Any, *, cap: int
 ) -> NetworkKineticsChebyshevPayload | None:
     """Project the Chebyshev JSONB row into the bounded coefficient shape.
 
     Returns ``None`` for non-Chebyshev kinetics so callers can
     distinguish "kind doesn't apply" from "kind applies but no data".
     Iteration is deterministic in (temperature_order, pressure_order).
+
+    The flattened coefficient list is truncated at ``cap`` rows;
+    ``coefficient_count_total`` always reports the full flattened
+    count so callers can detect the truncation.
     """
     if cheb_row is None:
         return None
     matrix = _extract_chebyshev_matrix(cheb_row.coefficients)
+    total = 0
     coefficients: list[NetworkKineticsChebyshevCoefficient] = []
     if matrix is not None:
         for t_idx, row in enumerate(matrix):
             if not isinstance(row, list):
                 continue
             for p_idx, value in enumerate(row):
-                coefficients.append(
-                    NetworkKineticsChebyshevCoefficient(
-                        temperature_order=t_idx,
-                        pressure_order=p_idx,
-                        coefficient=float(value),
+                total += 1
+                if len(coefficients) < cap:
+                    coefficients.append(
+                        NetworkKineticsChebyshevCoefficient(
+                            temperature_order=t_idx,
+                            pressure_order=p_idx,
+                            coefficient=float(value),
+                        )
                     )
-                )
     return NetworkKineticsChebyshevPayload(
         n_temperature=int(cheb_row.n_temperature),
         n_pressure=int(cheb_row.n_pressure),
         coefficients=coefficients,
+        coefficient_count_total=total,
+        coefficients_truncated=total > cap,
     )
 
 
-def _build_plog_entries(
-    session: Session, network_kinetics_id: int
-) -> list[NetworkKineticsPLOGEntry]:
+def _build_plog_payload(
+    session: Session,
+    network_kinetics_id: int,
+    *,
+    total: int,
+    cap: int,
+) -> NetworkKineticsPLOGPayload:
+    """Project PLOG rows for one kinetics record, capped at ``cap``.
+
+    Ordering is ``(pressure_bar ASC, entry_index ASC)`` — the primary-key
+    tuple on ``network_kinetics_plog``, so each kinetics record has a
+    stable, unique order. The DB-level ``LIMIT cap`` keeps the wire
+    payload bounded; ``plog_entry_count_total`` is the unbounded count
+    from the parent shape-metadata query so truncation is detectable
+    without a second scan.
+    """
     rows = session.scalars(
         select(NetworkKineticsPlog)
         .where(NetworkKineticsPlog.network_kinetics_id == network_kinetics_id)
@@ -444,8 +474,9 @@ def _build_plog_entries(
             NetworkKineticsPlog.pressure_bar.asc(),
             NetworkKineticsPlog.entry_index.asc(),
         )
+        .limit(cap)
     ).all()
-    return [
+    entries = [
         NetworkKineticsPLOGEntry(
             pressure_bar=r.pressure_bar,
             entry_index=r.entry_index,
@@ -456,6 +487,11 @@ def _build_plog_entries(
         )
         for r in rows
     ]
+    return NetworkKineticsPLOGPayload(
+        entries=entries,
+        plog_entry_count_total=total,
+        plog_entries_truncated=total > cap,
+    )
 
 
 def _build_point_entries(

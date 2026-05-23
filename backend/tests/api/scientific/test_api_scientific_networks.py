@@ -2244,6 +2244,8 @@ def test_nkin_detail_include_coefficients_chebyshev(client, db_session):
     assert coeffs["n_pressure"] == 4
     # Factory builds a 6x4 matrix → 24 coefficient rows.
     assert len(coeffs["coefficients"]) == 24
+    assert coeffs["coefficient_count_total"] == 24
+    assert coeffs["coefficients_truncated"] is False
     # First row has zero-order indices.
     first = coeffs["coefficients"][0]
     assert first["temperature_order"] == 0
@@ -2268,9 +2270,11 @@ def test_nkin_detail_include_plog(client, db_session):
     ).json()
     plog = body["record"]["plog"]
     assert plog is not None
-    assert len(plog) == 1
-    assert plog[0]["pressure_bar"] == 1.0
-    assert plog[0]["a"] == 1e12
+    assert len(plog["entries"]) == 1
+    assert plog["entries"][0]["pressure_bar"] == 1.0
+    assert plog["entries"][0]["a"] == 1e12
+    assert plog["plog_entry_count_total"] == 1
+    assert plog["plog_entries_truncated"] is False
 
 
 def test_nkin_detail_include_plog_non_plog_is_empty(client, db_session):
@@ -2278,7 +2282,12 @@ def test_nkin_detail_include_plog_non_plog_is_empty(client, db_session):
     body = client.get(
         _nkin_detail_url(fx["kinetics"].public_ref, include="plog")
     ).json()
-    assert body["record"]["plog"] == []
+    plog = body["record"]["plog"]
+    assert plog == {
+        "entries": [],
+        "plog_entry_count_total": 0,
+        "plog_entries_truncated": False,
+    }
 
 
 def test_nkin_detail_include_points(client, db_session):
@@ -2323,6 +2332,63 @@ def test_nkin_detail_include_points_capped(client, db_session, monkeypatch):
     assert len(rec["points"]) == 2
     assert rec["points_truncated"] is True
     assert rec["point_count_total"] == 6
+
+
+def test_nkin_detail_include_coefficients_capped(
+    client, db_session, monkeypatch
+):
+    """Chebyshev coefficient payload caps at public_max_limit and flags truncation."""
+    from app.api.config import settings as _settings
+
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    # Default factory builds a 6x4 matrix → 24 coefficients.
+    monkeypatch.setattr(_settings, "public_max_limit", 5)
+    body = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref, include="coefficients")
+    ).json()
+    coeffs = body["record"]["coefficients"]
+    assert coeffs is not None
+    assert len(coeffs["coefficients"]) == 5
+    assert coeffs["coefficients_truncated"] is True
+    assert coeffs["coefficient_count_total"] == 24
+    # Deterministic order: first 5 rows are the (t,p) prefix
+    # (0,0), (0,1), (0,2), (0,3), (1,0).
+    indices = [(c["temperature_order"], c["pressure_order"]) for c in coeffs["coefficients"]]
+    assert indices == [(0, 0), (0, 1), (0, 2), (0, 3), (1, 0)]
+
+
+def test_nkin_detail_include_plog_capped(client, db_session, monkeypatch):
+    """PLOG entry payload caps at public_max_limit and flags truncation."""
+    from app.api.config import settings as _settings
+    from tests.services.scientific_read._factories import (
+        attach_network_kinetics_plog,
+    )
+
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.plog)
+    kin = fx["kinetics"]
+    # Factory already attaches one entry at pressure_bar=1.0; add four more
+    # at distinct pressures to land six total PLOG rows.
+    for i in range(4):
+        attach_network_kinetics_plog(
+            db_session,
+            kinetics=kin,
+            pressure_bar=2.0 + i,
+            entry_index=1,
+            a=1e12,
+            n=0.0,
+            ea_kj_mol=0.0,
+        )
+    monkeypatch.setattr(_settings, "public_max_limit", 3)
+    body = client.get(
+        _nkin_detail_url(kin.public_ref, include="plog")
+    ).json()
+    plog = body["record"]["plog"]
+    assert len(plog["entries"]) == 3
+    assert plog["plog_entries_truncated"] is True
+    assert plog["plog_entry_count_total"] == 5
+    # Deterministic ordering by (pressure_bar ASC, entry_index ASC).
+    pressures = [e["pressure_bar"] for e in plog["entries"]]
+    assert pressures == sorted(pressures)
 
 
 def test_nkin_detail_include_source_calculations(client, db_session):
@@ -2443,7 +2509,9 @@ def test_nkin_detail_plog_ordering_deterministic(client, db_session):
     body = client.get(
         _nkin_detail_url(kin.public_ref, include="plog")
     ).json()
-    pressures = [row["pressure_bar"] for row in body["record"]["plog"]]
+    pressures = [
+        row["pressure_bar"] for row in body["record"]["plog"]["entries"]
+    ]
     assert pressures == sorted(pressures)
 
 
@@ -3046,8 +3114,11 @@ def test_nkin_search_include_plog(client, db_session):
             network_kinetics_ref=fx["kinetics"].public_ref, include="plog"
         )
     ).json()
-    assert body["records"][0]["plog"] is not None
-    assert len(body["records"][0]["plog"]) == 1
+    plog = body["records"][0]["plog"]
+    assert plog is not None
+    assert len(plog["entries"]) == 1
+    assert plog["plog_entry_count_total"] == 1
+    assert plog["plog_entries_truncated"] is False
 
 
 def test_nkin_search_include_points(client, db_session):
@@ -3186,6 +3257,105 @@ def test_nkin_search_include_points_capped_in_search_records(
     assert len(rec["points"]) == 2
     assert rec["points_truncated"] is True
     assert rec["point_count_total"] == 6
+
+
+def test_nkin_search_include_coefficients_capped_in_search_records(
+    client, db_session, monkeypatch
+):
+    """Search records cap Chebyshev coefficients the same way detail does."""
+    from app.api.config import settings as _settings
+
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    monkeypatch.setattr(_settings, "public_max_limit", 4)
+    body = client.get(
+        _nkin_search_url(
+            network_kinetics_ref=fx["kinetics"].public_ref,
+            include="coefficients",
+            limit=4,
+        )
+    ).json()
+    coeffs = body["records"][0]["coefficients"]
+    assert len(coeffs["coefficients"]) == 4
+    assert coeffs["coefficients_truncated"] is True
+    assert coeffs["coefficient_count_total"] == 24
+
+
+def test_nkin_search_include_plog_capped_in_search_records(
+    client, db_session, monkeypatch
+):
+    """Search records cap PLOG entries the same way detail does."""
+    from app.api.config import settings as _settings
+    from tests.services.scientific_read._factories import (
+        attach_network_kinetics_plog,
+    )
+
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.plog)
+    kin = fx["kinetics"]
+    for i in range(4):
+        attach_network_kinetics_plog(
+            db_session,
+            kinetics=kin,
+            pressure_bar=2.0 + i,
+            entry_index=1,
+            a=1e12,
+            n=0.0,
+            ea_kj_mol=0.0,
+        )
+    monkeypatch.setattr(_settings, "public_max_limit", 2)
+    body = client.get(
+        _nkin_search_url(
+            network_kinetics_ref=kin.public_ref,
+            include="plog",
+            limit=2,
+        )
+    ).json()
+    plog = body["records"][0]["plog"]
+    assert len(plog["entries"]) == 2
+    assert plog["plog_entries_truncated"] is True
+    assert plog["plog_entry_count_total"] == 5
+
+
+def test_nkin_detail_include_all_includes_capped_coefficients_and_plog(
+    client, db_session, monkeypatch
+):
+    """``include=all`` includes capped Chebyshev/PLOG payloads but still
+    excludes points (which require explicit opt-in)."""
+    from app.api.config import settings as _settings
+    from tests.services.scientific_read._factories import (
+        attach_network_kinetics_plog,
+        attach_network_kinetics_point,
+    )
+
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    kin = fx["kinetics"]
+    # Add an extra PLOG row and a tabulated point so all three payload
+    # tables have content. (Mixed-kind kinetics rows are unusual but
+    # the schema allows it and the include filter is the right gate.)
+    attach_network_kinetics_plog(
+        db_session, kinetics=kin, pressure_bar=2.0, entry_index=1,
+        a=1e12, n=0.0, ea_kj_mol=0.0,
+    )
+    attach_network_kinetics_point(
+        db_session, kinetics=kin,
+        temperature_k=500.0, pressure_bar=1.0, rate_value=1.0,
+    )
+    monkeypatch.setattr(_settings, "public_max_limit", 3)
+    body = client.get(
+        _nkin_detail_url(kin.public_ref, include="all")
+    ).json()
+    rec = body["record"]
+    # Coefficients capped + truncation flag set (24 > 3).
+    assert rec["coefficients"]["coefficients_truncated"] is True
+    assert rec["coefficients"]["coefficient_count_total"] == 24
+    assert len(rec["coefficients"]["coefficients"]) == 3
+    # PLOG present but not truncated (only the 1 entry we attached;
+    # the Chebyshev factory doesn't seed PLOG rows).
+    assert rec["plog"]["plog_entries_truncated"] is False
+    assert rec["plog"]["plog_entry_count_total"] == 1
+    # Points excluded from ``include=all``; require explicit opt-in.
+    assert rec["points"] is None
+    assert rec["points_truncated"] is None
+    assert rec["point_count_total"] is None
 
 
 def test_nkin_search_record_matches_detail_for_same_kinetics(

@@ -135,6 +135,12 @@ class NetworkKineticsChebyshevCoefficient(BaseModel):
 class NetworkKineticsChebyshevPayload(BaseModel):
     """Chebyshev coefficient payload for ``include=coefficients`` on a
     Chebyshev kinetics record. Empty / ``None`` for non-Chebyshev kinds.
+
+    The flattened coefficient list is capped at ``settings.public_max_limit``
+    rows to bound response size on pathological matrices. When the
+    coefficient count exceeds the cap, ``coefficients_truncated`` is
+    ``True`` and ``coefficient_count_total`` reports the full flattened
+    count so callers can paginate or escalate.
     """
 
     n_temperature: int
@@ -142,6 +148,8 @@ class NetworkKineticsChebyshevPayload(BaseModel):
     coefficients: list[NetworkKineticsChebyshevCoefficient] = Field(
         default_factory=list
     )
+    coefficient_count_total: int = 0
+    coefficients_truncated: bool = False
 
 
 class NetworkKineticsPLOGEntry(BaseModel):
@@ -153,6 +161,21 @@ class NetworkKineticsPLOGEntry(BaseModel):
     a_units: ArrheniusAUnits | None = None
     n: float
     ea_kj_mol: float
+
+
+class NetworkKineticsPLOGPayload(BaseModel):
+    """PLOG-entry payload for ``include=plog`` on a kinetics record.
+
+    Entries are capped at ``settings.public_max_limit`` rows. When the
+    underlying table holds more entries than the cap,
+    ``plog_entries_truncated`` is ``True`` and ``plog_entry_count_total``
+    reports the full row count. Empty entries / counts for non-PLOG
+    kinds so the shape stays stable across kinds.
+    """
+
+    entries: list[NetworkKineticsPLOGEntry] = Field(default_factory=list)
+    plog_entry_count_total: int = 0
+    plog_entries_truncated: bool = False
 
 
 class NetworkKineticsPointEntry(BaseModel):
@@ -203,9 +226,13 @@ class ScientificNetworkKineticsRecord(BaseModel):
     summaries. Include tokens expand the response:
 
     - ``coefficients`` — Chebyshev coefficient rows (None for
-      non-Chebyshev kinds).
-    - ``plog`` — pressure-specific Arrhenius rows (empty for non-PLOG
-      kinds).
+      non-Chebyshev kinds). The payload is capped at
+      ``public_max_limit`` rows and exposes
+      ``coefficient_count_total`` + ``coefficients_truncated``.
+    - ``plog`` — pressure-specific Arrhenius rows. The payload is
+      capped at ``public_max_limit`` rows and exposes
+      ``plog_entry_count_total`` + ``plog_entries_truncated``. Empty
+      entries / zero counts for non-PLOG kinds.
     - ``points`` — tabulated (T, P, k) entries, capped at
       ``public_max_limit`` rows. When the count exceeds the cap,
       ``points_truncated`` is True and ``point_count_total`` reports
@@ -226,7 +253,7 @@ class ScientificNetworkKineticsRecord(BaseModel):
     available_sections: AvailableNetworkKineticsSections
 
     coefficients: NetworkKineticsChebyshevPayload | None = None
-    plog: list[NetworkKineticsPLOGEntry] | None = None
+    plog: NetworkKineticsPLOGPayload | None = None
     points: list[NetworkKineticsPointEntry] | None = None
     point_count_total: int | None = None
     points_truncated: bool | None = None
@@ -252,6 +279,7 @@ __all__ = [
     "NetworkKineticsEvidenceSummary",
     "NetworkKineticsNetworkContext",
     "NetworkKineticsPLOGEntry",
+    "NetworkKineticsPLOGPayload",
     "NetworkKineticsPointEntry",
     "NetworkKineticsSolveContext",
     "ScientificNetworkKineticsDetailResponse",
