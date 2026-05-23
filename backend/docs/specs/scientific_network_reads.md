@@ -314,9 +314,11 @@ Include tokens:
 coefficients         — Chebyshev coefficient rows (None for non-Chebyshev).
                        Capped at settings.public_max_limit; payload carries
                        coefficient_count_total + coefficients_truncated.
-plog                 — PLOG entries (empty entries for non-PLOG).
-                       Capped at settings.public_max_limit; payload carries
-                       plog_entry_count_total + plog_entries_truncated.
+plog                 — PLOG entries as a bare list (empty list for
+                       non-PLOG kinds). Capped at settings.public_max_limit;
+                       sibling fields plog_entry_count_total +
+                       plog_entries_truncated on the record carry the
+                       truncation metadata.
 points               — point-tabulated (T, P, k) rows, capped at
                        settings.public_max_limit; response carries
                        points_truncated + point_count_total
@@ -401,8 +403,9 @@ include=all excludes points (require explicit opt-in)
 include=all excludes internal_ids (require explicit opt-in)
 include=coefficients capped at settings.public_max_limit with
                      coefficient_count_total + coefficients_truncated
-include=plog capped at settings.public_max_limit with
-             plog_entry_count_total + plog_entries_truncated
+include=plog returns a bare list capped at settings.public_max_limit
+             with sibling plog_entry_count_total + plog_entries_truncated
+             on the record
 include=points capped at settings.public_max_limit with
                points_truncated + point_count_total surfaced
 ```

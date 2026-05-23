@@ -2268,13 +2268,14 @@ def test_nkin_detail_include_plog(client, db_session):
     body = client.get(
         _nkin_detail_url(fx["kinetics"].public_ref, include="plog")
     ).json()
-    plog = body["record"]["plog"]
-    assert plog is not None
-    assert len(plog["entries"]) == 1
-    assert plog["entries"][0]["pressure_bar"] == 1.0
-    assert plog["entries"][0]["a"] == 1e12
-    assert plog["plog_entry_count_total"] == 1
-    assert plog["plog_entries_truncated"] is False
+    record = body["record"]
+    plog = record["plog"]
+    assert isinstance(plog, list)
+    assert len(plog) == 1
+    assert plog[0]["pressure_bar"] == 1.0
+    assert plog[0]["a"] == 1e12
+    assert record["plog_entry_count_total"] == 1
+    assert record["plog_entries_truncated"] is False
 
 
 def test_nkin_detail_include_plog_non_plog_is_empty(client, db_session):
@@ -2282,12 +2283,27 @@ def test_nkin_detail_include_plog_non_plog_is_empty(client, db_session):
     body = client.get(
         _nkin_detail_url(fx["kinetics"].public_ref, include="plog")
     ).json()
-    plog = body["record"]["plog"]
-    assert plog == {
-        "entries": [],
-        "plog_entry_count_total": 0,
-        "plog_entries_truncated": False,
-    }
+    record = body["record"]
+    assert record["plog"] == []
+    assert record["plog_entry_count_total"] == 0
+    assert record["plog_entries_truncated"] is False
+
+
+def test_nkin_detail_plog_metadata_absent_when_plog_not_requested(
+    client, db_session
+):
+    """PLOG sibling metadata follows the omittable-field pattern.
+
+    With no ``include=plog`` the bare-list field and both sibling
+    metadata fields stay at their unset (``None``) value, mirroring
+    the points / coefficients defaults.
+    """
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.plog)
+    body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
+    record = body["record"]
+    assert record["plog"] is None
+    assert record["plog_entry_count_total"] is None
+    assert record["plog_entries_truncated"] is None
 
 
 def test_nkin_detail_include_points(client, db_session):
@@ -2382,12 +2398,14 @@ def test_nkin_detail_include_plog_capped(client, db_session, monkeypatch):
     body = client.get(
         _nkin_detail_url(kin.public_ref, include="plog")
     ).json()
-    plog = body["record"]["plog"]
-    assert len(plog["entries"]) == 3
-    assert plog["plog_entries_truncated"] is True
-    assert plog["plog_entry_count_total"] == 5
+    record = body["record"]
+    plog = record["plog"]
+    assert isinstance(plog, list)
+    assert len(plog) == 3
+    assert record["plog_entries_truncated"] is True
+    assert record["plog_entry_count_total"] == 5
     # Deterministic ordering by (pressure_bar ASC, entry_index ASC).
-    pressures = [e["pressure_bar"] for e in plog["entries"]]
+    pressures = [e["pressure_bar"] for e in plog]
     assert pressures == sorted(pressures)
 
 
@@ -2510,7 +2528,7 @@ def test_nkin_detail_plog_ordering_deterministic(client, db_session):
         _nkin_detail_url(kin.public_ref, include="plog")
     ).json()
     pressures = [
-        row["pressure_bar"] for row in body["record"]["plog"]["entries"]
+        row["pressure_bar"] for row in body["record"]["plog"]
     ]
     assert pressures == sorted(pressures)
 
@@ -3114,11 +3132,12 @@ def test_nkin_search_include_plog(client, db_session):
             network_kinetics_ref=fx["kinetics"].public_ref, include="plog"
         )
     ).json()
-    plog = body["records"][0]["plog"]
-    assert plog is not None
-    assert len(plog["entries"]) == 1
-    assert plog["plog_entry_count_total"] == 1
-    assert plog["plog_entries_truncated"] is False
+    record = body["records"][0]
+    plog = record["plog"]
+    assert isinstance(plog, list)
+    assert len(plog) == 1
+    assert record["plog_entry_count_total"] == 1
+    assert record["plog_entries_truncated"] is False
 
 
 def test_nkin_search_include_points(client, db_session):
@@ -3309,10 +3328,12 @@ def test_nkin_search_include_plog_capped_in_search_records(
             limit=2,
         )
     ).json()
-    plog = body["records"][0]["plog"]
-    assert len(plog["entries"]) == 2
-    assert plog["plog_entries_truncated"] is True
-    assert plog["plog_entry_count_total"] == 5
+    record = body["records"][0]
+    plog = record["plog"]
+    assert isinstance(plog, list)
+    assert len(plog) == 2
+    assert record["plog_entries_truncated"] is True
+    assert record["plog_entry_count_total"] == 5
 
 
 def test_nkin_detail_include_all_includes_capped_coefficients_and_plog(
@@ -3348,10 +3369,13 @@ def test_nkin_detail_include_all_includes_capped_coefficients_and_plog(
     assert rec["coefficients"]["coefficients_truncated"] is True
     assert rec["coefficients"]["coefficient_count_total"] == 24
     assert len(rec["coefficients"]["coefficients"]) == 3
-    # PLOG present but not truncated (only the 1 entry we attached;
-    # the Chebyshev factory doesn't seed PLOG rows).
-    assert rec["plog"]["plog_entries_truncated"] is False
-    assert rec["plog"]["plog_entry_count_total"] == 1
+    # PLOG present (bare list) + sibling truncation metadata; only the
+    # 1 entry we attached, so not truncated (the Chebyshev factory
+    # doesn't seed PLOG rows).
+    assert isinstance(rec["plog"], list)
+    assert len(rec["plog"]) == 1
+    assert rec["plog_entries_truncated"] is False
+    assert rec["plog_entry_count_total"] == 1
     # Points excluded from ``include=all``; require explicit opt-in.
     assert rec["points"] is None
     assert rec["points_truncated"] is None

@@ -163,21 +163,6 @@ class NetworkKineticsPLOGEntry(BaseModel):
     ea_kj_mol: float
 
 
-class NetworkKineticsPLOGPayload(BaseModel):
-    """PLOG-entry payload for ``include=plog`` on a kinetics record.
-
-    Entries are capped at ``settings.public_max_limit`` rows. When the
-    underlying table holds more entries than the cap,
-    ``plog_entries_truncated`` is ``True`` and ``plog_entry_count_total``
-    reports the full row count. Empty entries / counts for non-PLOG
-    kinds so the shape stays stable across kinds.
-    """
-
-    entries: list[NetworkKineticsPLOGEntry] = Field(default_factory=list)
-    plog_entry_count_total: int = 0
-    plog_entries_truncated: bool = False
-
-
 class NetworkKineticsPointEntry(BaseModel):
     """One ``network_kinetics_point`` row projected for ``include=points``."""
 
@@ -229,10 +214,11 @@ class ScientificNetworkKineticsRecord(BaseModel):
       non-Chebyshev kinds). The payload is capped at
       ``public_max_limit`` rows and exposes
       ``coefficient_count_total`` + ``coefficients_truncated``.
-    - ``plog`` — pressure-specific Arrhenius rows. The payload is
-      capped at ``public_max_limit`` rows and exposes
-      ``plog_entry_count_total`` + ``plog_entries_truncated``. Empty
-      entries / zero counts for non-PLOG kinds.
+    - ``plog`` — pressure-specific Arrhenius rows as a bare list,
+      capped at ``public_max_limit`` rows. Sibling fields
+      ``plog_entry_count_total`` + ``plog_entries_truncated`` on the
+      record carry the truncation metadata. Empty list / zero count /
+      ``False`` for non-PLOG kinds when requested.
     - ``points`` — tabulated (T, P, k) entries, capped at
       ``public_max_limit`` rows. When the count exceeds the cap,
       ``points_truncated`` is True and ``point_count_total`` reports
@@ -253,7 +239,9 @@ class ScientificNetworkKineticsRecord(BaseModel):
     available_sections: AvailableNetworkKineticsSections
 
     coefficients: NetworkKineticsChebyshevPayload | None = None
-    plog: NetworkKineticsPLOGPayload | None = None
+    plog: list[NetworkKineticsPLOGEntry] | None = None
+    plog_entry_count_total: int | None = None
+    plog_entries_truncated: bool | None = None
     points: list[NetworkKineticsPointEntry] | None = None
     point_count_total: int | None = None
     points_truncated: bool | None = None
@@ -279,7 +267,6 @@ __all__ = [
     "NetworkKineticsEvidenceSummary",
     "NetworkKineticsNetworkContext",
     "NetworkKineticsPLOGEntry",
-    "NetworkKineticsPLOGPayload",
     "NetworkKineticsPointEntry",
     "NetworkKineticsSolveContext",
     "ScientificNetworkKineticsDetailResponse",

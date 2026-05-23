@@ -55,7 +55,6 @@ from app.schemas.reads.scientific_network_kinetics import (
     NetworkKineticsEvidenceSummary,
     NetworkKineticsNetworkContext,
     NetworkKineticsPLOGEntry,
-    NetworkKineticsPLOGPayload,
     NetworkKineticsPointEntry,
     NetworkKineticsSolveContext,
     ScientificNetworkKineticsDetailResponse,
@@ -324,11 +323,14 @@ def _build_network_kinetics_record(
     if "coefficients" in includes:
         coefficients_block = _build_chebyshev_payload(cheb_row, cap=cap)
 
-    plog_block: NetworkKineticsPLOGPayload | None = None
+    plog_block: list[NetworkKineticsPLOGEntry] | None = None
+    plog_entries_truncated: bool | None = None
+    plog_entry_count_total: int | None = None
     if "plog" in includes:
-        plog_block = _build_plog_payload(
+        plog_block, plog_entries_truncated = _build_plog_entries(
             session, nk.id, total=plog_count, cap=cap
         )
+        plog_entry_count_total = plog_count
 
     points_block: list[NetworkKineticsPointEntry] | None = None
     points_truncated: bool | None = None
@@ -356,6 +358,8 @@ def _build_network_kinetics_record(
         available_sections=available,
         coefficients=coefficients_block,
         plog=plog_block,
+        plog_entry_count_total=plog_entry_count_total,
+        plog_entries_truncated=plog_entries_truncated,
         points=points_block,
         point_count_total=point_count_total,
         points_truncated=points_truncated,
@@ -451,21 +455,22 @@ def _build_chebyshev_payload(
     )
 
 
-def _build_plog_payload(
+def _build_plog_entries(
     session: Session,
     network_kinetics_id: int,
     *,
     total: int,
     cap: int,
-) -> NetworkKineticsPLOGPayload:
+) -> tuple[list[NetworkKineticsPLOGEntry], bool]:
     """Project PLOG rows for one kinetics record, capped at ``cap``.
 
-    Ordering is ``(pressure_bar ASC, entry_index ASC)`` — the primary-key
-    tuple on ``network_kinetics_plog``, so each kinetics record has a
-    stable, unique order. The DB-level ``LIMIT cap`` keeps the wire
-    payload bounded; ``plog_entry_count_total`` is the unbounded count
-    from the parent shape-metadata query so truncation is detectable
-    without a second scan.
+    Returns ``(entries, truncated)``. Ordering is
+    ``(pressure_bar ASC, entry_index ASC)`` — the primary-key tuple on
+    ``network_kinetics_plog``, so each kinetics record has a stable,
+    unique order. The DB-level ``LIMIT cap`` keeps the wire payload
+    bounded; ``truncated`` is derived from ``total`` (the unbounded
+    count from the parent shape-metadata query) so detecting truncation
+    does not require a second scan.
     """
     rows = session.scalars(
         select(NetworkKineticsPlog)
@@ -487,11 +492,7 @@ def _build_plog_payload(
         )
         for r in rows
     ]
-    return NetworkKineticsPLOGPayload(
-        entries=entries,
-        plog_entry_count_total=total,
-        plog_entries_truncated=total > cap,
-    )
+    return entries, total > cap
 
 
 def _build_point_entries(

@@ -16381,30 +16381,6 @@
         "title": "NetworkKineticsPLOGEntry",
         "type": "object"
       },
-      "NetworkKineticsPLOGPayload": {
-        "description": "PLOG-entry payload for ``include=plog`` on a kinetics record.\n\nEntries are capped at ``settings.public_max_limit`` rows. When the\nunderlying table holds more entries than the cap,\n``plog_entries_truncated`` is ``True`` and ``plog_entry_count_total``\nreports the full row count. Empty entries / counts for non-PLOG\nkinds so the shape stays stable across kinds.",
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/NetworkKineticsPLOGEntry"
-            },
-            "title": "Entries",
-            "type": "array"
-          },
-          "plog_entries_truncated": {
-            "default": false,
-            "title": "Plog Entries Truncated",
-            "type": "boolean"
-          },
-          "plog_entry_count_total": {
-            "default": 0,
-            "title": "Plog Entry Count Total",
-            "type": "integer"
-          }
-        },
-        "title": "NetworkKineticsPLOGPayload",
-        "type": "object"
-      },
       "NetworkKineticsPlogRead": {
         "description": "Read schema for a PLOG entry.",
         "properties": {
@@ -24529,7 +24505,7 @@
         "type": "object"
       },
       "ScientificNetworkKineticsRecord": {
-        "description": "One ``network_kinetics`` projected as a scientific record.\n\nDefault response: kinetics core block + parent network / solve /\nchannel context + bounded evidence and available_sections\nsummaries. Include tokens expand the response:\n\n- ``coefficients`` — Chebyshev coefficient rows (None for\n  non-Chebyshev kinds). The payload is capped at\n  ``public_max_limit`` rows and exposes\n  ``coefficient_count_total`` + ``coefficients_truncated``.\n- ``plog`` — pressure-specific Arrhenius rows. The payload is\n  capped at ``public_max_limit`` rows and exposes\n  ``plog_entry_count_total`` + ``plog_entries_truncated``. Empty\n  entries / zero counts for non-PLOG kinds.\n- ``points`` — tabulated (T, P, k) entries, capped at\n  ``public_max_limit`` rows. When the count exceeds the cap,\n  ``points_truncated`` is True and ``point_count_total`` reports\n  the full count.\n- ``source_calculations`` — compact source-calc summaries from the\n  parent solve.\n- ``review`` — review history rows (only when the parent solve is\n  reviewable; ``NetworkKinetics`` itself is not in\n  ``SubmissionRecordType``).",
+        "description": "One ``network_kinetics`` projected as a scientific record.\n\nDefault response: kinetics core block + parent network / solve /\nchannel context + bounded evidence and available_sections\nsummaries. Include tokens expand the response:\n\n- ``coefficients`` — Chebyshev coefficient rows (None for\n  non-Chebyshev kinds). The payload is capped at\n  ``public_max_limit`` rows and exposes\n  ``coefficient_count_total`` + ``coefficients_truncated``.\n- ``plog`` — pressure-specific Arrhenius rows as a bare list,\n  capped at ``public_max_limit`` rows. Sibling fields\n  ``plog_entry_count_total`` + ``plog_entries_truncated`` on the\n  record carry the truncation metadata. Empty list / zero count /\n  ``False`` for non-PLOG kinds when requested.\n- ``points`` — tabulated (T, P, k) entries, capped at\n  ``public_max_limit`` rows. When the count exceeds the cap,\n  ``points_truncated`` is True and ``point_count_total`` reports\n  the full count.\n- ``source_calculations`` — compact source-calc summaries from the\n  parent solve.\n- ``review`` — review history rows (only when the parent solve is\n  reviewable; ``NetworkKinetics`` itself is not in\n  ``SubmissionRecordType``).",
         "properties": {
           "available_sections": {
             "$ref": "#/components/schemas/AvailableNetworkKineticsSections"
@@ -24562,12 +24538,38 @@
           "plog": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/NetworkKineticsPLOGPayload"
+                "items": {
+                  "$ref": "#/components/schemas/NetworkKineticsPLOGEntry"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Plog"
+          },
+          "plog_entries_truncated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plog Entries Truncated"
+          },
+          "plog_entry_count_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plog Entry Count Total"
           },
           "point_count_total": {
             "anyOf": [
