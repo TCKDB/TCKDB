@@ -272,7 +272,13 @@ def try_extract_parameters_from_input_upload(
     canonical and must not be aborted by parameter-extraction failure.
     """
 
-    if artifact_in.kind is not ArtifactKind.input:
+    # ``artifact_in`` is a Pydantic model whose ``kind`` field is typed
+    # against ``tckdb_schemas.enums.ArtifactKind``; ``ArtifactKind`` here
+    # is the parallel ``app.db.models.common.ArtifactKind`` used by the
+    # ORM. Both are ``(str, Enum)`` with identical members, so a value
+    # comparison (``!=``) works across the boundary — an identity check
+    # would always fail because the enum classes are not the same object.
+    if artifact_in.kind != ArtifactKind.input:
         return None
     try:
         content = base64.b64decode(artifact_in.content_base64, validate=True)
