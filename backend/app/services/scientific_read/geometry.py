@@ -85,7 +85,7 @@ def get_geometry(
     geometry_id = resolve_geometry_handle(session, geometry_handle)
     geometry = session.get(Geometry, geometry_id)
     if geometry is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(f"geometry not found (geometry_id={geometry_id})")
+        raise NotFoundError("geometry not found")
 
     # Hosted abuse-control cap: refuse to materialize huge coordinate
     # payloads anonymously. See

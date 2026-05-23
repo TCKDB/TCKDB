@@ -66,6 +66,41 @@ If a future change introduces signed cookies or JWTs, add the corresponding secr
 
 ---
 
+## Public-read policy assumptions
+
+The scientific read endpoints (`/api/v1/scientific/...`) serve anonymous traffic in hosted deployments. Two operational assumptions back the policy choices made in the read layer — both must hold before exposing the API publicly.
+
+### Rejected / deprecated records are opt-in, not authorization-gated
+
+Public scientific search endpoints hide `rejected` and `deprecated` records by default. Callers may explicitly opt in via `include_rejected=true` and/or `include_deprecated=true` on any search request. The flags are **not** auth-gated — anonymous callers can flip them.
+
+This is an intentional transparency policy for scientific reproducibility, not an authorization boundary. The motivating use case is "I want to understand why this record was deprecated and what replaced it"; gating that behind auth would defeat the purpose of a public scientific archive.
+
+Operational consequence:
+
+- **Do not store private or sensitive data in rejected or deprecated records.** The same anonymous traffic that can read `approved` content can opt in to read these by name.
+- Curators rejecting a record should treat the rejection note as public.
+- If a future deployment policy needs to restrict this (e.g. a behind-the-firewall lab instance where deprecated data has a privacy implication), gate it at the ingress layer or fork the flag's default — do not assume the application enforces auth on these flags.
+
+### Artifact storage buckets must be private
+
+The scientific artifact read surface (`/api/v1/scientific/artifacts/...` and the `include=artifacts` projections on calculation detail / search) exposes artifact **metadata** only:
+
+- `kind`, `filename`, `sha256`, `bytes`, `created_at`
+- `uri` — the raw storage URI verbatim, e.g. `s3://bucket/key`
+
+The endpoint never inlines artifact body bytes, never resolves the URI to a presigned download URL, and no public endpoint accepts a caller-supplied URI as a download target.
+
+Operational consequence:
+
+- **Artifact storage buckets must be private** (no anonymous read ACL, no public bucket policy). The `uri` is a name, not an access grant — but it loses that property if the bucket is also publicly listable.
+- If a future endpoint generates presigned download URLs, it must enforce its own authorization separately; the public scientific read surface deliberately does not.
+- Bucket-listing capabilities should also be private — leaking a bucket-key namespace via the API is acceptable only when those names cannot be turned into reads externally.
+
+A deploy that fails either assumption is not safe to expose anonymously, regardless of how strict the application-level checks are.
+
+---
+
 ## Recommended hosted settings
 
 Not strictly required, but strongly recommended for any internet-exposed deployment.

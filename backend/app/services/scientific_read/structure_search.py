@@ -23,6 +23,14 @@ are excluded from results — a single seq-scan-per-row fallback would
 defeat the index. Exact mode keeps the indexed ``species.inchi_key``
 path; it does not need the cartridge.
 
+Visibility filtering (default-hidden ``rejected``/``deprecated``),
+deterministic ordering by ``review_rank`` (and ``similarity_score`` in
+similarity mode), and pagination are all pushed into SQL — a pathological
+substructure query (e.g. ``[#6]`` matching nearly every row) returns at
+most ``limit`` rows to Python. The exact post-filter ``total`` is
+computed by a separate aggregate query that derives both the total and
+the per-status review summary in one scan.
+
 See ``backend/docs/specs/scientific_structure_search.md`` for the full
 contract.
 """
@@ -33,7 +41,7 @@ from typing import Any
 
 from rdkit import Chem
 from rdkit.Chem import inchi as _inchi
-from sqlalchemy import bindparam, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.models.common import (
@@ -42,8 +50,8 @@ from app.db.models.common import (
 )
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.reads.scientific_common import (
-    REVIEW_RANK,
     RecordReviewBadge,
+    ReviewStatusSummary,
 )
 from app.schemas.reads.scientific_structure_search import (
     DEFAULT_SIMILARITY_THRESHOLD,
@@ -59,7 +67,6 @@ from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
     reject_client_sort,
-    review_summary,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -129,75 +136,79 @@ def search_species_by_structure(
     _enforce_mode_query_compatibility(request.mode, query_kind)
     threshold = _resolve_similarity_threshold(request)
 
-    # Dispatch to the per-mode SQL builder. Each builder returns a list
-    # of ``(species_entry_id, species_id, similarity_score)`` rows (with
-    # ``similarity_score`` None for non-similarity modes).
-    if request.mode is StructureSearchMode.substructure:
-        candidate_rows = _run_substructure_query(
-            session,
-            query_kind=query_kind,
-            query_value=query_value,
-        )
-    elif request.mode is StructureSearchMode.similarity:
-        candidate_rows = _run_similarity_query(
-            session,
-            query_kind=query_kind,
-            query_value=query_value,
-            threshold=threshold,
-        )
-    else:  # exact
-        candidate_rows = _run_exact_query(
-            session,
-            query_kind=query_kind,
-            query_value=query_value,
-        )
-
-    if not candidate_rows:
-        return _empty_response(request, includes, offset, limit, threshold)
-
-    entry_ids = [row[0] for row in candidate_rows]
-    score_by_entry: dict[int, float | None] = {
-        row[0]: row[2] for row in candidate_rows
-    }
-
-    # Trust gate: hide rejected / deprecated entries unless opted in.
-    badges = fetch_review_badges(
-        session,
-        record_type=SubmissionRecordType.species_entry,
-        record_ids=entry_ids,
-    )
     visible = visible_statuses(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
-    visible_entry_ids = [
-        eid for eid in entry_ids if badges[eid].status in visible
-    ]
-    if not visible_entry_ids:
-        return _empty_response(request, includes, offset, limit, threshold)
 
-    # Materialize the visible entries with their parent species so we
-    # can build the record envelope. One round trip each.
-    entries = _load_entries(session, visible_entry_ids)
+    # Dispatch to the per-mode SQL builder. Each builder runs:
+    #   1. an aggregate query that returns ``{status: count}`` over the
+    #      whole post-filter candidate set (used for ``total`` + the
+    #      review summary, never materializes per-row data), and
+    #   2. an ordered ``LIMIT/OFFSET``-bounded row query that returns at
+    #      most ``limit`` rows already in the response order.
+    if request.mode is StructureSearchMode.substructure:
+        status_counts, page_rows = _run_substructure_query(
+            session,
+            query_kind=query_kind,
+            query_value=query_value,
+            visible=visible,
+            offset=offset,
+            limit=limit,
+        )
+    elif request.mode is StructureSearchMode.similarity:
+        status_counts, page_rows = _run_similarity_query(
+            session,
+            query_kind=query_kind,
+            query_value=query_value,
+            threshold=threshold,
+            visible=visible,
+            offset=offset,
+            limit=limit,
+        )
+    else:  # exact
+        status_counts, page_rows = _run_exact_query(
+            session,
+            query_kind=query_kind,
+            query_value=query_value,
+            visible=visible,
+            offset=offset,
+            limit=limit,
+        )
+
+    summary = _summary_from_counts(status_counts)
+    total = summary.total
+
+    if not page_rows:
+        return _empty_response(
+            request,
+            includes,
+            offset,
+            limit,
+            threshold,
+            summary=summary,
+            total=total,
+        )
+
+    entry_ids = [row[0] for row in page_rows]
+
+    # Badge load is page-scoped — the aggregate above already populated
+    # the cross-page review summary, so we only need badges for the
+    # rows we're actually returning.
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.species_entry,
+        record_ids=entry_ids,
+    )
+
+    entries = _load_entries(session, entry_ids)
     species_by_id = _load_species(
         session, [e.species_id for e in entries.values()]
     )
 
-    summary = review_summary(badges[eid] for eid in visible_entry_ids)
-
-    # Deterministic ordering per mode.
-    sorted_ids = _apply_sort(
-        request.mode,
-        visible_entry_ids,
-        badges=badges,
-        score_by_entry=score_by_entry,
-    )
-    total = len(sorted_ids)
-    page_ids = sorted_ids[offset : offset + limit]
-
     records: list[ScientificSpeciesStructureSearchRecord] = []
-    for eid in page_ids:
+    for eid, _sid, score, _status in page_rows:
         entry = entries.get(eid)
         if entry is None:  # pragma: no cover — race with delete
             continue
@@ -210,7 +221,7 @@ def search_species_by_structure(
                 species=species,
                 badge=badges[eid],
                 mode=request.mode,
-                similarity_score=score_by_entry.get(eid),
+                similarity_score=score,
                 query_kind=query_kind,
                 query_value=query_value,
             )
@@ -387,16 +398,110 @@ def _inchi_key_from_query(
 _STORED_MOL_EXPR = "se.mol"
 
 
+# Visibility join — pulled into both the aggregate and the row query so
+# the SQL builder stays DRY. ``COALESCE`` defaults missing review rows to
+# ``not_reviewed`` (matching the Python ``fetch_review_badges`` default)
+# so an entry with no review row participates in the visibility filter
+# uniformly. The cast to ``text`` lets us bind ``visible`` as a string
+# array via ``ANY(:visible_statuses)`` without juggling PG enum types.
+_REVIEW_JOIN = (
+    "LEFT JOIN record_review AS rr "
+    "ON rr.record_type = 'species_entry'::submission_record_type "
+    "AND rr.record_id = se.id"
+)
+_REVIEW_STATUS_EXPR = (
+    "COALESCE(rr.status::text, 'not_reviewed')"
+)
+# review_rank ASC matches REVIEW_RANK in scientific_common.py — the SQL
+# CASE keeps the Python ordering authoritative.
+_REVIEW_RANK_EXPR = (
+    f"CASE {_REVIEW_STATUS_EXPR} "
+    "WHEN 'approved' THEN 0 "
+    "WHEN 'under_review' THEN 1 "
+    "WHEN 'not_reviewed' THEN 2 "
+    "WHEN 'deprecated' THEN 3 "
+    "WHEN 'rejected' THEN 4 "
+    "ELSE 5 END"
+)
+
+
+def _visible_status_values(
+    visible: set[RecordReviewStatus],
+) -> list[str]:
+    return [s.value for s in visible]
+
+
+def _aggregate_status_counts(
+    session: Session,
+    *,
+    match_expr: str,
+    params: dict[str, Any],
+) -> dict[str, int]:
+    """Run ``GROUP BY review_status`` aggregate over the matched set.
+
+    Returns ``{status_value: count}`` for every status that has at least
+    one visible row. The caller sums these for ``total`` and projects
+    them onto :class:`ReviewStatusSummary`.
+
+    The query touches each matching row server-side exactly once but
+    never returns per-row data — the wire result is at most five rows
+    (one per ``RecordReviewStatus`` value), independent of how broad the
+    cartridge match is.
+    """
+    sql = text(
+        f"""
+        SELECT
+            {_REVIEW_STATUS_EXPR} AS review_status,
+            COUNT(*) AS cnt
+        FROM species_entry AS se
+        JOIN species AS sp ON sp.id = se.species_id
+        {_REVIEW_JOIN}
+        WHERE {match_expr}
+          AND {_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)
+        GROUP BY {_REVIEW_STATUS_EXPR}
+        """
+    )
+    rows = session.execute(sql, params).all()
+    return {row.review_status: int(row.cnt) for row in rows}
+
+
+def _summary_from_counts(counts: dict[str, int]) -> ReviewStatusSummary:
+    """Project the SQL aggregate into the public review summary shape."""
+    summary = ReviewStatusSummary(
+        approved=counts.get(RecordReviewStatus.approved.value, 0),
+        under_review=counts.get(RecordReviewStatus.under_review.value, 0),
+        not_reviewed=counts.get(RecordReviewStatus.not_reviewed.value, 0),
+        deprecated=counts.get(RecordReviewStatus.deprecated.value, 0),
+        rejected=counts.get(RecordReviewStatus.rejected.value, 0),
+    )
+    summary.total = (
+        summary.approved
+        + summary.under_review
+        + summary.not_reviewed
+        + summary.deprecated
+        + summary.rejected
+    )
+    return summary
+
+
 def _run_substructure_query(
     session: Session,
     *,
     query_kind: StructureQueryKind,
     query_value: str,
-) -> list[tuple[int, int, float | None]]:
-    """Return matching ``(species_entry_id, species_id, None)`` rows.
+    visible: set[RecordReviewStatus],
+    offset: int,
+    limit: int,
+) -> tuple[dict[str, int], list[tuple[int, int, float | None, str]]]:
+    """Bounded substructure search.
 
-    The cartridge ``@>`` operator evaluates the substructure containment
-    test database-side; we never iterate Python-side over species.
+    Returns ``(status_counts, page_rows)``. ``page_rows`` is
+    ``LIMIT/OFFSET``-bounded and already ordered
+    (``review_rank ASC, species_entry_id DESC``). ``status_counts``
+    spans the full post-filter set and is used to derive the exact total
+    and review summary. The cartridge ``@>`` operator evaluates the
+    substructure containment test database-side; we never iterate
+    Python-side over species.
     """
     if query_kind is StructureQueryKind.smarts:
         # Parse client-side to surface a 422 before issuing SQL.
@@ -412,17 +517,41 @@ def _run_substructure_query(
             "query_smiles or query_smarts."
         )
 
-    sql = text(
+    match_expr = (
+        f"{_STORED_MOL_EXPR} IS NOT NULL "
+        f"AND {_STORED_MOL_EXPR} @> {query_expr}"
+    )
+    params: dict[str, Any] = {
+        "query_text": bound_value,
+        "visible_statuses": _visible_status_values(visible),
+    }
+    counts = _aggregate_status_counts(
+        session, match_expr=match_expr, params=params
+    )
+
+    page_sql = text(
         f"""
-        SELECT se.id AS species_entry_id, sp.id AS species_id
+        SELECT
+            se.id AS species_entry_id,
+            sp.id AS species_id,
+            {_REVIEW_STATUS_EXPR} AS review_status
         FROM species_entry AS se
         JOIN species AS sp ON sp.id = se.species_id
-        WHERE {_STORED_MOL_EXPR} IS NOT NULL
-          AND {_STORED_MOL_EXPR} @> {query_expr}
+        {_REVIEW_JOIN}
+        WHERE {match_expr}
+          AND {_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)
+        ORDER BY {_REVIEW_RANK_EXPR} ASC, se.id DESC
+        LIMIT :row_limit OFFSET :row_offset
         """
     )
-    rows = session.execute(sql, {"query_text": bound_value}).all()
-    return [(row.species_entry_id, row.species_id, None) for row in rows]
+    rows = session.execute(
+        page_sql,
+        {**params, "row_limit": limit, "row_offset": offset},
+    ).all()
+    return counts, [
+        (row.species_entry_id, row.species_id, None, row.review_status)
+        for row in rows
+    ]
 
 
 def _run_similarity_query(
@@ -431,12 +560,17 @@ def _run_similarity_query(
     query_kind: StructureQueryKind,
     query_value: str,
     threshold: float,
-) -> list[tuple[int, int, float | None]]:
-    """Return ``(entry_id, species_id, score)`` rows above ``threshold``.
+    visible: set[RecordReviewStatus],
+    offset: int,
+    limit: int,
+) -> tuple[dict[str, int], list[tuple[int, int, float | None, str]]]:
+    """Bounded similarity search.
 
-    Uses ``tanimoto_sml(morganbv_fp(stored_mol), morganbv_fp(query_mol))``;
-    the threshold filter is applied database-side via a parameterized
-    HAVING-style ``WHERE``.
+    Returns ``(status_counts, page_rows)`` where ``page_rows`` is sorted
+    by ``similarity_score DESC, review_rank ASC, species_entry_id DESC``
+    and bounded by ``LIMIT/OFFSET``. Uses
+    ``tanimoto_sml(morganbv_fp(stored_mol), morganbv_fp(query_mol))``;
+    the threshold filter is applied database-side via ``>= :threshold``.
     """
     if query_kind is StructureQueryKind.smiles:
         canonical_smiles = _parse_smiles_to_canonical(query_value)
@@ -448,30 +582,53 @@ def _run_similarity_query(
             "query_smiles or query_inchi."
         )
 
-    sql = text(
+    score_expr = (
+        f"tanimoto_sml(morganbv_fp({_STORED_MOL_EXPR}), "
+        f"morganbv_fp(mol_from_smiles(:query_text)))"
+    )
+    match_expr = (
+        f"{_STORED_MOL_EXPR} IS NOT NULL "
+        f"AND {score_expr} >= :threshold"
+    )
+    params: dict[str, Any] = {
+        "query_text": canonical_smiles,
+        "threshold": threshold,
+        "visible_statuses": _visible_status_values(visible),
+    }
+    counts = _aggregate_status_counts(
+        session, match_expr=match_expr, params=params
+    )
+
+    page_sql = text(
         f"""
         SELECT
             se.id AS species_entry_id,
             sp.id AS species_id,
-            tanimoto_sml(
-                morganbv_fp({_STORED_MOL_EXPR}),
-                morganbv_fp(mol_from_smiles(:query_text))
-            ) AS similarity_score
+            {score_expr} AS similarity_score,
+            {_REVIEW_STATUS_EXPR} AS review_status
         FROM species_entry AS se
         JOIN species AS sp ON sp.id = se.species_id
-        WHERE {_STORED_MOL_EXPR} IS NOT NULL
-          AND tanimoto_sml(
-                morganbv_fp({_STORED_MOL_EXPR}),
-                morganbv_fp(mol_from_smiles(:query_text))
-              ) >= :threshold
+        {_REVIEW_JOIN}
+        WHERE {match_expr}
+          AND {_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)
+        ORDER BY similarity_score DESC NULLS LAST,
+                 {_REVIEW_RANK_EXPR} ASC,
+                 se.id DESC
+        LIMIT :row_limit OFFSET :row_offset
         """
-    ).bindparams(bindparam("threshold", value=threshold))
+    )
 
     rows = session.execute(
-        sql, {"query_text": canonical_smiles, "threshold": threshold}
+        page_sql,
+        {**params, "row_limit": limit, "row_offset": offset},
     ).all()
-    return [
-        (row.species_entry_id, row.species_id, float(row.similarity_score))
+    return counts, [
+        (
+            row.species_entry_id,
+            row.species_id,
+            float(row.similarity_score),
+            row.review_status,
+        )
         for row in rows
     ]
 
@@ -481,8 +638,11 @@ def _run_exact_query(
     *,
     query_kind: StructureQueryKind,
     query_value: str,
-) -> list[tuple[int, int, float | None]]:
-    """Return entries whose canonical InChIKey matches the query.
+    visible: set[RecordReviewStatus],
+    offset: int,
+    limit: int,
+) -> tuple[dict[str, int], list[tuple[int, int, float | None, str]]]:
+    """Bounded exact-match by canonical InChIKey.
 
     Computes the query's InChIKey via RDKit and matches against the
     indexed ``species.inchi_key`` column — no cartridge call required
@@ -490,16 +650,38 @@ def _run_exact_query(
     compatibility check.
     """
     target_key = _inchi_key_from_query(query_kind, query_value)
-    sql = text(
-        """
-        SELECT se.id AS species_entry_id, sp.id AS species_id
+    match_expr = "sp.inchi_key = :inchi_key"
+    params: dict[str, Any] = {
+        "inchi_key": target_key,
+        "visible_statuses": _visible_status_values(visible),
+    }
+    counts = _aggregate_status_counts(
+        session, match_expr=match_expr, params=params
+    )
+
+    page_sql = text(
+        f"""
+        SELECT
+            se.id AS species_entry_id,
+            sp.id AS species_id,
+            {_REVIEW_STATUS_EXPR} AS review_status
         FROM species_entry AS se
         JOIN species AS sp ON sp.id = se.species_id
-        WHERE sp.inchi_key = :inchi_key
+        {_REVIEW_JOIN}
+        WHERE {match_expr}
+          AND {_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)
+        ORDER BY {_REVIEW_RANK_EXPR} ASC, se.id DESC
+        LIMIT :row_limit OFFSET :row_offset
         """
     )
-    rows = session.execute(sql, {"inchi_key": target_key}).all()
-    return [(row.species_entry_id, row.species_id, None) for row in rows]
+    rows = session.execute(
+        page_sql,
+        {**params, "row_limit": limit, "row_offset": offset},
+    ).all()
+    return counts, [
+        (row.species_entry_id, row.species_id, None, row.review_status)
+        for row in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -529,28 +711,6 @@ def _load_species(
         session.query(Species).filter(Species.id.in_(species_ids)).all()
     )
     return {s.id: s for s in rows}
-
-
-def _apply_sort(
-    mode: StructureSearchMode,
-    entry_ids: list[int],
-    *,
-    badges: dict[int, RecordReviewBadge],
-    score_by_entry: dict[int, float | None],
-) -> list[int]:
-    """Return ``entry_ids`` ordered per the per-mode default sort."""
-    if mode is StructureSearchMode.similarity:
-        # similarity_score DESC, review_rank ASC, species_entry_id DESC
-        def key(eid: int) -> tuple:
-            score = score_by_entry.get(eid) or 0.0
-            return (-score, REVIEW_RANK[badges[eid].status], -eid)
-
-        return sorted(entry_ids, key=key)
-    # substructure / exact: review_rank ASC, species_entry_id DESC
-    return sorted(
-        entry_ids,
-        key=lambda eid: (REVIEW_RANK[badges[eid].status], -eid),
-    )
 
 
 def _build_record(
@@ -624,6 +784,9 @@ def _empty_response(
     offset: int,
     limit: int,
     threshold: float,
+    *,
+    summary: ReviewStatusSummary | None = None,
+    total: int = 0,
 ) -> ScientificSpeciesStructureSearchResponse:
     return ScientificSpeciesStructureSearchResponse(
         request=RequestEcho(
@@ -632,10 +795,10 @@ def _empty_response(
             sort=_DEFAULT_SORT_BY_MODE[request.mode],
             include=sorted(includes),
         ),
-        review_summary=review_summary([]),
+        review_summary=summary if summary is not None else ReviewStatusSummary(),
         records=[],
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=0, total=0
+            offset=offset, limit=limit, returned=0, total=total
         ),
     )
 

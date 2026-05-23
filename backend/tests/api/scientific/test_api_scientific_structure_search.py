@@ -590,3 +590,97 @@ def test_structure_search_uses_stored_mol_column_not_inline_conversion():
     # Sanity: both builders reference the stored column expression.
     assert "_STORED_MOL_EXPR" in source[sub_start:sim_start]
     assert "_STORED_MOL_EXPR" in source[sim_start:exact_start]
+
+
+# ---------------------------------------------------------------------------
+# SQL-side pagination guard (abuse-control)
+#
+# Anonymous structure searches must not be able to materialize the full
+# species catalog for a broad query (e.g. a wildcard SMARTS). Each
+# per-mode SQL builder must push ``LIMIT/OFFSET`` into the row query
+# rather than slicing in Python after a full table scan.
+# ---------------------------------------------------------------------------
+
+
+def test_structure_search_pushes_limit_into_sql():
+    from pathlib import Path
+
+    from app.services.scientific_read import structure_search as svc
+
+    source = Path(svc.__file__).read_text(encoding="utf-8")
+    sub_start = source.index("def _run_substructure_query")
+    sim_start = source.index("def _run_similarity_query")
+    exact_start = source.index("def _run_exact_query")
+    end = source.index("# ----", exact_start)
+
+    substructure = source[sub_start:sim_start]
+    similarity = source[sim_start:exact_start]
+    exact = source[exact_start:end]
+
+    for name, body in (
+        ("substructure", substructure),
+        ("similarity", similarity),
+        ("exact", exact),
+    ):
+        assert "LIMIT :row_limit" in body, (
+            f"{name} builder must push LIMIT into SQL; row materialization "
+            "must be bounded server-side."
+        )
+        assert "OFFSET :row_offset" in body, (
+            f"{name} builder must push OFFSET into SQL; deep pagination "
+            "must not require materializing skipped rows."
+        )
+        assert "ORDER BY" in body, (
+            f"{name} builder must declare ORDER BY before LIMIT so "
+            "pagination is deterministic."
+        )
+
+
+def test_broad_substructure_respects_requested_limit(client, db_session):
+    # Five entries all containing the C[#6] pattern; a wildcard SMARTS
+    # query would match every one. With limit=2 the response must
+    # return exactly 2 records and total must reflect the full visible
+    # set (5) — proving the cap came from SQL LIMIT, not a Python slice
+    # over an unbounded list.
+    smiles_list = ["CC", "CCC", "CCCC", "CCCCC", "CCCCCC"]
+    for s in smiles_list:
+        _make_real_species(db_session, s)
+
+    resp = client.get(
+        SEARCH_URL
+        + "?query_smarts=%5B%236%5D%5B%236%5D&mode=substructure&limit=2&offset=0"
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["records"]) == 2
+    assert body["pagination"]["limit"] == 2
+    assert body["pagination"]["returned"] == 2
+    # Total reflects the post-filter candidate set (all 5).
+    assert body["pagination"]["total"] == 5
+
+
+def test_broad_substructure_offset_pagination_walks_full_set(
+    client, db_session
+):
+    # Same five-entry setup; walking offsets 0,2,4 must yield disjoint
+    # pages whose union equals the full visible set. Proves SQL
+    # OFFSET/LIMIT is correctly threaded through the deterministic sort.
+    smiles_list = ["CC", "CCC", "CCCC", "CCCCC", "CCCCCC"]
+    for s in smiles_list:
+        _make_real_species(db_session, s)
+
+    seen: list[str] = []
+    for offset in (0, 2, 4):
+        resp = client.get(
+            SEARCH_URL
+            + "?query_smarts=%5B%236%5D%5B%236%5D"
+            + f"&mode=substructure&limit=2&offset={offset}"
+        )
+        assert resp.status_code == 200
+        page_refs = [r["species_entry_ref"] for r in resp.json()["records"]]
+        seen.extend(page_refs)
+
+    # Five entries total: pages of 2,2,1.
+    assert len(seen) == 5
+    # All distinct — no row appears on two pages.
+    assert len(set(seen)) == 5

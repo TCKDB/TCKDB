@@ -51,6 +51,26 @@ The endpoint:
 
 Recursive forbidden-key tests guard the contract.
 
+### Operational assumption: private storage bucket
+
+The `uri` exposure is safe **only** under the operational assumption
+that the underlying storage bucket is private. Specifically:
+
+- Artifact storage buckets MUST be private (no anonymous read ACL, no
+  public bucket policy).
+- The `uri` returned by this endpoint is a name, not an access grant —
+  but it loses that property if the bucket is also publicly listable
+  or readable.
+- No public TCKDB endpoint accepts a caller-supplied artifact `uri` as
+  input for download, presign, or proxy. If a future endpoint
+  generates presigned download URLs it must enforce its own
+  authorization separately; this read surface deliberately does not.
+
+The deployment-side restatement of this assumption lives in
+[`docs/deployment/production_checklist.md`](../../../docs/deployment/production_checklist.md#artifact-storage-buckets-must-be-private).
+Hosted deploys that cannot honor it must not expose the scientific
+read API anonymously.
+
 ## 4. Response fragments
 
 Per-record shape:

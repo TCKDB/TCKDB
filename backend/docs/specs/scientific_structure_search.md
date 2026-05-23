@@ -249,6 +249,13 @@ Restored rejected / deprecated entries sort after their better-reviewed
 peers because `review_rank` is the first (substructure / exact) or
 second (similarity) tie-breaker in the default sort.
 
+The opt-in flags are **not** auth-gated — anonymous callers can flip
+them. This is an intentional transparency policy for scientific
+reproducibility, not an authorization boundary; the operational
+implication ("do not store private data in rejected/deprecated
+records") is documented in
+[`docs/deployment/production_checklist.md`](../../../docs/deployment/production_checklist.md#public-read-policy-assumptions).
+
 ---
 
 ## Internal-ID behavior
@@ -293,6 +300,29 @@ SQL builders.
 
 Exact mode keeps the indexed `species.inchi_key` lookup path — it
 does not touch the cartridge.
+
+### SQL-side pagination bound
+
+Review-status visibility filtering, deterministic ordering, and
+`LIMIT/OFFSET` pagination are all pushed into SQL. A broad query
+(e.g. a wildcard SMARTS that matches most of the catalog) returns at
+most `limit` rows to Python; the candidate set is never materialized
+in application memory.
+
+Each per-mode builder issues two queries against the same
+`species_entry JOIN species LEFT JOIN record_review` shape:
+
+- An aggregate `GROUP BY review_status` query whose wire result is
+  bounded by the number of `RecordReviewStatus` values. Used to derive
+  the exact post-filter `pagination.total` and the `review_summary`.
+- An ordered, `LIMIT`/`OFFSET`-bounded row query that returns only the
+  visible page. Sort keys live in SQL (`similarity_score DESC`,
+  `review_rank ASC` via a `CASE`, `species_entry_id DESC`).
+
+This is enforced by a source-inspection guard test
+(`test_structure_search_pushes_limit_into_sql`) and a behavioral
+test that walks a multi-page query against more rows than fit in one
+page.
 
 **Deferred follow-ups:**
 

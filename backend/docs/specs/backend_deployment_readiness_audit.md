@@ -275,13 +275,22 @@ Ordered by impact-per-effort, drawing from the P0/P1 list:
 7. **Rate-limit Redis backend (P1-1)** — only when scaling past one worker. Until then, the in-process store is honest.
 8. **Sentry integration (P2)** — defer until first real user traffic; integrate before public launch.
 
+### Post-audit security-review follow-ups (addressed)
+
+The pre-merge security review of the public-read surface returned no critical/high findings. The minor tightening nits it flagged have been addressed:
+
+- Structure search now pushes review-status visibility, deterministic ordering, and `LIMIT/OFFSET` into SQL — a broad query (e.g. wildcard SMARTS) cannot materialize the full species catalog in Python. The exact post-filter `total` is derived from a bounded `GROUP BY review_status` aggregate query.
+- Geometry detail no longer echoes the internal `geometry_id` in the defensive 404 message ([`geometry.py`](../../app/services/scientific_read/geometry.py)).
+- The opt-in `include_rejected` / `include_deprecated` visibility policy is now explicitly documented as anonymous-flippable in [`production_checklist.md`](../../../docs/deployment/production_checklist.md#rejected--deprecated-records-are-opt-in-not-authorization-gated) and the structure-search spec.
+- The artifact `uri` exposure's private-storage-bucket assumption is now restated in both [`production_checklist.md`](../../../docs/deployment/production_checklist.md#artifact-storage-buckets-must-be-private) and [`scientific_artifact_reads.md`](scientific_artifact_reads.md#operational-assumption-private-storage-bucket).
+
 ### Evaluation of the audit-prompt's suggested next-task list
 
 | Suggested task | Verdict |
 |---|---|
 | Materialized/indexed RDKit mol column for structure search | ✅ Done — P1-3, migration `d4e5f6a7b8c9`. |
 | Standalone bulk export endpoint | **Defer** — no real consumer demand yet; pagination + client looping suffices. Add only when a downstream pipeline asks. |
-| Artifact URI exposure policy | **Already correct** — documented design; URIs are storage keys, not signed URLs. Reaffirm in deploy docs; no code change. |
+| Artifact URI exposure policy | **Already correct** — documented design; URIs are storage keys, not signed URLs. Reaffirm in deploy docs; no code change. Private-bucket assumption now restated in [`production_checklist.md`](../../../docs/deployment/production_checklist.md#artifact-storage-buckets-must-be-private) and [`scientific_artifact_reads.md`](scientific_artifact_reads.md#operational-assumption-private-storage-bucket). |
 | Migration strategy cleanup for deployed DB | **Yes** — P0-2/P0-3, top priority. |
 | OpenAPI contract freeze | ✅ Done — P1-8, see `tests/api/test_openapi_snapshot.py`. |
 | Rate-limit budget review | **Partial** — cost-weighted buckets for structure-search / `include=all` would help; full Redis migration only at scale (P1-1). |
