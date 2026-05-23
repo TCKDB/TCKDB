@@ -133,6 +133,14 @@ class Settings(BaseSettings):
     min_supported_tckdb_client_version: str = "0.11.0"
     enforce_tckdb_client_version_on_writes: bool = True
 
+    # Observability: log output format and minimum level. ``text`` is
+    # the developer-friendly default; hosted deployments set
+    # ``LOG_FORMAT=json`` so logs land in their structured backend
+    # with ``request_id``, ``level``, ``logger``, ``message`` fields.
+    # Configured by :mod:`app.api.logging_config`.
+    log_format: str = "text"
+    log_level: str = "INFO"
+
     # CORS — empty allow-list means "no CORS middleware registered",
     # which is the correct hosted default. Production deployments set
     # ``CORS_ALLOW_ORIGINS="https://app.tckdb.org"`` (one or more

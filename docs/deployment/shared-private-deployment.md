@@ -298,6 +298,42 @@ A shared private deployment is private. Treat it like one:
 
 ---
 
+## Observability and operator probes
+
+Two HTTP probes are exposed for operators and load balancers:
+
+```bash
+# Liveness — confirms the process is up and can run SELECT 1.
+curl -i https://tckdb.lab.example.org/api/v1/health
+
+# Readiness — confirms DB connectivity AND that the schema is migrated.
+# The body includes the currently-installed Alembic revision so a
+# half-migrated deploy is visible without shelling into the host.
+curl -i https://tckdb.lab.example.org/api/v1/readyz
+```
+
+A healthy `/readyz` returns `200` with:
+
+```json
+{"status":"ready","database":"ok","alembic_revision":"<rev>"}
+```
+
+A degraded deploy returns `503` with a stable `code` field
+(`database_unavailable`, `schema_not_initialized`). The body never
+contains driver text, the DB URL, or stack traces.
+
+Every response carries an `X-Request-ID` header. Clients may set their
+own value on inbound requests for correlation; the server echoes it
+when it matches a safe pattern, otherwise it generates a fresh
+UUID-style id. Lab/HPC scripts that log this header can be correlated
+end-to-end with the API access log.
+
+For structured log collection set `LOG_FORMAT=json` on the API process.
+Log records then arrive as one JSON object per line with at least
+`timestamp`, `level`, `logger`, `message`, and `request_id`.
+
+---
+
 ## Backup and restore basics
 
 A shared deployment is the system of record for data the lab cares

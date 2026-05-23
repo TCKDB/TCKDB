@@ -213,6 +213,8 @@ _AUTH_REGISTER_PATHS = frozenset({
 _HEALTH_PATHS = frozenset({
     "/api/v1/health",
     "/api/v1/health/",
+    "/api/v1/readyz",
+    "/api/v1/readyz/",
 })
 
 # Public read-classified GET prefixes. POST searches are handled

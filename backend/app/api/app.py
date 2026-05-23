@@ -10,7 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.config import settings
 from app.api.errors import register_exception_handlers
+from app.api.logging_config import configure_logging
 from app.api.rate_limit import RateLimitMiddleware
+from app.api.request_id import RequestIDMiddleware
 from app.api.router import api_router
 
 
@@ -34,6 +36,7 @@ async def _lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    configure_logging()
     # Passing ``None`` for the docs URL prevents FastAPI from
     # registering the route. Hosted deployments default to off via
     # ``EXPOSE_API_DOCS=false`` (see settings); local/dev leaves it on.
@@ -47,11 +50,13 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
         **docs_kwargs,
     )
-    # CORS first so preflight responses are short-circuited before
-    # any other middleware runs. An empty allow-list means we do
-    # *not* register the middleware at all — the default
-    # browser-rejects-cross-origin posture is the right hosted
-    # default.
+    # Middleware ordering. Starlette runs middleware in
+    # most-recently-added-first order, so the final inbound chain
+    # below is ``RequestID -> RateLimit -> CORS -> router``. The
+    # request id has to be set first so every downstream layer
+    # (rate-limit log lines, error envelopes, route handlers) can
+    # read it from ``request.state.request_id`` or the logging
+    # context.
     if settings.cors_allow_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -61,6 +66,7 @@ def create_app() -> FastAPI:
             allow_headers=settings.cors_allow_headers,
         )
     app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(RequestIDMiddleware)
     app.include_router(api_router, prefix="/api/v1")
     register_exception_handlers(app)
     return app

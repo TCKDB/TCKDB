@@ -674,18 +674,37 @@ docker compose --env-file .env.selfhosted ps
 ### External (tunnel)
 
 ```bash
+# Liveness — process up, DB reachable.
 curl -fsS https://api.tckdb.example.org/api/v1/health
 # -> {"status":"ok"}
+
+# Readiness — DB reachable AND schema migrated. Body includes the
+# Alembic revision currently installed.
+curl -fsS https://api.tckdb.example.org/api/v1/readyz
+# -> {"status":"ready","database":"ok","alembic_revision":"<rev>"}
 ```
 
-A non-200 here means either the tunnel is misrouted (Cloudflare side)
-or `tckdb-api.service` is down (`systemctl status tckdb-api`).
+A non-200 on `/health` means either the tunnel is misrouted (Cloudflare
+side) or `tckdb-api.service` is down (`systemctl status tckdb-api`).
+A non-200 on `/readyz` while `/health` is `200` means the process is
+up but the database is unreachable or the schema has not been
+migrated — fix before re-routing traffic.
+
+Every response carries an `X-Request-ID` header. Clients may set their
+own value (matching `^[A-Za-z0-9._\-]+$`, max 128 chars) for
+end-to-end correlation; the server echoes it when safe and otherwise
+generates a UUID-style id. Hosted log shipping should enable
+`LOG_FORMAT=json` so each log record carries `request_id`, `level`,
+`logger`, and `message` fields.
 
 ### Monitoring
 
 For a single-node deployment, a recurring uptime check from an external
-service (UptimeRobot, healthchecks.io) against `/api/v1/health` is
-sufficient. Page on three consecutive failures.
+service (UptimeRobot, healthchecks.io) against `/api/v1/readyz` is
+the right probe for load-balancer decisions (it reports both
+connectivity and schema state); `/api/v1/health` is a strictly
+lighter liveness probe useful for process-up alerts. Page on three
+consecutive failures.
 
 ---
 

@@ -74,6 +74,9 @@ Settings alone are not enough. Before opening the deployment to traffic:
 - [ ] Rate limits trip under intentional flood: hit `/auth/login` 11 times in one minute from one IP, confirm the 11th returns `429` with a `Retry-After` header.
 - [ ] PostgreSQL `statement_timeout` is set at the role level: `ALTER ROLE tckdb SET statement_timeout = '30s'`.
 - [ ] `/api/v1/health` returns `200`.
+- [ ] `/api/v1/readyz` returns `200` and a body of the shape `{"status":"ready","database":"ok","alembic_revision":"<rev>"}`. A non-`ready` response means the API is up but the DB / schema is not — do *not* route traffic in that state.
+- [ ] `X-Request-ID` is present on every response (try `curl -i https://your-host/api/v1/health` and confirm the header). Clients may set their own `X-Request-ID` on requests for correlation; the server echoes it when safe.
+- [ ] `LOG_FORMAT=json` is set so hosted logs are structured and include `request_id`, `level`, `logger`, `message`. (Local/dev defaults to human-readable text.)
 - [ ] Reverse-proxy / tunnel terminates TLS at the edge; the API itself listens only on `127.0.0.1`.
 - [ ] Backups are configured and verified by running a restore drill at least once (see [shared-private-deployment.md §Backup and restore basics](shared-private-deployment.md#backup-and-restore-basics)).
 
