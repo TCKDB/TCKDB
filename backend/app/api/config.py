@@ -6,10 +6,23 @@ Reuses the same ``DB_*`` variables consumed by ``alembic/env.py`` and
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
+DeploymentMode = Literal["local", "shared_private", "hosted_public"]
+
+
 class Settings(BaseSettings):
+    # Deployment posture. Drives the startup safety guard in
+    # :mod:`app.api.startup_checks` — ``local`` permits developer-friendly
+    # defaults (open registration, exposed docs, no TLS cookie), while
+    # ``shared_private`` and ``hosted_public`` refuse to boot when any
+    # production-required setting is unsafe. See
+    # ``docs/deployment/production_checklist.md``.
+    deployment_mode: DeploymentMode = "local"
+
     db_user: str = "tckdb"
     db_password: str = "tckdb"
     db_host: str = "127.0.0.1"

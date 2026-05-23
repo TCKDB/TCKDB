@@ -14,6 +14,7 @@ from app.api.logging_config import configure_logging
 from app.api.rate_limit import RateLimitMiddleware
 from app.api.request_id import RequestIDMiddleware
 from app.api.router import api_router
+from app.api.startup_checks import validate_deployment_safety
 
 
 @asynccontextmanager
@@ -37,6 +38,11 @@ async def _lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     configure_logging()
+    # Refuse to boot a hosted/public deployment with unsafe settings.
+    # No-op in DEPLOYMENT_MODE=local (the test/dev default), so existing
+    # fixtures are unaffected. See app/api/startup_checks.py and
+    # docs/deployment/production_checklist.md.
+    validate_deployment_safety(settings)
     # Passing ``None`` for the docs URL prevents FastAPI from
     # registering the route. Hosted deployments default to off via
     # ``EXPOSE_API_DOCS=false`` (see settings); local/dev leaves it on.

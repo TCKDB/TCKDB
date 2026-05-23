@@ -145,14 +145,24 @@ Auth is the model from
 For any deployment reachable beyond `127.0.0.1`, set:
 
 ```env
+DEPLOYMENT_MODE=shared_private
 AUTH_ALLOW_OPEN_REGISTRATION=false
 ```
+
+`DEPLOYMENT_MODE=shared_private` switches on the startup safety guard
+(see [Production checklist](production_checklist.md#deployment-mode-and-startup-guard)).
+The app refuses to boot if `AUTH_ALLOW_OPEN_REGISTRATION`,
+`EXPOSE_API_DOCS`, `LEGACY_READS_REQUIRE_AUTH`, `SESSION_COOKIE_SECURE`,
+`ALLOW_PUBLIC_INTERNAL_IDS`, or `RATE_LIMIT_ENABLED` are at their
+local-dev values. Settings documentation alone is no longer the only
+gate — the process exits with a clear error listing every unsafe
+setting at once.
 
 Reasoning: with the API reachable on the lab network, open
 registration is a soft account-creation backdoor. Disable it and seed
 every account explicitly. Single-machine private deployments may keep
 open registration on because the API is bound to `127.0.0.1` and
-unreachable from outside.
+unreachable from outside (and run with `DEPLOYMENT_MODE=local`).
 
 A starter set of policies for shared deployments:
 

@@ -8,21 +8,49 @@ The reference template that already encodes every safe value is [`.env.selfhoste
 
 ---
 
+## Deployment mode and startup guard
+
+Set `DEPLOYMENT_MODE` to one of:
+
+| Value | Use |
+|---|---|
+| `local` | Single-developer laptop / CI. Developer-friendly defaults (open registration, exposed docs, plaintext cookies) are allowed. Default if unset. |
+| `shared_private` | Lab/internal deployment behind a private network. All Required hosted settings below are enforced at startup. |
+| `hosted_public` | Public, internet-facing deployment. Same enforced settings as `shared_private`, plus `CORS_ALLOW_ORIGINS` may not contain `*`. |
+
+In `shared_private` and `hosted_public`, the API refuses to boot if any required setting is at an unsafe value. The error message lists every violation in one pass, so a misconfigured deploy fails fast instead of running with quiet production gaps. Implementation: [`backend/app/api/startup_checks.py`](../../backend/app/api/startup_checks.py).
+
+Examples:
+
+```env
+# Local development
+DEPLOYMENT_MODE=local
+
+# Shared private (lab/internal) deployment
+DEPLOYMENT_MODE=shared_private
+
+# Public deployment
+DEPLOYMENT_MODE=hosted_public
+```
+
+---
+
 ## Required hosted settings
 
-Every row below must be set to the indicated value before the API is reachable from outside the host loopback interface.
+Every row below must be set to the indicated value before the API is reachable from outside the host loopback interface. In `DEPLOYMENT_MODE=shared_private` or `hosted_public`, the startup guard refuses to boot when any of the rows tagged "**enforced**" below is at an unsafe value.
 
 | Env var | Required value | Why |
 |---|---|---|
-| `AUTH_ALLOW_OPEN_REGISTRATION` | `false` | Defaults to `true` for local dev convenience. Leaving it `true` in a hosted deployment turns the API into an uncontrolled self-registration endpoint. Seed accounts via `backend/scripts/bootstrap_admin.py` + admin invites instead. |
-| `EXPOSE_API_DOCS` | `false` | Defaults to `true`. When `false`, FastAPI never registers `/docs`, `/redoc`, or `/openapi.json`. Hosted deployments either keep docs off entirely or gate them behind a private network. |
-| `LEGACY_READS_REQUIRE_AUTH` | `true` | The `/api/v1/{thermo,kinetics,geometries,...}` legacy routes pre-date the internal-IDs visibility policy and leak integer PKs. They must require auth in hosted deployments. |
-| `ALLOW_PUBLIC_INTERNAL_IDS` | `false` | Hides internal integer primary keys from scientific responses. Clients use public refs. Set to `true` only in local/dev/test for compatibility with the legacy id-bearing shape. |
-| `SESSION_COOKIE_SECURE` | `true` | Required so browsers only send the session cookie over TLS. Set `false` only when testing a local HTTP-only setup. |
+| `DEPLOYMENT_MODE` | `shared_private` or `hosted_public` | **enforced** Selects the hosted posture and turns on the startup safety guard. See [Deployment mode and startup guard](#deployment-mode-and-startup-guard). |
+| `AUTH_ALLOW_OPEN_REGISTRATION` | `false` | **enforced** Defaults to `true` for local dev convenience. Leaving it `true` in a hosted deployment turns the API into an uncontrolled self-registration endpoint. Seed accounts via `backend/scripts/bootstrap_admin.py` + admin invites instead. |
+| `EXPOSE_API_DOCS` | `false` | **enforced** Defaults to `true`. When `false`, FastAPI never registers `/docs`, `/redoc`, or `/openapi.json`. Hosted deployments either keep docs off entirely or gate them behind a private network. |
+| `LEGACY_READS_REQUIRE_AUTH` | `true` | **enforced** The `/api/v1/{thermo,kinetics,geometries,...}` legacy routes pre-date the internal-IDs visibility policy and leak integer PKs. They must require auth in hosted deployments. |
+| `ALLOW_PUBLIC_INTERNAL_IDS` | `false` | **enforced** Hides internal integer primary keys from scientific responses. Clients use public refs. Set to `true` only in local/dev/test for compatibility with the legacy id-bearing shape. |
+| `SESSION_COOKIE_SECURE` | `true` | **enforced** Required so browsers only send the session cookie over TLS. Set `false` only when testing a local HTTP-only setup. |
 | `SESSION_COOKIE_HTTPONLY` | `true` | Prevents JavaScript access to the session cookie. Default is already `true`; do not flip it. |
 | `SESSION_COOKIE_SAMESITE` | `lax` | Default is already `lax`. Stricter (`strict`) is acceptable; never use `none` without `secure=true` and explicit CORS allow-listing. |
-| `RATE_LIMIT_ENABLED` | `true` | The app-level rate limiter. The test suite turns it off via env var; nothing else should. |
-| `CORS_ALLOW_ORIGINS` | explicit allow-list or unset | Default empty means no CORS middleware is registered, which is the correct posture for an API-key-only API. Set to a comma-separated list of trusted browser origins (e.g. `https://app.tckdb.example.org`) only if a browser app needs to call the API. Never use `*`. |
+| `RATE_LIMIT_ENABLED` | `true` | **enforced** The app-level rate limiter. The test suite turns it off via env var; nothing else should. |
+| `CORS_ALLOW_ORIGINS` | explicit allow-list or unset | **enforced (no wildcard)** Default empty means no CORS middleware is registered, which is the correct posture for an API-key-only API. Set to a comma-separated list of trusted browser origins (e.g. `https://app.tckdb.example.org`) only if a browser app needs to call the API. `*` is rejected at startup in both hosted modes. |
 | `TRUSTED_PROXY_HEADER` | match your ingress, or unset | Tells the rate limiter where to read the real client IP. Only set when terminating TLS behind a trusted reverse proxy that overwrites the header. Examples: Cloudflare Tunnel → `CF-Connecting-IP`; nginx with `proxy_set_header X-Real-IP` → `X-Real-IP`. Leave unset for loopback-only / no-proxy setups. |
 | `DB_STATEMENT_TIMEOUT_MS` | `30000` (or your chosen budget) | Caps the time any one query may hold a pool slot. Belt-and-braces; also set `ALTER ROLE tckdb SET statement_timeout = '30s'` at the role level. |
 | `DB_PASSWORD` | strong random value | Never leave at `tckdb` outside local dev. The hosted compose file refuses to start without one. |
@@ -63,6 +91,7 @@ Not strictly required, but strongly recommended for any internet-exposed deploym
 
 Settings alone are not enough. Before opening the deployment to traffic:
 
+- [ ] `DEPLOYMENT_MODE` is set to `shared_private` or `hosted_public`. The API exits at startup if any **enforced** row in the table above is at an unsafe value — the error message lists every violation in one pass.
 - [ ] `.env.selfhosted` (or your equivalent) is on the host, with every `change-me-*` placeholder replaced.
 - [ ] The DB is reachable: `PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c '\conninfo'`.
 - [ ] Migrations are at head: `alembic current` matches `alembic heads`. See [Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md).
@@ -92,7 +121,6 @@ Out of scope here; tracked separately:
 - CAPTCHA on the registration / login surface (relies on upstream WAF / Cloudflare).
 - API-key permission scopes (today keys inherit owner role).
 - OAuth / SSO (not implemented).
-- A formal `APP_ENV` / `HOSTED_PROFILE` setting that would let the app fail-fast on unsafe combinations at startup. Today the operator is the safety net; this checklist is the safety net's documentation. A future change may introduce such a flag and a `validate_hosted_security_settings()` guard — see the [deployment readiness audit](../../backend/docs/specs/backend_deployment_readiness_audit.md) for context.
 
 ---
 

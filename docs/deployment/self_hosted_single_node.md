@@ -266,6 +266,7 @@ the placeholders. The non-negotiable hosted toggles:
 
 | Variable | Required value | Why |
 |---|---|---|
+| `DEPLOYMENT_MODE` | `hosted_public` | Activates the startup safety guard so unsafe values for the rows below cause the API to exit at boot instead of silently misconfiguring production. Use `shared_private` for lab-internal deployments. |
 | `EXPOSE_API_DOCS` | `false` | Don't ship Swagger/ReDoc to the public surface. |
 | `LEGACY_READS_REQUIRE_AUTH` | `true` | Legacy `/api/v1/{thermo,…}` routes leak integer PKs. |
 | `ALLOW_PUBLIC_INTERNAL_IDS` | `false` | Clients use refs as handles. |
