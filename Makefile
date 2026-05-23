@@ -29,7 +29,7 @@
 #                      rather than in `reset` so the rotation is an
 #                      explicit, visible step.
 
-.PHONY: up down migrate reset reset-login test api admin doctor check help
+.PHONY: up down migrate reset reset-login test test-fast test-scientific test-api test-full test-profile api admin doctor check help
 
 # Print available targets.
 help:
@@ -43,6 +43,13 @@ help:
 	@echo "  make reset-login  reset + dev admin + API key (uses dev_login.sh)"
 	@echo "  make down         Stop infra (volumes preserved)"
 	@echo "  make test         Run the backend test suite"
+	@echo ""
+	@echo "Test ladder (see backend/docs/testing.md):"
+	@echo "  make test-fast        Tier 0/1: ARGS='<path> [-k expr]' for fast inner-loop"
+	@echo "  make test-scientific  Tier 2/3: scientific API + scientific_read services"
+	@echo "  make test-api         Tier 3:   full tests/api/ regression gate"
+	@echo "  make test-full        Tier 4:   full backend suite (pre-push)"
+	@echo "  make test-profile     Surface the slowest tests in a target subset"
 
 # Start local Postgres + MinIO and apply migrations to tckdb_dev.
 # Uses the canonical docker-compose.yml at the repo root; Compose
@@ -79,6 +86,33 @@ reset-login: reset
 # Run the full backend test suite.
 test:
 	conda run -n tckdb_env pytest backend/tests/
+
+# ---------------------------------------------------------------------
+# Test-ladder wrappers. Each delegates to the matching shell script
+# under ``backend/scripts/`` so the same entry point works whether
+# invoked via Make, directly, or wrapped in ``conda run``. Pass extra
+# pytest arguments through ``ARGS=...``:
+#
+#   make test-fast ARGS="tests/api/test_api_health.py"
+#   make test-api  ARGS="-x --maxfail=3"
+#
+# See ``backend/docs/testing.md`` for the full tier policy.
+# ---------------------------------------------------------------------
+
+test-fast:
+	conda run -n tckdb_env bash backend/scripts/test-fast.sh $(ARGS)
+
+test-scientific:
+	conda run -n tckdb_env bash backend/scripts/test-scientific.sh $(ARGS)
+
+test-api:
+	conda run -n tckdb_env bash backend/scripts/test-api.sh $(ARGS)
+
+test-full:
+	conda run -n tckdb_env bash backend/scripts/test-full.sh $(ARGS)
+
+test-profile:
+	conda run -n tckdb_env bash backend/scripts/test-profile.sh $(ARGS)
 
 # Start the FastAPI backend (foreground). Cd into backend/ so the
 # `app` package is on sys.path; this is the exact form that the rest
