@@ -342,6 +342,12 @@ For structured log collection set `LOG_FORMAT=json` on the API process.
 Log records then arrive as one JSON object per line with at least
 `timestamp`, `level`, `logger`, `message`, and `request_id`.
 
+The API process should run with a single Uvicorn worker (`--workers 1`)
+while the in-process rate limiter is in use. Adding more workers
+silently multiplies every per-IP bucket budget by the worker count; move
+the limiter to a shared backend (e.g. Redis) before scaling out. See
+[Rate limiter and Uvicorn workers](production_checklist.md#rate-limiter-and-uvicorn-workers).
+
 ---
 
 ## Backup and restore basics

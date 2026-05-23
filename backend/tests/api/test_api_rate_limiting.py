@@ -274,6 +274,10 @@ def test_429_envelope_shape(rate_limited_client):
     assert body["code"] == "rate_limit_exceeded"
     assert isinstance(body["retry_after_seconds"], int)
     assert blocked.headers.get("retry-after") == str(body["retry_after_seconds"])
+    # Operators correlate 429s back to the access log via X-Request-ID;
+    # the request-ID middleware sits outside the rate-limit middleware
+    # so the header must survive a limiter rejection.
+    assert blocked.headers.get("X-Request-ID")
 
 
 # ---------------------------------------------------------------------------

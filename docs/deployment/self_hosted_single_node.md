@@ -215,6 +215,12 @@ a systemd unit, not in Docker, so the existing conda-based dev/test
 workflow is preserved. The host process talks to Docker services over
 loopback.
 
+> **Keep `--workers 1`.** The default rate limiter is in-process; each
+> extra Uvicorn worker multiplies the effective per-IP bucket budget.
+> Do not add `--workers N` to the systemd unit until the limiter is
+> moved to a shared backend (e.g. Redis). See
+> [Rate limiter and Uvicorn workers](production_checklist.md#rate-limiter-and-uvicorn-workers).
+
 `ports:` entries are all `127.0.0.1:...:...`. **Never change them** to
 bare `5432:5432` — that publishes Postgres on every interface,
 including the LAN.

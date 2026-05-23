@@ -79,6 +79,7 @@ Not strictly required, but strongly recommended for any internet-exposed deploym
 | `RATE_LIMIT_ANON_OTHER_PER_MINUTE` | 20 (default) | Smaller than `ANON_READ` so anonymous writes do not inherit the read budget. |
 | `RATE_LIMIT_AUTH_LOGIN_PER_MINUTE` | 10 (default) | Credential-stuffing cap; IP-keyed. |
 | `RATE_LIMIT_REGISTER_PER_HOUR` | 10 (default) | Account-spam cap; IP-keyed. Mitigation against botnet registration is upstream (Cloudflare / WAF). |
+| `LOG_FORMAT` | `json` for hosted | Structured one-JSON-per-line output with `request_id`, `level`, `logger`, `message`, `timestamp`. Recommended when logs are shipped to journald/ELK/Datadog/etc. Default `text` is fine for ad-hoc inspection only. |
 | `PUBLIC_MAX_LIMIT` | `200` (default) | Hard cap on page size. Lower it on memory-constrained hosts. |
 | `MAX_GEOMETRY_ATOMS_PUBLIC` | `500` (default) | |
 | `MAX_FULL_CALCULATIONS_PUBLIC` | `100` (default) | |
@@ -110,6 +111,16 @@ Settings alone are not enough. Before opening the deployment to traffic:
 - [ ] Backups are configured and verified by running a restore drill at least once (see [shared-private-deployment.md §Backup and restore basics](shared-private-deployment.md#backup-and-restore-basics)).
 
 A deploy that ticks every row in both tables and the pre-flight checklist is safe to expose. A deploy that does not is not.
+
+---
+
+## Rate limiter and Uvicorn workers
+
+The default rate-limit backend is **in-process**. Every Uvicorn worker keeps its own counters in local memory and they are never reconciled. Running `uvicorn ... --workers N` therefore multiplies the *effective* bucket budget by `N` — a 60/min anonymous-read limit with `--workers 4` is actually 240/min from a single source IP.
+
+For the self-hosted / single-node / Pi deployment: keep `--workers 1`. The shipped systemd unit at [`examples/deployment/systemd/tckdb-api.service`](../../examples/deployment/systemd/tckdb-api.service) is configured this way.
+
+If a single worker is not enough throughput, scale out *after* moving the limiter to a shared backend (e.g. Redis). Do not raise `--workers` while the in-process limiter is still in use — the rate-limit smoke test (the `/auth/login` flood from the pre-flight) will still trip 429, masking the bucket inflation.
 
 ---
 

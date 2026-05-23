@@ -30,11 +30,18 @@ WorkingDirectory=/opt/tckdb/backend
 EnvironmentFile=/opt/tckdb/.env.selfhosted
 
 # Bind to localhost. cloudflared is the only thing that talks to this.
+#
+# --workers 1 is intentional: the default rate limiter is in-process,
+# so every additional worker multiplies the effective per-IP bucket
+# budget (4 workers => 4x the configured anon-read limit). Do NOT
+# raise this without first moving the limiter to a shared backend
+# (e.g. Redis). See docs/deployment/production_checklist.md
+# "Rate limiter and Uvicorn workers".
 ExecStart=/opt/conda/bin/conda run --no-capture-output -n tckdb_env \
     uvicorn main:app \
         --host 127.0.0.1 \
         --port 8010 \
-        --workers 2 \
+        --workers 1 \
         --proxy-headers \
         --forwarded-allow-ips 127.0.0.1
 
