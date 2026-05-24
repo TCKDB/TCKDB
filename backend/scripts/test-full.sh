@@ -12,4 +12,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec pytest -q tests/ "$@"
+exec pytest -q --tb=short tests/ "$@"

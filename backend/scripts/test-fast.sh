@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Tier 0 / Tier 1: inner-loop test runner.
 #
-# Wraps ``pytest -q -x --tb=short`` so a single failing test or file
-# stops the run immediately with a short traceback. Pass any pytest
-# arguments through; the typical use is a path plus a ``-k`` selector.
+# Wraps ``pytest -v -x --tb=short`` so each test name prints as it
+# runs and a single failing test or file stops the run immediately
+# with a short traceback. Pass any pytest arguments through; the
+# typical use is a path plus a ``-k`` selector.
 #
 # Examples:
 #   bash backend/scripts/test-fast.sh tests/api/test_api_health.py
@@ -15,4 +16,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec pytest -q -x --tb=short "$@"
+exec pytest -v -x --tb=short "$@"

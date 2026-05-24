@@ -29,13 +29,17 @@ backend directory before invoking pytest. They forward extra arguments
 through, so `-k`, `-x`, `--maxfail=...`, and named-test selectors all
 work as you'd expect:
 
-| Script                                   | Default pytest call                                                       |
-|------------------------------------------|---------------------------------------------------------------------------|
-| [`test-fast.sh`](../scripts/test-fast.sh)             | `pytest -q -x --tb=short "$@"`                                |
-| [`test-scientific.sh`](../scripts/test-scientific.sh) | `pytest -q tests/api/scientific/ tests/services/scientific_read/ "$@"`  |
-| [`test-api.sh`](../scripts/test-api.sh)               | `pytest -q tests/api/ "$@"`                                   |
-| [`test-full.sh`](../scripts/test-full.sh)             | `pytest -q tests/ "$@"`                                       |
-| [`test-profile.sh`](../scripts/test-profile.sh)       | `pytest -q --durations=50 [<path>|tests/]`                    |
+| Script                                   | Default pytest call                                                                |
+|------------------------------------------|------------------------------------------------------------------------------------|
+| [`test-fast.sh`](../scripts/test-fast.sh)             | `pytest -v -x --tb=short "$@"`                                         |
+| [`test-scientific.sh`](../scripts/test-scientific.sh) | `pytest -q --tb=short tests/api/scientific/ tests/services/scientific_read/ "$@"` |
+| [`test-api.sh`](../scripts/test-api.sh)               | `pytest -q --tb=short tests/api/ "$@"`                                 |
+| [`test-full.sh`](../scripts/test-full.sh)             | `pytest -q --tb=short tests/ "$@"`                                     |
+| [`test-profile.sh`](../scripts/test-profile.sh)       | `pytest -v --durations=50 [<path>|tests/]`                             |
+
+Tier 0/1 (`test-fast.sh`) keeps `-v` so each test name prints live while
+you iterate. Tiers 2/3/4 use `-q --tb=short` to keep CI and pre-push
+logs scannable — pass `-v` or `-vv` through `ARGS=` when debugging.
 
 Make targets wrap each script and use the `tckdb_env` conda
 environment:
@@ -145,6 +149,36 @@ There is **no slow-test budget today**. When that lands, add a
 `@pytest.mark.slow` marker (declared in `pytest.ini`) to anything
 above the threshold and have CI deselect or quarantine it. Until
 then, treat `make test-profile` output as informational.
+
+## Concurrent runs and shared `DB_TEST_NAME`
+
+Do not run multiple pytest processes against the same explicit
+`DB_TEST_NAME` on the same Postgres host. The session fixture in
+[`tests/conftest.py`](../tests/conftest.py) recreates the named test
+database during setup and terminates active connections on it — a
+second process pointed at the same name will see its DB dropped out
+from under it mid-run, with confusing `OperationalError`s as the
+visible symptom.
+
+The default per-process DB name avoids most accidental collisions, but
+any explicit `DB_TEST_NAME` value is **single-tenant**: only one
+pytest process at a time may use it. For CI, set `DB_TEST_NAME` to a
+job-specific value (e.g. include the runner / job id) so parallel
+jobs on the same Postgres host do not collide.
+
+When [`pytest-xdist`](https://pypi.org/project/pytest-xdist/) lands
+(see the parallelization note at the bottom of this doc), the test DB
+must be named per worker — typical scheme is:
+
+```text
+tckdb_test_gw0
+tckdb_test_gw1
+tckdb_test_gw2
+```
+
+so each worker owns its own database and the session-scoped
+drop-and-recreate sequence cannot race. xdist is **not** wired up in
+this slice; this is a forward-looking note.
 
 ## Flaky / repro handling
 

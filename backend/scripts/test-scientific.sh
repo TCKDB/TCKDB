@@ -13,4 +13,4 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec pytest -q tests/api/scientific/ tests/services/scientific_read/ "$@"
+exec pytest -q --tb=short tests/api/scientific/ tests/services/scientific_read/ "$@"

@@ -83,9 +83,11 @@ reset:
 reset-login: reset
 	bash backend/scripts/dev_login.sh
 
-# Run the full backend test suite.
+# Run the full backend test suite via the Tier 4 ladder script so
+# `make test` and `make test-full` share one entry point. Forwards
+# extra pytest args via ARGS=... like the other ladder targets.
 test:
-	conda run -n tckdb_env pytest backend/tests/
+	conda run -n tckdb_env bash backend/scripts/test-full.sh $(ARGS)
 
 # ---------------------------------------------------------------------
 # Test-ladder wrappers. Each delegates to the matching shell script

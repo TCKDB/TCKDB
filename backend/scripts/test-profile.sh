@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 # Pytest treats ``--durations`` as a top-level option, so additional
 # flags can ride along on the same command line.
 if [[ $# -eq 0 ]]; then
-    exec pytest -q tests/ --durations=50
+    exec pytest -v tests/ --durations=50
 fi
 
-exec pytest -q --durations=50 "$@"
+exec pytest -v --durations=50 "$@"

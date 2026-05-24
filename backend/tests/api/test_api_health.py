@@ -28,6 +28,12 @@ def test_readyz_does_not_leak_database_url(client):
     """The readiness body must not contain the DB URL, password, or host."""
     response = client.get("/api/v1/readyz")
     body_text = response.text
+    # /readyz is a public, unauthenticated probe (load balancers, k8s,
+    # uptime checks). These forbidden tokens guard against deployment-
+    # secret / infrastructure leakage — DB driver, database name, host,
+    # credentials — not against general diagnostic detail. Adding new
+    # diagnostic fields to /readyz is fine; surfacing connection-string
+    # fragments or secrets is not.
     forbidden = (
         "postgresql",
         "psycopg",
