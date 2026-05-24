@@ -1,0 +1,112 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/backend-ci.yml"
+      - "Makefile"
+      - "docker-compose.yml"
+      - "backend/**"
+      - "schemas/python/tckdb-schemas/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/backend-ci.yml"
+      - "Makefile"
+      - "docker-compose.yml"
+      - "backend/**"
+      - "schemas/python/tckdb-schemas/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-ci:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    services:
+      postgres:
+        image: informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+        env:
+          POSTGRES_USER: tckdb
+          POSTGRES_PASSWORD: tckdb
+          POSTGRES_DB: tckdb_test_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tckdb -d tckdb_test_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_USER: tckdb
+      DB_PASSWORD: tckdb
+      DB_NAME: tckdb_test_ci
+      DB_CLIENT_ENCODING: utf8
+      DB_TEST_NAME: tckdb_test_${{ github.run_id }}_${{ github.run_attempt }}
+      AUTH_ALLOW_OPEN_REGISTRATION: "true"
+      DEPLOYMENT_MODE: local
+      EXPOSE_API_DOCS: "true"
+      LEGACY_READS_REQUIRE_AUTH: "false"
+      SESSION_COOKIE_SECURE: "false"
+      RATE_LIMIT_ENABLED: "false"
+
+    defaults:
+      run:
+        shell: bash -el {0}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          use-mamba: true
+          environment-file: backend/environment.yml
+          activate-environment: tckdb_env
+          auto-activate-base: false
+
+      - name: Install backend packages
+        run: |
+          conda run -n tckdb_env python -m pip install --upgrade pip
+          conda run -n tckdb_env python -m pip install -e schemas/python/tckdb-schemas
+          conda run -n tckdb_env python -m pip install -e "backend[dev]"
+
+      - name: Hygiene checks
+        run: |
+          git diff --check
+          bash -n backend/scripts/test-fast.sh
+          bash -n backend/scripts/test-api.sh
+          bash -n backend/scripts/test-scientific.sh
+          bash -n backend/scripts/test-full.sh
+          bash -n backend/scripts/test-profile.sh
+          bash -n backend/scripts/update-openapi-golden.sh
+          make help
+
+      - name: Alembic upgrade head
+        working-directory: backend
+        run: |
+          conda run -n tckdb_env alembic upgrade head
+          heads_output="$(conda run -n tckdb_env alembic heads)"
+          printf '%s\n' "$heads_output"
+          test "$(printf '%s\n' "$heads_output" | grep -c '(head)')" -eq 1
+          conda run -n tckdb_env alembic current
+
+      - name: OpenAPI golden snapshot
+        working-directory: backend
+        run: conda run -n tckdb_env pytest tests/api/test_openapi_snapshot.py -q
+
+      - name: API test gate
+        run: conda run -n tckdb_env bash backend/scripts/test-api.sh --maxfail=5
+
+      - name: Scientific read and service gate
+        run: conda run -n tckdb_env bash backend/scripts/test-scientific.sh --maxfail=5

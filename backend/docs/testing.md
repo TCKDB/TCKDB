@@ -205,8 +205,58 @@ moment a caller sets `PYTEST_XDIST_WORKER`.
   every save.
 - Land Tier 1 green at minimum before pushing. Land Tier 3 green
   before opening a PR. Tier 4 is required before merging.
-- The CI configuration (TBD) should run Tier 4. Local Tier 4 is the
-  pre-push insurance.
+- The initial backend CI gate runs Tier 3 plus the scientific Tier 2/3
+  slice. Local Tier 4 remains the pre-push and pre-merge insurance
+  until full-suite CI runtime is known.
+
+## CI gate
+
+GitHub Actions runs the backend gate in
+[`../../.github/workflows/backend-ci.yml`](../../.github/workflows/backend-ci.yml)
+for pull requests and pushes that touch backend code, backend tests,
+the backend package, the shared `tckdb-schemas` package, or the CI
+workflow itself.
+
+The workflow uses the same RDKit-enabled Postgres image as local
+development:
+
+```text
+informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+```
+
+Plain Postgres is not sufficient because the Alembic chain enables the
+`rdkit` extension and the schema includes RDKit cartridge types and
+indexes.
+
+The CI job creates the `tckdb_env` conda environment from
+[`../environment.yml`](../environment.yml), then installs the shared
+schema package and backend package in editable mode:
+
+```bash
+python -m pip install -e schemas/python/tckdb-schemas
+python -m pip install -e "backend[dev]"
+```
+
+The gate runs:
+
+- shell/doc hygiene checks (`git diff --check`, `bash -n` for the test
+  ladder scripts, and `make help`)
+- `alembic upgrade head`, `alembic heads`, and `alembic current`
+  against the RDKit Postgres service
+- the OpenAPI golden snapshot test at
+  [`tests/api/test_openapi_snapshot.py`](../tests/api/test_openapi_snapshot.py)
+- the API gate via [`../scripts/test-api.sh`](../scripts/test-api.sh)
+- the scientific read/service gate via
+  [`../scripts/test-scientific.sh`](../scripts/test-scientific.sh)
+
+`DB_TEST_NAME` includes the GitHub run id and run attempt so concurrent
+workflow runs do not share the same pytest-created database on one
+Postgres service. The workflow does not enable pytest-xdist yet, so the
+fixture-level worker isolation remains available for a later CI slice.
+
+The full Tier 4 suite is intentionally not part of this v0 PR workflow.
+Keep running `make test-full` locally before push/merge until a
+separate full-suite or nightly CI gate is added.
 
 ## OpenAPI golden snapshot
 
