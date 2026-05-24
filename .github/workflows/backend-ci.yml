@@ -43,6 +43,20 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+      minio:
+        image: minio/minio:latest
+        command: server /data --address ":9000"
+        env:
+          MINIO_ROOT_USER: tckdb
+          MINIO_ROOT_PASSWORD: tckdb_secret
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "mc ready local"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
       DB_HOST: 127.0.0.1
       DB_PORT: "5432"
@@ -57,6 +71,11 @@ jobs:
       LEGACY_READS_REQUIRE_AUTH: "false"
       SESSION_COOKIE_SECURE: "false"
       RATE_LIMIT_ENABLED: "false"
+      S3_ENDPOINT_URL: http://127.0.0.1:9000
+      S3_ACCESS_KEY: tckdb
+      S3_SECRET_KEY: tckdb_secret
+      S3_BUCKET: tckdb-artifacts-test
+      S3_REGION: us-east-1
 
     defaults:
       run:
@@ -100,6 +119,31 @@ jobs:
           printf '%s\n' "$heads_output"
           test "$(printf '%s\n' "$heads_output" | grep -c '(head)')" -eq 1
           conda run -n tckdb_env alembic current
+
+      - name: Initialize artifact bucket
+        run: |
+          conda run -n tckdb_env python - <<'PY'
+          import os
+
+          import boto3
+          from botocore.client import Config
+          from botocore.exceptions import ClientError
+
+          bucket = os.environ["S3_BUCKET"]
+          s3 = boto3.client(
+              "s3",
+              endpoint_url=os.environ["S3_ENDPOINT_URL"],
+              aws_access_key_id=os.environ["S3_ACCESS_KEY"],
+              aws_secret_access_key=os.environ["S3_SECRET_KEY"],
+              region_name=os.environ["S3_REGION"],
+              config=Config(signature_version="s3v4"),
+          )
+
+          try:
+              s3.head_bucket(Bucket=bucket)
+          except ClientError:
+              s3.create_bucket(Bucket=bucket)
+          PY
 
       - name: OpenAPI golden snapshot
         working-directory: backend
