@@ -1017,13 +1017,15 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
     calculation_id: Mapped[int] = mapped_column(
         ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
         nullable=False,
+        index=True,
     )
     kind: Mapped[ArtifactKind] = mapped_column(
         SAEnum(ArtifactKind, name="artifact_kind"),
         nullable=False,
+        index=True,
     )
     uri: Mapped[str] = mapped_column(Text, nullable=False)
-    sha256: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True)
+    sha256: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True, index=True)
     bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -135,6 +135,22 @@ Pure pagination / include / review knobs are rejected with 422
 `missing_filter`. Explicit boolean `False` values
 (`has_sha256=false`) count as meaningful filters.
 
+Indexing notes:
+
+- Artifact metadata search has btree indexes on
+  `calculation_artifact.calculation_id`, `kind`, and `sha256` (migration
+  `f6a7b8c9d0e1_add_calculation_artifact_indexes`). These cover the
+  owning-calc join, the `artifact_kind` filter, and exact-`sha256` /
+  `has_sha256` lookups.
+- `filename_contains` remains a sequential `LIKE` over
+  `lower(filename)` — a `pg_trgm` GIN index or a generated lowercase
+  column would be needed to accelerate it, and is deferred until a real
+  consumer asks for substring search at scale.
+- `bytes_min` / `bytes_max` and `created_after` / `created_before` are
+  not individually indexed; they are expected to be combined with one of
+  the indexed filters in practice. Revisit if a workload appears that
+  uses them as the only predicate.
+
 ## 6. Include behavior
 
 Legal tokens: `calculation`, `owner`, `review`, `internal_ids`, `all`.
