@@ -38,7 +38,9 @@ from app.db.models.transport import Transport
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.services.public_refs import (
     PREFIXES,
+    PUBLIC_REF_BODY_LEN,
     PUBLIC_REF_LEN,
+    _assert_public_ref_prefix_budget,
     backfill_public_refs,
     generate_ref_for,
     make_content_ref,
@@ -94,9 +96,31 @@ class TestRefFormat:
         assert len(body) == 26
 
     def test_total_ref_length_fits_column(self):
-        # Longest prefix + underscore + 26-char body must fit in the column.
+        # Longest prefix + underscore + body must fit in the column.
         longest_prefix = max(len(p) for p in PREFIXES.values())
-        assert longest_prefix + 1 + 26 <= PUBLIC_REF_LEN
+        assert longest_prefix + 1 + PUBLIC_REF_BODY_LEN <= PUBLIC_REF_LEN
+
+    def test_prefix_budget_invariant_passes_for_current_registry(self):
+        """The import-time invariant must accept the current registry —
+        if it fails after a future prefix addition, the column must grow
+        before the new prefix lands.
+        """
+        _assert_public_ref_prefix_budget()
+
+    def test_prefix_budget_invariant_rejects_oversize_prefix(
+        self, monkeypatch
+    ):
+        """A hypothetical prefix that overflows the budget must trip the
+        guard. Confirms the invariant has teeth.
+        """
+        from app.services import public_refs as pr
+
+        oversize = "x" * (PUBLIC_REF_LEN - PUBLIC_REF_BODY_LEN)  # no room for '_'
+        patched = dict(PREFIXES)
+        patched["FakeOverflow"] = oversize
+        monkeypatch.setattr(pr, "PREFIXES", patched)
+        with pytest.raises(RuntimeError, match="prefix budget exceeded"):
+            _assert_public_ref_prefix_budget()
 
 
 class TestPrefixRegistry:
@@ -638,6 +662,26 @@ class TestCanonicalizerInvariants:
         a = ChemReaction(reversible=True, stoichiometry_hash="ccc333")
         b = ChemReaction(reversible=True, stoichiometry_hash="ccc333")
         assert generate_ref_for(a) == generate_ref_for(b)
+
+    def test_chem_reaction_without_stoichiometry_hash_uses_opaque_ref(self):
+        """Without a ``stoichiometry_hash`` the canonicalizer returns
+        ``None``, so each fresh instance gets a per-row random opaque ref
+        — same fallback contract as Literature without a DOI/ISBN.
+
+        Replaces the prior ``id(obj)`` fallback, which could collide when
+        CPython recycled object addresses between successive instantiations.
+        """
+        from app.services.public_refs import _CANONICALIZERS
+
+        bare = ChemReaction(reversible=True)
+        assert _CANONICALIZERS["ChemReaction"](bare) is None
+
+        refs = {
+            generate_ref_for(ChemReaction(reversible=True)) for _ in range(50)
+        }
+        # All opaque → all unique. (Same prefix, random body.)
+        assert len(refs) == 50
+        assert all(r.startswith("rxn_") for r in refs)
 
     # ------------------------------------------------------------------
     # Geometry — content-derived via geom_hash

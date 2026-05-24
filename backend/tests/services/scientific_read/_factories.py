@@ -275,15 +275,22 @@ def make_chem_reaction(
     reversible: bool = True,
     stoichiometry_hash: str | None = None,
 ) -> ChemReaction:
-    """Create a ChemReaction with participants.
+    """Get-or-create a ChemReaction with participants, keyed by ``stoichiometry_hash``.
 
-    Populates ``stoichiometry_hash`` from the participants by default
-    (mirroring ``app.services.reaction_resolution``) so the public-ref
-    listener takes the deterministic content-derived path instead of
-    the ``id(obj)`` fallback — that fallback collides when factory
-    instances are garbage collected and Python recycles addresses
-    between successive ``make_chem_reaction`` calls in one test.
+    Behavior:
+
+    - ``stoichiometry_hash`` is computed from participants by default
+      (mirroring ``app.services.reaction_resolution``), so the public-ref
+      listener takes the content-derived path.
+    - If a ChemReaction with that hash already exists in the session, it is
+      returned as-is. This mirrors the resolver's dedup contract and means
+      successive calls with the same participants do not violate the
+      ``stoichiometry_hash`` unique constraint.
+    - To force a distinct row, pass distinct participants or supply an
+      explicit ``stoichiometry_hash`` override.
     """
+    from sqlalchemy import select as _select
+
     if stoichiometry_hash is None:
         from app.services.reaction_resolution import reaction_stoichiometry_hash
         from collections import Counter
@@ -293,6 +300,15 @@ def make_chem_reaction(
             reactants=dict(Counter(sp.id for sp in reactants)),
             products=dict(Counter(sp.id for sp in products)),
         )
+
+    existing = session.scalar(
+        _select(ChemReaction).where(
+            ChemReaction.stoichiometry_hash == stoichiometry_hash
+        )
+    )
+    if existing is not None:
+        return existing
+
     reaction = ChemReaction(
         reversible=reversible,
         stoichiometry_hash=stoichiometry_hash,
@@ -1160,15 +1176,31 @@ def attach_network_kinetics_point(
 
 
 _FSF_COUNTER = 0
+_LITERATURE_COUNTER = 0
 
 
 def _next_fsf_value() -> float:
-    """Return a unique-ish FSF value so the natural-identity index does
-    not collide across factory calls."""
+    """Return a unique-ish FSF value for test data.
+
+    Stays within a plausible-looking range (0.90xx); only used to keep the
+    ``FrequencyScaleFactor`` natural-identity index distinct across
+    successive factory calls in one test. Not a production value generator.
+    """
     global _FSF_COUNTER
     _FSF_COUNTER += 1
-    # Keep within a realistic range while still unique per call.
     return 0.9000 + _FSF_COUNTER * 0.0001
+
+
+def _next_literature_doi() -> str:
+    """Return a unique synthetic DOI for test literature rows.
+
+    Independent of :func:`_next_fsf_value` so the two domains can't drift
+    into shared state (the prior code reused the FSF counter for DOIs,
+    coupling unrelated uniqueness needs).
+    """
+    global _LITERATURE_COUNTER
+    _LITERATURE_COUNTER += 1
+    return f"10.0000/test-{_LITERATURE_COUNTER:06d}"
 
 
 def make_literature(
@@ -1181,7 +1213,7 @@ def make_literature(
     """Create a Literature row. DOI defaults to a unique counter-derived value."""
     from app.db.models.common import LiteratureKind
 
-    doi = doi or f"10.0000/test-{_next_fsf_value():.4f}"
+    doi = doi or _next_literature_doi()
     lit = Literature(
         kind=LiteratureKind.article,
         title=title,
@@ -1202,13 +1234,49 @@ def make_software(session: Session, *, name: str = "gaussian") -> Software:
 
 
 def make_workflow_tool_release(
-    session: Session, *, name: str = "arc", version: str = "1.2.3"
+    session: Session,
+    *,
+    name: str = "arc",
+    version: str = "1.2.3",
+    git_commit: str | None = None,
 ) -> WorkflowToolRelease:
-    """Create a WorkflowTool + WorkflowToolRelease pair, returning the release."""
-    wt = WorkflowTool(name=name)
-    session.add(wt)
-    session.flush()
-    wtr = WorkflowToolRelease(workflow_tool_id=wt.id, version=version)
+    """Get-or-create a WorkflowTool + WorkflowToolRelease pair.
+
+    Mirrors the real uniqueness constraints:
+
+    - ``WorkflowTool`` is uniquely keyed by ``name``; repeated calls with
+      the same ``name`` reuse the existing tool rather than violating the
+      ``UniqueConstraint("name")``.
+    - ``WorkflowToolRelease`` is uniquely keyed by
+      ``(workflow_tool_id, version, git_commit)`` (``NULLS NOT DISTINCT``);
+      repeated calls with the same tuple reuse the existing release.
+
+    Callers that want a fresh distinct release should pass a different
+    ``version`` or ``git_commit``.
+    """
+    from sqlalchemy import select as _select
+
+    wt = session.scalar(_select(WorkflowTool).where(WorkflowTool.name == name))
+    if wt is None:
+        wt = WorkflowTool(name=name)
+        session.add(wt)
+        session.flush()
+
+    existing = session.scalar(
+        _select(WorkflowToolRelease).where(
+            WorkflowToolRelease.workflow_tool_id == wt.id,
+            WorkflowToolRelease.version == version,
+            WorkflowToolRelease.git_commit.is_(git_commit)
+            if git_commit is None
+            else WorkflowToolRelease.git_commit == git_commit,
+        )
+    )
+    if existing is not None:
+        return existing
+
+    wtr = WorkflowToolRelease(
+        workflow_tool_id=wt.id, version=version, git_commit=git_commit
+    )
     session.add(wtr)
     session.flush()
     return wtr

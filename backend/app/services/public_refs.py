@@ -98,12 +98,41 @@ _CONTENT_DERIVED: set[str] = {
     "EnergyCorrectionScheme",
 }
 
+# Body length (after the ``{prefix}_`` separator). 26 characters matches
+# the visual length of a ULID and is what both :func:`_b32` truncates to
+# for content-derived refs and :func:`make_opaque_ref` produces for
+# opaque refs. Exposed as a named constant so the prefix-budget invariant
+# below stays in sync with the actual body width.
+PUBLIC_REF_BODY_LEN = 26
+
 # Maximum stored length. Must match the ``String(length=...)`` of
 # ``PublicRefMixin.public_ref`` and the migration column. Sized for the
-# longest prefix in :data:`PREFIXES` + underscore + 26-char body, with
-# headroom for future prefixes (current longest is ``nsolve`` at 6 chars
+# longest prefix in :data:`PREFIXES` + underscore + body, with headroom
+# for future prefixes (current longest is ``nsolve`` at 6 chars
 # → 6 + 1 + 26 = 33).
 PUBLIC_REF_LEN = 40
+
+
+def _assert_public_ref_prefix_budget() -> None:
+    """Guard: the longest prefix + ``_`` + body must fit in the column.
+
+    Catches a future ``PREFIXES`` addition that would overflow
+    :data:`PUBLIC_REF_LEN` at import time, before any insert truncates a
+    ref and breaks resolution.
+    """
+    max_prefix = max(len(prefix) for prefix in PREFIXES.values())
+    needed = max_prefix + 1 + PUBLIC_REF_BODY_LEN
+    if needed > PUBLIC_REF_LEN:
+        raise RuntimeError(
+            "Public ref prefix budget exceeded: longest prefix "
+            f"({max_prefix} chars) + '_' + body ({PUBLIC_REF_BODY_LEN}) "
+            f"= {needed} > PUBLIC_REF_LEN={PUBLIC_REF_LEN}. "
+            "Either widen PUBLIC_REF_LEN (and the column / migration) or "
+            "shorten the prefix."
+        )
+
+
+_assert_public_ref_prefix_budget()
 
 
 # ---------------------------------------------------------------------------
@@ -112,11 +141,12 @@ PUBLIC_REF_LEN = 40
 
 
 def _b32(data: bytes) -> str:
-    """Lowercase base32 encoding, no padding. Returns up to 26 chars from
-    16 bytes of input.
+    """Lowercase base32 encoding, no padding.
+
+    Returns up to :data:`PUBLIC_REF_BODY_LEN` chars from 16 bytes of input.
     """
     raw = base64.b32encode(data).decode("ascii").lower().rstrip("=")
-    return raw[:26]
+    return raw[:PUBLIC_REF_BODY_LEN]
 
 
 def make_content_ref(prefix: str, canonical_identity: str | bytes) -> str:
@@ -182,16 +212,25 @@ def _canonical_species(obj: Any) -> str:
     )
 
 
-def _canonical_chem_reaction(obj: Any) -> str:
-    """ChemReaction identity: prefer ``stoichiometry_hash`` if populated."""
+def _canonical_chem_reaction(obj: Any) -> str | None:
+    """ChemReaction identity: ``stoichiometry_hash`` when populated.
+
+    Returns ``None`` when the hash is unset so the dispatcher falls back
+    to an opaque ref (same contract as :func:`_canonical_literature`
+    without a DOI/ISBN). The previous behavior — synthesizing a canonical
+    string that included ``id(obj)`` — was non-deterministic across
+    instances and could collide because CPython recycles object IDs;
+    every fresh insert now gets its own per-row random ref instead.
+
+    Production callers (``resolve_chem_reaction``) always populate
+    ``stoichiometry_hash`` before insert, so the content-derived path is
+    still the norm. The opaque fallback only applies to the rare paths
+    (e.g. demo seed scripts) that create a ChemReaction without a hash.
+    """
     sh = getattr(obj, "stoichiometry_hash", None)
     if sh:
         return f"chem_reaction:stoichiometry_hash={sh}"
-    # Fallback for transient instances pre-flush — caller is expected
-    # to populate stoichiometry_hash before insert.
-    rev = getattr(obj, "reversible", None)
-    fam = getattr(obj, "reaction_family_id", None)
-    return f"chem_reaction:reversible={rev};family_id={fam};id={id(obj)}"
+    return None
 
 
 def _canonical_geometry(obj: Any) -> str:
@@ -319,7 +358,10 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
 
 
 # Dispatch table from class name → canonical-identity extractor.
-_CANONICALIZERS: dict[str, Callable[[Any], str]] = {
+# Extractors may return ``None`` to signal "no canonical identity
+# available, fall back to opaque ref" (see ``_canonical_literature`` and
+# ``_canonical_chem_reaction``).
+_CANONICALIZERS: dict[str, Callable[[Any], str | None]] = {
     "Species": _canonical_species,
     "ChemReaction": _canonical_chem_reaction,
     "Geometry": _canonical_geometry,
@@ -486,6 +528,7 @@ def backfill_public_refs(session: Session) -> dict[str, int]:
 
 __all__ = [
     "PREFIXES",
+    "PUBLIC_REF_BODY_LEN",
     "PUBLIC_REF_LEN",
     "make_content_ref",
     "make_opaque_ref",
