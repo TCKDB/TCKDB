@@ -61,6 +61,12 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Tracked computational chemistry test fixtures. The generic *.log
+# rule above swallows real Gaussian/Orca output logs that ship as
+# pytest fixtures; re-include only the files the test suite reads.
+!backend/tests/fixtures/gaussian/opt_g09.log
+!backend/tests/fixtures/gaussian/freq_g09.log
+
 # Flask stuff:
 instance/
 .webassets-cache
