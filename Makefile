@@ -29,7 +29,7 @@
 #                      rather than in `reset` so the rotation is an
 #                      explicit, visible step.
 
-.PHONY: up down migrate reset reset-login test test-fast test-scientific test-api test-full test-profile api admin doctor check help
+.PHONY: up down migrate reset reset-login test test-fast test-scientific test-api test-full test-profile update-openapi-golden api admin doctor check help
 
 # Print available targets.
 help:
@@ -50,6 +50,9 @@ help:
 	@echo "  make test-api         Tier 3:   full tests/api/ regression gate"
 	@echo "  make test-full        Tier 4:   full backend suite (pre-push)"
 	@echo "  make test-profile     Surface the slowest tests in a target subset"
+	@echo ""
+	@echo "Snapshots:"
+	@echo "  make update-openapi-golden  Regenerate backend/tests/api/golden/openapi.json"
 
 # Start local Postgres + MinIO and apply migrations to tckdb_dev.
 # Uses the canonical docker-compose.yml at the repo root; Compose
@@ -115,6 +118,15 @@ test-full:
 
 test-profile:
 	conda run -n tckdb_env bash backend/scripts/test-profile.sh $(ARGS)
+
+# Regenerate the OpenAPI golden snapshot at
+# ``backend/tests/api/golden/openapi.json``. Run this only after an
+# intentional change to a route, request/response schema, parameter,
+# enum, or operation id. ``git diff`` the snapshot afterwards and
+# review every changed line before committing. Extra pytest args
+# pass through via ``ARGS=...`` (e.g. ``ARGS="-x --tb=short"``).
+update-openapi-golden:
+	conda run -n tckdb_env bash backend/scripts/update-openapi-golden.sh $(ARGS)
 
 # Start the FastAPI backend (foreground). Cd into backend/ so the
 # `app` package is on sys.path; this is the exact form that the rest

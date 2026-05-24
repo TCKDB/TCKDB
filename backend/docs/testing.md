@@ -225,16 +225,36 @@ renames, response-shape changes, or enum-value drift on routes that
 *are* present. The snapshot closes that gap.
 
 **Update workflow.** When you have intentionally changed a route or
-schema, regenerate the golden:
+schema, regenerate the golden. Either of these works:
+
+```bash
+make update-openapi-golden
+```
+
+```bash
+conda run -n tckdb_env bash backend/scripts/update-openapi-golden.sh
+```
+
+Both set `UPDATE_OPENAPI_GOLDEN=1` and rerun the snapshot test, which
+overwrites the golden file from the live `/openapi.json` instead of
+asserting against it. The Make target additionally forwards extra
+pytest args via `ARGS=...` (e.g. `make update-openapi-golden ARGS="-x"`).
+
+The underlying command is still available if you prefer it:
 
 ```bash
 UPDATE_OPENAPI_GOLDEN=1 conda run -n tckdb_env pytest \
     tests/api/test_openapi_snapshot.py
 ```
 
-Then `git diff tests/api/golden/openapi.json` and review every
-changed line in the PR. The diff is the contract change — treat it
-as part of the review surface, not as boilerplate to wave through.
+After regenerating, review the diff before committing:
+
+```bash
+git diff backend/tests/api/golden/openapi.json
+```
+
+The diff is the contract change — treat it as part of the review
+surface, not as boilerplate to wave through.
 
 **Normalization.** The helper sorts dict keys recursively and dumps
 with `indent=2`, `sort_keys=True`, and a trailing newline. Arrays
