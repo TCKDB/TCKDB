@@ -89,6 +89,7 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("workflow_tool_release.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+        index=True,
     )
     lot_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("level_of_theory.id", deferrable=True, initially="IMMEDIATE"),

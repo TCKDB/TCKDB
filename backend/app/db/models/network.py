@@ -32,6 +32,7 @@ class Network(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         BigInteger,
         ForeignKey("literature.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+        index=True,
     )
     software_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,

@@ -45,6 +45,7 @@ class Transport(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     literature_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("literature.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+        index=True,
     )
 
     software_release_id: Mapped[Optional[int]] = mapped_column(

@@ -46,6 +46,7 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         BigInteger,
         ForeignKey("literature.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+        index=True,
     )
 
     workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(
