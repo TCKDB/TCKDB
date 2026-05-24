@@ -160,25 +160,31 @@ second process pointed at the same name will see its DB dropped out
 from under it mid-run, with confusing `OperationalError`s as the
 visible symptom.
 
-The default per-process DB name avoids most accidental collisions, but
-any explicit `DB_TEST_NAME` value is **single-tenant**: only one
-pytest process at a time may use it. For CI, set `DB_TEST_NAME` to a
-job-specific value (e.g. include the runner / job id) so parallel
-jobs on the same Postgres host do not collide.
+The session fixture derives a test-DB name with the following
+precedence (see `_resolve_test_db_name` in
+[`tests/conftest.py`](../tests/conftest.py)):
 
-When [`pytest-xdist`](https://pypi.org/project/pytest-xdist/) lands
-(see the parallelization note at the bottom of this doc), the test DB
-must be named per worker — typical scheme is:
+1. **Explicit `DB_TEST_NAME`** — used verbatim. Backward-compatible
+   with existing CI configs that pin a job-specific name. Explicit
+   names are **single-tenant**: only one pytest process at a time may
+   use them. For CI runners that share one Postgres host, set
+   `DB_TEST_NAME` per job (e.g. include the runner / job id) so
+   parallel jobs do not collide.
+2. **`PYTEST_XDIST_WORKER`** — when pytest-xdist is invoked, each
+   worker exports its id (`gw0`, `gw1`, …) and the fixture maps it to
+   `tckdb_test_<worker>` (e.g. `tckdb_test_gw0`, `tckdb_test_gw1`).
+   Worker ids are sanitized to safe identifier characters, so each
+   worker owns its own database and the drop-and-recreate sequence
+   cannot race.
+3. **Fallback** — `tckdb_test_<pid>` so two ad-hoc pytest processes
+   on one host (e.g. two terminals running `make test-fast`) never
+   share a database, even without xdist.
 
-```text
-tckdb_test_gw0
-tckdb_test_gw1
-tckdb_test_gw2
-```
-
-so each worker owns its own database and the session-scoped
-drop-and-recreate sequence cannot race. xdist is **not** wired up in
-this slice; this is a forward-looking note.
+The resolved name is exported back into `os.environ["DB_TEST_NAME"]`
+so subprocess-based tests (e.g. the contribution-bundle CLI smoke
+test) inherit the same database. xdist is **not** wired up by
+default; this is forward-looking infrastructure that activates the
+moment a caller sets `PYTEST_XDIST_WORKER`.
 
 ## Flaky / repro handling
 
@@ -266,6 +272,8 @@ Things to verify before enabling xdist by default:
 - The test DB is named per worker (`tckdb_test_gw0`, `tckdb_test_gw1`,
   ...) so workers do not race on the same `alembic upgrade head` /
   drop-and-recreate sequence in [`tests/conftest.py`](../tests/conftest.py).
+  **Done** — `_resolve_test_db_name` in `conftest.py` honors
+  `PYTEST_XDIST_WORKER` automatically (see "Concurrent runs" above).
 - The rate-limit middleware in-memory store is disabled per test
   (already the case via `_disable_rate_limit_by_default` autouse
   fixture) so two workers do not poison each other's bucket counters

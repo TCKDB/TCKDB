@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Iterator
@@ -87,6 +88,32 @@ def _database_url(db_name: str) -> str:
     )
 
 
+def _resolve_test_db_name() -> str:
+    """Derive a test-DB name that won't collide across concurrent runners.
+
+    Precedence:
+
+    1. Explicit ``DB_TEST_NAME`` — used verbatim for backward compatibility.
+       Explicit names are single-tenant; do not point two concurrent pytest
+       runs at the same value on one Postgres host (see ``docs/testing.md``).
+    2. ``PYTEST_XDIST_WORKER`` — pytest-xdist worker id (e.g. ``gw0``),
+       producing ``tckdb_test_<worker>``. Sanitized so any value Postgres
+       would reject becomes safe identifier characters.
+    3. Fallback — ``tckdb_test_<pid>`` so two ad-hoc pytest processes on
+       one host never share a database, even without xdist.
+    """
+    explicit = os.environ.get("DB_TEST_NAME")
+    if explicit:
+        return explicit
+
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    if worker:
+        safe_worker = re.sub(r"[^A-Za-z0-9_]+", "_", worker)
+        return f"tckdb_test_{safe_worker}"
+
+    return f"tckdb_test_{os.getpid()}"
+
+
 def _recreate_test_database(db_name: str) -> None:
     admin_url = _database_url("postgres")
     engine = create_engine(admin_url, future=True, isolation_level="AUTOCOMMIT")
@@ -110,7 +137,11 @@ def _recreate_test_database(db_name: str) -> None:
 
 @pytest.fixture(scope="session")
 def db_engine():
-    db_name = os.environ.get("DB_TEST_NAME", "tckdb_test")
+    db_name = _resolve_test_db_name()
+    # Export the resolved name so subprocess-based tests (e.g. the bundle
+    # export CLI smoke test) inherit the same database without needing
+    # their own resolution logic.
+    os.environ["DB_TEST_NAME"] = db_name
     _recreate_test_database(db_name)
 
     subprocess.run(
