@@ -1,0 +1,27 @@
+.md-header {
+  background-color: #ffffffcf;
+  box-shadow: 0 0 0.2rem #0000, 0 0.2rem 0.4rem #0000;
+  color: #3b1b1b;
+}
+
+.md-header .md-header__button,
+.md-header .md-header__title,
+.md-header .md-search__input,
+.md-header .md-search__icon {
+  color: inherit;
+}
+
+.md-header .md-search__form {
+  background-color: #0000000a;
+}
+
+.md-header .md-search__form:hover {
+  background-color: #00000012;
+}
+
+@media screen and (max-width: 76.234375em) {
+  .md-nav--primary .md-nav__title[for="__drawer"] {
+    background-color: #ffffffcf;
+    color: #3b1b1b;
+  }
+}
