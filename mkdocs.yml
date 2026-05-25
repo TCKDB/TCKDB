@@ -63,7 +63,8 @@ nav:
   - Concepts:
       - Core Concepts: guides/core_concepts.md
       - Public Identifiers: specs/public_identifier_policy.md
-      - Unit Policy: unit_policy.md
+      - Internal ID Visibility: specs/internal_ids_visibility_policy.md
+      - Read API MVP: specs/read_api_mvp.md
   - Guides:
       - Query Cookbook: guides/scientific_query_cookbook.md
       - Public Hosted Querying: guides/public_hosted_querying.md
@@ -83,5 +84,5 @@ nav:
       - Contribution Bundle Format: contribution-bundles/v0-format.md
   - Project:
       - Documentation Index: README.md
-      - Read API Roadmap: roadmaps/read_api_phases.md
-      - Export/Import Roadmap: roadmaps/export_import_roadmap.md
+      - Public Read Abuse Controls: specs/public_read_abuse_controls.md
+      - API Containerization Notes: deployment/api_containerization_notes.md

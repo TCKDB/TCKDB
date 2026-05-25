@@ -22,14 +22,16 @@ contract. Workflow tools such as ARC, RMG, or any other computational
 chemistry pipeline can adapt to TCKDB; nothing in the schema or API is
 shaped around a single tool.
 
+Documentation website: <https://calvinp0.github.io/tckdbv2/>
+
 ---
 
 ## Start here
 
 Choose the path that matches what you are trying to do:
 
-- To read the full documentation website, use the GitHub Pages site
-  once enabled for this repository, or preview it locally with
+- To read the full documentation website, open
+  <https://calvinp0.github.io/tckdbv2/> or preview it locally with
   `conda run -n tckdb_env mkdocs serve`.
 - To understand what TCKDB is, read [What is TCKDB?](#what-is-tckdb)
   and [What TCKDB stores](#what-tckdb-stores).
