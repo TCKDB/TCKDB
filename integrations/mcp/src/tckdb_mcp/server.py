@@ -22,6 +22,7 @@ from .tools import kinetics_search as kinetics_search_tool
 from .tools import reaction_full as reaction_full_tool
 from .tools import reaction_kinetics as reaction_kinetics_tool
 from .tools import reactions as reactions_tool
+from .tools import scientific_reads as scientific_reads_tools
 from .tools import species as species_tool
 from .tools import species_thermo as species_thermo_tool
 from .tools import thermo_search as thermo_search_tool
@@ -77,6 +78,7 @@ def list_tools_payload() -> list[dict[str, Any]]:
             "description": kinetics_search_tool.TOOL_DESCRIPTION,
             "inputSchema": kinetics_search_tool.INPUT_SCHEMA,
         },
+        *scientific_reads_tools.list_tool_payloads(),
     ]
 
 
@@ -110,6 +112,14 @@ def dispatch_tool(
         return thermo_search_tool.run(client, config, arguments)
     if name == kinetics_search_tool.TOOL_NAME:
         return kinetics_search_tool.run(client, config, arguments)
+    if name in scientific_reads_tools.SEARCH_TOOLS:
+        return scientific_reads_tools.run_search(
+            client, config, scientific_reads_tools.SEARCH_TOOLS[name], arguments
+        )
+    if name in scientific_reads_tools.DETAIL_TOOLS:
+        return scientific_reads_tools.run_detail(
+            client, config, scientific_reads_tools.DETAIL_TOOLS[name], arguments
+        )
     raise MCPToolError(
         "invalid_input",
         f"unknown tool: {name!r}; "

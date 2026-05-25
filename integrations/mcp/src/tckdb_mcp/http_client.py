@@ -6,12 +6,9 @@ Why this wrapper instead of ``tckdb-client``?
   configured ``base_url`` is ``http://host/api/v1`` (the documented
   client default) that resolves to ``http://host/api/v1/health``, which
   does not exist — health is root-mounted at ``http://host/health``.
-- ``tckdb-client``'s ``search_species`` uses ``GET``; the MCP MVP wants
-  ``POST`` (the scientific route accepts both, but POST is the
-  documented MVP shape).
-- The MCP only calls two endpoints in this first slice; a ~80-line
-  wrapper is smaller than working around the above with absolute-URL
-  juggling.
+- The MCP covers a broad scientific read/query surface. A small local
+  wrapper keeps route, include-token, and artifact-safety policy explicit
+  while the generated client catches up.
 
 ``docs/specs/mcp_readonly_integration.md`` still prefers
 ``tckdb-client`` long-term. Revisit when it supports root-relative

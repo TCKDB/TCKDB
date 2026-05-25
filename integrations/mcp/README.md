@@ -1,10 +1,11 @@
 # tckdb-mcp
 
 Read-only Model Context Protocol (MCP) server that wraps the TCKDB
-scientific HTTP API. Lets agents (Claude in the IDE, ARC's planner,
-research copilots) query species, reactions, thermo, kinetics, and
-provenance without inventing ad-hoc HTTP wrappers, ever seeing raw SQL,
-or having any path to mutate the database.
+scientific HTTP API. Lets agents query species, reactions, calculations,
+transition states, conformers, statmech, transport, network/PDep data,
+literature links, correction references, and artifact metadata without
+inventing ad-hoc HTTP wrappers, ever seeing raw SQL, or having any path
+to mutate the database.
 
 > **Read-only.** This integration deliberately exposes no upload, auth,
 > admin, moderation, bulk-export, or artifact-download tools. Every
@@ -16,12 +17,15 @@ for the full design.
 
 ## Status
 
-**All nine read-only MVP tools implemented.** Matches [docs/specs/mcp_readonly_integration.md](../../docs/specs/mcp_readonly_integration.md).
+**Current scientific read/query tools implemented.** The MCP tracks the
+committed backend OpenAPI golden snapshot at
+[`backend/tests/api/golden/openapi.json`](../../backend/tests/api/golden/openapi.json).
 
 | Tool | Endpoint | Purpose |
 |---|---|---|
 | `tckdb_health` | `GET /health` | Reachability probe |
-| `tckdb_search_species` | `POST /api/v1/scientific/species/search` | Species discovery |
+| `tckdb_search_species` | `GET /api/v1/scientific/species/search` | Species discovery |
+| `tckdb_species_structure_search` | `POST /api/v1/scientific/species/structure-search` | RDKit-backed species structure search |
 | `tckdb_search_reactions` | `POST /api/v1/scientific/reactions/search` | Reaction-entry discovery |
 | `tckdb_search_thermo` | `POST /api/v1/scientific/thermo/search` | Chemistry-first thermo |
 | `tckdb_search_kinetics` | `POST /api/v1/scientific/kinetics/search` | Chemistry-first kinetics |
@@ -29,6 +33,28 @@ for the full design.
 | `tckdb_get_species_entry_thermo` | `GET /api/v1/scientific/species-entries/{spe_ref}/thermo` | Entry-scoped thermo |
 | `tckdb_get_geometry` | `GET /api/v1/scientific/geometries/{geom_ref}` | Geometry detail |
 | `tckdb_get_reaction_entry_full` | `GET /api/v1/scientific/reaction-entries/{rxe_ref}/full` | Composite reaction record |
+| `tckdb_calculation_search` | `POST /api/v1/scientific/calculations/search` | Calculation search |
+| `tckdb_calculation_detail` | `GET /api/v1/scientific/calculations/{calc_ref}` | Calculation detail |
+| `tckdb_transition_state_search` | `POST /api/v1/scientific/transition-states/search` | Transition-state search |
+| `tckdb_transition_state_detail` | `GET /api/v1/scientific/transition-states/{ts_ref}` | Transition-state detail |
+| `tckdb_transition_state_entry_detail` | `GET /api/v1/scientific/transition-state-entries/{tse_ref}` | Transition-state entry detail |
+| `tckdb_conformer_search` | `POST /api/v1/scientific/conformers/search` | Conformer search |
+| `tckdb_conformer_group_detail` | `GET /api/v1/scientific/conformer-groups/{cg_ref}` | Conformer group detail |
+| `tckdb_conformer_observation_detail` | `GET /api/v1/scientific/conformer-observations/{co_ref}` | Conformer observation detail |
+| `tckdb_statmech_search` | `POST /api/v1/scientific/statmech/search` | Statmech search |
+| `tckdb_statmech_detail` | `GET /api/v1/scientific/statmech/{sm_ref}` | Statmech detail |
+| `tckdb_transport_search` | `POST /api/v1/scientific/transport/search` | Transport search |
+| `tckdb_transport_detail` | `GET /api/v1/scientific/transport/{trn_ref}` | Transport detail |
+| `tckdb_network_search` | `POST /api/v1/scientific/networks/search` | Network/PDep search |
+| `tckdb_network_detail` | `GET /api/v1/scientific/networks/{net_ref}` | Network/PDep detail |
+| `tckdb_network_solve_search` | `POST /api/v1/scientific/network-solves/search` | Network-solve search |
+| `tckdb_network_solve_detail` | `GET /api/v1/scientific/network-solves/{nsolve_ref}` | Network-solve detail |
+| `tckdb_network_kinetics_search` | `POST /api/v1/scientific/network-kinetics/search` | Network-kinetics search |
+| `tckdb_network_kinetics_detail` | `GET /api/v1/scientific/network-kinetics/{nkin_ref}` | Network-kinetics detail |
+| `tckdb_literature_records` | `GET /api/v1/scientific/literature/{lit_ref}/records` | Literature inverse records |
+| `tckdb_artifact_search` | `POST /api/v1/scientific/artifacts/search` | Artifact metadata search |
+| `tckdb_frequency_scale_factor_search` | `POST /api/v1/scientific/frequency-scale-factors/search` | Frequency-scale-factor references |
+| `tckdb_energy_correction_scheme_search` | `POST /api/v1/scientific/energy-correction-schemes/search` | Energy-correction-scheme references |
 
 ## Deployment model — who runs what
 
@@ -235,6 +261,19 @@ returns. Every input that takes a handle uses one of these prefixes:
 | `rxe_*` | reaction entry (one observation/record of a reaction) |
 | `geom_*` | geometry (3D coordinates payload) |
 | `lot_*` | level of theory |
+| `calc_*` | calculation |
+| `ts_*` | transition-state concept |
+| `tse_*` | transition-state entry |
+| `cg_*` | conformer group |
+| `co_*` | conformer observation |
+| `sm_*` | statmech record |
+| `trn_*` | transport record |
+| `net_*` | network/PDep model |
+| `nsolve_*` | network solve |
+| `nkin_*` | network kinetics |
+| `lit_*` | literature reference |
+| `fsf_*` | frequency scale factor |
+| `ecs_*` | energy correction scheme |
 
 Rules the MCP enforces locally, before any HTTP call:
 
@@ -247,6 +286,16 @@ Rules the MCP enforces locally, before any HTTP call:
   teaching message pointing to the corresponding `*_ref` handle.
 - The MCP never requests `include=internal_ids` — DB integer IDs do not
   reach the agent.
+- `include=all` is allowed only where the backend defines safe bounded
+  semantics; it does not expose `internal_ids`. For network kinetics,
+  tabulated `points` are explicit-only: request `include: ["points"]`
+  when point data is actually needed.
+- Rejected/deprecated records are hidden by default by backend defaults
+  (`include_rejected=false`, `include_deprecated=false`). Tools expose
+  those flags for scientific transparency when a caller explicitly asks.
+- Artifact search is metadata-only. The MCP does not expose artifact
+  bodies, presigned URLs, download URLs, or raw content. A raw storage
+  `uri` may appear if the backend returns one; storage remains private.
 
 Why: agents should query against stable handles that survive renames,
 re-imports, and ID-space changes. DB primary keys are an implementation
@@ -254,28 +303,80 @@ detail; refs are the public surface.
 
 ## Tool workflow
 
-The nine tools group naturally by what an agent is trying to do:
+The tools group naturally by what an agent is trying to do:
 
 ```
 Health
-  └─ tckdb_health                          → check API reachable
+  └─ tckdb_health
 
-Discovery (chemistry → identity → records)
-  ├─ tckdb_search_species                  → find species_entries
-  ├─ tckdb_search_reactions                → find reaction_entries
-  ├─ tckdb_search_thermo                   → find thermo for chemistry
-  └─ tckdb_search_kinetics                 → find kinetics for chemistry
+Chemistry discovery
+  ├─ tckdb_search_species
+  ├─ tckdb_species_structure_search
+  ├─ tckdb_search_reactions
+  ├─ tckdb_search_thermo
+  └─ tckdb_search_kinetics
 
-Entry-scoped detail (when you already have a *_ref)
-  ├─ tckdb_get_species_entry_thermo        → thermo for one spe_*
-  ├─ tckdb_get_reaction_entry_kinetics     → kinetics for one rxe_*
-  ├─ tckdb_get_reaction_entry_full         → composite for one rxe_*
-  └─ tckdb_get_geometry                    → coords for one geom_*
+Scientific record search/detail
+  ├─ tckdb_calculation_search / tckdb_calculation_detail
+  ├─ tckdb_transition_state_search / tckdb_transition_state_detail
+  ├─ tckdb_conformer_search / conformer detail tools
+  ├─ tckdb_statmech_search / tckdb_statmech_detail
+  ├─ tckdb_transport_search / tckdb_transport_detail
+  └─ tckdb_network_* and tckdb_network_kinetics_*
+
+References and metadata
+  ├─ tckdb_literature_records
+  ├─ tckdb_artifact_search
+  ├─ tckdb_frequency_scale_factor_search
+  └─ tckdb_energy_correction_scheme_search
 ```
 
 Typical chain: `tckdb_search_reactions` → pick an `rxe_*` ref →
 `tckdb_get_reaction_entry_full` to expand species, kinetics, and
 transition states in a single follow-up.
+
+## Current Examples
+
+Species structure search:
+
+```json
+{
+  "query_smarts": "[OH]",
+  "mode": "substructure",
+  "include": ["review"],
+  "limit": 10
+}
+```
+
+Reaction search:
+
+```json
+{
+  "reactants": ["[OH]", "CC"],
+  "products": ["O", "[CH2]C"],
+  "include": ["species", "kinetics", "review"],
+  "limit": 10
+}
+```
+
+Network kinetics detail with explicit points:
+
+```json
+{
+  "network_kinetics_ref": "nkin_...",
+  "include": ["coefficients", "plog", "points", "review"]
+}
+```
+
+Literature inverse records:
+
+```json
+{
+  "literature_ref": "lit_...",
+  "record_type": "calculation",
+  "limit": 25
+}
+```
 
 ## Tools
 
@@ -682,11 +783,13 @@ package. Two reasons:
    documented base URL of `http://host/api/v1` this resolves to
    `http://host/api/v1/health` — but health is root-mounted at
    `http://host/health`.
-2. `tckdb-client.search_species()` is GET-only; the MCP MVP wants
-   `POST`.
+2. The MCP now covers many current scientific read/search endpoints.
+   Keeping the wrapper local avoids coupling this integration to
+   broader client generation until those surfaces settle.
 
 The long-term plan is still to depend on `tckdb-client`. Revisit when
-it supports root-relative paths and a POST species search.
+it supports root-relative health checks and the full scientific read
+surface used here.
 
 ## Troubleshooting
 

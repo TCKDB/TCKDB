@@ -1,6 +1,6 @@
 """``tckdb_search_species`` tool: public, read-only species discovery.
 
-Wraps ``POST /api/v1/scientific/species/search``. All validation is
+Wraps ``GET /api/v1/scientific/species/search``. All validation is
 local-first: the tool rejects bad input before issuing an HTTP request
 so agent feedback is fast and the backend isn't bothered with obviously
 invalid calls.
@@ -128,7 +128,7 @@ def run(
     config: Config,
     arguments: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Validate inputs, POST the search, return the server envelope."""
+    """Validate inputs, GET the search, return the server envelope."""
     args = dict(arguments or {})
 
     rejected_int = sorted(_REJECTED_INTEGER_FIELDS & args.keys())
@@ -224,7 +224,7 @@ def run(
     body = {k: v for k, v in body.items() if v is not None}
 
     url = client.scientific_url("/scientific/species/search")
-    return client.post_json(url, body)
+    return client.get(url, params=body)
 
 
 def _present(value: Any) -> bool:

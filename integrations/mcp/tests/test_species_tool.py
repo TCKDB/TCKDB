@@ -40,11 +40,17 @@ def _stub_response(records: list[dict[str, Any]] | None = None) -> dict[str, Any
 
 def _ok_handler(captured: list[dict[str, Any]]):
     def handler(request: httpx.Request) -> httpx.Response:
+        params = request.url.params
         captured.append(
             {
                 "method": request.method,
                 "url": str(request.url),
                 "body": json.loads(request.content.decode("utf-8") or "null"),
+                "query": {
+                    key: values[0] if len(values) == 1 else values
+                    for key in params
+                    if (values := params.get_list(key))
+                },
                 "headers": dict(request.headers),
             }
         )
@@ -66,8 +72,8 @@ def test_species_search_url_under_api_v1() -> None:
     captured: list[dict[str, Any]] = []
     client = _make_client(_ok_handler(captured))
     species_tool.run(client, _cfg(), {"smiles": "CCO"})
-    assert captured[0]["method"] == "POST"
-    assert captured[0]["url"] == (
+    assert captured[0]["method"] == "GET"
+    assert captured[0]["url"].startswith(
         "http://127.0.0.1:8010/api/v1/scientific/species/search"
     )
     client.close()
@@ -190,7 +196,7 @@ def test_limit_capped_to_max() -> None:
     captured: list[dict[str, Any]] = []
     client = _make_client(_ok_handler(captured))
     species_tool.run(client, _cfg(), {"smiles": "CCO", "limit": 10_000})
-    assert captured[0]["body"]["limit"] == 50  # DEFAULT_MAX_LIMIT
+    assert captured[0]["query"]["limit"] == "50"  # DEFAULT_MAX_LIMIT
     client.close()
 
 
@@ -198,7 +204,7 @@ def test_default_limit_applied_when_omitted() -> None:
     captured: list[dict[str, Any]] = []
     client = _make_client(_ok_handler(captured))
     species_tool.run(client, _cfg(), {"smiles": "CCO"})
-    assert captured[0]["body"]["limit"] == 25  # DEFAULT_DEFAULT_LIMIT
+    assert captured[0]["query"]["limit"] == "25"  # DEFAULT_DEFAULT_LIMIT
     client.close()
 
 
@@ -206,7 +212,7 @@ def test_collapse_all_forwarded() -> None:
     captured: list[dict[str, Any]] = []
     client = _make_client(_ok_handler(captured))
     species_tool.run(client, _cfg(), {"smiles": "CCO", "collapse": "all"})
-    assert captured[0]["body"]["collapse"] == "all"
+    assert captured[0]["query"]["collapse"] == "all"
     client.close()
 
 
@@ -214,7 +220,7 @@ def test_collapse_first_forwarded() -> None:
     captured: list[dict[str, Any]] = []
     client = _make_client(_ok_handler(captured))
     species_tool.run(client, _cfg(), {"smiles": "CCO", "collapse": "first"})
-    assert captured[0]["body"]["collapse"] == "first"
+    assert captured[0]["query"]["collapse"] == "first"
     client.close()
 
 
@@ -237,16 +243,16 @@ def test_valid_payload_forwarded_with_all_supplied_fields() -> None:
             "include_deprecated": False,
         },
     )
-    body = captured[0]["body"]
+    body = captured[0]["query"]
     assert body["smiles"] == "CCO"
     assert body["inchi_key"] == "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
-    assert body["charge"] == 0
-    assert body["multiplicity"] == 1
+    assert body["charge"] == "0"
+    assert body["multiplicity"] == "1"
     assert body["include"] == ["thermo", "review"]
     assert body["collapse"] == "first"
-    assert body["offset"] == 10
-    assert body["limit"] == 20
-    assert body["include_rejected"] is False
+    assert body["offset"] == "10"
+    assert body["limit"] == "20"
+    assert body["include_rejected"] == "false"
     # ``None`` fields are omitted (cleaner payload, server-side friendlier).
     assert "min_review_status" not in body
     client.close()
@@ -256,7 +262,7 @@ def test_well_formed_refs_pass_validation() -> None:
     captured: list[dict[str, Any]] = []
     client = _make_client(_ok_handler(captured))
     species_tool.run(client, _cfg(), {"species_entry_ref": "spe_01HXYZ"})
-    assert captured[0]["body"]["species_entry_ref"] == "spe_01HXYZ"
+    assert captured[0]["query"]["species_entry_ref"] == "spe_01HXYZ"
     client.close()
 
 
@@ -264,7 +270,7 @@ def test_include_all_token_passes() -> None:
     captured: list[dict[str, Any]] = []
     client = _make_client(_ok_handler(captured))
     species_tool.run(client, _cfg(), {"smiles": "CCO", "include": ["all"]})
-    assert captured[0]["body"]["include"] == ["all"]
+    assert captured[0]["query"]["include"] == "all"
     client.close()
 
 
