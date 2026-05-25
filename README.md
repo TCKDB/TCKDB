@@ -1,5 +1,9 @@
 # TCKDB
 
+<p align="center">
+  <img src="docs/assets/tckdb-wordmark-transparent.png" alt="TCKDB wordmark" width="760">
+</p>
+
 **Thermochemical & Kinetics Database** — a provenance-rich,
 workflow-tool-agnostic database and HTTP API for computational and
 experimental chemistry data: species, reactions, transition states,
