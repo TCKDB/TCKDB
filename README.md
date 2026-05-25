@@ -1,7 +1,7 @@
 # TCKDB
 
 <p align="center">
-  <img src="docs/assets/tckdb-wordmark-transparent.png" alt="TCKDB wordmark" width="760">
+  <img src="docs/assets/tckdb-wordmark.png" alt="TCKDB wordmark" width="760">
 </p>
 
 **Thermochemical & Kinetics Database** — a provenance-rich,
@@ -10,10 +10,45 @@ experimental chemistry data: species, reactions, transition states,
 geometries, calculations, statmech, thermo, kinetics, transport,
 networks, artifacts, and review/moderation state.
 
+In practical terms, TCKDB is a database you can run locally or host
+for a group. It stores quantum-chemistry and experimental records
+with enough context to answer questions like: *Which calculation
+produced this thermo value? Which geometry was used? What level of
+theory, software version, and workflow generated it? Has the record
+been reviewed?*
+
 TCKDB defines a general scientific storage, provenance, and read/query
 contract. Workflow tools such as ARC, RMG, or any other computational
 chemistry pipeline can adapt to TCKDB; nothing in the schema or API is
 shaped around a single tool.
+
+---
+
+## Start here
+
+Choose the path that matches what you are trying to do:
+
+- To read the full documentation website, use the GitHub Pages site
+  once enabled for this repository, or preview it locally with
+  `conda run -n tckdb_env mkdocs serve`.
+- To understand what TCKDB is, read [What is TCKDB?](#what-is-tckdb)
+  and [What TCKDB stores](#what-tckdb-stores).
+- To run it on your machine, use
+  [Quick start: local development](#quick-start-local-development).
+- To confirm it works with real responses, use
+  [Load demo data](#load-demo-data), then
+  [Scientific read/query examples](#scientific-readquery-examples).
+- To query an existing hosted instance, start with
+  [Scientific read/query examples](#scientific-readquery-examples).
+- To upload computed or experimental records, see
+  [Uploads and workflow-tool integration](#uploads-and-workflow-tool-integration).
+- To deploy it for a lab or group, see
+  [Quick start: self-hosted single-node deployment](#quick-start-self-hosted-single-node-deployment).
+- To work on the backend code, see [Development notes](#development-notes).
+
+If you are primarily a chemistry user, the shortest useful path is:
+install the prerequisites, run the local quick start, load the demo
+data, then run the query examples for methane and the demo reactions.
 
 ---
 
@@ -70,6 +105,12 @@ Raw output files (Gaussian/Orca logs, NEB traces, …) live in
 S3-compatible object storage as **artifacts** and are addressable
 through the API by handle.
 
+For example, a Gaussian or ORCA frequency workflow may produce a
+geometry, an optimization calculation, a frequency calculation,
+software/version provenance, a level of theory, vibrational/statmech
+data, and derived thermo. TCKDB stores those as linked records instead
+of flattening them into one disconnected table or file.
+
 ---
 
 ## Core scientific concepts
@@ -114,6 +155,11 @@ For the longer-form treatment with examples and design rationale, see
 ---
 
 ## Architecture
+
+In normal use, clients do **not** connect directly to Postgres or
+MinIO. You talk to the TCKDB API, either with curl, the Python client,
+or a workflow tool. The API then reads/writes the database and artifact
+storage for you.
 
 ```text
               ┌──────────────────────┐
@@ -187,6 +233,21 @@ The schema, upload payloads, and read API are still evolving — see
 
 ## Quick start: local development
 
+This path is for running TCKDB on your own machine. It starts the
+database and object storage in Docker, runs migrations, then starts
+the API on `http://127.0.0.1:8010`.
+
+Prerequisites:
+
+- Git.
+- Docker Desktop or Docker Engine with Compose.
+- Conda or Mamba. The recommended environment uses conda-forge RDKit.
+- A Unix-like shell: Linux, macOS, or WSL on Windows.
+
+The `make` commands below are thin wrappers around Docker, Alembic,
+and Uvicorn. They are the preferred local-development commands because
+they set the expected working directories and database name for you.
+
 ```bash
 git clone <repo-url> tckdb
 cd tckdb
@@ -219,6 +280,10 @@ curl http://127.0.0.1:8010/api/v1/health
 # -> {"status":"ok"}
 ```
 
+At this point the service is running, but the database may not contain
+scientific records yet. Query endpoints can legitimately return empty
+`records` arrays until you load data or upload records.
+
 `make help` lists every available target. The first-run diagnostic
 `make doctor` checks Docker, the env files, db/minio health, RDKit,
 Alembic, and the API — with actionable hints on each failure.
@@ -238,6 +303,37 @@ If anything fails, run `make doctor` and consult
 [docs/deployment/troubleshooting.md](docs/deployment/troubleshooting.md).
 For a longer walkthrough see
 [docs/deployment/local-v0.md](docs/deployment/local-v0.md).
+
+---
+
+## Load demo data
+
+For a first successful read/query test, load the small illustrative
+demo dataset. It includes methane, ethane, radicals, geometries,
+thermo, calculations, and two reactions with kinetics.
+
+> Demo values are not publication-grade. They exist only to exercise
+> the API and show response shapes.
+
+With the database already started and migrated:
+
+```bash
+cd backend
+
+# Dry run first; writes nothing.
+PYTHONPATH=. conda run -n tckdb_env python scripts/seed_scientific_demo_data.py
+
+# Actually write the demo rows.
+PYTHONPATH=. conda run -n tckdb_env python scripts/seed_scientific_demo_data.py --yes
+```
+
+Then keep the API running with `make api` from the repository root and
+try the examples in [Scientific read/query examples](#scientific-readquery-examples).
+You should see non-empty `records` for methane (`smiles=C`) and the
+demo reactions.
+
+The full demo-data guide, including cleanup notes, is
+[docs/guides/scientific_read_demo_data.md](docs/guides/scientific_read_demo_data.md).
 
 ---
 
@@ -330,10 +426,15 @@ tool) lives in
 All scientific reads live under `/api/v1/scientific/*` and are
 anonymous-readable on default deployments.
 
+If you loaded the demo data, `smiles=C` queries methane and should
+return non-empty results. If you have not loaded or uploaded data yet,
+the same endpoints may return an empty `records` array; that means the
+API is working but has nothing scientific to return.
+
 ```bash
 # Species search by SMILES (simple atom):
 curl -G "http://127.0.0.1:8010/api/v1/scientific/species/search" \
-    --data-urlencode "smiles=O"
+    --data-urlencode "smiles=C"
 
 # Bracketed SMILES — always url-encode with --data-urlencode,
 # otherwise brackets get interpreted as a curl URL range:
@@ -354,6 +455,20 @@ curl -G "http://127.0.0.1:8010/api/v1/scientific/kinetics/search" \
 
 # Geometry detail by public handle (geom_… ref):
 curl "http://127.0.0.1:8010/api/v1/scientific/geometries/geom_abc123"
+```
+
+For a more guided first run, use the Python example after loading demo
+data:
+
+```bash
+# One-time if you did not already install the Python client:
+pip install -e ./clients/python
+
+python clients/python/examples/scientific_reads.py \
+    --base-url http://127.0.0.1:8010/api/v1 \
+    --smiles "C" \
+    --reactant "[CH3]" --reactant "[H][H]" \
+    --product "C" --product "[H]"
 ```
 
 A longer cookbook with response shapes lives in
@@ -378,6 +493,13 @@ Workflow tools integrate by submitting structured TCKDB upload
 payloads to the appropriate `/api/v1/uploads/*` or `/api/v1/bundles/*`
 endpoint. The repo ships a thin Python HTTP client at
 [clients/python/](clients/python/).
+
+The important distinction: TCKDB uploads are structured scientific
+JSON payloads. Raw Gaussian/ORCA/RMG/ARC files can be stored as
+artifacts, but the database records still need the parsed scientific
+content: species, calculations, levels of theory, geometries, thermo,
+kinetics, provenance, and links between them. A workflow adapter is
+usually responsible for turning tool output into that JSON shape.
 
 Install it directly from the monorepo without cloning:
 

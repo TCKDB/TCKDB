@@ -1,0 +1,87 @@
+site_name: TCKDB
+site_description: Thermochemical and kinetics database documentation
+site_url: https://calvinp0.github.io/tckdbv2/
+repo_url: https://github.com/calvinp0/tckdbv2
+repo_name: calvinp0/tckdbv2
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  logo: assets/tckdb-mark-transparent.png
+  favicon: assets/tckdb-mark-transparent.png
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: light blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: light blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+validation:
+  nav:
+    omitted_files: ignore
+    not_found: warn
+    absolute_links: ignore
+  links:
+    not_found: ignore
+    absolute_links: ignore
+    unrecognized_links: ignore
+    anchors: ignore
+
+nav:
+  - Home: site/index.md
+  - Getting Started:
+      - Overview: site/getting-started.md
+      - Demo Data: site/demo-data.md
+      - Querying: site/querying.md
+      - Uploads: site/uploads.md
+      - Deployment: site/deployment.md
+  - Concepts:
+      - Core Concepts: guides/core_concepts.md
+      - Public Identifiers: specs/public_identifier_policy.md
+      - Unit Policy: unit_policy.md
+  - Guides:
+      - Query Cookbook: guides/scientific_query_cookbook.md
+      - Public Hosted Querying: guides/public_hosted_querying.md
+      - Workflow Tool Reads: guides/workflow_tool_scientific_reads.md
+      - Demo Data Details: guides/scientific_read_demo_data.md
+  - Deployment:
+      - Deployment Modes: deployment/deployment_modes.md
+      - Local Development: deployment/local-v0.md
+      - Self-Hosted Single Node: deployment/self_hosted_single_node.md
+      - Shared Private Deployment: deployment/shared-private-deployment.md
+      - HPC Client Access: deployment/client-access-from-hpc.md
+      - Troubleshooting: deployment/troubleshooting.md
+  - Clients and Uploads:
+      - Generic Client Targeting: clients/generic-client-targeting.md
+      - TCKDB Client Spec: specs/tckdb-client-v0-spec.md
+      - ARC Adapter Spec: specs/arc-tckdb-adapter-v0-spec.md
+      - Contribution Bundle Format: contribution-bundles/v0-format.md
+  - Project:
+      - Documentation Index: README.md
+      - Read API Roadmap: roadmaps/read_api_phases.md
+      - Export/Import Roadmap: roadmaps/export_import_roadmap.md
