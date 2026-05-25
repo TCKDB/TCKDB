@@ -15,11 +15,11 @@ Loud warnings:
 - The script is **not idempotent.** Re-running with ``--yes`` will create
   duplicate demo rows. Refuse to run twice in production.
 
-Usage (run from ``backend/`` with PYTHONPATH set so ``app.*`` resolves)::
+Usage (run from ``backend/``)::
 
     cd backend
-    PYTHONPATH=. conda run -n tckdb_env python scripts/seed_scientific_demo_data.py --help
-    PYTHONPATH=. conda run -n tckdb_env python scripts/seed_scientific_demo_data.py --yes
+    conda run -n tckdb_env python -m scripts.seed_scientific_demo_data --help
+    conda run -n tckdb_env python -m scripts.seed_scientific_demo_data --yes
 
 After loading, verify the data via ``tckdb-client``::
 

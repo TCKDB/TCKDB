@@ -16,10 +16,10 @@ Start from the repository root after `make up` has completed:
 cd backend
 
 # Dry run first; writes nothing.
-PYTHONPATH=. conda run -n tckdb_env python scripts/seed_scientific_demo_data.py
+conda run -n tckdb_env python -m scripts.seed_scientific_demo_data
 
 # Actually write the demo rows.
-PYTHONPATH=. conda run -n tckdb_env python scripts/seed_scientific_demo_data.py --yes
+conda run -n tckdb_env python -m scripts.seed_scientific_demo_data --yes
 ```
 
 Keep the API running with `make api` from the repository root.

@@ -49,13 +49,13 @@ The script is **opt-in** — without `--yes` it dry-runs and writes nothing.
 cd backend
 
 # Dry run (writes nothing):
-PYTHONPATH=. conda run -n tckdb_env python scripts/seed_scientific_demo_data.py
+conda run -n tckdb_env python -m scripts.seed_scientific_demo_data
 
 # Actually load demo rows:
-PYTHONPATH=. conda run -n tckdb_env python scripts/seed_scientific_demo_data.py --yes
+conda run -n tckdb_env python -m scripts.seed_scientific_demo_data --yes
 
 # Override the database URL:
-PYTHONPATH=. conda run -n tckdb_env python scripts/seed_scientific_demo_data.py --yes \
+conda run -n tckdb_env python -m scripts.seed_scientific_demo_data --yes \
     --database-url postgresql+psycopg://tckdb:tckdb@127.0.0.1:5432/tckdb_demo
 ```
 
