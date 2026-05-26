@@ -21,6 +21,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     TemperatureCoverage,
 )
+from app.services.trust.models import TrustFragment
 
 
 class ThermoModelKindQuery(str, Enum):
@@ -134,6 +135,7 @@ class ThermoRecord(BaseModel):
     temperature_coverage: TemperatureCoverage | None = None
     evidence_completeness: EvidenceCompletenessBreakdown
     provenance: ThermoProvenance
+    trust: TrustFragment | None = None
 
 
 class RequestEcho(BaseModel):

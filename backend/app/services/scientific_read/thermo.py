@@ -6,7 +6,7 @@ See docs/specs/read_api_mvp.md §Endpoint 4.
 from __future__ import annotations
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
@@ -15,6 +15,7 @@ from app.db.models.calculation import (
     CalculationSCFStability,
 )
 from app.db.models.common import (
+    RecordReviewStatus,
     SCFStabilityStatus,
     StatmechCalculationRole,
     SubmissionRecordType,
@@ -66,6 +67,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.trust import TrustFragment, evaluate_loaded_thermo
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
@@ -75,8 +77,59 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "artifacts",
     "internal_ids",
     "all",
+    "trust",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_TRUST_EAGER_LOADS = (
+    selectinload(Thermo.species_entry),
+    selectinload(Thermo.nasa),
+    selectinload(Thermo.points),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.lot),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.software_release),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.workflow_tool_release),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.artifacts),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.sp_result),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.opt_result),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.freq_result),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.scan_result),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.irc_result),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.path_search_result),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.geometry_validation),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.scf_stability),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.input_geometries),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.output_geometries),
+    selectinload(Thermo.source_calculations)
+    .selectinload(ThermoSourceCalculation.calculation)
+    .selectinload(Calculation.child_dependencies),
+)
 
 _DEFAULT_SORT_ECHO = (
     "covers_requested_temperature_range,extrapolation_distance_k,review_rank,"
@@ -114,7 +167,7 @@ def get_species_thermo(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
         "/scientific/species-entries/{id}/thermo",
-        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )
     includes = filter_internal_ids_from_resolved(includes)
     validate_temperature_range(request.temperature_min, request.temperature_max)
@@ -139,11 +192,10 @@ def get_species_thermo(
         )
     effective_lot_id: int | None = lot_id_or_match  # type: ignore[assignment]
 
-    thermo_rows = list(
-        session.scalars(
-            select(Thermo).where(Thermo.species_entry_id == species_entry_id)
-        ).all()
-    )
+    stmt = select(Thermo).where(Thermo.species_entry_id == species_entry_id)
+    if "trust" in includes:
+        stmt = stmt.options(*_TRUST_EAGER_LOADS)
+    thermo_rows = list(session.scalars(stmt).all())
     if not thermo_rows:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
@@ -302,6 +354,14 @@ def get_species_thermo(
             temperature_coverage=coverage,
             evidence_completeness=evidence,
             provenance=provenance,
+            trust=(
+                build_thermo_trust_fragment(
+                    t,
+                    review_status=badges[t.id].status,
+                )
+                if "trust" in includes
+                else None
+            ),
         )
         records.append(record)
 
@@ -347,6 +407,21 @@ def get_species_thermo(
             returned=len(returned),
             total=pre_collapse_total,
         ),
+    )
+
+
+def build_thermo_trust_fragment(
+    thermo: Thermo,
+    review_status: RecordReviewStatus | None = None,
+) -> TrustFragment:
+    """Build the read-layer trust fragment for a thermo record."""
+    evaluation = evaluate_loaded_thermo(thermo)
+    status = review_status.value if review_status is not None else "not_reviewed"
+    return TrustFragment(
+        review_status=status,
+        trust_status=evaluation.label.value,
+        evidence=evaluation.model_dump(mode="json", exclude={"check_results"}),
+        is_certified=evaluation.is_certified,
     )
 
 
