@@ -85,7 +85,7 @@ class EvidenceCheckKind(str, Enum):
 
 
 class HardFailReason(str, Enum):
-    """Discrete structural failure signals for ``computed_calculation_v1``.
+    """Discrete structural failure signals for deterministic evidence rubrics.
 
     Hard fails override the completeness ratio (§8) and force the
     rubric output into the ``hard_failed`` family. Names are stable
@@ -95,9 +95,14 @@ class HardFailReason(str, Enum):
 
     calculation_missing = "calculation_missing"
     calculation_rejected = "calculation_rejected"
+    kinetics_missing = "kinetics_missing"
+    invalid_temperature_range = "invalid_temperature_range"
     geometry_validation_failed = "geometry_validation_failed"
     missing_required_identity = "missing_required_identity"
     result_block_missing_when_successful = "result_block_missing_when_successful"
+    source_calculation_hard_failed_for_required_role = (
+        "source_calculation_hard_failed_for_required_role"
+    )
 
 
 class EvidenceCheckSpec(BaseModel):

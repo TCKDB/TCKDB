@@ -22,9 +22,13 @@ from __future__ import annotations
 from typing import Optional
 
 from app.db.models.calculation import Calculation
+from app.db.models.kinetics import Kinetics
 from app.db.models.common import (
     CalculationQuality,
     CalculationType,
+    KineticsCalculationRole,
+    KineticsModelKind,
+    ReactionRole,
     ValidationStatus,
 )
 from app.services.trust.models import (
@@ -33,7 +37,6 @@ from app.services.trust.models import (
     EvidenceOutcome,
     EvidenceRubric,
 )
-
 
 _TYPES_WITH_OUTPUT_GEOMETRY: frozenset[CalculationType] = frozenset(
     {CalculationType.opt, CalculationType.irc, CalculationType.path_search}
@@ -234,6 +237,292 @@ def _check_calculation_dependencies_present(calc: Calculation) -> EvidenceOutcom
     return _bool_outcome(len(calc.child_dependencies) >= 1)
 
 
+_ARRHENIUS_MODEL_KINDS: frozenset[KineticsModelKind] = frozenset(
+    {
+        KineticsModelKind.arrhenius,
+        KineticsModelKind.modified_arrhenius,
+    }
+)
+
+_KINETICS_STRONG_SOURCE_ROLES: frozenset[KineticsCalculationRole] = frozenset(
+    {
+        KineticsCalculationRole.reactant_energy,
+        KineticsCalculationRole.product_energy,
+        KineticsCalculationRole.ts_energy,
+        KineticsCalculationRole.freq,
+    }
+)
+
+
+def _kinetics_sources_by_role(
+    kinetics: Kinetics, role: KineticsCalculationRole
+) -> list:
+    """Return kinetics source-calculation links for ``role``."""
+    return [link for link in kinetics.source_calculations if link.role is role]
+
+
+def _kinetics_source_calculations(kinetics: Kinetics) -> list[Calculation]:
+    """Return non-null linked source calculations for ``kinetics``."""
+    return [
+        link.calculation
+        for link in kinetics.source_calculations
+        if link.calculation is not None
+    ]
+
+
+def _reaction_participant_count(kinetics: Kinetics, role: ReactionRole) -> int:
+    """Return the number of loaded reaction-entry structure participants by role."""
+    reaction_entry = kinetics.reaction_entry
+    if reaction_entry is None:
+        return 0
+    return sum(
+        1
+        for participant in reaction_entry.structure_participants
+        if participant.role is role
+    )
+
+
+def _check_kinetics_reaction_entry_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when the kinetics row is attached to a reaction_entry."""
+    return _bool_outcome(
+        kinetics.reaction_entry_id is not None and kinetics.reaction_entry is not None
+    )
+
+
+def _check_kinetics_model_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when the kinetics model kind is set."""
+    return _bool_outcome(kinetics.model_kind is not None)
+
+
+def _check_arrhenius_parameters_complete(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when Arrhenius-family scalar parameters are complete."""
+    if kinetics.model_kind not in _ARRHENIUS_MODEL_KINDS:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        kinetics.a is not None
+        and kinetics.a_units is not None
+        and kinetics.n is not None
+        and kinetics.ea_kj_mol is not None
+    )
+
+
+def _check_arrhenius_units_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when Arrhenius A units are populated for Arrhenius models."""
+    if kinetics.model_kind not in _ARRHENIUS_MODEL_KINDS:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(kinetics.a_units is not None)
+
+
+def _check_temperature_range_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when both temperature bounds are populated."""
+    return _bool_outcome(kinetics.tmin_k is not None and kinetics.tmax_k is not None)
+
+
+def _check_temperature_range_valid(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when the populated temperature range is physically plausible."""
+    if kinetics.tmin_k is None or kinetics.tmax_k is None:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(0 < kinetics.tmin_k < kinetics.tmax_k <= 10_000)
+
+
+def _check_source_calculations_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when at least one kinetics_source_calculation row is linked."""
+    return _bool_outcome(len(kinetics.source_calculations) >= 1)
+
+
+def _check_ts_energy_source_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when a TS energy source calculation is linked."""
+    return _bool_outcome(
+        len(_kinetics_sources_by_role(kinetics, KineticsCalculationRole.ts_energy)) >= 1
+    )
+
+
+def _check_reactant_energy_sources_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when reactant-energy sources cover the loaded reactants."""
+    expected = _reaction_participant_count(kinetics, ReactionRole.reactant)
+    if expected == 0:
+        return EvidenceOutcome.not_applicable
+    actual = len(
+        _kinetics_sources_by_role(kinetics, KineticsCalculationRole.reactant_energy)
+    )
+    return _bool_outcome(actual >= expected)
+
+
+def _check_product_energy_sources_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when product-energy sources cover the loaded products."""
+    expected = _reaction_participant_count(kinetics, ReactionRole.product)
+    if expected == 0:
+        return EvidenceOutcome.not_applicable
+    actual = len(
+        _kinetics_sources_by_role(kinetics, KineticsCalculationRole.product_energy)
+    )
+    return _bool_outcome(actual >= expected)
+
+
+def _check_frequency_source_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when a frequency source calculation is linked."""
+    return _bool_outcome(
+        len(_kinetics_sources_by_role(kinetics, KineticsCalculationRole.freq)) >= 1
+    )
+
+
+def _check_master_equation_or_fit_source_present_if_applicable(
+    kinetics: Kinetics,
+) -> EvidenceOutcome:
+    """Return passed for explicit master-equation or fit-source evidence.
+
+    The current schema has only Arrhenius-family model kinds, so there is no
+    deterministic way to infer that a master-equation or fit-source link is
+    required. When either role is present, credit the evidence; otherwise skip.
+    """
+    has_source = any(
+        link.role
+        in {
+            KineticsCalculationRole.master_equation,
+            KineticsCalculationRole.fit_source,
+        }
+        for link in kinetics.source_calculations
+    )
+    return EvidenceOutcome.passed if has_source else EvidenceOutcome.not_applicable
+
+
+def _check_source_calculation_lot_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when all linked source calculations have a level of theory."""
+    calcs = _kinetics_source_calculations(kinetics)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.lot_id is not None for calc in calcs))
+
+
+def _check_source_calculation_software_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when all linked source calculations have software release metadata."""
+    calcs = _kinetics_source_calculations(kinetics)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.software_release_id is not None for calc in calcs))
+
+
+def _check_workflow_tool_release_present_for_source_calculations(
+    kinetics: Kinetics,
+) -> EvidenceOutcome:
+    """Return passed when kinetics or at least one source calc carries workflow-tool metadata."""
+    if kinetics.workflow_tool_release_id is not None:
+        return EvidenceOutcome.passed
+    return _bool_outcome(
+        any(
+            calc.workflow_tool_release_id is not None
+            for calc in _kinetics_source_calculations(kinetics)
+        )
+    )
+
+
+def _check_source_calculation_artifacts_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when at least one linked source calculation retains artifacts."""
+    return _bool_outcome(
+        any(
+            len(calc.artifacts) >= 1 for calc in _kinetics_source_calculations(kinetics)
+        )
+    )
+
+
+def _check_source_calculation_result_blocks_present(
+    kinetics: Kinetics,
+) -> EvidenceOutcome:
+    """Return passed when every linked source calculation has its expected result block."""
+    calcs = _kinetics_source_calculations(kinetics)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(
+        all(
+            _check_result_block_present(calc) is EvidenceOutcome.passed
+            for calc in calcs
+        )
+    )
+
+
+def _check_geometry_validation_present_for_source_calculations(
+    kinetics: Kinetics,
+) -> EvidenceOutcome:
+    """Return passed when strong source calculations carry geometry validation."""
+    strong_calcs = [
+        link.calculation
+        for link in kinetics.source_calculations
+        if link.role in _KINETICS_STRONG_SOURCE_ROLES and link.calculation is not None
+    ]
+    if not strong_calcs:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        all(calc.geometry_validation is not None for calc in strong_calcs)
+    )
+
+
+def _check_geometry_validation_not_failed_for_source_calculations(
+    kinetics: Kinetics,
+) -> EvidenceOutcome:
+    """Return passed/warning based on geometry-validation status on source calcs."""
+    validations = [
+        link.calculation.geometry_validation
+        for link in kinetics.source_calculations
+        if link.role in _KINETICS_STRONG_SOURCE_ROLES
+        and link.calculation is not None
+        and link.calculation.geometry_validation is not None
+    ]
+    if not validations:
+        return EvidenceOutcome.not_applicable
+    if any(
+        validation.validation_status is ValidationStatus.warning
+        for validation in validations
+    ):
+        return EvidenceOutcome.warning
+    if any(
+        validation.validation_status is ValidationStatus.fail
+        for validation in validations
+    ):
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.passed
+
+
+def _check_irc_evidence_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when explicit IRC evidence is linked or present on a source calc."""
+    if _kinetics_sources_by_role(kinetics, KineticsCalculationRole.irc):
+        return EvidenceOutcome.passed
+    return _bool_outcome(
+        any(
+            calc.irc_result is not None
+            for calc in _kinetics_source_calculations(kinetics)
+        )
+    )
+
+
+def _check_path_search_evidence_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when a linked source calculation has path-search evidence."""
+    return _bool_outcome(
+        any(
+            calc.path_search_result is not None
+            for calc in _kinetics_source_calculations(kinetics)
+        )
+    )
+
+
+def _check_uncertainty_present(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when at least one kinetics uncertainty field is populated."""
+    has_a_uncertainty = (
+        kinetics.a_uncertainty is not None and kinetics.a_uncertainty_kind is not None
+    )
+    return _bool_outcome(
+        has_a_uncertainty
+        or kinetics.n_uncertainty is not None
+        or kinetics.ea_uncertainty_kj_mol is not None
+    )
+
+
+def _check_tunneling_metadata_present_if_claimed(kinetics: Kinetics) -> EvidenceOutcome:
+    """Return passed when a declared tunneling model has a non-empty identifier."""
+    if kinetics.tunneling_model is None:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(bool(kinetics.tunneling_model.strip()))
+
+
 COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
     version=1,
@@ -333,8 +622,156 @@ COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
 )
 
 
+COMPUTED_KINETICS_V1: EvidenceRubric = EvidenceRubric(
+    name="computed_kinetics",
+    version=1,
+    record_type="kinetics",
+    checks=(
+        EvidenceCheckSpec(
+            name="reaction_entry_present",
+            kind=EvidenceCheckKind.required,
+            explain="Kinetics must be attached to a reaction_entry.",
+            runner=_check_kinetics_reaction_entry_present,
+        ),
+        EvidenceCheckSpec(
+            name="kinetics_model_present",
+            kind=EvidenceCheckKind.required,
+            explain="Kinetics.model_kind must be set.",
+            runner=_check_kinetics_model_present,
+        ),
+        EvidenceCheckSpec(
+            name="arrhenius_parameters_complete",
+            kind=EvidenceCheckKind.required,
+            explain="Arrhenius-family kinetics should include A, A units, n, and Ea.",
+            runner=_check_arrhenius_parameters_complete,
+        ),
+        EvidenceCheckSpec(
+            name="arrhenius_units_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Arrhenius A units should be populated for Arrhenius-family kinetics.",
+            runner=_check_arrhenius_units_present,
+        ),
+        EvidenceCheckSpec(
+            name="temperature_range_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Both tmin_k and tmax_k should be populated.",
+            runner=_check_temperature_range_present,
+        ),
+        EvidenceCheckSpec(
+            name="temperature_range_valid",
+            kind=EvidenceCheckKind.optional,
+            explain="Temperature range should satisfy 0 < tmin_k < tmax_k <= 10000.",
+            runner=_check_temperature_range_valid,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculations_present",
+            kind=EvidenceCheckKind.required,
+            explain="At least one kinetics_source_calculation row should support computed kinetics.",
+            runner=_check_source_calculations_present,
+        ),
+        EvidenceCheckSpec(
+            name="ts_energy_source_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed TST kinetics should link a TS energy source calculation.",
+            runner=_check_ts_energy_source_present,
+        ),
+        EvidenceCheckSpec(
+            name="reactant_energy_sources_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Reactant energy source calculations should cover all loaded reactants.",
+            runner=_check_reactant_energy_sources_present,
+        ),
+        EvidenceCheckSpec(
+            name="product_energy_sources_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Product energy source calculations should cover all loaded products.",
+            runner=_check_product_energy_sources_present,
+        ),
+        EvidenceCheckSpec(
+            name="frequency_source_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Frequency source calculations should be linked when available.",
+            runner=_check_frequency_source_present,
+        ),
+        EvidenceCheckSpec(
+            name="master_equation_or_fit_source_present_if_applicable",
+            kind=EvidenceCheckKind.optional,
+            explain="Explicit master-equation or fit-source roles count when present.",
+            runner=_check_master_equation_or_fit_source_present_if_applicable,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_lot_present",
+            kind=EvidenceCheckKind.required,
+            explain="All linked source calculations should resolve to level_of_theory.",
+            runner=_check_source_calculation_lot_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_software_present",
+            kind=EvidenceCheckKind.optional,
+            explain="All linked source calculations should declare software_release.",
+            runner=_check_source_calculation_software_present,
+        ),
+        EvidenceCheckSpec(
+            name="workflow_tool_release_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Kinetics or at least one source calc should declare workflow-tool release metadata.",
+            runner=_check_workflow_tool_release_present_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_artifacts_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one linked source calculation should retain an artifact.",
+            runner=_check_source_calculation_artifacts_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_result_blocks_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Linked source calculations should have their expected result blocks.",
+            runner=_check_source_calculation_result_blocks_present,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_present_for_source_calculations",
+            kind=EvidenceCheckKind.optional,
+            explain="Strong source calculations should carry geometry-validation evidence.",
+            runner=_check_geometry_validation_present_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_not_failed_for_source_calculations",
+            kind=EvidenceCheckKind.warning,
+            explain="Source calculation geometry validation is warning (advisory).",
+            runner=_check_geometry_validation_not_failed_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="irc_evidence_present",
+            kind=EvidenceCheckKind.optional,
+            explain="IRC evidence should be linked when available.",
+            runner=_check_irc_evidence_present,
+        ),
+        EvidenceCheckSpec(
+            name="path_search_evidence_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Path-search evidence should be linked when available.",
+            runner=_check_path_search_evidence_present,
+        ),
+        EvidenceCheckSpec(
+            name="uncertainty_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one uncertainty field should be populated.",
+            runner=_check_uncertainty_present,
+        ),
+        EvidenceCheckSpec(
+            name="tunneling_metadata_present_if_claimed",
+            kind=EvidenceCheckKind.optional,
+            explain="A claimed tunneling model should have a non-empty identifier.",
+            runner=_check_tunneling_metadata_present_if_claimed,
+        ),
+    ),
+)
+
+
 RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
     "calculation": COMPUTED_CALCULATION_V1,
+    "kinetics": COMPUTED_KINETICS_V1,
 }
 """Lookup of the latest active rubric per record-type discriminator.
 

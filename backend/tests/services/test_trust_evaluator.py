@@ -34,29 +34,43 @@ from app.db.models.calculation import (
     CalculationSPResult,
 )
 from app.db.models.common import (
+    ArrheniusAUnits,
     ArtifactKind,
     CalculationGeometryRole,
     CalculationQuality,
     CalculationType,
+    KineticsCalculationRole,
+    KineticsModelKind,
+    KineticsUncertaintyKind,
     MoleculeKind,
     ParameterSource,
+    ReactionRole,
+    ScientificOriginKind,
     StereoKind,
     ValidationStatus,
 )
 from app.db.models.geometry import Geometry
+from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
 from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.reaction import (
+    ChemReaction,
+    ReactionEntry,
+    ReactionEntryStructureParticipant,
+)
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.services.trust import (
     COMPUTED_CALCULATION_V1,
+    COMPUTED_KINETICS_V1,
     EvidenceBadge,
     HardFailReason,
     evaluate_computed_calculation,
+    evaluate_computed_kinetics,
     evaluate_loaded_calculation,
+    evaluate_loaded_kinetics,
     label_from_completeness,
     select_rubric,
 )
-
 
 # ---------------------------------------------------------------------------
 # Local ORM helpers — direct inserts; rolled back at end of test
@@ -213,6 +227,90 @@ def _make_minimal_opt_calc(
     db_session.flush()
     db_session.refresh(calc)
     return calc
+
+
+def _make_reaction_entry(db_session: Session) -> ReactionEntry:
+    """Build a minimal reaction_entry with one reactant and one product."""
+    reactant_species = _make_species(db_session)
+    product_species = _make_species(db_session)
+    reactant_entry = _make_species_entry(db_session, reactant_species)
+    product_entry = _make_species_entry(db_session, product_species)
+    reaction = ChemReaction(reversible=False)
+    db_session.add(reaction)
+    db_session.flush()
+    entry = ReactionEntry(reaction_id=reaction.id)
+    db_session.add(entry)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ReactionEntryStructureParticipant(
+                reaction_entry_id=entry.id,
+                species_entry_id=reactant_entry.id,
+                role=ReactionRole.reactant,
+                participant_index=1,
+            ),
+            ReactionEntryStructureParticipant(
+                reaction_entry_id=entry.id,
+                species_entry_id=product_entry.id,
+                role=ReactionRole.product,
+                participant_index=1,
+            ),
+        ]
+    )
+    db_session.flush()
+    db_session.refresh(entry)
+    return entry
+
+
+def _make_kinetics(
+    db_session: Session,
+    *,
+    reaction_entry: ReactionEntry | None = None,
+    arrhenius: bool = True,
+    temperature_range: bool = True,
+    uncertainty: bool = False,
+    tmin_k: float | None = 300.0,
+    tmax_k: float | None = 2000.0,
+) -> Kinetics:
+    """Build a kinetics row with configurable scalar evidence."""
+    entry = reaction_entry or _make_reaction_entry(db_session)
+    kinetics = Kinetics(
+        reaction_entry_id=entry.id,
+        scientific_origin=ScientificOriginKind.computed,
+        model_kind=KineticsModelKind.modified_arrhenius,
+        a=1.0e12 if arrhenius else None,
+        a_units=ArrheniusAUnits.per_s if arrhenius else None,
+        n=0.5 if arrhenius else None,
+        ea_kj_mol=42.0 if arrhenius else None,
+        tmin_k=tmin_k if temperature_range else None,
+        tmax_k=tmax_k if temperature_range else None,
+        a_uncertainty=1.5 if uncertainty else None,
+        a_uncertainty_kind=(
+            KineticsUncertaintyKind.multiplicative if uncertainty else None
+        ),
+    )
+    db_session.add(kinetics)
+    db_session.flush()
+    db_session.refresh(kinetics)
+    return kinetics
+
+
+def _link_kinetics_source(
+    db_session: Session,
+    *,
+    kinetics: Kinetics,
+    calculation: Calculation,
+    role: KineticsCalculationRole,
+) -> None:
+    db_session.add(
+        KineticsSourceCalculation(
+            kinetics_id=kinetics.id,
+            calculation_id=calculation.id,
+            role=role,
+        )
+    )
+    db_session.flush()
+    db_session.refresh(kinetics)
 
 
 # ---------------------------------------------------------------------------
@@ -402,9 +500,7 @@ class TestGeometryValidation:
         assert result.label is not EvidenceBadge.hard_failed
 
     def test_fail_status_is_hard_failed(self, db_session):
-        calc = _make_minimal_opt_calc(
-            db_session, geom_validation=ValidationStatus.fail
-        )
+        calc = _make_minimal_opt_calc(db_session, geom_validation=ValidationStatus.fail)
         result = evaluate_computed_calculation(db_session, calc.id)
         assert result.label is EvidenceBadge.hard_failed
         assert result.hard_fail_reason is HardFailReason.geometry_validation_failed
@@ -586,4 +682,193 @@ class TestAggregationInvariants:
     def test_is_certified_always_false_from_evaluator(self, db_session):
         calc = _make_minimal_opt_calc(db_session, quality=CalculationQuality.curated)
         result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.is_certified is False
+
+
+# ---------------------------------------------------------------------------
+# 10. Computed kinetics rubric
+# ---------------------------------------------------------------------------
+
+
+class TestComputedKineticsEvaluator:
+    """Focused tests for computed_kinetics_v1 evidence completeness."""
+
+    def test_kinetics_rubric_registered(self):
+        rubric = select_rubric("kinetics")
+        assert rubric is COMPUTED_KINETICS_V1
+        assert rubric.name == "computed_kinetics"
+        assert rubric.version == 1
+
+    def test_missing_loaded_kinetics_returns_hard_failed(self):
+        result = evaluate_loaded_kinetics(None)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.record_type == "kinetics"
+        assert result.record_id is None
+        assert result.rubric == "computed_kinetics"
+        assert result.hard_fail_reason is HardFailReason.kinetics_missing
+
+    def test_sparse_computed_kinetics_has_low_evidence(self, db_session):
+        kinetics = _make_kinetics(db_session, arrhenius=False, temperature_range=False)
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert result.label in {EvidenceBadge.sparse, EvidenceBadge.unsupported}
+        assert "source_calculations_present" in result.missing_checks
+        assert "arrhenius_parameters_complete" in result.missing_checks
+
+    def test_core_arrhenius_and_temperature_checks_pass(self, db_session):
+        kinetics = _make_kinetics(db_session)
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert "reaction_entry_present" in result.passed_checks
+        assert "kinetics_model_present" in result.passed_checks
+        assert "arrhenius_parameters_complete" in result.passed_checks
+        assert "arrhenius_units_present" in result.passed_checks
+        assert "temperature_range_present" in result.passed_checks
+        assert "temperature_range_valid" in result.passed_checks
+
+    def test_missing_temperature_range_reports_missing(self, db_session):
+        kinetics = _make_kinetics(db_session, temperature_range=False)
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert "temperature_range_present" in result.missing_checks
+        assert "temperature_range_valid" in result.not_applicable_checks
+        assert result.hard_fail_reason is None
+
+    def test_invalid_temperature_range_hard_fails(self, db_session):
+        kinetics = _make_kinetics(db_session, tmin_k=500.0, tmax_k=500.0)
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is HardFailReason.invalid_temperature_range
+        assert "temperature_range_valid" in result.missing_checks
+
+    def test_source_calculations_raise_evidence_completeness(self, db_session):
+        sparse = _make_kinetics(db_session)
+        rich = _make_kinetics(db_session)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            quality=CalculationQuality.curated,
+        )
+        _link_kinetics_source(
+            db_session,
+            kinetics=rich,
+            calculation=calc,
+            role=KineticsCalculationRole.ts_energy,
+        )
+
+        sparse_result = evaluate_computed_kinetics(db_session, sparse.id)
+        rich_result = evaluate_computed_kinetics(db_session, rich.id)
+
+        assert rich_result.evidence_completeness > sparse_result.evidence_completeness
+        assert "source_calculations_present" in rich_result.passed_checks
+        assert "source_calculation_lot_present" in rich_result.passed_checks
+
+    def test_ts_and_frequency_roles_pass_corresponding_checks(self, db_session):
+        kinetics = _make_kinetics(db_session)
+        ts_calc = _make_minimal_opt_calc(db_session)
+        freq_calc = _make_minimal_opt_calc(db_session)
+        _link_kinetics_source(
+            db_session,
+            kinetics=kinetics,
+            calculation=ts_calc,
+            role=KineticsCalculationRole.ts_energy,
+        )
+        _link_kinetics_source(
+            db_session,
+            kinetics=kinetics,
+            calculation=freq_calc,
+            role=KineticsCalculationRole.freq,
+        )
+
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert "ts_energy_source_present" in result.passed_checks
+        assert "frequency_source_present" in result.passed_checks
+
+    def test_missing_uncertainty_is_not_hard_fail(self, db_session):
+        kinetics = _make_kinetics(db_session, uncertainty=False)
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert "uncertainty_present" in result.missing_checks
+        assert result.label is not EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is None
+
+    def test_source_geometry_failure_hard_fails_required_role(self, db_session):
+        kinetics = _make_kinetics(db_session)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            geom_validation=ValidationStatus.fail,
+        )
+        _link_kinetics_source(
+            db_session,
+            kinetics=kinetics,
+            calculation=calc,
+            role=KineticsCalculationRole.ts_energy,
+        )
+
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert (
+            result.hard_fail_reason
+            is HardFailReason.source_calculation_hard_failed_for_required_role
+        )
+
+    def test_source_geometry_warning_is_advisory(self, db_session):
+        kinetics = _make_kinetics(db_session)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            geom_validation=ValidationStatus.warning,
+        )
+        _link_kinetics_source(
+            db_session,
+            kinetics=kinetics,
+            calculation=calc,
+            role=KineticsCalculationRole.ts_energy,
+        )
+
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert (
+            "geometry_validation_not_failed_for_source_calculations"
+            in result.warning_checks
+        )
+        assert result.label is not EvidenceBadge.hard_failed
+
+    def test_loaded_kinetics_matches_id_entrypoint(self, db_session):
+        kinetics = _make_kinetics(db_session, uncertainty=True)
+        calc = _make_minimal_opt_calc(db_session)
+        _link_kinetics_source(
+            db_session,
+            kinetics=kinetics,
+            calculation=calc,
+            role=KineticsCalculationRole.ts_energy,
+        )
+        db_session.refresh(kinetics)
+
+        loaded = evaluate_loaded_kinetics(kinetics)
+        by_id = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert loaded == by_id
+
+    def test_evaluator_does_not_mutate_kinetics(self, db_session):
+        kinetics = _make_kinetics(db_session, uncertainty=True)
+        before_a = kinetics.a
+        before_tmin = kinetics.tmin_k
+        before_sources = len(kinetics.source_calculations)
+
+        evaluate_computed_kinetics(db_session, kinetics.id)
+        db_session.refresh(kinetics)
+
+        assert kinetics.a == before_a
+        assert kinetics.tmin_k == before_tmin
+        assert len(kinetics.source_calculations) == before_sources
+
+    def test_kinetics_evaluator_does_not_require_llm_config(
+        self, db_session, monkeypatch
+    ):
+        for var in (
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GOOGLE_API_KEY",
+            "GEMINI_API_KEY",
+            "AZURE_OPENAI_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
+
+        kinetics = _make_kinetics(db_session)
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert result.rubric == "computed_kinetics"
+        assert result.evidence_completeness >= 0.0
         assert result.is_certified is False

@@ -23,10 +23,18 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationQuality, ValidationStatus
+from app.db.models.common import (
+    CalculationQuality,
+    KineticsCalculationRole,
+    ReactionRole,
+    ValidationStatus,
+)
+from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
+from app.db.models.reaction import ReactionEntry
 from app.services.trust.models import (
     EvidenceBadge,
     EvidenceCheckKind,
@@ -39,6 +47,7 @@ from app.services.trust.models import (
 )
 from app.services.trust.rubrics import (
     COMPUTED_CALCULATION_V1,
+    COMPUTED_KINETICS_V1,
     get_rubric_for_record_type,
 )
 
@@ -64,6 +73,47 @@ def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]
     gv = calc.geometry_validation
     if gv is not None and gv.validation_status is ValidationStatus.fail:
         return HardFailReason.geometry_validation_failed
+    return None
+
+
+_KINETICS_REQUIRED_SOURCE_ROLES: frozenset[KineticsCalculationRole] = frozenset(
+    {
+        KineticsCalculationRole.reactant_energy,
+        KineticsCalculationRole.product_energy,
+        KineticsCalculationRole.ts_energy,
+        KineticsCalculationRole.freq,
+    }
+)
+
+
+def _detect_kinetics_hard_fail(kinetics: Kinetics) -> Optional[HardFailReason]:
+    """Return a hard-fail reason for ``kinetics`` if a structural failure is present."""
+    reaction_entry = kinetics.reaction_entry
+    if reaction_entry is None:
+        return HardFailReason.missing_required_identity
+
+    has_reactant = any(
+        participant.role is ReactionRole.reactant
+        for participant in reaction_entry.structure_participants
+    )
+    has_product = any(
+        participant.role is ReactionRole.product
+        for participant in reaction_entry.structure_participants
+    )
+    if not (has_reactant and has_product):
+        return HardFailReason.missing_required_identity
+
+    if kinetics.tmin_k is not None and kinetics.tmax_k is not None:
+        if not (0 < kinetics.tmin_k < kinetics.tmax_k <= 10_000):
+            return HardFailReason.invalid_temperature_range
+
+    for link in kinetics.source_calculations:
+        if link.role not in _KINETICS_REQUIRED_SOURCE_ROLES:
+            continue
+        calc = link.calculation
+        if calc is not None and _detect_calculation_hard_fail(calc) is not None:
+            return HardFailReason.source_calculation_hard_failed_for_required_role
+
     return None
 
 
@@ -164,6 +214,30 @@ def _empty_evaluation_for_missing_calculation(
     )
 
 
+def _empty_evaluation_for_missing_kinetics(
+    kinetics_id: Optional[int],
+    rubric: EvidenceRubric,
+) -> EvidenceEvaluation:
+    """Return a structured ``hard_failed`` evaluation for a missing kinetics row."""
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=kinetics_id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=EvidenceBadge.hard_failed,
+        passed_checks=(),
+        missing_checks=(),
+        warning_checks=(),
+        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        passed_count=0,
+        possible_count=0,
+        evidence_completeness=0.0,
+        is_certified=False,
+        hard_fail_reason=HardFailReason.kinetics_missing,
+        check_results=(),
+    )
+
+
 def evaluate_loaded_calculation(
     calculation: Calculation | None,
 ) -> EvidenceEvaluation:
@@ -242,6 +316,80 @@ def evaluate_loaded_calculation(
     )
 
 
+def evaluate_loaded_kinetics(
+    kinetics: Kinetics | None,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for a loaded kinetics record.
+
+    This entrypoint is pure over the ORM object graph it receives: it
+    does not perform a lookup and the check runners must not issue
+    their own queries. Callers are responsible for eager-loading the
+    relationships required by ``computed_kinetics_v1``.
+    """
+    rubric = COMPUTED_KINETICS_V1
+    if kinetics is None:
+        return _empty_evaluation_for_missing_kinetics(None, rubric)
+
+    hard_fail = _detect_kinetics_hard_fail(kinetics)
+
+    check_results: list[EvidenceCheckResult] = []
+    for spec in rubric.checks:
+        if (
+            hard_fail is HardFailReason.source_calculation_hard_failed_for_required_role
+            and spec.name == "geometry_validation_not_failed_for_source_calculations"
+        ):
+            outcome = EvidenceOutcome.not_applicable
+        else:
+            outcome = spec.runner(kinetics)
+        check_results.append(
+            EvidenceCheckResult(
+                name=spec.name,
+                outcome=outcome,
+                kind=spec.kind,
+                weight=spec.weight,
+                explain=spec.explain,
+            )
+        )
+
+    results_tuple = tuple(check_results)
+    (
+        passed,
+        missing,
+        warning,
+        not_applicable,
+        passed_count,
+        possible_count,
+        completeness,
+        all_required_passed,
+    ) = _aggregate_results(rubric, results_tuple)
+
+    if hard_fail is not None:
+        label = EvidenceBadge.hard_failed
+    else:
+        label = label_from_completeness(
+            completeness,
+            all_required_passed=all_required_passed,
+        )
+
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=kinetics.id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=label,
+        passed_checks=passed,
+        missing_checks=missing,
+        warning_checks=warning,
+        not_applicable_checks=not_applicable,
+        passed_count=passed_count,
+        possible_count=possible_count,
+        evidence_completeness=completeness,
+        is_certified=False,
+        hard_fail_reason=hard_fail,
+        check_results=results_tuple,
+    )
+
+
 def evaluate_computed_calculation(
     session: Session,
     calculation_id: int,
@@ -260,3 +408,47 @@ def evaluate_computed_calculation(
             calculation_id, COMPUTED_CALCULATION_V1
         )
     return evaluate_loaded_calculation(calculation)
+
+
+def evaluate_computed_kinetics(
+    session: Session,
+    kinetics_id: int,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for one computed kinetics row."""
+    statement = (
+        select(Kinetics)
+        .where(Kinetics.id == kinetics_id)
+        .options(
+            selectinload(Kinetics.reaction_entry).selectinload(
+                ReactionEntry.structure_participants
+            ),
+            selectinload(Kinetics.source_calculations)
+            .selectinload(KineticsSourceCalculation.calculation)
+            .selectinload(Calculation.artifacts),
+            selectinload(Kinetics.source_calculations)
+            .selectinload(KineticsSourceCalculation.calculation)
+            .selectinload(Calculation.geometry_validation),
+            selectinload(Kinetics.source_calculations)
+            .selectinload(KineticsSourceCalculation.calculation)
+            .selectinload(Calculation.sp_result),
+            selectinload(Kinetics.source_calculations)
+            .selectinload(KineticsSourceCalculation.calculation)
+            .selectinload(Calculation.opt_result),
+            selectinload(Kinetics.source_calculations)
+            .selectinload(KineticsSourceCalculation.calculation)
+            .selectinload(Calculation.freq_result),
+            selectinload(Kinetics.source_calculations)
+            .selectinload(KineticsSourceCalculation.calculation)
+            .selectinload(Calculation.irc_result),
+            selectinload(Kinetics.source_calculations)
+            .selectinload(KineticsSourceCalculation.calculation)
+            .selectinload(Calculation.scan_result),
+            selectinload(Kinetics.source_calculations)
+            .selectinload(KineticsSourceCalculation.calculation)
+            .selectinload(Calculation.path_search_result),
+        )
+    )
+    kinetics = session.scalars(statement).one_or_none()
+    if kinetics is None:
+        return _empty_evaluation_for_missing_kinetics(kinetics_id, COMPUTED_KINETICS_V1)
+    return evaluate_loaded_kinetics(kinetics)
