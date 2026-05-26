@@ -22,15 +22,18 @@ from __future__ import annotations
 from typing import Optional
 
 from app.db.models.calculation import Calculation
-from app.db.models.kinetics import Kinetics
 from app.db.models.common import (
     CalculationQuality,
     CalculationType,
     KineticsCalculationRole,
     KineticsModelKind,
     ReactionRole,
+    ScientificOriginKind,
+    ThermoCalculationRole,
     ValidationStatus,
 )
+from app.db.models.kinetics import Kinetics
+from app.db.models.thermo import Thermo
 from app.services.trust.models import (
     EvidenceCheckKind,
     EvidenceCheckSpec,
@@ -251,6 +254,39 @@ _KINETICS_STRONG_SOURCE_ROLES: frozenset[KineticsCalculationRole] = frozenset(
         KineticsCalculationRole.ts_energy,
         KineticsCalculationRole.freq,
     }
+)
+
+_THERMO_STRONG_SOURCE_ROLES: frozenset[ThermoCalculationRole] = frozenset(
+    {
+        ThermoCalculationRole.opt,
+        ThermoCalculationRole.freq,
+        ThermoCalculationRole.sp,
+        ThermoCalculationRole.composite,
+    }
+)
+
+_THERMO_REQUIRED_SOURCE_ROLES: frozenset[ThermoCalculationRole] = frozenset(
+    {
+        ThermoCalculationRole.opt,
+        ThermoCalculationRole.freq,
+    }
+)
+
+_NASA_COEFFICIENT_FIELDS: tuple[str, ...] = (
+    "a1",
+    "a2",
+    "a3",
+    "a4",
+    "a5",
+    "a6",
+    "a7",
+    "b1",
+    "b2",
+    "b3",
+    "b4",
+    "b5",
+    "b6",
+    "b7",
 )
 
 
@@ -523,6 +559,344 @@ def _check_tunneling_metadata_present_if_claimed(kinetics: Kinetics) -> Evidence
     return _bool_outcome(bool(kinetics.tunneling_model.strip()))
 
 
+def _thermo_sources_by_role(thermo: Thermo, role: ThermoCalculationRole) -> list:
+    """Return thermo source-calculation links for ``role``."""
+    return [link for link in thermo.source_calculations if link.role is role]
+
+
+def _thermo_source_calculations(thermo: Thermo) -> list[Calculation]:
+    """Return non-null linked source calculations for ``thermo``."""
+    return [
+        link.calculation
+        for link in thermo.source_calculations
+        if link.calculation is not None
+    ]
+
+
+def _thermo_source_calculations_for_roles(
+    thermo: Thermo, roles: frozenset[ThermoCalculationRole]
+) -> list[Calculation]:
+    """Return non-null source calculations whose link role is in ``roles``."""
+    return [
+        link.calculation
+        for link in thermo.source_calculations
+        if link.role in roles and link.calculation is not None
+    ]
+
+
+def _thermo_has_scalar_representation(thermo: Thermo) -> bool:
+    """Return True when scalar H298 and/or S298 values are populated."""
+    return thermo.h298_kj_mol is not None or thermo.s298_j_mol_k is not None
+
+
+def _thermo_has_nasa_representation(thermo: Thermo) -> bool:
+    """Return True when a NASA row with all coefficient fields is attached."""
+    nasa = thermo.nasa
+    if nasa is None:
+        return False
+    return all(getattr(nasa, field) is not None for field in _NASA_COEFFICIENT_FIELDS)
+
+
+def _thermo_has_point_representation(thermo: Thermo) -> bool:
+    """Return True when at least one tabulated point carries a thermo value."""
+    return any(
+        point.cp_j_mol_k is not None
+        or point.h_kj_mol is not None
+        or point.s_j_mol_k is not None
+        or point.g_kj_mol is not None
+        for point in thermo.points
+    )
+
+
+def _thermo_has_any_representation(thermo: Thermo) -> bool:
+    """Return True when scalar, NASA, or point evidence is populated."""
+    return (
+        _thermo_has_scalar_representation(thermo)
+        or _thermo_has_nasa_representation(thermo)
+        or _thermo_has_point_representation(thermo)
+    )
+
+
+def _thermo_range_is_present(thermo: Thermo) -> bool:
+    """Return True when a top-level or NASA temperature range is populated."""
+    if thermo.tmin_k is not None or thermo.tmax_k is not None:
+        return True
+    nasa = thermo.nasa
+    if nasa is None:
+        return False
+    return nasa.t_low is not None or nasa.t_mid is not None or nasa.t_high is not None
+
+
+def _thermo_range_is_valid(thermo: Thermo) -> bool:
+    """Return True when all populated thermo temperature ranges are plausible."""
+    if thermo.tmin_k is not None or thermo.tmax_k is not None:
+        if thermo.tmin_k is None or thermo.tmax_k is None:
+            return False
+        if not (0 < thermo.tmin_k < thermo.tmax_k <= 10_000):
+            return False
+
+    nasa = thermo.nasa
+    if nasa is None:
+        return True
+    if nasa.t_low is None and nasa.t_mid is None and nasa.t_high is None:
+        return True
+    if nasa.t_low is None or nasa.t_mid is None or nasa.t_high is None:
+        return False
+    return 0 < nasa.t_low < nasa.t_mid < nasa.t_high <= 10_000
+
+
+def _check_thermo_species_entry_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when the thermo row is attached to a species_entry."""
+    return _bool_outcome(
+        thermo.species_entry_id is not None and thermo.species_entry is not None
+    )
+
+
+def _check_thermo_origin_is_computed(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when the thermo record declares computed origin."""
+    return _bool_outcome(thermo.scientific_origin is ScientificOriginKind.computed)
+
+
+def _check_thermo_model_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when a deterministic thermo representation implies a model."""
+    return _bool_outcome(_thermo_has_any_representation(thermo))
+
+
+def _check_scalar_thermo_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed for scalar H298/S298 evidence, otherwise N/A if another model exists."""
+    if _thermo_has_scalar_representation(thermo):
+        return EvidenceOutcome.passed
+    if _thermo_has_any_representation(thermo):
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.missing
+
+
+def _check_nasa_coefficients_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when an attached NASA row has complete coefficient blocks."""
+    if thermo.nasa is None:
+        return (
+            EvidenceOutcome.not_applicable
+            if _thermo_has_any_representation(thermo)
+            else EvidenceOutcome.missing
+        )
+    return _bool_outcome(_thermo_has_nasa_representation(thermo))
+
+
+def _check_thermo_points_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when attached thermo points carry at least one value."""
+    if thermo.points:
+        return _bool_outcome(_thermo_has_point_representation(thermo))
+    return (
+        EvidenceOutcome.not_applicable
+        if _thermo_has_any_representation(thermo)
+        else EvidenceOutcome.missing
+    )
+
+
+def _check_at_least_one_thermo_representation_present(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Return passed when scalar, NASA, or tabulated point evidence exists."""
+    return _bool_outcome(_thermo_has_any_representation(thermo))
+
+
+def _check_temperature_range_present_if_applicable(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed for range-bearing thermo representations when bounds exist."""
+    if thermo.nasa is None and thermo.tmin_k is None and thermo.tmax_k is None:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(_thermo_range_is_present(thermo))
+
+
+def _check_thermo_temperature_range_valid(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when a populated thermo temperature range is valid."""
+    if not _thermo_range_is_present(thermo):
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(_thermo_range_is_valid(thermo))
+
+
+def _check_thermo_source_calculations_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when at least one thermo_source_calculation row is linked."""
+    return _bool_outcome(len(thermo.source_calculations) >= 1)
+
+
+def _check_opt_source_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when an opt source calculation is linked."""
+    return _bool_outcome(
+        len(_thermo_sources_by_role(thermo, ThermoCalculationRole.opt)) >= 1
+    )
+
+
+def _check_freq_source_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when a frequency source calculation is linked."""
+    return _bool_outcome(
+        len(_thermo_sources_by_role(thermo, ThermoCalculationRole.freq)) >= 1
+    )
+
+
+def _check_sp_or_composite_source_present_if_applicable(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Return passed when SP/composite source evidence is linked.
+
+    The current schema cannot distinguish pure empirical/scalar import paths from
+    SP-derived computed thermo. Treat the check as applicable for computed rows.
+    """
+    return _bool_outcome(
+        len(_thermo_sources_by_role(thermo, ThermoCalculationRole.sp))
+        + len(_thermo_sources_by_role(thermo, ThermoCalculationRole.composite))
+        >= 1
+    )
+
+
+def _check_thermo_source_calculation_lot_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when all linked source calculations have a level of theory."""
+    calcs = _thermo_source_calculations(thermo)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.lot_id is not None for calc in calcs))
+
+
+def _check_thermo_source_calculation_software_present(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Return passed when all linked source calculations have software metadata."""
+    calcs = _thermo_source_calculations(thermo)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.software_release_id is not None for calc in calcs))
+
+
+def _check_thermo_source_calculation_workflow_tool_present(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Return passed when thermo or one source calc carries workflow-tool metadata."""
+    if thermo.workflow_tool_release_id is not None:
+        return EvidenceOutcome.passed
+    return _bool_outcome(
+        any(
+            calc.workflow_tool_release_id is not None
+            for calc in _thermo_source_calculations(thermo)
+        )
+    )
+
+
+def _check_thermo_source_calculation_artifacts_present(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Return passed when at least one linked source calculation retains artifacts."""
+    return _bool_outcome(
+        any(len(calc.artifacts) >= 1 for calc in _thermo_source_calculations(thermo))
+    )
+
+
+def _check_thermo_source_calculation_result_blocks_present(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Return passed when every linked source calculation has its expected result block."""
+    calcs = _thermo_source_calculations(thermo)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(
+        all(
+            _check_result_block_present(calc) is EvidenceOutcome.passed
+            for calc in calcs
+        )
+    )
+
+
+def _check_source_calculation_has_non_hard_failed_evidence(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Return passed when linked source calculations avoid deterministic hard-fail signals."""
+    calcs = _thermo_source_calculations(thermo)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(
+        all(
+            calc.quality is not CalculationQuality.rejected
+            and (
+                calc.geometry_validation is None
+                or calc.geometry_validation.validation_status
+                is not ValidationStatus.fail
+            )
+            for calc in calcs
+        )
+    )
+
+
+def _check_thermo_geometry_validation_present_for_source_calculations(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Return passed when strong source calculations carry geometry validation."""
+    strong_calcs = _thermo_source_calculations_for_roles(
+        thermo, _THERMO_STRONG_SOURCE_ROLES
+    )
+    if not strong_calcs:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        all(calc.geometry_validation is not None for calc in strong_calcs)
+    )
+
+
+def _check_thermo_geometry_validation_not_failed_for_source_calculations(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Return passed/warning based on geometry-validation status on source calcs."""
+    validations = [
+        calc.geometry_validation
+        for calc in _thermo_source_calculations_for_roles(
+            thermo, _THERMO_STRONG_SOURCE_ROLES
+        )
+        if calc.geometry_validation is not None
+    ]
+    if not validations:
+        return EvidenceOutcome.not_applicable
+    if any(
+        validation.validation_status is ValidationStatus.warning
+        for validation in validations
+    ):
+        return EvidenceOutcome.warning
+    if any(
+        validation.validation_status is ValidationStatus.fail
+        for validation in validations
+    ):
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.passed
+
+
+def _check_statmech_present(thermo: Thermo) -> EvidenceOutcome:
+    """Skip statmech linkage until a thermo-to-statmech relationship exists."""
+    return EvidenceOutcome.not_applicable
+
+
+def _check_frequency_scale_factor_present_if_applicable(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Require a frequency scale factor only when a frequency source is linked.
+
+    The current thermo schema has no direct scale-factor relationship, so the
+    linked frequency role makes this check applicable but currently missing.
+    """
+    if not _thermo_sources_by_role(thermo, ThermoCalculationRole.freq):
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.missing
+
+
+def _check_thermo_uncertainty_present(thermo: Thermo) -> EvidenceOutcome:
+    """Return passed when at least one scalar uncertainty field is populated."""
+    return _bool_outcome(
+        thermo.h298_uncertainty_kj_mol is not None
+        or thermo.s298_uncertainty_j_mol_k is not None
+    )
+
+
+def _check_thermo_not_rejected_or_deprecated_if_applicable(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """Skip curator status checks until thermo-level review/deprecation is modeled."""
+    return EvidenceOutcome.not_applicable
+
+
 COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
     version=1,
@@ -769,9 +1143,169 @@ COMPUTED_KINETICS_V1: EvidenceRubric = EvidenceRubric(
 )
 
 
+COMPUTED_THERMO_V1: EvidenceRubric = EvidenceRubric(
+    name="computed_thermo",
+    version=1,
+    record_type="thermo",
+    checks=(
+        EvidenceCheckSpec(
+            name="species_entry_present",
+            kind=EvidenceCheckKind.required,
+            explain="Thermo must be attached to a species_entry.",
+            runner=_check_thermo_species_entry_present,
+        ),
+        EvidenceCheckSpec(
+            name="thermo_origin_is_computed",
+            kind=EvidenceCheckKind.required,
+            explain="Thermo.scientific_origin should be computed for this rubric.",
+            runner=_check_thermo_origin_is_computed,
+        ),
+        EvidenceCheckSpec(
+            name="thermo_model_present",
+            kind=EvidenceCheckKind.required,
+            explain="Thermo should expose scalar, NASA, or tabulated-point model evidence.",
+            runner=_check_thermo_model_present,
+        ),
+        EvidenceCheckSpec(
+            name="scalar_thermo_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Scalar H298 or S298 values should be populated when using scalar thermo.",
+            runner=_check_scalar_thermo_present,
+        ),
+        EvidenceCheckSpec(
+            name="nasa_coefficients_present",
+            kind=EvidenceCheckKind.optional,
+            explain="NASA thermo should include a complete coefficient block.",
+            runner=_check_nasa_coefficients_present,
+        ),
+        EvidenceCheckSpec(
+            name="thermo_points_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Tabulated thermo should include at least one point with a thermo value.",
+            runner=_check_thermo_points_present,
+        ),
+        EvidenceCheckSpec(
+            name="at_least_one_thermo_representation_present",
+            kind=EvidenceCheckKind.required,
+            explain="Thermo must have scalar, NASA, or tabulated-point evidence.",
+            runner=_check_at_least_one_thermo_representation_present,
+        ),
+        EvidenceCheckSpec(
+            name="temperature_range_present_if_applicable",
+            kind=EvidenceCheckKind.optional,
+            explain="Range-bearing thermo should declare temperature bounds.",
+            runner=_check_temperature_range_present_if_applicable,
+        ),
+        EvidenceCheckSpec(
+            name="temperature_range_valid",
+            kind=EvidenceCheckKind.optional,
+            explain="Temperature ranges should satisfy 0 < low < high <= 10000.",
+            runner=_check_thermo_temperature_range_valid,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculations_present",
+            kind=EvidenceCheckKind.required,
+            explain="At least one thermo_source_calculation row should support computed thermo.",
+            runner=_check_thermo_source_calculations_present,
+        ),
+        EvidenceCheckSpec(
+            name="opt_source_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed thermo should link an optimization source calculation when available.",
+            runner=_check_opt_source_present,
+        ),
+        EvidenceCheckSpec(
+            name="freq_source_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed thermo should link a frequency source calculation when available.",
+            runner=_check_freq_source_present,
+        ),
+        EvidenceCheckSpec(
+            name="sp_or_composite_source_present_if_applicable",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed thermo should link single-point or composite energy evidence when applicable.",
+            runner=_check_sp_or_composite_source_present_if_applicable,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_lot_present",
+            kind=EvidenceCheckKind.required,
+            explain="All linked source calculations should resolve to level_of_theory.",
+            runner=_check_thermo_source_calculation_lot_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_software_present",
+            kind=EvidenceCheckKind.optional,
+            explain="All linked source calculations should declare software_release.",
+            runner=_check_thermo_source_calculation_software_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_workflow_tool_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Thermo or at least one source calc should declare workflow-tool release metadata.",
+            runner=_check_thermo_source_calculation_workflow_tool_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_artifacts_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one linked source calculation should retain an artifact.",
+            runner=_check_thermo_source_calculation_artifacts_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_result_blocks_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Linked source calculations should have their expected result blocks.",
+            runner=_check_thermo_source_calculation_result_blocks_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_has_non_hard_failed_evidence",
+            kind=EvidenceCheckKind.optional,
+            explain="Linked source calculations should avoid deterministic hard-fail signals.",
+            runner=_check_source_calculation_has_non_hard_failed_evidence,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_present_for_source_calculations",
+            kind=EvidenceCheckKind.optional,
+            explain="Strong source calculations should carry geometry-validation evidence.",
+            runner=_check_thermo_geometry_validation_present_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_not_failed_for_source_calculations",
+            kind=EvidenceCheckKind.warning,
+            explain="Source calculation geometry validation is warning (advisory).",
+            runner=_check_thermo_geometry_validation_not_failed_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="statmech_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Linked statmech evidence is expected when schema support exists.",
+            runner=_check_statmech_present,
+        ),
+        EvidenceCheckSpec(
+            name="frequency_scale_factor_present_if_applicable",
+            kind=EvidenceCheckKind.optional,
+            explain="Frequency-derived thermo should record its frequency scale factor when schema support exists.",
+            runner=_check_frequency_scale_factor_present_if_applicable,
+        ),
+        EvidenceCheckSpec(
+            name="uncertainty_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one thermo uncertainty field should be populated.",
+            runner=_check_thermo_uncertainty_present,
+        ),
+        EvidenceCheckSpec(
+            name="thermo_not_rejected_or_deprecated_if_applicable",
+            kind=EvidenceCheckKind.optional,
+            explain="Thermo rejection/deprecation checks apply once modeled.",
+            runner=_check_thermo_not_rejected_or_deprecated_if_applicable,
+        ),
+    ),
+)
+
+
 RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
     "calculation": COMPUTED_CALCULATION_V1,
     "kinetics": COMPUTED_KINETICS_V1,
+    "thermo": COMPUTED_THERMO_V1,
 }
 """Lookup of the latest active rubric per record-type discriminator.
 

@@ -47,6 +47,7 @@ from app.db.models.common import (
     ReactionRole,
     ScientificOriginKind,
     StereoKind,
+    ThermoCalculationRole,
     ValidationStatus,
 )
 from app.db.models.geometry import Geometry
@@ -59,15 +60,24 @@ from app.db.models.reaction import (
 )
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
+from app.db.models.thermo import (
+    Thermo,
+    ThermoNASA,
+    ThermoPoint,
+    ThermoSourceCalculation,
+)
 from app.services.trust import (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,
+    COMPUTED_THERMO_V1,
     EvidenceBadge,
     HardFailReason,
     evaluate_computed_calculation,
     evaluate_computed_kinetics,
+    evaluate_computed_thermo,
     evaluate_loaded_calculation,
     evaluate_loaded_kinetics,
+    evaluate_loaded_thermo,
     label_from_completeness,
     select_rubric,
 )
@@ -311,6 +321,94 @@ def _link_kinetics_source(
     )
     db_session.flush()
     db_session.refresh(kinetics)
+
+
+def _make_thermo(
+    db_session: Session,
+    *,
+    species_entry: SpeciesEntry | None = None,
+    scalar: bool = True,
+    nasa: bool = False,
+    points: bool = False,
+    temperature_range: bool = True,
+    uncertainty: bool = False,
+    tmin_k: float | None = 300.0,
+    tmax_k: float | None = 2000.0,
+) -> Thermo:
+    """Build a thermo row with configurable representation evidence."""
+    entry = species_entry or _make_species_entry(db_session, _make_species(db_session))
+    thermo = Thermo(
+        species_entry_id=entry.id,
+        scientific_origin=ScientificOriginKind.computed,
+        h298_kj_mol=-50.0 if scalar else None,
+        s298_j_mol_k=220.0 if scalar else None,
+        h298_uncertainty_kj_mol=1.2 if uncertainty else None,
+        tmin_k=tmin_k if temperature_range else None,
+        tmax_k=tmax_k if temperature_range else None,
+    )
+    db_session.add(thermo)
+    db_session.flush()
+
+    if nasa:
+        db_session.add(
+            ThermoNASA(
+                thermo_id=thermo.id,
+                t_low=300.0,
+                t_mid=1000.0,
+                t_high=3000.0,
+                a1=1.0,
+                a2=2.0,
+                a3=3.0,
+                a4=4.0,
+                a5=5.0,
+                a6=6.0,
+                a7=7.0,
+                b1=1.5,
+                b2=2.5,
+                b3=3.5,
+                b4=4.5,
+                b5=5.5,
+                b6=6.5,
+                b7=7.5,
+            )
+        )
+    if points:
+        db_session.add_all(
+            [
+                ThermoPoint(
+                    thermo_id=thermo.id,
+                    temperature_k=300.0,
+                    cp_j_mol_k=35.0,
+                ),
+                ThermoPoint(
+                    thermo_id=thermo.id,
+                    temperature_k=500.0,
+                    h_kj_mol=-47.5,
+                ),
+            ]
+        )
+
+    db_session.flush()
+    db_session.refresh(thermo)
+    return thermo
+
+
+def _link_thermo_source(
+    db_session: Session,
+    *,
+    thermo: Thermo,
+    calculation: Calculation,
+    role: ThermoCalculationRole,
+) -> None:
+    db_session.add(
+        ThermoSourceCalculation(
+            thermo_id=thermo.id,
+            calculation_id=calculation.id,
+            role=role,
+        )
+    )
+    db_session.flush()
+    db_session.refresh(thermo)
 
 
 # ---------------------------------------------------------------------------
@@ -870,5 +968,243 @@ class TestComputedKineticsEvaluator:
         kinetics = _make_kinetics(db_session)
         result = evaluate_computed_kinetics(db_session, kinetics.id)
         assert result.rubric == "computed_kinetics"
+        assert result.evidence_completeness >= 0.0
+        assert result.is_certified is False
+
+
+# ---------------------------------------------------------------------------
+# 11. Computed thermo rubric
+# ---------------------------------------------------------------------------
+
+
+class TestComputedThermoEvaluator:
+    """Focused tests for computed_thermo_v1 evidence completeness."""
+
+    def test_thermo_rubric_registered(self):
+        rubric = select_rubric("thermo")
+        assert rubric is COMPUTED_THERMO_V1
+        assert rubric.name == "computed_thermo"
+        assert rubric.version == 1
+
+    def test_missing_loaded_thermo_returns_hard_failed(self):
+        result = evaluate_loaded_thermo(None)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.record_type == "thermo"
+        assert result.record_id is None
+        assert result.rubric == "computed_thermo"
+        assert result.hard_fail_reason is HardFailReason.thermo_missing
+
+    def test_sparse_computed_thermo_has_low_evidence(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True, temperature_range=False)
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert result.label in {EvidenceBadge.sparse, EvidenceBadge.unsupported}
+        assert "source_calculations_present" in result.missing_checks
+        assert "source_calculation_lot_present" in result.missing_checks
+
+    def test_species_and_scalar_representation_checks_pass(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True, temperature_range=False)
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert "species_entry_present" in result.passed_checks
+        assert "thermo_origin_is_computed" in result.passed_checks
+        assert "thermo_model_present" in result.passed_checks
+        assert "scalar_thermo_present" in result.passed_checks
+        assert "at_least_one_thermo_representation_present" in result.passed_checks
+        assert "nasa_coefficients_present" in result.not_applicable_checks
+        assert "thermo_points_present" in result.not_applicable_checks
+
+    def test_nasa_representation_checks_pass(self, db_session):
+        thermo = _make_thermo(db_session, scalar=False, nasa=True)
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert "nasa_coefficients_present" in result.passed_checks
+        assert "at_least_one_thermo_representation_present" in result.passed_checks
+        assert "temperature_range_present_if_applicable" in result.passed_checks
+        assert "temperature_range_valid" in result.passed_checks
+
+    def test_points_representation_checks_pass(self, db_session):
+        thermo = _make_thermo(
+            db_session,
+            scalar=False,
+            points=True,
+            temperature_range=False,
+        )
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert "thermo_points_present" in result.passed_checks
+        assert "at_least_one_thermo_representation_present" in result.passed_checks
+        assert "scalar_thermo_present" in result.not_applicable_checks
+
+    def test_missing_all_representations_hard_fails(self, db_session):
+        thermo = _make_thermo(
+            db_session,
+            scalar=False,
+            nasa=False,
+            points=False,
+            temperature_range=False,
+        )
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert (
+            result.hard_fail_reason is HardFailReason.no_thermo_representation_present
+        )
+        assert "at_least_one_thermo_representation_present" in result.missing_checks
+
+    def test_missing_temperature_range_reports_not_applicable_for_scalar(
+        self, db_session
+    ):
+        thermo = _make_thermo(db_session, scalar=True, temperature_range=False)
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert "temperature_range_present_if_applicable" in result.not_applicable_checks
+        assert "temperature_range_valid" in result.not_applicable_checks
+        assert result.hard_fail_reason is None
+
+    def test_invalid_temperature_range_hard_fails(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True, tmin_k=500.0, tmax_k=500.0)
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is HardFailReason.invalid_temperature_range
+        assert "temperature_range_valid" in result.missing_checks
+
+    def test_source_calculations_raise_evidence_completeness(self, db_session):
+        sparse = _make_thermo(db_session, scalar=True)
+        rich = _make_thermo(db_session, scalar=True)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            quality=CalculationQuality.curated,
+        )
+        _link_thermo_source(
+            db_session,
+            thermo=rich,
+            calculation=calc,
+            role=ThermoCalculationRole.opt,
+        )
+
+        sparse_result = evaluate_computed_thermo(db_session, sparse.id)
+        rich_result = evaluate_computed_thermo(db_session, rich.id)
+
+        assert rich_result.evidence_completeness > sparse_result.evidence_completeness
+        assert "source_calculations_present" in rich_result.passed_checks
+        assert "source_calculation_lot_present" in rich_result.passed_checks
+
+    def test_opt_freq_and_sp_roles_pass_corresponding_checks(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True)
+        opt_calc = _make_minimal_opt_calc(db_session)
+        freq_calc = _make_minimal_opt_calc(db_session)
+        sp_calc = _make_minimal_opt_calc(db_session)
+        _link_thermo_source(
+            db_session,
+            thermo=thermo,
+            calculation=opt_calc,
+            role=ThermoCalculationRole.opt,
+        )
+        _link_thermo_source(
+            db_session,
+            thermo=thermo,
+            calculation=freq_calc,
+            role=ThermoCalculationRole.freq,
+        )
+        _link_thermo_source(
+            db_session,
+            thermo=thermo,
+            calculation=sp_calc,
+            role=ThermoCalculationRole.sp,
+        )
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert "opt_source_present" in result.passed_checks
+        assert "freq_source_present" in result.passed_checks
+        assert "sp_or_composite_source_present_if_applicable" in result.passed_checks
+
+    def test_missing_uncertainty_is_not_hard_fail(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True, uncertainty=False)
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert "uncertainty_present" in result.missing_checks
+        assert result.label is not EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is None
+
+    def test_source_geometry_failure_hard_fails_required_role(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            geom_validation=ValidationStatus.fail,
+        )
+        _link_thermo_source(
+            db_session,
+            thermo=thermo,
+            calculation=calc,
+            role=ThermoCalculationRole.opt,
+        )
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert (
+            result.hard_fail_reason
+            is HardFailReason.source_calculation_hard_failed_for_required_role
+        )
+        assert (
+            "source_calculation_has_non_hard_failed_evidence" in result.missing_checks
+        )
+
+    def test_source_geometry_warning_is_advisory(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            geom_validation=ValidationStatus.warning,
+        )
+        _link_thermo_source(
+            db_session,
+            thermo=thermo,
+            calculation=calc,
+            role=ThermoCalculationRole.opt,
+        )
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert (
+            "geometry_validation_not_failed_for_source_calculations"
+            in result.warning_checks
+        )
+        assert result.label is not EvidenceBadge.hard_failed
+
+    def test_loaded_thermo_matches_id_entrypoint(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True, uncertainty=True)
+        calc = _make_minimal_opt_calc(db_session)
+        _link_thermo_source(
+            db_session,
+            thermo=thermo,
+            calculation=calc,
+            role=ThermoCalculationRole.opt,
+        )
+        db_session.refresh(thermo)
+
+        loaded = evaluate_loaded_thermo(thermo)
+        by_id = evaluate_computed_thermo(db_session, thermo.id)
+        assert loaded == by_id
+
+    def test_evaluator_does_not_mutate_thermo(self, db_session):
+        thermo = _make_thermo(db_session, scalar=True, uncertainty=True)
+        before_h298 = thermo.h298_kj_mol
+        before_tmin = thermo.tmin_k
+        before_sources = len(thermo.source_calculations)
+
+        evaluate_computed_thermo(db_session, thermo.id)
+        db_session.refresh(thermo)
+
+        assert thermo.h298_kj_mol == before_h298
+        assert thermo.tmin_k == before_tmin
+        assert len(thermo.source_calculations) == before_sources
+
+    def test_thermo_evaluator_does_not_require_llm_config(
+        self, db_session, monkeypatch
+    ):
+        for var in (
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GOOGLE_API_KEY",
+            "GEMINI_API_KEY",
+            "AZURE_OPENAI_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
+
+        thermo = _make_thermo(db_session, scalar=True)
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert result.rubric == "computed_thermo"
         assert result.evidence_completeness >= 0.0
         assert result.is_certified is False

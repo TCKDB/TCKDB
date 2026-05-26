@@ -31,10 +31,12 @@ from app.db.models.common import (
     CalculationQuality,
     KineticsCalculationRole,
     ReactionRole,
+    ThermoCalculationRole,
     ValidationStatus,
 )
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
 from app.db.models.reaction import ReactionEntry
+from app.db.models.thermo import Thermo, ThermoSourceCalculation
 from app.services.trust.models import (
     EvidenceBadge,
     EvidenceCheckKind,
@@ -48,6 +50,7 @@ from app.services.trust.models import (
 from app.services.trust.rubrics import (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,
+    COMPUTED_THERMO_V1,
     get_rubric_for_record_type,
 )
 
@@ -109,6 +112,85 @@ def _detect_kinetics_hard_fail(kinetics: Kinetics) -> Optional[HardFailReason]:
 
     for link in kinetics.source_calculations:
         if link.role not in _KINETICS_REQUIRED_SOURCE_ROLES:
+            continue
+        calc = link.calculation
+        if calc is not None and _detect_calculation_hard_fail(calc) is not None:
+            return HardFailReason.source_calculation_hard_failed_for_required_role
+
+    return None
+
+
+_THERMO_REQUIRED_SOURCE_ROLES: frozenset[ThermoCalculationRole] = frozenset(
+    {
+        ThermoCalculationRole.opt,
+        ThermoCalculationRole.freq,
+    }
+)
+
+
+def _thermo_has_representation(thermo: Thermo) -> bool:
+    """Return True when scalar, NASA coefficients, or populated points exist."""
+    if thermo.h298_kj_mol is not None or thermo.s298_j_mol_k is not None:
+        return True
+    if thermo.nasa is not None:
+        coefficient_fields = (
+            "a1",
+            "a2",
+            "a3",
+            "a4",
+            "a5",
+            "a6",
+            "a7",
+            "b1",
+            "b2",
+            "b3",
+            "b4",
+            "b5",
+            "b6",
+            "b7",
+        )
+        if all(getattr(thermo.nasa, field) is not None for field in coefficient_fields):
+            return True
+    return any(
+        point.cp_j_mol_k is not None
+        or point.h_kj_mol is not None
+        or point.s_j_mol_k is not None
+        or point.g_kj_mol is not None
+        for point in thermo.points
+    )
+
+
+def _thermo_temperature_range_invalid(thermo: Thermo) -> bool:
+    """Return True when any populated thermo temperature range is invalid."""
+    if thermo.tmin_k is not None or thermo.tmax_k is not None:
+        if thermo.tmin_k is None or thermo.tmax_k is None:
+            return True
+        if not (0 < thermo.tmin_k < thermo.tmax_k <= 10_000):
+            return True
+
+    nasa = thermo.nasa
+    if nasa is None:
+        return False
+    if nasa.t_low is None and nasa.t_mid is None and nasa.t_high is None:
+        return False
+    if nasa.t_low is None or nasa.t_mid is None or nasa.t_high is None:
+        return True
+    return not (0 < nasa.t_low < nasa.t_mid < nasa.t_high <= 10_000)
+
+
+def _detect_thermo_hard_fail(thermo: Thermo) -> Optional[HardFailReason]:
+    """Return a hard-fail reason for ``thermo`` if a structural failure is present."""
+    if thermo.species_entry_id is None or thermo.species_entry is None:
+        return HardFailReason.species_entry_missing
+
+    if not _thermo_has_representation(thermo):
+        return HardFailReason.no_thermo_representation_present
+
+    if _thermo_temperature_range_invalid(thermo):
+        return HardFailReason.invalid_temperature_range
+
+    for link in thermo.source_calculations:
+        if link.role not in _THERMO_REQUIRED_SOURCE_ROLES:
             continue
         calc = link.calculation
         if calc is not None and _detect_calculation_hard_fail(calc) is not None:
@@ -234,6 +316,30 @@ def _empty_evaluation_for_missing_kinetics(
         evidence_completeness=0.0,
         is_certified=False,
         hard_fail_reason=HardFailReason.kinetics_missing,
+        check_results=(),
+    )
+
+
+def _empty_evaluation_for_missing_thermo(
+    thermo_id: Optional[int],
+    rubric: EvidenceRubric,
+) -> EvidenceEvaluation:
+    """Return a structured ``hard_failed`` evaluation for a missing thermo row."""
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=thermo_id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=EvidenceBadge.hard_failed,
+        passed_checks=(),
+        missing_checks=(),
+        warning_checks=(),
+        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        passed_count=0,
+        possible_count=0,
+        evidence_completeness=0.0,
+        is_certified=False,
+        hard_fail_reason=HardFailReason.thermo_missing,
         check_results=(),
     )
 
@@ -390,6 +496,80 @@ def evaluate_loaded_kinetics(
     )
 
 
+def evaluate_loaded_thermo(
+    thermo: Thermo | None,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for a loaded thermo record.
+
+    This entrypoint is pure over the ORM object graph it receives: it
+    does not perform a lookup and the check runners must not issue
+    their own queries. Callers are responsible for eager-loading the
+    relationships required by ``computed_thermo_v1``.
+    """
+    rubric = COMPUTED_THERMO_V1
+    if thermo is None:
+        return _empty_evaluation_for_missing_thermo(None, rubric)
+
+    hard_fail = _detect_thermo_hard_fail(thermo)
+
+    check_results: list[EvidenceCheckResult] = []
+    for spec in rubric.checks:
+        if (
+            hard_fail is HardFailReason.source_calculation_hard_failed_for_required_role
+            and spec.name == "geometry_validation_not_failed_for_source_calculations"
+        ):
+            outcome = EvidenceOutcome.not_applicable
+        else:
+            outcome = spec.runner(thermo)
+        check_results.append(
+            EvidenceCheckResult(
+                name=spec.name,
+                outcome=outcome,
+                kind=spec.kind,
+                weight=spec.weight,
+                explain=spec.explain,
+            )
+        )
+
+    results_tuple = tuple(check_results)
+    (
+        passed,
+        missing,
+        warning,
+        not_applicable,
+        passed_count,
+        possible_count,
+        completeness,
+        all_required_passed,
+    ) = _aggregate_results(rubric, results_tuple)
+
+    if hard_fail is not None:
+        label = EvidenceBadge.hard_failed
+    else:
+        label = label_from_completeness(
+            completeness,
+            all_required_passed=all_required_passed,
+        )
+
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=thermo.id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=label,
+        passed_checks=passed,
+        missing_checks=missing,
+        warning_checks=warning,
+        not_applicable_checks=not_applicable,
+        passed_count=passed_count,
+        possible_count=possible_count,
+        evidence_completeness=completeness,
+        is_certified=False,
+        hard_fail_reason=hard_fail,
+        check_results=results_tuple,
+    )
+
+
 def evaluate_computed_calculation(
     session: Session,
     calculation_id: int,
@@ -452,3 +632,47 @@ def evaluate_computed_kinetics(
     if kinetics is None:
         return _empty_evaluation_for_missing_kinetics(kinetics_id, COMPUTED_KINETICS_V1)
     return evaluate_loaded_kinetics(kinetics)
+
+
+def evaluate_computed_thermo(
+    session: Session,
+    thermo_id: int,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for one computed thermo row."""
+    statement = (
+        select(Thermo)
+        .where(Thermo.id == thermo_id)
+        .options(
+            selectinload(Thermo.species_entry),
+            selectinload(Thermo.nasa),
+            selectinload(Thermo.points),
+            selectinload(Thermo.source_calculations)
+            .selectinload(ThermoSourceCalculation.calculation)
+            .selectinload(Calculation.artifacts),
+            selectinload(Thermo.source_calculations)
+            .selectinload(ThermoSourceCalculation.calculation)
+            .selectinload(Calculation.geometry_validation),
+            selectinload(Thermo.source_calculations)
+            .selectinload(ThermoSourceCalculation.calculation)
+            .selectinload(Calculation.sp_result),
+            selectinload(Thermo.source_calculations)
+            .selectinload(ThermoSourceCalculation.calculation)
+            .selectinload(Calculation.opt_result),
+            selectinload(Thermo.source_calculations)
+            .selectinload(ThermoSourceCalculation.calculation)
+            .selectinload(Calculation.freq_result),
+            selectinload(Thermo.source_calculations)
+            .selectinload(ThermoSourceCalculation.calculation)
+            .selectinload(Calculation.irc_result),
+            selectinload(Thermo.source_calculations)
+            .selectinload(ThermoSourceCalculation.calculation)
+            .selectinload(Calculation.scan_result),
+            selectinload(Thermo.source_calculations)
+            .selectinload(ThermoSourceCalculation.calculation)
+            .selectinload(Calculation.path_search_result),
+        )
+    )
+    thermo = session.scalars(statement).one_or_none()
+    if thermo is None:
+        return _empty_evaluation_for_missing_thermo(thermo_id, COMPUTED_THERMO_V1)
+    return evaluate_loaded_thermo(thermo)
