@@ -1,7 +1,7 @@
 # TCKDB
 
 <p align="center">
-  <img src="docs/assets/tckdb-wordmark.png" alt="TCKDB wordmark" width="760">
+  <img src="docs/assets/tckdb-wordmark-croppped.png" alt="TCKDB wordmark" width="760">
 </p>
 
 **Thermochemical & Kinetics Database** — a provenance-rich,
