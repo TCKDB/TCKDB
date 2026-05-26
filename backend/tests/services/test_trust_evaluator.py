@@ -52,6 +52,7 @@ from app.services.trust import (
     EvidenceBadge,
     HardFailReason,
     evaluate_computed_calculation,
+    evaluate_loaded_calculation,
     label_from_completeness,
     select_rubric,
 )
@@ -303,6 +304,14 @@ class TestRubricRegistry:
 class TestMissingCalculation:
     """A non-existent calculation_id returns a structured hard-fail."""
 
+    def test_missing_loaded_calculation_returns_hard_failed(self):
+        result = evaluate_loaded_calculation(None)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is HardFailReason.calculation_missing
+        assert result.record_type == "calculation"
+        assert result.record_id is None
+        assert result.rubric == "computed_calculation"
+
     def test_missing_calculation_id_returns_hard_failed(self, db_session):
         result = evaluate_computed_calculation(db_session, calculation_id=999_999_999)
         assert result.label is EvidenceBadge.hard_failed
@@ -325,6 +334,17 @@ class TestMissingCalculation:
 
 class TestEvidenceCompletenessOrdering:
     """Adding provenance to a calculation should not lower the badge."""
+
+    def test_loaded_calculation_matches_id_entrypoint(self, db_session):
+        calc = _make_minimal_opt_calc(
+            db_session,
+            quality=CalculationQuality.curated,
+        )
+
+        loaded = evaluate_loaded_calculation(calc)
+        by_id = evaluate_computed_calculation(db_session, calc.id)
+
+        assert loaded == by_id
 
     def test_full_provenance_beats_sparse(self, db_session):
         rich_calc = _make_minimal_opt_calc(

@@ -381,6 +381,31 @@ def test_detail_include_trust_returns_fragment(client, db_session):
     assert "record_id" not in evidence
 
 
+def test_detail_include_trust_uses_loaded_calculation_path(
+    client, db_session, monkeypatch
+):
+    _, _, calc = _make_species_owned_calc(
+        db_session, lot_id=make_lot(db_session).id
+    )
+    _attach_trust_input_geometry(db_session, calculation=calc)
+    attach_opt_result(db_session, calculation=calc, final_energy_hartree=-10.0)
+
+    def fail_session_id_entrypoint(*args, **kwargs):
+        raise AssertionError("read trust path must use loaded calculation")
+
+    monkeypatch.setattr(
+        "app.services.trust.evaluator.evaluate_computed_calculation",
+        fail_session_id_entrypoint,
+    )
+
+    resp = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=trust"
+    )
+    assert resp.status_code == 200, resp.text
+    evidence = resp.json()["record"]["trust"]["evidence"]
+    assert evidence["record_type"] == "calculation"
+
+
 def test_detail_include_trust_exposes_record_id_when_internal_ids_allowed(
     client, db_session, allow_internal_ids
 ):

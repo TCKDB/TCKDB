@@ -136,7 +136,7 @@ def _aggregate_results(
 
 
 def _empty_evaluation_for_missing_calculation(
-    calculation_id: int,
+    calculation_id: Optional[int],
     rubric: EvidenceRubric,
 ) -> EvidenceEvaluation:
     """Return a structured ``hard_failed`` evaluation for a missing calculation.
@@ -164,39 +164,21 @@ def _empty_evaluation_for_missing_calculation(
     )
 
 
-def evaluate_computed_calculation(
-    session: Session,
-    calculation_id: int,
+def evaluate_loaded_calculation(
+    calculation: Calculation | None,
 ) -> EvidenceEvaluation:
-    """Evaluate deterministic evidence completeness for one computed calculation.
+    """Evaluate deterministic evidence completeness for a loaded calculation.
 
-    Runs the ``computed_calculation_v1`` rubric against the calculation
-    row addressed by ``calculation_id``. Returns an
-    :class:`EvidenceEvaluation` describing the passed / missing /
-    warning sets, the completeness ratio, the deterministic badge, and
-    any hard-fail reason.
-
-    Behaviour:
-
-    * If the calculation row does not exist, a structured ``hard_failed``
-      evaluation with ``hard_fail_reason = calculation_missing`` is
-      returned (the evaluator never raises on a missing record).
-    * If the calculation is rejected (``CalculationQuality.rejected``)
-      or its geometry validation has ``ValidationStatus.fail``, the
-      evaluator still runs every check but forces the badge to
-      ``hard_failed``.
-    * Otherwise the badge follows the deterministic completeness
-      thresholds in :func:`label_from_completeness`.
-
-    The evaluator does not mutate scientific records and does not
-    require any LLM, API key, or external network.
+    This entrypoint is pure over the ORM object graph it receives: it
+    does not perform a lookup and the check runners must not issue
+    their own queries. Callers are responsible for eager-loading the
+    relationships required by ``computed_calculation_v1``.
     """
     rubric = COMPUTED_CALCULATION_V1
-    calc: Optional[Calculation] = session.get(Calculation, calculation_id)
-    if calc is None:
-        return _empty_evaluation_for_missing_calculation(calculation_id, rubric)
+    if calculation is None:
+        return _empty_evaluation_for_missing_calculation(None, rubric)
 
-    hard_fail = _detect_calculation_hard_fail(calc)
+    hard_fail = _detect_calculation_hard_fail(calculation)
 
     check_results: list[EvidenceCheckResult] = []
     for spec in rubric.checks:
@@ -210,7 +192,7 @@ def evaluate_computed_calculation(
         ):
             outcome = EvidenceOutcome.not_applicable
         else:
-            outcome = spec.runner(calc)
+            outcome = spec.runner(calculation)
         check_results.append(
             EvidenceCheckResult(
                 name=spec.name,
@@ -243,7 +225,7 @@ def evaluate_computed_calculation(
 
     return EvidenceEvaluation(
         record_type=rubric.record_type,
-        record_id=calc.id,
+        record_id=calculation.id,
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=label,
@@ -258,3 +240,23 @@ def evaluate_computed_calculation(
         hard_fail_reason=hard_fail,
         check_results=results_tuple,
     )
+
+
+def evaluate_computed_calculation(
+    session: Session,
+    calculation_id: int,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for one computed calculation.
+
+    Backward-compatible session/id wrapper around
+    :func:`evaluate_loaded_calculation`. The wrapper performs the one
+    explicit lookup required by the legacy API; read serializers that
+    already have a loaded calculation should call
+    :func:`evaluate_loaded_calculation` directly.
+    """
+    calculation: Optional[Calculation] = session.get(Calculation, calculation_id)
+    if calculation is None:
+        return _empty_evaluation_for_missing_calculation(
+            calculation_id, COMPUTED_CALCULATION_V1
+        )
+    return evaluate_loaded_calculation(calculation)

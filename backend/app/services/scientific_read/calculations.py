@@ -101,7 +101,7 @@ from app.services.scientific_read.handles import resolve_calculation_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.trust import TrustFragment, evaluate_computed_calculation
+from app.services.trust import TrustFragment, evaluate_loaded_calculation
 
 
 # Heavy include sections promised by the spec. Implemented tokens fall
@@ -356,7 +356,6 @@ def build_record(
     trust_block: TrustFragment | None = None
     if "trust" in includes:
         trust_block = build_calculation_trust_fragment(
-            session,
             calc,
             review_status=badge.status,
         )
@@ -396,12 +395,11 @@ def build_record(
 
 
 def build_calculation_trust_fragment(
-    session: Session,
     calculation: Calculation,
     review_status: RecordReviewStatus | None = None,
 ) -> TrustFragment:
     """Build the read-layer trust fragment for a calculation."""
-    evaluation = evaluate_computed_calculation(session, calculation.id)
+    evaluation = evaluate_loaded_calculation(calculation)
     status = review_status.value if review_status is not None else "not_reviewed"
     return TrustFragment(
         review_status=status,

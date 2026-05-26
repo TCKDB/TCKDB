@@ -15,6 +15,7 @@ statmech, transport, experimental) land in later slices per
 
 from app.services.trust.evaluator import (
     evaluate_computed_calculation,
+    evaluate_loaded_calculation,
     select_rubric,
 )
 from app.services.trust.models import (
@@ -49,6 +50,7 @@ __all__ = [
     "TrustFragment",
     "TrustLLMPrecheck",
     "evaluate_computed_calculation",
+    "evaluate_loaded_calculation",
     "label_from_completeness",
     "select_rubric",
 ]
