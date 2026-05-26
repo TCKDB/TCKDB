@@ -45,6 +45,7 @@ from app.db.models.common import (
     MoleculeKind,
     ParameterSource,
     ReactionRole,
+    RecordReviewStatus,
     ScientificOriginKind,
     StereoKind,
     ThermoCalculationRole,
@@ -71,7 +72,9 @@ from app.services.trust import (
     COMPUTED_KINETICS_V1,
     COMPUTED_THERMO_V1,
     EvidenceBadge,
+    EvidenceEvaluation,
     HardFailReason,
+    build_trust_fragment,
     evaluate_computed_calculation,
     evaluate_computed_kinetics,
     evaluate_computed_thermo,
@@ -521,6 +524,54 @@ class TestMissingCalculation:
 
     def test_missing_calculation_does_not_raise(self, db_session):
         evaluate_computed_calculation(db_session, calculation_id=999_999_999)
+
+
+def test_trust_fragment_normalizes_public_shape():
+    evaluation = EvidenceEvaluation(
+        record_type="calculation",
+        record_id=123,
+        rubric="computed_calculation",
+        rubric_version=1,
+        label=EvidenceBadge.hard_failed,
+        passed_checks=("owner_present",),
+        missing_checks=("result_block_present",),
+        warning_checks=("geometry_validation_passed_or_warning",),
+        not_applicable_checks=("output_geometry_present",),
+        passed_count=1,
+        possible_count=2,
+        evidence_completeness=0.5,
+        hard_fail_reason=HardFailReason.geometry_validation_failed,
+    )
+
+    fragment = build_trust_fragment(
+        evaluation,
+        review_status=RecordReviewStatus.approved,
+    ).model_dump(mode="json")
+
+    assert fragment["review_status"] == "approved"
+    assert fragment["trust_status"] == "hard_failed"
+    assert fragment["llm_precheck"] == {
+        "enabled": False,
+        "label": "not_run",
+        "summary": None,
+    }
+    assert fragment["is_certified"] is False
+    assert fragment["evidence"] == {
+        "record_type": "calculation",
+        "record_id": 123,
+        "rubric": "computed_calculation_v1",
+        "rubric_version": 1,
+        "label": "hard_failed",
+        "passed_checks": ["owner_present"],
+        "missing_checks": ["result_block_present"],
+        "warning_checks": ["geometry_validation_passed_or_warning"],
+        "not_applicable_checks": ["output_geometry_present"],
+        "passed_count": 1,
+        "possible_count": 2,
+        "evidence_completeness": 0.5,
+        "is_certified": False,
+        "hard_fail_reason": "geometry_validation_failed",
+    }
 
 
 # ---------------------------------------------------------------------------

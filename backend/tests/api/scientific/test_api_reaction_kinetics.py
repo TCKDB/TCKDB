@@ -226,7 +226,7 @@ def test_include_trust_returns_fragment(client, db_session):
     }
     evidence = trust["evidence"]
     assert evidence["record_type"] == "kinetics"
-    assert evidence["rubric"] == "computed_kinetics"
+    assert evidence["rubric"] == "computed_kinetics_v1"
     assert evidence["rubric_version"] == 1
     assert "record_id" not in evidence
     assert "passed_checks" in evidence

@@ -128,7 +128,7 @@ def test_include_trust_returns_fragment(client, db_session):
     assert trust["is_certified"] is False
     evidence = trust["evidence"]
     assert evidence["record_type"] == "thermo"
-    assert evidence["rubric"] == "computed_thermo"
+    assert evidence["rubric"] == "computed_thermo_v1"
     assert evidence["rubric_version"] == 1
     assert "scalar_thermo_present" in evidence["passed_checks"]
     assert "source_calculations_present" in evidence["missing_checks"]

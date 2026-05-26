@@ -22,6 +22,7 @@ from app.services.trust.evaluator import (
     evaluate_loaded_thermo,
     select_rubric,
 )
+from app.services.trust.fragment import build_trust_fragment
 from app.services.trust.models import (
     EvidenceBadge,
     EvidenceCheckKind,
@@ -57,6 +58,7 @@ __all__ = [
     "RUBRIC_REGISTRY",
     "TrustFragment",
     "TrustLLMPrecheck",
+    "build_trust_fragment",
     "evaluate_computed_calculation",
     "evaluate_computed_kinetics",
     "evaluate_computed_thermo",

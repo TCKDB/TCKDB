@@ -75,7 +75,11 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.trust import TrustFragment, evaluate_loaded_kinetics
+from app.services.trust import (
+    TrustFragment,
+    build_trust_fragment,
+    evaluate_loaded_kinetics,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
@@ -420,13 +424,7 @@ def build_kinetics_trust_fragment(
 ) -> TrustFragment:
     """Build the read-layer trust fragment for a kinetics record."""
     evaluation = evaluate_loaded_kinetics(kinetics)
-    status = review_status.value if review_status is not None else "not_reviewed"
-    return TrustFragment(
-        review_status=status,
-        trust_status=evaluation.label.value,
-        evidence=evaluation.model_dump(mode="json", exclude={"check_results"}),
-        is_certified=evaluation.is_certified,
-    )
+    return build_trust_fragment(evaluation, review_status=review_status)
 
 
 # ---------------------------------------------------------------------------

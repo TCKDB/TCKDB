@@ -520,10 +520,22 @@ without reactants/products); zero literature sources.
 
 ## 10. Read API: `trust` fragment
 
-Every scientific read of a reviewable record includes a `trust` block.
-Existing endpoints already carry the smaller `RecordReviewBadge` —
-this block is its superset and replaces the badge field name with a
-fully expanded fragment.
+The trust fragment is opt-in on the currently shipped calculation,
+kinetics, and thermo detail reads:
+
+- `GET /api/v1/scientific/calculations/{calculation_ref_or_id}?include=trust`
+- `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics?include=trust`
+- `GET /api/v1/scientific/species-entries/{species_entry_id}/thermo?include=trust`
+
+Default responses omit `trust`, and `include=all` intentionally does
+not expand to `trust`; callers must request `include=trust` explicitly.
+Search/list endpoints do not include trust fragments yet. Existing
+reads still carry their smaller `RecordReviewBadge` fields where
+already implemented.
+
+Trust means deterministic evidence completeness for attached
+provenance. It is not a scientific correctness judgment and must not
+be presented as a quality score.
 
 ### 10.1 Shape
 
@@ -531,24 +543,27 @@ fully expanded fragment.
 {
   "trust": {
     "review_status": "not_reviewed",
-    "trust_status": "auto_validated_with_warnings",
+    "trust_status": "mostly_supported",
     "evidence": {
       "rubric": "computed_kinetics_v1",
+      "rubric_version": 1,
       "label": "well_supported",
-      "completeness_ratio": 0.73,
-      "passed_checks": 8,
-      "possible_checks": 11,
+      "evidence_completeness": 0.73,
+      "passed_count": 8,
+      "possible_count": 11,
       "missing_checks": [
         "irc_evidence",
         "uncertainty"
       ],
-      "warnings": [
+      "warning_checks": [
         "scf_stability_not_checked"
-      ]
+      ],
+      "not_applicable_checks": []
     },
     "llm_precheck": {
       "enabled": false,
-      "label": "not_run"
+      "label": "not_run",
+      "summary": null
     },
     "is_certified": false
   }
@@ -561,16 +576,20 @@ fully expanded fragment.
 |---|---|---|
 | `trust.review_status` | `record_review.status` (default `not_reviewed` when row absent) | Always present. |
 | `trust.trust_status` | Computed per §7. | Always present. |
-| `trust.evidence.rubric` | Selected rubric name + version. | Omitted only if no rubric applies (very rare; e.g. provenance-only entities). |
+| `trust.evidence.rubric` | Public rubric name with version suffix (`computed_calculation_v1`, `computed_kinetics_v1`, `computed_thermo_v1`). | Always present for shipped trust reads. |
+| `trust.evidence.rubric_version` | Integer rubric version. | Retained for machine checks and future migrations. |
 | `trust.evidence.label` | Per §6.1. | |
-| `trust.evidence.completeness_ratio` | `passed_weight / possible_weight`, rounded to 2 dp. | Not exposed as a percentage; reader formats as it likes. |
-| `trust.evidence.passed_checks` | Count of `kind in {required, optional}` checks that passed. | |
-| `trust.evidence.possible_checks` | Same denominator, excluding `not_applicable`. | |
+| `trust.evidence.evidence_completeness` | `passed_weight / possible_weight`, rounded by the evaluator. | Not exposed as a percentage; reader formats as it likes. |
+| `trust.evidence.passed_count` | Count of `kind in {required, optional}` checks that passed. | |
+| `trust.evidence.possible_count` | Same denominator, excluding `not_applicable`. | |
+| `trust.evidence.passed_checks[]` | Names of checks that passed. | |
 | `trust.evidence.missing_checks[]` | Names of checks that did not pass and are not `not_applicable`. | |
-| `trust.evidence.warnings[]` | Names of warning checks that fired. | |
-| `trust.llm_precheck.enabled` | `true` iff the originating submission had an LLM precheck step (per `SubmissionAuditEventKind.llm_precheck_*`). | |
-| `trust.llm_precheck.label` | `passed` / `flagged` (from `SubmissionPrecheckLabel`) or `not_run`. | Advisory only. Does not influence `trust_status`. |
-| `trust.is_certified` | `true` iff `record_review.status == approved` *and* curator explicitly marked certification. | Reserved; default `false`. |
+| `trust.evidence.warning_checks[]` | Names of warning checks that fired. | |
+| `trust.evidence.not_applicable_checks[]` | Names of checks excluded from the numerator and denominator. | |
+| `trust.llm_precheck.enabled` | Disabled in the current MVP. | Always `false` until an explicit precheck integration lands. |
+| `trust.llm_precheck.label` | Advisory LLM label. | Currently always `not_run`; does not influence `trust_status`. |
+| `trust.llm_precheck.summary` | Advisory LLM summary. | Currently always `null`. |
+| `trust.is_certified` | Reserved curator flag. | Current automated trust reads always emit `false`. |
 
 ### 10.3 Default filtering on list endpoints
 
