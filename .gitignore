@@ -155,6 +155,9 @@ venv.bak/
 # tracked; the populated counterparts must never be committed.
 .env.local
 .env.selfhosted
+.env.test.local
+backend/.env.test.local
+docker-compose.dev.local.yml
 !.env.example
 !.env.local.example
 !.env.selfhosted.example
