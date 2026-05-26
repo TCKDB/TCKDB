@@ -42,6 +42,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.services.trust.models import TrustFragment
 
 
 # ---------------------------------------------------------------------------
@@ -741,6 +742,7 @@ class ScientificCalculationRecord(BaseModel):
     scan: CalculationScanSummary | None = None
     irc: CalculationIRCSummary | None = None
     path_search: CalculationPathSearchSummary | None = None
+    trust: TrustFragment | None = None
 
 
 class ScientificCalculationDetailResponse(BaseModel):

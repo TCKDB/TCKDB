@@ -241,6 +241,7 @@ _OMITTABLE_RECORD_KEYS: dict[str, str] = {
     "scan": "scan",
     "irc": "irc",
     "path_search": "path_search",
+    "trust": "trust",
 }
 
 

@@ -23,6 +23,7 @@ from app.db.models.calculation import (
     CalculationScanPoint,
     CalculationScanResult,
 )
+from app.db.models.software import Software, SoftwareRelease
 from app.db.models.common import (
     ArtifactKind,
     CalculationDependencyRole,
@@ -127,6 +128,30 @@ def _make_ts_owned_calc(db_session, **kwargs):
         lot_id=kwargs.get("lot_id"),
     )
     return tse, calc
+
+
+def _attach_trust_input_geometry(db_session, *, calculation):
+    geometry = make_geometry(db_session)
+    row = CalculationInputGeometry(
+        calculation_id=calculation.id,
+        geometry_id=geometry.id,
+        input_order=1,
+    )
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
+def _attach_software_release(db_session, *, calculation):
+    software = Software(name=f"trust-api-sw-{calculation.id}")
+    db_session.add(software)
+    db_session.flush()
+    release = SoftwareRelease(software_id=software.id, version="1.0")
+    db_session.add(release)
+    db_session.flush()
+    calculation.software_release_id = release.id
+    db_session.flush()
+    return release
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +320,208 @@ def test_detail_unknown_include_token_returns_422(client, db_session):
     )
     assert resp.status_code == 422
     assert "unknown_include_token" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# include=trust
+# ---------------------------------------------------------------------------
+
+
+def test_detail_trust_omitted_when_not_requested(client, db_session):
+    _, _, calc = _make_species_owned_calc(db_session)
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+    ).json()
+    assert "trust" not in body["record"]
+
+
+def test_detail_include_trust_returns_fragment(client, db_session):
+    _, _, calc = _make_species_owned_calc(
+        db_session, lot_id=make_lot(db_session).id
+    )
+    _attach_trust_input_geometry(db_session, calculation=calc)
+    attach_opt_result(db_session, calculation=calc, final_energy_hartree=-10.0)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.calculation,
+        record_id=calc.id,
+        status=RecordReviewStatus.approved,
+    )
+
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=trust"
+    ).json()
+
+    assert body["request"]["include"] == ["trust"]
+    trust = body["record"]["trust"]
+    assert trust["review_status"] == "approved"
+    assert trust["trust_status"] in {
+        "well_supported",
+        "mostly_supported",
+        "partial",
+        "sparse",
+        "unsupported",
+        "hard_failed",
+    }
+    assert trust["llm_precheck"] == {
+        "enabled": False,
+        "label": "not_run",
+        "summary": None,
+    }
+    evidence = trust["evidence"]
+    assert evidence["record_type"] == "calculation"
+    assert evidence["rubric"] == "computed_calculation"
+    assert evidence["rubric_version"] == 1
+    assert "evidence_completeness" in evidence
+    assert "passed_checks" in evidence
+    assert "missing_checks" in evidence
+    assert "warning_checks" in evidence
+    assert "not_applicable_checks" in evidence
+    # Phase D default internal-ID policy still applies inside trust evidence.
+    assert "record_id" not in evidence
+
+
+def test_detail_include_trust_exposes_record_id_when_internal_ids_allowed(
+    client, db_session, allow_internal_ids
+):
+    _, _, calc = _make_species_owned_calc(db_session)
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        "?include=trust,internal_ids"
+    ).json()
+    evidence = body["record"]["trust"]["evidence"]
+    assert evidence["record_id"] == calc.id
+
+
+def test_detail_include_trust_sparse_calculation_reports_missing_checks(
+    client, db_session
+):
+    _, _, calc = _make_species_owned_calc(db_session)
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=trust"
+    ).json()
+    evidence = body["record"]["trust"]["evidence"]
+
+    assert evidence["label"] in {"sparse", "unsupported", "partial"}
+    assert "level_of_theory_present" in evidence["missing_checks"]
+    assert "input_geometry_present" in evidence["missing_checks"]
+    assert "result_block_present" in evidence["missing_checks"]
+
+
+def test_detail_include_trust_rich_calculation_scores_higher(
+    client, db_session
+):
+    _, _, sparse = _make_species_owned_calc(db_session)
+    _, _, rich = _make_species_owned_calc(
+        db_session, lot_id=make_lot(db_session).id
+    )
+    rich.quality = CalculationQuality.curated
+    _attach_software_release(db_session, calculation=rich)
+    _attach_trust_input_geometry(db_session, calculation=rich)
+    output_geometry = make_geometry(db_session)
+    attach_output_geometry(
+        db_session, calculation=rich, geometry=output_geometry
+    )
+    attach_opt_result(db_session, calculation=rich, final_energy_hartree=-10.0)
+    attach_geometry_validation(
+        db_session, calculation=rich, status=ValidationStatus.passed
+    )
+    attach_artifact(db_session, calculation=rich)
+    db_session.add(
+        CalculationParameter(
+            calculation_id=rich.id,
+            raw_key="opt",
+            raw_value="tight",
+            source=ParameterSource.parser,
+        )
+    )
+    db_session.flush()
+
+    sparse_body = client.get(
+        f"/api/v1/scientific/calculations/{sparse.public_ref}?include=trust"
+    ).json()
+    rich_body = client.get(
+        f"/api/v1/scientific/calculations/{rich.public_ref}?include=trust"
+    ).json()
+
+    sparse_score = sparse_body["record"]["trust"]["evidence"][
+        "evidence_completeness"
+    ]
+    rich_score = rich_body["record"]["trust"]["evidence"][
+        "evidence_completeness"
+    ]
+    assert rich_score > sparse_score
+
+
+def test_detail_include_trust_rejected_calculation_hard_failed(
+    client, db_session
+):
+    _, _, calc = _make_species_owned_calc(db_session)
+    calc.quality = CalculationQuality.rejected
+    db_session.flush()
+
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=trust"
+    ).json()
+    evidence = body["record"]["trust"]["evidence"]
+    assert evidence["label"] == "hard_failed"
+    assert evidence["hard_fail_reason"] == "calculation_rejected"
+
+
+def test_detail_include_trust_geometry_validation_fail_hard_failed(
+    client, db_session
+):
+    _, _, calc = _make_species_owned_calc(db_session)
+    attach_geometry_validation(
+        db_session, calculation=calc, status=ValidationStatus.fail
+    )
+
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=trust"
+    ).json()
+    evidence = body["record"]["trust"]["evidence"]
+    assert evidence["label"] == "hard_failed"
+    assert evidence["hard_fail_reason"] == "geometry_validation_failed"
+
+
+def test_detail_include_all_does_not_include_trust(client, db_session):
+    _, _, calc = _make_species_owned_calc(db_session)
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=all"
+    ).json()
+    assert "trust" not in body["request"]["include"]
+    assert "trust" not in body["record"]
+
+
+def test_detail_include_trust_does_not_mutate_calculation(client, db_session):
+    _, _, calc = _make_species_owned_calc(db_session)
+    before = (
+        calc.type,
+        calc.quality,
+        calc.species_entry_id,
+        calc.transition_state_entry_id,
+        calc.lot_id,
+        calc.software_release_id,
+        calc.workflow_tool_release_id,
+        calc.parameters_json,
+    )
+
+    resp = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=trust"
+    )
+    assert resp.status_code == 200, resp.text
+    db_session.refresh(calc)
+    after = (
+        calc.type,
+        calc.quality,
+        calc.species_entry_id,
+        calc.transition_state_entry_id,
+        calc.lot_id,
+        calc.software_release_id,
+        calc.workflow_tool_release_id,
+        calc.parameters_json,
+    )
+    assert after == before
 
 
 # ---------------------------------------------------------------------------
@@ -3817,5 +4044,3 @@ def test_detail_include_all_equivalent_to_full_enumeration(client, db_session):
     # Records are byte-identical except possibly for the request echo
     # — which we already compared explicitly above.
     assert body_all["record"] == body_explicit["record"]
-
-

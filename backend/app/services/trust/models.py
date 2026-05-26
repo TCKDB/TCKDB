@@ -246,6 +246,7 @@ class TrustLLMPrecheck(BaseModel):
 
     enabled: bool = False
     label: str = "not_run"
+    summary: Optional[str] = None
 
 
 class TrustFragment(BaseModel):

@@ -11,7 +11,7 @@ that do nothing. See ``backend/docs/specs/scientific_calculation_reads.md``.
 from __future__ import annotations
 
 from sqlalchemy import exists, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
@@ -101,6 +101,7 @@ from app.services.scientific_read.handles import resolve_calculation_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.trust import TrustFragment, evaluate_computed_calculation
 
 
 # Heavy include sections promised by the spec. Implemented tokens fall
@@ -134,7 +135,26 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "internal_ids",
     "all",
 }
+_DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = {
+    *_LEGAL_INCLUDE_TOKENS,
+    "trust",
+}
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_TRUST_EAGER_LOADS = (
+    selectinload(Calculation.input_geometries),
+    selectinload(Calculation.output_geometries),
+    selectinload(Calculation.sp_result),
+    selectinload(Calculation.opt_result),
+    selectinload(Calculation.freq_result),
+    selectinload(Calculation.scan_result),
+    selectinload(Calculation.irc_result),
+    selectinload(Calculation.path_search_result),
+    selectinload(Calculation.geometry_validation),
+    selectinload(Calculation.scf_stability),
+    selectinload(Calculation.artifacts),
+    selectinload(Calculation.parameters),
+    selectinload(Calculation.child_dependencies),
+)
 
 
 # Note: an earlier ``_reject_include_all`` policy guard lived here while
@@ -180,9 +200,9 @@ def get_calculation(
     """
     includes = validate_includes(
         request.include,
-        _LEGAL_INCLUDE_TOKENS,
+        _DETAIL_LEGAL_INCLUDE_TOKENS,
         "/scientific/calculations/{calculation_ref_or_id}",
-        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )
     includes = filter_internal_ids_from_resolved(includes)
 
@@ -204,7 +224,7 @@ def get_calculation(
         )
 
     calculation_id = resolve_calculation_handle(session, calculation_handle)
-    calc = session.get(Calculation, calculation_id)
+    calc = _load_calculation_for_read(session, calculation_id, includes)
     if calc is None:  # pragma: no cover — defended by resolver 404
         raise NotFoundError(
             f"calculation not found (calculation_id={calculation_id})",
@@ -219,6 +239,19 @@ def get_calculation(
         request=RequestEcho(include=sorted(includes)),
         review_summary=summary,
         record=record,
+    )
+
+
+def _load_calculation_for_read(
+    session: Session, calculation_id: int, includes: set[str]
+) -> Calculation | None:
+    """Load the calculation row, eager-loading trust inputs only on opt-in."""
+    if "trust" not in includes:
+        return session.get(Calculation, calculation_id)
+    return session.scalar(
+        select(Calculation)
+        .options(*_TRUST_EAGER_LOADS)
+        .where(Calculation.id == calculation_id)
     )
 
 
@@ -320,6 +353,14 @@ def build_record(
             session, calc.id
         )
 
+    trust_block: TrustFragment | None = None
+    if "trust" in includes:
+        trust_block = build_calculation_trust_fragment(
+            session,
+            calc,
+            review_status=badge.status,
+        )
+
     return ScientificCalculationRecord(
         calculation=CalculationCoreBlock(
             calculation_id=calc.id,
@@ -350,6 +391,23 @@ def build_record(
         scan=scan_block,
         irc=irc_block,
         path_search=path_search_block,
+        trust=trust_block,
+    )
+
+
+def build_calculation_trust_fragment(
+    session: Session,
+    calculation: Calculation,
+    review_status: RecordReviewStatus | None = None,
+) -> TrustFragment:
+    """Build the read-layer trust fragment for a calculation."""
+    evaluation = evaluate_computed_calculation(session, calculation.id)
+    status = review_status.value if review_status is not None else "not_reviewed"
+    return TrustFragment(
+        review_status=status,
+        trust_status=evaluation.label.value,
+        evidence=evaluation.model_dump(mode="json", exclude={"check_results"}),
+        is_certified=evaluation.is_certified,
     )
 
 
