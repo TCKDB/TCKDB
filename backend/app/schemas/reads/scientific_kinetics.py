@@ -33,6 +33,7 @@ from app.schemas.reads.scientific_common import (
     ValidationSummary,
     WorkflowToolReleaseSummary,
 )
+from app.services.trust.models import TrustFragment
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +144,7 @@ class KineticsRecord(BaseModel):
     temperature_coverage: TemperatureCoverage | None = None
     evidence_completeness: EvidenceCompletenessBreakdown
     provenance: KineticsProvenance
+    trust: TrustFragment | None = None
 
 
 class RequestEcho(BaseModel):

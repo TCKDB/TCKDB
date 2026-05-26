@@ -9,6 +9,7 @@ compatibility with OpenAPI consumers.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Path, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -81,10 +82,28 @@ def reaction_kinetics(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        get_reaction_kinetics(
-            session,
-            reaction_entry_id=resolved_reaction_entry_id,
-            request=request,
-        )
+    payload = get_reaction_kinetics(
+        session,
+        reaction_entry_id=resolved_reaction_entry_id,
+        request=request,
     )
+    visibility = apply_internal_ids_visibility(payload)
+    return _omit_unrequested_trust(visibility, payload)
+
+
+def _omit_unrequested_trust(visibility, payload):
+    """Drop record.trust unless the caller explicitly requested include=trust."""
+    if "trust" in set(payload.request.include):
+        return visibility
+
+    if isinstance(visibility, JSONResponse):
+        import json
+
+        data = json.loads(visibility.body)
+    else:
+        data = visibility.model_dump(mode="json")
+
+    for record in data.get("records", []) or []:
+        if isinstance(record, dict):
+            record.pop("trust", None)
+    return JSONResponse(data)

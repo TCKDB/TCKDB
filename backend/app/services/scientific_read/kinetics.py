@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
@@ -25,6 +25,7 @@ from app.db.models.common import (
     CalculationType,
     KineticsCalculationRole,
     PathSearchMethod,
+    RecordReviewStatus,
     SCFStabilityStatus,
     SubmissionRecordType,
     ValidationStatus,
@@ -74,6 +75,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.trust import TrustFragment, evaluate_loaded_kinetics
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
@@ -85,8 +87,53 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "artifacts",
     "internal_ids",
     "all",
+    "trust",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_TRUST_EAGER_LOADS = (
+    selectinload(Kinetics.reaction_entry).selectinload(
+        ReactionEntry.structure_participants
+    ),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.lot),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.software_release),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.workflow_tool_release),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.artifacts),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.sp_result),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.opt_result),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.freq_result),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.scan_result),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.irc_result),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.path_search_result),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.geometry_validation),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.scf_stability),
+    selectinload(Kinetics.source_calculations)
+    .selectinload(KineticsSourceCalculation.calculation)
+    .selectinload(Calculation.child_dependencies),
+)
 
 _DEFAULT_SORT_ECHO = (
     "covers_requested_range,extrapolation_distance_k,review_rank,"
@@ -128,7 +175,7 @@ def get_reaction_kinetics(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
         "/scientific/reaction-entries/{id}/kinetics",
-        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )
     includes = filter_internal_ids_from_resolved(includes)
     validate_temperature_range(request.temperature_min, request.temperature_max)
@@ -154,6 +201,8 @@ def get_reaction_kinetics(
 
     # Load kinetics rows for this entry, applying simple column filters.
     stmt = select(Kinetics).where(Kinetics.reaction_entry_id == reaction_entry_id)
+    if "trust" in includes:
+        stmt = stmt.options(*_TRUST_EAGER_LOADS)
     if request.model_kind is not None:
         stmt = stmt.where(Kinetics.model_kind == request.model_kind)
     kinetics_rows: list[Kinetics] = list(session.scalars(stmt).all())
@@ -309,6 +358,14 @@ def get_reaction_kinetics(
                 temperature_coverage=coverage,
                 evidence_completeness=evidence,
                 provenance=provenance,
+                trust=(
+                    build_kinetics_trust_fragment(
+                        k,
+                        review_status=badges[k.id].status,
+                    )
+                    if "trust" in includes
+                    else None
+                ),
             )
         )
 
@@ -354,6 +411,21 @@ def get_reaction_kinetics(
             returned=len(returned),
             total=pre_collapse_total,
         ),
+    )
+
+
+def build_kinetics_trust_fragment(
+    kinetics: Kinetics,
+    review_status: RecordReviewStatus | None = None,
+) -> TrustFragment:
+    """Build the read-layer trust fragment for a kinetics record."""
+    evaluation = evaluate_loaded_kinetics(kinetics)
+    status = review_status.value if review_status is not None else "not_reviewed"
+    return TrustFragment(
+        review_status=status,
+        trust_status=evaluation.label.value,
+        evidence=evaluation.model_dump(mode="json", exclude={"check_results"}),
+        is_certified=evaluation.is_certified,
     )
 
 
