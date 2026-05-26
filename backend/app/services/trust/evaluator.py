@@ -1,0 +1,260 @@
+"""Deterministic evaluator entrypoints for the trust layer.
+
+The evaluator is a pure function over already-loaded ORM rows. It:
+
+1. Selects the rubric for the record type.
+2. Detects discrete structural hard-fail signals first (calc missing,
+   calc rejected, geometry validation failed). When a hard-fail
+   signal fires, the evaluator still runs every check so the report
+   is complete, but forces the badge to
+   :attr:`EvidenceBadge.hard_failed` and populates
+   :attr:`EvidenceEvaluation.hard_fail_reason`.
+3. Runs every :class:`EvidenceCheckSpec.runner` against the record,
+   collecting :class:`EvidenceCheckResult` rows.
+4. Computes the deterministic completeness ratio and maps it to a
+   badge via :func:`label_from_completeness`.
+
+The evaluator does not mutate scientific records and does not require
+any LLM provider, API key, or external network. It is safe to call
+from inside a read serializer and from offline batch jobs alike.
+"""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from sqlalchemy.orm import Session
+
+from app.db.models.calculation import Calculation
+from app.db.models.common import CalculationQuality, ValidationStatus
+from app.services.trust.models import (
+    EvidenceBadge,
+    EvidenceCheckKind,
+    EvidenceCheckResult,
+    EvidenceEvaluation,
+    EvidenceOutcome,
+    EvidenceRubric,
+    HardFailReason,
+    label_from_completeness,
+)
+from app.services.trust.rubrics import (
+    COMPUTED_CALCULATION_V1,
+    get_rubric_for_record_type,
+)
+
+
+def select_rubric(record_type: str) -> Optional[EvidenceRubric]:
+    """Return the active rubric for ``record_type``, or ``None`` if none defined.
+
+    Thin wrapper around :func:`get_rubric_for_record_type` so callers
+    in unrelated modules can import a single namespace.
+    """
+    return get_rubric_for_record_type(record_type)
+
+
+def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]:
+    """Return a hard-fail reason for ``calc`` if a structural failure is present.
+
+    The set is intentionally narrow (per §8 of the spec) — only
+    discrete, evidenced failures qualify. Low completeness on its own
+    is not a hard fail.
+    """
+    if calc.quality is CalculationQuality.rejected:
+        return HardFailReason.calculation_rejected
+    gv = calc.geometry_validation
+    if gv is not None and gv.validation_status is ValidationStatus.fail:
+        return HardFailReason.geometry_validation_failed
+    return None
+
+
+def _aggregate_results(
+    rubric: EvidenceRubric,
+    check_results: tuple[EvidenceCheckResult, ...],
+) -> tuple[
+    tuple[str, ...],
+    tuple[str, ...],
+    tuple[str, ...],
+    tuple[str, ...],
+    int,
+    int,
+    float,
+    bool,
+]:
+    """Bucket check results and compute the completeness numerator/denominator.
+
+    Returns ``(passed, missing, warning, not_applicable, passed_count,
+    possible_count, completeness, all_required_passed)``. ``passed`` and
+    ``missing`` include only required/optional checks; ``warning`` lists
+    fired warning-kind checks; ``not_applicable`` lists every skipped
+    check regardless of kind.
+    """
+    passed: list[str] = []
+    missing: list[str] = []
+    warning: list[str] = []
+    not_applicable: list[str] = []
+
+    passed_weight = 0
+    possible_weight = 0
+    all_required_passed = True
+
+    for result in check_results:
+        if result.outcome is EvidenceOutcome.not_applicable:
+            not_applicable.append(result.name)
+            continue
+        if result.kind is EvidenceCheckKind.warning:
+            if result.outcome is EvidenceOutcome.warning:
+                warning.append(result.name)
+            continue
+        # required / optional
+        possible_weight += result.weight
+        if result.outcome is EvidenceOutcome.passed:
+            passed.append(result.name)
+            passed_weight += result.weight
+        elif result.outcome is EvidenceOutcome.warning:
+            # required/optional checks should not return warning, but
+            # be defensive: treat as a soft pass for now and record the warning.
+            warning.append(result.name)
+            possible_weight -= result.weight  # do not count toward ratio
+        else:
+            missing.append(result.name)
+            if result.kind is EvidenceCheckKind.required:
+                all_required_passed = False
+
+    completeness = passed_weight / possible_weight if possible_weight > 0 else 0.0
+    completeness = round(completeness, 4)
+
+    return (
+        tuple(passed),
+        tuple(missing),
+        tuple(warning),
+        tuple(not_applicable),
+        len(passed),
+        len(passed) + len(missing),
+        completeness,
+        all_required_passed,
+    )
+
+
+def _empty_evaluation_for_missing_calculation(
+    calculation_id: int,
+    rubric: EvidenceRubric,
+) -> EvidenceEvaluation:
+    """Return a structured ``hard_failed`` evaluation for a missing calculation.
+
+    The evaluator never raises on a missing record — it returns a
+    structured hard-fail so the read API can surface "no such record"
+    as a trust signal instead of a 5xx.
+    """
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=calculation_id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=EvidenceBadge.hard_failed,
+        passed_checks=(),
+        missing_checks=(),
+        warning_checks=(),
+        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        passed_count=0,
+        possible_count=0,
+        evidence_completeness=0.0,
+        is_certified=False,
+        hard_fail_reason=HardFailReason.calculation_missing,
+        check_results=(),
+    )
+
+
+def evaluate_computed_calculation(
+    session: Session,
+    calculation_id: int,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for one computed calculation.
+
+    Runs the ``computed_calculation_v1`` rubric against the calculation
+    row addressed by ``calculation_id``. Returns an
+    :class:`EvidenceEvaluation` describing the passed / missing /
+    warning sets, the completeness ratio, the deterministic badge, and
+    any hard-fail reason.
+
+    Behaviour:
+
+    * If the calculation row does not exist, a structured ``hard_failed``
+      evaluation with ``hard_fail_reason = calculation_missing`` is
+      returned (the evaluator never raises on a missing record).
+    * If the calculation is rejected (``CalculationQuality.rejected``)
+      or its geometry validation has ``ValidationStatus.fail``, the
+      evaluator still runs every check but forces the badge to
+      ``hard_failed``.
+    * Otherwise the badge follows the deterministic completeness
+      thresholds in :func:`label_from_completeness`.
+
+    The evaluator does not mutate scientific records and does not
+    require any LLM, API key, or external network.
+    """
+    rubric = COMPUTED_CALCULATION_V1
+    calc: Optional[Calculation] = session.get(Calculation, calculation_id)
+    if calc is None:
+        return _empty_evaluation_for_missing_calculation(calculation_id, rubric)
+
+    hard_fail = _detect_calculation_hard_fail(calc)
+
+    check_results: list[EvidenceCheckResult] = []
+    for spec in rubric.checks:
+        # Suppress the geometry-validation warning check when the
+        # underlying row is a hard-fail — the hard-fail signal is the
+        # primary report; surfacing the same condition again as a
+        # warning would be noise.
+        if (
+            hard_fail is HardFailReason.geometry_validation_failed
+            and spec.name == "geometry_validation_passed_or_warning"
+        ):
+            outcome = EvidenceOutcome.not_applicable
+        else:
+            outcome = spec.runner(calc)
+        check_results.append(
+            EvidenceCheckResult(
+                name=spec.name,
+                outcome=outcome,
+                kind=spec.kind,
+                weight=spec.weight,
+                explain=spec.explain,
+            )
+        )
+
+    results_tuple = tuple(check_results)
+    (
+        passed,
+        missing,
+        warning,
+        not_applicable,
+        passed_count,
+        possible_count,
+        completeness,
+        all_required_passed,
+    ) = _aggregate_results(rubric, results_tuple)
+
+    if hard_fail is not None:
+        label = EvidenceBadge.hard_failed
+    else:
+        label = label_from_completeness(
+            completeness,
+            all_required_passed=all_required_passed,
+        )
+
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=calc.id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=label,
+        passed_checks=passed,
+        missing_checks=missing,
+        warning_checks=warning,
+        not_applicable_checks=not_applicable,
+        passed_count=passed_count,
+        possible_count=possible_count,
+        evidence_completeness=completeness,
+        is_certified=False,
+        hard_fail_reason=hard_fail,
+        check_results=results_tuple,
+    )
