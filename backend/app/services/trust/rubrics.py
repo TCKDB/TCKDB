@@ -29,10 +29,13 @@ from app.db.models.common import (
     KineticsModelKind,
     ReactionRole,
     ScientificOriginKind,
+    StatmechCalculationRole,
+    StatmechTreatmentKind,
     ThermoCalculationRole,
     ValidationStatus,
 )
 from app.db.models.kinetics import Kinetics
+from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.services.trust.models import (
     EvidenceCheckKind,
@@ -897,6 +900,326 @@ def _check_thermo_not_rejected_or_deprecated_if_applicable(
     return EvidenceOutcome.not_applicable
 
 
+_STATMECH_STRONG_SOURCE_ROLES: frozenset[StatmechCalculationRole] = frozenset(
+    {
+        StatmechCalculationRole.opt,
+        StatmechCalculationRole.freq,
+        StatmechCalculationRole.scan,
+    }
+)
+
+_STATMECH_REQUIRED_SOURCE_ROLES: frozenset[StatmechCalculationRole] = frozenset(
+    {
+        StatmechCalculationRole.opt,
+        StatmechCalculationRole.freq,
+    }
+)
+
+_TORSION_BEARING_STATMECH_TREATMENTS: frozenset[StatmechTreatmentKind] = frozenset(
+    {
+        StatmechTreatmentKind.rrho_1d,
+        StatmechTreatmentKind.rrho_nd,
+        StatmechTreatmentKind.rrho_1d_nd,
+    }
+)
+
+
+def _statmech_sources_by_role(
+    statmech: Statmech, role: StatmechCalculationRole
+) -> list:
+    """Return statmech source-calculation links for ``role``."""
+    return [link for link in statmech.source_calculations if link.role is role]
+
+
+def _statmech_source_calculations(statmech: Statmech) -> list[Calculation]:
+    """Return non-null linked source calculations for ``statmech``."""
+    return [
+        link.calculation
+        for link in statmech.source_calculations
+        if link.calculation is not None
+    ]
+
+
+def _statmech_source_calculations_for_roles(
+    statmech: Statmech, roles: frozenset[StatmechCalculationRole]
+) -> list[Calculation]:
+    """Return non-null source calculations whose link role is in ``roles``."""
+    return [
+        link.calculation
+        for link in statmech.source_calculations
+        if link.role in roles and link.calculation is not None
+    ]
+
+
+def _statmech_has_torsion_treatment(statmech: Statmech) -> bool:
+    """Return True when statmech treatment or rows imply internal rotors."""
+    return (
+        statmech.statmech_treatment in _TORSION_BEARING_STATMECH_TREATMENTS
+        or len(statmech.torsions) >= 1
+    )
+
+
+def _check_statmech_species_entry_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when the statmech row is attached to a species_entry."""
+    return _bool_outcome(
+        statmech.species_entry_id is not None and statmech.species_entry is not None
+    )
+
+
+def _check_statmech_origin_is_computed(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when the statmech record declares computed origin."""
+    return _bool_outcome(statmech.scientific_origin is ScientificOriginKind.computed)
+
+
+def _check_statmech_treatment_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when the statmech treatment kind is set."""
+    return _bool_outcome(statmech.statmech_treatment is not None)
+
+
+def _check_rigid_rotor_kind_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when rigid-rotor treatment is declared."""
+    return _bool_outcome(statmech.rigid_rotor_kind is not None)
+
+
+def _check_external_symmetry_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when external symmetry is recorded and valid."""
+    return _bool_outcome(
+        statmech.external_symmetry is not None and statmech.external_symmetry >= 1
+    )
+
+
+def _check_point_group_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when point group metadata is recorded."""
+    return _bool_outcome(bool(statmech.point_group))
+
+
+def _check_is_linear_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when molecular linearity is explicitly recorded."""
+    return _bool_outcome(statmech.is_linear is not None)
+
+
+def _check_statmech_frequency_scale_factor_present_if_applicable(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Require a frequency scale factor only when frequency evidence is linked."""
+    if not _statmech_sources_by_role(statmech, StatmechCalculationRole.freq):
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(statmech.frequency_scale_factor_id is not None)
+
+
+def _check_uses_projected_frequencies_recorded(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when projected-frequency handling is explicitly recorded."""
+    return _bool_outcome(statmech.uses_projected_frequencies is not None)
+
+
+def _check_statmech_source_calculations_present(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when at least one statmech_source_calculation row is linked."""
+    return _bool_outcome(len(statmech.source_calculations) >= 1)
+
+
+def _check_statmech_opt_source_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when an opt source calculation is linked."""
+    return _bool_outcome(
+        len(_statmech_sources_by_role(statmech, StatmechCalculationRole.opt)) >= 1
+    )
+
+
+def _check_statmech_freq_source_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when a frequency source calculation is linked."""
+    return _bool_outcome(
+        len(_statmech_sources_by_role(statmech, StatmechCalculationRole.freq)) >= 1
+    )
+
+
+def _check_statmech_sp_or_composite_source_present(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when SP/composite supporting source evidence is linked."""
+    return _bool_outcome(
+        len(_statmech_sources_by_role(statmech, StatmechCalculationRole.sp))
+        + len(_statmech_sources_by_role(statmech, StatmechCalculationRole.composite))
+        >= 1
+    )
+
+
+def _check_scan_source_present_if_torsions_present(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when torsion-bearing statmech has scan source evidence."""
+    if not _statmech_has_torsion_treatment(statmech):
+        return EvidenceOutcome.not_applicable
+    has_scan_link = (
+        len(_statmech_sources_by_role(statmech, StatmechCalculationRole.scan)) >= 1
+    )
+    has_torsion_scan = any(
+        torsion.source_scan_calculation_id is not None for torsion in statmech.torsions
+    )
+    return _bool_outcome(has_scan_link or has_torsion_scan)
+
+
+def _check_statmech_source_calculation_lot_present(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when all linked source calculations have a level of theory."""
+    calcs = _statmech_source_calculations(statmech)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.lot_id is not None for calc in calcs))
+
+
+def _check_statmech_source_calculation_software_present(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when all linked source calculations have software metadata."""
+    calcs = _statmech_source_calculations(statmech)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.software_release_id is not None for calc in calcs))
+
+
+def _check_statmech_source_calculation_workflow_tool_present(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when statmech or one source calc carries workflow-tool metadata."""
+    if statmech.workflow_tool_release_id is not None:
+        return EvidenceOutcome.passed
+    return _bool_outcome(
+        any(
+            calc.workflow_tool_release_id is not None
+            for calc in _statmech_source_calculations(statmech)
+        )
+    )
+
+
+def _check_statmech_source_calculation_artifacts_present(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when at least one linked source calculation retains artifacts."""
+    return _bool_outcome(
+        any(
+            len(calc.artifacts) >= 1 for calc in _statmech_source_calculations(statmech)
+        )
+    )
+
+
+def _check_statmech_source_calculation_result_blocks_present(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when every linked source calculation has its expected result block."""
+    calcs = _statmech_source_calculations(statmech)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(
+        all(
+            _check_result_block_present(calc) is EvidenceOutcome.passed
+            for calc in calcs
+        )
+    )
+
+
+def _check_statmech_source_calculation_has_non_hard_failed_evidence(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when linked source calculations avoid deterministic hard-fail signals."""
+    calcs = _statmech_source_calculations(statmech)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(
+        all(
+            calc.quality is not CalculationQuality.rejected
+            and (
+                calc.geometry_validation is None
+                or calc.geometry_validation.validation_status
+                is not ValidationStatus.fail
+            )
+            for calc in calcs
+        )
+    )
+
+
+def _check_statmech_geometry_validation_present_for_source_calculations(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when strong source calculations carry geometry validation."""
+    strong_calcs = _statmech_source_calculations_for_roles(
+        statmech, _STATMECH_STRONG_SOURCE_ROLES
+    )
+    if not strong_calcs:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        all(calc.geometry_validation is not None for calc in strong_calcs)
+    )
+
+
+def _check_statmech_geometry_validation_not_failed_for_source_calculations(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed/warning based on geometry-validation status on source calcs."""
+    validations = [
+        calc.geometry_validation
+        for calc in _statmech_source_calculations_for_roles(
+            statmech, _STATMECH_STRONG_SOURCE_ROLES
+        )
+        if calc.geometry_validation is not None
+    ]
+    if not validations:
+        return EvidenceOutcome.not_applicable
+    if any(
+        validation.validation_status is ValidationStatus.warning
+        for validation in validations
+    ):
+        return EvidenceOutcome.warning
+    if any(
+        validation.validation_status is ValidationStatus.fail
+        for validation in validations
+    ):
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.passed
+
+
+def _check_torsions_recorded_if_hindered_rotor_treatment(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Return passed when torsion-bearing treatments include torsion rows."""
+    if statmech.statmech_treatment not in _TORSION_BEARING_STATMECH_TREATMENTS:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(len(statmech.torsions) >= 1)
+
+
+def _check_torsion_definitions_present(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when recorded torsions include at least one coordinate."""
+    if not _statmech_has_torsion_treatment(statmech):
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        len(statmech.torsions) >= 1
+        and all(len(torsion.coordinates) >= 1 for torsion in statmech.torsions)
+    )
+
+
+def _check_torsion_symmetry_recorded(statmech: Statmech) -> EvidenceOutcome:
+    """Return passed when recorded torsions include valid symmetry numbers."""
+    if not _statmech_has_torsion_treatment(statmech):
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        len(statmech.torsions) >= 1
+        and all(
+            torsion.symmetry_number is not None and torsion.symmetry_number >= 1
+            for torsion in statmech.torsions
+        )
+    )
+
+
+def _check_statmech_not_rejected_or_deprecated_if_applicable(
+    statmech: Statmech,
+) -> EvidenceOutcome:
+    """Skip curator status checks until statmech-level review/deprecation is modeled."""
+    return EvidenceOutcome.not_applicable
+
+
 COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
     version=1,
@@ -1302,9 +1625,175 @@ COMPUTED_THERMO_V1: EvidenceRubric = EvidenceRubric(
 )
 
 
+COMPUTED_STATMECH_V1: EvidenceRubric = EvidenceRubric(
+    name="computed_statmech",
+    version=1,
+    record_type="statmech",
+    checks=(
+        EvidenceCheckSpec(
+            name="species_entry_present",
+            kind=EvidenceCheckKind.required,
+            explain="Statmech must be attached to a species_entry.",
+            runner=_check_statmech_species_entry_present,
+        ),
+        EvidenceCheckSpec(
+            name="statmech_origin_is_computed",
+            kind=EvidenceCheckKind.required,
+            explain="Statmech.scientific_origin should be computed for this rubric.",
+            runner=_check_statmech_origin_is_computed,
+        ),
+        EvidenceCheckSpec(
+            name="statmech_treatment_present",
+            kind=EvidenceCheckKind.required,
+            explain="Statmech treatment kind should be recorded.",
+            runner=_check_statmech_treatment_present,
+        ),
+        EvidenceCheckSpec(
+            name="rigid_rotor_kind_present",
+            kind=EvidenceCheckKind.required,
+            explain="Rigid rotor treatment should be recorded.",
+            runner=_check_rigid_rotor_kind_present,
+        ),
+        EvidenceCheckSpec(
+            name="external_symmetry_present",
+            kind=EvidenceCheckKind.optional,
+            explain="External symmetry number should be recorded.",
+            runner=_check_external_symmetry_present,
+        ),
+        EvidenceCheckSpec(
+            name="point_group_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Point group should be recorded when known.",
+            runner=_check_point_group_present,
+        ),
+        EvidenceCheckSpec(
+            name="is_linear_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Linearity should be explicitly recorded.",
+            runner=_check_is_linear_present,
+        ),
+        EvidenceCheckSpec(
+            name="frequency_scale_factor_present_if_applicable",
+            kind=EvidenceCheckKind.optional,
+            explain="Frequency-derived statmech should record a frequency scale factor.",
+            runner=_check_statmech_frequency_scale_factor_present_if_applicable,
+        ),
+        EvidenceCheckSpec(
+            name="uses_projected_frequencies_recorded",
+            kind=EvidenceCheckKind.optional,
+            explain="Projected-frequency handling should be explicitly recorded.",
+            runner=_check_uses_projected_frequencies_recorded,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculations_present",
+            kind=EvidenceCheckKind.required,
+            explain="At least one statmech_source_calculation row should support computed statmech.",
+            runner=_check_statmech_source_calculations_present,
+        ),
+        EvidenceCheckSpec(
+            name="opt_source_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed statmech should link an optimization source calculation when available.",
+            runner=_check_statmech_opt_source_present,
+        ),
+        EvidenceCheckSpec(
+            name="freq_source_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed statmech should link a frequency source calculation when available.",
+            runner=_check_statmech_freq_source_present,
+        ),
+        EvidenceCheckSpec(
+            name="sp_or_composite_source_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed statmech may link single-point or composite supporting evidence.",
+            runner=_check_statmech_sp_or_composite_source_present,
+        ),
+        EvidenceCheckSpec(
+            name="scan_source_present_if_torsions_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Torsion-bearing statmech should link scan source evidence.",
+            runner=_check_scan_source_present_if_torsions_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_lot_present",
+            kind=EvidenceCheckKind.required,
+            explain="All linked source calculations should resolve to level_of_theory.",
+            runner=_check_statmech_source_calculation_lot_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_software_present",
+            kind=EvidenceCheckKind.optional,
+            explain="All linked source calculations should declare software_release.",
+            runner=_check_statmech_source_calculation_software_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_workflow_tool_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Statmech or at least one source calc should declare workflow-tool release metadata.",
+            runner=_check_statmech_source_calculation_workflow_tool_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_artifacts_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one linked source calculation should retain an artifact.",
+            runner=_check_statmech_source_calculation_artifacts_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_result_blocks_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Linked source calculations should have their expected result blocks.",
+            runner=_check_statmech_source_calculation_result_blocks_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_has_non_hard_failed_evidence",
+            kind=EvidenceCheckKind.optional,
+            explain="Linked source calculations should avoid deterministic hard-fail signals.",
+            runner=_check_statmech_source_calculation_has_non_hard_failed_evidence,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_present_for_source_calculations",
+            kind=EvidenceCheckKind.optional,
+            explain="Strong source calculations should carry geometry-validation evidence.",
+            runner=_check_statmech_geometry_validation_present_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_not_failed_for_source_calculations",
+            kind=EvidenceCheckKind.warning,
+            explain="Source calculation geometry validation is warning (advisory).",
+            runner=_check_statmech_geometry_validation_not_failed_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="torsions_recorded_if_hindered_rotor_treatment",
+            kind=EvidenceCheckKind.optional,
+            explain="Hindered-rotor/statmech torsion treatments should include torsion rows.",
+            runner=_check_torsions_recorded_if_hindered_rotor_treatment,
+        ),
+        EvidenceCheckSpec(
+            name="torsion_definitions_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Recorded torsions should include torsion coordinate definitions.",
+            runner=_check_torsion_definitions_present,
+        ),
+        EvidenceCheckSpec(
+            name="torsion_symmetry_recorded",
+            kind=EvidenceCheckKind.optional,
+            explain="Recorded torsions should include symmetry numbers.",
+            runner=_check_torsion_symmetry_recorded,
+        ),
+        EvidenceCheckSpec(
+            name="statmech_not_rejected_or_deprecated_if_applicable",
+            kind=EvidenceCheckKind.optional,
+            explain="Statmech rejection/deprecation checks apply once modeled.",
+            runner=_check_statmech_not_rejected_or_deprecated_if_applicable,
+        ),
+    ),
+)
+
+
 RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
     "calculation": COMPUTED_CALCULATION_V1,
     "kinetics": COMPUTED_KINETICS_V1,
+    "statmech": COMPUTED_STATMECH_V1,
     "thermo": COMPUTED_THERMO_V1,
 }
 """Lookup of the latest active rubric per record-type discriminator.

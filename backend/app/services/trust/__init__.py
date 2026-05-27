@@ -16,9 +16,11 @@ statmech, transport, experimental) land in later slices per
 from app.services.trust.evaluator import (
     evaluate_computed_calculation,
     evaluate_computed_kinetics,
+    evaluate_computed_statmech,
     evaluate_computed_thermo,
     evaluate_loaded_calculation,
     evaluate_loaded_kinetics,
+    evaluate_loaded_statmech,
     evaluate_loaded_thermo,
     select_rubric,
 )
@@ -39,6 +41,7 @@ from app.services.trust.models import (
 from app.services.trust.rubrics import (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,
+    COMPUTED_STATMECH_V1,
     COMPUTED_THERMO_V1,
     RUBRIC_REGISTRY,
 )
@@ -46,6 +49,7 @@ from app.services.trust.rubrics import (
 __all__ = [
     "COMPUTED_CALCULATION_V1",
     "COMPUTED_KINETICS_V1",
+    "COMPUTED_STATMECH_V1",
     "COMPUTED_THERMO_V1",
     "EvidenceBadge",
     "EvidenceCheckKind",
@@ -61,9 +65,11 @@ __all__ = [
     "build_trust_fragment",
     "evaluate_computed_calculation",
     "evaluate_computed_kinetics",
+    "evaluate_computed_statmech",
     "evaluate_computed_thermo",
     "evaluate_loaded_calculation",
     "evaluate_loaded_kinetics",
+    "evaluate_loaded_statmech",
     "evaluate_loaded_thermo",
     "label_from_completeness",
     "select_rubric",

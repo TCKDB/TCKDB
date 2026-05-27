@@ -39,6 +39,7 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationQuality,
     CalculationType,
+    FrequencyScaleKind,
     KineticsCalculationRole,
     KineticsModelKind,
     KineticsUncertaintyKind,
@@ -46,11 +47,16 @@ from app.db.models.common import (
     ParameterSource,
     ReactionRole,
     RecordReviewStatus,
+    RigidRotorKind,
     ScientificOriginKind,
+    StatmechCalculationRole,
+    StatmechTreatmentKind,
     StereoKind,
     ThermoCalculationRole,
+    TorsionTreatmentKind,
     ValidationStatus,
 )
+from app.db.models.energy_correction import FrequencyScaleFactor
 from app.db.models.geometry import Geometry
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
 from app.db.models.level_of_theory import LevelOfTheory
@@ -61,6 +67,12 @@ from app.db.models.reaction import (
 )
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
+from app.db.models.statmech import (
+    Statmech,
+    StatmechSourceCalculation,
+    StatmechTorsion,
+    StatmechTorsionDefinition,
+)
 from app.db.models.thermo import (
     Thermo,
     ThermoNASA,
@@ -70,6 +82,7 @@ from app.db.models.thermo import (
 from app.services.trust import (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,
+    COMPUTED_STATMECH_V1,
     COMPUTED_THERMO_V1,
     EvidenceBadge,
     EvidenceEvaluation,
@@ -77,9 +90,11 @@ from app.services.trust import (
     build_trust_fragment,
     evaluate_computed_calculation,
     evaluate_computed_kinetics,
+    evaluate_computed_statmech,
     evaluate_computed_thermo,
     evaluate_loaded_calculation,
     evaluate_loaded_kinetics,
+    evaluate_loaded_statmech,
     evaluate_loaded_thermo,
     label_from_completeness,
     select_rubric,
@@ -237,6 +252,48 @@ def _make_minimal_opt_calc(
             )
         )
 
+    db_session.flush()
+    db_session.refresh(calc)
+    return calc
+
+
+def _make_minimal_freq_calc(db_session: Session) -> Calculation:
+    """Build a frequency calc with the provenance statmech checks need."""
+    species = _make_species(db_session)
+    entry = _make_species_entry(db_session, species)
+    lot = _make_lot(db_session)
+    release = _make_software_release(db_session)
+    calc = Calculation(
+        type=CalculationType.freq,
+        quality=CalculationQuality.raw,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+        software_release_id=release.id,
+    )
+    db_session.add(calc)
+    db_session.flush()
+    db_session.add(
+        CalculationInputGeometry(
+            calculation_id=calc.id,
+            geometry_id=_make_geometry(db_session).id,
+            input_order=1,
+        )
+    )
+    db_session.add(
+        CalculationFreqResult(
+            calculation_id=calc.id,
+            n_imag=0,
+            zpe_hartree=0.05,
+        )
+    )
+    db_session.add(
+        CalculationArtifact(
+            calculation_id=calc.id,
+            kind=ArtifactKind.output_log,
+            uri="s3://test/freq-log",
+            filename="freq.log",
+        )
+    )
     db_session.flush()
     db_session.refresh(calc)
     return calc
@@ -412,6 +469,95 @@ def _link_thermo_source(
     )
     db_session.flush()
     db_session.refresh(thermo)
+
+
+def _make_frequency_scale_factor(db_session: Session) -> FrequencyScaleFactor:
+    fsf = FrequencyScaleFactor(
+        level_of_theory_id=_make_lot(db_session).id,
+        scale_kind=FrequencyScaleKind.fundamental,
+        value=0.99,
+    )
+    db_session.add(fsf)
+    db_session.flush()
+    return fsf
+
+
+def _make_statmech(
+    db_session: Session,
+    *,
+    species_entry: SpeciesEntry | None = None,
+    metadata: bool = True,
+    frequency_scale_factor: bool = False,
+    treatment: StatmechTreatmentKind = StatmechTreatmentKind.rrho,
+) -> Statmech:
+    """Build a statmech row with configurable structured evidence."""
+    entry = species_entry or _make_species_entry(db_session, _make_species(db_session))
+    fsf = _make_frequency_scale_factor(db_session) if frequency_scale_factor else None
+    statmech = Statmech(
+        species_entry_id=entry.id,
+        scientific_origin=ScientificOriginKind.computed,
+        external_symmetry=1 if metadata else None,
+        point_group="C1" if metadata else None,
+        is_linear=False if metadata else None,
+        rigid_rotor_kind=RigidRotorKind.asymmetric_top if metadata else None,
+        statmech_treatment=treatment if metadata else None,
+        frequency_scale_factor_id=fsf.id if fsf is not None else None,
+        uses_projected_frequencies=False if metadata else None,
+    )
+    db_session.add(statmech)
+    db_session.flush()
+    db_session.refresh(statmech)
+    return statmech
+
+
+def _link_statmech_source(
+    db_session: Session,
+    *,
+    statmech: Statmech,
+    calculation: Calculation,
+    role: StatmechCalculationRole,
+) -> None:
+    db_session.add(
+        StatmechSourceCalculation(
+            statmech_id=statmech.id,
+            calculation_id=calculation.id,
+            role=role,
+        )
+    )
+    db_session.flush()
+    db_session.refresh(statmech)
+
+
+def _add_statmech_torsion(
+    db_session: Session,
+    *,
+    statmech: Statmech,
+    source_scan: Calculation | None = None,
+) -> StatmechTorsion:
+    torsion = StatmechTorsion(
+        statmech_id=statmech.id,
+        torsion_index=1,
+        symmetry_number=3,
+        treatment_kind=TorsionTreatmentKind.hindered_rotor,
+        dimension=1,
+        source_scan_calculation_id=source_scan.id if source_scan is not None else None,
+    )
+    db_session.add(torsion)
+    db_session.flush()
+    db_session.add(
+        StatmechTorsionDefinition(
+            torsion_id=torsion.id,
+            coordinate_index=1,
+            atom1_index=1,
+            atom2_index=2,
+            atom3_index=3,
+            atom4_index=4,
+        )
+    )
+    db_session.flush()
+    db_session.refresh(statmech)
+    db_session.refresh(torsion)
+    return torsion
 
 
 # ---------------------------------------------------------------------------
@@ -1257,5 +1403,243 @@ class TestComputedThermoEvaluator:
         thermo = _make_thermo(db_session, scalar=True)
         result = evaluate_computed_thermo(db_session, thermo.id)
         assert result.rubric == "computed_thermo"
+        assert result.evidence_completeness >= 0.0
+        assert result.is_certified is False
+
+
+# ---------------------------------------------------------------------------
+# 12. Computed statmech rubric
+# ---------------------------------------------------------------------------
+
+
+class TestComputedStatmechEvaluator:
+    """Focused tests for computed_statmech_v1 evidence completeness."""
+
+    def test_statmech_rubric_registered(self):
+        rubric = select_rubric("statmech")
+        assert rubric is COMPUTED_STATMECH_V1
+        assert rubric.name == "computed_statmech"
+        assert rubric.version == 1
+
+    def test_missing_loaded_statmech_returns_hard_failed(self):
+        result = evaluate_loaded_statmech(None)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.record_type == "statmech"
+        assert result.record_id is None
+        assert result.rubric == "computed_statmech"
+        assert result.hard_fail_reason is HardFailReason.statmech_missing
+
+    def test_sparse_computed_statmech_has_low_evidence(self, db_session):
+        statmech = _make_statmech(db_session, metadata=False)
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert result.label in {EvidenceBadge.sparse, EvidenceBadge.unsupported}
+        assert "source_calculations_present" in result.missing_checks
+        assert "statmech_treatment_present" in result.missing_checks
+        assert "rigid_rotor_kind_present" in result.missing_checks
+
+    def test_species_treatment_and_rotor_metadata_checks_pass(self, db_session):
+        statmech = _make_statmech(db_session)
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert "species_entry_present" in result.passed_checks
+        assert "statmech_origin_is_computed" in result.passed_checks
+        assert "statmech_treatment_present" in result.passed_checks
+        assert "rigid_rotor_kind_present" in result.passed_checks
+        assert "external_symmetry_present" in result.passed_checks
+        assert "point_group_present" in result.passed_checks
+        assert "is_linear_present" in result.passed_checks
+        assert "uses_projected_frequencies_recorded" in result.passed_checks
+
+    def test_frequency_scale_factor_passes_when_frequency_source_exists(
+        self, db_session
+    ):
+        statmech = _make_statmech(db_session, frequency_scale_factor=True)
+        freq_calc = _make_minimal_freq_calc(db_session)
+        _link_statmech_source(
+            db_session,
+            statmech=statmech,
+            calculation=freq_calc,
+            role=StatmechCalculationRole.freq,
+        )
+
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert "frequency_scale_factor_present_if_applicable" in result.passed_checks
+
+    def test_source_calculations_raise_evidence_completeness(self, db_session):
+        sparse = _make_statmech(db_session)
+        rich = _make_statmech(db_session)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            quality=CalculationQuality.curated,
+        )
+        _link_statmech_source(
+            db_session,
+            statmech=rich,
+            calculation=calc,
+            role=StatmechCalculationRole.opt,
+        )
+
+        sparse_result = evaluate_computed_statmech(db_session, sparse.id)
+        rich_result = evaluate_computed_statmech(db_session, rich.id)
+
+        assert rich_result.evidence_completeness > sparse_result.evidence_completeness
+        assert "source_calculations_present" in rich_result.passed_checks
+        assert "source_calculation_lot_present" in rich_result.passed_checks
+
+    def test_opt_freq_and_sp_roles_pass_corresponding_checks(self, db_session):
+        statmech = _make_statmech(db_session, frequency_scale_factor=True)
+        opt_calc = _make_minimal_opt_calc(db_session)
+        freq_calc = _make_minimal_freq_calc(db_session)
+        sp_calc = _make_minimal_opt_calc(db_session)
+        _link_statmech_source(
+            db_session,
+            statmech=statmech,
+            calculation=opt_calc,
+            role=StatmechCalculationRole.opt,
+        )
+        _link_statmech_source(
+            db_session,
+            statmech=statmech,
+            calculation=freq_calc,
+            role=StatmechCalculationRole.freq,
+        )
+        _link_statmech_source(
+            db_session,
+            statmech=statmech,
+            calculation=sp_calc,
+            role=StatmechCalculationRole.sp,
+        )
+
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert "opt_source_present" in result.passed_checks
+        assert "freq_source_present" in result.passed_checks
+        assert "sp_or_composite_source_present" in result.passed_checks
+
+    def test_missing_frequency_source_reports_missing_not_hard_fail(self, db_session):
+        statmech = _make_statmech(db_session)
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert "freq_source_present" in result.missing_checks
+        assert (
+            "frequency_scale_factor_present_if_applicable"
+            in result.not_applicable_checks
+        )
+        assert result.hard_fail_reason is None
+
+    def test_torsion_checks_not_applicable_without_torsion_treatment(self, db_session):
+        statmech = _make_statmech(db_session, treatment=StatmechTreatmentKind.rrho)
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert (
+            "torsions_recorded_if_hindered_rotor_treatment"
+            in result.not_applicable_checks
+        )
+        assert "torsion_definitions_present" in result.not_applicable_checks
+        assert "torsion_symmetry_recorded" in result.not_applicable_checks
+        assert "scan_source_present_if_torsions_present" in result.not_applicable_checks
+
+    def test_torsion_rows_and_definitions_pass_when_present(self, db_session):
+        statmech = _make_statmech(
+            db_session,
+            treatment=StatmechTreatmentKind.rrho_1d,
+        )
+        scan_calc = _make_minimal_opt_calc(db_session)
+        _link_statmech_source(
+            db_session,
+            statmech=statmech,
+            calculation=scan_calc,
+            role=StatmechCalculationRole.scan,
+        )
+        _add_statmech_torsion(db_session, statmech=statmech, source_scan=scan_calc)
+
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert "torsions_recorded_if_hindered_rotor_treatment" in result.passed_checks
+        assert "torsion_definitions_present" in result.passed_checks
+        assert "torsion_symmetry_recorded" in result.passed_checks
+        assert "scan_source_present_if_torsions_present" in result.passed_checks
+
+    def test_source_geometry_failure_hard_fails_required_role(self, db_session):
+        statmech = _make_statmech(db_session)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            geom_validation=ValidationStatus.fail,
+        )
+        _link_statmech_source(
+            db_session,
+            statmech=statmech,
+            calculation=calc,
+            role=StatmechCalculationRole.opt,
+        )
+
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert (
+            result.hard_fail_reason
+            is HardFailReason.source_calculation_hard_failed_for_required_role
+        )
+        assert (
+            "source_calculation_has_non_hard_failed_evidence" in result.missing_checks
+        )
+
+    def test_source_geometry_warning_is_advisory(self, db_session):
+        statmech = _make_statmech(db_session)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            geom_validation=ValidationStatus.warning,
+        )
+        _link_statmech_source(
+            db_session,
+            statmech=statmech,
+            calculation=calc,
+            role=StatmechCalculationRole.opt,
+        )
+
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert (
+            "geometry_validation_not_failed_for_source_calculations"
+            in result.warning_checks
+        )
+        assert result.label is not EvidenceBadge.hard_failed
+
+    def test_loaded_statmech_matches_id_entrypoint(self, db_session):
+        statmech = _make_statmech(db_session)
+        calc = _make_minimal_opt_calc(db_session)
+        _link_statmech_source(
+            db_session,
+            statmech=statmech,
+            calculation=calc,
+            role=StatmechCalculationRole.opt,
+        )
+        db_session.refresh(statmech)
+
+        loaded = evaluate_loaded_statmech(statmech)
+        by_id = evaluate_computed_statmech(db_session, statmech.id)
+        assert loaded == by_id
+
+    def test_evaluator_does_not_mutate_statmech(self, db_session):
+        statmech = _make_statmech(db_session, frequency_scale_factor=True)
+        before_treatment = statmech.statmech_treatment
+        before_external_symmetry = statmech.external_symmetry
+        before_sources = len(statmech.source_calculations)
+
+        evaluate_computed_statmech(db_session, statmech.id)
+        db_session.refresh(statmech)
+
+        assert statmech.statmech_treatment is before_treatment
+        assert statmech.external_symmetry == before_external_symmetry
+        assert len(statmech.source_calculations) == before_sources
+
+    def test_statmech_evaluator_does_not_require_llm_config(
+        self, db_session, monkeypatch
+    ):
+        for var in (
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GOOGLE_API_KEY",
+            "GEMINI_API_KEY",
+            "AZURE_OPENAI_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
+
+        statmech = _make_statmech(db_session)
+        result = evaluate_computed_statmech(db_session, statmech.id)
+        assert result.rubric == "computed_statmech"
         assert result.evidence_completeness >= 0.0
         assert result.is_certified is False

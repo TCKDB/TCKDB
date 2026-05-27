@@ -31,11 +31,17 @@ from app.db.models.common import (
     CalculationQuality,
     KineticsCalculationRole,
     ReactionRole,
+    StatmechCalculationRole,
     ThermoCalculationRole,
     ValidationStatus,
 )
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
 from app.db.models.reaction import ReactionEntry
+from app.db.models.statmech import (
+    Statmech,
+    StatmechSourceCalculation,
+    StatmechTorsion,
+)
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
 from app.services.trust.models import (
     EvidenceBadge,
@@ -50,6 +56,7 @@ from app.services.trust.models import (
 from app.services.trust.rubrics import (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,
+    COMPUTED_STATMECH_V1,
     COMPUTED_THERMO_V1,
     get_rubric_for_record_type,
 )
@@ -127,6 +134,13 @@ _THERMO_REQUIRED_SOURCE_ROLES: frozenset[ThermoCalculationRole] = frozenset(
     }
 )
 
+_STATMECH_REQUIRED_SOURCE_ROLES: frozenset[StatmechCalculationRole] = frozenset(
+    {
+        StatmechCalculationRole.opt,
+        StatmechCalculationRole.freq,
+    }
+)
+
 
 def _thermo_has_representation(thermo: Thermo) -> bool:
     """Return True when scalar, NASA coefficients, or populated points exist."""
@@ -193,6 +207,46 @@ def _detect_thermo_hard_fail(thermo: Thermo) -> Optional[HardFailReason]:
         if link.role not in _THERMO_REQUIRED_SOURCE_ROLES:
             continue
         calc = link.calculation
+        if calc is not None and _detect_calculation_hard_fail(calc) is not None:
+            return HardFailReason.source_calculation_hard_failed_for_required_role
+
+    return None
+
+
+def _statmech_has_torsions_or_torsion_treatment(statmech: Statmech) -> bool:
+    """Return True when statmech source roles should include scan evidence."""
+    treatment = statmech.statmech_treatment
+    treatment_value = getattr(treatment, "value", treatment)
+    return len(statmech.torsions) >= 1 or (
+        isinstance(treatment_value, str)
+        and ("1d" in treatment_value or "nd" in treatment_value)
+    )
+
+
+def _detect_statmech_hard_fail(statmech: Statmech) -> Optional[HardFailReason]:
+    """Return a hard-fail reason for ``statmech`` if a structural failure is present."""
+    if statmech.species_entry_id is None or statmech.species_entry is None:
+        return HardFailReason.species_entry_missing
+
+    if statmech.external_symmetry is not None and statmech.external_symmetry < 1:
+        return HardFailReason.invalid_external_symmetry
+
+    if any(torsion.dimension < 1 for torsion in statmech.torsions):
+        return HardFailReason.invalid_torsion_dimension
+
+    required_roles = set(_STATMECH_REQUIRED_SOURCE_ROLES)
+    if _statmech_has_torsions_or_torsion_treatment(statmech):
+        required_roles.add(StatmechCalculationRole.scan)
+
+    for link in statmech.source_calculations:
+        if link.role not in required_roles:
+            continue
+        calc = link.calculation
+        if calc is not None and _detect_calculation_hard_fail(calc) is not None:
+            return HardFailReason.source_calculation_hard_failed_for_required_role
+
+    for torsion in statmech.torsions:
+        calc = torsion.source_scan_calculation
         if calc is not None and _detect_calculation_hard_fail(calc) is not None:
             return HardFailReason.source_calculation_hard_failed_for_required_role
 
@@ -340,6 +394,30 @@ def _empty_evaluation_for_missing_thermo(
         evidence_completeness=0.0,
         is_certified=False,
         hard_fail_reason=HardFailReason.thermo_missing,
+        check_results=(),
+    )
+
+
+def _empty_evaluation_for_missing_statmech(
+    statmech_id: Optional[int],
+    rubric: EvidenceRubric,
+) -> EvidenceEvaluation:
+    """Return a structured ``hard_failed`` evaluation for a missing statmech row."""
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=statmech_id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=EvidenceBadge.hard_failed,
+        passed_checks=(),
+        missing_checks=(),
+        warning_checks=(),
+        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        passed_count=0,
+        possible_count=0,
+        evidence_completeness=0.0,
+        is_certified=False,
+        hard_fail_reason=HardFailReason.statmech_missing,
         check_results=(),
     )
 
@@ -570,6 +648,80 @@ def evaluate_loaded_thermo(
     )
 
 
+def evaluate_loaded_statmech(
+    statmech: Statmech | None,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for a loaded statmech record.
+
+    This entrypoint is pure over the ORM object graph it receives: it
+    does not perform a lookup and the check runners must not issue
+    their own queries. Callers are responsible for eager-loading the
+    relationships required by ``computed_statmech_v1``.
+    """
+    rubric = COMPUTED_STATMECH_V1
+    if statmech is None:
+        return _empty_evaluation_for_missing_statmech(None, rubric)
+
+    hard_fail = _detect_statmech_hard_fail(statmech)
+
+    check_results: list[EvidenceCheckResult] = []
+    for spec in rubric.checks:
+        if (
+            hard_fail is HardFailReason.source_calculation_hard_failed_for_required_role
+            and spec.name == "geometry_validation_not_failed_for_source_calculations"
+        ):
+            outcome = EvidenceOutcome.not_applicable
+        else:
+            outcome = spec.runner(statmech)
+        check_results.append(
+            EvidenceCheckResult(
+                name=spec.name,
+                outcome=outcome,
+                kind=spec.kind,
+                weight=spec.weight,
+                explain=spec.explain,
+            )
+        )
+
+    results_tuple = tuple(check_results)
+    (
+        passed,
+        missing,
+        warning,
+        not_applicable,
+        passed_count,
+        possible_count,
+        completeness,
+        all_required_passed,
+    ) = _aggregate_results(rubric, results_tuple)
+
+    if hard_fail is not None:
+        label = EvidenceBadge.hard_failed
+    else:
+        label = label_from_completeness(
+            completeness,
+            all_required_passed=all_required_passed,
+        )
+
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=statmech.id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=label,
+        passed_checks=passed,
+        missing_checks=missing,
+        warning_checks=warning,
+        not_applicable_checks=not_applicable,
+        passed_count=passed_count,
+        possible_count=possible_count,
+        evidence_completeness=completeness,
+        is_certified=False,
+        hard_fail_reason=hard_fail,
+        check_results=results_tuple,
+    )
+
+
 def evaluate_computed_calculation(
     session: Session,
     calculation_id: int,
@@ -676,3 +828,56 @@ def evaluate_computed_thermo(
     if thermo is None:
         return _empty_evaluation_for_missing_thermo(thermo_id, COMPUTED_THERMO_V1)
     return evaluate_loaded_thermo(thermo)
+
+
+def evaluate_computed_statmech(
+    session: Session,
+    statmech_id: int,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for one computed statmech row."""
+    statement = (
+        select(Statmech)
+        .where(Statmech.id == statmech_id)
+        .options(
+            selectinload(Statmech.species_entry),
+            selectinload(Statmech.frequency_scale_factor),
+            selectinload(Statmech.torsions).selectinload(StatmechTorsion.coordinates),
+            selectinload(Statmech.torsions)
+            .selectinload(StatmechTorsion.source_scan_calculation)
+            .selectinload(Calculation.artifacts),
+            selectinload(Statmech.torsions)
+            .selectinload(StatmechTorsion.source_scan_calculation)
+            .selectinload(Calculation.geometry_validation),
+            selectinload(Statmech.torsions)
+            .selectinload(StatmechTorsion.source_scan_calculation)
+            .selectinload(Calculation.scan_result),
+            selectinload(Statmech.source_calculations)
+            .selectinload(StatmechSourceCalculation.calculation)
+            .selectinload(Calculation.artifacts),
+            selectinload(Statmech.source_calculations)
+            .selectinload(StatmechSourceCalculation.calculation)
+            .selectinload(Calculation.geometry_validation),
+            selectinload(Statmech.source_calculations)
+            .selectinload(StatmechSourceCalculation.calculation)
+            .selectinload(Calculation.sp_result),
+            selectinload(Statmech.source_calculations)
+            .selectinload(StatmechSourceCalculation.calculation)
+            .selectinload(Calculation.opt_result),
+            selectinload(Statmech.source_calculations)
+            .selectinload(StatmechSourceCalculation.calculation)
+            .selectinload(Calculation.freq_result),
+            selectinload(Statmech.source_calculations)
+            .selectinload(StatmechSourceCalculation.calculation)
+            .selectinload(Calculation.irc_result),
+            selectinload(Statmech.source_calculations)
+            .selectinload(StatmechSourceCalculation.calculation)
+            .selectinload(Calculation.scan_result),
+            selectinload(Statmech.source_calculations)
+            .selectinload(StatmechSourceCalculation.calculation)
+            .selectinload(Calculation.path_search_result),
+        )
+    )
+    statmech = session.scalars(statement).one_or_none()
+    if statmech is None:
+        return _empty_evaluation_for_missing_statmech(statmech_id, COMPUTED_STATMECH_V1)
+    return evaluate_loaded_statmech(statmech)
