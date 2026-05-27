@@ -1,6 +1,7 @@
 # Optional LLM Precheck / AI Review Assistant
 
-**Status:** draft spec - optional plumbing exists, persistence design only
+**Status:** draft spec - optional plumbing exists, advisory persistence
+policy
 **Date:** 2026-05-27
 **Scope:** TCKDB backend only. No real LLM calls, persistence tables,
 migrations, RAG, ARC changes, or `tckdb-client` changes.
@@ -20,9 +21,10 @@ rejection, read availability, or scientific correctness.
 Optional precheck plumbing was introduced in commit
 `0087c35 Add optional LLM precheck plumbing`. The current implementation
 has disabled and fake providers, context-builder scaffolding, service
-orchestration, and failure conversion to `failed_to_review`. It has no
-upload workflow wiring, read API changes, persistence, real providers, or
-RAG.
+orchestration, failure conversion to `failed_to_review`,
+submission-scoped audit event persistence, and a submission-scoped latest
+AI review summary endpoint. It has no upload workflow wiring, public
+scientific trust mapping, real providers, or RAG.
 
 The default mode is:
 
@@ -50,8 +52,8 @@ The current public trust contract remains unchanged:
 - `include=all` intentionally excludes `trust`
 - default responses omit `trust`
 - search/list endpoints do not expose `trust`
-- `llm_precheck` is always disabled/not_run until this optional layer is
-  implemented and enabled
+- scientific `trust.llm_precheck` is always disabled/not_run until a
+  deliberate record-level mapping layer is implemented and enabled
 - `record_id` is hidden unless `include=internal_ids` is requested and
   allowed
 - `trust` means evidence completeness, not scientific correctness
@@ -149,11 +151,14 @@ These are explicitly out of scope for this spec and the MVP:
 - automatic approval/rejection
 - scientific correctness certification
 - frontend curator UI
+- upload workflow change
 - upload schema redesign
+- read API change
 - ARC-specific behavior
 - new trust rubrics
 - search/list trust
-- database tables or migrations
+- search/list trust mapping
+- database tables or migrations unless separately approved
 
 ---
 
@@ -401,11 +406,37 @@ The result schema should also enforce:
 
 ---
 
-## 12. Persistence
+## 12. Persistence and Public Mapping Policy
 
-Persistence is intentionally deferred until the advisory result vocabulary
-is reconciled with the deployed submission schema. The existing
-`SubmissionPrecheckLabel` enum only supports:
+AI Review Assistant persistence is submission-scoped by default. Scientific
+trust fragments are record-scoped. These are separate semantic layers and
+must not drift into each other accidentally.
+
+The policy is:
+
+- AI Review is advisory only.
+- AI Review is submission-scoped by default.
+- Scientific trust fragments are record-scoped.
+- AI Review must not be treated as scientific correctness.
+- AI Review must not compute or modify evidence completeness.
+- AI Review must not approve or reject submissions.
+- AI Review must not mutate scientific records.
+- AI Review failure must not fail otherwise valid uploads.
+
+The current implementation persists AI Review Assistant output as
+`submission_audit_event` rows with:
+
+```text
+event_kind=llm_precheck_recorded
+actor_kind=llm
+```
+
+The submission AI review summary endpoint derives its latest-result card
+from the newest matching audit event. Public scientific trust fragments
+remain unchanged and continue to report `trust.llm_precheck` as
+disabled/not_run.
+
+The existing `SubmissionPrecheckLabel` enum may only support:
 
 ```text
 passed
@@ -422,35 +453,15 @@ needs_attention
 failed_to_review
 ```
 
-Persistence must preserve these rules:
-
-- LLM precheck is advisory only.
-- LLM precheck must not approve submissions.
-- LLM precheck must not reject submissions.
-- LLM precheck must not mutate `submission.status`.
-- LLM precheck must not mutate scientific records.
-- LLM precheck must not compute evidence completeness.
-- LLM failure must not fail an otherwise valid upload.
-- Off mode must require no persistence writes.
-
 The existing `mark_precheck_result` helper is not appropriate for the AI
 Review Assistant because it mutates submission moderation status. Future
 persistence wiring must use a new advisory-only path or refactor that
 helper before reuse.
 
-### Option A: Expand `submission.llm_precheck_label`
+### Option A: Submission Summary Fields Only
 
-Expand the existing submission enum-backed column to support:
-
-```text
-not_run
-pass
-warning
-needs_attention
-failed_to_review
-```
-
-Current related columns:
+Store only a latest-result summary on the submission row, using fields such
+as:
 
 ```text
 submission.llm_precheck_label
@@ -467,12 +478,17 @@ Pros:
 
 Cons:
 
-- Requires an enum migration.
+- The existing enum may require a migration before it can represent
+  `not_run`, `pass`, `warning`, `needs_attention`, and
+  `failed_to_review`.
 - Overloads existing field semantics because the old labels are
   `passed`/`flagged`, while the advisory vocabulary is
   `pass`/`warning`/`needs_attention`.
 - May require backfill or mapping.
 - Risks confusing an advisory label with moderation status.
+- Loses historical attempts unless audit events are also written.
+- Is unsafe if implemented through any helper that mutates
+  `submission.status`.
 
 Label mapping should be avoided unless backward compatibility requires it.
 If mapping is required, it is lossy:
@@ -485,7 +501,9 @@ flagged -> warning or needs_attention
 `flagged` cannot be deterministically mapped without knowing whether the
 old result was a mild warning or a stronger curator-attention signal.
 
-### Option B: Audit-Event-Only Persistence
+Do not force rich advisory labels into the old `passed`/`flagged` enum.
+
+### Option B: Submission Audit Event `details_json` Only
 
 Store the full structured advisory result in:
 
@@ -493,28 +511,17 @@ Store the full structured advisory result in:
 submission_audit_event.details_json
 ```
 
-with an event kind such as:
+with an advisory event kind such as:
 
 ```text
-llm_precheck_completed
-llm_precheck_failed
+llm_precheck_recorded
 ```
-
-If those event kinds do not exist, there are three choices:
-
-1. Reuse the closest existing precheck event kind only if its name does not
-   misrepresent the advisory result. The current
-   `llm_precheck_passed`/`llm_precheck_flagged` kinds are too narrow for
-   `not_run`, `needs_attention`, and `failed_to_review`.
-2. Add new audit event kinds in a small Alembic revision when persistence
-   is implemented.
-3. Defer audit persistence until a migration is justified.
 
 Suggested audit event detail shape:
 
 ```json
 {
-  "kind": "llm_precheck_completed",
+  "kind": "llm_precheck_recorded",
   "label": "warning",
   "summary": "Two provenance gaps found.",
   "model": "provider/model-name",
@@ -537,6 +544,8 @@ Pros:
 - Preserves history.
 - Does not overload submission status.
 - Good MVP shape.
+- Supports `failed_to_review` without treating provider failure as upload
+  failure.
 
 Cons:
 
@@ -544,7 +553,30 @@ Cons:
 - Requires reading the latest relevant audit event for a submission.
 - May need event-kind extension if no existing kind is suitable.
 
-### Option C: Dedicated `submission_llm_precheck` Table
+### Option C: Summary Fields Plus Audit Event `details_json`
+
+Write the full structured result to `submission_audit_event.details_json`
+and also update non-status summary fields on `submission`.
+
+Pros:
+
+- Keeps audit history and full details.
+- Gives admin surfaces a cheap latest-result shortcut.
+- Can support future list filters better than audit-only persistence.
+
+Cons:
+
+- Requires careful transactional consistency between the summary fields and
+  the audit event.
+- Still inherits enum limitations if `submission.llm_precheck_label` is
+  updated.
+- Is unsafe if the summary update path calls status-mutating helpers.
+- Can create ambiguity if the summary row and newest audit event diverge.
+
+This option is acceptable only if the submission-field update path is
+advisory-only and cannot mutate `submission.status`.
+
+### Option D: Future Dedicated `submission_llm_precheck` Table
 
 A future table could represent precheck attempts directly:
 
@@ -568,6 +600,7 @@ Pros:
 - Queryable.
 - Versionable.
 - Supports multiple attempts and providers.
+- Avoids overloading older submission precheck fields.
 
 Cons:
 
@@ -578,13 +611,14 @@ Cons:
 
 ### Recommended MVP
 
-Use Option B as the MVP persistence strategy:
+Use submission-scoped persistence. Prefer Option B as the MVP persistence
+strategy:
 
 - Write an append-only audit event containing the full structured result.
 - Do not mutate `submission.status`.
-- Do not update `submission.llm_precheck_label` until enum semantics are
-  resolved.
-- Optionally update only `submission.llm_precheck_summary`,
+- Do not force rich advisory labels into the old `passed`/`flagged` enum.
+- Optionally update only non-status summary fields such as
+  `submission.llm_precheck_summary`,
   `submission.llm_precheck_model`, and `submission.llm_precheck_at` if the
   implementation can do so through an advisory-only path that never touches
   moderation status.
@@ -593,14 +627,9 @@ Use Option B as the MVP persistence strategy:
   skipped checks.
 - Do not add a dedicated table for the MVP.
 
-Because the current audit event enum has only `llm_precheck_passed` and
-`llm_precheck_flagged`, the recommended implementation slice should either
-add neutral event kinds such as `llm_precheck_completed` and
-`llm_precheck_failed` via a new Alembic revision, or defer persistence.
-Reusing `llm_precheck_passed` for advisory `pass` is acceptable only if the
-event documentation makes clear that it is not approval; however it still
-does not cover `not_run`, `needs_attention`, or `failed_to_review`, so a
-neutral event kind is preferred.
+If a migration is required to add audit event kinds or enum labels, it must
+be a new Alembic revision layered on top of the deployed schema. Do not
+mutate deployed migrations.
 
 A future `submission_llm_precheck` table may be considered only if there
 is a clear query need, such as retaining many precheck attempts per
@@ -678,8 +707,68 @@ If added later:
 
 ## 16. Public Trust Fragment Relationship
 
-The public `trust.llm_precheck` fragment should remain advisory and
-opt-in through `include=trust` on endpoints that already expose trust.
+Default policy:
+
+```text
+Scientific trust.llm_precheck remains disabled/not_run unless a deliberate
+mapping layer is implemented.
+```
+
+The authoritative AI Review Assistant read surface is:
+
+```text
+GET /api/v1/submissions/{submission_id}/ai-review-summary
+```
+
+The submission audit timeline remains the full-detail source of truth:
+
+```text
+GET /api/v1/submissions/{submission_id}/audit-events
+```
+
+Scientific reads remain unchanged for now:
+
+```text
+GET /api/v1/scientific/calculations/{calculation_ref_or_id}?include=trust
+GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics?include=trust
+GET /api/v1/scientific/species-entries/{species_entry_id}/thermo?include=trust
+```
+
+On those scientific endpoints, `trust.llm_precheck` remains:
+
+```json
+{
+  "enabled": false,
+  "label": "not_run",
+  "summary": null
+}
+```
+
+This remains true even when the same submission has AI Review Assistant
+audit events or a latest AI review summary.
+
+Reasons:
+
+- AI Review may inspect an entire submission bundle, not one specific
+  scientific record.
+- Mapping a submission-level AI Review result to every linked record can
+  overstate review coverage.
+- Different records in one submission may have different evidence quality.
+- One submission may affect multiple records.
+- One record may have multiple submission histories.
+- Latest submission precheck is not necessarily latest record-level
+  assessment.
+- Advisory submission review is not record certification.
+
+Allowed future mapping from AI Review into public scientific
+`trust.llm_precheck` requires all of the following:
+
+- The AI Review result contains record-level findings.
+- The `submission_record_link` graph can associate findings to a specific
+  `record_type` and `record_id`.
+- The mapped output clearly says advisory, not certified.
+- The mapping is tested.
+- The mapping preserves internal-ID visibility rules.
 
 The LLM precheck result may be summarized under `trust.llm_precheck`, but
 it must not affect:
@@ -698,17 +787,13 @@ it must not affect:
 `record_id` remains hidden unless `include=internal_ids` is requested and
 allowed.
 
-For the persistence MVP, public/read `trust.llm_precheck` may remain
-`disabled`/`not_run` until persistence is wired cleanly. When exposed
-later, the source should be chosen in this order:
+Future read options may include explicit `include=ai_review` or
+`include=trust,ai_review` semantics, but that would be a separate read API
+design. Do not add AI Review Assistant output to `include=all`.
 
-1. Latest submission precheck audit event for the append-only MVP.
-2. Submission summary fields only if the advisory-only summary update path
-   is implemented.
-3. A dedicated future table only if Option C is later justified.
-
-Retrieval must be deterministic, using event timestamp plus primary key as
-a tie-breaker when reading the latest audit event.
+If a deliberate record-level mapping is implemented later, retrieval must
+be deterministic and must only include findings linked to the specific
+record being read.
 
 ---
 
@@ -716,6 +801,14 @@ a tie-breaker when reading the latest audit event.
 
 Future implementation should include tests proving:
 
+- AI Review result persists without changing `submission.status`.
+- AI Review result persists without mutating scientific records.
+- Provider failure writes a `failed_to_review` advisory event.
+- Submission summary endpoint returns the latest advisory result.
+- Scientific `trust.llm_precheck` remains disabled/not_run unless explicit
+  mapping is enabled.
+- Record-level mapping does not leak internal ids.
+- Record-level mapping only includes findings linked to that record.
 - disabled/off mode writes nothing, or writes `not_run` only if explicitly
   requested by the selected implementation
 - disabled/off mode requires no API key
@@ -807,11 +900,12 @@ local_http
 
 1. Keep the existing disabled/fake provider plumbing advisory-only and
    unwired from uploads.
-2. Add neutral audit event kinds such as `llm_precheck_completed` and
-   `llm_precheck_failed` in a new Alembic revision only when persistence is
-   explicitly implemented.
-3. Add an advisory-only persistence helper that appends audit events and
-   never mutates `submission.status`.
+2. Keep or add an advisory-only persistence helper that appends
+   `llm_precheck_recorded` audit events and never mutates
+   `submission.status`.
+3. If additional audit event kinds or enum labels are needed, add them in
+   a new Alembic revision only after that schema change is separately
+   approved.
 4. Optionally update `submission.llm_precheck_summary`,
    `submission.llm_precheck_model`, and `submission.llm_precheck_at` from
    that helper if a latest-result shortcut is needed.
