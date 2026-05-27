@@ -490,6 +490,7 @@ class SubmissionAuditEventKind(str, Enum):
     ingestion_failed = "ingestion_failed"
     llm_precheck_passed = "llm_precheck_passed"
     llm_precheck_flagged = "llm_precheck_flagged"
+    llm_precheck_recorded = "llm_precheck_recorded"
     curator_approved = "curator_approved"
     curator_rejected = "curator_rejected"
     correction_window_opened = "correction_window_opened"

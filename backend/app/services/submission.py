@@ -27,7 +27,7 @@ approver.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Iterable, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -54,6 +54,9 @@ from app.services.record_review import (
     RecordRef,
     bulk_set_record_review_status,
 )
+
+if TYPE_CHECKING:
+    from app.services.llm_precheck.schemas import LLMPrecheckResult
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
@@ -260,6 +263,46 @@ def mark_ingestion_failed(
         event_kind=SubmissionAuditEventKind.ingestion_failed,
         actor_kind=SubmissionActorKind.system,
         reason=reason,
+        details_json=details_json,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Advisory LLM precheck audit
+# ---------------------------------------------------------------------------
+
+
+def record_llm_precheck_audit_event(
+    session: Session,
+    *,
+    submission: Submission,
+    result: "LLMPrecheckResult",
+    provider: str | None = None,
+    mode: str | None = None,
+    error_kind: str | None = None,
+) -> SubmissionAuditEvent:
+    """Record an advisory LLM precheck result as an append-only audit event.
+
+    This helper deliberately writes only ``submission_audit_event``. It does
+    not change submission status, approval/rejection fields, precheck summary
+    columns, record-review rows, or scientific records.
+    """
+    from app.services.llm_precheck.schemas import llm_precheck_result_to_details_json
+
+    details_json = llm_precheck_result_to_details_json(result)
+    if provider is not None:
+        details_json["provider"] = provider
+    if mode is not None:
+        details_json["mode"] = mode
+    if error_kind is not None:
+        details_json["error_kind"] = error_kind
+
+    return append_audit_event(
+        session,
+        submission=submission,
+        event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
+        actor_kind=SubmissionActorKind.llm,
+        summary=result.summary,
         details_json=details_json,
     )
 

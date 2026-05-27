@@ -5,9 +5,18 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from sqlalchemy import func, select
 
 from app.api.config import Settings
-from app.db.models.common import SubmissionKind, SubmissionRecordType, SubmissionStatus
+from app.db.models.common import (
+    SubmissionActorKind,
+    SubmissionAuditEventKind,
+    SubmissionKind,
+    SubmissionRecordType,
+    SubmissionStatus,
+)
+from app.db.models.record_review import RecordReview
+from app.db.models.submission import SubmissionAuditEvent, SubmissionRecordLink
 from app.services.llm_precheck.context_builder import build_llm_precheck_context
 from app.services.llm_precheck.providers import (
     DisabledLLMPrecheckProvider,
@@ -24,7 +33,11 @@ from app.services.llm_precheck.schemas import (
     LLMPrecheckResult,
 )
 from app.services.llm_precheck.service import run_llm_precheck_for_submission
-from app.services.submission import create_submission, link_record
+from app.services.submission import (
+    create_submission,
+    link_record,
+    record_llm_precheck_audit_event,
+)
 
 
 class RaisingProvider:
@@ -62,6 +75,20 @@ def _seed_submission(db_session, user_id: int):
     return submission
 
 
+def _llm_precheck_events(db_session, submission_id: int) -> list[SubmissionAuditEvent]:
+    return list(
+        db_session.scalars(
+            select(SubmissionAuditEvent)
+            .where(
+                SubmissionAuditEvent.submission_id == submission_id,
+                SubmissionAuditEvent.event_kind
+                == SubmissionAuditEventKind.llm_precheck_recorded,
+            )
+            .order_by(SubmissionAuditEvent.id.asc())
+        )
+    )
+
+
 def test_off_mode_returns_not_run(db_session, _api_test_user):
     """Off mode returns a local not-run result."""
     submission = _seed_submission(db_session, _api_test_user)
@@ -78,6 +105,7 @@ def test_off_mode_returns_not_run(db_session, _api_test_user):
     assert result.findings == ()
     assert result.model is None
     assert result.used_rag is False
+    assert _llm_precheck_events(db_session, submission.id) == []
 
 
 def test_off_mode_requires_no_api_key(monkeypatch):
@@ -165,6 +193,10 @@ def test_provider_exception_becomes_failed_to_review(db_session, _api_test_user)
     assert result.label is LLMPrecheckLabel.failed_to_review
     assert result.findings == ()
     assert "provider unavailable" in (result.summary or "")
+    events = _llm_precheck_events(db_session, submission.id)
+    assert len(events) == 1
+    assert events[0].details_json["label"] == LLMPrecheckLabel.failed_to_review.value
+    assert events[0].details_json["error_kind"] == "RuntimeError"
 
 
 def test_malformed_provider_output_becomes_failed_to_review(db_session, _api_test_user):
@@ -179,6 +211,10 @@ def test_malformed_provider_output_becomes_failed_to_review(db_session, _api_tes
 
     assert result.label is LLMPrecheckLabel.failed_to_review
     assert result.summary == "AI Review Assistant returned malformed output."
+    events = _llm_precheck_events(db_session, submission.id)
+    assert len(events) == 1
+    assert events[0].details_json["label"] == LLMPrecheckLabel.failed_to_review.value
+    assert events[0].details_json["error_kind"] == "malformed_output"
 
 
 def test_context_builder_excludes_artifacts_logs_and_coordinates_by_default(
@@ -249,6 +285,7 @@ def test_service_does_not_mutate_submission_or_record_links(db_session, _api_tes
     )
     assert result.label is LLMPrecheckLabel.pass_
     assert after == before
+    assert _llm_precheck_events(db_session, submission.id)
 
 
 def test_service_does_not_compute_or_change_evidence_completeness(
@@ -283,6 +320,208 @@ def test_service_can_run_without_deterministic_trust_evaluator(
 
     assert result.label is LLMPrecheckLabel.warning
     assert result.summary == "Fake precheck found no linked records to inspect."
+
+
+def test_fake_provider_writes_one_advisory_audit_event(db_session, _api_test_user):
+    """Fake provider attempts are persisted only as neutral audit events."""
+    submission = _seed_submission(db_session, _api_test_user)
+    link_record(
+        db_session,
+        submission=submission,
+        record_type=SubmissionRecordType.calculation,
+        record_id=321,
+        role="primary",
+    )
+
+    result = run_llm_precheck_for_submission(
+        db_session,
+        submission.id,
+        provider=FakeLLMPrecheckProvider(),
+    )
+
+    events = _llm_precheck_events(db_session, submission.id)
+    assert result.label is LLMPrecheckLabel.pass_
+    assert len(events) == 1
+    assert events[0].actor_kind is SubmissionActorKind.llm
+    assert events[0].from_status is None
+    assert events[0].to_status is None
+    assert events[0].details_json == {
+        "label": "pass",
+        "summary": "Fake precheck inspected 1 linked record(s).",
+        "findings": [],
+        "model": "fake_test/simple-v1",
+        "used_rag": False,
+        "provider": "FakeLLMPrecheckProvider",
+    }
+
+
+def test_audit_event_details_include_structured_findings(db_session, _api_test_user):
+    """Audit details keep the full advisory result payload."""
+    submission = _seed_submission(db_session, _api_test_user)
+    fixed = LLMPrecheckResult(
+        label=LLMPrecheckLabel.warning,
+        summary="Configured warning",
+        findings=(
+            LLMFinding(
+                severity=LLMFindingSeverity.warning,
+                category=LLMFindingCategory.provenance,
+                record_type="calculation",
+                record_id=42,
+                message="Missing source artifact summary.",
+                evidence_keys=("missing_checks.source_artifact_present",),
+            ),
+        ),
+        model="fake_test/fixed",
+        used_rag=False,
+    )
+
+    run_llm_precheck_for_submission(
+        db_session,
+        submission.id,
+        provider=FakeLLMPrecheckProvider(fixed_result=fixed),
+    )
+
+    event = _llm_precheck_events(db_session, submission.id)[0]
+    assert event.details_json["label"] == "warning"
+    assert event.details_json["summary"] == "Configured warning"
+    assert event.details_json["model"] == "fake_test/fixed"
+    assert event.details_json["used_rag"] is False
+    assert event.details_json["findings"] == [
+        {
+            "severity": "warning",
+            "category": "provenance",
+            "record_type": "calculation",
+            "record_id": 42,
+            "message": "Missing source artifact summary.",
+            "evidence_keys": ["missing_checks.source_artifact_present"],
+        }
+    ]
+
+
+def test_precheck_audit_does_not_change_submission_moderation_fields(
+    db_session,
+    _api_test_user,
+):
+    """Advisory persistence does not write moderation or label columns."""
+    submission = _seed_submission(db_session, _api_test_user)
+    before = (
+        submission.status,
+        submission.approved_at,
+        submission.approved_by,
+        submission.rejected_at,
+        submission.rejected_by,
+        submission.rejection_reason,
+        submission.llm_precheck_label,
+        submission.llm_precheck_summary,
+        submission.llm_precheck_model,
+        submission.llm_precheck_at,
+    )
+
+    run_llm_precheck_for_submission(
+        db_session,
+        submission.id,
+        provider=FakeLLMPrecheckProvider(),
+    )
+
+    assert (
+        submission.status,
+        submission.approved_at,
+        submission.approved_by,
+        submission.rejected_at,
+        submission.rejected_by,
+        submission.rejection_reason,
+        submission.llm_precheck_label,
+        submission.llm_precheck_summary,
+        submission.llm_precheck_model,
+        submission.llm_precheck_at,
+    ) == before
+
+
+def test_precheck_audit_does_not_change_record_links_or_record_reviews(
+    db_session,
+    _api_test_user,
+):
+    """Advisory persistence does not touch record linkage or review rows."""
+    submission = _seed_submission(db_session, _api_test_user)
+    link = link_record(
+        db_session,
+        submission=submission,
+        record_type=SubmissionRecordType.calculation,
+        record_id=321,
+        role="primary",
+    )
+    before_links = [
+        (link.id, link.submission_id, link.record_type, link.record_id, link.role)
+    ]
+    before_review_count = db_session.scalar(select(func.count()).select_from(RecordReview))
+
+    run_llm_precheck_for_submission(
+        db_session,
+        submission.id,
+        provider=FakeLLMPrecheckProvider(),
+    )
+
+    links = list(
+        db_session.scalars(
+            select(SubmissionRecordLink)
+            .where(SubmissionRecordLink.submission_id == submission.id)
+            .order_by(SubmissionRecordLink.id.asc())
+        )
+    )
+    after_links = [
+        (row.id, row.submission_id, row.record_type, row.record_id, row.role)
+        for row in links
+    ]
+    after_review_count = db_session.scalar(select(func.count()).select_from(RecordReview))
+    assert after_links == before_links
+    assert after_review_count == before_review_count
+
+
+def test_helper_is_append_only_across_repeated_runs(db_session, _api_test_user):
+    """Repeated advisory prechecks append events instead of updating rows."""
+    submission = _seed_submission(db_session, _api_test_user)
+
+    first = run_llm_precheck_for_submission(
+        db_session,
+        submission.id,
+        provider=FakeLLMPrecheckProvider(),
+    )
+    second = run_llm_precheck_for_submission(
+        db_session,
+        submission.id,
+        provider=FakeLLMPrecheckProvider(),
+    )
+
+    events = _llm_precheck_events(db_session, submission.id)
+    assert first.label is LLMPrecheckLabel.warning
+    assert second.label is LLMPrecheckLabel.warning
+    assert len(events) == 2
+    assert events[0].id != events[1].id
+
+
+def test_new_audit_event_kind_round_trips_through_db_enum(db_session, _api_test_user):
+    """The neutral audit kind persists and reloads as a DB enum value."""
+    submission = _seed_submission(db_session, _api_test_user)
+    event = record_llm_precheck_audit_event(
+        db_session,
+        submission=submission,
+        result=LLMPrecheckResult(
+            label=LLMPrecheckLabel.warning,
+            summary="Manual helper call",
+            findings=(),
+            model="fake_test/manual",
+            used_rag=False,
+        ),
+        provider="manual-test",
+    )
+    event_id = event.id
+
+    db_session.expire_all()
+    reloaded = db_session.get(SubmissionAuditEvent, event_id)
+
+    assert reloaded is not None
+    assert reloaded.event_kind is SubmissionAuditEventKind.llm_precheck_recorded
+    assert reloaded.details_json["provider"] == "manual-test"
 
 
 @pytest.mark.parametrize(
