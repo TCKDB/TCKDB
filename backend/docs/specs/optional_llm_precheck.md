@@ -1,9 +1,9 @@
 # Optional LLM Precheck / AI Review Assistant
 
-**Status:** draft spec - design only, no code yet
+**Status:** draft spec - optional plumbing exists, persistence design only
 **Date:** 2026-05-27
-**Scope:** TCKDB backend only. No real LLM calls, fake providers, RAG,
-database tables, migrations, ARC changes, or `tckdb-client` changes.
+**Scope:** TCKDB backend only. No real LLM calls, persistence tables,
+migrations, RAG, ARC changes, or `tckdb-client` changes.
 **Audience:** TCKDB backend maintainers, deployment admins, future
 precheck implementers.
 
@@ -16,6 +16,13 @@ precheck implementers.
 AI Review Assistant is an optional advisory layer. It is not part of the
 deterministic trust/evidence layer, upload validity, moderation, approval,
 rejection, read availability, or scientific correctness.
+
+Optional precheck plumbing was introduced in commit
+`0087c35 Add optional LLM precheck plumbing`. The current implementation
+has disabled and fake providers, context-builder scaffolding, service
+orchestration, and failure conversion to `failed_to_review`. It has no
+upload workflow wiring, read API changes, persistence, real providers, or
+RAG.
 
 The default mode is:
 
@@ -147,7 +154,6 @@ These are explicitly out of scope for this spec and the MVP:
 - new trust rubrics
 - search/list trust
 - database tables or migrations
-- fake provider implementation in production code
 
 ---
 
@@ -397,7 +403,54 @@ The result schema should also enforce:
 
 ## 12. Persistence
 
-Use existing submission-level fields first:
+Persistence is intentionally deferred until the advisory result vocabulary
+is reconciled with the deployed submission schema. The existing
+`SubmissionPrecheckLabel` enum only supports:
+
+```text
+passed
+flagged
+```
+
+The optional AI Review Assistant result vocabulary is:
+
+```text
+not_run
+pass
+warning
+needs_attention
+failed_to_review
+```
+
+Persistence must preserve these rules:
+
+- LLM precheck is advisory only.
+- LLM precheck must not approve submissions.
+- LLM precheck must not reject submissions.
+- LLM precheck must not mutate `submission.status`.
+- LLM precheck must not mutate scientific records.
+- LLM precheck must not compute evidence completeness.
+- LLM failure must not fail an otherwise valid upload.
+- Off mode must require no persistence writes.
+
+The existing `mark_precheck_result` helper is not appropriate for the AI
+Review Assistant because it mutates submission moderation status. Future
+persistence wiring must use a new advisory-only path or refactor that
+helper before reuse.
+
+### Option A: Expand `submission.llm_precheck_label`
+
+Expand the existing submission enum-backed column to support:
+
+```text
+not_run
+pass
+warning
+needs_attention
+failed_to_review
+```
+
+Current related columns:
 
 ```text
 submission.llm_precheck_label
@@ -406,17 +459,62 @@ submission.llm_precheck_model
 submission.llm_precheck_at
 ```
 
-Full structured details may be stored in:
+Pros:
+
+- Simple query and filter by the latest precheck label.
+- Easy admin dashboard badge.
+- Uses existing submission columns.
+
+Cons:
+
+- Requires an enum migration.
+- Overloads existing field semantics because the old labels are
+  `passed`/`flagged`, while the advisory vocabulary is
+  `pass`/`warning`/`needs_attention`.
+- May require backfill or mapping.
+- Risks confusing an advisory label with moderation status.
+
+Label mapping should be avoided unless backward compatibility requires it.
+If mapping is required, it is lossy:
+
+```text
+passed  -> pass
+flagged -> warning or needs_attention
+```
+
+`flagged` cannot be deterministically mapped without knowing whether the
+old result was a mild warning or a stronger curator-attention signal.
+
+### Option B: Audit-Event-Only Persistence
+
+Store the full structured advisory result in:
 
 ```text
 submission_audit_event.details_json
 ```
 
+with an event kind such as:
+
+```text
+llm_precheck_completed
+llm_precheck_failed
+```
+
+If those event kinds do not exist, there are three choices:
+
+1. Reuse the closest existing precheck event kind only if its name does not
+   misrepresent the advisory result. The current
+   `llm_precheck_passed`/`llm_precheck_flagged` kinds are too narrow for
+   `not_run`, `needs_attention`, and `failed_to_review`.
+2. Add new audit event kinds in a small Alembic revision when persistence
+   is implemented.
+3. Defer audit persistence until a migration is justified.
+
 Suggested audit event detail shape:
 
 ```json
 {
-  "kind": "llm_precheck_result",
+  "kind": "llm_precheck_completed",
   "label": "warning",
   "summary": "Two provenance gaps found.",
   "model": "provider/model-name",
@@ -431,7 +529,78 @@ Suggested audit event detail shape:
 }
 ```
 
-Do not add database tables or migrations for the MVP.
+Pros:
+
+- Append-only.
+- No schema change if a suitable event kind already exists and
+  `details_json` can store the structured result.
+- Preserves history.
+- Does not overload submission status.
+- Good MVP shape.
+
+Cons:
+
+- Harder to filter by latest precheck label.
+- Requires reading the latest relevant audit event for a submission.
+- May need event-kind extension if no existing kind is suitable.
+
+### Option C: Dedicated `submission_llm_precheck` Table
+
+A future table could represent precheck attempts directly:
+
+```text
+submission_llm_precheck
+  id
+  submission_id
+  label
+  summary
+  model
+  provider
+  used_rag
+  result_json
+  context_hash
+  created_at
+```
+
+Pros:
+
+- Clean domain model.
+- Queryable.
+- Versionable.
+- Supports multiple attempts and providers.
+
+Cons:
+
+- Requires a migration.
+- Adds more schema surface.
+- Probably premature before upload wiring, curator UI, and read behavior
+  are settled.
+
+### Recommended MVP
+
+Use Option B as the MVP persistence strategy:
+
+- Write an append-only audit event containing the full structured result.
+- Do not mutate `submission.status`.
+- Do not update `submission.llm_precheck_label` until enum semantics are
+  resolved.
+- Optionally update only `submission.llm_precheck_summary`,
+  `submission.llm_precheck_model`, and `submission.llm_precheck_at` if the
+  implementation can do so through an advisory-only path that never touches
+  moderation status.
+- In off mode, write nothing by default. Absence of an audit event means
+  `not_run` unless an explicit product requirement later asks to record
+  skipped checks.
+- Do not add a dedicated table for the MVP.
+
+Because the current audit event enum has only `llm_precheck_passed` and
+`llm_precheck_flagged`, the recommended implementation slice should either
+add neutral event kinds such as `llm_precheck_completed` and
+`llm_precheck_failed` via a new Alembic revision, or defer persistence.
+Reusing `llm_precheck_passed` for advisory `pass` is acceptable only if the
+event documentation makes clear that it is not approval; however it still
+does not cover `not_run`, `needs_attention`, or `failed_to_review`, so a
+neutral event kind is preferred.
 
 A future `submission_llm_precheck` table may be considered only if there
 is a clear query need, such as retaining many precheck attempts per
@@ -444,7 +613,7 @@ Alembic revision. Do not edit the initial schema migration.
 
 | Scenario | Required behavior |
 |---|---|
-| AI Review Assistant off | Return/persist `not_run` as appropriate. Do not require provider config. |
+| AI Review Assistant off | Return `not_run` where a runtime result object is needed. Do not require provider config. Do not write persistence rows by default. |
 | Provider timeout | Mark `failed_to_review`, write advisory metadata/audit event, do not fail upload. |
 | Provider error | Mark `failed_to_review`, write advisory metadata/audit event, do not fail upload. |
 | Malformed model output | Schema validation fails into `failed_to_review`, do not fail upload. |
@@ -529,19 +698,39 @@ it must not affect:
 `record_id` remains hidden unless `include=internal_ids` is requested and
 allowed.
 
+For the persistence MVP, public/read `trust.llm_precheck` may remain
+`disabled`/`not_run` until persistence is wired cleanly. When exposed
+later, the source should be chosen in this order:
+
+1. Latest submission precheck audit event for the append-only MVP.
+2. Submission summary fields only if the advisory-only summary update path
+   is implemented.
+3. A dedicated future table only if Option C is later justified.
+
+Retrieval must be deterministic, using event timestamp plus primary key as
+a tie-breaker when reading the latest audit event.
+
 ---
 
 ## 17. Tests Required Later
 
 Future implementation should include tests proving:
 
-- Off mode returns `not_run`
-- Off mode requires no API key
-- fake provider result persists summary fields
-- fake provider result creates audit event if implemented
+- disabled/off mode writes nothing, or writes `not_run` only if explicitly
+  requested by the selected implementation
+- disabled/off mode requires no API key
+- fake provider writes an advisory result without changing
+  `submission.status`
+- provider failure writes `failed_to_review` as an advisory result without
+  changing `submission.status`
 - malformed provider output becomes `failed_to_review`
 - provider timeout does not fail upload
-- LLM output does not mutate scientific records
+- full structured result appears in `submission_audit_event.details_json`
+- summary/model/time fields update only if that optional summary path is
+  selected by the design
+- scientific records are not mutated
+- submission approval/rejection status is not changed
+- latest result can be retrieved deterministically
 - context builder excludes raw artifacts by default
 - context builder includes deterministic evidence output
 - Cloud mode validates required API-key configuration
@@ -591,12 +780,15 @@ local_http
 ## 19. Open Design Questions
 
 1. Should `not_run` be persisted on every submission when the assistant is
-   off, or should absence of precheck metadata imply not run?
+   off, or should absence of precheck metadata imply not run? MVP answer:
+   absence should imply `not_run`; off mode writes nothing by default.
 2. Should precheck run inside the upload transaction, after commit, or as
    a background job? The failure contract is the same either way: LLM
    failure must not fail a valid upload.
 3. Should `submission_audit_event.details_json` store full findings in
-   MVP, or only a compact result summary?
+   MVP, or only a compact result summary? MVP recommendation: store the
+   validated structured result, with context represented only by compact
+   summary/hash metadata unless explicitly configured otherwise.
 4. What maximum number of findings should be accepted from a provider?
 5. Should `needs_attention` map to any existing moderation queue filter,
    or remain purely informational until a curator UI exists?
@@ -605,27 +797,30 @@ local_http
    kinetics/thermo records?
 7. Should local provider health checks run at startup or lazily at first
    precheck?
+8. Should new neutral audit event kinds be added before persistence, or
+   should persistence remain deferred until a broader submission audit
+   migration is scheduled?
 
 ---
 
 ## 20. Recommended Implementation Order
 
-1. Add settings parsing for `AI_REVIEW_ASSISTANT_MODE` and derived internal
-   provider behavior, with `Off` as the default.
-2. Add internal schemas for `LLMPrecheckContext`, `LLMPrecheckResult`, and
-   `LLMFinding`.
-3. Add the `LLMPrecheckProvider` protocol and disabled provider behavior.
-4. Add a context builder that includes deterministic trust/evidence output
-   and excludes raw artifacts by default.
-5. Add `LLMPrecheckService` orchestration with failure-to-advisory
-   conversion.
-6. Persist summary fields on `submission` and optionally write structured
-   details into `submission_audit_event.details_json`.
-7. Add developer/test-only fake provider support for deterministic tests.
-8. Wire upload workflow invocation only after preserving the guarantee that
-   LLM failure cannot fail an otherwise valid upload.
-9. Expose advisory summary through existing trust read fragments where
-   appropriate.
-10. Add Cloud and Local provider implementations later, behind explicit
-    configuration.
-
+1. Keep the existing disabled/fake provider plumbing advisory-only and
+   unwired from uploads.
+2. Add neutral audit event kinds such as `llm_precheck_completed` and
+   `llm_precheck_failed` in a new Alembic revision only when persistence is
+   explicitly implemented.
+3. Add an advisory-only persistence helper that appends audit events and
+   never mutates `submission.status`.
+4. Optionally update `submission.llm_precheck_summary`,
+   `submission.llm_precheck_model`, and `submission.llm_precheck_at` from
+   that helper if a latest-result shortcut is needed.
+5. Leave `submission.llm_precheck_label` unchanged until the enum
+   migration/mapping decision is made.
+6. Add deterministic latest-result retrieval from audit events.
+7. Wire upload workflow invocation only after proving LLM failure cannot
+   fail an otherwise valid upload.
+8. Keep public read fragments as `disabled`/`not_run` until the persistence
+   source is selected and covered by tests.
+9. Add Cloud and Local provider implementations later, behind explicit
+   configuration.
