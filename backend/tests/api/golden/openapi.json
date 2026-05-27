@@ -13343,6 +13343,16 @@
               }
             ]
           },
+          "trust": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "tunneling_model": {
             "anyOf": [
               {
@@ -23638,6 +23648,16 @@
               }
             ]
           },
+          "trust": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "wavefunction_diagnostic": {
             "anyOf": [
               {
@@ -29742,6 +29762,7 @@
           "ingestion_failed",
           "llm_precheck_passed",
           "llm_precheck_flagged",
+          "llm_precheck_recorded",
           "curator_approved",
           "curator_rejected",
           "correction_window_opened",
@@ -31679,6 +31700,16 @@
           "thermo_ref": {
             "title": "Thermo Ref",
             "type": "string"
+          },
+          "trust": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -34593,6 +34624,67 @@
           "species_entry_id"
         ],
         "title": "TransportUploadResult",
+        "type": "object"
+      },
+      "TrustFragment": {
+        "description": "Read-fragment shape per §10.1 of the spec.\n\nBuilt from an :class:`EvidenceEvaluation` plus the record's\n:class:`~app.db.models.record_review.RecordReview` row (when\npresent). The evaluator itself returns only the evaluation; the\nfragment is composed in the read serializer where the review row\nand any LLM-precheck audit event are already in scope.",
+        "properties": {
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "is_certified": {
+            "default": false,
+            "title": "Is Certified",
+            "type": "boolean"
+          },
+          "llm_precheck": {
+            "$ref": "#/components/schemas/TrustLLMPrecheck"
+          },
+          "review_status": {
+            "default": "not_reviewed",
+            "title": "Review Status",
+            "type": "string"
+          },
+          "trust_status": {
+            "title": "Trust Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trust_status",
+          "evidence"
+        ],
+        "title": "TrustFragment",
+        "type": "object"
+      },
+      "TrustLLMPrecheck": {
+        "description": "Advisory LLM precheck metadata surfaced under ``trust.llm_precheck``.\n\nDefault in this MVP is ``enabled=False`` and ``label='not_run'``\nbecause no LLM is wired in; if/when the precheck event is\navailable, the read serializer can populate this without altering\nthe rubric output.",
+        "properties": {
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "label": {
+            "default": "not_run",
+            "title": "Label",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "title": "TrustLLMPrecheck",
         "type": "object"
       },
       "UploadJobKind": {
