@@ -12,6 +12,13 @@ from pydantic_settings import BaseSettings
 
 
 DeploymentMode = Literal["local", "shared_private", "hosted_public"]
+AIReviewAssistantMode = Literal["off", "cloud", "local", "test"]
+LLMPrecheckProviderName = Literal[
+    "disabled",
+    "fake_test",
+    "online_api",
+    "local_http",
+]
 
 
 class Settings(BaseSettings):
@@ -145,6 +152,21 @@ class Settings(BaseSettings):
     # client/server change makes older clients incompatible.
     min_supported_tckdb_client_version: str = "0.11.0"
     enforce_tckdb_client_version_on_writes: bool = True
+
+    # Optional AI Review Assistant / LLM precheck. Default is fully off:
+    # no API key, no local model, no network call, no Docker service, and
+    # no dependency for uploads, reads, validation, or deterministic trust.
+    ai_review_assistant_mode: AIReviewAssistantMode = "off"
+    llm_precheck_provider: LLMPrecheckProviderName = "disabled"
+    llm_precheck_model: str | None = None
+    llm_precheck_api_key_env: str | None = None
+    llm_precheck_base_url: str | None = None
+    llm_precheck_timeout_seconds: int = 30
+    llm_precheck_max_input_tokens: int = 6000
+    llm_precheck_max_output_tokens: int = 1200
+    llm_precheck_include_artifact_text: bool = False
+    llm_precheck_include_coordinates: bool = False
+    llm_precheck_store_full_context: bool = False
 
     # Observability: log output format and minimum level. ``text`` is
     # the developer-friendly default; hosted deployments set
