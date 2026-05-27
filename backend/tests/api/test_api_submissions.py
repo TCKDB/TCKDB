@@ -21,17 +21,35 @@ from pathlib import Path
 import pytest
 from sqlalchemy import func, select
 
+from app.api.config import Settings
+from app.db.models.calculation import Calculation
 from app.db.models.common import (
+    SubmissionActorKind,
     SubmissionAuditEventKind,
     SubmissionKind,
+    SubmissionRecordType,
     SubmissionStatus,
 )
+from app.db.models.kinetics import Kinetics
 from app.db.models.submission import (
     Submission,
     SubmissionAuditEvent,
     SubmissionRecordLink,
 )
-from app.services.submission import create_submission
+from app.db.models.thermo import Thermo
+from app.services.llm_precheck.schemas import (
+    LLMFinding,
+    LLMFindingCategory,
+    LLMFindingSeverity,
+    LLMPrecheckLabel,
+    LLMPrecheckResult,
+)
+from app.services.llm_precheck.service import run_llm_precheck_for_submission
+from app.services.submission import (
+    create_submission,
+    link_record,
+    record_llm_precheck_audit_event,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
@@ -63,6 +81,15 @@ def _seed_submission(
 
 def _load_bundle(filename: str) -> dict:
     return json.loads((EXAMPLES_DIR / filename).read_text())
+
+
+def _scientific_record_counts(db_session) -> dict[str, int]:
+    return {
+        "calculation": db_session.scalar(select(func.count()).select_from(Calculation))
+        or 0,
+        "kinetics": db_session.scalar(select(func.count()).select_from(Kinetics)) or 0,
+        "thermo": db_session.scalar(select(func.count()).select_from(Thermo)) or 0,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +381,126 @@ class TestAuditEventsVisibility:
         sub = _seed_submission(db_session, created_by=_api_other_user)
         resp = client.get(f"/api/v1/submissions/{sub.id}/audit-events")
         assert resp.status_code == 403
+
+    def test_llm_precheck_audit_event_round_trips_for_creator(
+        self, client, db_session, _api_test_user, _api_other_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        link_record(
+            db_session,
+            submission=sub,
+            record_type=SubmissionRecordType.calculation,
+            record_id=321,
+            role="primary",
+        )
+        baseline_status = sub.status
+        baseline_counts = _scientific_record_counts(db_session)
+
+        run_llm_precheck_for_submission(
+            db_session,
+            sub.id,
+            settings_obj=Settings(ai_review_assistant_mode="test"),
+        )
+        db_session.refresh(sub)
+
+        assert sub.status is baseline_status
+        assert _scientific_record_counts(db_session) == baseline_counts
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/audit-events")
+        assert resp.status_code == 200
+        events = resp.json()
+
+        created = next(
+            e
+            for e in events
+            if e["event_kind"] == SubmissionAuditEventKind.submission_created.value
+        )
+        assert created["actor_kind"] == "user"
+        assert created["details_json"] is None
+
+        precheck = next(
+            e
+            for e in events
+            if e["event_kind"] == SubmissionAuditEventKind.llm_precheck_recorded.value
+        )
+        assert precheck["actor_kind"] == SubmissionActorKind.llm.value
+        assert precheck["summary"] == "Fake precheck inspected 1 linked record(s)."
+        assert precheck["from_status"] is None
+        assert precheck["to_status"] is None
+        assert precheck["details_json"] == {
+            "label": "pass",
+            "summary": "Fake precheck inspected 1 linked record(s).",
+            "findings": [],
+            "model": "fake_test/simple-v1",
+            "used_rag": False,
+            "provider": "FakeLLMPrecheckProvider",
+            "mode": "test",
+        }
+
+        other_sub = _seed_submission(db_session, created_by=_api_other_user)
+        run_llm_precheck_for_submission(
+            db_session,
+            other_sub.id,
+            settings_obj=Settings(ai_review_assistant_mode="test"),
+        )
+        resp = client.get(f"/api/v1/submissions/{other_sub.id}/audit-events")
+        assert resp.status_code == 403
+
+    def test_llm_precheck_audit_details_include_structured_findings(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        result = LLMPrecheckResult(
+            label=LLMPrecheckLabel.warning,
+            summary="Configured warning",
+            findings=(
+                LLMFinding(
+                    severity=LLMFindingSeverity.warning,
+                    category=LLMFindingCategory.provenance,
+                    record_type="calculation",
+                    record_id=42,
+                    message="Missing source artifact summary.",
+                    evidence_keys=("missing_checks.source_artifact_present",),
+                ),
+            ),
+            model="fake/test",
+            used_rag=False,
+        )
+
+        record_llm_precheck_audit_event(
+            db_session,
+            submission=sub,
+            result=result,
+            provider="fake_test",
+            mode="test",
+        )
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/audit-events")
+        assert resp.status_code == 200
+        precheck = next(
+            e
+            for e in resp.json()
+            if e["event_kind"] == SubmissionAuditEventKind.llm_precheck_recorded.value
+        )
+        assert precheck["actor_kind"] == "llm"
+        assert precheck["details_json"] == {
+            "label": "warning",
+            "summary": "Configured warning",
+            "findings": [
+                {
+                    "severity": "warning",
+                    "category": "provenance",
+                    "record_type": "calculation",
+                    "record_id": 42,
+                    "message": "Missing source artifact summary.",
+                    "evidence_keys": ["missing_checks.source_artifact_present"],
+                }
+            ],
+            "model": "fake/test",
+            "used_rag": False,
+            "provider": "fake_test",
+            "mode": "test",
+        }
 
 
 # ---------------------------------------------------------------------------
