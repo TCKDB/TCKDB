@@ -222,6 +222,31 @@ def list_audit_events(
     return list(rows)
 
 
+def get_latest_llm_precheck_audit_event(
+    session: Session, *, submission_id: int
+) -> SubmissionAuditEvent | None:
+    """Return the newest advisory LLM precheck audit event for a submission.
+
+    Selection is deterministic: newest ``created_at`` wins, with the audit
+    event primary key as a tie-breaker. Absence means only that no advisory
+    review has been recorded.
+    """
+    _require_submission(session, submission_id)
+    return session.scalars(
+        select(SubmissionAuditEvent)
+        .where(
+            SubmissionAuditEvent.submission_id == submission_id,
+            SubmissionAuditEvent.event_kind
+            == SubmissionAuditEventKind.llm_precheck_recorded,
+        )
+        .order_by(
+            SubmissionAuditEvent.created_at.desc(),
+            SubmissionAuditEvent.id.desc(),
+        )
+        .limit(1)
+    ).first()
+
+
 # ---------------------------------------------------------------------------
 # Ingestion outcome
 # ---------------------------------------------------------------------------

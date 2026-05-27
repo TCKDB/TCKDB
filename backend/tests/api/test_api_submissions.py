@@ -16,14 +16,15 @@ populate any submission table — the moderated lifecycle stays scoped to
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
-import pytest
 from sqlalchemy import func, select
 
 from app.api.config import Settings
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
+    CalculationType,
     SubmissionActorKind,
     SubmissionAuditEventKind,
     SubmissionKind,
@@ -46,9 +47,16 @@ from app.services.llm_precheck.schemas import (
 )
 from app.services.llm_precheck.service import run_llm_precheck_for_submission
 from app.services.submission import (
+    append_audit_event,
     create_submission,
     link_record,
     record_llm_precheck_audit_event,
+)
+from tests.services.scientific_read._factories import (
+    make_calculation,
+    make_species,
+    make_species_entry,
+    next_inchi_key,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -503,6 +511,339 @@ class TestAuditEventsVisibility:
         }
 
 
+class TestAIReviewSummary:
+    def test_latest_card_chooses_newest_llm_precheck_event(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        older = LLMPrecheckResult(
+            label=LLMPrecheckLabel.warning,
+            summary="Older warning",
+            model="fake/old",
+            used_rag=False,
+        )
+        newer = LLMPrecheckResult(
+            label=LLMPrecheckLabel.needs_attention,
+            summary="Newer needs attention",
+            model="fake/new",
+            used_rag=True,
+        )
+        old_event = record_llm_precheck_audit_event(
+            db_session, submission=sub, result=older
+        )
+        new_event = record_llm_precheck_audit_event(
+            db_session, submission=sub, result=newer
+        )
+        old_event.created_at = datetime(2026, 1, 1, 12, 0, 0)
+        new_event.created_at = datetime(2026, 1, 2, 12, 0, 0)
+        db_session.flush()
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "label": "needs_attention",
+            "summary": "Newer needs attention",
+            "model": "fake/new",
+            "used_rag": True,
+            "created_at": "2026-01-02T12:00:00",
+            "finding_counts": {"info": 0, "warning": 0, "critical": 0},
+        }
+
+    def test_latest_card_uses_primary_key_tie_breaker(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        first = record_llm_precheck_audit_event(
+            db_session,
+            submission=sub,
+            result=LLMPrecheckResult(
+                label=LLMPrecheckLabel.warning,
+                summary="Lower id",
+                model="fake/low",
+            ),
+        )
+        second = record_llm_precheck_audit_event(
+            db_session,
+            submission=sub,
+            result=LLMPrecheckResult(
+                label=LLMPrecheckLabel.warning,
+                summary="Higher id",
+                model="fake/high",
+            ),
+        )
+        same_created_at = datetime(2026, 1, 3, 12, 0, 0)
+        first.created_at = same_created_at
+        second.created_at = same_created_at
+        db_session.flush()
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+
+        assert resp.status_code == 200
+        assert second.id > first.id
+        assert resp.json()["summary"] == "Higher id"
+        assert resp.json()["model"] == "fake/high"
+
+    def test_finding_counts_are_deterministic(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        record_llm_precheck_audit_event(
+            db_session,
+            submission=sub,
+            result=LLMPrecheckResult(
+                label=LLMPrecheckLabel.warning,
+                summary="Mixed severities",
+                findings=(
+                    LLMFinding(
+                        severity=LLMFindingSeverity.warning,
+                        category=LLMFindingCategory.provenance,
+                        message="Missing source evidence.",
+                    ),
+                    LLMFinding(
+                        severity=LLMFindingSeverity.info,
+                        category=LLMFindingCategory.consistency,
+                        message="Review note.",
+                    ),
+                    LLMFinding(
+                        severity=LLMFindingSeverity.warning,
+                        category=LLMFindingCategory.units,
+                        message="Check units.",
+                    ),
+                    LLMFinding(
+                        severity=LLMFindingSeverity.critical,
+                        category=LLMFindingCategory.geometry,
+                        message="Invalid geometry.",
+                    ),
+                ),
+                model="fake/test",
+            ),
+        )
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+
+        assert resp.status_code == 200
+        assert resp.json()["finding_counts"] == {
+            "info": 1,
+            "warning": 2,
+            "critical": 1,
+        }
+
+    def test_missing_findings_behaves_like_empty_list(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        append_audit_event(
+            db_session,
+            submission=sub,
+            event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
+            actor_kind=SubmissionActorKind.llm,
+            summary="No findings key",
+            details_json={
+                "label": "warning",
+                "summary": "No findings key",
+                "model": "fake/test",
+                "used_rag": False,
+                "future_field": {"ignored": True},
+            },
+        )
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+
+        assert resp.status_code == 200
+        assert resp.json()["finding_counts"] == {
+            "info": 0,
+            "warning": 0,
+            "critical": 0,
+        }
+
+    def test_summary_falls_back_to_audit_event_summary(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        append_audit_event(
+            db_session,
+            submission=sub,
+            event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
+            actor_kind=SubmissionActorKind.llm,
+            summary="Fallback summary",
+            details_json={
+                "label": "warning",
+                "findings": [],
+                "model": "fake/test",
+                "used_rag": False,
+            },
+        )
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+
+        assert resp.status_code == 200
+        assert resp.json()["summary"] == "Fallback summary"
+
+    def test_no_llm_precheck_event_returns_null(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+
+        assert resp.status_code == 200
+        assert resp.json() is None
+
+    def test_visibility_follows_submission_policy(
+        self,
+        client,
+        db_session,
+        _api_test_user,
+        _api_other_user,
+        _api_curator_user,
+        login_as,
+    ):
+        sub = _seed_submission(db_session, created_by=_api_other_user)
+        record_llm_precheck_audit_event(
+            db_session,
+            submission=sub,
+            result=LLMPrecheckResult(
+                label=LLMPrecheckLabel.warning,
+                summary="Private summary",
+            ),
+        )
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+        assert resp.status_code == 403
+
+        login_as(_api_other_user)
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+        assert resp.status_code == 200
+        assert resp.json()["summary"] == "Private summary"
+
+        login_as(_api_curator_user)
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+        assert resp.status_code == 200
+        assert resp.json()["summary"] == "Private summary"
+
+    def test_audit_events_endpoint_still_exposes_full_details_json(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        record_llm_precheck_audit_event(
+            db_session,
+            submission=sub,
+            result=LLMPrecheckResult(
+                label=LLMPrecheckLabel.warning,
+                summary="Full detail summary",
+                findings=(
+                    LLMFinding(
+                        severity=LLMFindingSeverity.warning,
+                        category=LLMFindingCategory.provenance,
+                        message="Missing source artifact summary.",
+                    ),
+                ),
+                model="fake/test",
+                used_rag=False,
+            ),
+            provider="fake_test",
+            mode="test",
+        )
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/audit-events")
+
+        assert resp.status_code == 200
+        precheck = next(
+            e
+            for e in resp.json()
+            if e["event_kind"] == SubmissionAuditEventKind.llm_precheck_recorded.value
+        )
+        assert precheck["details_json"]["findings"] == [
+            {
+                "severity": "warning",
+                "category": "provenance",
+                "record_type": None,
+                "record_id": None,
+                "message": "Missing source artifact summary.",
+                "evidence_keys": [],
+            }
+        ]
+        assert precheck["details_json"]["provider"] == "fake_test"
+        assert precheck["details_json"]["mode"] == "test"
+
+    def test_failed_to_review_is_advisory_not_upload_failure(
+        self, client, db_session, _api_test_user
+    ):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        baseline_status = sub.status
+        baseline_counts = _scientific_record_counts(db_session)
+        record_llm_precheck_audit_event(
+            db_session,
+            submission=sub,
+            result=LLMPrecheckResult(
+                label=LLMPrecheckLabel.failed_to_review,
+                summary="AI Review Assistant could not complete review.",
+                model="fake/test",
+            ),
+            error_kind="provider_error",
+        )
+        db_session.refresh(sub)
+
+        resp = client.get(f"/api/v1/submissions/{sub.id}/ai-review-summary")
+
+        assert resp.status_code == 200
+        assert resp.json()["label"] == "failed_to_review"
+        assert sub.status is baseline_status
+        assert _scientific_record_counts(db_session) == baseline_counts
+
+    def test_public_scientific_reads_remain_unchanged(
+        self, client, db_session, _api_test_user
+    ):
+        species = make_species(
+            db_session, smiles="CCO", inchi_key=next_inchi_key("AISUM")
+        )
+        entry = make_species_entry(db_session, species)
+        calc = make_calculation(
+            db_session,
+            type=CalculationType.opt,
+            species_entry_id=entry.id,
+        )
+        sub = _seed_submission(
+            db_session,
+            created_by=_api_test_user,
+            kind=SubmissionKind.other,
+        )
+        link_record(
+            db_session,
+            submission=sub,
+            record_type=SubmissionRecordType.calculation,
+            record_id=calc.id,
+            role="primary",
+        )
+        record_llm_precheck_audit_event(
+            db_session,
+            submission=sub,
+            result=LLMPrecheckResult(
+                label=LLMPrecheckLabel.warning,
+                summary="Submission advisory warning.",
+                model="fake/test",
+            ),
+        )
+
+        resp = client.get(
+            f"/api/v1/scientific/calculations/{calc.public_ref}?include=trust"
+        )
+
+        assert resp.status_code == 200
+        trust = resp.json()["record"]["trust"]
+        assert trust["llm_precheck"] == {
+            "enabled": False,
+            "label": "not_run",
+            "summary": None,
+        }
+        evidence = trust["evidence"]
+        assert "passed_checks" in evidence
+        assert "missing_checks" in evidence
+        assert "warning_checks" in evidence
+        assert "not_applicable_checks" in evidence
+
+
 # ---------------------------------------------------------------------------
 # Bundle ingest creates submission + record links
 # ---------------------------------------------------------------------------
@@ -534,7 +875,7 @@ class TestBundleSubmissionWiring:
             f"/api/v1/submissions/{submission_id}/record-links"
         ).json()
         assert len(links) >= 1
-        link_types = {l["record_type"] for l in links}
+        link_types = {link["record_type"] for link in links}
         assert "thermo" in link_types
 
 

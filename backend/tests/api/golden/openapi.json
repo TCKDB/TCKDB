@@ -29723,6 +29723,91 @@
         "title": "StructureSearchMode",
         "type": "string"
       },
+      "SubmissionAIReviewFindingCounts": {
+        "description": "Compact counts for AI Review Assistant finding severities.",
+        "properties": {
+          "critical": {
+            "default": 0,
+            "title": "Critical",
+            "type": "integer"
+          },
+          "info": {
+            "default": 0,
+            "title": "Info",
+            "type": "integer"
+          },
+          "warning": {
+            "default": 0,
+            "title": "Warning",
+            "type": "integer"
+          }
+        },
+        "title": "SubmissionAIReviewFindingCounts",
+        "type": "object"
+      },
+      "SubmissionAIReviewSummaryRead": {
+        "description": "Latest compact AI Review Assistant card for one submission.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finding_counts": {
+            "$ref": "#/components/schemas/SubmissionAIReviewFindingCounts"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "used_rag": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used Rag"
+          }
+        },
+        "required": [
+          "created_at",
+          "finding_counts"
+        ],
+        "title": "SubmissionAIReviewSummaryRead",
+        "type": "object"
+      },
       "SubmissionActorKind": {
         "description": "Category of actor recorded on an audit event.\n\nHuman curator/admin actions must remain distinguishable from automated\n(llm/system) actions — only ``curator`` and ``admin`` events count as\nhuman approval.",
         "enum": [
@@ -55865,6 +55950,89 @@
           }
         },
         "summary": "Read Submission",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/ai-review-summary": {
+      "get": {
+        "description": "Return the latest compact advisory AI review card for a submission.",
+        "operationId": "read_ai_review_summary_api_v1_submissions__submission_id__ai_review_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "title": "Submission Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SubmissionAIReviewSummaryRead"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Read Ai Review Summary Api V1 Submissions  Submission Id  Ai Review Summary Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Ai Review Summary",
         "tags": [
           "submissions"
         ]

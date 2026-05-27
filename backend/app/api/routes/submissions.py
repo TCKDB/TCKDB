@@ -31,6 +31,8 @@ from app.db.models.app_user import AppUser, AppUserRole
 from app.db.models.common import SubmissionStatus
 from app.db.models.submission import Submission
 from app.schemas.entities.submission import (
+    SubmissionAIReviewFindingCounts,
+    SubmissionAIReviewSummaryRead,
     SubmissionApproveRequest,
     SubmissionAuditEventRead,
     SubmissionRead,
@@ -40,6 +42,7 @@ from app.schemas.entities.submission import (
 )
 from app.services.submission import (
     approve_submission,
+    get_latest_llm_precheck_audit_event,
     get_submission,
     list_audit_events,
     list_my_submissions,
@@ -53,6 +56,7 @@ router = APIRouter()
 
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
+_AI_REVIEW_FINDING_SEVERITIES = ("info", "warning", "critical")
 
 
 def _can_view(submission: Submission, user: AppUser) -> bool:
@@ -65,6 +69,38 @@ def _require_view_permission(submission: Submission, user: AppUser) -> None:
             status_code=403,
             detail="Not authorized to view this submission.",
         )
+
+
+def _ai_review_summary_from_event(event) -> SubmissionAIReviewSummaryRead:
+    details = event.details_json if isinstance(event.details_json, dict) else {}
+    findings = details.get("findings")
+    if not isinstance(findings, list):
+        findings = []
+
+    counts = dict.fromkeys(_AI_REVIEW_FINDING_SEVERITIES, 0)
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        severity = finding.get("severity")
+        if severity in counts:
+            counts[severity] += 1
+
+    return SubmissionAIReviewSummaryRead(
+        label=details.get("label") if isinstance(details.get("label"), str) else None,
+        summary=(
+            details.get("summary")
+            if isinstance(details.get("summary"), str)
+            else event.summary
+        ),
+        model=details.get("model") if isinstance(details.get("model"), str) else None,
+        used_rag=(
+            details.get("used_rag")
+            if isinstance(details.get("used_rag"), bool)
+            else None
+        ),
+        created_at=event.created_at,
+        finding_counts=SubmissionAIReviewFindingCounts(**counts),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +166,26 @@ def read_audit_events(
 
 
 @router.get(
+    "/{submission_id}/ai-review-summary",
+    response_model=SubmissionAIReviewSummaryRead | None,
+)
+def read_ai_review_summary(
+    submission_id: int,
+    session: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+) -> SubmissionAIReviewSummaryRead | None:
+    """Return the latest compact advisory AI review card for a submission."""
+    submission = get_submission(session, submission_id)
+    _require_view_permission(submission, current_user)
+    event = get_latest_llm_precheck_audit_event(
+        session, submission_id=submission_id
+    )
+    if event is None:
+        return None
+    return _ai_review_summary_from_event(event)
+
+
+@router.get(
     "/{submission_id}/record-links",
     response_model=list[SubmissionRecordLinkRead],
 )
@@ -142,7 +198,7 @@ def read_record_links(
     submission = get_submission(session, submission_id)
     _require_view_permission(submission, current_user)
     links = list_record_links(session, submission_id=submission_id)
-    return [SubmissionRecordLinkRead.model_validate(l) for l in links]
+    return [SubmissionRecordLinkRead.model_validate(link) for link in links]
 
 
 # ---------------------------------------------------------------------------

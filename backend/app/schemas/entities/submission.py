@@ -27,7 +27,6 @@ from app.db.models.common import (
 )
 from app.schemas.common import SchemaBase, TimestampedReadSchema
 
-
 # ---------------------------------------------------------------------------
 # Submission
 # ---------------------------------------------------------------------------
@@ -98,6 +97,25 @@ class SubmissionAuditEventRead(BaseModel):
     summary: str | None = None
     details_json: dict[str, Any] | None = None
     related_submission_id: int | None = None
+
+
+class SubmissionAIReviewFindingCounts(BaseModel):
+    """Compact counts for AI Review Assistant finding severities."""
+
+    info: int = 0
+    warning: int = 0
+    critical: int = 0
+
+
+class SubmissionAIReviewSummaryRead(BaseModel):
+    """Latest compact AI Review Assistant card for one submission."""
+
+    label: str | None = None
+    summary: str | None = None
+    model: str | None = None
+    used_rag: bool | None = None
+    created_at: datetime
+    finding_counts: SubmissionAIReviewFindingCounts
 
 
 # ---------------------------------------------------------------------------
