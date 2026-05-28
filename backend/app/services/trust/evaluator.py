@@ -26,13 +26,18 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models.calculation import Calculation
+from app.db.models.calculation import (
+    Calculation,
+    CalculationDependency,
+)
 from app.db.models.common import (
     CalculationQuality,
+    CalculationType,
     KineticsCalculationRole,
     ReactionRole,
     StatmechCalculationRole,
     ThermoCalculationRole,
+    TransitionStateEntryStatus,
     TransportCalculationRole,
     ValidationStatus,
 )
@@ -44,6 +49,7 @@ from app.db.models.statmech import (
     StatmechTorsion,
 )
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
+from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport, TransportSourceCalculation
 from app.services.trust.models import (
     EvidenceBadge,
@@ -60,7 +66,10 @@ from app.services.trust.rubrics import (
     COMPUTED_KINETICS_V1,
     COMPUTED_STATMECH_V1,
     COMPUTED_THERMO_V1,
+    COMPUTED_TRANSITION_STATE_V1,
     COMPUTED_TRANSPORT_V1,
+    _ts_representative_freq_result,
+    _ts_source_calculations,
     get_rubric_for_record_type,
 )
 
@@ -476,6 +485,90 @@ def _empty_evaluation_for_missing_statmech(
     )
 
 
+def _empty_evaluation_for_missing_transition_state_entry(
+    ts_entry_id: Optional[int],
+    rubric: EvidenceRubric,
+    reason: HardFailReason = HardFailReason.transition_state_entry_missing,
+) -> EvidenceEvaluation:
+    """Return a structured ``hard_failed`` evaluation for a missing TS entry."""
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=ts_entry_id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=EvidenceBadge.hard_failed,
+        passed_checks=(),
+        missing_checks=(),
+        warning_checks=(),
+        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        passed_count=0,
+        possible_count=0,
+        evidence_completeness=0.0,
+        is_certified=False,
+        hard_fail_reason=reason,
+        check_results=(),
+    )
+
+
+def _detect_transition_state_entry_hard_fail(
+    ts_entry: TransitionStateEntry,
+) -> Optional[HardFailReason]:
+    """Return a hard-fail reason for ``ts_entry`` if a structural failure is present.
+
+    Mirrors §6.1 of the TS rubric spec. The set is intentionally narrow —
+    only discrete, evidenced structural failures qualify. Missing IRC,
+    missing path-search, missing SP, missing review, and missing
+    SMILES/mol must NOT hard-fail here.
+    """
+    if ts_entry.transition_state_id is None or ts_entry.transition_state is None:
+        return HardFailReason.transition_state_parent_missing
+
+    parent = ts_entry.transition_state
+    if parent.reaction_entry_id is None or parent.reaction_entry is None:
+        return HardFailReason.reaction_entry_missing
+
+    if ts_entry.status is TransitionStateEntryStatus.rejected:
+        return HardFailReason.ts_entry_status_rejected
+
+    if ts_entry.multiplicity is not None and ts_entry.multiplicity < 1:
+        return HardFailReason.multiplicity_invalid
+
+    source = _ts_source_calculations(ts_entry)
+
+    # Any source-calc geometry validation failure structurally compromises
+    # the TS evidence (spec §6.1).
+    for calc in source:
+        gv = calc.geometry_validation
+        if gv is not None and gv.validation_status is ValidationStatus.fail:
+            return HardFailReason.geometry_validation_failed_for_source_calculation
+
+    # If every source calc is itself a hard fail at the calculation rubric
+    # level, the TS entry inherits a hard fail.
+    if source and all(
+        _detect_calculation_hard_fail(calc) is not None for calc in source
+    ):
+        return HardFailReason.all_source_calculations_hard_failed
+
+    # Frequency contradictions for status-validated TS entries are hard
+    # fails per spec §8.2.
+    if ts_entry.status in {
+        TransitionStateEntryStatus.optimized,
+        TransitionStateEntryStatus.validated,
+    }:
+        freq = _ts_representative_freq_result(ts_entry)
+        if freq is not None and freq.n_imag is not None:
+            if freq.n_imag == 0:
+                return (
+                    HardFailReason.frequency_source_has_zero_imaginary_modes_for_validated_ts
+                )
+            if freq.n_imag > 1:
+                return (
+                    HardFailReason.frequency_source_has_multiple_imaginary_modes_for_validated_ts
+                )
+
+    return None
+
+
 def _empty_evaluation_for_missing_transport(
     transport_id: Optional[int],
     rubric: EvidenceRubric,
@@ -874,6 +967,89 @@ def evaluate_loaded_transport(
     )
 
 
+def evaluate_loaded_transition_state_entry(
+    transition_state_entry: TransitionStateEntry | None,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for a loaded TS entry.
+
+    Pure over the ORM object graph it receives — no queries are issued
+    from inside this function or any check runner. Callers (typically the
+    read serializer or the session/id wrapper below) are responsible for
+    eager-loading the relationships required by
+    ``computed_transition_state_v1``: the parent ``TransitionState`` and
+    its ``ReactionEntry`` (and that entry's ``ChemReaction``), the
+    directly-attached ``calculations`` with their result blocks,
+    ``geometry_validation``, ``artifacts``, ``parent_dependencies`` /
+    ``child_dependencies`` (both directions), and the linked calcs along
+    each dependency edge.
+    """
+    rubric = COMPUTED_TRANSITION_STATE_V1
+    if transition_state_entry is None:
+        return _empty_evaluation_for_missing_transition_state_entry(None, rubric)
+
+    hard_fail = _detect_transition_state_entry_hard_fail(transition_state_entry)
+
+    check_results: list[EvidenceCheckResult] = []
+    for spec in rubric.checks:
+        # Suppress the geometry-validation warning check when the
+        # underlying signal already hard-failed the entry; the hard-fail
+        # carries the same evidence and the warning would be noise.
+        if (
+            hard_fail is HardFailReason.geometry_validation_failed_for_source_calculation
+            and spec.name == "geometry_validation_not_failed_for_source_calculations"
+        ):
+            outcome = EvidenceOutcome.not_applicable
+        else:
+            outcome = spec.runner(transition_state_entry)
+        check_results.append(
+            EvidenceCheckResult(
+                name=spec.name,
+                outcome=outcome,
+                kind=spec.kind,
+                weight=spec.weight,
+                explain=spec.explain,
+            )
+        )
+
+    results_tuple = tuple(check_results)
+    (
+        passed,
+        missing,
+        warning,
+        not_applicable,
+        passed_count,
+        possible_count,
+        completeness,
+        all_required_passed,
+    ) = _aggregate_results(rubric, results_tuple)
+
+    if hard_fail is not None:
+        label = EvidenceBadge.hard_failed
+    else:
+        label = label_from_completeness(
+            completeness,
+            all_required_passed=all_required_passed,
+        )
+
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=transition_state_entry.id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=label,
+        passed_checks=passed,
+        missing_checks=missing,
+        warning_checks=warning,
+        not_applicable_checks=not_applicable,
+        passed_count=passed_count,
+        possible_count=possible_count,
+        evidence_completeness=completeness,
+        is_certified=False,
+        hard_fail_reason=hard_fail,
+        check_results=results_tuple,
+    )
+
+
 def evaluate_computed_calculation(
     session: Session,
     calculation_id: int,
@@ -1077,3 +1253,112 @@ def evaluate_computed_transport(
             transport_id, COMPUTED_TRANSPORT_V1
         )
     return evaluate_loaded_transport(transport)
+
+
+def evaluate_computed_transition_state_entry(
+    session: Session,
+    transition_state_entry_id: int,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for one TS entry.
+
+    Session/id wrapper around :func:`evaluate_loaded_transition_state_entry`.
+    The wrapper eager-loads the graph the rubric inspects so the loaded
+    evaluator and its check runners issue no further queries. Read
+    serializers that already have a loaded TS entry should call the
+    loaded evaluator directly to avoid the duplicate query.
+    """
+    statement = (
+        select(TransitionStateEntry)
+        .where(TransitionStateEntry.id == transition_state_entry_id)
+        .options(
+            selectinload(TransitionStateEntry.transition_state)
+            .selectinload(TransitionState.reaction_entry)
+            .selectinload(ReactionEntry.reaction),
+            selectinload(TransitionStateEntry.calculations).selectinload(
+                Calculation.artifacts
+            ),
+            selectinload(TransitionStateEntry.calculations).selectinload(
+                Calculation.geometry_validation
+            ),
+            selectinload(TransitionStateEntry.calculations).selectinload(
+                Calculation.sp_result
+            ),
+            selectinload(TransitionStateEntry.calculations).selectinload(
+                Calculation.opt_result
+            ),
+            selectinload(TransitionStateEntry.calculations).selectinload(
+                Calculation.freq_result
+            ),
+            selectinload(TransitionStateEntry.calculations).selectinload(
+                Calculation.irc_result
+            ),
+            selectinload(TransitionStateEntry.calculations).selectinload(
+                Calculation.scan_result
+            ),
+            selectinload(TransitionStateEntry.calculations).selectinload(
+                Calculation.path_search_result
+            ),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.parent_dependencies)
+            .selectinload(CalculationDependency.child_calculation)
+            .selectinload(Calculation.artifacts),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.parent_dependencies)
+            .selectinload(CalculationDependency.child_calculation)
+            .selectinload(Calculation.geometry_validation),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.parent_dependencies)
+            .selectinload(CalculationDependency.child_calculation)
+            .selectinload(Calculation.sp_result),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.parent_dependencies)
+            .selectinload(CalculationDependency.child_calculation)
+            .selectinload(Calculation.opt_result),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.parent_dependencies)
+            .selectinload(CalculationDependency.child_calculation)
+            .selectinload(Calculation.freq_result),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.parent_dependencies)
+            .selectinload(CalculationDependency.child_calculation)
+            .selectinload(Calculation.irc_result),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.parent_dependencies)
+            .selectinload(CalculationDependency.child_calculation)
+            .selectinload(Calculation.path_search_result),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.child_dependencies)
+            .selectinload(CalculationDependency.parent_calculation)
+            .selectinload(Calculation.artifacts),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.child_dependencies)
+            .selectinload(CalculationDependency.parent_calculation)
+            .selectinload(Calculation.geometry_validation),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.child_dependencies)
+            .selectinload(CalculationDependency.parent_calculation)
+            .selectinload(Calculation.sp_result),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.child_dependencies)
+            .selectinload(CalculationDependency.parent_calculation)
+            .selectinload(Calculation.opt_result),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.child_dependencies)
+            .selectinload(CalculationDependency.parent_calculation)
+            .selectinload(Calculation.freq_result),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.child_dependencies)
+            .selectinload(CalculationDependency.parent_calculation)
+            .selectinload(Calculation.scan_result),
+            selectinload(TransitionStateEntry.calculations)
+            .selectinload(Calculation.child_dependencies)
+            .selectinload(CalculationDependency.parent_calculation)
+            .selectinload(Calculation.path_search_result),
+        )
+    )
+    ts_entry = session.scalars(statement).one_or_none()
+    if ts_entry is None:
+        return _empty_evaluation_for_missing_transition_state_entry(
+            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V1
+        )
+    return evaluate_loaded_transition_state_entry(ts_entry)

@@ -23,6 +23,7 @@ from typing import Optional
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
+    CalculationDependencyRole,
     CalculationQuality,
     CalculationType,
     KineticsCalculationRole,
@@ -32,12 +33,14 @@ from app.db.models.common import (
     StatmechCalculationRole,
     StatmechTreatmentKind,
     ThermoCalculationRole,
+    TransitionStateEntryStatus,
     TransportCalculationRole,
     ValidationStatus,
 )
 from app.db.models.kinetics import Kinetics
 from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
+from app.db.models.transition_state import TransitionStateEntry
 from app.db.models.transport import Transport
 from app.services.trust.models import (
     EvidenceCheckKind,
@@ -2272,11 +2275,636 @@ COMPUTED_TRANSPORT_V1: EvidenceRubric = EvidenceRubric(
 )
 
 
+_TS_VALIDATED_STATUSES: frozenset[TransitionStateEntryStatus] = frozenset(
+    {TransitionStateEntryStatus.optimized, TransitionStateEntryStatus.validated}
+)
+
+_TS_UPSTREAM_DEPENDENCY_ROLES: frozenset[CalculationDependencyRole] = frozenset(
+    {
+        CalculationDependencyRole.optimized_from,
+        CalculationDependencyRole.scan_parent,
+    }
+)
+"""Dependency roles where the TS-owned calc is the child and the upstream
+parent (e.g. a path_search or scan that produced the TS guess) should be
+pulled into the source set."""
+
+_TS_DOWNSTREAM_DEPENDENCY_ROLES: frozenset[CalculationDependencyRole] = frozenset(
+    {
+        CalculationDependencyRole.freq_on,
+        CalculationDependencyRole.single_point_on,
+        CalculationDependencyRole.irc_start,
+        CalculationDependencyRole.irc_followup,
+    }
+)
+"""Dependency roles where the TS-owned opt calc is the parent and a
+downstream child (freq/sp/irc) should be pulled into the source set."""
+
+
+def _ts_source_calculations(ts_entry: TransitionStateEntry) -> list[Calculation]:
+    """Return the deduplicated source-calculation set for a TS entry.
+
+    Discovery is deterministic and pure over already-loaded relationships:
+      1. Every ``calculation`` directly attached via
+         ``calculation.transition_state_entry_id``.
+      2. One dependency hop in both directions, restricted to the roles
+         listed in :data:`_TS_UPSTREAM_DEPENDENCY_ROLES` and
+         :data:`_TS_DOWNSTREAM_DEPENDENCY_ROLES` (spec §5.2).
+    Order is stable: directly-attached calcs first (insertion order, which
+    SQLAlchemy preserves from the loaded relationship), then any
+    dependency-discovered calcs in the order they are first encountered.
+    """
+    source: dict[int, Calculation] = {}
+    direct = list(ts_entry.calculations)
+    for calc in direct:
+        source.setdefault(calc.id, calc)
+    for calc in direct:
+        # child_dependencies = rows where this calc is the *child*; the
+        # parent_calculation is the upstream we want when role is e.g.
+        # optimized_from or scan_parent.
+        for dep in calc.child_dependencies:
+            if dep.dependency_role in _TS_UPSTREAM_DEPENDENCY_ROLES:
+                parent = dep.parent_calculation
+                if parent is not None:
+                    source.setdefault(parent.id, parent)
+        # parent_dependencies = rows where this calc is the *parent*; the
+        # child_calculation is the downstream we want when role is e.g.
+        # freq_on, single_point_on, irc_start, irc_followup.
+        for dep in calc.parent_dependencies:
+            if dep.dependency_role in _TS_DOWNSTREAM_DEPENDENCY_ROLES:
+                child = dep.child_calculation
+                if child is not None:
+                    source.setdefault(child.id, child)
+    return list(source.values())
+
+
+def _ts_source_calc_ids(ts_entry: TransitionStateEntry) -> frozenset[int]:
+    """Return the deduplicated id set of source calcs for a TS entry."""
+    return frozenset(calc.id for calc in _ts_source_calculations(ts_entry))
+
+
+def _ts_source_dependencies_present(ts_entry: TransitionStateEntry) -> bool:
+    """Return True when at least one dependency edge spans the source set."""
+    source_ids = _ts_source_calc_ids(ts_entry)
+    if not source_ids:
+        return False
+    for calc in ts_entry.calculations:
+        for dep in calc.parent_dependencies:
+            if (
+                dep.child_calculation is not None
+                and dep.child_calculation.id in source_ids
+            ):
+                return True
+        for dep in calc.child_dependencies:
+            if (
+                dep.parent_calculation is not None
+                and dep.parent_calculation.id in source_ids
+            ):
+                return True
+    return False
+
+
+def _ts_representative_freq_result(ts_entry: TransitionStateEntry):
+    """Return the deterministically-selected representative freq result.
+
+    Selection rule per spec §8.5: latest ``calculation.created_at`` with
+    ``calculation.id DESC`` tie-break. Returns ``None`` when no freq calc
+    in the source set carries a ``calc_freq_result`` row.
+    """
+    freq_calcs = [
+        calc
+        for calc in _ts_source_calculations(ts_entry)
+        if calc.type is CalculationType.freq and calc.freq_result is not None
+    ]
+    if not freq_calcs:
+        return None
+    chosen = max(freq_calcs, key=lambda c: (c.created_at, c.id))
+    return chosen.freq_result
+
+
+def _ts_has_calc_type(
+    ts_entry: TransitionStateEntry, calc_type: CalculationType
+) -> bool:
+    """Return True when the source set contains a calc of ``calc_type``."""
+    return any(calc.type is calc_type for calc in _ts_source_calculations(ts_entry))
+
+
+def _ts_has_dependency_role_link(
+    ts_entry: TransitionStateEntry,
+    roles: frozenset[CalculationDependencyRole],
+    *,
+    direction: str,
+) -> bool:
+    """Return True when a directly-attached calc has an edge with ``roles``.
+
+    ``direction='downstream'`` walks ``parent_dependencies`` (TS-owned calc
+    is the parent); ``direction='upstream'`` walks ``child_dependencies``
+    (TS-owned calc is the child).
+    """
+    for calc in ts_entry.calculations:
+        edges = (
+            calc.parent_dependencies
+            if direction == "downstream"
+            else calc.child_dependencies
+        )
+        for dep in edges:
+            if dep.dependency_role in roles:
+                return True
+    return False
+
+
+def _check_ts_entry_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+    """Trivially passes inside the runner (None is handled by the evaluator)."""
+    return EvidenceOutcome.passed
+
+
+def _check_ts_parent_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+    """Return passed when the TS entry resolves to its parent TS concept."""
+    return _bool_outcome(
+        ts_entry.transition_state_id is not None
+        and ts_entry.transition_state is not None
+    )
+
+
+def _check_ts_reaction_entry_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when the parent TS resolves to a reaction_entry."""
+    parent = ts_entry.transition_state
+    if parent is None:
+        return EvidenceOutcome.missing
+    return _bool_outcome(
+        parent.reaction_entry_id is not None and parent.reaction_entry is not None
+    )
+
+
+def _check_ts_chem_reaction_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when the parent reaction_entry resolves to a chem_reaction."""
+    parent = ts_entry.transition_state
+    if parent is None or parent.reaction_entry is None:
+        return EvidenceOutcome.missing
+    reaction_entry = parent.reaction_entry
+    return _bool_outcome(
+        reaction_entry.reaction_id is not None and reaction_entry.reaction is not None
+    )
+
+
+def _check_ts_status_recorded(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+    """Return passed when ``status`` is set (NOT NULL by schema)."""
+    return _bool_outcome(ts_entry.status is not None)
+
+
+def _check_ts_status_not_rejected(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+    """Return passed when status is anything other than ``rejected``.
+
+    Rejected entries also trigger a hard fail in the evaluator; this check
+    keeps the report explicit when the hard-fail branch fires.
+    """
+    if ts_entry.status is None:
+        return EvidenceOutcome.missing
+    return _bool_outcome(ts_entry.status is not TransitionStateEntryStatus.rejected)
+
+
+def _check_ts_charge_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+    """Return passed when ``charge`` is populated (NOT NULL by schema)."""
+    return _bool_outcome(ts_entry.charge is not None)
+
+
+def _check_ts_multiplicity_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+    """Return passed when ``multiplicity`` is populated (NOT NULL by schema)."""
+    return _bool_outcome(ts_entry.multiplicity is not None)
+
+
+def _check_ts_multiplicity_valid(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+    """Return passed when ``multiplicity >= 1`` (mirrors the CheckConstraint)."""
+    if ts_entry.multiplicity is None:
+        return EvidenceOutcome.missing
+    return _bool_outcome(ts_entry.multiplicity >= 1)
+
+
+def _check_ts_graph_or_smiles_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when SMILES or a mol blob is attached on the entry."""
+    return _bool_outcome(
+        bool(ts_entry.unmapped_smiles) or ts_entry.mol is not None
+    )
+
+
+def _check_ts_supporting_calculations_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when at least one source calc is discoverable."""
+    return _bool_outcome(len(_ts_source_calculations(ts_entry)) >= 1)
+
+
+def _check_ts_optimization_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when an opt calc is in the source set."""
+    return _bool_outcome(_ts_has_calc_type(ts_entry, CalculationType.opt))
+
+
+def _check_ts_frequency_present(ts_entry: TransitionStateEntry) -> EvidenceOutcome:
+    """Return passed when a freq calc is in the source set."""
+    return _bool_outcome(_ts_has_calc_type(ts_entry, CalculationType.freq))
+
+
+def _check_ts_single_point_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when an sp calc is in the source set."""
+    return _bool_outcome(_ts_has_calc_type(ts_entry, CalculationType.sp))
+
+
+def _check_ts_irc_evidence_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when an irc calc is in the source set.
+
+    Per spec §7, missing IRC is **not** a hard fail; this check only
+    records its presence as additive evidence.
+    """
+    return _bool_outcome(_ts_has_calc_type(ts_entry, CalculationType.irc))
+
+
+def _check_ts_path_search_evidence_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when a path_search or scan-parent calc is in the source set.
+
+    Per spec §7, missing path-search is **not** a hard fail.
+    """
+    if _ts_has_calc_type(ts_entry, CalculationType.path_search):
+        return EvidenceOutcome.passed
+    # A scan parent (TS opt's child_dependencies role=scan_parent) also counts.
+    if _ts_has_dependency_role_link(
+        ts_entry,
+        frozenset({CalculationDependencyRole.scan_parent}),
+        direction="upstream",
+    ):
+        return EvidenceOutcome.passed
+    return EvidenceOutcome.missing
+
+
+def _check_ts_calculation_dependencies_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when at least one dependency edge spans the source set."""
+    return _bool_outcome(_ts_source_dependencies_present(ts_entry))
+
+
+def _check_ts_source_calculation_lot_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when every source calc resolves to a level_of_theory.
+
+    Per spec §4.3, this is "all-source" semantics: LoT-less source calcs
+    are meaningless for TS evidence, so any missing LoT fails the check.
+    """
+    source = _ts_source_calculations(ts_entry)
+    if not source:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.lot_id is not None for calc in source))
+
+
+def _check_ts_source_calculation_software_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when every source calc resolves to a software_release."""
+    source = _ts_source_calculations(ts_entry)
+    if not source:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.software_release_id is not None for calc in source))
+
+
+def _check_ts_source_calculation_workflow_tool_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when at least one source calc has a workflow_tool_release."""
+    source = _ts_source_calculations(ts_entry)
+    if not source:
+        return EvidenceOutcome.missing
+    return _bool_outcome(
+        any(calc.workflow_tool_release_id is not None for calc in source)
+    )
+
+
+def _check_ts_source_calculation_artifacts_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when at least one source calc has any calculation_artifact."""
+    source = _ts_source_calculations(ts_entry)
+    if not source:
+        return EvidenceOutcome.missing
+    return _bool_outcome(any(len(calc.artifacts) >= 1 for calc in source))
+
+
+def _check_ts_source_calculation_has_non_hard_failed_evidence(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when at least one source calc is not deterministically hard-failed.
+
+    "Hard-failed" mirrors the calculation rubric's signals: quality=rejected
+    or geometry-validation status=fail. The evaluator promotes the
+    "all source calcs hard-failed" case to its own ``HardFailReason``.
+    """
+    source = _ts_source_calculations(ts_entry)
+    if not source:
+        return EvidenceOutcome.missing
+    for calc in source:
+        if calc.quality is CalculationQuality.rejected:
+            continue
+        gv = calc.geometry_validation
+        if gv is not None and gv.validation_status is ValidationStatus.fail:
+            continue
+        return EvidenceOutcome.passed
+    return EvidenceOutcome.missing
+
+
+_TS_GEOMETRY_VALIDATION_TYPES: frozenset[CalculationType] = frozenset(
+    {
+        CalculationType.opt,
+        CalculationType.irc,
+        CalculationType.path_search,
+    }
+)
+
+
+def _check_ts_geometry_validation_present_for_source_calculations(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when at least one geometry-bearing source calc has validation."""
+    eligible = [
+        calc
+        for calc in _ts_source_calculations(ts_entry)
+        if calc.type in _TS_GEOMETRY_VALIDATION_TYPES
+    ]
+    if not eligible:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(any(calc.geometry_validation is not None for calc in eligible))
+
+
+def _check_ts_geometry_validation_not_failed_for_source_calculations(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return warning when any source calc carries a ``warning`` geometry status.
+
+    ``fail`` is promoted to a hard fail by the evaluator before this runs;
+    in that case the runner reports ``not_applicable``.
+    """
+    validations = [
+        calc.geometry_validation
+        for calc in _ts_source_calculations(ts_entry)
+        if calc.geometry_validation is not None
+    ]
+    if not validations:
+        return EvidenceOutcome.not_applicable
+    if any(v.validation_status is ValidationStatus.fail for v in validations):
+        return EvidenceOutcome.not_applicable
+    if any(v.validation_status is ValidationStatus.warning for v in validations):
+        return EvidenceOutcome.warning
+    return EvidenceOutcome.passed
+
+
+def _check_ts_imaginary_frequency_count_recorded(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when the representative freq result records ``n_imag``."""
+    freq = _ts_representative_freq_result(ts_entry)
+    if freq is None:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(freq.n_imag is not None)
+
+
+def _check_ts_single_imaginary_frequency_for_ts(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when the representative freq result has exactly one imaginary mode.
+
+    Status-aware policy is handled at the evaluator hard-fail layer: this
+    runner returns ``missing`` for ``n_imag != 1`` regardless of status; the
+    evaluator promotes the optimized/validated + ``n_imag in {0, >1}`` cases
+    to hard fails after the check has run.
+    """
+    freq = _ts_representative_freq_result(ts_entry)
+    if freq is None:
+        return EvidenceOutcome.not_applicable
+    if freq.n_imag is None:
+        return EvidenceOutcome.missing
+    return _bool_outcome(freq.n_imag == 1)
+
+
+def _check_ts_imaginary_frequency_value_present(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return passed when the representative freq result records ``imag_freq_cm1``."""
+    freq = _ts_representative_freq_result(ts_entry)
+    if freq is None:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(freq.imag_freq_cm1 is not None)
+
+
+def _check_ts_review_not_rejected_or_deprecated_if_applicable(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Skip curator status checks until TS-entry-level review lookup is wired.
+
+    Mirrors the equivalent ``_check_*_not_rejected_or_deprecated_if_applicable``
+    runners on the thermo/statmech/transport rubrics. Wiring the
+    ``record_review`` lookup is intentionally deferred to the read-API
+    integration slice (per spec §10 / §14).
+    """
+    return EvidenceOutcome.not_applicable
+
+
+COMPUTED_TRANSITION_STATE_V1: EvidenceRubric = EvidenceRubric(
+    name="computed_transition_state",
+    version=1,
+    record_type="transition_state_entry",
+    checks=(
+        EvidenceCheckSpec(
+            name="transition_state_entry_present",
+            kind=EvidenceCheckKind.required,
+            explain="The transition_state_entry record under evaluation is loaded.",
+            runner=_check_ts_entry_present,
+        ),
+        EvidenceCheckSpec(
+            name="transition_state_parent_present",
+            kind=EvidenceCheckKind.required,
+            explain="transition_state_entry must resolve to its parent transition_state.",
+            runner=_check_ts_parent_present,
+        ),
+        EvidenceCheckSpec(
+            name="reaction_entry_present",
+            kind=EvidenceCheckKind.required,
+            explain="Parent transition_state must resolve to a reaction_entry.",
+            runner=_check_ts_reaction_entry_present,
+        ),
+        EvidenceCheckSpec(
+            name="chem_reaction_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Parent reaction_entry should resolve to a chem_reaction.",
+            runner=_check_ts_chem_reaction_present,
+        ),
+        EvidenceCheckSpec(
+            name="ts_status_recorded",
+            kind=EvidenceCheckKind.required,
+            explain="transition_state_entry.status must be set.",
+            runner=_check_ts_status_recorded,
+        ),
+        EvidenceCheckSpec(
+            name="ts_status_not_rejected",
+            kind=EvidenceCheckKind.required,
+            explain="transition_state_entry.status must not be rejected.",
+            runner=_check_ts_status_not_rejected,
+        ),
+        EvidenceCheckSpec(
+            name="charge_present",
+            kind=EvidenceCheckKind.required,
+            explain="transition_state_entry.charge must be set.",
+            runner=_check_ts_charge_present,
+        ),
+        EvidenceCheckSpec(
+            name="multiplicity_present",
+            kind=EvidenceCheckKind.required,
+            explain="transition_state_entry.multiplicity must be set.",
+            runner=_check_ts_multiplicity_present,
+        ),
+        EvidenceCheckSpec(
+            name="multiplicity_valid",
+            kind=EvidenceCheckKind.required,
+            explain="transition_state_entry.multiplicity must be >= 1.",
+            runner=_check_ts_multiplicity_valid,
+        ),
+        EvidenceCheckSpec(
+            name="ts_graph_or_smiles_present",
+            kind=EvidenceCheckKind.optional,
+            explain="A SMILES or mol blob should be attached to the TS entry.",
+            runner=_check_ts_graph_or_smiles_present,
+        ),
+        EvidenceCheckSpec(
+            name="supporting_calculations_present",
+            kind=EvidenceCheckKind.required,
+            weight=2,
+            explain="At least one calculation should support this TS entry.",
+            runner=_check_ts_supporting_calculations_present,
+        ),
+        EvidenceCheckSpec(
+            name="ts_optimization_present",
+            kind=EvidenceCheckKind.optional,
+            explain="A TS-optimization calculation should be in the source set.",
+            runner=_check_ts_optimization_present,
+        ),
+        EvidenceCheckSpec(
+            name="ts_frequency_present",
+            kind=EvidenceCheckKind.optional,
+            explain="A frequency calculation should be in the source set.",
+            runner=_check_ts_frequency_present,
+        ),
+        EvidenceCheckSpec(
+            name="ts_single_point_present",
+            kind=EvidenceCheckKind.optional,
+            explain="A single-point calculation should be in the source set.",
+            runner=_check_ts_single_point_present,
+        ),
+        EvidenceCheckSpec(
+            name="irc_evidence_present",
+            kind=EvidenceCheckKind.optional,
+            explain="IRC evidence should be linked when available (additive only).",
+            runner=_check_ts_irc_evidence_present,
+        ),
+        EvidenceCheckSpec(
+            name="path_search_evidence_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Path-search (NEB/GSM/scan parent) evidence should be linked when available.",
+            runner=_check_ts_path_search_evidence_present,
+        ),
+        EvidenceCheckSpec(
+            name="calculation_dependencies_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one calculation_dependency edge should document the source-set DAG.",
+            runner=_check_ts_calculation_dependencies_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_lot_present",
+            kind=EvidenceCheckKind.required,
+            explain="Every source calculation must resolve to a level_of_theory.",
+            runner=_check_ts_source_calculation_lot_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_software_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Every source calculation should declare a software_release.",
+            runner=_check_ts_source_calculation_software_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_workflow_tool_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one source calculation should declare a workflow_tool_release.",
+            runner=_check_ts_source_calculation_workflow_tool_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_artifacts_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one source calculation should retain an artifact.",
+            runner=_check_ts_source_calculation_artifacts_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_has_non_hard_failed_evidence",
+            kind=EvidenceCheckKind.required,
+            weight=2,
+            explain="At least one source calculation must avoid deterministic hard-fail signals.",
+            runner=_check_ts_source_calculation_has_non_hard_failed_evidence,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_present_for_source_calculations",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one opt/irc/path_search source calc should carry geometry validation.",
+            runner=_check_ts_geometry_validation_present_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_not_failed_for_source_calculations",
+            kind=EvidenceCheckKind.warning,
+            explain="Source calculation geometry validation is warning (advisory).",
+            runner=_check_ts_geometry_validation_not_failed_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="imaginary_frequency_count_recorded",
+            kind=EvidenceCheckKind.optional,
+            explain="Representative freq result should record n_imag.",
+            runner=_check_ts_imaginary_frequency_count_recorded,
+        ),
+        EvidenceCheckSpec(
+            name="single_imaginary_frequency_for_ts",
+            kind=EvidenceCheckKind.required,
+            explain="Representative freq result should have exactly one imaginary mode.",
+            runner=_check_ts_single_imaginary_frequency_for_ts,
+        ),
+        EvidenceCheckSpec(
+            name="imaginary_frequency_value_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Representative freq result should record the imaginary-mode value (cm-1).",
+            runner=_check_ts_imaginary_frequency_value_present,
+        ),
+        EvidenceCheckSpec(
+            name="review_not_rejected_or_deprecated_if_applicable",
+            kind=EvidenceCheckKind.required,
+            explain="TS-entry review/deprecation checks apply once record_review lookup is wired.",
+            runner=_check_ts_review_not_rejected_or_deprecated_if_applicable,
+        ),
+    ),
+)
+
+
 RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
     "calculation": COMPUTED_CALCULATION_V1,
     "kinetics": COMPUTED_KINETICS_V1,
     "statmech": COMPUTED_STATMECH_V1,
     "thermo": COMPUTED_THERMO_V1,
+    "transition_state_entry": COMPUTED_TRANSITION_STATE_V1,
     "transport": COMPUTED_TRANSPORT_V1,
 }
 """Lookup of the latest active rubric per record-type discriminator.

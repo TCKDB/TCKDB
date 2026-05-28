@@ -112,6 +112,21 @@ class HardFailReason(str, Enum):
     source_calculation_hard_failed_for_required_role = (
         "source_calculation_hard_failed_for_required_role"
     )
+    transition_state_entry_missing = "transition_state_entry_missing"
+    transition_state_parent_missing = "transition_state_parent_missing"
+    reaction_entry_missing = "reaction_entry_missing"
+    ts_entry_status_rejected = "ts_entry_status_rejected"
+    multiplicity_invalid = "multiplicity_invalid"
+    all_source_calculations_hard_failed = "all_source_calculations_hard_failed"
+    geometry_validation_failed_for_source_calculation = (
+        "geometry_validation_failed_for_source_calculation"
+    )
+    frequency_source_has_zero_imaginary_modes_for_validated_ts = (
+        "frequency_source_has_zero_imaginary_modes_for_validated_ts"
+    )
+    frequency_source_has_multiple_imaginary_modes_for_validated_ts = (
+        "frequency_source_has_multiple_imaginary_modes_for_validated_ts"
+    )
 
 
 class EvidenceCheckSpec(BaseModel):
