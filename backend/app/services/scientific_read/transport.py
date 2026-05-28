@@ -17,7 +17,7 @@ See ``backend/docs/specs/scientific_transport_reads.md``.
 from __future__ import annotations
 
 from sqlalchemy import and_, exists, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
@@ -59,7 +59,11 @@ from app.services.scientific_read.handles import resolve_transport_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-
+from app.services.trust import (
+    TrustFragment,
+    build_trust_fragment,
+    evaluate_loaded_transport,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "source_calculations",
@@ -67,7 +71,35 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "internal_ids",
     "all",
 }
+_DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS | {"trust"}
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_TRUST_EAGER_LOADS = (
+    selectinload(Transport.species_entry),
+    selectinload(Transport.source_calculations)
+    .selectinload(TransportSourceCalculation.calculation)
+    .selectinload(Calculation.artifacts),
+    selectinload(Transport.source_calculations)
+    .selectinload(TransportSourceCalculation.calculation)
+    .selectinload(Calculation.geometry_validation),
+    selectinload(Transport.source_calculations)
+    .selectinload(TransportSourceCalculation.calculation)
+    .selectinload(Calculation.sp_result),
+    selectinload(Transport.source_calculations)
+    .selectinload(TransportSourceCalculation.calculation)
+    .selectinload(Calculation.opt_result),
+    selectinload(Transport.source_calculations)
+    .selectinload(TransportSourceCalculation.calculation)
+    .selectinload(Calculation.freq_result),
+    selectinload(Transport.source_calculations)
+    .selectinload(TransportSourceCalculation.calculation)
+    .selectinload(Calculation.irc_result),
+    selectinload(Transport.source_calculations)
+    .selectinload(TransportSourceCalculation.calculation)
+    .selectinload(Calculation.scan_result),
+    selectinload(Transport.source_calculations)
+    .selectinload(TransportSourceCalculation.calculation)
+    .selectinload(Calculation.path_search_result),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -87,14 +119,21 @@ def get_transport(
     """
     includes = validate_includes(
         include or [],
-        _LEGAL_INCLUDE_TOKENS,
+        _DETAIL_LEGAL_INCLUDE_TOKENS,
         "/scientific/transport/{transport_ref_or_id}",
-        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )
     includes = filter_internal_ids_from_resolved(includes)
 
     tr_id = resolve_transport_handle(session, transport_handle)
-    tr = session.get(Transport, tr_id)
+    if "trust" in includes:
+        tr = session.scalars(
+            select(Transport)
+            .where(Transport.id == tr_id)
+            .options(*_TRUST_EAGER_LOADS)
+        ).one_or_none()
+    else:
+        tr = session.get(Transport, tr_id)
     if tr is None:  # pragma: no cover — defended by resolver 404
         raise NotFoundError(
             f"transport not found (transport_id={tr_id})",
@@ -181,6 +220,13 @@ def build_transport_record(
     if "review" in includes:
         review_block = _build_review_history(session, tr.id)
 
+    trust_block: TrustFragment | None = None
+    if "trust" in includes:
+        trust_block = build_transport_trust_fragment(
+            tr,
+            review_status=badge.status,
+        )
+
     return ScientificTransportRecord(
         transport=core,
         species=species_context,
@@ -191,7 +237,17 @@ def build_transport_record(
         available_sections=available,
         source_calculations=source_block,
         review_history=review_block,
+        trust=trust_block,
     )
+
+
+def build_transport_trust_fragment(
+    transport: Transport,
+    review_status: RecordReviewStatus | None = None,
+) -> TrustFragment:
+    """Build the read-layer trust fragment for a transport record."""
+    evaluation = evaluate_loaded_transport(transport)
+    return build_trust_fragment(evaluation, review_status=review_status)
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +582,7 @@ def _load_review_badge(
 __all__ = [
     "_INTERNAL_INCLUDE_TOKENS",
     "_LEGAL_INCLUDE_TOKENS",
+    "build_transport_trust_fragment",
     "build_transport_record",
     "get_transport",
 ]

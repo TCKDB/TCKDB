@@ -26156,6 +26156,16 @@
           "transport": {
             "$ref": "#/components/schemas/TransportCoreBlock"
           },
+          "trust": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "workflow_tool_release": {
             "anyOf": [
               {

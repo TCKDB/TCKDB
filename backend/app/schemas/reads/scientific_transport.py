@@ -37,7 +37,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
-
+from app.services.trust.models import TrustFragment
 
 # ---------------------------------------------------------------------------
 # Request
@@ -201,6 +201,7 @@ class ScientificTransportRecord(BaseModel):
     # Optional include blocks
     source_calculations: list[TransportSourceCalculationSummary] | None = None
     review_history: list[TransportReviewEntry] | None = None
+    trust: TrustFragment | None = None
 
 
 class ScientificTransportDetailResponse(BaseModel):

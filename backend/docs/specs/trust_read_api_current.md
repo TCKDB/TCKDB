@@ -15,6 +15,7 @@ GET /api/v1/scientific/calculations/{calculation_ref_or_id}?include=trust
 GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics?include=trust
 GET /api/v1/scientific/species-entries/{species_entry_id}/thermo?include=trust
 GET /api/v1/scientific/statmech/{statmech_ref_or_id}?include=trust
+GET /api/v1/scientific/transport/{transport_ref_or_id}?include=trust
 ```
 
 Current implemented deterministic trust rubrics:
@@ -25,6 +26,7 @@ Current implemented deterministic trust rubrics:
 | `computed_kinetics_v1` | Reaction-entry kinetics reads |
 | `computed_thermo_v1` | Species-entry thermo reads |
 | `computed_statmech_v1` | Statmech detail reads |
+| `computed_transport_v1` | Transport detail reads |
 
 Public rubric names are versioned. Clients should treat the full rubric string
 as the stable public identifier for the scoring contract used by that response.
@@ -39,7 +41,7 @@ deterministic trust fragment explicit even on read surfaces where `include=all`
 expands other summary-safe sections.
 
 Search/list endpoints do not expose trust fragments. Trust is currently a
-detail/read-surface feature for the four endpoints listed above.
+detail/read-surface feature for the endpoints listed above.
 
 Internal database ids remain hidden by default. In trust evidence payloads,
 `record_id` is hidden unless `include=internal_ids` is explicitly requested and
@@ -106,6 +108,17 @@ This is true even when a submission has AI Review Assistant audit events.
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. Broad statmech search/list endpoints do not expose trust. |
+
+### Transport Detail
+
+| Field | Behavior |
+| --- | --- |
+| Path | `GET /api/v1/scientific/transport/{transport_ref_or_id}` |
+| Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
+| Rubric used | `computed_transport_v1` |
+| Default behavior | Without `include=trust`, the response omits `record.trust`. |
+| Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
+| Notes/limitations | `include=all` does not include trust. Broad transport search/list endpoints do not expose trust. |
 
 ## Common Trust Fragment Shape
 

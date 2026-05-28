@@ -16,6 +16,7 @@ See ``backend/docs/specs/scientific_transport_reads.md``.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -37,16 +38,13 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.transport import get_transport
 from app.services.scientific_read.transport_search import search_transport
 
-
 router = APIRouter(prefix="/transport")
 
 
 _POST_ALLOWED_QS_KEYS: set[str] = set()
 
 
-@router.get(
-    "/search", response_model=ScientificTransportSearchResponse
-)
+@router.get("/search", response_model=ScientificTransportSearchResponse)
 def scientific_transport_search_get(
     session: Session = Depends(get_db),
     species_ref: str | None = Query(None),
@@ -103,14 +101,12 @@ def scientific_transport_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_transport(session, request_obj)
-    )
+    payload = search_transport(session, request_obj)
+    visibility = apply_internal_ids_visibility(payload)
+    return _omit_unrequested_trust(visibility, payload, scope="search")
 
 
-@router.post(
-    "/search", response_model=ScientificTransportSearchResponse
-)
+@router.post("/search", response_model=ScientificTransportSearchResponse)
 def scientific_transport_search_post(
     request: Request,
     body: TransportSearchRequest,
@@ -127,7 +123,9 @@ def scientific_transport_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(search_transport(session, body))
+    payload = search_transport(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    return _omit_unrequested_trust(visibility, payload, scope="search")
 
 
 @router.get(
@@ -145,10 +143,34 @@ def scientific_transport_detail(
     of the form ``trn_…``. Wrong-prefix refs return 422
     ``handle_type_mismatch``; unknown refs / ids return 404.
     """
-    return apply_internal_ids_visibility(
-        get_transport(
-            session,
-            transport_handle=transport_ref_or_id,
-            include=parse_include(include),
-        )
+    payload = get_transport(
+        session,
+        transport_handle=transport_ref_or_id,
+        include=parse_include(include),
     )
+    visibility = apply_internal_ids_visibility(payload)
+    return _omit_unrequested_trust(visibility, payload)
+
+
+def _omit_unrequested_trust(visibility, payload, *, scope: str = "detail"):
+    """Drop ``record.trust`` unless the caller explicitly requested it."""
+    if "trust" in set(payload.request.include):
+        return visibility
+
+    if isinstance(visibility, JSONResponse):
+        import json
+
+        data = json.loads(visibility.body)
+    else:
+        data = visibility.model_dump(mode="json")
+
+    if scope == "detail":
+        record = data.get("record")
+        if isinstance(record, dict):
+            record.pop("trust", None)
+    else:
+        for record in data.get("records", []) or []:
+            if isinstance(record, dict):
+                record.pop("trust", None)
+
+    return JSONResponse(data)

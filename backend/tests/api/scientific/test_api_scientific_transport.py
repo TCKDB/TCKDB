@@ -8,10 +8,14 @@ from app.db.models.common import (
     ScientificOriginKind,
     SubmissionRecordType,
     TransportCalculationRole,
+    ValidationStatus,
 )
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from tests.services.scientific_read._factories import (
+    attach_artifact,
+    attach_geometry_validation,
+    attach_sp_result,
     attach_transport_source_calculation,
     make_calculation,
     make_lot,
@@ -21,7 +25,6 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
     set_review,
 )
-
 
 # ---------------------------------------------------------------------------
 # Local fixtures
@@ -74,6 +77,17 @@ def _attach_source(db_session, tr, *, species_entry, lot=None, role=None):
         calculation=calc,
         role=role or TransportCalculationRole.full_transport,
     )
+    return calc
+
+
+def _attach_supported_source(db_session, tr, *, species_entry, role=None):
+    lot = make_lot(db_session)
+    calc = _attach_source(
+        db_session, tr, species_entry=species_entry, lot=lot, role=role
+    )
+    attach_sp_result(db_session, calculation=calc, electronic_energy_hartree=-76.4)
+    attach_artifact(db_session, calculation=calc)
+    attach_geometry_validation(db_session, calculation=calc)
     return calc
 
 
@@ -245,6 +259,198 @@ def test_detail_include_all_expands_all_public_tokens(client, db_session):
     assert "source_calculations" in inc
     assert "review" in inc
     assert "internal_ids" not in inc
+    assert "trust" not in inc
+    assert "trust" not in body["record"]
+
+
+def test_detail_default_response_omits_trust(client, db_session):
+    _, _, tr = _make_transport(db_session)
+    body = client.get(_detail_url(tr.public_ref)).json()
+    assert "trust" not in body["record"]
+
+
+def test_detail_include_trust_returns_transport_fragment(client, db_session):
+    _, _, tr = _make_transport(db_session)
+    body = client.get(_detail_url(tr.public_ref, include="trust")).json()
+    trust = body["record"]["trust"]
+    assert trust["review_status"] == "not_reviewed"
+    assert trust["evidence"]["record_type"] == "transport"
+    assert trust["evidence"]["rubric"] == "computed_transport_v1"
+    assert trust["evidence"]["rubric_version"] == 1
+    assert trust["llm_precheck"] == {
+        "enabled": False,
+        "label": "not_run",
+        "summary": None,
+    }
+    assert trust["is_certified"] is False
+
+
+def test_detail_include_trust_uses_review_badge(client, db_session):
+    _, _, tr = _make_transport(db_session)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.transport,
+        record_id=tr.id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(_detail_url(tr.public_ref, include="trust")).json()
+    assert body["record"]["trust"]["review_status"] == "approved"
+
+
+def test_detail_include_trust_sparse_transport_reports_missing_checks(
+    client, db_session
+):
+    _, _, tr = _make_transport(db_session)
+    body = client.get(_detail_url(tr.public_ref, include="trust")).json()
+    evidence = body["record"]["trust"]["evidence"]
+    assert evidence["label"] in {"sparse", "partial"}
+    assert "source_calculations_present" in evidence["missing_checks"]
+
+
+def test_detail_include_trust_source_calculation_scores_higher(
+    client, db_session
+):
+    _, _, sparse = _make_transport(db_session)
+    _, entry, supported = _make_transport(db_session)
+    _attach_supported_source(db_session, supported, species_entry=entry)
+
+    sparse_evidence = client.get(
+        _detail_url(sparse.public_ref, include="trust")
+    ).json()["record"]["trust"]["evidence"]
+    supported_evidence = client.get(
+        _detail_url(supported.public_ref, include="trust")
+    ).json()["record"]["trust"]["evidence"]
+
+    assert (
+        supported_evidence["evidence_completeness"]
+        > sparse_evidence["evidence_completeness"]
+    )
+
+
+def test_detail_include_trust_lj_pair_checks_pass(client, db_session):
+    _, _, tr = _make_transport(db_session)
+    body = client.get(_detail_url(tr.public_ref, include="trust")).json()
+    passed = set(body["record"]["trust"]["evidence"]["passed_checks"])
+    assert {
+        "lj_pair_present_if_applicable",
+        "sigma_present",
+        "epsilon_present",
+    } <= passed
+
+
+def test_detail_include_trust_property_source_checks_pass(client, db_session):
+    _, entry, tr = _make_transport(
+        db_session,
+        dipole_debye=1.85,
+        polarizability_angstrom3=1.45,
+    )
+    _attach_supported_source(
+        db_session,
+        tr,
+        species_entry=entry,
+        role=TransportCalculationRole.dipole,
+    )
+    _attach_supported_source(
+        db_session,
+        tr,
+        species_entry=entry,
+        role=TransportCalculationRole.polarizability,
+    )
+
+    body = client.get(_detail_url(tr.public_ref, include="trust")).json()
+    passed = set(body["record"]["trust"]["evidence"]["passed_checks"])
+    assert "dipole_present" in passed
+    assert "polarizability_present" in passed
+    assert "dipole_source_present_if_dipole_present" in passed
+    assert "polarizability_source_present_if_polarizability_present" in passed
+
+
+def test_detail_include_trust_no_property_hard_fail(client, db_session):
+    _, _, tr = _make_transport(
+        db_session,
+        sigma_angstrom=None,
+        epsilon_over_k_k=None,
+    )
+    body = client.get(_detail_url(tr.public_ref, include="trust")).json()
+    evidence = body["record"]["trust"]["evidence"]
+    assert evidence["label"] == "hard_failed"
+    assert evidence["hard_fail_reason"] == "no_transport_property_present"
+
+
+def test_detail_include_trust_source_calc_hard_fail(client, db_session):
+    _, entry, tr = _make_transport(db_session)
+    calc = _attach_supported_source(db_session, tr, species_entry=entry)
+    calc.geometry_validation.validation_status = ValidationStatus.fail
+    calc.geometry_validation.is_isomorphic = False
+
+    body = client.get(_detail_url(tr.public_ref, include="trust")).json()
+    evidence = body["record"]["trust"]["evidence"]
+    assert evidence["label"] == "hard_failed"
+    assert (
+        evidence["hard_fail_reason"]
+        == "source_calculation_hard_failed_for_required_role"
+    )
+
+
+def test_detail_include_trust_preserves_internal_id_policy(client, db_session):
+    _, _, tr = _make_transport(db_session)
+    body = client.get(_detail_url(tr.public_ref, include="trust")).json()
+    assert "record_id" not in body["record"]["trust"]["evidence"]
+
+
+def test_detail_include_trust_internal_id_policy_allows_record_id(
+    client, db_session, allow_internal_ids
+):
+    _, _, tr = _make_transport(db_session)
+    body = client.get(_detail_url(tr.public_ref, include="trust,internal_ids")).json()
+    assert body["record"]["trust"]["evidence"]["record_id"] == tr.id
+
+
+def test_detail_include_trust_does_not_mutate_transport(client, db_session):
+    _, _, tr = _make_transport(db_session)
+    before = (
+        tr.sigma_angstrom,
+        tr.epsilon_over_k_k,
+        tr.dipole_debye,
+        tr.polarizability_angstrom3,
+        tr.rotational_relaxation,
+    )
+    resp = client.get(_detail_url(tr.public_ref, include="trust"))
+    assert resp.status_code == 200, resp.text
+    db_session.refresh(tr)
+    after = (
+        tr.sigma_angstrom,
+        tr.epsilon_over_k_k,
+        tr.dipole_debye,
+        tr.polarizability_angstrom3,
+        tr.rotational_relaxation,
+    )
+    assert after == before
+
+
+def test_detail_trust_path_uses_loaded_evaluator(
+    client, db_session, monkeypatch
+):
+    from app.services.scientific_read import transport as transport_service
+    from app.services.trust import evaluate_loaded_transport
+
+    _, _, tr = _make_transport(db_session)
+    calls = 0
+
+    def counted_loaded_evaluator(transport):
+        nonlocal calls
+        calls += 1
+        return evaluate_loaded_transport(transport)
+
+    monkeypatch.setattr(
+        transport_service,
+        "evaluate_loaded_transport",
+        counted_loaded_evaluator,
+    )
+
+    resp = client.get(_detail_url(tr.public_ref, include="trust"))
+    assert resp.status_code == 200, resp.text
+    assert calls == 1
 
 
 def test_detail_include_all_does_not_restore_internal_ids(client, db_session):
