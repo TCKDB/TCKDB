@@ -500,7 +500,33 @@ record (`scientific_origin == experimental`).
 **Hard-fail signals:** `missing_required_identity` (reaction_entry
 without reactants/products); zero literature sources.
 
-### 9.7 `experimental_thermo_v1`
+### 9.7 `computed_transition_state_v1`
+
+Defined in its own spec file:
+[transition_state_trust_rubric.md](transition_state_trust_rubric.md).
+
+**Purpose:** evidence checklist for a `transition_state_entry`. The
+rubric evaluates the entry as the concrete saddle-point candidate and
+inspects its parent `transition_state` and `reaction_entry` as
+identity context only. The full check set, hard-fail policy,
+IRC / path-search treatment, and frequency / imaginary-mode policy
+are documented in the companion spec.
+
+**Hard-fail signals (summary):** `transition_state_entry_missing`,
+`transition_state_parent_missing`, `reaction_entry_missing`,
+`ts_entry_status_rejected`, `multiplicity_invalid`,
+`supporting_required_calculation_hard_failed`,
+`geometry_validation_failed_for_required_source`,
+`frequency_source_has_zero_imaginary_modes_for_validated_ts`,
+`frequency_source_has_multiple_imaginary_modes_for_validated_ts`.
+
+**Status:** spec only — not yet implemented and not yet wired into
+the read API. The reaction-entry `/full?include=trust` endpoint does
+not currently emit TS trust; see
+[transition_state_trust_rubric.md §10](transition_state_trust_rubric.md#10-future-read-api-integration)
+for the planned wiring.
+
+### 9.8 `experimental_thermo_v1`
 
 **Purpose:** evidence checklist for an experimental `thermo` record.
 
