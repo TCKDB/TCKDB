@@ -42,6 +42,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.services.trust.models import TrustFragment
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +328,7 @@ class ScientificStatmechRecord(BaseModel):
     frequencies: StatmechFrequenciesSummary | None = None
     conformers: list[StatmechConformerContextItem] | None = None
     review_history: list[StatmechReviewEntry] | None = None
+    trust: TrustFragment | None = None
 
 
 class ScientificStatmechDetailResponse(BaseModel):

@@ -25757,6 +25757,16 @@
             ],
             "title": "Torsions"
           },
+          "trust": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "workflow_tool_release": {
             "anyOf": [
               {

@@ -24,6 +24,7 @@ from tests.services.scientific_read._factories import (
     attach_statmech_torsion,
     make_calculation,
     make_conformer_group,
+    make_frequency_scale_factor,
     make_lot,
     make_species,
     make_species_entry,
@@ -157,6 +158,7 @@ def test_detail_default_response_shape(client, db_session):
     assert record["frequencies"] is None
     assert record["conformers"] is None
     assert record["review_history"] is None
+    assert "trust" not in record
 
 
 def test_detail_review_badge_present(client, db_session):
@@ -310,6 +312,210 @@ def test_detail_include_all_expands_all_public_tokens(client, db_session):
     ):
         assert token in inc
     assert "internal_ids" not in inc
+    assert "trust" not in inc
+    assert "trust" not in body["record"]
+
+
+def test_detail_include_trust_adds_statmech_trust_fragment(
+    client, db_session
+):
+    _, _, sm = _make_statmech(db_session)
+    body = client.get(_detail_url(sm.public_ref, include="trust")).json()
+
+    trust = body["record"]["trust"]
+    assert trust["review_status"] == "not_reviewed"
+    assert trust["trust_status"] in {
+        "well_supported",
+        "mostly_supported",
+        "partial",
+        "sparse",
+        "unsupported",
+        "hard_failed",
+    }
+    assert trust["is_certified"] is False
+    assert trust["llm_precheck"] == {
+        "enabled": False,
+        "label": "not_run",
+        "summary": None,
+    }
+
+    evidence = trust["evidence"]
+    assert evidence["record_type"] == "statmech"
+    assert evidence["rubric"] == "computed_statmech_v1"
+    assert evidence["rubric_version"] == 1
+    assert evidence["is_certified"] is False
+    assert "record_id" not in evidence
+
+
+def test_detail_include_trust_uses_review_badge(client, db_session):
+    _, _, sm = _make_statmech(db_session)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.statmech,
+        record_id=sm.id,
+        status=RecordReviewStatus.approved,
+    )
+
+    body = client.get(_detail_url(sm.public_ref, include="trust")).json()
+
+    assert body["record"]["trust"]["review_status"] == "approved"
+
+
+def test_detail_include_trust_sparse_statmech_reports_missing_checks(
+    client, db_session
+):
+    _, _, sm = _make_statmech(
+        db_session,
+        statmech_treatment=None,
+        external_symmetry=None,
+        point_group=None,
+        is_linear=None,
+    )
+
+    body = client.get(_detail_url(sm.public_ref, include="trust")).json()
+    evidence = body["record"]["trust"]["evidence"]
+
+    assert evidence["rubric"] == "computed_statmech_v1"
+    assert "source_calculations_present" in evidence["missing_checks"]
+    assert "statmech_treatment_present" in evidence["missing_checks"]
+
+
+def test_detail_include_trust_source_calculations_score_higher(
+    client, db_session
+):
+    _, _, sparse = _make_statmech(db_session)
+    _, rich_entry, rich = _make_statmech(db_session)
+    lot = make_lot(db_session)
+    calc = make_calculation(
+        db_session,
+        type=CalculationType.opt,
+        species_entry_id=rich_entry.id,
+        lot_id=lot.id,
+    )
+    attach_statmech_source_calculation(
+        db_session,
+        statmech=rich,
+        calculation=calc,
+        role=StatmechCalculationRole.opt,
+    )
+
+    sparse_body = client.get(
+        _detail_url(sparse.public_ref, include="trust")
+    ).json()
+    rich_body = client.get(_detail_url(rich.public_ref, include="trust")).json()
+
+    sparse_score = sparse_body["record"]["trust"]["evidence"][
+        "evidence_completeness"
+    ]
+    rich_evidence = rich_body["record"]["trust"]["evidence"]
+    assert rich_evidence["evidence_completeness"] > sparse_score
+    assert "source_calculations_present" in rich_evidence["passed_checks"]
+
+
+def test_detail_include_trust_scale_factor_check_passes(
+    client, db_session
+):
+    _, entry, sm = _make_statmech(db_session)
+    fsf = make_frequency_scale_factor(db_session)
+    sm.frequency_scale_factor_id = fsf.id
+    calc = _attach_freq_source(db_session, sm, species_entry=entry)
+    db_session.flush()
+
+    body = client.get(_detail_url(sm.public_ref, include="trust")).json()
+    evidence = body["record"]["trust"]["evidence"]
+
+    assert calc.public_ref
+    assert "frequency_scale_factor_present_if_applicable" in evidence[
+        "passed_checks"
+    ]
+
+
+def test_detail_include_trust_torsion_checks_pass(client, db_session):
+    _, entry, sm = _make_statmech(
+        db_session,
+        statmech_treatment=StatmechTreatmentKind.rrho_1d,
+    )
+    scan = make_calculation(
+        db_session, type=CalculationType.scan, species_entry_id=entry.id
+    )
+    attach_statmech_source_calculation(
+        db_session,
+        statmech=sm,
+        calculation=scan,
+        role=StatmechCalculationRole.scan,
+    )
+    attach_statmech_torsion(
+        db_session,
+        statmech=sm,
+        source_scan_calculation=scan,
+        atoms=(1, 2, 3, 4),
+    )
+
+    body = client.get(_detail_url(sm.public_ref, include="trust")).json()
+    evidence = body["record"]["trust"]["evidence"]
+
+    assert "torsions_recorded_if_hindered_rotor_treatment" in evidence[
+        "passed_checks"
+    ]
+    assert "torsion_definitions_present" in evidence["passed_checks"]
+    assert "torsion_symmetry_recorded" in evidence["passed_checks"]
+
+
+def test_detail_include_trust_internal_ids_restored_when_allowed(
+    client, db_session, allow_internal_ids
+):
+    _, _, sm = _make_statmech(db_session)
+    body = client.get(
+        _detail_url(sm.public_ref, include="trust,internal_ids")
+    ).json()
+
+    assert body["record"]["trust"]["evidence"]["record_id"] == sm.id
+
+
+def test_detail_include_trust_does_not_mutate_statmech(client, db_session):
+    _, _, sm = _make_statmech(db_session)
+    before = (
+        sm.statmech_treatment,
+        sm.external_symmetry,
+        sm.point_group,
+        sm.is_linear,
+        sm.frequency_scale_factor_id,
+    )
+
+    resp = client.get(_detail_url(sm.public_ref, include="trust"))
+
+    assert resp.status_code == 200, resp.text
+    db_session.refresh(sm)
+    assert (
+        sm.statmech_treatment,
+        sm.external_symmetry,
+        sm.point_group,
+        sm.is_linear,
+        sm.frequency_scale_factor_id,
+    ) == before
+
+
+def test_detail_include_trust_uses_loaded_evaluator(
+    client, db_session, monkeypatch
+):
+    from app.services.scientific_read import statmech as statmech_service
+
+    _, _, sm = _make_statmech(db_session)
+    called = {"loaded": False}
+    original = statmech_service.evaluate_loaded_statmech
+
+    def wrapped(loaded_sm):
+        called["loaded"] = True
+        assert loaded_sm is not None
+        assert loaded_sm.id == sm.id
+        return original(loaded_sm)
+
+    monkeypatch.setattr(statmech_service, "evaluate_loaded_statmech", wrapped)
+
+    resp = client.get(_detail_url(sm.public_ref, include="trust"))
+
+    assert resp.status_code == 200, resp.text
+    assert called["loaded"] is True
 
 
 def test_detail_include_all_does_not_restore_internal_ids(client, db_session):

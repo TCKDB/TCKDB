@@ -16,6 +16,7 @@ See ``backend/docs/specs/scientific_statmech_reads.md``.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -106,9 +107,9 @@ def scientific_statmech_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_statmech(session, request_obj)
-    )
+    payload = search_statmech(session, request_obj)
+    visibility = apply_internal_ids_visibility(payload)
+    return _omit_unrequested_trust_section(visibility, payload, scope="search")
 
 
 @router.post(
@@ -134,7 +135,9 @@ def scientific_statmech_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(search_statmech(session, body))
+    payload = search_statmech(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    return _omit_unrequested_trust_section(visibility, payload, scope="search")
 
 
 @router.get(
@@ -152,10 +155,39 @@ def scientific_statmech_detail(
     the form ``sm_…``. Wrong-prefix refs return 422
     ``handle_type_mismatch``; unknown refs / ids return 404.
     """
-    return apply_internal_ids_visibility(
-        get_statmech(
-            session,
-            statmech_handle=statmech_ref_or_id,
-            include=parse_include(include),
-        )
+    payload = get_statmech(
+        session,
+        statmech_handle=statmech_ref_or_id,
+        include=parse_include(include),
     )
+    visibility = apply_internal_ids_visibility(payload)
+    return _omit_unrequested_trust_section(visibility, payload)
+
+
+def _omit_unrequested_trust_section(
+    visibility,
+    payload,
+    *,
+    scope: str = "detail",
+):
+    """Drop ``record.trust`` unless the caller explicitly requested it."""
+    if "trust" in set(payload.request.include):
+        return visibility
+
+    if isinstance(visibility, JSONResponse):
+        import json
+
+        data = json.loads(visibility.body)
+    else:
+        data = visibility.model_dump(mode="json")
+
+    if scope == "detail":
+        record = data.get("record")
+        if isinstance(record, dict):
+            record.pop("trust", None)
+    else:
+        for record in data.get("records", []) or []:
+            if isinstance(record, dict):
+                record.pop("trust", None)
+
+    return JSONResponse(data)
