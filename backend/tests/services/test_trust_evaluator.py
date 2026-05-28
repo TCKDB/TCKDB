@@ -54,6 +54,7 @@ from app.db.models.common import (
     StereoKind,
     ThermoCalculationRole,
     TorsionTreatmentKind,
+    TransportCalculationRole,
     ValidationStatus,
 )
 from app.db.models.energy_correction import FrequencyScaleFactor
@@ -79,11 +80,13 @@ from app.db.models.thermo import (
     ThermoPoint,
     ThermoSourceCalculation,
 )
+from app.db.models.transport import Transport, TransportSourceCalculation
 from app.services.trust import (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,
     COMPUTED_STATMECH_V1,
     COMPUTED_THERMO_V1,
+    COMPUTED_TRANSPORT_V1,
     EvidenceBadge,
     EvidenceEvaluation,
     HardFailReason,
@@ -92,10 +95,12 @@ from app.services.trust import (
     evaluate_computed_kinetics,
     evaluate_computed_statmech,
     evaluate_computed_thermo,
+    evaluate_computed_transport,
     evaluate_loaded_calculation,
     evaluate_loaded_kinetics,
     evaluate_loaded_statmech,
     evaluate_loaded_thermo,
+    evaluate_loaded_transport,
     label_from_completeness,
     select_rubric,
 )
@@ -469,6 +474,53 @@ def _link_thermo_source(
     )
     db_session.flush()
     db_session.refresh(thermo)
+
+
+def _make_transport(
+    db_session: Session,
+    *,
+    species_entry: SpeciesEntry | None = None,
+    lj: bool = True,
+    dipole: bool = False,
+    polarizability: bool = False,
+    rotational_relaxation: bool = False,
+    software_release: bool = False,
+) -> Transport:
+    """Build a transport row with configurable structured evidence."""
+    entry = species_entry or _make_species_entry(db_session, _make_species(db_session))
+    release = _make_software_release(db_session) if software_release else None
+    transport = Transport(
+        species_entry_id=entry.id,
+        scientific_origin=ScientificOriginKind.computed,
+        software_release_id=release.id if release is not None else None,
+        sigma_angstrom=3.8 if lj else None,
+        epsilon_over_k_k=120.0 if lj else None,
+        dipole_debye=1.1 if dipole else None,
+        polarizability_angstrom3=2.3 if polarizability else None,
+        rotational_relaxation=4.0 if rotational_relaxation else None,
+    )
+    db_session.add(transport)
+    db_session.flush()
+    db_session.refresh(transport)
+    return transport
+
+
+def _link_transport_source(
+    db_session: Session,
+    *,
+    transport: Transport,
+    calculation: Calculation,
+    role: TransportCalculationRole,
+) -> None:
+    db_session.add(
+        TransportSourceCalculation(
+            transport_id=transport.id,
+            calculation_id=calculation.id,
+            role=role,
+        )
+    )
+    db_session.flush()
+    db_session.refresh(transport)
 
 
 def _make_frequency_scale_factor(db_session: Session) -> FrequencyScaleFactor:
@@ -1641,5 +1693,270 @@ class TestComputedStatmechEvaluator:
         statmech = _make_statmech(db_session)
         result = evaluate_computed_statmech(db_session, statmech.id)
         assert result.rubric == "computed_statmech"
+        assert result.evidence_completeness >= 0.0
+        assert result.is_certified is False
+
+
+# ---------------------------------------------------------------------------
+# 13. Computed transport rubric
+# ---------------------------------------------------------------------------
+
+
+class TestComputedTransportEvaluator:
+    """Focused tests for computed_transport_v1 evidence completeness."""
+
+    def test_transport_rubric_registered(self):
+        rubric = select_rubric("transport")
+        assert rubric is COMPUTED_TRANSPORT_V1
+        assert rubric.name == "computed_transport"
+        assert rubric.version == 1
+
+    def test_missing_loaded_transport_returns_hard_failed(self):
+        result = evaluate_loaded_transport(None)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.record_type == "transport"
+        assert result.record_id is None
+        assert result.rubric == "computed_transport"
+        assert result.hard_fail_reason is HardFailReason.transport_missing
+
+    def test_sparse_computed_transport_has_low_evidence(self, db_session):
+        transport = _make_transport(db_session, lj=True)
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert result.label in {EvidenceBadge.sparse, EvidenceBadge.partial}
+        assert "source_calculations_present" in result.missing_checks
+        assert "source_calculation_lot_present" in result.missing_checks
+
+    def test_species_and_lj_pair_checks_pass(self, db_session):
+        transport = _make_transport(db_session, lj=True)
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert "species_entry_present" in result.passed_checks
+        assert "transport_origin_is_computed" in result.passed_checks
+        assert "transport_model_present" in result.passed_checks
+        assert "transport_property_present" in result.passed_checks
+        assert "lj_pair_present_if_applicable" in result.passed_checks
+        assert "sigma_present" in result.passed_checks
+        assert "epsilon_present" in result.passed_checks
+        assert "sigma_epsilon_pair_consistent" in result.passed_checks
+
+    def test_dipole_and_polarizability_property_checks_pass(self, db_session):
+        transport = _make_transport(
+            db_session,
+            lj=False,
+            dipole=True,
+            polarizability=True,
+            rotational_relaxation=True,
+        )
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert "dipole_present" in result.passed_checks
+        assert "polarizability_present" in result.passed_checks
+        assert "rotational_relaxation_present" in result.passed_checks
+        assert "lj_pair_present_if_applicable" in result.not_applicable_checks
+
+    def test_missing_all_transport_properties_hard_fails(self, db_session):
+        transport = _make_transport(
+            db_session,
+            lj=False,
+            dipole=False,
+            polarizability=False,
+            rotational_relaxation=False,
+        )
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is HardFailReason.no_transport_property_present
+        assert "transport_property_present" in result.missing_checks
+
+    def test_invalid_lj_pair_hard_fails_loaded_object(self, db_session):
+        entry = _make_species_entry(db_session, _make_species(db_session))
+        transport = Transport(
+            species_entry_id=entry.id,
+            species_entry=entry,
+            scientific_origin=ScientificOriginKind.computed,
+            sigma_angstrom=3.8,
+            epsilon_over_k_k=None,
+        )
+        result = evaluate_loaded_transport(transport)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is HardFailReason.invalid_lj_pair
+        assert "sigma_epsilon_pair_consistent" in result.missing_checks
+
+    def test_source_calculations_raise_evidence_completeness(self, db_session):
+        sparse = _make_transport(db_session, lj=True)
+        rich = _make_transport(db_session, lj=True)
+        calc = _make_minimal_opt_calc(db_session, quality=CalculationQuality.curated)
+        _link_transport_source(
+            db_session,
+            transport=rich,
+            calculation=calc,
+            role=TransportCalculationRole.full_transport,
+        )
+
+        sparse_result = evaluate_computed_transport(db_session, sparse.id)
+        rich_result = evaluate_computed_transport(db_session, rich.id)
+
+        assert rich_result.evidence_completeness > sparse_result.evidence_completeness
+        assert "source_calculations_present" in rich_result.passed_checks
+        assert "source_calculation_lot_present" in rich_result.passed_checks
+
+    def test_transport_source_roles_pass_corresponding_checks(self, db_session):
+        transport = _make_transport(
+            db_session,
+            lj=True,
+            dipole=True,
+            polarizability=True,
+        )
+        full_calc = _make_minimal_opt_calc(db_session)
+        dipole_calc = _make_minimal_opt_calc(db_session)
+        polarizability_calc = _make_minimal_opt_calc(db_session)
+        geometry_calc = _make_minimal_opt_calc(db_session)
+        _link_transport_source(
+            db_session,
+            transport=transport,
+            calculation=full_calc,
+            role=TransportCalculationRole.full_transport,
+        )
+        _link_transport_source(
+            db_session,
+            transport=transport,
+            calculation=dipole_calc,
+            role=TransportCalculationRole.dipole,
+        )
+        _link_transport_source(
+            db_session,
+            transport=transport,
+            calculation=polarizability_calc,
+            role=TransportCalculationRole.polarizability,
+        )
+        _link_transport_source(
+            db_session,
+            transport=transport,
+            calculation=geometry_calc,
+            role=TransportCalculationRole.supporting_geometry,
+        )
+
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert "full_transport_source_present" in result.passed_checks
+        assert "dipole_source_present_if_dipole_present" in result.passed_checks
+        assert (
+            "polarizability_source_present_if_polarizability_present"
+            in result.passed_checks
+        )
+        assert "supporting_geometry_source_present" in result.passed_checks
+
+    def test_missing_optional_source_roles_not_hard_fail(self, db_session):
+        transport = _make_transport(db_session, lj=True, dipole=True)
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert "full_transport_source_present" in result.missing_checks
+        assert "dipole_source_present_if_dipole_present" in result.missing_checks
+        assert (
+            "polarizability_source_present_if_polarizability_present"
+            in result.not_applicable_checks
+        )
+        assert result.hard_fail_reason is None
+
+    def test_source_geometry_failure_hard_fails_required_role(self, db_session):
+        transport = _make_transport(db_session, lj=True)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            geom_validation=ValidationStatus.fail,
+        )
+        _link_transport_source(
+            db_session,
+            transport=transport,
+            calculation=calc,
+            role=TransportCalculationRole.full_transport,
+        )
+
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert (
+            result.hard_fail_reason
+            is HardFailReason.source_calculation_hard_failed_for_required_role
+        )
+        assert (
+            "source_calculation_has_non_hard_failed_evidence" in result.missing_checks
+        )
+
+    def test_source_calculation_rejected_quality_affects_transport(self, db_session):
+        transport = _make_transport(db_session, lj=True)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            quality=CalculationQuality.rejected,
+        )
+        _link_transport_source(
+            db_session,
+            transport=transport,
+            calculation=calc,
+            role=TransportCalculationRole.full_transport,
+        )
+
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert (
+            result.hard_fail_reason
+            is HardFailReason.source_calculation_hard_failed_for_required_role
+        )
+
+    def test_source_geometry_warning_is_advisory(self, db_session):
+        transport = _make_transport(db_session, lj=True)
+        calc = _make_minimal_opt_calc(
+            db_session,
+            geom_validation=ValidationStatus.warning,
+        )
+        _link_transport_source(
+            db_session,
+            transport=transport,
+            calculation=calc,
+            role=TransportCalculationRole.full_transport,
+        )
+
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert (
+            "geometry_validation_not_failed_for_source_calculations"
+            in result.warning_checks
+        )
+        assert result.label is not EvidenceBadge.hard_failed
+
+    def test_loaded_transport_matches_id_entrypoint(self, db_session):
+        transport = _make_transport(db_session, lj=True, dipole=True)
+        calc = _make_minimal_opt_calc(db_session)
+        _link_transport_source(
+            db_session,
+            transport=transport,
+            calculation=calc,
+            role=TransportCalculationRole.full_transport,
+        )
+
+        by_id = evaluate_computed_transport(db_session, transport.id)
+        loaded = evaluate_loaded_transport(transport)
+        assert loaded == by_id
+
+    def test_evaluator_does_not_mutate_transport(self, db_session):
+        transport = _make_transport(db_session, lj=True, dipole=True)
+        before_sigma = transport.sigma_angstrom
+        before_dipole = transport.dipole_debye
+        before_sources = len(transport.source_calculations)
+
+        evaluate_computed_transport(db_session, transport.id)
+        db_session.refresh(transport)
+
+        assert transport.sigma_angstrom == before_sigma
+        assert transport.dipole_debye == before_dipole
+        assert len(transport.source_calculations) == before_sources
+
+    def test_transport_evaluator_does_not_require_llm_config(
+        self, db_session, monkeypatch
+    ):
+        for var in (
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GOOGLE_API_KEY",
+            "GEMINI_API_KEY",
+            "AZURE_OPENAI_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
+
+        transport = _make_transport(db_session, lj=True)
+        result = evaluate_computed_transport(db_session, transport.id)
+        assert result.rubric == "computed_transport"
         assert result.evidence_completeness >= 0.0
         assert result.is_certified is False

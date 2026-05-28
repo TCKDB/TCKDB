@@ -18,10 +18,12 @@ from app.services.trust.evaluator import (
     evaluate_computed_kinetics,
     evaluate_computed_statmech,
     evaluate_computed_thermo,
+    evaluate_computed_transport,
     evaluate_loaded_calculation,
     evaluate_loaded_kinetics,
     evaluate_loaded_statmech,
     evaluate_loaded_thermo,
+    evaluate_loaded_transport,
     select_rubric,
 )
 from app.services.trust.fragment import build_trust_fragment
@@ -43,6 +45,7 @@ from app.services.trust.rubrics import (
     COMPUTED_KINETICS_V1,
     COMPUTED_STATMECH_V1,
     COMPUTED_THERMO_V1,
+    COMPUTED_TRANSPORT_V1,
     RUBRIC_REGISTRY,
 )
 
@@ -51,6 +54,7 @@ __all__ = [
     "COMPUTED_KINETICS_V1",
     "COMPUTED_STATMECH_V1",
     "COMPUTED_THERMO_V1",
+    "COMPUTED_TRANSPORT_V1",
     "EvidenceBadge",
     "EvidenceCheckKind",
     "EvidenceCheckResult",
@@ -67,10 +71,12 @@ __all__ = [
     "evaluate_computed_kinetics",
     "evaluate_computed_statmech",
     "evaluate_computed_thermo",
+    "evaluate_computed_transport",
     "evaluate_loaded_calculation",
     "evaluate_loaded_kinetics",
     "evaluate_loaded_statmech",
     "evaluate_loaded_thermo",
+    "evaluate_loaded_transport",
     "label_from_completeness",
     "select_rubric",
 ]

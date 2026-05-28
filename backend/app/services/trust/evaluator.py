@@ -33,6 +33,7 @@ from app.db.models.common import (
     ReactionRole,
     StatmechCalculationRole,
     ThermoCalculationRole,
+    TransportCalculationRole,
     ValidationStatus,
 )
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
@@ -43,6 +44,7 @@ from app.db.models.statmech import (
     StatmechTorsion,
 )
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
+from app.db.models.transport import Transport, TransportSourceCalculation
 from app.services.trust.models import (
     EvidenceBadge,
     EvidenceCheckKind,
@@ -58,6 +60,7 @@ from app.services.trust.rubrics import (
     COMPUTED_KINETICS_V1,
     COMPUTED_STATMECH_V1,
     COMPUTED_THERMO_V1,
+    COMPUTED_TRANSPORT_V1,
     get_rubric_for_record_type,
 )
 
@@ -140,7 +143,6 @@ _STATMECH_REQUIRED_SOURCE_ROLES: frozenset[StatmechCalculationRole] = frozenset(
         StatmechCalculationRole.freq,
     }
 )
-
 
 def _thermo_has_representation(thermo: Thermo) -> bool:
     """Return True when scalar, NASA coefficients, or populated points exist."""
@@ -247,6 +249,58 @@ def _detect_statmech_hard_fail(statmech: Statmech) -> Optional[HardFailReason]:
 
     for torsion in statmech.torsions:
         calc = torsion.source_scan_calculation
+        if calc is not None and _detect_calculation_hard_fail(calc) is not None:
+            return HardFailReason.source_calculation_hard_failed_for_required_role
+
+    return None
+
+
+def _transport_has_property(transport: Transport) -> bool:
+    """Return True when at least one structured transport property is populated."""
+    return (
+        transport.sigma_angstrom is not None
+        or transport.epsilon_over_k_k is not None
+        or transport.dipole_debye is not None
+        or transport.polarizability_angstrom3 is not None
+        or transport.rotational_relaxation is not None
+    )
+
+
+def _transport_has_invalid_lj_pair(transport: Transport) -> bool:
+    """Return True when exactly one LJ pair field is populated."""
+    return (transport.sigma_angstrom is None) != (transport.epsilon_over_k_k is None)
+
+
+def _transport_hard_fail_source_roles(
+    transport: Transport,
+) -> frozenset[TransportCalculationRole]:
+    """Return source roles whose linked calculation failure should hard-fail."""
+    roles = {TransportCalculationRole.full_transport}
+    if transport.dipole_debye is not None:
+        roles.add(TransportCalculationRole.dipole)
+    if transport.polarizability_angstrom3 is not None:
+        roles.add(TransportCalculationRole.polarizability)
+    if _transport_has_property(transport):
+        roles.add(TransportCalculationRole.supporting_geometry)
+    return frozenset(roles)
+
+
+def _detect_transport_hard_fail(transport: Transport) -> Optional[HardFailReason]:
+    """Return a hard-fail reason for ``transport`` if a structural failure is present."""
+    if transport.species_entry_id is None or transport.species_entry is None:
+        return HardFailReason.species_entry_missing
+
+    if not _transport_has_property(transport):
+        return HardFailReason.no_transport_property_present
+
+    if _transport_has_invalid_lj_pair(transport):
+        return HardFailReason.invalid_lj_pair
+
+    required_roles = _transport_hard_fail_source_roles(transport)
+    for link in transport.source_calculations:
+        if link.role not in required_roles:
+            continue
+        calc = link.calculation
         if calc is not None and _detect_calculation_hard_fail(calc) is not None:
             return HardFailReason.source_calculation_hard_failed_for_required_role
 
@@ -418,6 +472,30 @@ def _empty_evaluation_for_missing_statmech(
         evidence_completeness=0.0,
         is_certified=False,
         hard_fail_reason=HardFailReason.statmech_missing,
+        check_results=(),
+    )
+
+
+def _empty_evaluation_for_missing_transport(
+    transport_id: Optional[int],
+    rubric: EvidenceRubric,
+) -> EvidenceEvaluation:
+    """Return a structured ``hard_failed`` evaluation for a missing transport row."""
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=transport_id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=EvidenceBadge.hard_failed,
+        passed_checks=(),
+        missing_checks=(),
+        warning_checks=(),
+        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        passed_count=0,
+        possible_count=0,
+        evidence_completeness=0.0,
+        is_certified=False,
+        hard_fail_reason=HardFailReason.transport_missing,
         check_results=(),
     )
 
@@ -722,6 +800,80 @@ def evaluate_loaded_statmech(
     )
 
 
+def evaluate_loaded_transport(
+    transport: Transport | None,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for a loaded transport record.
+
+    This entrypoint is pure over the ORM object graph it receives: it
+    does not perform a lookup and the check runners must not issue
+    their own queries. Callers are responsible for eager-loading the
+    relationships required by ``computed_transport_v1``.
+    """
+    rubric = COMPUTED_TRANSPORT_V1
+    if transport is None:
+        return _empty_evaluation_for_missing_transport(None, rubric)
+
+    hard_fail = _detect_transport_hard_fail(transport)
+
+    check_results: list[EvidenceCheckResult] = []
+    for spec in rubric.checks:
+        if (
+            hard_fail is HardFailReason.source_calculation_hard_failed_for_required_role
+            and spec.name == "geometry_validation_not_failed_for_source_calculations"
+        ):
+            outcome = EvidenceOutcome.not_applicable
+        else:
+            outcome = spec.runner(transport)
+        check_results.append(
+            EvidenceCheckResult(
+                name=spec.name,
+                outcome=outcome,
+                kind=spec.kind,
+                weight=spec.weight,
+                explain=spec.explain,
+            )
+        )
+
+    results_tuple = tuple(check_results)
+    (
+        passed,
+        missing,
+        warning,
+        not_applicable,
+        passed_count,
+        possible_count,
+        completeness,
+        all_required_passed,
+    ) = _aggregate_results(rubric, results_tuple)
+
+    if hard_fail is not None:
+        label = EvidenceBadge.hard_failed
+    else:
+        label = label_from_completeness(
+            completeness,
+            all_required_passed=all_required_passed,
+        )
+
+    return EvidenceEvaluation(
+        record_type=rubric.record_type,
+        record_id=transport.id,
+        rubric=rubric.name,
+        rubric_version=rubric.version,
+        label=label,
+        passed_checks=passed,
+        missing_checks=missing,
+        warning_checks=warning,
+        not_applicable_checks=not_applicable,
+        passed_count=passed_count,
+        possible_count=possible_count,
+        evidence_completeness=completeness,
+        is_certified=False,
+        hard_fail_reason=hard_fail,
+        check_results=results_tuple,
+    )
+
+
 def evaluate_computed_calculation(
     session: Session,
     calculation_id: int,
@@ -881,3 +1033,47 @@ def evaluate_computed_statmech(
     if statmech is None:
         return _empty_evaluation_for_missing_statmech(statmech_id, COMPUTED_STATMECH_V1)
     return evaluate_loaded_statmech(statmech)
+
+
+def evaluate_computed_transport(
+    session: Session,
+    transport_id: int,
+) -> EvidenceEvaluation:
+    """Evaluate deterministic evidence completeness for one computed transport row."""
+    statement = (
+        select(Transport)
+        .where(Transport.id == transport_id)
+        .options(
+            selectinload(Transport.species_entry),
+            selectinload(Transport.source_calculations)
+            .selectinload(TransportSourceCalculation.calculation)
+            .selectinload(Calculation.artifacts),
+            selectinload(Transport.source_calculations)
+            .selectinload(TransportSourceCalculation.calculation)
+            .selectinload(Calculation.geometry_validation),
+            selectinload(Transport.source_calculations)
+            .selectinload(TransportSourceCalculation.calculation)
+            .selectinload(Calculation.sp_result),
+            selectinload(Transport.source_calculations)
+            .selectinload(TransportSourceCalculation.calculation)
+            .selectinload(Calculation.opt_result),
+            selectinload(Transport.source_calculations)
+            .selectinload(TransportSourceCalculation.calculation)
+            .selectinload(Calculation.freq_result),
+            selectinload(Transport.source_calculations)
+            .selectinload(TransportSourceCalculation.calculation)
+            .selectinload(Calculation.irc_result),
+            selectinload(Transport.source_calculations)
+            .selectinload(TransportSourceCalculation.calculation)
+            .selectinload(Calculation.scan_result),
+            selectinload(Transport.source_calculations)
+            .selectinload(TransportSourceCalculation.calculation)
+            .selectinload(Calculation.path_search_result),
+        )
+    )
+    transport = session.scalars(statement).one_or_none()
+    if transport is None:
+        return _empty_evaluation_for_missing_transport(
+            transport_id, COMPUTED_TRANSPORT_V1
+        )
+    return evaluate_loaded_transport(transport)

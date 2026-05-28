@@ -32,11 +32,13 @@ from app.db.models.common import (
     StatmechCalculationRole,
     StatmechTreatmentKind,
     ThermoCalculationRole,
+    TransportCalculationRole,
     ValidationStatus,
 )
 from app.db.models.kinetics import Kinetics
 from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
+from app.db.models.transport import Transport
 from app.services.trust.models import (
     EvidenceCheckKind,
     EvidenceCheckSpec,
@@ -1220,6 +1222,327 @@ def _check_statmech_not_rejected_or_deprecated_if_applicable(
     return EvidenceOutcome.not_applicable
 
 
+_TRANSPORT_STRONG_SOURCE_ROLES: frozenset[TransportCalculationRole] = frozenset(
+    {
+        TransportCalculationRole.full_transport,
+        TransportCalculationRole.dipole,
+        TransportCalculationRole.polarizability,
+        TransportCalculationRole.supporting_geometry,
+    }
+)
+
+
+def _transport_sources_by_role(
+    transport: Transport, role: TransportCalculationRole
+) -> list:
+    """Return transport source-calculation links for ``role``."""
+    return [link for link in transport.source_calculations if link.role is role]
+
+
+def _transport_source_calculations(transport: Transport) -> list[Calculation]:
+    """Return non-null linked source calculations for ``transport``."""
+    return [
+        link.calculation
+        for link in transport.source_calculations
+        if link.calculation is not None
+    ]
+
+
+def _transport_source_calculations_for_roles(
+    transport: Transport, roles: frozenset[TransportCalculationRole]
+) -> list[Calculation]:
+    """Return non-null source calculations whose link role is in ``roles``."""
+    return [
+        link.calculation
+        for link in transport.source_calculations
+        if link.role in roles and link.calculation is not None
+    ]
+
+
+def _transport_has_lj_pair(transport: Transport) -> bool:
+    """Return True when both Lennard-Jones parameters are populated."""
+    return transport.sigma_angstrom is not None and transport.epsilon_over_k_k is not None
+
+
+def _transport_has_partial_lj_pair(transport: Transport) -> bool:
+    """Return True when exactly one Lennard-Jones parameter is populated."""
+    return (transport.sigma_angstrom is None) != (transport.epsilon_over_k_k is None)
+
+
+def _transport_has_any_property(transport: Transport) -> bool:
+    """Return True when at least one structured transport property is populated."""
+    return (
+        transport.sigma_angstrom is not None
+        or transport.epsilon_over_k_k is not None
+        or transport.dipole_debye is not None
+        or transport.polarizability_angstrom3 is not None
+        or transport.rotational_relaxation is not None
+    )
+
+
+def _check_transport_species_entry_present(transport: Transport) -> EvidenceOutcome:
+    """Return passed when the transport row is attached to a species_entry."""
+    return _bool_outcome(
+        transport.species_entry_id is not None and transport.species_entry is not None
+    )
+
+
+def _check_transport_origin_is_computed(transport: Transport) -> EvidenceOutcome:
+    """Return passed when the transport record declares computed origin."""
+    return _bool_outcome(transport.scientific_origin is ScientificOriginKind.computed)
+
+
+def _check_lj_pair_present_if_applicable(transport: Transport) -> EvidenceOutcome:
+    """Return passed when an LJ representation is complete, or skip for non-LJ rows."""
+    if _transport_has_lj_pair(transport):
+        return EvidenceOutcome.passed
+    if _transport_has_partial_lj_pair(transport):
+        return EvidenceOutcome.missing
+    return EvidenceOutcome.not_applicable
+
+
+def _check_sigma_present(transport: Transport) -> EvidenceOutcome:
+    """Return passed when sigma is populated for an LJ representation."""
+    if transport.epsilon_over_k_k is None and transport.sigma_angstrom is None:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(transport.sigma_angstrom is not None)
+
+
+def _check_epsilon_present(transport: Transport) -> EvidenceOutcome:
+    """Return passed when epsilon/k is populated for an LJ representation."""
+    if transport.epsilon_over_k_k is None and transport.sigma_angstrom is None:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(transport.epsilon_over_k_k is not None)
+
+
+def _check_sigma_epsilon_pair_consistent(transport: Transport) -> EvidenceOutcome:
+    """Return passed when sigma and epsilon are both present or both absent."""
+    return _bool_outcome(not _transport_has_partial_lj_pair(transport))
+
+
+def _check_dipole_present(transport: Transport) -> EvidenceOutcome:
+    """Return passed when dipole evidence is populated, otherwise skip if absent."""
+    return (
+        EvidenceOutcome.passed
+        if transport.dipole_debye is not None
+        else EvidenceOutcome.not_applicable
+    )
+
+
+def _check_polarizability_present(transport: Transport) -> EvidenceOutcome:
+    """Return passed when polarizability evidence is populated, otherwise skip if absent."""
+    return (
+        EvidenceOutcome.passed
+        if transport.polarizability_angstrom3 is not None
+        else EvidenceOutcome.not_applicable
+    )
+
+
+def _check_rotational_relaxation_present(transport: Transport) -> EvidenceOutcome:
+    """Return passed when rotational-relaxation evidence is populated, otherwise skip if absent."""
+    return (
+        EvidenceOutcome.passed
+        if transport.rotational_relaxation is not None
+        else EvidenceOutcome.not_applicable
+    )
+
+
+def _check_transport_property_present(transport: Transport) -> EvidenceOutcome:
+    """Return passed when at least one structured transport property exists."""
+    return _bool_outcome(_transport_has_any_property(transport))
+
+
+def _check_transport_model_present(transport: Transport) -> EvidenceOutcome:
+    """Return passed when a structured transport representation exists."""
+    return _bool_outcome(_transport_has_any_property(transport))
+
+
+def _check_transport_source_calculations_present(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when at least one transport_source_calculation row is linked."""
+    return _bool_outcome(len(transport.source_calculations) >= 1)
+
+
+def _check_full_transport_source_present(transport: Transport) -> EvidenceOutcome:
+    """Return passed when a full-transport source calculation is linked."""
+    return _bool_outcome(
+        len(
+            _transport_sources_by_role(
+                transport, TransportCalculationRole.full_transport
+            )
+        )
+        >= 1
+    )
+
+
+def _check_dipole_source_present_if_dipole_present(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when populated dipole evidence has a dipole source role."""
+    if transport.dipole_debye is None:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        len(_transport_sources_by_role(transport, TransportCalculationRole.dipole))
+        >= 1
+    )
+
+
+def _check_polarizability_source_present_if_polarizability_present(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when populated polarizability evidence has a polarizability source role."""
+    if transport.polarizability_angstrom3 is None:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        len(
+            _transport_sources_by_role(
+                transport, TransportCalculationRole.polarizability
+            )
+        )
+        >= 1
+    )
+
+
+def _check_supporting_geometry_source_present(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when a supporting-geometry source calculation is linked."""
+    return _bool_outcome(
+        len(
+            _transport_sources_by_role(
+                transport, TransportCalculationRole.supporting_geometry
+            )
+        )
+        >= 1
+    )
+
+
+def _check_transport_source_calculation_lot_present(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when all linked source calculations have a level of theory."""
+    calcs = _transport_source_calculations(transport)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.lot_id is not None for calc in calcs))
+
+
+def _check_transport_source_calculation_software_present(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when all linked source calculations have software metadata."""
+    calcs = _transport_source_calculations(transport)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(all(calc.software_release_id is not None for calc in calcs))
+
+
+def _check_transport_source_calculation_workflow_tool_present(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when transport or one source calc carries workflow-tool metadata."""
+    if transport.workflow_tool_release_id is not None:
+        return EvidenceOutcome.passed
+    return _bool_outcome(
+        any(
+            calc.workflow_tool_release_id is not None
+            for calc in _transport_source_calculations(transport)
+        )
+    )
+
+
+def _check_transport_source_calculation_artifacts_present(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when at least one linked source calculation retains artifacts."""
+    return _bool_outcome(
+        any(len(calc.artifacts) >= 1 for calc in _transport_source_calculations(transport))
+    )
+
+
+def _check_transport_source_calculation_result_blocks_present(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when every linked source calculation has its expected result block."""
+    calcs = _transport_source_calculations(transport)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(
+        all(
+            _check_result_block_present(calc) is EvidenceOutcome.passed
+            for calc in calcs
+        )
+    )
+
+
+def _check_transport_source_calculation_has_non_hard_failed_evidence(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when linked source calculations avoid deterministic hard-fail signals."""
+    calcs = _transport_source_calculations(transport)
+    if not calcs:
+        return EvidenceOutcome.missing
+    return _bool_outcome(
+        all(
+            calc.quality is not CalculationQuality.rejected
+            and (
+                calc.geometry_validation is None
+                or calc.geometry_validation.validation_status
+                is not ValidationStatus.fail
+            )
+            for calc in calcs
+        )
+    )
+
+
+def _check_transport_geometry_validation_present_for_source_calculations(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed when strong source calculations carry geometry validation."""
+    strong_calcs = _transport_source_calculations_for_roles(
+        transport, _TRANSPORT_STRONG_SOURCE_ROLES
+    )
+    if not strong_calcs:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        all(calc.geometry_validation is not None for calc in strong_calcs)
+    )
+
+
+def _check_transport_geometry_validation_not_failed_for_source_calculations(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Return passed/warning based on geometry-validation status on source calcs."""
+    validations = [
+        calc.geometry_validation
+        for calc in _transport_source_calculations_for_roles(
+            transport, _TRANSPORT_STRONG_SOURCE_ROLES
+        )
+        if calc.geometry_validation is not None
+    ]
+    if not validations:
+        return EvidenceOutcome.not_applicable
+    if any(
+        validation.validation_status is ValidationStatus.warning
+        for validation in validations
+    ):
+        return EvidenceOutcome.warning
+    if any(
+        validation.validation_status is ValidationStatus.fail
+        for validation in validations
+    ):
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.passed
+
+
+def _check_transport_not_rejected_or_deprecated_if_applicable(
+    transport: Transport,
+) -> EvidenceOutcome:
+    """Skip curator status checks until transport-level review/deprecation is modeled."""
+    return EvidenceOutcome.not_applicable
+
+
 COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
     version=1,
@@ -1790,11 +2113,171 @@ COMPUTED_STATMECH_V1: EvidenceRubric = EvidenceRubric(
 )
 
 
+COMPUTED_TRANSPORT_V1: EvidenceRubric = EvidenceRubric(
+    name="computed_transport",
+    version=1,
+    record_type="transport",
+    checks=(
+        EvidenceCheckSpec(
+            name="species_entry_present",
+            kind=EvidenceCheckKind.required,
+            explain="Transport must be attached to a species_entry.",
+            runner=_check_transport_species_entry_present,
+        ),
+        EvidenceCheckSpec(
+            name="transport_origin_is_computed",
+            kind=EvidenceCheckKind.required,
+            explain="Transport.scientific_origin should be computed for this rubric.",
+            runner=_check_transport_origin_is_computed,
+        ),
+        EvidenceCheckSpec(
+            name="transport_model_present",
+            kind=EvidenceCheckKind.required,
+            explain="Transport should expose at least one structured property representation.",
+            runner=_check_transport_model_present,
+        ),
+        EvidenceCheckSpec(
+            name="lj_pair_present_if_applicable",
+            kind=EvidenceCheckKind.optional,
+            explain="Lennard-Jones transport should include both sigma and epsilon/k.",
+            runner=_check_lj_pair_present_if_applicable,
+        ),
+        EvidenceCheckSpec(
+            name="sigma_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Lennard-Jones transport should include sigma.",
+            runner=_check_sigma_present,
+        ),
+        EvidenceCheckSpec(
+            name="epsilon_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Lennard-Jones transport should include epsilon/k.",
+            runner=_check_epsilon_present,
+        ),
+        EvidenceCheckSpec(
+            name="sigma_epsilon_pair_consistent",
+            kind=EvidenceCheckKind.required,
+            explain="sigma_angstrom and epsilon_over_k_k must be both present or both absent.",
+            runner=_check_sigma_epsilon_pair_consistent,
+        ),
+        EvidenceCheckSpec(
+            name="dipole_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Dipole evidence should be populated when this representation is present.",
+            runner=_check_dipole_present,
+        ),
+        EvidenceCheckSpec(
+            name="polarizability_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Polarizability evidence should be populated when this representation is present.",
+            runner=_check_polarizability_present,
+        ),
+        EvidenceCheckSpec(
+            name="rotational_relaxation_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Rotational-relaxation evidence should be populated when present.",
+            runner=_check_rotational_relaxation_present,
+        ),
+        EvidenceCheckSpec(
+            name="transport_property_present",
+            kind=EvidenceCheckKind.required,
+            explain="At least one transport property must be populated.",
+            runner=_check_transport_property_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculations_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one transport_source_calculation row should support computed transport.",
+            runner=_check_transport_source_calculations_present,
+        ),
+        EvidenceCheckSpec(
+            name="full_transport_source_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed transport should link a full-transport source calculation when available.",
+            runner=_check_full_transport_source_present,
+        ),
+        EvidenceCheckSpec(
+            name="dipole_source_present_if_dipole_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed dipole transport evidence should link a dipole source calculation.",
+            runner=_check_dipole_source_present_if_dipole_present,
+        ),
+        EvidenceCheckSpec(
+            name="polarizability_source_present_if_polarizability_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed polarizability transport evidence should link a polarizability source calculation.",
+            runner=_check_polarizability_source_present_if_polarizability_present,
+        ),
+        EvidenceCheckSpec(
+            name="supporting_geometry_source_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Computed transport should link supporting-geometry evidence when available.",
+            runner=_check_supporting_geometry_source_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_lot_present",
+            kind=EvidenceCheckKind.optional,
+            explain="All linked source calculations should resolve to level_of_theory.",
+            runner=_check_transport_source_calculation_lot_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_software_present",
+            kind=EvidenceCheckKind.optional,
+            explain="All linked source calculations should declare software_release.",
+            runner=_check_transport_source_calculation_software_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_workflow_tool_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Transport or at least one source calc should declare workflow-tool release metadata.",
+            runner=_check_transport_source_calculation_workflow_tool_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_artifacts_present",
+            kind=EvidenceCheckKind.optional,
+            explain="At least one linked source calculation should retain an artifact.",
+            runner=_check_transport_source_calculation_artifacts_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_result_blocks_present",
+            kind=EvidenceCheckKind.optional,
+            explain="Linked source calculations should have their expected result blocks.",
+            runner=_check_transport_source_calculation_result_blocks_present,
+        ),
+        EvidenceCheckSpec(
+            name="source_calculation_has_non_hard_failed_evidence",
+            kind=EvidenceCheckKind.optional,
+            explain="Linked source calculations should avoid deterministic hard-fail signals.",
+            runner=_check_transport_source_calculation_has_non_hard_failed_evidence,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_present_for_source_calculations",
+            kind=EvidenceCheckKind.optional,
+            explain="Strong source calculations should carry geometry-validation evidence.",
+            runner=_check_transport_geometry_validation_present_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="geometry_validation_not_failed_for_source_calculations",
+            kind=EvidenceCheckKind.warning,
+            explain="Source calculation geometry validation is warning (advisory).",
+            runner=_check_transport_geometry_validation_not_failed_for_source_calculations,
+        ),
+        EvidenceCheckSpec(
+            name="transport_not_rejected_or_deprecated_if_applicable",
+            kind=EvidenceCheckKind.optional,
+            explain="Transport rejection/deprecation checks apply once modeled.",
+            runner=_check_transport_not_rejected_or_deprecated_if_applicable,
+        ),
+    ),
+)
+
+
 RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
     "calculation": COMPUTED_CALCULATION_V1,
     "kinetics": COMPUTED_KINETICS_V1,
     "statmech": COMPUTED_STATMECH_V1,
     "thermo": COMPUTED_THERMO_V1,
+    "transport": COMPUTED_TRANSPORT_V1,
 }
 """Lookup of the latest active rubric per record-type discriminator.
 
