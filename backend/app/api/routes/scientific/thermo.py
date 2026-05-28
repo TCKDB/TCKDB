@@ -10,11 +10,11 @@ compatibility with OpenAPI consumers. See
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Path, Query
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._response import omit_trust_unless_requested
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_thermo import (
@@ -86,22 +86,4 @@ def species_thermo(
         request=request,
     )
     visibility = apply_internal_ids_visibility(payload)
-    return _omit_unrequested_trust(visibility, payload)
-
-
-def _omit_unrequested_trust(visibility, payload):
-    """Drop record.trust unless the caller explicitly requested include=trust."""
-    if "trust" in set(payload.request.include):
-        return visibility
-
-    if isinstance(visibility, JSONResponse):
-        import json
-
-        data = json.loads(visibility.body)
-    else:
-        data = visibility.model_dump(mode="json")
-
-    for record in data.get("records", []) or []:
-        if isinstance(record, dict):
-            record.pop("trust", None)
-    return JSONResponse(data)
+    return omit_trust_unless_requested(visibility, payload, scope="search")

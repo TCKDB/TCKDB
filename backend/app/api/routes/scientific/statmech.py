@@ -16,11 +16,11 @@ See ``backend/docs/specs/scientific_statmech_reads.md``.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._response import omit_trust_unless_requested
 from app.db.models.common import (
     RecordReviewStatus,
     StatmechTreatmentKind,
@@ -109,7 +109,7 @@ def scientific_statmech_search_get(
     )
     payload = search_statmech(session, request_obj)
     visibility = apply_internal_ids_visibility(payload)
-    return _omit_unrequested_trust_section(visibility, payload, scope="search")
+    return omit_trust_unless_requested(visibility, payload, scope="search")
 
 
 @router.post(
@@ -137,7 +137,7 @@ def scientific_statmech_search_post(
         )
     payload = search_statmech(session, body)
     visibility = apply_internal_ids_visibility(payload)
-    return _omit_unrequested_trust_section(visibility, payload, scope="search")
+    return omit_trust_unless_requested(visibility, payload, scope="search")
 
 
 @router.get(
@@ -161,33 +161,4 @@ def scientific_statmech_detail(
         include=parse_include(include),
     )
     visibility = apply_internal_ids_visibility(payload)
-    return _omit_unrequested_trust_section(visibility, payload)
-
-
-def _omit_unrequested_trust_section(
-    visibility,
-    payload,
-    *,
-    scope: str = "detail",
-):
-    """Drop ``record.trust`` unless the caller explicitly requested it."""
-    if "trust" in set(payload.request.include):
-        return visibility
-
-    if isinstance(visibility, JSONResponse):
-        import json
-
-        data = json.loads(visibility.body)
-    else:
-        data = visibility.model_dump(mode="json")
-
-    if scope == "detail":
-        record = data.get("record")
-        if isinstance(record, dict):
-            record.pop("trust", None)
-    else:
-        for record in data.get("records", []) or []:
-            if isinstance(record, dict):
-                record.pop("trust", None)
-
-    return JSONResponse(data)
+    return omit_trust_unless_requested(visibility, payload)

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._response import omit_trust_unless_requested
 from app.db.models.common import (
     ArtifactKind,
     CalculationDependencyRole,
@@ -148,9 +149,10 @@ def scientific_calculations_search_get(
     )
     payload = search_calculations(session, request_obj)
     visibility = apply_internal_ids_visibility(payload)
-    return _omit_unrequested_heavy_sections(
+    visibility = _omit_unrequested_heavy_sections(
         visibility, payload, scope="search"
     )
+    return omit_trust_unless_requested(visibility, payload, scope="search")
 
 
 @router.post(
@@ -178,9 +180,10 @@ def scientific_calculations_search_post(
         )
     payload = search_calculations(session, body)
     visibility = apply_internal_ids_visibility(payload)
-    return _omit_unrequested_heavy_sections(
+    visibility = _omit_unrequested_heavy_sections(
         visibility, payload, scope="search"
     )
+    return omit_trust_unless_requested(visibility, payload, scope="search")
 
 
 @router.get(
@@ -215,7 +218,8 @@ def scientific_calculation_detail(
         request=request,
     )
     visibility = apply_internal_ids_visibility(payload)
-    return _omit_unrequested_heavy_sections(visibility, payload)
+    visibility = _omit_unrequested_heavy_sections(visibility, payload)
+    return omit_trust_unless_requested(visibility, payload)
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +245,6 @@ _OMITTABLE_RECORD_KEYS: dict[str, str] = {
     "scan": "scan",
     "irc": "irc",
     "path_search": "path_search",
-    "trust": "trust",
 }
 
 
