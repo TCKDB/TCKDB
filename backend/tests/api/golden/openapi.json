@@ -21451,6 +21451,100 @@
         "title": "ReactionFullCalculationArtifacts",
         "type": "object"
       },
+      "ReactionFullCalculationEvidenceSummary": {
+        "description": "Embedded calculation summary for ``/full``.\n\nExtends :class:`CalculationEvidenceSummary` with an optional\n``trust`` field populated when the caller passes\n``include=trust`` to ``/reaction-entries/{id}/full``. The field\nreuses :class:`TrustFragment` so a trust block embedded here is\nstructurally identical to the one returned by\n``GET /scientific/calculations/{ref}?include=trust``.",
+        "properties": {
+          "calculation_id": {
+            "title": "Calculation Id",
+            "type": "integer"
+          },
+          "calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Ref"
+          },
+          "calculation_type": {
+            "title": "Calculation Type",
+            "type": "string"
+          },
+          "converged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converged"
+          },
+          "geometry_validation_status": {
+            "enum": [
+              "passed",
+              "warning",
+              "fail",
+              "not_present"
+            ],
+            "title": "Geometry Validation Status",
+            "type": "string"
+          },
+          "level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scf_stability_status": {
+            "enum": [
+              "stable",
+              "unstable",
+              "stabilized",
+              "inconclusive",
+              "not_present"
+            ],
+            "title": "Scf Stability Status",
+            "type": "string"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareReleaseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trust": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "calculation_id",
+          "calculation_type",
+          "geometry_validation_status",
+          "scf_stability_status"
+        ],
+        "title": "ReactionFullCalculationEvidenceSummary",
+        "type": "object"
+      },
       "ReactionFullConformerGroupItem": {
         "description": "One conformer-group projection embedded under\n``/reaction-entries/{id}/full?include=conformers``.\n\nThe block is summary-safe: it carries the same per-group bounded\nprojection that the default ``/scientific/conformer-groups/{ref}``\ndetail response produces (core block + observations summary +\nevidence summary + selection summary + available_sections),\n**never** observation lists, calculation lists, geometry links, or\nreview history. Callers who want those follow ``endpoint`` to the\ndetail endpoint:\n\n``GET /scientific/conformer-groups/{conformer_group_ref}?include=all``\n\nPhase D internal-id policy gates ``conformer_group_id`` (and every\nnested ``*_id`` inside the summary blocks).",
         "properties": {
@@ -25090,7 +25184,7 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/CalculationEvidenceSummary"
+                  "$ref": "#/components/schemas/ReactionFullCalculationEvidenceSummary"
                 },
                 "type": "array"
               },

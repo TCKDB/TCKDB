@@ -41,6 +41,21 @@ from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_transition_state import (
     TransitionStateCalculationEvidenceSummary,
 )
+from app.services.trust.models import TrustFragment
+
+
+class ReactionFullCalculationEvidenceSummary(CalculationEvidenceSummary):
+    """Embedded calculation summary for ``/full``.
+
+    Extends :class:`CalculationEvidenceSummary` with an optional
+    ``trust`` field populated when the caller passes
+    ``include=trust`` to ``/reaction-entries/{id}/full``. The field
+    reuses :class:`TrustFragment` so a trust block embedded here is
+    structurally identical to the one returned by
+    ``GET /scientific/calculations/{ref}?include=trust``.
+    """
+
+    trust: TrustFragment | None = None
 
 
 class ReviewDetail(str, Enum):
@@ -343,7 +358,7 @@ class ScientificReactionFullResponse(BaseModel):
     species: ReactionFullSpecies | None = None
     kinetics: list[KineticsRecord] | None = None
     transition_states: list[TransitionStateInFull] | None = None
-    calculations: list[CalculationEvidenceSummary] | None = None
+    calculations: list[ReactionFullCalculationEvidenceSummary] | None = None
     path_search: list[ReactionFullPathSearchItem] | None = None
     irc: list[ReactionFullIRCItem] | None = None
     scans: list[ReactionFullScanItem] | None = None

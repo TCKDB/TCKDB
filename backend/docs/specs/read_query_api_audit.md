@@ -271,8 +271,10 @@ how it integrates with the rest of the read surface.
 ### 0.6.1 Trust-enabled surfaces
 
 Five detail reads accept `include=trust` and emit a `record.trust`
-fragment. The legal-token sets in the service modules are
-authoritative; this table is verified against them.
+fragment. The composite reaction-entry `/full` read additionally
+propagates trust into its embedded kinetics and calculation records
+when `include=trust` is supplied. The legal-token sets in the service
+modules are authoritative; this table is verified against them.
 
 | Endpoint | Legal `trust` token | Rubric | Source |
 |---|---|---|---|
@@ -281,6 +283,7 @@ authoritative; this table is verified against them.
 | `GET /scientific/species-entries/{id}/thermo` | ✓ | `computed_thermo_v1` | `services/scientific_read/thermo.py:84,174,200,366` |
 | `GET /scientific/statmech/{ref_or_id}` | ✓ | `computed_statmech_v1` | `services/scientific_read/statmech.py:95,185,190,313` |
 | `GET /scientific/transport/{ref_or_id}` | ✓ | `computed_transport_v1` | `services/scientific_read/transport.py:74,124,129,224` |
+| `GET /scientific/reaction-entries/{id}/full` | ✓ (modifier) | `computed_kinetics_v1` on embedded kinetics; `computed_calculation_v1` on embedded calculations | `services/scientific_read/provenance.py` (`_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `_build_kinetics_section`, `_build_calculations_section`, `_build_calculation_trust_fragments`) |
 
 ### 0.6.2 Trust posture invariants
 
@@ -316,7 +319,7 @@ All five surfaces share these invariants, verified by inspection:
 |---|---|---|
 | `/scientific/calculations/{ref_or_id}` | **enabled** | per-calculation `computed_calculation_v1`. |
 | `/scientific/calculations/search` | omitted by policy | search surfaces skip trust. |
-| `/scientific/reaction-entries/{id}/full` | **not enabled** | composite reaction-entry read does not carry trust on the embedded kinetics / calculations / transition-state sections, even though the standalone endpoints do. |
+| `/scientific/reaction-entries/{id}/full` | **enabled (embedded)** | `?include=trust` propagates `computed_kinetics_v1` to each embedded kinetics record and `computed_calculation_v1` to each embedded calculation summary. No top-level reaction-entry rubric exists yet; transition-state, conformer, path-search, IRC, scan, and artifact sections still lack trust because they have no rubric. |
 | `/scientific/transition-states/{ref_or_id}` | **not enabled** | no `computed_transition_state_v1` rubric defined. |
 | `/scientific/conformer-groups/{ref_or_id}`, `/scientific/conformer-observations/{ref_or_id}` | **not enabled** | no conformer rubric. |
 | `/scientific/networks/*` (network / network-solve / network-kinetics) | **not enabled** | no network/PDep rubric. |
@@ -324,10 +327,14 @@ All five surfaces share these invariants, verified by inspection:
 | `/scientific/literature/*` | **n/a (by design)** | identity surface, not a scientific computation record. |
 | `/scientific/artifacts/search` | **n/a** | metadata-only search; trust would be a property of the owning calculation. |
 
-The most notable practical gap is the reaction-entry `/full` composite:
-a caller who fetches the composite cannot see trust badges on the
-embedded kinetics or calculations, even though the dedicated endpoints
-expose them. This is a UX inconsistency, not a correctness bug.
+As of 2026-05-28 the reaction-entry `/full` composite now propagates
+trust to its embedded kinetics records and embedded calculation
+summaries when the caller passes `include=trust`. The composite still
+has no top-level reaction-entry rubric, and `transition_states`,
+`conformers`, `path_search`, `irc`, `scans`, and `artifacts` sections
+do not carry trust because they have no deterministic rubric. The
+remaining gap is therefore aggregation policy plus the rubrics for
+those record types — not the composite read itself.
 
 ---
 
@@ -347,7 +354,7 @@ non-canonical surface; "✗" means no documented surface answers it.
 | 5 | Find reactions by reactants / products | ✓ | `GET\|POST /scientific/reactions/search` | Reactants/products as identifier lists; direction `forward\|reverse\|either`. |
 | 6 | Find kinetics for a reaction | ✓ | `GET /scientific/reaction-entries/{id}/kinetics`, `GET\|POST /scientific/kinetics/search` | Per-entry surface exposes `include=trust`; search does not. |
 | 7 | Inspect calculation / provenance for a record | ✓ | `GET /scientific/calculations/{ref_or_id}`, `GET /scientific/reaction-entries/{id}/full` | `/full` is the only composite "provenance projection" today; no generic `/scientific/records/{type}/{id}/provenance`. |
-| 8 | Ask for trust / evidence details on a record | △ | five detail reads (calculation, kinetics-per-entry, thermo-per-entry, statmech, transport) | Reaction-entry `/full` does not propagate trust to embedded records; TS / conformer / network have no rubric. |
+| 8 | Ask for trust / evidence details on a record | ✓ | five detail reads (calculation, kinetics-per-entry, thermo-per-entry, statmech, transport) plus the composite `/reaction-entries/{id}/full?include=trust` for embedded kinetics + calculations | TS / conformer / network sections still lack trust because no rubric exists for them. |
 | 9 | Avoid rejected / deprecated records by default | ✓ | every `/scientific/*` read | Default visible set: `{approved, under_review, not_reviewed}`. Opt in via `include_rejected` / `include_deprecated`; threshold via `min_review_status`. Legacy `/api/v1/{entity}` reads do not filter. |
 | 10 | Documented selection policy for "best" record | △ | `species-calculations/search` `ranking` enum only; all other surfaces use deterministic L3 ordering without an explicit policy token | See §0.8. No `tckdb_default` / `approved_first` / `latest` token exists across the broader surface. |
 
@@ -363,10 +370,11 @@ non-canonical surface; "✗" means no documented surface answers it.
   via `/full`. The species and TS analogues do not have an equivalent
   composite, so the audit's original §12 entry for a generic
   `/scientific/records/{type}/{id}/provenance` projection still stands.
-- Story #8 has a clear policy (detail-only, opt-in, internal-IDs gated)
-  but the *composite* read (reaction-entry `/full`) is now the odd one
-  out — embedded kinetics there cannot carry the same trust badges as
-  the standalone kinetics endpoint.
+- Story #8 has a clear policy (detail-only, opt-in, internal-IDs
+  gated). The composite read (`reaction-entry /full`) now propagates
+  the same `computed_kinetics_v1` and `computed_calculation_v1`
+  fragments to its embedded kinetics and calculation records, so the
+  composite and standalone surfaces stay in sync.
 
 ---
 

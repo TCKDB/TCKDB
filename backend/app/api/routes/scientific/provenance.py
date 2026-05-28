@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._response import omit_trust_unless_requested
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_provenance import (
     ReactionFullReadRequest,
@@ -64,10 +65,10 @@ def reaction_full(
         include=parse_include(include),
         include_review=include_review,
     )
-    return apply_internal_ids_visibility(
-        get_reaction_full(
-            session,
-            reaction_entry_id=resolved_reaction_entry_id,
-            request=request,
-        )
+    payload = get_reaction_full(
+        session,
+        reaction_entry_id=resolved_reaction_entry_id,
+        request=request,
     )
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_trust_unless_requested(visibility, payload, scope="full")

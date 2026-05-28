@@ -16,7 +16,16 @@ GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics?include=tru
 GET /api/v1/scientific/species-entries/{species_entry_id}/thermo?include=trust
 GET /api/v1/scientific/statmech/{statmech_ref_or_id}?include=trust
 GET /api/v1/scientific/transport/{transport_ref_or_id}?include=trust
+GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/full?include=trust
 ```
+
+The composite reaction-entry `/full` read does not own its own rubric.
+When `include=trust` is requested, it propagates trust fragments down to
+the embedded records that already have a real rubric: embedded kinetics
+records carry `computed_kinetics_v1`, and embedded calculation summaries
+under the `calculations` section carry `computed_calculation_v1`. No
+top-level reaction-entry trust is emitted (no aggregation rubric exists
+yet).
 
 Current implemented deterministic trust rubrics:
 
@@ -119,6 +128,17 @@ This is true even when a submission has AI Review Assistant audit events.
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. Broad transport search/list endpoints do not expose trust. |
+
+### Reaction-Entry Full (composite)
+
+| Field | Behavior |
+| --- | --- |
+| Path | `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/full` |
+| Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` and section tokens like `?include=calculations,trust` |
+| Rubric used | Embedded kinetics records carry `computed_kinetics_v1`; embedded calculation summaries carry `computed_calculation_v1`. No top-level reaction-entry rubric exists. |
+| Default behavior | Without `include=trust`, every embedded kinetics record and calculation summary omits `trust`. The default response shape is unchanged from the pre-propagation behavior. |
+| Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. The policy applies recursively to every embedded trust block. |
+| Notes/limitations | `include=all` does not include trust. Trust is only attached to embedded records that already have a real deterministic rubric; transition-state, conformer, path-search, IRC, scan, artifact, and review-records sections do not gain trust here. `trust.llm_precheck` on every embedded trust block ships disabled (`{enabled:false, label:"not_run"}`). |
 
 ## Common Trust Fragment Shape
 

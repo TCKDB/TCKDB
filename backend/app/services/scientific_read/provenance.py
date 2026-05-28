@@ -48,6 +48,7 @@ from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.schemas.reads.scientific_provenance import (
     ReactionEntrySummary,
     ReactionFullCalculationArtifacts,
+    ReactionFullCalculationEvidenceSummary,
     ReactionFullConformerGroupItem,
     ReactionFullIRCItem,
     ReactionFullPathSearchItem,
@@ -75,10 +76,12 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.calculations import (
+    _TRUST_EAGER_LOADS as _CALCULATION_TRUST_EAGER_LOADS,
     _build_artifacts,
     _build_irc_include_summary,
     _build_path_search_include_summary,
     _build_scan_include_summary,
+    build_calculation_trust_fragment,
 )
 from app.services.scientific_read.conformers import build_group_record
 from app.services.scientific_read.kinetics import get_reaction_kinetics
@@ -98,9 +101,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "artifacts",
     "review",
     "internal_ids",
+    "trust",
     "all",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "trust"}
 
 _DEFAULT_INCLUDES: set[str] = {"species", "kinetics", "transition_states"}
 
@@ -134,6 +138,13 @@ def get_reaction_full(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     ) or _DEFAULT_INCLUDES
     includes = filter_internal_ids_from_resolved(includes)
+    # Modifier-only requests (e.g. ``?include=trust``) should still
+    # return the default section set; the modifier token only changes
+    # the shape of records inside the embedded sections, not which
+    # sections appear.
+    if not (includes - _INTERNAL_INCLUDE_TOKENS):
+        includes = (includes & _INTERNAL_INCLUDE_TOKENS) | _DEFAULT_INCLUDES
+    trust_requested = "trust" in includes
 
     entry = session.get(ReactionEntry, reaction_entry_id)
     if entry is None:
@@ -187,6 +198,7 @@ def get_reaction_full(
             reaction_entry_id,
             request,
             visible,
+            include_trust=trust_requested,
         )
 
     ts_block: list[TransitionStateInFull] | None = None
@@ -195,10 +207,12 @@ def get_reaction_full(
             session, reaction_entry_id, visible
         )
 
-    calculations_block: list[CalculationEvidenceSummary] | None = None
+    calculations_block: list[ReactionFullCalculationEvidenceSummary] | None = None
     if "calculations" in includes:
         calculations_block = _build_calculations_section(
-            session, reaction_entry_id
+            session,
+            reaction_entry_id,
+            include_trust=trust_requested,
         )
 
     path_search_block: list[ReactionFullPathSearchItem] | None = None
@@ -352,17 +366,27 @@ def _build_kinetics_section(
     reaction_entry_id: int,
     request: ReactionFullReadRequest,
     visible_review_statuses: set,
+    *,
+    include_trust: bool = False,
 ) -> list:
     """Reuse get_reaction_kinetics to ensure identical KineticsRecord shape.
 
-    Top-level filters cascade to the kinetics endpoint via a fresh request.
+    Top-level filters cascade to the kinetics endpoint via a fresh
+    request. When ``include_trust`` is True the kinetics request also
+    carries ``trust`` so each :class:`KineticsRecord` returned here is
+    byte-identical to what
+    ``GET /scientific/reaction-entries/{id}/kinetics?include=trust``
+    would emit for the same record.
     """
+    kinetics_include = ["provenance"]
+    if include_trust:
+        kinetics_include.append("trust")
     kinetics_request = KineticsReadRequest(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
         # Always-present provenance keys are automatic; default include set.
-        include=["provenance"],
+        include=kinetics_include,
         # Pagination wide-open; /full returns the full kinetics list.
         offset=0,
         limit=200,
@@ -445,9 +469,20 @@ def _build_transition_states_section(
 
 
 def _build_calculations_section(
-    session: Session, reaction_entry_id: int
-) -> list[CalculationEvidenceSummary]:
-    """All calculations whose TS entry belongs to this reaction entry."""
+    session: Session,
+    reaction_entry_id: int,
+    *,
+    include_trust: bool = False,
+) -> list[ReactionFullCalculationEvidenceSummary]:
+    """All calculations whose TS entry belongs to this reaction entry.
+
+    When ``include_trust`` is True, each item additionally carries a
+    ``computed_calculation_v1`` trust fragment. The calculation graph
+    needed by the rubric is eagerly loaded via
+    ``_CALCULATION_TRUST_EAGER_LOADS`` so the trust runners stay
+    deterministic and do not emit hidden N+1 queries (the calculation
+    detail endpoint uses the same eager-load tuple).
+    """
     rows = session.execute(
         select(
             Calculation.id,
@@ -495,8 +530,15 @@ def _build_calculations_section(
         .order_by(Calculation.created_at.desc(), Calculation.id.desc())
     ).all()
 
+    calc_ids = [row[0] for row in rows]
+    trust_by_calc_id = (
+        _build_calculation_trust_fragments(session, calc_ids)
+        if include_trust
+        else {}
+    )
+
     return [
-        CalculationEvidenceSummary(
+        ReactionFullCalculationEvidenceSummary(
             calculation_id=row[0],
             calculation_ref=row[1],
             calculation_type=row[2].value,
@@ -526,9 +568,41 @@ def _build_calculations_section(
                 if row[9] is not None
                 else None
             ),
+            trust=trust_by_calc_id.get(row[0]),
         )
         for row in rows
     ]
+
+
+def _build_calculation_trust_fragments(
+    session: Session, calculation_ids: list[int]
+):
+    """Bulk-load calculations with trust eager loads and build fragments.
+
+    Returns a ``{calculation_id: TrustFragment}`` mapping. Review badges
+    are loaded once for the whole set so ``trust.review_status`` lines
+    up with the standalone calculation detail surface.
+    """
+    if not calculation_ids:
+        return {}
+
+    calcs = session.scalars(
+        select(Calculation)
+        .options(*_CALCULATION_TRUST_EAGER_LOADS)
+        .where(Calculation.id.in_(calculation_ids))
+    ).all()
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids=calculation_ids,
+    )
+    return {
+        calc.id: build_calculation_trust_fragment(
+            calc,
+            review_status=badges[calc.id].status,
+        )
+        for calc in calcs
+    }
 
 
 def _conformer_group_endpoint(group_ref: str) -> str:
