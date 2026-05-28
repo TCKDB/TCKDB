@@ -1,12 +1,14 @@
 # TCKDB Read/Query API Audit
 
 **Original audit date:** 2026-05-13
-**Status update:** 2026-05-19
+**Status updates:** 2026-05-19, 2026-05-28 (trust-layer pass)
 **Branch:** main
 **Scope:** Factual audit of the existing read/query surface in the TCKDB
-backend, plus a current implementation-status update layered on top.
+backend, plus current implementation-status updates layered on top.
 The original sections (§1–§16) are preserved as historical context;
-the new §0 below reflects what shipped after the original audit.
+§0 reflects what shipped after the original audit, and §0.6–§0.11 add a
+trust-era audit that re-evaluates the surface against MVP user stories
+now that deterministic trust ships on five detail-read endpoints.
 No design changes, no implementation, no schema work. ARC and
 `tckdb-client` are out of scope.
 
@@ -257,6 +259,354 @@ PRs follow the same shape:
   surface originally skipped `False` and was fixed in commit
   `da7c2fd`; all subsequent surfaces (conformer / statmech /
   transport) ship with the correct semantics from the start.
+
+---
+
+## 0.6 Trust-layer integration audit (2026-05-28)
+
+Trust support landed after the original audit and is documented in
+`trust_read_api_current.md`. This section is the operational summary of
+how it integrates with the rest of the read surface.
+
+### 0.6.1 Trust-enabled surfaces
+
+Five detail reads accept `include=trust` and emit a `record.trust`
+fragment. The legal-token sets in the service modules are
+authoritative; this table is verified against them.
+
+| Endpoint | Legal `trust` token | Rubric | Source |
+|---|---|---|---|
+| `GET /scientific/calculations/{ref_or_id}` | ✓ | `computed_calculation_v1` | `services/scientific_read/calculations.py:144,209,361` |
+| `GET /scientific/reaction-entries/{id}/kinetics` | ✓ | `computed_kinetics_v1` | `services/scientific_read/kinetics.py:94,182,208,370` |
+| `GET /scientific/species-entries/{id}/thermo` | ✓ | `computed_thermo_v1` | `services/scientific_read/thermo.py:84,174,200,366` |
+| `GET /scientific/statmech/{ref_or_id}` | ✓ | `computed_statmech_v1` | `services/scientific_read/statmech.py:95,185,190,313` |
+| `GET /scientific/transport/{ref_or_id}` | ✓ | `computed_transport_v1` | `services/scientific_read/transport.py:74,124,129,224` |
+
+### 0.6.2 Trust posture invariants
+
+All five surfaces share these invariants, verified by inspection:
+
+- **`trust` is internal-tokenized.** Each detail surface passes
+  `internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"}` to
+  `validate_includes()`, so `include=all` does **not** expand to
+  `trust`. Clients must say `?include=trust` explicitly.
+- **`trust` is not legal on search/list endpoints.** Verified against
+  `_LEGAL_INCLUDE_TOKENS` in `thermo_search.py`, `kinetics_search.py`,
+  `statmech_search.py`, `transport_search.py`, `calculations_search.py`
+  (plus structure/artifact/conformer/network search surfaces). A
+  request of `include=trust` to a search endpoint returns 422
+  `unknown_include_token`. This is intentional pagination-cost control
+  and is the policy this audit recommends keeping.
+- **`trust.evidence.record_id` is internal-IDs-gated.** Hidden by
+  default; surfaces only when `include=trust,internal_ids` is requested
+  *and* `settings.allow_public_internal_ids` is true.
+- **`trust.llm_precheck` ships disabled.** Public scientific responses
+  always carry `{"enabled": false, "label": "not_run", "summary": null}`
+  regardless of whether AI Review Assistant audit events exist for the
+  underlying submission. AI Review Assistant results stay confined to
+  `/submissions/{id}/ai-review-summary` and `/audit-events`.
+- **Post-resolution stripping.** `_response.py` removes `trust` from any
+  record where the include set did not retain the token (handles edge
+  cases where a nested helper attached `trust` but the caller did not
+  request it).
+
+### 0.6.3 Trust gaps relative to the broader surface
+
+| Surface | Trust status | Notes |
+|---|---|---|
+| `/scientific/calculations/{ref_or_id}` | **enabled** | per-calculation `computed_calculation_v1`. |
+| `/scientific/calculations/search` | omitted by policy | search surfaces skip trust. |
+| `/scientific/reaction-entries/{id}/full` | **not enabled** | composite reaction-entry read does not carry trust on the embedded kinetics / calculations / transition-state sections, even though the standalone endpoints do. |
+| `/scientific/transition-states/{ref_or_id}` | **not enabled** | no `computed_transition_state_v1` rubric defined. |
+| `/scientific/conformer-groups/{ref_or_id}`, `/scientific/conformer-observations/{ref_or_id}` | **not enabled** | no conformer rubric. |
+| `/scientific/networks/*` (network / network-solve / network-kinetics) | **not enabled** | no network/PDep rubric. |
+| `/scientific/frequency-scale-factors/*`, `/scientific/energy-correction-schemes/*` | **n/a (by design)** | non-reviewable surfaces; no record-grade trust applies. |
+| `/scientific/literature/*` | **n/a (by design)** | identity surface, not a scientific computation record. |
+| `/scientific/artifacts/search` | **n/a** | metadata-only search; trust would be a property of the owning calculation. |
+
+The most notable practical gap is the reaction-entry `/full` composite:
+a caller who fetches the composite cannot see trust badges on the
+embedded kinetics or calculations, even though the dedicated endpoints
+expose them. This is a UX inconsistency, not a correctness bug.
+
+---
+
+## 0.7 MVP user-story coverage (2026-05-28)
+
+Evaluates the ten prompt MVP stories against the current shipped
+surface. "✓" means the question has a clear answer via a single
+documented endpoint; "△" means it is answerable via composition or a
+non-canonical surface; "✗" means no documented surface answers it.
+
+| # | User story | Status | Endpoint(s) | Notes |
+|---|---|---|---|---|
+| 1 | Find species by SMILES / InChI / InChIKey | ✓ | `GET /scientific/species/search` | Identifiers required; `formula` also accepted. AND-combined; deterministic ordering. |
+| 2 | Find thermo for a species | ✓ | `GET /scientific/species-entries/{id}/thermo` (per-entry), `GET\|POST /scientific/thermo/search` (chemistry-first) | Both support `include=trust` only on the per-entry surface; search lacks trust by policy. |
+| 3 | Find transport for a species | △ | `GET\|POST /scientific/transport/search` (record-grain only) | Search by species identifiers is supported; no `/species-entries/{id}/transport` analogue under `/scientific`. The legacy `/species-entries/{id}/transport` exists but is not review-aware and not on the public-handle contract. |
+| 4 | Find statmech for a species | △ | `GET\|POST /scientific/statmech/search` | Same shape as transport. No `/species-entries/{id}/statmech` analogue under `/scientific`. |
+| 5 | Find reactions by reactants / products | ✓ | `GET\|POST /scientific/reactions/search` | Reactants/products as identifier lists; direction `forward\|reverse\|either`. |
+| 6 | Find kinetics for a reaction | ✓ | `GET /scientific/reaction-entries/{id}/kinetics`, `GET\|POST /scientific/kinetics/search` | Per-entry surface exposes `include=trust`; search does not. |
+| 7 | Inspect calculation / provenance for a record | ✓ | `GET /scientific/calculations/{ref_or_id}`, `GET /scientific/reaction-entries/{id}/full` | `/full` is the only composite "provenance projection" today; no generic `/scientific/records/{type}/{id}/provenance`. |
+| 8 | Ask for trust / evidence details on a record | △ | five detail reads (calculation, kinetics-per-entry, thermo-per-entry, statmech, transport) | Reaction-entry `/full` does not propagate trust to embedded records; TS / conformer / network have no rubric. |
+| 9 | Avoid rejected / deprecated records by default | ✓ | every `/scientific/*` read | Default visible set: `{approved, under_review, not_reviewed}`. Opt in via `include_rejected` / `include_deprecated`; threshold via `min_review_status`. Legacy `/api/v1/{entity}` reads do not filter. |
+| 10 | Documented selection policy for "best" record | △ | `species-calculations/search` `ranking` enum only; all other surfaces use deterministic L3 ordering without an explicit policy token | See §0.8. No `tckdb_default` / `approved_first` / `latest` token exists across the broader surface. |
+
+### Cross-cutting story observations
+
+- The "find X for a species" stories (#2, #3, #4) split between
+  per-entry path endpoints (only #2 has the canonical `/scientific`
+  variant) and identifier-driven search endpoints. The shape mismatch
+  is real but small; closing it would mean adding
+  `/scientific/species-entries/{id}/statmech` and `.../transport` as
+  thin wrappers over the existing search services.
+- Story #7 ("inspect provenance") is well covered for the reaction case
+  via `/full`. The species and TS analogues do not have an equivalent
+  composite, so the audit's original §12 entry for a generic
+  `/scientific/records/{type}/{id}/provenance` projection still stands.
+- Story #8 has a clear policy (detail-only, opt-in, internal-IDs gated)
+  but the *composite* read (reaction-entry `/full`) is now the odd one
+  out — embedded kinetics there cannot carry the same trust badges as
+  the standalone kinetics endpoint.
+
+---
+
+## 0.8 Selection-policy audit (2026-05-28)
+
+The prompt asks whether reads/searches define a selection policy with
+tokens such as `all`, `latest`, `approved_first`, `tckdb_default`.
+
+### 0.8.1 Current state
+
+Only one endpoint exposes a selection-policy enum:
+
+| Endpoint | Parameter | Values | Source |
+|---|---|---|---|
+| `GET\|POST /scientific/species-calculations/search` | `ranking` | `default \| latest \| earliest \| review_rank \| lowest_energy` | `schemas/reads/scientific_species_calculations.py:125`; `services/scientific_read/species_calculations_search.py:955-981` |
+
+`lowest_energy` is constrained to `calculation_type ∈ {sp, opt}` and
+returns 422 `unsupported_ranking_for_calculation_type` otherwise.
+
+Every other `/scientific/*` search endpoint relies on a *locked*
+deterministic L3-style ordering (e.g.
+`covers_requested_temperature_range, extrapolation_distance_k,
+review_rank, evidence_completeness, created_at, id` on
+`/species-entries/{id}/thermo`). Client `sort=` is always rejected
+with 422 `client_sort_not_supported`. The semantics of "best" are
+therefore baked into the per-endpoint ordering, not chosen by the
+caller.
+
+The default visible set (rejected/deprecated excluded) acts as a *de
+facto* `approved_first`-style filter, but it is a visibility filter,
+not a ranking — two `approved` records and one `not_reviewed` record
+are ordered by L3 tie-breakers, not by review rank.
+
+### 0.8.2 Gap
+
+There is no policy token that lets a caller say:
+
+- "give me only the best record" (collapse-to-one),
+- "give me approved records, then promising candidates" (rank-by-review),
+- "give me the most recently submitted" (`latest` outside species-calculations),
+- "give me everything, ordered by stable key" (`all`).
+
+For example, on `/scientific/species-entries/{id}/thermo` the caller
+gets a deterministically-ordered paginated list with implicit "best
+first" semantics but no token that documents that behavior or lets
+them switch to "latest first" or "approved only, then collapse".
+
+### 0.8.3 Proposed MVP policy (recommendation only — not implemented)
+
+If/when we ship a uniform selection policy:
+
+| Token | Semantics |
+|---|---|
+| `all` | return everything matching filters; ordered by current locked deterministic key (current behavior). |
+| `latest` | sort by `created_at DESC, id DESC`; ties broken by stable key. |
+| `approved_first` | sort by `review_rank ASC` first, then the endpoint's current locked tie-breakers. |
+| `tckdb_default` | the endpoint's current locked L3 ordering — explicit so the default is namable and stable. |
+
+Implementation shape (recommended, not committed): an optional
+`selection_policy` query parameter on the per-entry surfaces and
+record-grain searches that opt in. Endpoints without a meaningful
+"best" notion (identity surfaces such as
+`/scientific/species/search`) would not accept the parameter and would
+return 422 if supplied. `species-calculations/search`'s existing
+`ranking` enum should be preserved as a domain-specific override and
+*not* replaced — `lowest_energy` is a chemistry-specific axis that no
+generic policy token covers.
+
+Out of scope for this audit: actually wiring the policy. See §0.10.
+
+---
+
+## 0.9 Include-vocabulary consistency audit (2026-05-28)
+
+The original §6.1 lists per-endpoint legal tokens. This section adds
+two cross-cutting findings about consistency.
+
+### 0.9.1 Current cross-endpoint include matrix
+
+Marks: ✓ = supported, n/a = not applicable to the surface, ✗ = absent
+but plausibly meaningful.
+
+| Token | calc detail | calc search | TS detail | TS search | conformer detail | conformer search | statmech detail | statmech search | transport detail | transport search | network detail | network search | thermo per-entry | thermo search | kinetics per-entry | kinetics search | reaction-entry `/full` | species search | structure search | artifact search | FSF / ECS |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `provenance` | n/a (provenance is inline) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a | n/a | n/a |
+| `calculations` | n/a (this *is* a calc) | n/a | ✓ | n/a | ✓ | n/a | ✓ (`source_calculations`) | n/a | ✓ (`source_calculations`) | n/a | n/a | n/a | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a | n/a |
+| `artifacts` | ✓ | n/a | n/a (use calc detail) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a (`/artifacts/search` is its own surface) | n/a |
+| `review` | ✓ | n/a (review per-row inline) | ✓ | n/a | ✓ | n/a | ✓ | n/a | ✓ | n/a | ✓ | n/a | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a (non-reviewable) |
+| `trust` | ✓ | ✗ by policy | ✗ (no rubric) | ✗ | ✗ | ✗ | ✓ | ✗ by policy | ✓ | ✗ by policy | ✗ (no rubric) | ✗ | ✓ | ✗ by policy | ✓ | ✗ by policy | ✗ (not propagated) | n/a | n/a | n/a | n/a |
+| `internal_ids` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | ✓ | ✓ |
+| `all` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | ✓ | ✓ |
+| `used_by` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | ✓ (inverse links) |
+
+### 0.9.2 Findings
+
+1. **`include=all` semantics are consistent.** Every surface defines
+   `all = legal − internal_tokens`, where `internal_tokens` is
+   `{internal_ids}` plus `{trust}` on the trust-enabled surfaces. No
+   endpoint accidentally leaks `internal_ids` or `trust` through `all`.
+2. **`include=trust` is detail-only by policy.** Search surfaces that
+   *could* meaningfully attach trust (thermo / kinetics / statmech /
+   transport / calculations search) explicitly omit it. This audit
+   recommends keeping the policy; see §0.10.
+3. **Reaction-entry `/full` is missing trust.** This is the single
+   meaningful inconsistency in the trust vocabulary: the composite
+   exposes `review` but not `trust` on the embedded sections, while the
+   standalone detail endpoints expose both. Closing it requires either
+   (a) propagating per-record trust into the embedded sections under
+   `include=trust` on `/full`, or (b) explicitly documenting that
+   callers must follow the embedded refs back to the standalone detail
+   endpoints to see trust badges.
+4. **`include=provenance` is thermo/kinetics-only.** On the
+   record-grain searches (calculations, statmech, transport, network)
+   the provenance is inlined into the record body rather than gated by
+   an include token. That is the right call (provenance is always
+   load-bearing for those records), but it is worth documenting so
+   future surfaces follow the same pattern.
+5. **`include=calculations` overloads two meanings.** On thermo /
+   kinetics / TS / conformer surfaces it means "show the calculation
+   provenance for this record". On statmech / transport surfaces the
+   same data is exposed under `include=source_calculations`. The two
+   are functionally equivalent; harmonising on a single token would
+   reduce client surprise. Not urgent.
+6. **No `include=geometry` on detail reads.** Available only on
+   `species-calculations/search`. Other surfaces require an extra hop
+   to `/scientific/geometries/{handle}`. This is a deliberate
+   "geometries are big" decision and is correctly scoped.
+7. **No missing include tokens identified beyond §0.6.3 and §0.9.2.3.**
+   The Phase D internal-ID story is fully threaded.
+
+### 0.9.3 Recommended include-vocabulary stabilization (advisory)
+
+- **Document the policy that `trust` is always internal-tokenized and
+  always detail-only.** This is true in code but only documented in
+  `trust_read_api_current.md`. Adding a one-line note to
+  `scientific_common.py` (and to this audit) would prevent future
+  surfaces from drifting.
+- **Treat `include=source_calculations` as the canonical token for
+  "the calculations that produced this record".** When the next
+  surface lands (e.g. a putative `applied_energy_correction` scientific
+  read), prefer `source_calculations` over `calculations`. Do not
+  rename existing tokens.
+
+---
+
+## 0.10 Recommended next MVP implementation slices (2026-05-28)
+
+This audit replaces the original §14 recommendations with a smaller,
+trust-era-informed ordering. Each slice is sized to land independently
+without broad rewrites.
+
+1. **Propagate trust to reaction-entry `/full` embedded records
+   (smallest, highest user-visible value).** Make `include=trust` on
+   `/scientific/reaction-entries/{id}/full` re-use the existing
+   `computed_kinetics_v1` and `computed_calculation_v1` builders to
+   attach trust to embedded kinetics and (where present) calculation
+   summaries. Reuses tested helpers; no new rubric. Keeps the
+   detail-only policy intact because `/full` is a detail read. Adds a
+   cross-endpoint equality test asserting the embedded trust block
+   matches the standalone detail block.
+
+2. **Add `/scientific/species-entries/{id}/statmech` and
+   `/scientific/species-entries/{id}/transport` thin wrappers (closes
+   stories #3 / #4 / #8 symmetry).** Thin adapters that delegate to
+   `search_statmech` / `search_transport` with the species-entry's
+   resolved ref pinned. Includes `trust` (detail per-record), `review`,
+   `source_calculations`, `artifacts`. Mirrors the existing thermo
+   per-entry surface. No schema work; no new service.
+
+3. **Document an explicit `selection_policy` parameter — *spec only*,
+   no implementation.** Update this audit (or a sibling spec) with the
+   four-token vocabulary from §0.8.3 and a per-endpoint applicability
+   matrix. The implementation lands in a later slice once a downstream
+   consumer asks for it. (Per `feedback_no_calendar_followups`: hold
+   the implementation until a real trigger.)
+
+4. **Add provenance-summary fragments where they are inline-only
+   today.** Define a `ProvenanceSummary` schema (LoT ref + method/basis,
+   software ref + version, workflow_tool ref + version, primary
+   calculation ref) and reuse it on the statmech / transport / network
+   detail responses where the provenance is currently composed
+   ad-hoc. Anti-drift mirror of the existing
+   `CalculationEvidenceSummary` pattern.
+
+5. **Cross-link detail trust from search results.** Search responses
+   currently return record refs but no signal that the *detail*
+   endpoint can deliver `?include=trust`. Add a per-record
+   `links.trust_detail_url` (or equivalent under an existing
+   `_links` block if one exists) so clients can navigate from a
+   trust-less search hit to its trust-enabled detail. Detail-only
+   trust policy preserved; no pagination-cost regression.
+
+### Items explicitly *not* on this slice list
+
+- **Trust on search / list endpoints.** Keep the detail-only policy.
+  Pagination-cost control is the right reason; if a future consumer
+  needs it, ship it behind an explicit `include=trust` *plus* a
+  reduced default `limit`, not by default.
+- **New trust rubrics (transition state, conformer, network).** These
+  are scientifically meaningful but each needs a rubric design pass
+  before a read endpoint change. Not MVP.
+- **Generic `/scientific/records/{type}/{id}/provenance` projection.**
+  Original §14 carried this; it is still worth doing but is larger
+  than an MVP slice. Defer.
+- **Bulk export.** Out of MVP scope; tracked under §12 / §0.2.
+- **Public substructure / similarity expansion beyond v0.** Already
+  shipped in v0 (`/species/structure-search`); reaction substructure
+  search is a v1 follow-up but not MVP.
+
+---
+
+## 0.11 Open design questions (2026-05-28)
+
+Carries forward the relevant subset of §15 plus trust-era specifics.
+
+1. **`/full` trust propagation shape.** Should embedded kinetics under
+   `include=trust` carry the *full* `trust` envelope (with
+   `evidence.passed_checks` arrays) or a compact `trust_summary`
+   ({status, label, is_certified, evidence_completeness})? The full
+   envelope is simpler (reuses one builder); the compact form keeps
+   `/full` payload sizes bounded.
+2. **Selection-policy applicability matrix.** Which surfaces should
+   accept `selection_policy=latest` (or any policy token at all)? The
+   per-entry surfaces (#2 thermo, putative #3/#4) are the obvious
+   candidates. The chemistry-first record-grain searches (thermo /
+   kinetics / statmech / transport) are less obvious — they already
+   return a paginated list, so "policy" is mostly an ordering tweak.
+3. **Should the per-entry surfaces expose `selection_policy=best` as a
+   shorthand for "collapse to the top-ranked record"?** Useful for ARC
+   /  tckdb-client consumers that want a single answer, but it changes
+   the response shape from list to single record. May be cleaner to
+   ship as a separate endpoint (e.g. `/best`).
+4. **Cross-linking idiom.** Adding `_links` or `links.trust_detail`
+   raises the question of whether the public response envelope should
+   adopt a HAL-style `_links` block uniformly. Either route is fine
+   but a one-time decision avoids drift.
+5. **Trust on reaction-entry top-level.** Should `/full` *itself*
+   carry a top-level `trust` block aggregating embedded record trust?
+   Probably not — there is no `computed_reaction_entry_v1` rubric and
+   aggregation policy would be its own design discussion.
 
 ---
 
