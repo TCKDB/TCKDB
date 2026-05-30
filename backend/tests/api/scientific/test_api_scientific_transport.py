@@ -854,6 +854,9 @@ def test_search_include_all_on_records(client, db_session):
     assert "source_calculations" in inc
     assert "review" in inc
     assert "internal_ids" not in inc
+    # Broad search never exposes trust (detail-only token).
+    assert "trust" not in inc
+    assert "trust" not in body["records"][0]
 
 
 def test_search_include_all_does_not_restore_internal_ids(client, db_session):
@@ -862,6 +865,15 @@ def test_search_include_all_does_not_restore_internal_ids(client, db_session):
         _search_url(transport_ref=tr.public_ref, include="all")
     ).json()
     assert "transport_id" not in body["records"][0]["transport"]
+
+
+def test_search_include_trust_returns_422(client, db_session):
+    """Broad transport search rejects ``include=trust`` — trust is a
+    detail/subresource-only token, never exposed on list/search."""
+    _, _, tr = _make_transport(db_session)
+    resp = client.get(_search_url(transport_ref=tr.public_ref, include="trust"))
+    assert resp.status_code == 422
+    assert "unknown_include_token" in resp.text
 
 
 def test_search_internal_ids_restored_when_policy_allows(

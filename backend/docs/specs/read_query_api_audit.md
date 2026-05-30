@@ -283,8 +283,8 @@ modules are authoritative; this table is verified against them.
 | `GET /scientific/calculations/{ref_or_id}` | ✓ | `computed_calculation_v1` | `services/scientific_read/calculations.py:144,209,361` |
 | `GET /scientific/reaction-entries/{id}/kinetics` | ✓ | `computed_kinetics_v1` | `services/scientific_read/kinetics.py:94,182,208,370` |
 | `GET /scientific/species-entries/{id}/thermo` | ✓ | `computed_thermo_v1` | `services/scientific_read/thermo.py:84,174,200,366` |
-| `GET /scientific/statmech/{ref_or_id}` | ✓ | `computed_statmech_v1` | `services/scientific_read/statmech.py:95,185,190,313` |
-| `GET /scientific/species-entries/{id}/statmech` | ✓ | `computed_statmech_v1` | `services/scientific_read/species_statmech.py` (reuses `_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `build_statmech_record`; `trust` is an internal token) |
+| `GET /scientific/statmech/{ref_or_id}` | ✓ | `computed_statmech_v1` | `services/scientific_read/statmech.py:109,195,202,325` (detail uses `_DETAIL_LEGAL_INCLUDE_TOKENS`; the search-shared `_LEGAL_INCLUDE_TOKENS` excludes `trust`) |
+| `GET /scientific/species-entries/{id}/statmech` | ✓ | `computed_statmech_v1` | `services/scientific_read/species_statmech.py` (reuses `_DETAIL_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `build_statmech_record`; `trust` is an internal token) |
 | `GET /scientific/transport/{ref_or_id}` | ✓ | `computed_transport_v1` | `services/scientific_read/transport.py:74,124,129,224` |
 | `GET /scientific/species-entries/{id}/transport` | ✓ | `computed_transport_v1` | `services/scientific_read/species_transport.py` (reuses `_DETAIL_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `build_transport_record`; `trust` is an internal token) |
 | `GET /scientific/transition-state-entries/{ref_or_id}` | ✓ | `computed_transition_state_v1` | `services/scientific_read/transition_states.py` (`_TSE_DETAIL_LEGAL_INCLUDE_TOKENS`, `_TSE_DETAIL_INTERNAL_INCLUDE_TOKENS`, `_TRUST_EAGER_LOADS`, `build_transition_state_entry_trust_fragment`) |

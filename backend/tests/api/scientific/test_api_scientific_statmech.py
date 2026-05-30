@@ -936,6 +936,10 @@ def test_search_include_all_on_records(client, db_session):
     ):
         assert token in inc
     assert "internal_ids" not in inc
+    # Broad search never exposes trust: ``include=all`` must not expand to
+    # it (search/list endpoints are trust-free; trust is detail-only).
+    assert "trust" not in inc
+    assert "trust" not in body["records"][0]
 
 
 def test_search_include_all_does_not_restore_internal_ids(client, db_session):
@@ -944,6 +948,23 @@ def test_search_include_all_does_not_restore_internal_ids(client, db_session):
         _search_url(statmech_ref=sm.public_ref, include="all")
     ).json()
     assert "statmech_id" not in body["records"][0]["statmech"]
+
+
+def test_search_include_trust_returns_422(client, db_session):
+    """Broad statmech search must reject ``include=trust`` — trust is a
+    detail/subresource-only token, never exposed on list/search."""
+    _, _, sm = _make_statmech(db_session)
+    resp = client.get(_search_url(statmech_ref=sm.public_ref, include="trust"))
+    assert resp.status_code == 422
+    assert "unknown_include_token" in resp.text
+
+
+def test_search_default_omits_trust(client, db_session):
+    """Default statmech search (no include) never carries a trust block."""
+    _, _, sm = _make_statmech(db_session)
+    body = client.get(_search_url(statmech_ref=sm.public_ref)).json()
+    assert "trust" not in body["request"]["include"]
+    assert "trust" not in body["records"][0]
 
 
 def test_search_internal_ids_restored_when_policy_allows(

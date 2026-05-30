@@ -84,6 +84,11 @@ from app.services.trust import (
 # ---------------------------------------------------------------------------
 
 
+# Public include tokens shared by the search and species-entry surfaces.
+# ``trust`` is deliberately **absent** here: search/list endpoints never
+# expose trust, so a caller passing ``include=trust`` to
+# ``/scientific/statmech/search`` gets a 422 ``unknown_include_token`` and
+# ``include=all`` cannot expand to it.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "source_calculations",
     "torsions",
@@ -92,9 +97,16 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
     "internal_ids",
     "all",
-    "trust",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+
+# ``trust`` is legal only on the trust-bearing surfaces: the standalone
+# statmech detail endpoint and the species-entry statmech subresource. Like
+# ``internal_ids``, it is internal-tokenized on those surfaces so
+# ``include=all`` does not pull it in — callers must opt in with
+# ``include=trust`` explicitly. The narrower ``_LEGAL_INCLUDE_TOKENS`` set
+# used by search keeps trust out of broad list/search responses entirely.
+_DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS | {"trust"}
 _TRUST_EAGER_LOADS = (
     selectinload(Statmech.species_entry),
     selectinload(Statmech.frequency_scale_factor),
@@ -180,7 +192,7 @@ def get_statmech(
     """
     includes = validate_includes(
         include or [],
-        _LEGAL_INCLUDE_TOKENS,
+        _DETAIL_LEGAL_INCLUDE_TOKENS,
         "/scientific/statmech/{statmech_ref_or_id}",
         internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )
@@ -914,6 +926,7 @@ def _load_review_badge(session: Session, statmech_id: int) -> RecordReviewBadge:
 
 
 __all__ = [
+    "_DETAIL_LEGAL_INCLUDE_TOKENS",
     "_INTERNAL_INCLUDE_TOKENS",
     "_LEGAL_INCLUDE_TOKENS",
     "build_statmech_record",

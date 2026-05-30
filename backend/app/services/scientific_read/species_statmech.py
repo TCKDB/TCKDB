@@ -8,11 +8,12 @@ for the same include set) plus the shared review / pagination / sort
 helpers.
 
 Mirrors ``get_species_thermo`` rather than delegating to
-``search_statmech`` because the per-entry endpoint owns a stricter
-``include=`` policy: ``trust`` is an *internal* token here, so
-``include=all`` never expands to it. ``search_statmech`` treats
-``trust`` as a public token; reusing it would leak trust on
-``include=all`` and diverge from the per-entry thermo contract.
+``search_statmech``: the per-entry subresource *does* expose ``trust``
+(via the trust-bearing ``_DETAIL_LEGAL_INCLUDE_TOKENS`` set, with
+``trust`` internal-tokenized so ``include=all`` never expands to it),
+whereas broad ``search_statmech`` uses the narrower
+``_LEGAL_INCLUDE_TOKENS`` set and rejects ``include=trust`` outright —
+trust is detail/subresource only, never on broad search.
 
 See ``backend/docs/specs/scientific_statmech_reads.md`` and
 ``backend/docs/specs/trust_read_api_current.md``.
@@ -54,8 +55,8 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.statmech import (
+    _DETAIL_LEGAL_INCLUDE_TOKENS,
     _INTERNAL_INCLUDE_TOKENS,
-    _LEGAL_INCLUDE_TOKENS,
     build_statmech_record,
 )
 
@@ -92,7 +93,7 @@ def get_species_statmech(
     offset, limit = validate_pagination(offset, limit)
     includes = validate_includes(
         include or [],
-        _LEGAL_INCLUDE_TOKENS,
+        _DETAIL_LEGAL_INCLUDE_TOKENS,
         "/scientific/species-entries/{id}/statmech",
         internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )

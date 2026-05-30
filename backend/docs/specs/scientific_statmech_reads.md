@@ -109,6 +109,24 @@ No `include` returns the bounded default: core block + species
 context + FSF / software / workflow / literature pointers when the
 row carries them + evidence summary + available_sections.
 
+### Trust token policy
+
+`trust` is a **detail/subresource-only** token. It adds the
+`computed_statmech_v1` fragment per record and is legal only on:
+
+- `GET /scientific/statmech/{ref_or_id}` (standalone detail)
+- `GET /scientific/species-entries/{id}/statmech` (per-entry subresource)
+
+Broad `GET|POST /scientific/statmech/search` follows the global
+search/list policy and **does not expose trust**: `include=trust`
+returns 422 `unknown_include_token`, and `include=all` never expands to
+`trust`. On the two trust-bearing surfaces `trust` is likewise
+internal-tokenized — `include=all` does not pull it in; callers must
+request `include=trust` explicitly. Mechanically this is the
+`_DETAIL_LEGAL_INCLUDE_TOKENS` (detail/subresource) vs
+`_LEGAL_INCLUDE_TOKENS` (search) split in
+`services/scientific_read/statmech.py`, mirroring `transport.py`.
+
 ## 5. Search filters
 
 Implemented (MVP):
