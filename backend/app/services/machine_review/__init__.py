@@ -22,6 +22,12 @@ from app.services.machine_review.mapping import (
     UnmappedReason,
     map_findings_to_submission_records,
 )
+from app.services.machine_review.read_model import (
+    MachineReviewRecordSummary,
+    RecordMachineReview,
+    build_machine_review_record_summary,
+    select_latest_machine_review_for_record,
+)
 from app.services.machine_review.schemas import (
     CuratorPriority,
     MachineReviewCategory,
@@ -37,14 +43,18 @@ __all__ = [
     "MachineReviewFinding",
     "MachineReviewOutcome",
     "MachineReviewRecordMapping",
+    "MachineReviewRecordSummary",
     "MachineReviewResult",
     "MachineReviewSeverity",
     "MachineReviewStatus",
     "MappedRecord",
+    "RecordMachineReview",
     "SubmissionRecordLinkLike",
     "SubmissionRecordLinkRef",
     "UnmappedFinding",
     "UnmappedReason",
+    "build_machine_review_record_summary",
     "derive_machine_review_status",
     "map_findings_to_submission_records",
+    "select_latest_machine_review_for_record",
 ]
