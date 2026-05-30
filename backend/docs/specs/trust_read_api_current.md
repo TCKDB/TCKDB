@@ -14,6 +14,8 @@ Trust fragments are available only on these scientific detail/read endpoints:
 GET /api/v1/scientific/calculations/{calculation_ref_or_id}?include=trust
 GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics?include=trust
 GET /api/v1/scientific/species-entries/{species_entry_id}/thermo?include=trust
+GET /api/v1/scientific/species-entries/{species_entry_id}/statmech?include=trust
+GET /api/v1/scientific/species-entries/{species_entry_id}/transport?include=trust
 GET /api/v1/scientific/statmech/{statmech_ref_or_id}?include=trust
 GET /api/v1/scientific/transport/{transport_ref_or_id}?include=trust
 GET /api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}?include=trust
@@ -37,8 +39,8 @@ Current implemented deterministic trust rubrics:
 | `computed_calculation_v1` | Calculation detail reads |
 | `computed_kinetics_v1` | Reaction-entry kinetics reads |
 | `computed_thermo_v1` | Species-entry thermo reads |
-| `computed_statmech_v1` | Statmech detail reads |
-| `computed_transport_v1` | Transport detail reads |
+| `computed_statmech_v1` | Statmech detail reads and species-entry statmech reads |
+| `computed_transport_v1` | Transport detail reads and species-entry transport reads |
 | `computed_transition_state_v1` | Standalone transition-state-entry detail reads |
 
 Public rubric names are versioned. Clients should treat the full rubric string
@@ -132,6 +134,28 @@ This is true even when a submission has AI Review Assistant audit events.
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. Broad transport search/list endpoints do not expose trust. |
+
+### Species-Entry Statmech
+
+| Field | Behavior |
+| --- | --- |
+| Path | `GET /api/v1/scientific/species-entries/{species_entry_id}/statmech` |
+| Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
+| Rubric used | `computed_statmech_v1` (per returned record) |
+| Default behavior | Without `include=trust`, each statmech record omits `trust`. |
+| Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
+| Notes/limitations | `include=all` does not include trust. A species-entry-scoped subresource read (mirrors species-entry thermo), not a broad search; it reuses the statmech record projection and deterministic ordering. Broad statmech search/list endpoints still do not expose trust. |
+
+### Species-Entry Transport
+
+| Field | Behavior |
+| --- | --- |
+| Path | `GET /api/v1/scientific/species-entries/{species_entry_id}/transport` |
+| Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
+| Rubric used | `computed_transport_v1` (per returned record) |
+| Default behavior | Without `include=trust`, each transport record omits `trust`. |
+| Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
+| Notes/limitations | `include=all` does not include trust. A species-entry-scoped subresource read (mirrors species-entry thermo), not a broad search; it reuses the transport record projection and deterministic ordering. Broad transport search/list endpoints still do not expose trust. |
 
 ### Transition-State Entry Detail (standalone)
 

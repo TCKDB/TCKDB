@@ -133,10 +133,12 @@ Verified against `backend/app/api/routes/scientific/__init__.py` on
 
 **Statmech**
 - `GET /statmech/{ref_or_id}` — statmech detail (`include=source_calculations`, `torsions`, `frequencies`, `conformers`, `review`, `all`). Frequencies are a pointer to the source freq calc refs, not inlined per-mode arrays.
+- `GET /species-entries/{id}/statmech` — per-species-entry statmech read (mirrors species-entry thermo). Reuses the statmech record projection + deterministic ordering; review knobs (`min_review_status`, `include_rejected`, `include_deprecated`) + pagination; `include=source_calculations`, `torsions`, `frequencies`, `conformers`, `review`, `trust`, `internal_ids`, `all` (trust opt-in; `all` excludes trust).
 - `GET\|POST /statmech/search` — 16 filters incl. `model_kind`, `has_source_calculations`/`freq_calculation`/`rotor_scans`/`torsions`, method/basis/software/workflow filters.
 
 **Transport**
 - `GET /transport/{ref_or_id}` — transport detail (`include=source_calculations`, `review`, `all`).
+- `GET /species-entries/{id}/transport` — per-species-entry transport read (mirrors species-entry thermo). Reuses the transport record projection + deterministic ordering; review knobs + pagination; `include=source_calculations`, `review`, `trust`, `internal_ids`, `all` (trust opt-in; `all` excludes trust).
 - `GET\|POST /transport/search` — 15 filters incl. `model_kind` (maps to `scientific_origin`), `has_lj_parameters`/`dipole_moment`/`polarizability`/`rotational_relaxation`/`source_calculations`, method/basis/software/workflow filters.
 
 **Reaction-full**
@@ -282,7 +284,9 @@ modules are authoritative; this table is verified against them.
 | `GET /scientific/reaction-entries/{id}/kinetics` | ✓ | `computed_kinetics_v1` | `services/scientific_read/kinetics.py:94,182,208,370` |
 | `GET /scientific/species-entries/{id}/thermo` | ✓ | `computed_thermo_v1` | `services/scientific_read/thermo.py:84,174,200,366` |
 | `GET /scientific/statmech/{ref_or_id}` | ✓ | `computed_statmech_v1` | `services/scientific_read/statmech.py:95,185,190,313` |
+| `GET /scientific/species-entries/{id}/statmech` | ✓ | `computed_statmech_v1` | `services/scientific_read/species_statmech.py` (reuses `_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `build_statmech_record`; `trust` is an internal token) |
 | `GET /scientific/transport/{ref_or_id}` | ✓ | `computed_transport_v1` | `services/scientific_read/transport.py:74,124,129,224` |
+| `GET /scientific/species-entries/{id}/transport` | ✓ | `computed_transport_v1` | `services/scientific_read/species_transport.py` (reuses `_DETAIL_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `build_transport_record`; `trust` is an internal token) |
 | `GET /scientific/transition-state-entries/{ref_or_id}` | ✓ | `computed_transition_state_v1` | `services/scientific_read/transition_states.py` (`_TSE_DETAIL_LEGAL_INCLUDE_TOKENS`, `_TSE_DETAIL_INTERNAL_INCLUDE_TOKENS`, `_TRUST_EAGER_LOADS`, `build_transition_state_entry_trust_fragment`) |
 | `GET /scientific/reaction-entries/{id}/full` | ✓ (modifier) | `computed_kinetics_v1` on embedded kinetics; `computed_calculation_v1` on embedded calculations; `computed_transition_state_v1` on embedded transition-state entries | `services/scientific_read/provenance.py` (`_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `_build_kinetics_section`, `_build_calculations_section`, `_build_calculation_trust_fragments`, `_build_transition_states_section`, `build_transition_state_entry_trust_fragment`) |
 
@@ -365,23 +369,29 @@ non-canonical surface; "✗" means no documented surface answers it.
 |---|---|---|---|---|
 | 1 | Find species by SMILES / InChI / InChIKey | ✓ | `GET /scientific/species/search` | Identifiers required; `formula` also accepted. AND-combined; deterministic ordering. |
 | 2 | Find thermo for a species | ✓ | `GET /scientific/species-entries/{id}/thermo` (per-entry), `GET\|POST /scientific/thermo/search` (chemistry-first) | Both support `include=trust` only on the per-entry surface; search lacks trust by policy. |
-| 3 | Find transport for a species | △ | `GET\|POST /scientific/transport/search` (record-grain only) | Search by species identifiers is supported; no `/species-entries/{id}/transport` analogue under `/scientific`. The legacy `/species-entries/{id}/transport` exists but is not review-aware and not on the public-handle contract. |
-| 4 | Find statmech for a species | △ | `GET\|POST /scientific/statmech/search` | Same shape as transport. No `/species-entries/{id}/statmech` analogue under `/scientific`. |
+| 3 | Find transport for a species | ✓ | `GET /scientific/species-entries/{id}/transport` (per-entry), `GET\|POST /scientific/transport/search` (chemistry-first) | The per-entry surface now mirrors species-entry thermo: review-aware, public-handle, `include=trust` → `computed_transport_v1`. Search still does not expose trust by policy. |
+| 4 | Find statmech for a species | ✓ | `GET /scientific/species-entries/{id}/statmech` (per-entry), `GET\|POST /scientific/statmech/search` (chemistry-first) | The per-entry surface now mirrors species-entry thermo: review-aware, public-handle, `include=trust` → `computed_statmech_v1`. Search still does not expose trust by policy. |
 | 5 | Find reactions by reactants / products | ✓ | `GET\|POST /scientific/reactions/search` | Reactants/products as identifier lists; direction `forward\|reverse\|either`. |
 | 6 | Find kinetics for a reaction | ✓ | `GET /scientific/reaction-entries/{id}/kinetics`, `GET\|POST /scientific/kinetics/search` | Per-entry surface exposes `include=trust`; search does not. |
 | 7 | Inspect calculation / provenance for a record | ✓ | `GET /scientific/calculations/{ref_or_id}`, `GET /scientific/reaction-entries/{id}/full` | `/full` is the only composite "provenance projection" today; no generic `/scientific/records/{type}/{id}/provenance`. |
-| 8 | Ask for trust / evidence details on a record | ✓ | six detail reads (calculation, kinetics-per-entry, thermo-per-entry, statmech, transport, standalone transition-state-entry) plus the composite `/reaction-entries/{id}/full?include=trust` for embedded kinetics + calculations + transition-state entries | Conformer / network sections still lack trust because no rubric exists for them; no top-level reaction-entry or TS-concept aggregation rubric exists yet. |
+| 8 | Ask for trust / evidence details on a record | ✓ | record/per-entry reads (calculation, kinetics-per-entry, thermo-per-entry, statmech detail + species-entry statmech, transport detail + species-entry transport, standalone transition-state-entry) plus the composite `/reaction-entries/{id}/full?include=trust` for embedded kinetics + calculations + transition-state entries | Conformer / network sections still lack trust because no rubric exists for them; no top-level reaction-entry or TS-concept aggregation rubric exists yet. |
 | 9 | Avoid rejected / deprecated records by default | ✓ | every `/scientific/*` read | Default visible set: `{approved, under_review, not_reviewed}`. Opt in via `include_rejected` / `include_deprecated`; threshold via `min_review_status`. Legacy `/api/v1/{entity}` reads do not filter. |
 | 10 | Documented selection policy for "best" record | △ | `species-calculations/search` `ranking` enum only; all other surfaces use deterministic L3 ordering without an explicit policy token | See §0.8. No `tckdb_default` / `approved_first` / `latest` token exists across the broader surface. |
 
 ### Cross-cutting story observations
 
-- The "find X for a species" stories (#2, #3, #4) split between
-  per-entry path endpoints (only #2 has the canonical `/scientific`
-  variant) and identifier-driven search endpoints. The shape mismatch
-  is real but small; closing it would mean adding
-  `/scientific/species-entries/{id}/statmech` and `.../transport` as
-  thin wrappers over the existing search services.
+- The "find X for a species" stories (#2, #3, #4) are now closed at the
+  per-entry path-endpoint level: thermo, statmech, and transport each
+  have a canonical `/scientific/species-entries/{id}/...` read in
+  addition to their identifier-driven search endpoints. The statmech /
+  transport per-entry reads are thin wrappers that pin the query to one
+  species entry and reuse the shared `build_statmech_record` /
+  `build_transport_record` projections and deterministic ordering — so
+  a pinned search and the per-entry read return identical records for a
+  given include set. (They are not literal delegations to the search
+  services, because the per-entry surface owns a stricter `include=`
+  policy where `trust` is opt-in only and `include=all` never expands
+  to it.)
 - Story #7 ("inspect provenance") is well covered for the reaction case
   via `/full`. The species and TS analogues do not have an equivalent
   composite, so the audit's original §12 entry for a generic

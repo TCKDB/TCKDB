@@ -9,6 +9,9 @@ Sub-routers:
     reactions.router        → /scientific/reactions/search (GET, POST)
     kinetics.router         → /scientific/reaction-entries/{id}/kinetics
     thermo.router           → /scientific/species-entries/{id}/thermo
+    species_subresources.router
+                            → /scientific/species-entries/{id}/statmech
+                              /scientific/species-entries/{id}/transport
     provenance.router       → /scientific/reaction-entries/{id}/full
     thermo_search.router    → /scientific/thermo/search (GET, POST)
     kinetics_search.router  → /scientific/kinetics/search (GET, POST)
@@ -45,6 +48,7 @@ from app.api.routes.scientific import (
     reactions,
     species,
     species_calculations_search,
+    species_subresources,
     statmech,
     structure,
     thermo,
@@ -63,6 +67,9 @@ scientific_router.include_router(species.router)
 scientific_router.include_router(reactions.router)
 scientific_router.include_router(kinetics.router)
 scientific_router.include_router(thermo.router)
+# Sibling per-entry subresource reads (statmech / transport) sharing the
+# ``/species-entries`` prefix with the thermo per-entry endpoint.
+scientific_router.include_router(species_subresources.router)
 scientific_router.include_router(provenance.router)
 scientific_router.include_router(thermo_search.router)
 scientific_router.include_router(kinetics_search.router)
