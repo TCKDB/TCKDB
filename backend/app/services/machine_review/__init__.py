@@ -9,6 +9,16 @@ machine-review axis is impossible to confuse with human review or the
 submission precheck at the type level.
 """
 
+from app.services.machine_review.audit_adapter import (
+    AuditRecordLink,
+    MachineReviewAuditProjection,
+    ParsedMachineReviewPayload,
+    SubmissionAuditEventLike,
+    event_is_machine_review,
+    machine_review_result_from_audit_event,
+    record_machine_reviews_from_audit_events,
+    record_machine_reviews_from_submission_audit_event,
+)
 from app.services.machine_review.derivation import (
     MachineReviewOutcome,
     derive_machine_review_status,
@@ -38,7 +48,9 @@ from app.services.machine_review.schemas import (
 )
 
 __all__ = [
+    "AuditRecordLink",
     "CuratorPriority",
+    "MachineReviewAuditProjection",
     "MachineReviewCategory",
     "MachineReviewFinding",
     "MachineReviewOutcome",
@@ -48,13 +60,19 @@ __all__ = [
     "MachineReviewSeverity",
     "MachineReviewStatus",
     "MappedRecord",
+    "ParsedMachineReviewPayload",
     "RecordMachineReview",
+    "SubmissionAuditEventLike",
     "SubmissionRecordLinkLike",
     "SubmissionRecordLinkRef",
     "UnmappedFinding",
     "UnmappedReason",
     "build_machine_review_record_summary",
     "derive_machine_review_status",
+    "event_is_machine_review",
+    "machine_review_result_from_audit_event",
     "map_findings_to_submission_records",
+    "record_machine_reviews_from_audit_events",
+    "record_machine_reviews_from_submission_audit_event",
     "select_latest_machine_review_for_record",
 ]
