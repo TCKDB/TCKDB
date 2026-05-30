@@ -26040,6 +26040,16 @@
           },
           "transition_state_entry": {
             "$ref": "#/components/schemas/TransitionStateEntryCoreBlock"
+          },
+          "trust": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -53033,7 +53043,7 @@
     },
     "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}": {
       "get": {
-        "description": "Return one transition-state-entry as a scientific record.\n\nPath handle accepts an integer ``transition_state_entry.id`` or a\npublic ref of the form ``tse_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.",
+        "description": "Return one transition-state-entry as a scientific record.\n\nPath handle accepts an integer ``transition_state_entry.id`` or a\npublic ref of the form ``tse_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.\n\nDeterministic trust / evidence metadata\n(``computed_transition_state_v1``) is attached to the record only\nwhen ``include=trust`` is supplied explicitly — ``include=all`` does\nnot pull it in, and the default response omits the field entirely so\nit stays byte-identical to its pre-trust shape.",
         "operationId": "scientific_transition_state_entry_detail_api_v1_scientific_transition_state_entries__transition_state_entry_ref_or_id__get",
         "parameters": [
           {

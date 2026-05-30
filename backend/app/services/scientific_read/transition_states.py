@@ -18,11 +18,12 @@ See ``backend/docs/specs/scientific_transition_state_reads.md``.
 from __future__ import annotations
 
 from sqlalchemy import and_, exists, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
     Calculation,
+    CalculationDependency,
     CalculationGeometryValidation,
     CalculationOutputGeometry,
     CalculationSCFStability,
@@ -80,6 +81,11 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.trust import (
+    TrustFragment,
+    build_trust_fragment,
+    evaluate_loaded_transition_state_entry,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +107,112 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "all",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+
+# ``trust`` is legal *only* on the standalone TS-entry detail surface.
+# The parent-TS detail surface and the search surface keep the narrower
+# ``_LEGAL_INCLUDE_TOKENS`` set, so a caller passing ``include=trust`` to
+# those endpoints gets a 422 ``unknown_include_token`` — trust is never
+# exposed through embedded entries or list/search responses (and, like
+# ``internal_ids``, it is internal-tokenized so ``include=all`` does not
+# pull it in).
+_TSE_DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS | {"trust"}
+_TSE_DETAIL_INTERNAL_INCLUDE_TOKENS: set[str] = _INTERNAL_INCLUDE_TOKENS | {
+    "trust"
+}
+
+
+# Eager-load graph required by ``computed_transition_state_v1``. Mirrors
+# the load plan inside
+# :func:`app.services.trust.evaluator.evaluate_computed_transition_state_entry`
+# so the loaded evaluator (and its check runners) issue no further
+# queries — the read path must never push hidden queries into the trust
+# runners. Loaded once in :func:`get_transition_state_entry` when
+# ``include=trust`` is requested.
+_TRUST_EAGER_LOADS = (
+    selectinload(TransitionStateEntry.transition_state)
+    .selectinload(TransitionState.reaction_entry)
+    .selectinload(ReactionEntry.reaction),
+    selectinload(TransitionStateEntry.calculations).selectinload(
+        Calculation.artifacts
+    ),
+    selectinload(TransitionStateEntry.calculations).selectinload(
+        Calculation.geometry_validation
+    ),
+    selectinload(TransitionStateEntry.calculations).selectinload(
+        Calculation.sp_result
+    ),
+    selectinload(TransitionStateEntry.calculations).selectinload(
+        Calculation.opt_result
+    ),
+    selectinload(TransitionStateEntry.calculations).selectinload(
+        Calculation.freq_result
+    ),
+    selectinload(TransitionStateEntry.calculations).selectinload(
+        Calculation.irc_result
+    ),
+    selectinload(TransitionStateEntry.calculations).selectinload(
+        Calculation.scan_result
+    ),
+    selectinload(TransitionStateEntry.calculations).selectinload(
+        Calculation.path_search_result
+    ),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.parent_dependencies)
+    .selectinload(CalculationDependency.child_calculation)
+    .selectinload(Calculation.artifacts),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.parent_dependencies)
+    .selectinload(CalculationDependency.child_calculation)
+    .selectinload(Calculation.geometry_validation),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.parent_dependencies)
+    .selectinload(CalculationDependency.child_calculation)
+    .selectinload(Calculation.sp_result),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.parent_dependencies)
+    .selectinload(CalculationDependency.child_calculation)
+    .selectinload(Calculation.opt_result),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.parent_dependencies)
+    .selectinload(CalculationDependency.child_calculation)
+    .selectinload(Calculation.freq_result),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.parent_dependencies)
+    .selectinload(CalculationDependency.child_calculation)
+    .selectinload(Calculation.irc_result),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.parent_dependencies)
+    .selectinload(CalculationDependency.child_calculation)
+    .selectinload(Calculation.path_search_result),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.child_dependencies)
+    .selectinload(CalculationDependency.parent_calculation)
+    .selectinload(Calculation.artifacts),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.child_dependencies)
+    .selectinload(CalculationDependency.parent_calculation)
+    .selectinload(Calculation.geometry_validation),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.child_dependencies)
+    .selectinload(CalculationDependency.parent_calculation)
+    .selectinload(Calculation.sp_result),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.child_dependencies)
+    .selectinload(CalculationDependency.parent_calculation)
+    .selectinload(Calculation.opt_result),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.child_dependencies)
+    .selectinload(CalculationDependency.parent_calculation)
+    .selectinload(Calculation.freq_result),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.child_dependencies)
+    .selectinload(CalculationDependency.parent_calculation)
+    .selectinload(Calculation.scan_result),
+    selectinload(TransitionStateEntry.calculations)
+    .selectinload(Calculation.child_dependencies)
+    .selectinload(CalculationDependency.parent_calculation)
+    .selectinload(Calculation.path_search_result),
+)
 
 
 # Calculation types that carry a primary "evidence" role for a TS entry.
@@ -260,17 +372,26 @@ def get_transition_state_entry(
     """
     includes = validate_includes(
         request.include,
-        _LEGAL_INCLUDE_TOKENS,
+        _TSE_DETAIL_LEGAL_INCLUDE_TOKENS,
         "/scientific/transition-state-entries/"
         "{transition_state_entry_ref_or_id}",
-        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
+        internal_tokens=_TSE_DETAIL_INTERNAL_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
 
     tse_id = resolve_transition_state_entry_handle(
         session, transition_state_entry_handle
     )
-    tse = session.get(TransitionStateEntry, tse_id)
+    if "trust" in includes:
+        # Eager-load the graph computed_transition_state_v1 inspects so the
+        # loaded evaluator issues no further queries.
+        tse = session.scalars(
+            select(TransitionStateEntry)
+            .where(TransitionStateEntry.id == tse_id)
+            .options(*_TRUST_EAGER_LOADS)
+        ).one_or_none()
+    else:
+        tse = session.get(TransitionStateEntry, tse_id)
     if tse is None:  # pragma: no cover — defended by resolver 404
         raise NotFoundError(
             "transition_state_entry not found "
@@ -366,6 +487,19 @@ def _build_entry_record(
             session, SubmissionRecordType.transition_state_entry, entry.id
         )
 
+    # ``trust`` is only ever in *includes* on the standalone TS-entry detail
+    # surface (the parent-TS and search surfaces reject the token), and only
+    # that path eager-loads the graph the evaluator walks. Building it here
+    # keeps the per-record shape identical across the detail surfaces while
+    # never populating trust for embedded entries / search records.
+    trust_block: TrustFragment | None = None
+    if "trust" in includes:
+        trust_block = build_transition_state_entry_trust_fragment(
+            entry,
+            review_status=entry_badge.status,
+            include_internal_ids="internal_ids" in includes,
+        )
+
     return ScientificTransitionStateEntryRecord(
         transition_state_entry=TransitionStateEntryCoreBlock(
             transition_state_entry_id=entry.id,
@@ -384,7 +518,36 @@ def _build_entry_record(
         calculations=calcs_block,
         geometries=geoms_block,
         review_history=review_block,
+        trust=trust_block,
     )
+
+
+def build_transition_state_entry_trust_fragment(
+    transition_state_entry: TransitionStateEntry,
+    review_status: RecordReviewStatus | None = None,
+    include_internal_ids: bool = False,
+) -> TrustFragment:
+    """Build a read-layer trust fragment for a transition-state entry.
+
+    Calls the *loaded* evaluator
+    (:func:`evaluate_loaded_transition_state_entry`) — never the
+    session/id wrapper — because the caller has already loaded the entry
+    (and, on the trust path, its evidence graph). The evaluator owns
+    deterministic ``evidence_completeness``; the read layer owns review
+    status, the disabled LLM-precheck default, and certification default
+    (all supplied by :func:`build_trust_fragment`).
+
+    ``include_internal_ids`` mirrors the resolved include set so callers
+    can reason about ID exposure at this layer, but the canonical gate
+    for ``trust.evidence.record_id`` is the response boundary
+    (:func:`app.services.scientific_read.internal_ids.apply_internal_ids_visibility`),
+    which strips the id recursively unless ``include=internal_ids`` is
+    both requested and permitted by the deployment. The flag is therefore
+    advisory here — the fragment always carries the evaluator's
+    ``record_id`` and the boundary removes it when policy disallows it.
+    """
+    evaluation = evaluate_loaded_transition_state_entry(transition_state_entry)
+    return build_trust_fragment(evaluation, review_status=review_status)
 
 
 # ---------------------------------------------------------------------------
@@ -888,7 +1051,9 @@ __all__ = [
     "_EVIDENCE_TYPES",
     "_INTERNAL_INCLUDE_TOKENS",
     "_LEGAL_INCLUDE_TOKENS",
+    "_TSE_DETAIL_LEGAL_INCLUDE_TOKENS",
     "build_entry_record",
+    "build_transition_state_entry_trust_fragment",
     "get_transition_state",
     "get_transition_state_entry",
 ]

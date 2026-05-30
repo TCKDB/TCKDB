@@ -16,6 +16,7 @@ GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics?include=tru
 GET /api/v1/scientific/species-entries/{species_entry_id}/thermo?include=trust
 GET /api/v1/scientific/statmech/{statmech_ref_or_id}?include=trust
 GET /api/v1/scientific/transport/{transport_ref_or_id}?include=trust
+GET /api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}?include=trust
 GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/full?include=trust
 ```
 
@@ -36,6 +37,7 @@ Current implemented deterministic trust rubrics:
 | `computed_thermo_v1` | Species-entry thermo reads |
 | `computed_statmech_v1` | Statmech detail reads |
 | `computed_transport_v1` | Transport detail reads |
+| `computed_transition_state_v1` | Standalone transition-state-entry detail reads |
 
 Public rubric names are versioned. Clients should treat the full rubric string
 as the stable public identifier for the scoring contract used by that response.
@@ -128,6 +130,17 @@ This is true even when a submission has AI Review Assistant audit events.
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
 | Notes/limitations | `include=all` does not include trust. Broad transport search/list endpoints do not expose trust. |
+
+### Transition-State Entry Detail (standalone)
+
+| Field | Behavior |
+| --- | --- |
+| Path | `GET /api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}` |
+| Include syntax | `?include=trust`; may be combined with allowed include tokens such as `?include=trust,internal_ids` |
+| Rubric used | `computed_transition_state_v1` |
+| Default behavior | Without `include=trust`, the response omits `record.trust` and is byte-identical to its pre-trust shape. |
+| Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
+| Notes/limitations | `include=all` does not include trust. Trust is wired to the *standalone* TS-entry detail surface only. The parent TS-concept detail (`/scientific/transition-states/{ref}`, including its embedded `entries`) and the TS-entry search/list surface reject the `trust` include token (422 `unknown_include_token`) and never populate `trust`. Frequency policy is status-aware: `optimized`/`validated` TS entries with `n_imag` in `{0, >1}` hard-fail; `guess`-stage entries with the same signal only lower evidence completeness. IRC and path-search evidence are additive (missing is never a hard fail in v1). TS trust is **not** yet propagated into the composite `/reaction-entries/{id}/full` read. |
 
 ### Reaction-Entry Full (composite)
 

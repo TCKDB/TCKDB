@@ -1,14 +1,14 @@
 # TCKDB Read/Query API Audit
 
 **Original audit date:** 2026-05-13
-**Status updates:** 2026-05-19, 2026-05-28 (trust-layer pass)
+**Status updates:** 2026-05-19, 2026-05-28 (trust-layer pass), 2026-05-30 (standalone TS-entry trust)
 **Branch:** main
 **Scope:** Factual audit of the existing read/query surface in the TCKDB
 backend, plus current implementation-status updates layered on top.
 The original sections (§1–§16) are preserved as historical context;
 §0 reflects what shipped after the original audit, and §0.6–§0.11 add a
 trust-era audit that re-evaluates the surface against MVP user stories
-now that deterministic trust ships on five detail-read endpoints.
+now that deterministic trust ships on six detail-read endpoints.
 No design changes, no implementation, no schema work. ARC and
 `tckdb-client` are out of scope.
 
@@ -270,7 +270,7 @@ how it integrates with the rest of the read surface.
 
 ### 0.6.1 Trust-enabled surfaces
 
-Five detail reads accept `include=trust` and emit a `record.trust`
+Six detail reads accept `include=trust` and emit a `record.trust`
 fragment. The composite reaction-entry `/full` read additionally
 propagates trust into its embedded kinetics and calculation records
 when `include=trust` is supplied. The legal-token sets in the service
@@ -283,11 +283,19 @@ modules are authoritative; this table is verified against them.
 | `GET /scientific/species-entries/{id}/thermo` | ✓ | `computed_thermo_v1` | `services/scientific_read/thermo.py:84,174,200,366` |
 | `GET /scientific/statmech/{ref_or_id}` | ✓ | `computed_statmech_v1` | `services/scientific_read/statmech.py:95,185,190,313` |
 | `GET /scientific/transport/{ref_or_id}` | ✓ | `computed_transport_v1` | `services/scientific_read/transport.py:74,124,129,224` |
+| `GET /scientific/transition-state-entries/{ref_or_id}` | ✓ | `computed_transition_state_v1` | `services/scientific_read/transition_states.py` (`_TSE_DETAIL_LEGAL_INCLUDE_TOKENS`, `_TSE_DETAIL_INTERNAL_INCLUDE_TOKENS`, `_TRUST_EAGER_LOADS`, `build_transition_state_entry_trust_fragment`) |
 | `GET /scientific/reaction-entries/{id}/full` | ✓ (modifier) | `computed_kinetics_v1` on embedded kinetics; `computed_calculation_v1` on embedded calculations | `services/scientific_read/provenance.py` (`_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `_build_kinetics_section`, `_build_calculations_section`, `_build_calculation_trust_fragments`) |
+
+The TS-entry trust token is wired to the **standalone** TS-entry detail
+surface only. The parent TS-concept detail
+(`GET /scientific/transition-states/{ref_or_id}`, including its embedded
+`entries`) and the TS-entry search surface keep the narrower legal-token
+set and reject `include=trust` with 422 `unknown_include_token`. TS
+trust is **not** yet propagated into `/reaction-entries/{id}/full`.
 
 ### 0.6.2 Trust posture invariants
 
-All five surfaces share these invariants, verified by inspection:
+All six surfaces share these invariants, verified by inspection:
 
 - **`trust` is internal-tokenized.** Each detail surface passes
   `internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"}` to
@@ -320,7 +328,8 @@ All five surfaces share these invariants, verified by inspection:
 | `/scientific/calculations/{ref_or_id}` | **enabled** | per-calculation `computed_calculation_v1`. |
 | `/scientific/calculations/search` | omitted by policy | search surfaces skip trust. |
 | `/scientific/reaction-entries/{id}/full` | **enabled (embedded)** | `?include=trust` propagates `computed_kinetics_v1` to each embedded kinetics record and `computed_calculation_v1` to each embedded calculation summary. No top-level reaction-entry rubric exists yet; transition-state, conformer, path-search, IRC, scan, and artifact sections still lack trust because they have no rubric. |
-| `/scientific/transition-states/{ref_or_id}` | **not enabled** | no `computed_transition_state_v1` rubric defined. |
+| `/scientific/transition-state-entries/{ref_or_id}` | **enabled** | standalone TS-entry detail emits `computed_transition_state_v1` under `include=trust`. Status-aware frequency policy; IRC/path-search additive. Not propagated into `/full` yet. |
+| `/scientific/transition-states/{ref_or_id}` | **not enabled** | TS-concept detail (and its embedded `entries`) reject `include=trust`; only the standalone TS-entry surface carries the rubric. No top-level TS-concept aggregation rubric exists. |
 | `/scientific/conformer-groups/{ref_or_id}`, `/scientific/conformer-observations/{ref_or_id}` | **not enabled** | no conformer rubric. |
 | `/scientific/networks/*` (network / network-solve / network-kinetics) | **not enabled** | no network/PDep rubric. |
 | `/scientific/frequency-scale-factors/*`, `/scientific/energy-correction-schemes/*` | **n/a (by design)** | non-reviewable surfaces; no record-grade trust applies. |
@@ -354,7 +363,7 @@ non-canonical surface; "✗" means no documented surface answers it.
 | 5 | Find reactions by reactants / products | ✓ | `GET\|POST /scientific/reactions/search` | Reactants/products as identifier lists; direction `forward\|reverse\|either`. |
 | 6 | Find kinetics for a reaction | ✓ | `GET /scientific/reaction-entries/{id}/kinetics`, `GET\|POST /scientific/kinetics/search` | Per-entry surface exposes `include=trust`; search does not. |
 | 7 | Inspect calculation / provenance for a record | ✓ | `GET /scientific/calculations/{ref_or_id}`, `GET /scientific/reaction-entries/{id}/full` | `/full` is the only composite "provenance projection" today; no generic `/scientific/records/{type}/{id}/provenance`. |
-| 8 | Ask for trust / evidence details on a record | ✓ | five detail reads (calculation, kinetics-per-entry, thermo-per-entry, statmech, transport) plus the composite `/reaction-entries/{id}/full?include=trust` for embedded kinetics + calculations | TS / conformer / network sections still lack trust because no rubric exists for them. |
+| 8 | Ask for trust / evidence details on a record | ✓ | six detail reads (calculation, kinetics-per-entry, thermo-per-entry, statmech, transport, standalone transition-state-entry) plus the composite `/reaction-entries/{id}/full?include=trust` for embedded kinetics + calculations | TS-entry trust is standalone-only (not yet on `/full`); conformer / network sections still lack trust because no rubric exists for them. |
 | 9 | Avoid rejected / deprecated records by default | ✓ | every `/scientific/*` read | Default visible set: `{approved, under_review, not_reviewed}`. Opt in via `include_rejected` / `include_deprecated`; threshold via `min_review_status`. Legacy `/api/v1/{entity}` reads do not filter. |
 | 10 | Documented selection policy for "best" record | △ | `species-calculations/search` `ranking` enum only; all other surfaces use deterministic L3 ordering without an explicit policy token | See §0.8. No `tckdb_default` / `approved_first` / `latest` token exists across the broader surface. |
 
@@ -463,7 +472,7 @@ but plausibly meaningful.
 | `calculations` | n/a (this *is* a calc) | n/a | ✓ | n/a | ✓ | n/a | ✓ (`source_calculations`) | n/a | ✓ (`source_calculations`) | n/a | n/a | n/a | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a | n/a |
 | `artifacts` | ✓ | n/a | n/a (use calc detail) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a (`/artifacts/search` is its own surface) | n/a |
 | `review` | ✓ | n/a (review per-row inline) | ✓ | n/a | ✓ | n/a | ✓ | n/a | ✓ | n/a | ✓ | n/a | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a (non-reviewable) |
-| `trust` | ✓ | ✗ by policy | ✗ (no rubric) | ✗ | ✗ | ✗ | ✓ | ✗ by policy | ✓ | ✗ by policy | ✗ (no rubric) | ✗ | ✓ | ✗ by policy | ✓ | ✗ by policy | ✗ (not propagated) | n/a | n/a | n/a | n/a |
+| `trust` | ✓ | ✗ by policy | ✓ (TS-entry detail only; TS-concept ✗) | ✗ by policy | ✗ | ✗ | ✓ | ✗ by policy | ✓ | ✗ by policy | ✗ (no rubric) | ✗ | ✓ | ✗ by policy | ✓ | ✗ by policy | ✗ (not propagated) | n/a | n/a | n/a | n/a |
 | `internal_ids` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | ✓ | ✓ |
 | `all` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | ✓ | ✓ |
 | `used_by` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | ✓ (inverse links) |

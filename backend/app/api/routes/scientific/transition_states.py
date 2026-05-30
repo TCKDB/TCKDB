@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._response import omit_trust_unless_requested
 from app.db.models.common import (
     RecordReviewStatus,
     TransitionStateEntryStatus,
@@ -209,12 +210,18 @@ def scientific_transition_state_entry_detail(
     Path handle accepts an integer ``transition_state_entry.id`` or a
     public ref of the form ``tse_…``. Wrong-prefix refs return 422
     ``handle_type_mismatch``; unknown refs and unknown ids return 404.
+
+    Deterministic trust / evidence metadata
+    (``computed_transition_state_v1``) is attached to the record only
+    when ``include=trust`` is supplied explicitly — ``include=all`` does
+    not pull it in, and the default response omits the field entirely so
+    it stays byte-identical to its pre-trust shape.
     """
     req = TransitionStateEntryDetailRequest(include=parse_include(include))
-    return apply_internal_ids_visibility(
-        get_transition_state_entry(
-            session,
-            transition_state_entry_handle=transition_state_entry_ref_or_id,
-            request=req,
-        )
+    payload = get_transition_state_entry(
+        session,
+        transition_state_entry_handle=transition_state_entry_ref_or_id,
+        request=req,
     )
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_trust_unless_requested(visibility, payload)

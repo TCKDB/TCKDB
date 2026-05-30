@@ -36,6 +36,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.services.trust.models import TrustFragment
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +239,14 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     calculations: list[TransitionStateCalculationSummary] | None = None
     geometries: list[CalculationGeometryLinkSummary] | None = None
     review_history: list[TransitionStateReviewEntry] | None = None
+
+    # Deterministic trust / evidence fragment. Populated only by the
+    # standalone TS-entry detail surface under ``include=trust`` — the
+    # parent-TS detail (embedded entries) and the search surface never
+    # populate it (``trust`` is not a legal include token there), and the
+    # detail route strips this field entirely when trust is not requested
+    # so the default response stays byte-identical to its pre-trust shape.
+    trust: TrustFragment | None = None
 
 
 # ---------------------------------------------------------------------------

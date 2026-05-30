@@ -10,8 +10,15 @@ Covers:
 
 from __future__ import annotations
 
-from app.db.models.calculation import CalculationOutputGeometry
+from app.db.models.calculation import (
+    CalculationArtifact,
+    CalculationDependency,
+    CalculationFreqResult,
+    CalculationOutputGeometry,
+)
 from app.db.models.common import (
+    ArtifactKind,
+    CalculationDependencyRole,
     CalculationGeometryRole,
     CalculationQuality,
     CalculationType,
@@ -22,6 +29,7 @@ from app.db.models.common import (
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from tests.services.scientific_read._factories import (
+    attach_artifact,
     attach_geometry_validation,
     attach_scf_stability,
     make_calculation,
@@ -120,22 +128,54 @@ def _attach_calc(
 
 
 def _make_software_release(db_session, *, name="gaussian", version="g16.a03"):
-    sw = Software(name=name)
-    db_session.add(sw)
-    db_session.flush()
-    sr = SoftwareRelease(software_id=sw.id, version=version)
-    db_session.add(sr)
-    db_session.flush()
+    # Get-or-create so a single test may attach several calcs that share a
+    # software/release without tripping ``uq_software_name`` or
+    # ``uq_software_release_software_id`` (the latter is NULLS NOT DISTINCT
+    # over ``(software_id, version, revision, build)``).
+    sw = (
+        db_session.query(Software).filter(Software.name == name).one_or_none()
+    )
+    if sw is None:
+        sw = Software(name=name)
+        db_session.add(sw)
+        db_session.flush()
+    sr = (
+        db_session.query(SoftwareRelease)
+        .filter(
+            SoftwareRelease.software_id == sw.id,
+            SoftwareRelease.version == version,
+        )
+        .one_or_none()
+    )
+    if sr is None:
+        sr = SoftwareRelease(software_id=sw.id, version=version)
+        db_session.add(sr)
+        db_session.flush()
     return sw, sr
 
 
 def _make_workflow_tool_release(db_session, *, name="arc", version="1.2.3"):
-    wt = WorkflowTool(name=name)
-    db_session.add(wt)
-    db_session.flush()
-    wtr = WorkflowToolRelease(workflow_tool_id=wt.id, version=version)
-    db_session.add(wtr)
-    db_session.flush()
+    wt = (
+        db_session.query(WorkflowTool)
+        .filter(WorkflowTool.name == name)
+        .one_or_none()
+    )
+    if wt is None:
+        wt = WorkflowTool(name=name)
+        db_session.add(wt)
+        db_session.flush()
+    wtr = (
+        db_session.query(WorkflowToolRelease)
+        .filter(
+            WorkflowToolRelease.workflow_tool_id == wt.id,
+            WorkflowToolRelease.version == version,
+        )
+        .one_or_none()
+    )
+    if wtr is None:
+        wtr = WorkflowToolRelease(workflow_tool_id=wt.id, version=version)
+        db_session.add(wtr)
+        db_session.flush()
     return wt, wtr
 
 
@@ -1148,3 +1188,379 @@ def test_search_has_opt_false_narrows_to_entries_without_opt(client, db_session)
     assert entries_a[0].public_ref not in false_refs
     assert entries_b[0].public_ref not in true_refs
     assert entries_b[0].public_ref in false_refs
+
+
+# ===========================================================================
+# TS-entry detail trust fragment (include=trust)
+# ===========================================================================
+#
+# Trust is wired to the *standalone* TS-entry detail surface only. The
+# parent-TS detail (embedded entries) and the search surface do not expose
+# it, and the default TS-entry response is byte-identical to its pre-trust
+# shape. See ``backend/docs/specs/trust_read_api_current.md``.
+
+
+def _attach_ts_opt(
+    db_session,
+    *,
+    tse,
+    with_geom_validation=True,
+    with_artifact=True,
+    with_workflow_tool=True,
+):
+    """Attach a fully-provenanced TS-optimization calc to a TS entry."""
+    lot = make_lot(db_session)
+    _, sr = _make_software_release(db_session)
+    wtr = None
+    if with_workflow_tool:
+        _, wtr = _make_workflow_tool_release(db_session)
+    calc = _attach_calc(
+        db_session,
+        tse=tse,
+        calc_type=CalculationType.opt,
+        lot=lot,
+        software_release=sr,
+        workflow_tool_release=wtr,
+    )
+    if with_geom_validation:
+        attach_geometry_validation(db_session, calculation=calc)
+    if with_artifact:
+        attach_artifact(db_session, calculation=calc)
+    return calc
+
+
+def _attach_ts_freq(
+    db_session,
+    *,
+    tse,
+    opt_calc=None,
+    n_imag=1,
+    imag_freq_cm1=-550.0,
+):
+    """Attach a frequency calc (with an n_imag-bearing result) to a TS entry."""
+    lot = make_lot(db_session)
+    _, sr = _make_software_release(db_session)
+    calc = _attach_calc(
+        db_session,
+        tse=tse,
+        calc_type=CalculationType.freq,
+        lot=lot,
+        software_release=sr,
+    )
+    db_session.add(
+        CalculationFreqResult(
+            calculation_id=calc.id,
+            n_imag=n_imag,
+            imag_freq_cm1=imag_freq_cm1,
+            zpe_hartree=0.05,
+        )
+    )
+    if opt_calc is not None:
+        db_session.add(
+            CalculationDependency(
+                parent_calculation_id=opt_calc.id,
+                child_calculation_id=calc.id,
+                dependency_role=CalculationDependencyRole.freq_on,
+            )
+        )
+    db_session.flush()
+    return calc
+
+
+def test_tse_detail_default_response_omits_trust(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    body = client.get(_tse_detail_url(entries[0].public_ref)).json()
+    assert "trust" not in body["record"]
+
+
+def test_tse_detail_include_trust_returns_fragment(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    body = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()
+    trust = body["record"]["trust"]
+    assert trust["review_status"] == "not_reviewed"
+    assert trust["is_certified"] is False
+    evidence = trust["evidence"]
+    assert evidence["record_type"] == "transition_state_entry"
+    assert evidence["rubric"] == "computed_transition_state_v1"
+    assert evidence["rubric_version"] == 1
+    # Evidence object carries the deterministic check breakdown.
+    for key in (
+        "passed_checks",
+        "missing_checks",
+        "warning_checks",
+        "not_applicable_checks",
+        "passed_count",
+        "possible_count",
+        "evidence_completeness",
+    ):
+        assert key in evidence
+
+
+def test_tse_detail_include_trust_disabled_llm_precheck(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    body = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()
+    assert body["record"]["trust"]["llm_precheck"] == {
+        "enabled": False,
+        "label": "not_run",
+        "summary": None,
+    }
+
+
+def test_tse_detail_include_trust_uses_review_badge(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.transition_state_entry,
+        record_id=entries[0].id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()
+    assert body["record"]["trust"]["review_status"] == "approved"
+
+
+def test_tse_detail_include_all_excludes_trust(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    body = client.get(
+        _tse_detail_url(entries[0].public_ref, include="all")
+    ).json()
+    assert "trust" not in body["request"]["include"]
+    assert "trust" not in body["record"]
+
+
+def test_tse_detail_unknown_include_still_422(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    resp = client.get(_tse_detail_url(entries[0].public_ref, include="bogus"))
+    assert resp.status_code == 422
+    assert "unknown_include_token" in resp.text
+
+
+def test_tse_detail_trust_preserves_internal_id_policy(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    body = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()
+    assert "record_id" not in body["record"]["trust"]["evidence"]
+
+
+def test_tse_detail_trust_internal_id_policy_allows_record_id(
+    client, db_session, allow_internal_ids
+):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    body = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust,internal_ids")
+    ).json()
+    assert body["record"]["trust"]["evidence"]["record_id"] == entries[0].id
+
+
+def test_tse_detail_trust_sparse_entry_reports_missing_checks(
+    client, db_session
+):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    # No calculations attached → supporting-evidence checks are missing.
+    body = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()
+    evidence = body["record"]["trust"]["evidence"]
+    assert "supporting_calculations_present" in evidence["missing_checks"]
+    assert evidence["passed_count"] < evidence["possible_count"]
+
+
+def test_tse_detail_trust_optimized_n_imag_one_passes_freq_check(
+    client, db_session
+):
+    _, _, _, entries = _make_reaction_with_ts(
+        db_session, statuses=[TransitionStateEntryStatus.optimized]
+    )
+    opt = _attach_ts_opt(db_session, tse=entries[0])
+    _attach_ts_freq(db_session, tse=entries[0], opt_calc=opt, n_imag=1)
+    body = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()
+    trust = body["record"]["trust"]
+    assert trust["trust_status"] != "hard_failed"
+    passed = set(trust["evidence"]["passed_checks"])
+    assert "single_imaginary_frequency_for_ts" in passed
+    assert "imaginary_frequency_count_recorded" in passed
+
+
+def test_tse_detail_trust_validated_n_imag_one_passes_freq_check(
+    client, db_session
+):
+    _, _, _, entries = _make_reaction_with_ts(
+        db_session, statuses=[TransitionStateEntryStatus.validated]
+    )
+    opt = _attach_ts_opt(db_session, tse=entries[0])
+    _attach_ts_freq(db_session, tse=entries[0], opt_calc=opt, n_imag=1)
+    trust = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()["record"]["trust"]
+    assert trust["trust_status"] != "hard_failed"
+    assert (
+        "single_imaginary_frequency_for_ts"
+        in trust["evidence"]["passed_checks"]
+    )
+
+
+def test_tse_detail_trust_optimized_n_imag_zero_hard_fails(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(
+        db_session, statuses=[TransitionStateEntryStatus.optimized]
+    )
+    opt = _attach_ts_opt(db_session, tse=entries[0])
+    _attach_ts_freq(
+        db_session, tse=entries[0], opt_calc=opt, n_imag=0, imag_freq_cm1=None
+    )
+    trust = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()["record"]["trust"]
+    assert trust["trust_status"] == "hard_failed"
+
+
+def test_tse_detail_trust_optimized_n_imag_multiple_hard_fails(
+    client, db_session
+):
+    _, _, _, entries = _make_reaction_with_ts(
+        db_session, statuses=[TransitionStateEntryStatus.optimized]
+    )
+    opt = _attach_ts_opt(db_session, tse=entries[0])
+    _attach_ts_freq(
+        db_session,
+        tse=entries[0],
+        opt_calc=opt,
+        n_imag=3,
+        imag_freq_cm1=-100.0,
+    )
+    trust = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()["record"]["trust"]
+    assert trust["trust_status"] == "hard_failed"
+
+
+def test_tse_detail_trust_guess_n_imag_not_one_warns_not_hard_fail(
+    client, db_session
+):
+    _, _, _, entries = _make_reaction_with_ts(
+        db_session, statuses=[TransitionStateEntryStatus.guess]
+    )
+    opt = _attach_ts_opt(db_session, tse=entries[0])
+    _attach_ts_freq(
+        db_session, tse=entries[0], opt_calc=opt, n_imag=0, imag_freq_cm1=None
+    )
+    trust = client.get(
+        _tse_detail_url(entries[0].public_ref, include="trust")
+    ).json()["record"]["trust"]
+    # A guess-stage TS with the wrong imaginary-mode count is missing the
+    # required check but is NOT collapsed to hard_failed.
+    assert trust["trust_status"] != "hard_failed"
+    assert (
+        "single_imaginary_frequency_for_ts"
+        in trust["evidence"]["missing_checks"]
+    )
+
+
+def test_tse_detail_trust_irc_and_path_search_increase_completeness(
+    client, db_session
+):
+    # Baseline: opt + freq only.
+    _, _, _, base_entries = _make_reaction_with_ts(
+        db_session, statuses=[TransitionStateEntryStatus.optimized]
+    )
+    opt_b = _attach_ts_opt(db_session, tse=base_entries[0])
+    _attach_ts_freq(db_session, tse=base_entries[0], opt_calc=opt_b, n_imag=1)
+    base = client.get(
+        _tse_detail_url(base_entries[0].public_ref, include="trust")
+    ).json()["record"]["trust"]["evidence"]
+
+    # Richer: same + an IRC calc + a path-search calc.
+    _, _, _, rich_entries = _make_reaction_with_ts(
+        db_session, statuses=[TransitionStateEntryStatus.optimized]
+    )
+    opt_r = _attach_ts_opt(db_session, tse=rich_entries[0])
+    _attach_ts_freq(db_session, tse=rich_entries[0], opt_calc=opt_r, n_imag=1)
+    _attach_calc(
+        db_session,
+        tse=rich_entries[0],
+        calc_type=CalculationType.irc,
+        lot=make_lot(db_session),
+    )
+    _attach_calc(
+        db_session,
+        tse=rich_entries[0],
+        calc_type=CalculationType.path_search,
+        lot=make_lot(db_session),
+    )
+    rich = client.get(
+        _tse_detail_url(rich_entries[0].public_ref, include="trust")
+    ).json()["record"]["trust"]["evidence"]
+
+    rich_passed = set(rich["passed_checks"])
+    assert "irc_evidence_present" in rich_passed
+    assert "path_search_evidence_present" in rich_passed
+    assert rich["evidence_completeness"] >= base["evidence_completeness"]
+
+
+def test_tse_detail_trust_does_not_mutate_record(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    tse = entries[0]
+    before = (tse.charge, tse.multiplicity, tse.status, tse.unmapped_smiles)
+    resp = client.get(_tse_detail_url(tse.public_ref, include="trust"))
+    assert resp.status_code == 200, resp.text
+    db_session.refresh(tse)
+    after = (tse.charge, tse.multiplicity, tse.status, tse.unmapped_smiles)
+    assert after == before
+
+
+def test_tse_detail_trust_path_uses_loaded_evaluator(
+    client, db_session, monkeypatch
+):
+    """The read path must call the loaded evaluator, not the session/id
+    wrapper (which would issue its own query / hard-fail on missing rows).
+    """
+    from app.services.scientific_read import (
+        transition_states as ts_service,
+    )
+    from app.services.trust import evaluate_loaded_transition_state_entry
+
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    calls = 0
+
+    def counted_loaded_evaluator(ts_entry):
+        nonlocal calls
+        calls += 1
+        return evaluate_loaded_transition_state_entry(ts_entry)
+
+    monkeypatch.setattr(
+        ts_service,
+        "evaluate_loaded_transition_state_entry",
+        counted_loaded_evaluator,
+    )
+    resp = client.get(_tse_detail_url(entries[0].public_ref, include="trust"))
+    assert resp.status_code == 200, resp.text
+    assert calls == 1
+
+
+def test_ts_concept_detail_embedded_entries_omit_trust(client, db_session):
+    """Trust is not exposed through the parent-TS detail surface, even
+    with ``include=entries`` (``trust`` is not a legal token there)."""
+    _, _, ts, _ = _make_reaction_with_ts(db_session)
+    body = client.get(_ts_detail_url(ts.public_ref, include="entries")).json()
+    for entry in body["record"]["entries"]:
+        assert entry.get("trust") is None
+
+
+def test_ts_concept_detail_rejects_trust_token(client, db_session):
+    _, _, ts, _ = _make_reaction_with_ts(db_session)
+    resp = client.get(_ts_detail_url(ts.public_ref, include="trust"))
+    assert resp.status_code == 422
+    assert "unknown_include_token" in resp.text
+
+
+def test_ts_search_rejects_trust_token(client, db_session):
+    resp = client.get(_search_url(has_opt="true", include="trust"))
+    assert resp.status_code == 422
+    assert "unknown_include_token" in resp.text
