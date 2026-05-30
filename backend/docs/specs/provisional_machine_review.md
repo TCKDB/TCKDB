@@ -644,6 +644,14 @@ No new deterministic rubrics or changes to existing rubric outputs.
    `trust.llm_precheck` stays disabled/`not_run`.
 4. Define and **test** the submission→record mapping over the
    `submission_record_link` graph in isolation, without exposing it.
+   *Done:* the pure mapping policy lives in
+   `app/services/machine_review/mapping.py`
+   (`map_findings_to_submission_records`) with the anti-fan-out rules
+   (§6/§13) and is covered by `tests/services/test_machine_review_mapping.py`.
+   It maps a finding only to the exact `(record_type, record_ref)` it names
+   when that record is linked to the submission; submission-scoped, unknown,
+   ref-less, and unlinked findings route to `unmapped_findings` with a
+   warning instead. No persistence or public exposure yet.
 5. Add the `record_machine_review` table (Option B) in a **new Alembic
    revision** only when public record-level review is actually being
    implemented; implement `upgrade()`/`downgrade()`.

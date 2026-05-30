@@ -13,6 +13,15 @@ from app.services.machine_review.derivation import (
     MachineReviewOutcome,
     derive_machine_review_status,
 )
+from app.services.machine_review.mapping import (
+    MachineReviewRecordMapping,
+    MappedRecord,
+    SubmissionRecordLinkLike,
+    SubmissionRecordLinkRef,
+    UnmappedFinding,
+    UnmappedReason,
+    map_findings_to_submission_records,
+)
 from app.services.machine_review.schemas import (
     CuratorPriority,
     MachineReviewCategory,
@@ -27,8 +36,15 @@ __all__ = [
     "MachineReviewCategory",
     "MachineReviewFinding",
     "MachineReviewOutcome",
+    "MachineReviewRecordMapping",
     "MachineReviewResult",
     "MachineReviewSeverity",
     "MachineReviewStatus",
+    "MappedRecord",
+    "SubmissionRecordLinkLike",
+    "SubmissionRecordLinkRef",
+    "UnmappedFinding",
+    "UnmappedReason",
     "derive_machine_review_status",
+    "map_findings_to_submission_records",
 ]
