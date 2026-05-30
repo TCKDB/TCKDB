@@ -25,7 +25,10 @@ from app.services.machine_review.derivation import (
 )
 from app.services.machine_review.inspection import (
     MachineReviewInspectionView,
+    SubmissionMachineReviewInspection,
+    SubmissionRecordMachineReviewInspection,
     build_machine_review_inspection_view,
+    build_submission_machine_review_inspection,
     get_machine_review_summaries_for_record,
 )
 from app.services.machine_review.mapping import (
@@ -75,6 +78,8 @@ __all__ = [
     "ParsedMachineReviewPayload",
     "RecordMachineReview",
     "SubmissionAuditEventLike",
+    "SubmissionMachineReviewInspection",
+    "SubmissionRecordMachineReviewInspection",
     "SubmissionRecordLinkLike",
     "SubmissionRecordLinkRef",
     "UnmappedFinding",
@@ -83,6 +88,7 @@ __all__ = [
     "build_machine_review_record_summary",
     "build_machine_review_inspection_view",
     "build_private_trust_envelope_with_machine_review",
+    "build_submission_machine_review_inspection",
     "derive_machine_review_status",
     "event_is_machine_review",
     "get_machine_review_summaries_for_record",

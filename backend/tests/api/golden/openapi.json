@@ -11,6 +11,104 @@
         "title": "ActivationEnergyUnits",
         "type": "string"
       },
+      "AdminMachineReviewRecordInspection": {
+        "additionalProperties": false,
+        "description": "Admin-only machine-review projection for one linked record.",
+        "properties": {
+          "all_record_reviews_count": {
+            "default": 0,
+            "title": "All Record Reviews Count",
+            "type": "integer"
+          },
+          "latest_summary": {
+            "$ref": "#/components/schemas/MachineReviewRecordSummary"
+          },
+          "record_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Id"
+          },
+          "record_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Ref"
+          },
+          "record_type": {
+            "title": "Record Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_type",
+          "latest_summary"
+        ],
+        "title": "AdminMachineReviewRecordInspection",
+        "type": "object"
+      },
+      "AdminSubmissionMachineReviewInspectionResponse": {
+        "additionalProperties": false,
+        "description": "Admin-only machine-review inspection response for one submission.\n\nPrivate/debugging shape — intentionally distinct from the public\nscientific ``TrustFragment``. ``record_summaries`` carries one entry per\nlinked record that received at least one mapped machine-review finding;\nsubmission-scoped, unlinked, and sibling findings appear only in the\ndiagnostics counters/warnings, never as a record summary.",
+        "properties": {
+          "mapping_warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Mapping Warnings",
+            "type": "array"
+          },
+          "parse_warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Parse Warnings",
+            "type": "array"
+          },
+          "record_summaries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AdminMachineReviewRecordInspection"
+            },
+            "title": "Record Summaries",
+            "type": "array"
+          },
+          "source_audit_event_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Source Audit Event Ids",
+            "type": "array"
+          },
+          "submission_id": {
+            "title": "Submission Id",
+            "type": "integer"
+          },
+          "unmapped_findings_count": {
+            "default": 0,
+            "title": "Unmapped Findings Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "submission_id"
+        ],
+        "title": "AdminSubmissionMachineReviewInspectionResponse",
+        "type": "object"
+      },
       "ApiKeyCreateRequest": {
         "properties": {
           "label": {
@@ -10542,6 +10640,16 @@
         "title": "CoordinateUnit",
         "type": "string"
       },
+      "CuratorPriority": {
+        "description": "Advisory ordering hint for a future human-review queue (spec §3).\n\nPure metadata — it is *not* a state and has no effect on visibility,\ntrust, or evidence.",
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "title": "CuratorPriority",
+        "type": "string"
+      },
       "DryRunAction": {
         "description": "Preview action a real import would take for a given record/dependency.",
         "enum": [
@@ -15314,6 +15422,115 @@
         ],
         "title": "LowestSPConformerObservationResultRead",
         "type": "object"
+      },
+      "MachineReviewRecordSummary": {
+        "additionalProperties": false,
+        "description": "Internal summary of the latest machine-review state for one record.\n\nThis is the shape a future public ``trust.machine_review`` fragment (spec\n§4/§10) could render, prepared here but **not** exposed: nothing imports\nthis into a public response schema, and it is ``extra=\"forbid\"`` so it can\nnever carry a provider-supplied mutation payload. It is a projection of the\nsingle *selected latest* review, never an aggregate across passes.",
+        "properties": {
+          "curator_priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CuratorPriority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findings_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Findings Count",
+            "type": "integer"
+          },
+          "highest_severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineReviewSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MachineReviewStatus"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "MachineReviewRecordSummary",
+        "type": "object"
+      },
+      "MachineReviewSeverity": {
+        "description": "Severity of a single machine-review finding (spec §8).",
+        "enum": [
+          "info",
+          "warning",
+          "critical"
+        ],
+        "title": "MachineReviewSeverity",
+        "type": "string"
+      },
+      "MachineReviewStatus": {
+        "description": "Provisional, advisory record-level machine-review state.\n\nA dedicated enum, intentionally distinct from\n:class:`~app.db.models.common.RecordReviewStatus` (human review) and\n:class:`~app.db.models.common.SubmissionPrecheckLabel` (submission\nprecheck). Authoritative for *nothing* the deterministic-evidence or\nhuman-review layers own; see the spec §2/§4.\n\n``machine_screened_blocking_concern`` from the spec is intentionally\n**not** defined here: it is reserved/deferred (spec §3, §15 Q1) and must\nonly be introduced when a concrete operational distinction from\n``machine_screened_needs_attention`` is actually wired.",
+        "enum": [
+          "not_run",
+          "machine_screened_pass",
+          "machine_screened_warning",
+          "machine_screened_needs_attention",
+          "machine_review_failed"
+        ],
+        "title": "MachineReviewStatus",
+        "type": "string"
       },
       "MatchDetail": {
         "description": "How the query was matched.",
@@ -36575,6 +36792,113 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/submissions/{submission_id}/machine-review-inspection": {
+      "get": {
+        "description": "Inspect machine-review projections for one submission (admin only).\n\nLoads the submission (404 if missing), then projects its machine-review\naudit events onto its linked records via the private inspection service.\nNon-machine-review events are ignored. This is read-only: it never mutates\nsubmission status/lifecycle fields, review state, deterministic evidence,\nor scientific records.",
+        "operationId": "inspect_submission_machine_review_api_v1_admin_submissions__submission_id__machine_review_inspection_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "title": "Submission Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSubmissionMachineReviewInspectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inspect Submission Machine Review",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/users/{user_id}/role": {
       "patch": {
         "operationId": "change_user_role_api_v1_admin_users__user_id__role_patch",

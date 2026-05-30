@@ -126,6 +126,63 @@ def _links_for_submission(
     return scoped
 
 
+@dataclass(frozen=True)
+class _EventsProjection:
+    """Single-pass projection of many audit events (internal to this module)."""
+
+    record_reviews: tuple[RecordMachineReview, ...] = ()
+    unmapped_findings: tuple[UnmappedFinding, ...] = ()
+    mapping_warnings: tuple[str, ...] = ()
+    parse_warnings: tuple[str, ...] = ()
+    source_audit_event_ids: tuple[int, ...] = ()
+
+
+def _project_events(
+    submission_record_links: Sequence[AuditRecordLink],
+    submission_audit_events: Sequence[SubmissionAuditEventLike],
+) -> _EventsProjection:
+    """Run the audit adapter once across all events, collecting diagnostics.
+
+    Non-machine-review events are ignored. Each machine-review event is
+    projected with links scoped to its own submission, and its diagnostics are
+    accumulated. ``source_audit_event_ids`` are the (sorted, distinct) ids of
+    the machine-review events that were inspected — the provenance of the
+    projection — read opportunistically via ``event.id`` when present.
+    """
+    all_reviews: list[RecordMachineReview] = []
+    unmapped: list[UnmappedFinding] = []
+    mapping_warnings: list[str] = []
+    parse_warnings: list[str] = []
+    source_ids: list[int] = []
+
+    for event in submission_audit_events:
+        if not event_is_machine_review(event):
+            continue
+
+        event_id = getattr(event, "id", None)
+        if event_id is not None:
+            source_ids.append(event_id)
+
+        scoped_links = _links_for_submission(
+            getattr(event, "submission_id", None), submission_record_links
+        )
+        projection = record_machine_reviews_from_submission_audit_event(
+            event=event, submission_record_links=scoped_links
+        )
+        all_reviews.extend(projection.record_reviews)
+        unmapped.extend(projection.unmapped_findings)
+        mapping_warnings.extend(projection.mapping_warnings)
+        parse_warnings.extend(projection.parse_warnings)
+
+    return _EventsProjection(
+        record_reviews=tuple(all_reviews),
+        unmapped_findings=tuple(unmapped),
+        mapping_warnings=tuple(mapping_warnings),
+        parse_warnings=tuple(parse_warnings),
+        source_audit_event_ids=tuple(sorted(set(source_ids))),
+    )
+
+
 def build_machine_review_inspection_view(
     *,
     record_type: Any,
@@ -152,32 +209,12 @@ def build_machine_review_inspection_view(
     target_ref = _resolve_target_ref(record_ref, record_id)
     record_type_value = getattr(record_type, "value", record_type)
 
-    all_reviews: list[RecordMachineReview] = []
-    unmapped: list[UnmappedFinding] = []
-    mapping_warnings: list[str] = []
-    parse_warnings: list[str] = []
-
-    for event in submission_audit_events:
-        # Step 1: an event that is not an LLM-authored machine-review event
-        # contributes nothing (and is not even a diagnostic — it is unrelated).
-        if not event_is_machine_review(event):
-            continue
-
-        scoped_links = _links_for_submission(
-            getattr(event, "submission_id", None), submission_record_links
-        )
-        projection = record_machine_reviews_from_submission_audit_event(
-            event=event, submission_record_links=scoped_links
-        )
-        all_reviews.extend(projection.record_reviews)
-        unmapped.extend(projection.unmapped_findings)
-        mapping_warnings.extend(projection.mapping_warnings)
-        parse_warnings.extend(projection.parse_warnings)
+    projection = _project_events(submission_record_links, submission_audit_events)
 
     # Step 3: exact-record matching only — sibling records never leak in.
     matched_reviews = tuple(
         review
-        for review in all_reviews
+        for review in projection.record_reviews
         if review.record_type == record_type_value
         and review.record_ref == target_ref
     )
@@ -205,9 +242,9 @@ def build_machine_review_inspection_view(
         record_id=record_id,
         latest_summary=latest_summary,
         all_record_reviews=matched_reviews,
-        unmapped_findings=tuple(unmapped),
-        mapping_warnings=tuple(mapping_warnings),
-        parse_warnings=tuple(parse_warnings),
+        unmapped_findings=projection.unmapped_findings,
+        mapping_warnings=projection.mapping_warnings,
+        parse_warnings=projection.parse_warnings,
         source_submission_ids=source_submission_ids,
     )
 
@@ -232,3 +269,98 @@ def get_machine_review_summaries_for_record(
         submission_record_links=submission_record_links,
         submission_audit_events=submission_audit_events,
     ).latest_summary
+
+
+@dataclass(frozen=True)
+class SubmissionRecordMachineReviewInspection:
+    """One linked record's machine-review projection within a submission view.
+
+    Read-only and frozen. ``latest_summary`` is the read-model latest-selection
+    over only this record's mapped reviews; ``all_record_reviews`` keeps the
+    underlying passes for audit.
+    """
+
+    record_type: str
+    latest_summary: MachineReviewRecordSummary
+    record_ref: str | None = None
+    record_id: int | None = None
+    all_record_reviews: tuple[RecordMachineReview, ...] = ()
+
+
+@dataclass(frozen=True)
+class SubmissionMachineReviewInspection:
+    """Private/admin submission-scoped machine-review inspection result.
+
+    A single-pass projection of one submission's machine-review audit events
+    onto the records linked to that submission. ``record_inspections`` carries
+    one entry per record that received at least one mapped review (records with
+    no machine-review finding simply do not appear — their state is ``not_run``
+    by absence). The diagnostics are computed once for the whole submission, not
+    per record. Mutates nothing.
+    """
+
+    submission_id: int
+    record_inspections: tuple[SubmissionRecordMachineReviewInspection, ...] = ()
+    unmapped_findings: tuple[UnmappedFinding, ...] = ()
+    mapping_warnings: tuple[str, ...] = ()
+    parse_warnings: tuple[str, ...] = ()
+    source_audit_event_ids: tuple[int, ...] = field(default_factory=tuple)
+
+
+def build_submission_machine_review_inspection(
+    *,
+    submission_id: int,
+    submission_record_links: Sequence[AuditRecordLink] = (),
+    submission_audit_events: Sequence[SubmissionAuditEventLike] = (),
+) -> SubmissionMachineReviewInspection:
+    """Project one submission's machine-review audit events onto its records.
+
+    Runs the audit adapter once over the submission's events (anti-fan-out and
+    parse-degradation handled by the adapter), groups the resulting record
+    reviews by ``(record_type, record_ref)``, and builds a latest summary per
+    record group via the read-model helper. Submission-scoped, unlinked, and
+    sibling findings never become a record summary — they survive only in the
+    submission-level diagnostics.
+
+    Returns an empty inspection (no record inspections, no diagnostics) when the
+    submission has no machine-review events.
+    """
+    projection = _project_events(submission_record_links, submission_audit_events)
+
+    grouped: dict[tuple[str, str], list[RecordMachineReview]] = {}
+    for review in projection.record_reviews:
+        grouped.setdefault((review.record_type, review.record_ref), []).append(
+            review
+        )
+
+    record_inspections: list[SubmissionRecordMachineReviewInspection] = []
+    for (record_type, record_ref), reviews in grouped.items():
+        latest_summary = build_machine_review_record_summary(
+            record_type=record_type, record_ref=record_ref, reviews=reviews
+        )
+        # The internal record_id is carried through on the reviews as passthrough
+        # metadata; recover it for the admin view when present.
+        record_id = next(
+            (r.record_id for r in reviews if r.record_id is not None), None
+        )
+        record_inspections.append(
+            SubmissionRecordMachineReviewInspection(
+                record_type=record_type,
+                record_ref=record_ref,
+                record_id=record_id,
+                latest_summary=latest_summary,
+                all_record_reviews=tuple(reviews),
+            )
+        )
+
+    # Deterministic ordering so the response is stable across calls.
+    record_inspections.sort(key=lambda ri: (ri.record_type, ri.record_ref or ""))
+
+    return SubmissionMachineReviewInspection(
+        submission_id=submission_id,
+        record_inspections=tuple(record_inspections),
+        unmapped_findings=projection.unmapped_findings,
+        mapping_warnings=projection.mapping_warnings,
+        parse_warnings=projection.parse_warnings,
+        source_audit_event_ids=projection.source_audit_event_ids,
+    )
