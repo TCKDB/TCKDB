@@ -46,10 +46,16 @@ from app.services.machine_review.schemas import (
     MachineReviewSeverity,
     MachineReviewStatus,
 )
+from app.services.machine_review.trust_adapter import (
+    InternalTrustEnvelopeWithMachineReview,
+    build_internal_machine_review_trust_fragment,
+    build_private_trust_envelope_with_machine_review,
+)
 
 __all__ = [
     "AuditRecordLink",
     "CuratorPriority",
+    "InternalTrustEnvelopeWithMachineReview",
     "MachineReviewAuditProjection",
     "MachineReviewCategory",
     "MachineReviewFinding",
@@ -67,7 +73,9 @@ __all__ = [
     "SubmissionRecordLinkRef",
     "UnmappedFinding",
     "UnmappedReason",
+    "build_internal_machine_review_trust_fragment",
     "build_machine_review_record_summary",
+    "build_private_trust_envelope_with_machine_review",
     "derive_machine_review_status",
     "event_is_machine_review",
     "machine_review_result_from_audit_event",
