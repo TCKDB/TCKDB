@@ -23,6 +23,11 @@ from app.services.machine_review.derivation import (
     MachineReviewOutcome,
     derive_machine_review_status,
 )
+from app.services.machine_review.inspection import (
+    MachineReviewInspectionView,
+    build_machine_review_inspection_view,
+    get_machine_review_summaries_for_record,
+)
 from app.services.machine_review.mapping import (
     MachineReviewRecordMapping,
     MappedRecord,
@@ -59,6 +64,7 @@ __all__ = [
     "MachineReviewAuditProjection",
     "MachineReviewCategory",
     "MachineReviewFinding",
+    "MachineReviewInspectionView",
     "MachineReviewOutcome",
     "MachineReviewRecordMapping",
     "MachineReviewRecordSummary",
@@ -75,9 +81,11 @@ __all__ = [
     "UnmappedReason",
     "build_internal_machine_review_trust_fragment",
     "build_machine_review_record_summary",
+    "build_machine_review_inspection_view",
     "build_private_trust_envelope_with_machine_review",
     "derive_machine_review_status",
     "event_is_machine_review",
+    "get_machine_review_summaries_for_record",
     "machine_review_result_from_audit_event",
     "map_findings_to_submission_records",
     "record_machine_reviews_from_audit_events",
