@@ -8,6 +8,12 @@ migrations, RAG, ARC changes, or `tckdb-client` changes.
 **Audience:** TCKDB backend maintainers, deployment admins, future
 precheck implementers.
 
+**See also:** `provisional_machine_review.md` specifies the future
+public-facing **machine-review** layer that builds on this precheck
+plumbing. This precheck infrastructure is the implementation foundation;
+the public-facing state is exposed there as `machine_review`, not
+`llm_precheck`.
+
 ---
 
 ## 1. Core Principle
