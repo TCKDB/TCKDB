@@ -33084,7 +33084,7 @@
         "type": "object"
       },
       "TransitionStateInFull": {
-        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).",
+        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).\n\n``trust`` is populated only when the caller passes ``include=trust``\nto ``/reaction-entries/{id}/full``. It reuses :class:`TrustFragment`\nso a trust block embedded here is structurally identical to the one\nreturned by\n``GET /scientific/transition-state-entries/{ref}?include=trust``\n(rubric ``computed_transition_state_v1``).",
         "properties": {
           "calculations": {
             "additionalProperties": {
@@ -33138,6 +33138,16 @@
           "transition_state_ref": {
             "title": "Transition State Ref",
             "type": "string"
+          },
+          "trust": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

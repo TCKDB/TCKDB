@@ -284,14 +284,20 @@ modules are authoritative; this table is verified against them.
 | `GET /scientific/statmech/{ref_or_id}` | ✓ | `computed_statmech_v1` | `services/scientific_read/statmech.py:95,185,190,313` |
 | `GET /scientific/transport/{ref_or_id}` | ✓ | `computed_transport_v1` | `services/scientific_read/transport.py:74,124,129,224` |
 | `GET /scientific/transition-state-entries/{ref_or_id}` | ✓ | `computed_transition_state_v1` | `services/scientific_read/transition_states.py` (`_TSE_DETAIL_LEGAL_INCLUDE_TOKENS`, `_TSE_DETAIL_INTERNAL_INCLUDE_TOKENS`, `_TRUST_EAGER_LOADS`, `build_transition_state_entry_trust_fragment`) |
-| `GET /scientific/reaction-entries/{id}/full` | ✓ (modifier) | `computed_kinetics_v1` on embedded kinetics; `computed_calculation_v1` on embedded calculations | `services/scientific_read/provenance.py` (`_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `_build_kinetics_section`, `_build_calculations_section`, `_build_calculation_trust_fragments`) |
+| `GET /scientific/reaction-entries/{id}/full` | ✓ (modifier) | `computed_kinetics_v1` on embedded kinetics; `computed_calculation_v1` on embedded calculations; `computed_transition_state_v1` on embedded transition-state entries | `services/scientific_read/provenance.py` (`_LEGAL_INCLUDE_TOKENS`, `_INTERNAL_INCLUDE_TOKENS`, `_build_kinetics_section`, `_build_calculations_section`, `_build_calculation_trust_fragments`, `_build_transition_states_section`, `build_transition_state_entry_trust_fragment`) |
 
 The TS-entry trust token is wired to the **standalone** TS-entry detail
-surface only. The parent TS-concept detail
-(`GET /scientific/transition-states/{ref_or_id}`, including its embedded
-`entries`) and the TS-entry search surface keep the narrower legal-token
-set and reject `include=trust` with 422 `unknown_include_token`. TS
-trust is **not** yet propagated into `/reaction-entries/{id}/full`.
+surface and to the embedded `transition_states[*]` records of the
+composite `/reaction-entries/{id}/full` read. The parent TS-concept
+detail (`GET /scientific/transition-states/{ref_or_id}`, including its
+embedded `entries`) and the TS-entry search surface keep the narrower
+legal-token set and reject `include=trust` with 422
+`unknown_include_token`. The `/full` propagation reuses the standalone
+builder (`build_transition_state_entry_trust_fragment`) and the same
+`_TRUST_EAGER_LOADS` graph, so an embedded TS-entry trust block is
+byte-identical to its standalone counterpart for the same record. No
+top-level reaction-entry trust and no top-level TS-concept trust are
+emitted.
 
 ### 0.6.2 Trust posture invariants
 
@@ -327,8 +333,8 @@ All six surfaces share these invariants, verified by inspection:
 |---|---|---|
 | `/scientific/calculations/{ref_or_id}` | **enabled** | per-calculation `computed_calculation_v1`. |
 | `/scientific/calculations/search` | omitted by policy | search surfaces skip trust. |
-| `/scientific/reaction-entries/{id}/full` | **enabled (embedded)** | `?include=trust` propagates `computed_kinetics_v1` to each embedded kinetics record and `computed_calculation_v1` to each embedded calculation summary. No top-level reaction-entry rubric exists yet; transition-state, conformer, path-search, IRC, scan, and artifact sections still lack trust because they have no rubric. |
-| `/scientific/transition-state-entries/{ref_or_id}` | **enabled** | standalone TS-entry detail emits `computed_transition_state_v1` under `include=trust`. Status-aware frequency policy; IRC/path-search additive. Not propagated into `/full` yet. |
+| `/scientific/reaction-entries/{id}/full` | **enabled (embedded)** | `?include=trust` propagates `computed_kinetics_v1` to each embedded kinetics record, `computed_calculation_v1` to each embedded calculation summary, and `computed_transition_state_v1` to each embedded transition-state-entry record. No top-level reaction-entry rubric exists yet; conformer, path-search, IRC, scan, and artifact sections still lack trust because they have no rubric. |
+| `/scientific/transition-state-entries/{ref_or_id}` | **enabled** | standalone TS-entry detail emits `computed_transition_state_v1` under `include=trust`. Status-aware frequency policy; IRC/path-search additive. Also propagated into `/full` under `transition_states[*].trust`. |
 | `/scientific/transition-states/{ref_or_id}` | **not enabled** | TS-concept detail (and its embedded `entries`) reject `include=trust`; only the standalone TS-entry surface carries the rubric. No top-level TS-concept aggregation rubric exists. |
 | `/scientific/conformer-groups/{ref_or_id}`, `/scientific/conformer-observations/{ref_or_id}` | **not enabled** | no conformer rubric. |
 | `/scientific/networks/*` (network / network-solve / network-kinetics) | **not enabled** | no network/PDep rubric. |
@@ -336,14 +342,15 @@ All six surfaces share these invariants, verified by inspection:
 | `/scientific/literature/*` | **n/a (by design)** | identity surface, not a scientific computation record. |
 | `/scientific/artifacts/search` | **n/a** | metadata-only search; trust would be a property of the owning calculation. |
 
-As of 2026-05-28 the reaction-entry `/full` composite now propagates
-trust to its embedded kinetics records and embedded calculation
-summaries when the caller passes `include=trust`. The composite still
-has no top-level reaction-entry rubric, and `transition_states`,
-`conformers`, `path_search`, `irc`, `scans`, and `artifacts` sections
-do not carry trust because they have no deterministic rubric. The
-remaining gap is therefore aggregation policy plus the rubrics for
-those record types — not the composite read itself.
+As of 2026-05-30 the reaction-entry `/full` composite propagates trust
+to its embedded kinetics records, embedded calculation summaries, and
+embedded transition-state-entry records when the caller passes
+`include=trust`. The composite still has no top-level reaction-entry
+rubric and no top-level TS-*concept* rubric, and the `conformers`,
+`path_search`, `irc`, `scans`, and `artifacts` sections do not carry
+trust because they have no deterministic rubric. The remaining gap is
+therefore aggregation policy plus the rubrics for those record types —
+not the composite read itself.
 
 ---
 
@@ -363,7 +370,7 @@ non-canonical surface; "✗" means no documented surface answers it.
 | 5 | Find reactions by reactants / products | ✓ | `GET\|POST /scientific/reactions/search` | Reactants/products as identifier lists; direction `forward\|reverse\|either`. |
 | 6 | Find kinetics for a reaction | ✓ | `GET /scientific/reaction-entries/{id}/kinetics`, `GET\|POST /scientific/kinetics/search` | Per-entry surface exposes `include=trust`; search does not. |
 | 7 | Inspect calculation / provenance for a record | ✓ | `GET /scientific/calculations/{ref_or_id}`, `GET /scientific/reaction-entries/{id}/full` | `/full` is the only composite "provenance projection" today; no generic `/scientific/records/{type}/{id}/provenance`. |
-| 8 | Ask for trust / evidence details on a record | ✓ | six detail reads (calculation, kinetics-per-entry, thermo-per-entry, statmech, transport, standalone transition-state-entry) plus the composite `/reaction-entries/{id}/full?include=trust` for embedded kinetics + calculations | TS-entry trust is standalone-only (not yet on `/full`); conformer / network sections still lack trust because no rubric exists for them. |
+| 8 | Ask for trust / evidence details on a record | ✓ | six detail reads (calculation, kinetics-per-entry, thermo-per-entry, statmech, transport, standalone transition-state-entry) plus the composite `/reaction-entries/{id}/full?include=trust` for embedded kinetics + calculations + transition-state entries | Conformer / network sections still lack trust because no rubric exists for them; no top-level reaction-entry or TS-concept aggregation rubric exists yet. |
 | 9 | Avoid rejected / deprecated records by default | ✓ | every `/scientific/*` read | Default visible set: `{approved, under_review, not_reviewed}`. Opt in via `include_rejected` / `include_deprecated`; threshold via `min_review_status`. Legacy `/api/v1/{entity}` reads do not filter. |
 | 10 | Documented selection policy for "best" record | △ | `species-calculations/search` `ranking` enum only; all other surfaces use deterministic L3 ordering without an explicit policy token | See §0.8. No `tckdb_default` / `approved_first` / `latest` token exists across the broader surface. |
 

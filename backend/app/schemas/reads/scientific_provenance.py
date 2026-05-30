@@ -169,6 +169,13 @@ class TransitionStateInFull(BaseModel):
     :class:`ScientificTransitionStateEntryRecord` so the
     full-response block lines up byte-for-byte with the per-entry
     detail endpoint (same counts, same booleans, same status enum).
+
+    ``trust`` is populated only when the caller passes ``include=trust``
+    to ``/reaction-entries/{id}/full``. It reuses :class:`TrustFragment`
+    so a trust block embedded here is structurally identical to the one
+    returned by
+    ``GET /scientific/transition-state-entries/{ref}?include=trust``
+    (rubric ``computed_transition_state_v1``).
     """
 
     transition_state_id: int | None = None
@@ -180,6 +187,7 @@ class TransitionStateInFull(BaseModel):
     evidence_summary: TransitionStateCalculationEvidenceSummary
     calculations: dict[str, TransitionStateCalculationSlot] = Field(default_factory=dict)
     dependencies: list[TransitionStateDependency] = Field(default_factory=list)
+    trust: TrustFragment | None = None
 
 
 # ---------------------------------------------------------------------------

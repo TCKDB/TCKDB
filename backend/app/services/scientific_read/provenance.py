@@ -86,7 +86,9 @@ from app.services.scientific_read.calculations import (
 from app.services.scientific_read.conformers import build_group_record
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.transition_states import (
+    _TRUST_EAGER_LOADS as _TS_ENTRY_TRUST_EAGER_LOADS,
     _build_evidence_summary_for_entries,
+    build_transition_state_entry_trust_fragment,
 )
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
@@ -204,7 +206,10 @@ def get_reaction_full(
     ts_block: list[TransitionStateInFull] | None = None
     if "transition_states" in includes:
         ts_block = _build_transition_states_section(
-            session, reaction_entry_id, visible
+            session,
+            reaction_entry_id,
+            visible,
+            include_trust=trust_requested,
         )
 
     calculations_block: list[ReactionFullCalculationEvidenceSummary] | None = None
@@ -403,7 +408,23 @@ def _build_transition_states_section(
     session: Session,
     reaction_entry_id: int,
     visible_review_statuses: set,
+    *,
+    include_trust: bool = False,
 ) -> list[TransitionStateInFull]:
+    """Embed the reaction entry's TS-entry rows.
+
+    When ``include_trust`` is True, each visible TS-entry additionally
+    carries a ``computed_transition_state_v1`` trust fragment. The
+    evidence graph the rubric walks is eagerly loaded via
+    ``_TS_ENTRY_TRUST_EAGER_LOADS`` — the same tuple the standalone
+    TS-entry trust read uses — so the loaded evaluator emits no hidden
+    N+1 queries. The fragment is built through
+    :func:`build_transition_state_entry_trust_fragment`, which calls the
+    *loaded* evaluator (never the session/id wrapper), so an embedded
+    TS-entry trust block is byte-identical to what
+    ``GET /scientific/transition-state-entries/{ref}?include=trust``
+    would emit for the same record.
+    """
     ts_rows = session.scalars(
         select(TransitionState).where(
             TransitionState.reaction_entry_id == reaction_entry_id
@@ -414,11 +435,12 @@ def _build_transition_states_section(
 
     ts_ref_by_id: dict[int, str] = {t.id: t.public_ref for t in ts_rows}
 
-    ts_entry_rows = session.scalars(
-        select(TransitionStateEntry).where(
-            TransitionStateEntry.transition_state_id.in_([t.id for t in ts_rows])
-        )
-    ).all()
+    ts_entry_query = select(TransitionStateEntry).where(
+        TransitionStateEntry.transition_state_id.in_([t.id for t in ts_rows])
+    )
+    if include_trust:
+        ts_entry_query = ts_entry_query.options(*_TS_ENTRY_TRUST_EAGER_LOADS)
+    ts_entry_rows = session.scalars(ts_entry_query).all()
 
     badge_by_entry = fetch_review_badges(
         session,
@@ -455,6 +477,14 @@ def _build_transition_states_section(
                 calculations=_format_ts_calc_slots(ts_calcs),
                 dependencies=_format_ts_deps(
                     deps_by_ts_entry.get(ts_entry.id, []), calc_refs
+                ),
+                trust=(
+                    build_transition_state_entry_trust_fragment(
+                        ts_entry,
+                        review_status=badge.status,
+                    )
+                    if include_trust
+                    else None
                 ),
             )
         )
