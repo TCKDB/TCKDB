@@ -1,0 +1,18 @@
+{
+  "case": "malformed_payload_parse_warning_only",
+  "description": "A malformed audit payload (label outside the precheck enum) fails contract validation. The high-level adapter/inspection path degrades to a parse warning without raising: no record summaries, no tasks.",
+  "linked_records": [
+    {"record_type": "kinetics", "record_id": 9001, "role": "primary"}
+  ],
+  "audit_event_details_json": {
+    "label": "not-a-real-label",
+    "findings": []
+  },
+  "expected": {
+    "record_summary_count": 0,
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 1,
+    "created_tasks": 0
+  }
+}

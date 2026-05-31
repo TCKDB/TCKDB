@@ -1,0 +1,22 @@
+{
+  "case": "clean_pass_no_tasks",
+  "description": "A precheck that passed with no findings. The audit adapter only builds record reviews from findings, so a clean pass produces no record summary and no curator task.",
+  "linked_records": [
+    {"record_type": "kinetics", "record_id": 9001, "role": "primary"}
+  ],
+  "audit_event_details_json": {
+    "label": "pass",
+    "summary": "No issues found.",
+    "findings": [],
+    "model": "fake_test/simple-v1",
+    "used_rag": false,
+    "provider": "FakeLLMPrecheckProvider"
+  },
+  "expected": {
+    "record_summary_count": 0,
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 0,
+    "created_tasks": 0
+  }
+}

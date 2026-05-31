@@ -1,0 +1,36 @@
+{
+  "case": "kinetics_warning_creates_task",
+  "description": "A warning finding mapped exactly to one linked kinetics record. Maps to one record summary (machine_screened_warning) and builds one needs_curator_review task.",
+  "linked_records": [
+    {"record_type": "kinetics", "record_id": 9001, "role": "primary"}
+  ],
+  "audit_event_details_json": {
+    "label": "warning",
+    "summary": "One advisory warning on a kinetics record.",
+    "findings": [
+      {
+        "severity": "warning",
+        "category": "kinetics",
+        "record_type": "kinetics",
+        "record_id": 9001,
+        "message": "Note mentions tunneling but tunneling_model is null; clarify whether tunneling was applied.",
+        "evidence_keys": ["missing_checks.tunneling_model", "kinetics.note"]
+      }
+    ],
+    "model": "fake_test/simple-v1",
+    "used_rag": false,
+    "provider": "FakeLLMPrecheckProvider"
+  },
+  "expected": {
+    "record_summary_count": 1,
+    "record_type": "kinetics",
+    "record_id": 9001,
+    "latest_status": "machine_screened_warning",
+    "highest_severity": "warning",
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 0,
+    "created_tasks": 1,
+    "workflow_state": "needs_curator_review"
+  }
+}

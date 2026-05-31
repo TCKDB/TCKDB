@@ -1,0 +1,36 @@
+{
+  "case": "transition_state_critical_creates_task",
+  "description": "A critical finding mapped to one linked transition_state_entry record. Maps to one record summary (machine_screened_needs_attention) and builds one needs_curator_review task. NOTE: the persisted precheck category vocabulary (LLMFindingCategory) does not include 'transition_state_validation'; the closest available token 'consistency' is used. The broader service-layer MachineReviewCategory has 'transition_state_validation' but the precheck source cannot emit it.",
+  "linked_records": [
+    {"record_type": "transition_state_entry", "record_id": 9002, "role": "ts"}
+  ],
+  "audit_event_details_json": {
+    "label": "needs_attention",
+    "summary": "A critical contradiction on a transition-state entry.",
+    "findings": [
+      {
+        "severity": "critical",
+        "category": "consistency",
+        "record_type": "transition_state_entry",
+        "record_id": 9002,
+        "message": "Validated TS has contradictory imaginary-frequency evidence: marked validated yet the frequency set shows no single imaginary mode.",
+        "evidence_keys": ["ts.imaginary_frequency_count", "ts.validated"]
+      }
+    ],
+    "model": "fake_test/simple-v1",
+    "used_rag": false,
+    "provider": "FakeLLMPrecheckProvider"
+  },
+  "expected": {
+    "record_summary_count": 1,
+    "record_type": "transition_state_entry",
+    "record_id": 9002,
+    "latest_status": "machine_screened_needs_attention",
+    "highest_severity": "critical",
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 0,
+    "created_tasks": 1,
+    "workflow_state": "needs_curator_review"
+  }
+}

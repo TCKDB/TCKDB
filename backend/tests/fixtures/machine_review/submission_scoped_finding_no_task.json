@@ -1,0 +1,29 @@
+{
+  "case": "submission_scoped_finding_no_task",
+  "description": "A finding with no record_type/record_id is submission-scoped. It is a diagnostic only (counted in unmapped_findings), never fanned out to a record, and never produces a task. Submission-scoped is expected, so it carries no mapping warning.",
+  "linked_records": [
+    {"record_type": "kinetics", "record_id": 9001, "role": "primary"}
+  ],
+  "audit_event_details_json": {
+    "label": "warning",
+    "summary": "A submission-wide provenance concern with no specific record.",
+    "findings": [
+      {
+        "severity": "warning",
+        "category": "provenance",
+        "message": "Submission lacks an overall provenance summary tying its records together.",
+        "evidence_keys": ["submission.provenance_summary"]
+      }
+    ],
+    "model": "fake_test/simple-v1",
+    "used_rag": false,
+    "provider": "FakeLLMPrecheckProvider"
+  },
+  "expected": {
+    "record_summary_count": 0,
+    "unmapped_findings_count": 1,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 0,
+    "created_tasks": 0
+  }
+}
