@@ -580,3 +580,76 @@ class RecordReviewStatus(str, Enum):
     approved = "approved"
     rejected = "rejected"
     deprecated = "deprecated"
+
+
+class MachineReviewStatus(str, Enum):
+    """DB-layer mirror of the advisory machine-review status vocabulary.
+
+    The authoritative vocabulary lives in the service layer as
+    :class:`app.services.machine_review.schemas.MachineReviewStatus`. DB
+    models must not import service-layer Pydantic schemas (see
+    ``.claude/rules/schema-rules.md``), so the token set is mirrored here for
+    the persisted *denormalised snapshot* column on
+    ``machine_review_curator_task``. The two are kept in lock-step by a
+    drift-guard test; this enum is display/ranking metadata only and is never
+    authoritative for anything the human-review or evidence layers own.
+    """
+
+    not_run = "not_run"
+    machine_screened_pass = "machine_screened_pass"
+    machine_screened_warning = "machine_screened_warning"
+    machine_screened_needs_attention = "machine_screened_needs_attention"
+    machine_review_failed = "machine_review_failed"
+
+
+class MachineReviewSeverity(str, Enum):
+    """DB-layer mirror of the machine-review finding severity vocabulary.
+
+    Mirrors :class:`app.services.machine_review.schemas.MachineReviewSeverity`
+    for the persisted ``highest_severity`` snapshot column. Kept in lock-step
+    with the service-layer twin by a drift-guard test. See
+    :class:`MachineReviewStatus` for why the token set is duplicated rather
+    than imported.
+    """
+
+    info = "info"
+    warning = "warning"
+    critical = "critical"
+
+
+class MachineReviewCuratorTaskState(str, Enum):
+    """Human triage state over an exact, mapped machine-review finding.
+
+    This is the *fourth* review axis and is intentionally distinct from
+    :class:`MachineReviewStatus` (advisory machine output),
+    :class:`RecordReviewStatus` (authoritative human review), and
+    :class:`SubmissionStatus` (submission lifecycle / moderation). A curator
+    task tracks *whether a human has handled a machine finding* — it never
+    approves, rejects, certifies, or otherwise mutates a record. See
+    ``backend/docs/specs/machine_review_curator_task_queue.md`` §2/§5.
+
+    The first three are **open** states (work outstanding); the last three
+    are **terminal/resolved** states (see :meth:`is_terminal`).
+    """
+
+    untriaged = "untriaged"
+    needs_curator_review = "needs_curator_review"
+    in_curator_review = "in_curator_review"
+    resolved_no_action = "resolved_no_action"
+    resolved_human_reviewed = "resolved_human_reviewed"
+    dismissed_machine_finding = "dismissed_machine_finding"
+
+    @classmethod
+    def terminal_states(cls) -> "frozenset[MachineReviewCuratorTaskState]":
+        """The resolved/terminal states (a human has handled the finding)."""
+        return frozenset(
+            {
+                cls.resolved_no_action,
+                cls.resolved_human_reviewed,
+                cls.dismissed_machine_finding,
+            }
+        )
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in self.terminal_states()
