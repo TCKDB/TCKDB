@@ -129,11 +129,21 @@ source calculation refs                            (sorted)
 source calculation roles                           (sorted, paired with refs)
 geometry validation statuses                       (per source geometry)
 artifact-kind summaries                            (kinds present, not contents)
-review_status snapshot   — ONLY if review_status is part of the machine
-                            context (see §3.4 and §6)
+review_status snapshot   — read-only human-review input, ONLY if review_status
+                            is part of the machine context (see §3.4 and §6)
+is_certified snapshot    — read-only human-review input, ONLY if part of the
+                            machine context (never a machine-owned output)
 selected notes / free-text fields — ONLY if those fields were part of the
                             reviewed context (the prose the rubric can't read)
 ```
+
+The implemented context contract (`MachineReviewEvidenceContext`,
+`app/services/machine_review/context_hash.py`) carries optional
+`review_status` and `is_certified` fields for exactly these read-only inputs.
+The pure adapter `build_machine_review_evidence_context_from_trust`
+(`context_adapter.py`) populates them from the public deterministic
+`TrustFragment`; a deployment preferring axis-independence (policy §6) can
+leave them out by building the context without them.
 
 The rubric name+version is in the hash on purpose: a rubric version bump
 changes the *meaning* of the check set, so the same passed/missing checks under
@@ -602,6 +612,16 @@ the prior and on the provisional spec's §13 non-interference tests.
    (`classify_machine_review_currency`), covered by
    `tests/services/test_machine_review_currency.py`. See "Implemented
    classifier" below for naming. No persistence, no public exposure.
+   The pure **context/currency adapter** that wires steps 2–3 against *real*
+   deterministic trust output is also DONE:
+   `app/services/machine_review/context_adapter.py`
+   (`build_machine_review_evidence_context_from_trust` and
+   `stored_projection_from_record_machine_review`), covered by
+   `tests/services/test_machine_review_context_adapter.py`. It reads the public
+   `TrustFragment` (read-only, non-interfering), builds the evidence context →
+   digest → `StoredMachineReviewProjection`, and feeds the classifier — proving
+   currency against real evidence with no persistence and no public exposure.
+   This is the **last pure step before persistence** (step 4 remains not done).
 4. Add the record_machine_review table (§8) in a NEW Alembic revision only when
    public record-level review is actually being built; append-only, both
    upgrade()/downgrade(). Backfill is not required (history starts empty).

@@ -261,7 +261,7 @@ def test_record_identity_is_part_of_the_hash():
 
 
 # --------------------------------------------------------------------------- #
-# Optional-inclusion fields (review_status / notes)
+# Optional-inclusion fields (review_status / is_certified / notes)
 # --------------------------------------------------------------------------- #
 
 
@@ -271,6 +271,15 @@ def test_review_status_inclusion_changes_hash_only_when_set():
     assert _hash(_context()) == _hash(_context(review_status=None))
     # Including it is a distinct context.
     assert _hash(_context()) != _hash(_context(review_status="approved"))
+
+
+def test_is_certified_inclusion_changes_hash_only_when_set():
+    """is_certified is a read-only context input affecting the hash when set."""
+    # Default (not included) is stable.
+    assert _hash(_context()) == _hash(_context(is_certified=None))
+    # Including it (either bool) is a distinct context.
+    assert _hash(_context()) != _hash(_context(is_certified=False))
+    assert _hash(_context(is_certified=False)) != _hash(_context(is_certified=True))
 
 
 def test_notes_inclusion_changes_hash_and_is_order_insensitive():

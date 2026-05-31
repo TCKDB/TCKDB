@@ -125,7 +125,13 @@ class MachineReviewEvidenceContext(BaseModel):
     artifact_kinds: tuple[str, ...] = Field(default_factory=tuple)
 
     # Included only when explicitly part of the reviewed context (policy §3.2).
+    # ``review_status`` / ``is_certified`` are **read-only context inputs** — the
+    # human-review snapshot the reviewer saw — never machine-owned outputs.
+    # Per policy §6 a deployment may prefer to leave ``review_status`` out to
+    # keep the machine/human axes independent; the field is optional so either
+    # posture is expressible.
     review_status: str | None = Field(default=None, max_length=64)
+    is_certified: bool | None = None
     notes: tuple[str, ...] = Field(default_factory=tuple)
 
 
@@ -202,6 +208,7 @@ def build_machine_review_context_hash(
         ),
         "artifact_kinds": sorted(context.artifact_kinds),
         "review_status": context.review_status,
+        "is_certified": context.is_certified,
         # Notes treated as an unordered set of included free-text values.
         "notes": sorted(context.notes),
     }

@@ -42,6 +42,7 @@ from datetime import datetime
 from enum import Enum
 
 from app.services.machine_review.context_hash import MachineReviewContextDigest
+from app.services.machine_review.schemas import MachineReviewStatus
 
 
 class MachineReviewCurrencyState(str, Enum):
@@ -97,10 +98,12 @@ class StoredMachineReviewProjection:
 
     Mirrors the columns a future append-only ``record_machine_review`` row
     (policy §8) would carry that are relevant to currency and latest-selection.
-    It carries no findings/summary/status — currency is about *which* review is
-    live, not its verdict. ``id`` and ``source_audit_event_id`` are the
-    latest-selection tiebreaks (both may be ``None`` for in-memory projections
-    not yet persisted, and sort last under DESC NULLS LAST).
+    Currency itself is about *which* review is live, not its verdict, so the
+    classifier ignores ``status``; it is retained as passthrough provenance (the
+    verdict the live review carried) and to mirror the future table's column.
+    ``id`` and ``source_audit_event_id`` are the latest-selection tiebreaks
+    (both may be ``None`` for in-memory projections not yet persisted, and sort
+    last under DESC NULLS LAST).
     """
 
     record_type: str
@@ -110,6 +113,7 @@ class StoredMachineReviewProjection:
     context_hash: str
     prompt_version: str
     rubric_versions: Mapping[str, str]
+    status: MachineReviewStatus | None = None
     id: int | None = None
     source_audit_event_id: int | None = None
 
