@@ -54,6 +54,11 @@ from app.services.machine_review.derivation import (
     MachineReviewOutcome,
     derive_machine_review_status,
 )
+from app.services.machine_review.persistence import (
+    classify_record_machine_review_currency_from_rows,
+    create_record_machine_review_row,
+    stored_projection_from_record_machine_review_row,
+)
 from app.services.machine_review.inspection import (
     MachineReviewInspectionView,
     SubmissionMachineReviewInspection,
@@ -142,7 +147,9 @@ __all__ = [
     "build_private_trust_envelope_with_machine_review",
     "build_submission_machine_review_inspection",
     "classify_machine_review_currency",
+    "classify_record_machine_review_currency_from_rows",
     "compute_finding_fingerprint",
+    "create_record_machine_review_row",
     "derive_machine_review_status",
     "event_is_machine_review",
     "get_machine_review_summaries_for_record",
@@ -155,4 +162,5 @@ __all__ = [
     "select_latest_machine_review_for_record",
     "start_curator_task_review",
     "stored_projection_from_record_machine_review",
+    "stored_projection_from_record_machine_review_row",
 ]

@@ -17,6 +17,7 @@ from . import (
     network,
     network_pdep,
     reaction,
+    record_machine_review,
     record_review,
     software,
     species,

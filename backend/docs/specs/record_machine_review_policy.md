@@ -489,6 +489,18 @@ currency fields (`prompt_version`, `rubric_versions_json`,
 `context_schema_version`), the provenance link (`source_audit_event_id`), and
 states the ordering columns.
 
+**Implemented** as `RecordMachineReviewRow`
+(`app/db/models/record_machine_review.py`) + revision
+`c9d0e1f2a3b4_add_record_machine_review`. Notes on the realised shape: `status`
+reuses the existing DB-layer `machine_review_status` enum and `record_type` the
+`submission_record_type` enum (no enum churn); `curator_priority` is stored as
+text with application-level validation. CHECK constraints enforce
+`char_length(context_hash) = 64` and `jsonb_typeof(findings_json) = 'array'`;
+indexes back the latest-selection paths
+(`(record_type, record_id, reviewed_at DESC)` and the
+`source_audit_event_id DESC` tiebreak) plus `context_hash`,
+`source_submission_id`, and `source_audit_event_id`.
+
 ### Uniqueness / write model
 
 ```text
@@ -621,10 +633,24 @@ the prior and on the provisional spec's §13 non-interference tests.
    `TrustFragment` (read-only, non-interfering), builds the evidence context →
    digest → `StoredMachineReviewProjection`, and feeds the classifier — proving
    currency against real evidence with no persistence and no public exposure.
-   This is the **last pure step before persistence** (step 4 remains not done).
+   This was the last pure step before persistence.
 4. Add the record_machine_review table (§8) in a NEW Alembic revision only when
    public record-level review is actually being built; append-only, both
    upgrade()/downgrade(). Backfill is not required (history starts empty).
+   DONE (persistence only — NOT public exposure): new Alembic revision
+   `c9d0e1f2a3b4_add_record_machine_review` (append-only table, real
+   upgrade()/downgrade(), reusing the `submission_record_type` /
+   `machine_review_status` enums); ORM model
+   `app/db/models/record_machine_review.py::RecordMachineReviewRow`; the
+   row→`StoredMachineReviewProjection` path and append helper in
+   `app/services/machine_review/persistence.py`
+   (`stored_projection_from_record_machine_review_row`,
+   `classify_record_machine_review_currency_from_rows`,
+   `create_record_machine_review_row`); covered by
+   `tests/services/test_record_machine_review_persistence.py`. No uniqueness
+   over `(record_type, record_id)` — multiple historical rows are expected and
+   "which is live" stays a read-time classification. Not wired into uploads; no
+   public `trust.machine_review`.
 5. Wire re-review triggers (§5) as background/admin paths that APPEND rows;
    never synchronous in uploads, never mutating review_status or evidence.
 6. Only then expose public trust.machine_review behind the latest-current
