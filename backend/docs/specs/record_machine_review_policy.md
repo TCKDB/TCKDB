@@ -255,6 +255,42 @@ Selection is two steps, in this order:
 Staleness never changes *which* review is latest — a stale latest review is
 still the latest; it is just not an active public candidate.
 
+### Implemented classifier (naming)
+
+The pure classifier `classify_machine_review_currency`
+(`app/services/machine_review/currency.py`) realises §2/§3.5/§4 with no
+persistence and no public exposure. Its naming:
+
+- `MachineReviewCurrencyState` — enum `not_run` / `current` / `stale` /
+  `historical`. The classification's overall `state` is the latest-derived one
+  (`not_run` / `current` / `stale`); `historical` is the per-review label of
+  every non-latest review.
+- `StoredMachineReviewProjection` — the minimal per-review currency metadata
+  (record identity, `reviewed_at`, `id`, `source_audit_event_id`, and the four
+  currency dimensions). `source_audit_event_id` is the persisted/projection
+  name for the in-memory read model's `audit_event_id`; ordering behavior is
+  identical (`reviewed_at` DESC, `source_audit_event_id` DESC NULLS LAST, `id`
+  DESC NULLS LAST). Both `id` and `source_audit_event_id` may be `None` and
+  sort last.
+- `MachineReviewCurrencyKey` — the four currency dimensions
+  (`context_schema_version`, `context_hash`, `prompt_version`,
+  `rubric_versions`) compared for the active recipe vs. each stored review.
+  `rubric_versions` is compared by canonical mapping equality (key order
+  irrelevant; a missing/extra/changed key is a mismatch).
+- `MachineReviewCurrencyClassification` — the result: `state`, `active_review`
+  (the latest, or `None`), `historical_reviews` (non-latest, newest-first), and
+  `stale_reasons`.
+- `MachineReviewStaleReason` (`stale_reasons`) — enum
+  `context_schema_version_mismatch` / `context_hash_mismatch` /
+  `prompt_version_mismatch` / `rubric_versions_mismatch`, emitted (in that fixed
+  order) only when `state` is `stale`.
+
+A latest-selection determinism backstop: when the three policy ordering keys are
+fully tied (only possible for in-memory projections with `id is None`, never for
+unique-PK rows), a final tiebreak on immutable currency content keeps the
+classification deterministic across input order without altering the policy
+ordering for any real data.
+
 ---
 
 ## 5. Re-review triggers
@@ -562,6 +598,10 @@ the prior and on the provisional spec's §13 non-interference tests.
 3. Implement a PURE currency classifier (current/stale/historical) over the
    existing in-memory RecordMachineReview projections — still no persistence —
    so staleness is provable before any table exists.
+   DONE: `app/services/machine_review/currency.py`
+   (`classify_machine_review_currency`), covered by
+   `tests/services/test_machine_review_currency.py`. See "Implemented
+   classifier" below for naming. No persistence, no public exposure.
 4. Add the record_machine_review table (§8) in a NEW Alembic revision only when
    public record-level review is actually being built; append-only, both
    upgrade()/downgrade(). Backfill is not required (history starts empty).
