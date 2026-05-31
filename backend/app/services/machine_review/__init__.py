@@ -19,6 +19,12 @@ from app.services.machine_review.audit_adapter import (
     record_machine_reviews_from_audit_events,
     record_machine_reviews_from_submission_audit_event,
 )
+from app.services.machine_review.curator_task_lifecycle import (
+    assign_curator_task,
+    reopen_curator_task,
+    resolve_curator_task,
+    start_curator_task_review,
+)
 from app.services.machine_review.curator_tasks import (
     CuratorTaskBuildResult,
     build_curator_tasks_for_submission,
@@ -90,6 +96,7 @@ __all__ = [
     "SubmissionRecordLinkRef",
     "UnmappedFinding",
     "UnmappedReason",
+    "assign_curator_task",
     "build_curator_tasks_for_submission",
     "build_internal_machine_review_trust_fragment",
     "build_machine_review_record_summary",
@@ -104,5 +111,8 @@ __all__ = [
     "map_findings_to_submission_records",
     "record_machine_reviews_from_audit_events",
     "record_machine_reviews_from_submission_audit_event",
+    "reopen_curator_task",
+    "resolve_curator_task",
     "select_latest_machine_review_for_record",
+    "start_curator_task_review",
 ]
