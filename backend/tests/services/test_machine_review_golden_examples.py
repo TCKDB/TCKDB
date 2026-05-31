@@ -76,6 +76,17 @@ _CASES = (
     "malformed_payload_parse_warning_only",
 )
 
+# v2 provider-contract golden cases (machine_review_provider_contract_v2.md).
+# They run through the SAME pipeline helpers; the adapter dispatches on the
+# schema_version marker in the payload.
+_V2_CASES = (
+    "v2_transition_state_validation_critical_with_recommended_action",
+    "v2_schema_gap_warning_with_recommended_action",
+    "v2_unknown_schema_version_parse_warning",
+    "v2_extra_mutation_payload_rejected",
+    "v2_used_rag_true_rejected",
+)
+
 
 def _load(case: str) -> dict:
     return json.loads((_FIXTURES / f"{case}.json").read_text())
@@ -153,7 +164,7 @@ def _count_tasks(db_session: Session, submission_id: int) -> int:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("case", _CASES)
+@pytest.mark.parametrize("case", _CASES + _V2_CASES)
 def test_golden_case_inspection_and_build(db_session, _api_test_user, case):
     fixture = _load(case)
     expected = fixture["expected"]
@@ -178,6 +189,13 @@ def test_golden_case_inspection_and_build(db_session, _api_test_user, case):
         assert record.record_id == expected["record_id"]
         assert record.latest_summary.status.value == expected["latest_status"]
         assert record.latest_summary.highest_severity.value == expected["highest_severity"]
+        # v2-only: provider is a first-class payload field and reaches the summary.
+        if "provider" in expected:
+            assert record.latest_summary.provider == expected["provider"]
+        # v2-only: recommended_action survives onto the projected finding.
+        if "recommended_action" in expected:
+            latest = record.all_record_reviews[0]
+            assert latest.findings[0].recommended_action == expected["recommended_action"]
 
     result = build_curator_tasks_for_submission(db_session, inspection=inspection)
     assert result.created_count == expected["created_tasks"]
@@ -288,6 +306,66 @@ def test_fingerprint_changes_with_evidence_keys():
 
 def test_fingerprint_changes_with_recommended_action():
     assert _fp(_finding(recommended_action="x")) != _fp(_finding(recommended_action="y"))
+
+
+def test_fingerprint_same_recommended_action_deduplicates():
+    assert _fp(_finding(recommended_action="same")) == _fp(_finding(recommended_action="same"))
+
+
+# --------------------------------------------------------------------------- #
+# v2 provider contract — gap closure + legacy compatibility
+# --------------------------------------------------------------------------- #
+
+
+def test_v2_transition_state_case_closes_v1_gap(db_session, _api_test_user):
+    """The v2 TS case expresses what the v1 source contract could not:
+    transition_state_validation category + recommended_action, both surviving
+    end-to-end, with recommended_action folded into the task fingerprint."""
+    fixture = _load("v2_transition_state_validation_critical_with_recommended_action")
+    submission = _seed(db_session, _api_test_user, fixture)
+    inspection = _inspect(db_session, submission)
+
+    record = inspection.record_inspections[0]
+    finding = record.all_record_reviews[0].findings[0]
+    assert finding.category.value == "transition_state_validation"
+    assert finding.recommended_action == fixture["expected"]["recommended_action"]
+
+    result = build_curator_tasks_for_submission(db_session, inspection=inspection)
+    task = db_session.get(MachineReviewCuratorTask, result.task_ids[0])
+
+    expected_fp = compute_finding_fingerprint(
+        finding=finding, record_type=record.record_type, record_id=record.record_id
+    )
+    assert task.finding_fingerprint == expected_fp
+    # Changing only recommended_action yields a different fingerprint (a distinct
+    # task identity) — proving it contributes to the fingerprint.
+    other = finding.model_copy(update={"recommended_action": "a different action"})
+    assert (
+        compute_finding_fingerprint(
+            finding=other, record_type=record.record_type, record_id=record.record_id
+        )
+        != expected_fp
+    )
+
+
+def test_legacy_v1_payload_without_marker_uses_v1_path(db_session, _api_test_user):
+    """A payload with no schema_version still takes the v1 translate path and
+    still creates a task — v2 is additive, not a replacement."""
+    fixture = _load("kinetics_warning_creates_task")
+    assert "schema_version" not in fixture["audit_event_details_json"]
+    submission = _seed(db_session, _api_test_user, fixture)
+    inspection = _inspect(db_session, submission)
+    assert len(inspection.record_inspections) == 1
+    result = build_curator_tasks_for_submission(db_session, inspection=inspection)
+    assert result.created_count == 1
+
+
+def test_v2_provider_field_supersedes_sibling_provider(db_session, _api_test_user):
+    """v2 carries provider as a first-class field; it reaches the summary."""
+    fixture = _load("v2_schema_gap_warning_with_recommended_action")
+    submission = _seed(db_session, _api_test_user, fixture)
+    inspection = _inspect(db_session, submission)
+    assert inspection.record_inspections[0].latest_summary.provider == "VendorProvider"
 
 
 def test_build_dedups_across_audit_event_and_model(db_session, _api_test_user):

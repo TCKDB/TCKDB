@@ -131,3 +131,70 @@ class MachineReviewResult(BaseModel):
     # RAG is a non-goal for the MVP; constrain to False at the type level so a
     # provider that claims it used RAG fails validation.
     used_rag: Literal[False] = False
+
+
+# ---------------------------------------------------------------------------
+# v2 provider output contract (machine_review_provider_contract_v2.md)
+# ---------------------------------------------------------------------------
+#
+# The v1 source contract (``app/services/llm_precheck/schemas.py``:
+# ``LLMPrecheckResult`` / ``LLMFinding``) is narrower than this machine-review
+# vocabulary: it has only a precheck ``label`` (translated to a status), no
+# ``curator_priority``, no ``recommended_action``, and a smaller category set.
+# The v2 provider payload speaks this vocabulary natively, so the adapter can
+# validate it directly with no label->status translation. v2 is detected by a
+# single root marker (``schema_version``); its absence means a legacy v1
+# payload. See ``machine_review_provider_contract_v2.md`` §3/§4/§7.
+
+#: Root marker value identifying a v2 machine-review provider payload.
+MACHINE_REVIEW_V2_SCHEMA_VERSION = "machine_review_v2"
+
+
+class MachineReviewProviderFindingV2(BaseModel):
+    """One finding in a v2 provider payload, using native machine-review terms.
+
+    Mirrors :class:`MachineReviewFinding` field-for-field and adds explicit
+    record addressing: a provider may cite ``record_ref`` (the mapping key) or
+    ``record_id`` (an internal-id alias; the adapter derives
+    ``record_ref = str(record_id)`` when only ``record_id`` is given). Like the
+    rest of the contract it is ``extra="forbid"`` so no mutation field can be
+    smuggled through, and ``recommended_action`` is advisory text for a human
+    curator — never executed.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    severity: MachineReviewSeverity
+    category: MachineReviewCategory
+    record_type: str | None = Field(default=None, max_length=128)
+    record_ref: str | None = Field(default=None, max_length=256)
+    record_id: int | None = None
+    message: str = Field(min_length=1, max_length=1000)
+    evidence_keys: tuple[str, ...] = Field(default_factory=tuple, max_length=20)
+    recommended_action: str | None = Field(default=None, max_length=1000)
+
+
+class MachineReviewProviderResultV2(BaseModel):
+    """Versioned provider payload for native machine-review output (v2).
+
+    Carries the machine-review ``status`` directly (no precheck ``label`` to
+    translate), an optional ``curator_priority``, a first-class ``provider``
+    field (in v1 the provider is a sibling key on the audit event), and the
+    full :class:`MachineReviewCategory` vocabulary on findings. Schema-validated
+    before any use; ``extra="forbid"`` rejects mutation payloads and
+    ``used_rag`` is constrained to ``False`` (RAG is a non-goal). Backward
+    compatible: v1 payloads have no ``schema_version`` and take the legacy path.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    schema_version: Literal["machine_review_v2"]
+    status: MachineReviewStatus
+    curator_priority: CuratorPriority | None = None
+    summary: str | None = Field(default=None, max_length=2000)
+    findings: tuple[MachineReviewProviderFindingV2, ...] = Field(
+        default_factory=tuple, max_length=50
+    )
+    model: str | None = Field(default=None, max_length=128)
+    provider: str | None = Field(default=None, max_length=128)
+    used_rag: Literal[False] = False

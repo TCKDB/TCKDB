@@ -1,0 +1,20 @@
+{
+  "case": "v2_used_rag_true_rejected",
+  "description": "used_rag=true violates the Literal[False] constraint (RAG is a non-goal); the v2 payload fails schema validation and degrades to a parse warning with no record reviews and no tasks.",
+  "linked_records": [
+    {"record_type": "kinetics", "record_id": 9001, "role": "primary"}
+  ],
+  "audit_event_details_json": {
+    "schema_version": "machine_review_v2",
+    "status": "machine_screened_warning",
+    "findings": [],
+    "used_rag": true
+  },
+  "expected": {
+    "record_summary_count": 0,
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 1,
+    "created_tasks": 0
+  }
+}

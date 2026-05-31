@@ -1,0 +1,41 @@
+{
+  "case": "v2_schema_gap_warning_with_recommended_action",
+  "description": "A v2 payload using the schema_gap category (also absent from the v1 vocabulary), warning severity, with a recommended_action. Maps to one calculation record summary (machine_screened_warning) and builds one needs_curator_review task.",
+  "linked_records": [
+    {"record_type": "calculation", "record_id": 9003, "role": "primary"}
+  ],
+  "audit_event_details_json": {
+    "schema_version": "machine_review_v2",
+    "status": "machine_screened_warning",
+    "curator_priority": "medium",
+    "summary": "A schema-gap warning on a calculation record.",
+    "model": "vendor/model-name",
+    "provider": "VendorProvider",
+    "used_rag": false,
+    "findings": [
+      {
+        "severity": "warning",
+        "category": "schema_gap",
+        "record_type": "calculation",
+        "record_ref": "9003",
+        "message": "Calculation references a quantity the schema cannot yet store first-class.",
+        "evidence_keys": ["schema_gap.unmodeled_quantity"],
+        "recommended_action": "Record the quantity in a follow-up once the schema supports it."
+      }
+    ]
+  },
+  "expected": {
+    "record_summary_count": 1,
+    "record_type": "calculation",
+    "record_id": 9003,
+    "latest_status": "machine_screened_warning",
+    "highest_severity": "warning",
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 0,
+    "created_tasks": 1,
+    "workflow_state": "needs_curator_review",
+    "recommended_action": "Record the quantity in a follow-up once the schema supports it.",
+    "provider": "VendorProvider"
+  }
+}

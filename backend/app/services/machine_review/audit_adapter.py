@@ -78,8 +78,10 @@ from app.services.machine_review.mapping import (
 )
 from app.services.machine_review.read_model import RecordMachineReview
 from app.services.machine_review.schemas import (
+    MACHINE_REVIEW_V2_SCHEMA_VERSION,
     MachineReviewCategory,
     MachineReviewFinding,
+    MachineReviewProviderResultV2,
     MachineReviewResult,
     MachineReviewSeverity,
     MachineReviewStatus,
@@ -247,18 +249,71 @@ def _machine_review_result_from_precheck(
     )
 
 
+def _machine_review_finding_from_v2(
+    finding: Any,
+) -> MachineReviewFinding:
+    """Convert one v2 provider finding into the internal machine-review finding.
+
+    v2 findings already speak the machine-review vocabulary, so this is a
+    field copy. A finding that cites only ``record_id`` (no ``record_ref``)
+    gets ``record_ref = str(record_id)`` — the same internal-id mapping key the
+    v1 path uses (module docstring).
+    """
+    record_ref = finding.record_ref
+    if record_ref is None and finding.record_id is not None:
+        record_ref = str(finding.record_id)
+    return MachineReviewFinding(
+        severity=finding.severity,
+        category=finding.category,
+        record_type=finding.record_type,
+        record_ref=record_ref,
+        message=finding.message,
+        evidence_keys=finding.evidence_keys,
+        recommended_action=finding.recommended_action,
+    )
+
+
+def _machine_review_result_from_v2(
+    v2: MachineReviewProviderResultV2,
+) -> MachineReviewResult:
+    """Project a validated v2 provider payload onto the internal contract.
+
+    No label->status translation: v2 carries the machine-review ``status`` and
+    ``curator_priority`` natively. Findings are converted one-for-one. The
+    v2-only ``provider`` field is handled by the caller (it is not part of the
+    internal :class:`MachineReviewResult`).
+    """
+    return MachineReviewResult(
+        status=v2.status,
+        curator_priority=v2.curator_priority,
+        summary=v2.summary,
+        findings=tuple(_machine_review_finding_from_v2(f) for f in v2.findings),
+        model=v2.model,
+        used_rag=v2.used_rag,
+    )
+
+
 def machine_review_result_from_audit_event(
     details_json: Any,
 ) -> ParsedMachineReviewPayload:
     """Validate and translate one audit event's ``details_json`` payload.
 
-    Treats ``details_json`` as **untrusted**: it must be an object validatable
-    against the persisted precheck contract and projectable onto the
-    machine-review contract. Any failure degrades to ``result=None`` plus a
-    parse warning — this function never raises on malformed input.
+    Treats ``details_json`` as **untrusted** and dispatches on the root
+    ``schema_version`` marker (machine_review_provider_contract_v2.md §3/§7):
 
-    The optional ``provider`` key the precheck recorder attaches to the event
-    is read out separately (the precheck contract itself has no such field).
+    * ``schema_version == "machine_review_v2"`` -> validate the v2 provider
+      contract directly and project it (no label->status translation). The
+      v2 ``provider`` field, when present, takes precedence over the sibling
+      ``details_json["provider"]`` key.
+    * ``schema_version`` **absent** -> legacy v1 path: validate against the
+      precheck contract and translate.
+    * any **other** ``schema_version`` value -> a parse warning (an unknown
+      future version is not silently treated as v1).
+
+    Any validation/projection failure degrades to ``result=None`` plus a parse
+    warning — this function never raises on malformed input. The optional
+    ``provider`` sibling key is read out separately (the v1 precheck contract
+    has no such field).
     """
     if not isinstance(details_json, dict):
         return ParsedMachineReviewPayload(
@@ -268,15 +323,22 @@ def machine_review_result_from_audit_event(
             ),
         )
 
-    provider = details_json.get("provider")
-    provider = provider if isinstance(provider, str) else None
+    sibling_provider = details_json.get("provider")
+    sibling_provider = sibling_provider if isinstance(sibling_provider, str) else None
 
+    schema_version = details_json.get("schema_version")
+    if schema_version is not None:
+        return _parse_versioned_payload(
+            details_json, schema_version, sibling_provider
+        )
+
+    # Legacy v1 path: no version marker.
     try:
         precheck = LLMPrecheckResult.model_validate(details_json)
     except ValidationError:
         return ParsedMachineReviewPayload(
             result=None,
-            provider=provider,
+            provider=sibling_provider,
             parse_warnings=(
                 "machine-review audit payload failed precheck-contract validation.",
             ),
@@ -287,10 +349,60 @@ def machine_review_result_from_audit_event(
     except (ValidationError, ValueError):
         return ParsedMachineReviewPayload(
             result=None,
-            provider=provider,
+            provider=sibling_provider,
             parse_warnings=(
                 "machine-review audit payload could not be projected onto the "
                 "machine-review contract.",
+            ),
+        )
+
+    return ParsedMachineReviewPayload(result=result, provider=sibling_provider)
+
+
+def _parse_versioned_payload(
+    details_json: dict[str, Any],
+    schema_version: Any,
+    sibling_provider: str | None,
+) -> ParsedMachineReviewPayload:
+    """Handle a payload carrying an explicit ``schema_version`` marker.
+
+    Currently only ``machine_review_v2`` is recognised; any other value is an
+    unknown (e.g. future) version and degrades to a parse warning rather than
+    falling back to the v1 path.
+    """
+    if schema_version != MACHINE_REVIEW_V2_SCHEMA_VERSION:
+        return ParsedMachineReviewPayload(
+            result=None,
+            provider=sibling_provider,
+            parse_warnings=(
+                "machine-review audit payload has unknown schema_version "
+                f"{schema_version!r}.",
+            ),
+        )
+
+    try:
+        v2 = MachineReviewProviderResultV2.model_validate(details_json)
+    except ValidationError:
+        return ParsedMachineReviewPayload(
+            result=None,
+            provider=sibling_provider,
+            parse_warnings=(
+                "machine-review v2 audit payload failed contract validation.",
+            ),
+        )
+
+    # v2 carries provider as a first-class field; prefer it, else the sibling.
+    provider = v2.provider if v2.provider is not None else sibling_provider
+
+    try:
+        result = _machine_review_result_from_v2(v2)
+    except (ValidationError, ValueError):
+        return ParsedMachineReviewPayload(
+            result=None,
+            provider=provider,
+            parse_warnings=(
+                "machine-review v2 audit payload could not be projected onto "
+                "the machine-review contract.",
             ),
         )
 

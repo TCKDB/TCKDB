@@ -1,0 +1,20 @@
+{
+  "case": "v2_extra_mutation_payload_rejected",
+  "description": "A v2 payload carrying an extra mutation-like field is rejected by extra=forbid; the adapter degrades to a parse warning with no record reviews and no tasks. Providers can never smuggle a 'set field X' instruction.",
+  "linked_records": [
+    {"record_type": "kinetics", "record_id": 9001, "role": "primary"}
+  ],
+  "audit_event_details_json": {
+    "schema_version": "machine_review_v2",
+    "status": "machine_screened_warning",
+    "findings": [],
+    "set_record_review_status": "approved"
+  },
+  "expected": {
+    "record_summary_count": 0,
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 1,
+    "created_tasks": 0
+  }
+}

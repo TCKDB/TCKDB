@@ -58,9 +58,12 @@ from app.services.machine_review.read_model import (
     select_latest_machine_review_for_record,
 )
 from app.services.machine_review.schemas import (
+    MACHINE_REVIEW_V2_SCHEMA_VERSION,
     CuratorPriority,
     MachineReviewCategory,
     MachineReviewFinding,
+    MachineReviewProviderFindingV2,
+    MachineReviewProviderResultV2,
     MachineReviewResult,
     MachineReviewSeverity,
     MachineReviewStatus,
@@ -72,6 +75,7 @@ from app.services.machine_review.trust_adapter import (
 )
 
 __all__ = [
+    "MACHINE_REVIEW_V2_SCHEMA_VERSION",
     "AuditRecordLink",
     "CuratorPriority",
     "CuratorTaskBuildResult",
@@ -81,6 +85,8 @@ __all__ = [
     "MachineReviewFinding",
     "MachineReviewInspectionView",
     "MachineReviewOutcome",
+    "MachineReviewProviderFindingV2",
+    "MachineReviewProviderResultV2",
     "MachineReviewRecordMapping",
     "MachineReviewRecordSummary",
     "MachineReviewResult",

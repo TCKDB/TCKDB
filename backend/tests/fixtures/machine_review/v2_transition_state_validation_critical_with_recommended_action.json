@@ -1,0 +1,41 @@
+{
+  "case": "v2_transition_state_validation_critical_with_recommended_action",
+  "description": "A v2 payload expressing what v1 could not: the transition_state_validation category (absent from LLMFindingCategory), critical severity, and a recommended_action. Maps to one transition_state_entry record summary (machine_screened_needs_attention) and builds one needs_curator_review task.",
+  "linked_records": [
+    {"record_type": "transition_state_entry", "record_id": 9002, "role": "ts"}
+  ],
+  "audit_event_details_json": {
+    "schema_version": "machine_review_v2",
+    "status": "machine_screened_needs_attention",
+    "curator_priority": "high",
+    "summary": "A critical transition-state validation contradiction.",
+    "model": "vendor/model-name",
+    "provider": "VendorProvider",
+    "used_rag": false,
+    "findings": [
+      {
+        "severity": "critical",
+        "category": "transition_state_validation",
+        "record_type": "transition_state_entry",
+        "record_ref": "9002",
+        "message": "Validated TS lacks the single expected imaginary mode; path validation is inconsistent.",
+        "evidence_keys": ["ts.imaginary_frequency_count", "ts.validated"],
+        "recommended_action": "Do not promote to benchmark_reference until path validation is inspected."
+      }
+    ]
+  },
+  "expected": {
+    "record_summary_count": 1,
+    "record_type": "transition_state_entry",
+    "record_id": 9002,
+    "latest_status": "machine_screened_needs_attention",
+    "highest_severity": "critical",
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 0,
+    "created_tasks": 1,
+    "workflow_state": "needs_curator_review",
+    "recommended_action": "Do not promote to benchmark_reference until path validation is inspected.",
+    "provider": "VendorProvider"
+  }
+}

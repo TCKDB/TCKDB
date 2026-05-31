@@ -50,14 +50,21 @@ state, and fingerprint stability — **not** exact timestamps (`reviewed_at` /
 
 ### Vocabulary caveat
 
-The persisted precheck vocabulary (`LLMFindingCategory`) is a **subset** of the
-service-layer `MachineReviewCategory`, and `LLMFinding` carries no
-`recommended_action`. So a payload originating from the precheck path cannot
-emit `transition_state_validation` / `schema_gap` categories or a
-recommended action. The transition-state golden case therefore uses the
-closest available token, `consistency`. Findings constructed directly against
-the service-layer contract (e.g. the fingerprint unit tests) can use the full
-vocabulary.
+The persisted **v1** precheck vocabulary (`LLMFindingCategory`) is a **subset**
+of the service-layer `MachineReviewCategory`, and `LLMFinding` carries no
+`recommended_action`. So a payload originating from the v1 precheck path cannot
+emit `transition_state_validation` / `schema_gap` categories or a recommended
+action. The v1 transition-state golden case therefore uses the closest
+available token, `consistency`.
+
+**This gap is now closed by the v2 provider contract** (implemented; see
+`machine_review_provider_contract_v2.md`). A payload with
+`schema_version: "machine_review_v2"` speaks the full machine-review vocabulary
+natively — native `MachineReviewStatus`, `curator_priority`,
+`recommended_action`, and all 11 `MachineReviewCategory` values including
+`transition_state_validation` and `schema_gap`. The `v2_*` fixtures below
+exercise it; v1 payloads (no marker) keep taking the legacy translate path
+unchanged.
 
 ---
 
@@ -77,6 +84,25 @@ Record-level status is derived from the record's **findings**
 `machine_screened_needs_attention`, any `warning` → `machine_screened_warning`,
 else `machine_screened_pass`. Only `warning`/`critical` exact-mapped findings
 create tasks; `info` findings create none by default.
+
+## v2 cases (`v2_*` fixtures)
+
+The v2 provider contract (`schema_version: "machine_review_v2"`) is dispatched
+by the audit adapter and converges on the same internal pipeline. These run
+through the same test helpers as the v1 cases:
+
+| Case | Input | Result |
+|---|---|---|
+| `v2_transition_state_validation_critical_with_recommended_action` | v2 `critical` finding, category `transition_state_validation`, with `recommended_action` | `machine_screened_needs_attention` summary; one `needs_curator_review` task; `recommended_action` survives and folds into the fingerprint — the v1 gap, closed. |
+| `v2_schema_gap_warning_with_recommended_action` | v2 `warning` finding, category `schema_gap`, with `recommended_action` | `machine_screened_warning` summary; one task; `provider` field reaches the summary. |
+| `v2_unknown_schema_version_parse_warning` | `schema_version: machine_review_v3` | Parse warning; **not** treated as v1; no summaries, no tasks. |
+| `v2_extra_mutation_payload_rejected` | v2 payload with an extra mutation-like field | Rejected by `extra="forbid"` → parse warning; no summaries, no tasks. |
+| `v2_used_rag_true_rejected` | v2 payload with `used_rag: true` | Fails the `Literal[False]` constraint → parse warning; no summaries, no tasks. |
+
+A v2 payload carries `status`/`curator_priority` natively (no label→status
+translation) and `provider` as a first-class field (it supersedes the sibling
+`provider` key). v1 payloads (no `schema_version`) keep taking the legacy path,
+proven by the same module.
 
 ---
 

@@ -1,0 +1,19 @@
+{
+  "case": "v2_unknown_schema_version_parse_warning",
+  "description": "An unknown schema_version (e.g. a future v3) is NOT silently treated as v1; the adapter degrades to a parse warning with no record summaries and no tasks.",
+  "linked_records": [
+    {"record_type": "kinetics", "record_id": 9001, "role": "primary"}
+  ],
+  "audit_event_details_json": {
+    "schema_version": "machine_review_v3",
+    "status": "machine_screened_warning",
+    "findings": []
+  },
+  "expected": {
+    "record_summary_count": 0,
+    "unmapped_findings_count": 0,
+    "mapping_warnings_count": 0,
+    "parse_warnings_count": 1,
+    "created_tasks": 0
+  }
+}

@@ -59,10 +59,11 @@ All of the following exist in code with tests, and are private/admin-only.
 |---|---|---|
 | Foundational spec | `docs/specs/provisional_machine_review.md` | Vocabulary, mental model, public-exposure gate |
 | Contracts | `app/services/machine_review/schemas.py` | `MachineReviewStatus`, `MachineReviewSeverity`, `MachineReviewCategory`, `CuratorPriority`, `MachineReviewFinding`, `MachineReviewResult` (all `extra="forbid"`, no mutation field) |
+| v2 provider contract | `app/services/machine_review/schemas.py` | `MachineReviewProviderResultV2`, `MachineReviewProviderFindingV2`, `MACHINE_REVIEW_V2_SCHEMA_VERSION` — native machine-review provider payload (`extra="forbid"`, `used_rag=Literal[False]`) |
 | Status derivation | `app/services/machine_review/derivation.py` | `MachineReviewOutcome` + `derive_machine_review_status()` — pure, deterministic |
 | Safe mapping | `app/services/machine_review/mapping.py` | `map_findings_to_submission_records()` — exact identity, no fan-out |
 | Latest-record read model | `app/services/machine_review/read_model.py` | `RecordMachineReview`, `MachineReviewRecordSummary`, `select_latest_machine_review_for_record()` |
-| Audit-event adapter | `app/services/machine_review/audit_adapter.py` | `submission_audit_event.details_json` -> `LLMPrecheckResult` -> `RecordMachineReview` tuples |
+| Audit-event adapter | `app/services/machine_review/audit_adapter.py` | `submission_audit_event.details_json` -> `RecordMachineReview` tuples; **dispatches on `schema_version`**: v2 payload validated directly, no marker => legacy v1 `LLMPrecheckResult` translate, unknown version => parse warning |
 | Private trust-envelope adapter | `app/services/machine_review/trust_adapter.py` | `InternalTrustEnvelopeWithMachineReview` — assembles a private envelope beside (never inside) the public `TrustFragment` |
 | Inspection service | `app/services/machine_review/inspection.py` | `build_submission_machine_review_inspection()` and the per-submission/per-record inspection dataclasses |
 | Curator task model + migration | `app/db/models/machine_review_curator_task.py`, `alembic/versions/b8c9d0e1f2a3_*.py` | `machine_review_curator_task` table; identity unique constraint, queue indexes, FKs, bidirectional resolution-consistency CHECK |
@@ -99,12 +100,16 @@ b02438e  Add machine-review curator task creation service
 d93afc8  Add machine-review curator task lifecycle service
 b4110e4  Add admin machine-review curator task queue API
 1a17962  Document admin machine-review curator task API
-<this>    Update machine-review handoff after curator task API
+66503d5  Update machine-review handoff after curator task queue API
+34abc6f  Add golden fake-provider machine-review examples
+e08efbf  Spec machine-review provider output contract v2
+<this>    Implement machine-review provider contract v2 schemas + adapter support
 ```
 
 (`f83178a` is the foundational spec. The five commits from `78cceaa` onward are
 the curator task queue slice — model/migration, creation service, lifecycle
-service, admin API, and its docs — followed by this handoff update.)
+service, admin API, and its docs. The golden examples (`34abc6f`) then the v2
+provider contract — spec (`e08efbf`) and implementation (this commit) — follow.)
 
 ---
 
@@ -313,8 +318,11 @@ lifecycle.
 
 ```text
 submission_audit_event.details_json
-  -> LLMPrecheckResult                 (validate; malformed -> failed, advisory)
-  -> MachineReviewResult               (translate to machine-review contract)
+  -> adapter dispatch on schema_version:
+       "machine_review_v2"  -> validate MachineReviewProviderResultV2 directly
+       absent (legacy v1)   -> validate LLMPrecheckResult + translate
+       unknown version      -> parse warning (no record reviews)
+  -> MachineReviewResult               (both versions converge here)
   -> map_findings_to_submission_records (exact (record_type, record_id) only; no fan-out)
   -> RecordMachineReview               (per-record, stamped with reviewed_at/submission_id)
   -> MachineReviewRecordSummary        (select latest per record; status derived)
@@ -465,6 +473,11 @@ FastAPI qualifies the same-named DB/service enums by module path in OpenAPI to
   drift-guarded), not a wire-level change.
 No public trust.machine_review until an explicit product decision passes the
   exposure gate.
+v2 provider payloads are dispatched by a single root schema_version marker
+  ("machine_review_v2"); absence => legacy v1 path, unknown version => parse
+  warning (never silently treated as v1). v2 is additive — no new event kind,
+  no migration; the version lives in details_json. Both versions converge on
+  the internal MachineReviewResult, so downstream is unchanged.
 ```
 
 ---
@@ -501,14 +514,15 @@ vocabulary gap, now **designed** (not yet built) in
 `machine_review_provider_contract_v2.md`. From here:
 
 ```text
-Option 1 (next, low risk): Implement the v2 provider output contract + adapter
-          version dispatch designed in machine_review_provider_contract_v2.md,
-          plus v2 golden examples, keeping all v1 golden tests passing. No real
-          provider, no public API, no migration (version lives in details_json).
+Option 1 (DONE): The v2 provider output contract + adapter version dispatch +
+          v2 golden examples are now implemented; all v1 golden tests still pass.
+          (MachineReviewProviderResultV2/FindingV2 in schemas.py; dispatch in
+          audit_adapter.py; v2_* fixtures + tests.) No real provider, no public
+          API, no migration.
 
-Option 1b (legacy, partly done): Add MORE golden fake-provider examples / fixtures
-          (varied severities, categories, mapped/unmapped mixes). Base set already
-          exists; extend as needed to evaluate false positives and tune the queue.
+Option 1b (optional): Add MORE golden fake-provider examples / fixtures (varied
+          severities, categories, mapped/unmapped mixes) as needed to evaluate
+          false positives and tune the queue.
 
 Option 2: Implement real provider plumbing behind off/cloud/local config
           (replace the fake provider). Larger; introduces external dependencies
@@ -525,9 +539,10 @@ Option 5: Stop machine-review work and move to another backend area; the
           private/admin stack is complete and self-contained as-is.
 ```
 
-**Recommendation: implement the v2 contract (Option 1) before real providers
-(Option 2) or public exposure (Option 4).** It closes the documented vocabulary
-gap (richer categories, `recommended_action`, `curator_priority`, native
-`status`) with no provider, public-API, or migration change, and keeps every v1
-payload valid — exactly the foundation a real provider (Option 2) and the
-exposure gate (Option 4) need, at the lowest risk and cost.
+**Recommendation: with the v2 contract now in place, the next step is a real
+provider (Option 2) behind off/cloud/local config — emitting v2 payloads — or
+extending golden coverage (Option 1b) before public exposure (Option 4).** The
+v2 contract already closes the vocabulary gap (richer categories,
+`recommended_action`, `curator_priority`, native `status`) with every v1 payload
+still valid, so a real provider and the exposure gate now have the foundation
+they need.
