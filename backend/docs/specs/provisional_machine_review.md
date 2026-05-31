@@ -26,6 +26,10 @@ machine-review implementers.
 - `machine_review_curator_task_queue.md` — detailed design of the persisted
   curator task table, including how it compares to a future
   `record_machine_review` table (§6 Option B here).
+- `machine_review_provider_contract_v2.md` — design for a versioned v2 provider
+  output contract that speaks this layer's status/severity/category/priority
+  vocabulary natively, while the adapter stays backward-compatible with v1
+  precheck payloads.
 
 ---
 

@@ -12,7 +12,9 @@ provider or public exposure.
 
 **Related specs:** `machine_review_handoff.md`,
 `admin_machine_review_inspection.md`, `admin_machine_review_curator_task_api.md`,
-`machine_review_curator_task_queue.md`, `provisional_machine_review.md`.
+`machine_review_curator_task_queue.md`, `provisional_machine_review.md`,
+`machine_review_provider_contract_v2.md` (the v2 provider contract designed to
+close the v1 vocabulary gap these examples surfaced).
 
 ---
 

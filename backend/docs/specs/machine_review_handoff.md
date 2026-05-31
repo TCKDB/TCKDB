@@ -414,6 +414,8 @@ admin_machine_review_curator_task_api.md
 machine_review_curator_workflow.md
 machine_review_curator_task_queue.md
 machine_review_admin_ui_mock.md
+machine_review_golden_examples.md         (golden fake-provider examples)
+machine_review_provider_contract_v2.md    (design: v2 provider output contract)
 machine_review_handoff.md   (this file)
 ```
 
@@ -492,14 +494,21 @@ Do NOT create a record_machine_review table before a product decision.
 
 ## 11. Recommended next options
 
-The persisted curator task queue + admin API (the old "Option A") are now
-**done**. From here:
+The persisted curator task queue + admin API (the old "Option A") **and** the
+golden fake-provider examples (the old "Option 1") are now **done** (see
+`machine_review_golden_examples.md`). The golden examples surfaced a v1↔target
+vocabulary gap, now **designed** (not yet built) in
+`machine_review_provider_contract_v2.md`. From here:
 
 ```text
-Option 1: Add golden fake-provider examples / fixtures that produce realistic
-          curator tasks (varied severities, categories, mapped/unmapped mixes).
-          No provider, public-API, or frontend change. Gives repeatable task
-          data to evaluate false positives and tune the queue.
+Option 1 (next, low risk): Implement the v2 provider output contract + adapter
+          version dispatch designed in machine_review_provider_contract_v2.md,
+          plus v2 golden examples, keeping all v1 golden tests passing. No real
+          provider, no public API, no migration (version lives in details_json).
+
+Option 1b (legacy, partly done): Add MORE golden fake-provider examples / fixtures
+          (varied severities, categories, mapped/unmapped mixes). Base set already
+          exists; extend as needed to evaluate false positives and tune the queue.
 
 Option 2: Implement real provider plumbing behind off/cloud/local config
           (replace the fake provider). Larger; introduces external dependencies
@@ -516,8 +525,9 @@ Option 5: Stop machine-review work and move to another backend area; the
           private/admin stack is complete and self-contained as-is.
 ```
 
-**Recommendation: do Option 1 before real providers (Option 2) or public
-exposure (Option 4).** Golden examples give realistic, repeatable task data and
-help evaluate false positives without changing provider, public API, or frontend
-behavior — exactly the triage experience the exposure gate (Option 4) requires
-as input, at the lowest risk and cost.
+**Recommendation: implement the v2 contract (Option 1) before real providers
+(Option 2) or public exposure (Option 4).** It closes the documented vocabulary
+gap (richer categories, `recommended_action`, `curator_priority`, native
+`status`) with no provider, public-API, or migration change, and keeps every v1
+payload valid — exactly the foundation a real provider (Option 2) and the
+exposure gate (Option 4) need, at the lowest risk and cost.
