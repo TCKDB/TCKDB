@@ -30,6 +30,10 @@ machine-review implementers.
   output contract that speaks this layer's status/severity/category/priority
   vocabulary natively, while the adapter stays backward-compatible with v1
   precheck payloads.
+- `record_machine_review_policy.md` — the retention, staleness (`context_hash`),
+  and re-review policy that must exist before the §9 Option B
+  `record_machine_review` table is added. Expands §9, §12, and §15 Q2/Q7 below
+  into a concrete current/stale/historical model.
 
 ---
 
@@ -704,6 +708,13 @@ record_machine_review
   `migration-rules.md` → new revision, both `upgrade()`/`downgrade()`);
   needs a latest-vs-history read policy; premature before mapping and read
   behavior are settled.
+- **Retention/staleness/currency model is specified** in
+  `record_machine_review_policy.md`: the precise column set (adding
+  `prompt_version`, `rubric_versions_json`, `context_schema_version`,
+  `source_audit_event_id`), the append-only write model, the current/stale/
+  historical classification, the `context_hash` input/exclusion list, the
+  deterministic latest-selection ordering, and the re-review triggers. That
+  policy is a prerequisite for this table.
 
 ### Option C — materialized latest-machine-review view
 
@@ -876,6 +887,11 @@ No new deterministic rubrics or changes to existing rubric outputs.
    re-reviewed (new submission, new model, changed evidence), is the public
    surface the latest review only, or is history queryable? `context_hash`
    in `record_machine_review` is designed to support either.
+   *Resolved* in `record_machine_review_policy.md` §4: append-only history;
+   the active candidate is the latest **current** review (latest by
+   `reviewed_at` → `source_audit_event_id` → `id`, then classified
+   current/stale by the `context_hash` currency key); history is retained for
+   audit and never an active candidate.
 3. **Trigger model.** Does machine review run at upload time, post-commit,
    or as a background re-review job when evidence changes? The failure
    contract is identical either way: machine failure never fails an upload.
@@ -894,6 +910,12 @@ No new deterministic rubrics or changes to existing rubric outputs.
    record changes (new calculation linked, rubric version bump), should the
    prior machine-review state be invalidated to `not_run`, kept with a
    stale flag, or auto-re-reviewed?
+   *Resolved* in `record_machine_review_policy.md` §2/§5: the prior review is
+   neither destructively reset nor silently kept current — it is retained and
+   derived as `stale` (its `context_hash` no longer matches), and a required/
+   background/manual trigger re-reviews by **appending** a new pass.
+   Stale-until-asked vs. auto-re-review remains the one sub-question (that
+   spec's §11 Q3).
 8. **Audit-event-kind vs. new table cutover.** At what point does the
    audit-event MVP (Option A) get superseded by `record_machine_review`
    (Option B), and do both run in parallel during transition?
