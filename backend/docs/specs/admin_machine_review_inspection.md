@@ -28,6 +28,8 @@ product decision to expose machine review publicly.
 - `machine_review_curator_task_queue.md` — the future persisted curator task
   table that would track human triage state over the record-level findings this
   endpoint projects.
+- `machine_review_admin_ui_mock.md` — design for the lightweight admin-only
+  read view (panel or static mock) that renders this endpoint's response.
 
 ---
 

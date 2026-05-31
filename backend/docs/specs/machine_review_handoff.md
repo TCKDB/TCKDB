@@ -279,6 +279,7 @@ provisional_machine_review.md
 admin_machine_review_inspection.md
 machine_review_curator_workflow.md
 machine_review_curator_task_queue.md
+machine_review_admin_ui_mock.md
 machine_review_handoff.md   (this file)
 ```
 
@@ -340,7 +341,8 @@ Option A: Implement the machine_review_curator_task table + an admin queue API
 
 Option B: Build a lightweight admin UI / mock around the existing inspection
           endpoint. No schema/migration; turns the diagnostic into something a
-          human can actually drive and learn from.
+          human can actually drive and learn from. Designed in
+          machine_review_admin_ui_mock.md.
 
 Option C: Design public trust.machine_review exposure — still behind the spec
           gate in provisional_machine_review.md §10. Highest risk; needs the

@@ -23,6 +23,9 @@ eventually builds a curator review queue/UI.
 - `machine_review_curator_task_queue.md` — detailed design of the persisted
   curator task table that would make this workflow's triage axis (§4) and
   task-table persistence option (§9) concrete.
+- `machine_review_admin_ui_mock.md` — the admin-only inspection view/mock that
+  gathers the triage experience this workflow (and its public-exposure gate,
+  §10) depends on, while keeping raw diagnostics admin-only (§6).
 
 ---
 
