@@ -20,6 +20,9 @@ machine-review implementers.
 - `admin_machine_review_inspection.md` — the admin-only, read-only debugging
   endpoint that projects this layer over existing submission audit events
   (private; not public `trust.machine_review`).
+- `machine_review_curator_workflow.md` — design for the future curator/admin
+  triage workflow (review queue, roles, human actions, public-exposure gate)
+  built on the inspection endpoint.
 
 ---
 

@@ -22,6 +22,9 @@ product decision to expose machine review publicly.
   this endpoint must never perturb.
 - `ai_review_assistant_admin_consumption.md` — the existing admin read surfaces
   for precheck events.
+- `machine_review_curator_workflow.md` — the future human-facing triage layer
+  (review queue, curator access, human actions) designed on top of this
+  inspection endpoint.
 
 ---
 
