@@ -54,6 +54,11 @@ from app.services.machine_review.derivation import (
     MachineReviewOutcome,
     derive_machine_review_status,
 )
+from app.services.machine_review.orchestration import (
+    MachineReviewOrchestrationResult,
+    MachineReviewOrchestrationStatus,
+    run_fake_record_machine_review,
+)
 from app.services.machine_review.persistence import (
     classify_record_machine_review_currency_from_rows,
     create_record_machine_review_row,
@@ -132,6 +137,8 @@ __all__ = [
     "MachineReviewEvidenceContext",
     "MachineReviewFinding",
     "MachineReviewInspectionView",
+    "MachineReviewOrchestrationResult",
+    "MachineReviewOrchestrationStatus",
     "MachineReviewOutcome",
     "MachineReviewProviderFindingV2",
     "MachineReviewProviderResultV2",
@@ -183,6 +190,7 @@ __all__ = [
     "record_machine_reviews_from_audit_events",
     "record_machine_reviews_from_submission_audit_event",
     "reopen_curator_task",
+    "run_fake_record_machine_review",
     "resolve_curator_task",
     "select_latest_machine_review_for_record",
     "should_run_machine_rereview",

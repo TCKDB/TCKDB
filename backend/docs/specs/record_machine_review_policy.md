@@ -690,9 +690,23 @@ the prior and on the provisional spec's §13 non-interference tests.
    guard re-checks live currency against the plan's recipe and skips
    (`skipped_current`) when the record is already current, so re-running the same
    unchanged plan never double-appends. It only *persists* a supplied review —
-   it does not produce one. Still **NOT done:** provider/fake-provider
-   orchestration that produces the review, background/scheduled triggers, an
-   admin route, upload-workflow wiring, and public exposure (step 6).
+   it does not produce one.
+   The **fake/supplied-review orchestration driver** that ties the full private
+   loop together is also DONE:
+   `app/services/machine_review/orchestration.py`
+   (`run_fake_record_machine_review` → `MachineReviewOrchestrationResult` with
+   status `appended` / `skipped_current` / `failed_to_produce_review`), covered
+   by `tests/services/test_machine_review_orchestration.py`. For one record it
+   builds the evidence context from the live `TrustFragment` → digest → plan,
+   and on `run_*` uses a supplied `RecordMachineReview` (or synthesises a benign
+   `machine_screened_pass`/no-findings default from an injected `reviewed_at`
+   clock, stamped `fake-test`/`fake`) and appends via the executor (the sole
+   write path). It is idempotent for an unchanged recipe, re-appends when
+   evidence changes (stale), preserves source ids, calls **no** real provider,
+   and mutates nothing outside `record_machine_review` (the public
+   `TrustFragment` is only read). Still **NOT done:** real-provider
+   orchestration, background/scheduled triggers, an admin route, upload-workflow
+   wiring, and public exposure (step 6).
 6. Only then expose public trust.machine_review behind the latest-current
    selection (§4) and the display rules (§7), labelled as machine output,
    never altering deterministic fields, with the §9 tests green.
