@@ -64,6 +64,12 @@ from app.services.machine_review.query import (
     get_record_machine_review_currency_for_record,
     list_record_machine_review_rows_for_record,
 )
+from app.services.machine_review.rereview import (
+    MachineReviewReReviewDecision,
+    MachineReviewReReviewPlan,
+    plan_record_machine_rereview,
+    should_run_machine_rereview,
+)
 from app.services.machine_review.inspection import (
     MachineReviewInspectionView,
     SubmissionMachineReviewInspection,
@@ -124,6 +130,8 @@ __all__ = [
     "MachineReviewOutcome",
     "MachineReviewProviderFindingV2",
     "MachineReviewProviderResultV2",
+    "MachineReviewReReviewDecision",
+    "MachineReviewReReviewPlan",
     "MachineReviewRecordMapping",
     "MachineReviewRecordSummary",
     "MachineReviewResult",
@@ -163,11 +171,13 @@ __all__ = [
     "list_record_machine_review_rows_for_record",
     "machine_review_result_from_audit_event",
     "map_findings_to_submission_records",
+    "plan_record_machine_rereview",
     "record_machine_reviews_from_audit_events",
     "record_machine_reviews_from_submission_audit_event",
     "reopen_curator_task",
     "resolve_curator_task",
     "select_latest_machine_review_for_record",
+    "should_run_machine_rereview",
     "start_curator_task_review",
     "stored_projection_from_record_machine_review",
     "stored_projection_from_record_machine_review_row",

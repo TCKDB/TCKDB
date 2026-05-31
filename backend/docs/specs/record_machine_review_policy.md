@@ -662,10 +662,22 @@ the prior and on the provisional spec's §13 non-interference tests.
    returns rows newest-first in the classifier's exact ordering (`reviewed_at`
    DESC, `source_audit_event_id` DESC NULLS LAST, `id` DESC NULLS LAST), and
    classifies persisted currency via the pure classifier. Read-only and
-   non-interfering. **Re-review triggers (step 5) and public exposure (step 6)
-   remain NOT done.**
+   non-interfering.
 5. Wire re-review triggers (§5) as background/admin paths that APPEND rows;
    never synchronous in uploads, never mutating review_status or evidence.
+   The **decision/planning** half is DONE (detection only — it appends nothing):
+   `app/services/machine_review/rereview.py`
+   (`plan_record_machine_rereview` → `MachineReviewReReviewPlan` with a
+   `MachineReviewReReviewDecision` of `skip_current` / `run_not_reviewed` /
+   `run_stale`, plus `should_run_machine_rereview`), covered by
+   `tests/services/test_machine_review_rereview.py`. It composes the context
+   adapter, query service, and currency classifier to turn the §5 trigger
+   conditions (no review, or a `context_schema_version` / `context_hash` /
+   `prompt_version` / `rubric_versions` mismatch) into a read-only plan; it adds
+   no `reviewed_at` TTL trigger and never treats provider/model as a trigger
+   dimension. **Execution (appending a fresh row, background/admin trigger,
+   provider wiring, upload wiring) and public exposure (step 6) remain NOT
+   done.**
 6. Only then expose public trust.machine_review behind the latest-current
    selection (§4) and the display rules (§7), labelled as machine output,
    never altering deterministic fields, with the §9 tests green.
