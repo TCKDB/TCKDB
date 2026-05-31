@@ -58,6 +58,12 @@ from app.services.machine_review.orchestration import (
     MachineReviewOrchestrationResult,
     MachineReviewOrchestrationStatus,
     run_fake_record_machine_review,
+    run_record_machine_review_with_producer,
+)
+from app.services.machine_review.producer import (
+    FakeMachineReviewProducer,
+    MachineReviewProducer,
+    MachineReviewProductionError,
 )
 from app.services.machine_review.persistence import (
     classify_record_machine_review_currency_from_rows,
@@ -126,6 +132,7 @@ __all__ = [
     "AuditRecordLink",
     "CuratorPriority",
     "CuratorTaskBuildResult",
+    "FakeMachineReviewProducer",
     "GeometryValidationContext",
     "InternalTrustEnvelopeWithMachineReview",
     "MachineReviewAuditProjection",
@@ -140,6 +147,8 @@ __all__ = [
     "MachineReviewOrchestrationResult",
     "MachineReviewOrchestrationStatus",
     "MachineReviewOutcome",
+    "MachineReviewProducer",
+    "MachineReviewProductionError",
     "MachineReviewProviderFindingV2",
     "MachineReviewProviderResultV2",
     "MachineReviewReReviewDecision",
@@ -191,6 +200,7 @@ __all__ = [
     "record_machine_reviews_from_submission_audit_event",
     "reopen_curator_task",
     "run_fake_record_machine_review",
+    "run_record_machine_review_with_producer",
     "resolve_curator_task",
     "select_latest_machine_review_for_record",
     "should_run_machine_rereview",

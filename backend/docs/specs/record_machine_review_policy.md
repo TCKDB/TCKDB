@@ -704,8 +704,20 @@ the prior and on the provisional spec's §13 non-interference tests.
    write path). It is idempotent for an unchanged recipe, re-appends when
    evidence changes (stale), preserves source ids, calls **no** real provider,
    and mutates nothing outside `record_machine_review` (the public
-   `TrustFragment` is only read). Still **NOT done:** real-provider
-   orchestration, background/scheduled triggers, an admin route, upload-workflow
+   `TrustFragment` is only read).
+   The **provider-shaped producer interface** (the seam for a future real
+   producer) is also DONE: `app/services/machine_review/producer.py`
+   (`MachineReviewProducer` protocol, `FakeMachineReviewProducer`,
+   `MachineReviewProductionError`) plus
+   `run_record_machine_review_with_producer` in `orchestration.py`, covered by
+   `tests/services/test_machine_review_producer.py`. Orchestration now depends on
+   the injected producer instead of constructing reviews inline
+   (`run_fake_record_machine_review` is a thin wrapper over the same core); the
+   producer is called only for `run_*` (never for `skip_current`), and a
+   producer that raises `MachineReviewProductionError` or returns invalid output
+   yields `failed_to_produce_review` with no row appended. Only the **fake**
+   producer ships. Still **NOT done:** a real/cloud/local producer
+   implementation, background/scheduled triggers, an admin route, upload-workflow
    wiring, and public exposure (step 6).
 6. Only then expose public trust.machine_review behind the latest-current
    selection (§4) and the display rules (§7), labelled as machine output,
