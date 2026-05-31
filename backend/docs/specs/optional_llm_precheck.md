@@ -12,7 +12,9 @@ precheck implementers.
 public-facing **machine-review** layer that builds on this precheck
 plumbing. This precheck infrastructure is the implementation foundation;
 the public-facing state is exposed there as `machine_review`, not
-`llm_precheck`.
+`llm_precheck`. `admin_machine_review_inspection.md` documents the
+admin-only, read-only endpoint that projects the precheck audit events
+recorded here onto submission-linked records for debugging.
 
 ---
 

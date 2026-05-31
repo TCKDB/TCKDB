@@ -17,6 +17,9 @@ machine-review implementers.
   (the implementation foundation this layer builds on).
 - `trust_read_api_current.md` — current public trust-fragment behavior.
 - `ai_review_assistant_admin_consumption.md` — current admin read surfaces.
+- `admin_machine_review_inspection.md` — the admin-only, read-only debugging
+  endpoint that projects this layer over existing submission audit events
+  (private; not public `trust.machine_review`).
 
 ---
 
