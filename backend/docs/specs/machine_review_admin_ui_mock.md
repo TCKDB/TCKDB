@@ -1,10 +1,11 @@
 # Admin UI / Mock — Machine-Review Inspection
 
-**Status:** draft spec — design only. No frontend code, no backend code, no API
-change, no migration, no public `trust.machine_review`. Designs a *lightweight
-admin-only* inspection page/panel (or static mock) over the existing inspection
-endpoint, to judge whether machine-review output is useful before building a
-persisted curator queue or exposing anything publicly.
+**Status:** design + minimal implementation. A lightweight admin-only inspection
+panel is now implemented in the `frontend/` app (see §13); no backend code, no
+API change, no migration, no public `trust.machine_review`. The panel renders
+the existing inspection endpoint so maintainers can judge whether machine-review
+output is useful before building a persisted curator queue or exposing anything
+publicly.
 **Date:** 2026-05-31
 **Scope:** TCKDB design only. No implementation. No route change. No migration.
 No public machine review. No curator-task persistence. No automatic review
@@ -368,7 +369,75 @@ Maintainer observations  (mock-only, not persisted)
 
 ---
 
-## 13. Non-goals
+## 13. Implementation status & manual verification
+
+A minimal version of this panel is **implemented** in the existing React +
+react-router + react-query + zod frontend app (`frontend/`). It is a thin,
+read-only admin view — no backend change, no new route on the API, no
+persistence.
+
+### Files
+
+```text
+frontend/src/types/machineReviewInspection.ts   zod schema + types mirroring the
+                                                 backend AdminSubmissionMachineReview
+                                                 InspectionResponse; overallHighestSeverity()
+frontend/src/api/machineReviewInspection.ts      fetch() client; credentials:"include";
+                                                 validates the payload with zod
+frontend/src/pages/MachineReviewInspectionPage.tsx
+                                                 the page (all six sections + badge legend
+                                                 with disclaimers + local maintainer notes)
+frontend/src/App.tsx                              route: /admin/machine-review-inspection
+```
+
+### Access control
+
+The page is a browser view; the **backend is the access-control authority**. The
+endpoint is gated by `require_admin` (`backend/app/api/deps.py`), so a non-admin
+or anonymous caller receives `403`/`401` and the page shows the error instead of
+data — regardless of whether the route is reachable in the SPA. Human admins
+authenticate via the session cookie set by `POST /auth/login`, which is why the
+client sends `credentials: "include"`. When mounted behind a real admin shell,
+the route should additionally be hidden/guarded there, but that is defence in
+depth — the server gate is the real boundary. The existing endpoint test
+(`backend/tests/api/test_admin_machine_review_inspection.py`) already covers the
+admin/`403`/`401` paths.
+
+### Manual verification
+
+The frontend has **no test runner configured** (scripts are `dev`/`build`/
+`lint`/`preview` only; no vitest/jest/testing-library). Rather than bootstrap a
+test framework for one page, verify manually:
+
+```text
+[ ] `npm run lint` is clean for the new files.
+[ ] `npm run build` type-checks the new files (note: pre-existing scaffolding
+    files species.ts / SpeciesPage.tsx have unrelated errors not introduced here).
+[ ] `npm run dev`, open /admin/machine-review-inspection.
+[ ] As a non-admin / anonymous user the fetch returns 401/403 and the page shows
+    the error, not data (server-enforced).
+[ ] Enter a submission_id with no machine-review events -> empty record table
+    with "No records received mapped machine-review findings." and affirmative
+    "No mapping warnings." / "No parse warnings."
+[ ] Enter a submission_id with one mapped finding -> one row with the status
+    badge; the run summary counts and overall highest severity are correct.
+[ ] A submission with mapping warnings renders them under Diagnostics.
+[ ] A submission with parse warnings renders them under Diagnostics.
+[ ] The status legend shows each badge with its disclaimer text (visible, not a
+    tooltip-only/doc-only string).
+[ ] No public-trust wording (approved / certified / rejected) appears except as
+    part of a disclaimer explaining what the machine status does NOT mean.
+[ ] The raw JSON drawer is collapsed by default and, when expanded, contains the
+    response data.
+[ ] Maintainer observations note that they are local / not persisted.
+```
+
+These mirror the test cases the implementation prompt asked for; promote them to
+real tests if/when a frontend test runner is added.
+
+---
+
+## 14. Non-goals
 
 ```text
 No public trust.machine_review.
