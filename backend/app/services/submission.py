@@ -57,6 +57,7 @@ from app.services.record_review import (
 
 if TYPE_CHECKING:
     from app.services.llm_precheck.schemas import LLMPrecheckResult
+    from app.services.machine_review.schemas import MachineReviewProviderResultV2
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
@@ -321,6 +322,47 @@ def record_llm_precheck_audit_event(
         details_json["mode"] = mode
     if error_kind is not None:
         details_json["error_kind"] = error_kind
+
+    return append_audit_event(
+        session,
+        submission=submission,
+        event_kind=SubmissionAuditEventKind.llm_precheck_recorded,
+        actor_kind=SubmissionActorKind.llm,
+        summary=result.summary,
+        details_json=details_json,
+    )
+
+
+def record_machine_review_v2_audit_event(
+    session: Session,
+    *,
+    submission: Submission,
+    result: "MachineReviewProviderResultV2",
+    provider: str | None = None,
+) -> SubmissionAuditEvent:
+    """Record a native v2 machine-review provider result as an audit event.
+
+    Minimal service glue paralleling :func:`record_llm_precheck_audit_event`,
+    but for the native v2 contract: the ``details_json`` carries
+    ``schema_version="machine_review_v2"`` (the marker the adapter dispatches
+    on), so the persisted event takes the adapter's v2 path on readback. Like
+    the v1 helper it writes only ``submission_audit_event`` —
+    ``actor_kind=llm``, ``event_kind=llm_precheck_recorded`` — and never mutates
+    submission status, moderation, summary columns, record-review rows, or
+    scientific records. It is **not** wired into the upload/precheck flow; it is
+    an explicit, caller-driven recorder. Commit control stays with the caller
+    (this only flushes, via :func:`append_audit_event`).
+    """
+    from app.services.machine_review.providers.interface import (
+        machine_review_v2_result_to_details_json,
+    )
+
+    details_json = machine_review_v2_result_to_details_json(result)
+    # The v2 result already carries ``provider`` as a first-class field; only
+    # add a sibling key if an explicit override is supplied and the payload
+    # didn't already set it (the adapter prefers the in-payload value).
+    if provider is not None and details_json.get("provider") is None:
+        details_json["provider"] = provider
 
     return append_audit_event(
         session,
