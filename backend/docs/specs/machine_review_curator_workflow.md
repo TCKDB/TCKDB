@@ -20,6 +20,9 @@ eventually builds a curator review queue/UI.
   events.
 - `automated_trust_layer.md` — the deterministic evidence engine and
   `RecordReviewStatus` (human review).
+- `machine_review_curator_task_queue.md` — detailed design of the persisted
+  curator task table that would make this workflow's triage axis (§4) and
+  task-table persistence option (§9) concrete.
 
 ---
 

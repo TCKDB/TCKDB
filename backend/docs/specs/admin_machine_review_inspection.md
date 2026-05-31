@@ -25,6 +25,9 @@ product decision to expose machine review publicly.
 - `machine_review_curator_workflow.md` — the future human-facing triage layer
   (review queue, curator access, human actions) designed on top of this
   inspection endpoint.
+- `machine_review_curator_task_queue.md` — the future persisted curator task
+  table that would track human triage state over the record-level findings this
+  endpoint projects.
 
 ---
 

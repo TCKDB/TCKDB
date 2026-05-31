@@ -23,6 +23,9 @@ machine-review implementers.
 - `machine_review_curator_workflow.md` — design for the future curator/admin
   triage workflow (review queue, roles, human actions, public-exposure gate)
   built on the inspection endpoint.
+- `machine_review_curator_task_queue.md` — detailed design of the persisted
+  curator task table, including how it compares to a future
+  `record_machine_review` table (§6 Option B here).
 
 ---
 
