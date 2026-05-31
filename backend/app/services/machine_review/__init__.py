@@ -19,6 +19,14 @@ from app.services.machine_review.audit_adapter import (
     record_machine_reviews_from_audit_events,
     record_machine_reviews_from_submission_audit_event,
 )
+from app.services.machine_review.context_hash import (
+    MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION,
+    GeometryValidationContext,
+    MachineReviewContextDigest,
+    MachineReviewEvidenceContext,
+    SourceCalculationContext,
+    build_machine_review_context_hash,
+)
 from app.services.machine_review.curator_task_lifecycle import (
     assign_curator_task,
     reopen_curator_task,
@@ -75,13 +83,17 @@ from app.services.machine_review.trust_adapter import (
 )
 
 __all__ = [
+    "MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION",
     "MACHINE_REVIEW_V2_SCHEMA_VERSION",
     "AuditRecordLink",
     "CuratorPriority",
     "CuratorTaskBuildResult",
+    "GeometryValidationContext",
     "InternalTrustEnvelopeWithMachineReview",
     "MachineReviewAuditProjection",
     "MachineReviewCategory",
+    "MachineReviewContextDigest",
+    "MachineReviewEvidenceContext",
     "MachineReviewFinding",
     "MachineReviewInspectionView",
     "MachineReviewOutcome",
@@ -95,6 +107,7 @@ __all__ = [
     "MappedRecord",
     "ParsedMachineReviewPayload",
     "RecordMachineReview",
+    "SourceCalculationContext",
     "SubmissionAuditEventLike",
     "SubmissionMachineReviewInspection",
     "SubmissionRecordMachineReviewInspection",
@@ -105,6 +118,7 @@ __all__ = [
     "assign_curator_task",
     "build_curator_tasks_for_submission",
     "build_internal_machine_review_trust_fragment",
+    "build_machine_review_context_hash",
     "build_machine_review_record_summary",
     "build_machine_review_inspection_view",
     "build_private_trust_envelope_with_machine_review",

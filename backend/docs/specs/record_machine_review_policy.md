@@ -158,6 +158,20 @@ Excluding volatile fields is what makes the hash stable: re-running the same
 review over an unchanged record must reproduce the same `context_hash` so a
 no-op re-review can be skipped (the dedupe use named in §9 Option B).
 
+**Implemented (commit follows this spec):** the pure builder
+`build_machine_review_context_hash` in
+`app/services/machine_review/context_hash.py` **rejects** the excluded inputs
+rather than silently ignoring them. Its typed input
+(`MachineReviewEvidenceContext`) is `extra="forbid"` and carries no field for
+raw artifacts/logs/coordinates, secrets, `provider`/`model`, or any timestamp,
+so passing one raises at construction — the builder can never hash an excluded
+field. Set-like inputs (check sets, artifact kinds, notes, source-calculation
+`(ref, role)` pairs, geometry-validation `(ref, status)` pairs) are sorted
+before hashing, so input order never changes the digest. The hash is a SHA-256
+over canonical, key-sorted, compact JSON (same discipline as
+`compute_finding_fingerprint`). No persistence and no public exposure: this is
+the pure currency primitive only.
+
 ### 3.4 Hash recipe is itself versioned: `context_schema_version`
 
 The set of inputs and the canonicalisation recipe will evolve. Store a
@@ -166,6 +180,13 @@ comparable to "now" when both the hash **and** the schema version match the
 active recipe. Bumping the recipe is a controlled migration of staleness
 semantics: every prior review becomes `stale` under the new recipe until
 re-reviewed, rather than silently mis-comparing across recipes.
+
+**Implemented:** `context_schema_version` (constant
+`MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION = "v1"`) is **folded into the hashed
+payload** and also returned on the `MachineReviewContextDigest`. Folding it in
+means two contexts identical except for their schema version hash differently,
+so even a hash-only comparison is recipe-safe — a v1 digest can never equal a
+v2 digest of the same inputs.
 
 ### 3.5 Currency key (currency vs. provenance)
 
@@ -532,6 +553,12 @@ the prior and on the provisional spec's §13 non-interference tests.
 2. Implement a PURE context_hash builder over the compact evidence context
    (no table, no exposure), unit-tested for stability, order-insensitivity, and
    exclusion of volatile/raw inputs. Reuse the fingerprint canonicalisation.
+   DONE: `app/services/machine_review/context_hash.py`
+   (`build_machine_review_context_hash` + the typed `MachineReviewEvidenceContext`
+   / `MachineReviewContextDigest`), covered by
+   `tests/services/test_machine_review_context_hash.py`. Excluded inputs are
+   rejected at the typed boundary (§3.3); the schema version is folded into the
+   hash (§3.4). No persistence, no public exposure.
 3. Implement a PURE currency classifier (current/stale/historical) over the
    existing in-memory RecordMachineReview projections — still no persistence —
    so staleness is provable before any table exists.
