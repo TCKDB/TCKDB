@@ -33,6 +33,121 @@ machine-review implementers.
 
 ---
 
+## 0. Current machine-review layering (implemented today)
+
+This section is the **authoritative map** of what exists *right now*, so the
+boundary between shipped behavior and future design is unambiguous. Sections
+1–17 below remain the design for the future public-facing layer; this section
+is the current state the other machine-review specs should agree with.
+
+There are six distinct layers. Only the first four are implemented; the last
+two are design only. Human review is a separate axis that is authoritative
+throughout.
+
+| # | Layer | Status | Surface | Scope | Who can read |
+|---|---|---|---|---|---|
+| 1 | **Deterministic trust / evidence** | implemented | public `trust` fragment on scientific reads (`include=trust`) | per record | anyone who can read the record |
+| 2 | **Submission AI review events** | implemented | `submission_audit_event(event_kind=llm_precheck_recorded, actor_kind=llm)`, read via `GET /submissions/{id}/audit-events` | per submission | existing submission visibility |
+| 3 | **Submission AI review summary** | implemented | `GET /submissions/{id}/ai-review-summary` | per submission (latest event) | existing submission visibility |
+| 4 | **Admin machine-review inspection** | implemented | `GET /admin/submissions/{id}/machine-review-inspection` | per submission, projected onto linked records | **admin only** |
+| 5 | **Public record-level `machine_review`** | **not implemented** | would be a `trust.machine_review` block on scientific reads | per record | (future) anyone who can read the record |
+| 6 | **Human `review_status`** | implemented (separate axis) | `review_status` on records; `is_certified` | per record | authoritative; overrides machine signal |
+
+1. **Deterministic trust/evidence** — the public scientific read fragments
+   (`trust.evidence`, `trust_status`, evidence rubrics like
+   `computed_kinetics_v1`). It has **no LLM dependency** and is the sole owner
+   of `evidence_completeness`, `passed/missing/warning/not_applicable_checks`,
+   `hard_fail_reason`, and `trust_status`. See `trust_read_api_current.md` and
+   `automated_trust_layer.md`.
+
+2. **Submission AI review events** — an optional advisory LLM precheck
+   (`AI_REVIEW_ASSISTANT_MODE=off` by default; `disabled`/`fake` providers
+   only) persisted as append-only `submission_audit_event` rows with
+   `event_kind=llm_precheck_recorded`. **Advisory only**: it never approves,
+   rejects, or mutates anything. See `optional_llm_precheck.md`.
+
+3. **Submission AI review summary** — `GET /submissions/{id}/ai-review-summary`
+   returns a **compact latest-result card** derived from the newest
+   `llm_precheck_recorded` event for that submission (or `null` if none). See
+   `ai_review_assistant_admin_consumption.md`.
+
+4. **Admin machine-review inspection** —
+   `GET /admin/submissions/{id}/machine-review-inspection` is an **admin-only,
+   read-only, raw diagnostic/debugging view**. It projects the submission's
+   precheck audit events onto the records linked to that submission, and
+   surfaces **unmapped findings** plus **mapping warnings**, **parse
+   warnings**, and **source audit event ids**. It is a private surface for
+   deciding whether to expose machine review publicly later — it is **not**
+   public trust. See `admin_machine_review_inspection.md` (added in commit
+   `2b0f8d4`).
+
+5. **Future public record-level `machine_review`** — **not implemented.** A
+   public `trust.machine_review` block does not exist and **must not be
+   inferred from the current admin inspection endpoint.** The admin inspection
+   view is a debugging projection; it is not a public, persisted, queryable
+   record-level state. Layers 5+ are designed in §3–§16 below.
+
+6. **Human `review_status`** — the authoritative curation axis
+   (`RecordReviewStatus`: `not_reviewed`/`under_review`/`approved`/`rejected`/
+   `deprecated`) plus `is_certified`/`benchmark_reference`. Machine review
+   never writes any of these (§4, §11).
+
+### Auth boundary (current)
+
+```text
+/submissions/{id}/audit-events              -> existing submission visibility
+/submissions/{id}/ai-review-summary         -> existing submission visibility
+/admin/submissions/{id}/machine-review-inspection -> requires admin
+```
+
+Curators do **not** automatically get inspection access; the admin endpoint is
+gated by `require_admin` (the stricter of the two existing gates). Curator
+access is a deliberate future decision, not a current capability. Full access
+matrix in `admin_machine_review_inspection.md` §6.
+
+### Public trust boundary (current)
+
+```text
+Admin machine-review inspection does NOT change public scientific trust fragments.
+Public trust.llm_precheck remains disabled / not_run.
+There is no public trust.machine_review yet.
+Submission-level findings are NOT mapped into record-level public trust yet.
+```
+
+The public `trust.llm_precheck` fragment is frozen at:
+
+```json
+{ "enabled": false, "label": "not_run", "summary": null }
+```
+
+### Mutation boundary (current)
+
+The admin inspection endpoint, and every layer-2/3/4 surface above, is
+**read-only** and does not:
+
+```text
+mutate submission.status
+mutate approval / rejection fields
+mutate scientific records
+create record_review rows
+certify records (is_certified / benchmark_reference)
+change any deterministic evidence/trust field
+```
+
+### Future path (in order)
+
+```text
+1. Keep admin inspection as an internal/debug view.
+2. Define the record-level machine_review mapping policy (§6).
+3. Add persistence (record_machine_review, §9) only if record-level
+   machine_review becomes public/queryable — as a NEW Alembic revision.
+4. Only then expose public trust.machine_review (§10), labeled as machine
+   output, never altering deterministic fields.
+5. Human review_status remains authoritative throughout.
+```
+
+---
+
 ## 1. Why this exists
 
 Human curation may be rare. TCKDB has chosen to be **trust-stratified, not

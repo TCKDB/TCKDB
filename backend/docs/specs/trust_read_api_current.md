@@ -226,8 +226,9 @@ AI Review Assistant results are submission/admin scoped. The current read
 surfaces are:
 
 ```text
-GET /api/v1/submissions/{submission_id}/ai-review-summary
-GET /api/v1/submissions/{submission_id}/audit-events
+GET /api/v1/submissions/{submission_id}/ai-review-summary               -- submission visibility
+GET /api/v1/submissions/{submission_id}/audit-events                    -- submission visibility
+GET /api/v1/admin/submissions/{submission_id}/machine-review-inspection -- admin only
 ```
 
 `/ai-review-summary` returns a compact latest-result card derived from the
@@ -237,10 +238,23 @@ event, it returns `null`.
 `/audit-events` exposes the full stored audit details, including
 `details_json`, according to the existing submission visibility policy.
 
-The AI Review Assistant summary follows the same submission visibility policy
-as other submission reads: the creator can read their own submission, and
+`/admin/.../machine-review-inspection` is an **admin-only** raw diagnostic
+view. It projects a submission's `llm_precheck_recorded` events onto the
+records linked to that submission and returns per-record latest summaries plus
+`unmapped_findings_count`, `mapping_warnings`, `parse_warnings`, and
+`source_audit_event_ids`. It is read-only, persists nothing, and emits its own
+admin-only schema — **not** a public `TrustFragment`. It is a private debugging
+surface for deciding whether to expose machine review publicly later; it is
+**not** public scientific trust and **not** a curator workflow. Full contract:
+`admin_machine_review_inspection.md`. The full layering map is
+`provisional_machine_review.md` §0.
+
+The first two endpoints follow the same submission visibility policy as other
+submission reads: the creator can read their own submission, and
 curators/admins can read submissions according to the existing submission
-policy. Other users receive `403`.
+policy. Other users receive `403`. The inspection endpoint is stricter —
+`require_admin`: anonymous callers get `401`, and normal users *and curators*
+get `403`. Curators are deliberately not granted inspection access yet.
 
 ## AI Review Assistant Boundary
 
@@ -278,6 +292,9 @@ The current backend does not provide:
 - RAG behavior
 - record-level mapping from AI Review Assistant audit events into public
   scientific `trust.llm_precheck` fragments
+- a public `trust.machine_review` fragment (none exists; the admin
+  machine-review inspection endpoint is private diagnostics, not public trust,
+  and must not be inferred as a public record-level state)
 
 Future work should keep the deterministic trust layer and AI Review Assistant
 advisory layer separated unless an explicit public-trust mapping is designed,

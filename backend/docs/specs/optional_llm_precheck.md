@@ -34,9 +34,12 @@ Optional precheck plumbing was introduced in commit
 `0087c35 Add optional LLM precheck plumbing`. The current implementation
 has disabled and fake providers, context-builder scaffolding, service
 orchestration, failure conversion to `failed_to_review`,
-submission-scoped audit event persistence, and a submission-scoped latest
-AI review summary endpoint. It has no upload workflow wiring, public
-scientific trust mapping, real providers, or RAG.
+submission-scoped audit event persistence, a submission-scoped latest
+AI review summary endpoint, and an admin-only submission machine-review
+inspection endpoint (commit `2b0f8d4`) that projects those audit events onto
+linked records for debugging. It has no upload workflow wiring, public
+scientific trust mapping (no public `trust.machine_review`), real providers,
+or RAG.
 
 The default mode is:
 
@@ -737,6 +740,22 @@ The submission audit timeline remains the full-detail source of truth:
 ```text
 GET /api/v1/submissions/{submission_id}/audit-events
 ```
+
+An admin-only diagnostic surface also exists over the same precheck audit
+events:
+
+```text
+GET /api/v1/admin/submissions/{submission_id}/machine-review-inspection
+```
+
+It is read-only, admin-gated (curators excluded), persists nothing, and emits
+its own admin-only schema — **not** a public `TrustFragment`. It projects the
+submission's precheck events onto linked records for debugging only. It does
+**not** create a public `trust.machine_review` fragment. See
+`admin_machine_review_inspection.md` for the contract and
+`provisional_machine_review.md` §0 for the full current layering (deterministic
+trust → submission events → submission summary → admin inspection → future
+public `machine_review` → human `review_status`).
 
 Scientific reads remain unchanged for now:
 

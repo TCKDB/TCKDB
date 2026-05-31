@@ -8,12 +8,20 @@ ARC changes, or `tckdb-client` changes.
 **Audience:** TCKDB backend maintainers, admin tooling authors, curator UX
 implementers.
 
+**See also:** `provisional_machine_review.md` §0 is the authoritative map of
+the full machine-review layering (deterministic trust → submission events →
+submission summary → admin inspection → future public `machine_review` →
+human `review_status`). This file covers the admin/curator consumption of the
+submission-scoped layers (2 and 3) and points at the admin inspection layer
+(4, documented in `admin_machine_review_inspection.md`).
+
 ---
 
 ## 1. Current Behavior
 
-AI Review Assistant is optional and off by default. The fake provider can
-generate structured advisory results, and those results are persisted as
+AI Review Assistant is optional and off by default
+(`AI_REVIEW_ASSISTANT_MODE=off`). The fake/disabled providers can generate
+structured advisory results, and those results are persisted as
 `submission_audit_event` rows with:
 
 ```text
@@ -21,15 +29,28 @@ event_kind=llm_precheck_recorded
 actor_kind=llm
 ```
 
-The current read surface is:
+There are now three read surfaces over this data, at two distinct auth tiers:
 
 ```text
-GET /api/v1/submissions/{submission_id}/audit-events
+GET /api/v1/submissions/{submission_id}/audit-events                  -- submission visibility
+GET /api/v1/submissions/{submission_id}/ai-review-summary             -- submission visibility
+GET /api/v1/admin/submissions/{submission_id}/machine-review-inspection -- admin only
 ```
 
-The existing submission visibility policy applies to that endpoint.
-Public scientific trust fragments still show the AI review state as
-disabled/not_run.
+- `/audit-events` — full audit timeline, including `details_json` (the
+  full-detail source of truth; §5).
+- `/ai-review-summary` — compact latest-result card derived from the newest
+  `llm_precheck_recorded` event, or `null` if none (§4).
+- `/admin/.../machine-review-inspection` — **admin-only** raw diagnostic view
+  projecting the submission's precheck events onto its linked records, with
+  unmapped findings and mapping/parse warnings. Curators are **not** granted
+  access. It is a private debugging surface, **not** public trust and **not**
+  a curator workflow. Full contract in `admin_machine_review_inspection.md`.
+
+The first two endpoints follow the existing submission visibility policy; the
+inspection endpoint requires admin. Public scientific trust fragments still
+show the AI review state as disabled/`not_run`, and there is **no** public
+`trust.machine_review` (§8).
 
 Recent related commits:
 
@@ -37,6 +58,7 @@ Recent related commits:
 0087c35 Add optional LLM precheck plumbing
 c8e2999 Persist LLM precheck audit events
 2c1bc0e Test LLM precheck audit read surface
+2b0f8d4 Add admin-only submission machine-review inspection endpoint
 ```
 
 ---
@@ -241,6 +263,12 @@ Reasons:
 - Latest submission precheck is not necessarily latest record-level
   assessment.
 - Advisory submission review is not record certification.
+
+The admin machine-review inspection endpoint does **not** change this: it is
+a read-only projection for maintainers and emits its own admin-only schema,
+not a public `TrustFragment`. There is **no** public `trust.machine_review`
+fragment yet, and the existence of the inspection endpoint must not be read as
+one. Public `trust.llm_precheck` stays disabled/`not_run`.
 
 Public scientific trust fragments should remain unchanged for now. In
 particular, AI Review Assistant output must not affect:
