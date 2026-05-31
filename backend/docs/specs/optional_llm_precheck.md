@@ -15,6 +15,10 @@ the public-facing state is exposed there as `machine_review`, not
 `llm_precheck`. `admin_machine_review_inspection.md` documents the
 admin-only, read-only endpoint that projects the precheck audit events
 recorded here onto submission-linked records for debugging.
+`machine_review_real_provider_plumbing.md` designs the real (Off / Cloud /
+Local) provider plumbing that reuses the `AI_REVIEW_ASSISTANT_MODE` /
+`LLM_PRECHECK_*` configuration and failure contract specified here, but emits
+the native machine-review v2 payload instead of the v1 `LLMPrecheckResult`.
 
 ---
 

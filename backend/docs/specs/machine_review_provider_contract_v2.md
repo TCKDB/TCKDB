@@ -25,6 +25,9 @@ adapter dispatch, and whoever later wires a real (cloud/local) provider.
   that v2 findings would feed.
 - `machine_review_handoff.md` — the workstream checkpoint (§9 decision log,
   §11 next options).
+- `machine_review_real_provider_plumbing.md` — the *producer* design (Off /
+  Cloud / Local provider plumbing) that would emit the v2 payloads this contract
+  defines.
 
 ---
 

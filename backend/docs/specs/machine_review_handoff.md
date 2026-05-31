@@ -424,6 +424,7 @@ machine_review_curator_task_queue.md
 machine_review_admin_ui_mock.md
 machine_review_golden_examples.md         (golden fake-provider examples)
 machine_review_provider_contract_v2.md    (design: v2 provider output contract)
+machine_review_real_provider_plumbing.md  (design: off/cloud/local producer)
 machine_review_handoff.md   (this file)
 ```
 
@@ -526,7 +527,11 @@ Option 1b (optional): Add MORE golden fake-provider examples / fixtures (varied
 
 Option 2: Implement real provider plumbing behind off/cloud/local config
           (replace the fake provider). Larger; introduces external dependencies
-          and cost/secret handling. Still advisory, still private.
+          and cost/secret handling. Still advisory, still private. NOW SPEC'D in
+          machine_review_real_provider_plumbing.md (producer design: provider
+          package, MachineReviewContext, config reuse of LLM_PRECHECK_*, failure
+          contract, fake/test boundary, and the 1->6 implementation order). Not
+          yet implemented.
 
 Option 3: Build a frontend / admin UI for the queue (much later). Depends on the
           queue shape being validated first (see machine_review_admin_ui_mock.md).
