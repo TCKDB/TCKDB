@@ -651,6 +651,19 @@ the prior and on the provisional spec's §13 non-interference tests.
    over `(record_type, record_id)` — multiple historical rows are expected and
    "which is live" stays a read-time classification. Not wired into uploads; no
    public `trust.machine_review`.
+   The private **query service** over persisted rows is also DONE:
+   `app/services/machine_review/query.py`
+   (`list_record_machine_review_rows_for_record`,
+   `get_latest_record_machine_review_row`,
+   `get_record_machine_review_currency_for_record`), covered by
+   `tests/services/test_record_machine_review_query.py`. It is the single
+   read path (for future admin inspection, re-review triggers, and eventual
+   public-trust projection): it filters by exact `(record_type, record_id)`,
+   returns rows newest-first in the classifier's exact ordering (`reviewed_at`
+   DESC, `source_audit_event_id` DESC NULLS LAST, `id` DESC NULLS LAST), and
+   classifies persisted currency via the pure classifier. Read-only and
+   non-interfering. **Re-review triggers (step 5) and public exposure (step 6)
+   remain NOT done.**
 5. Wire re-review triggers (§5) as background/admin paths that APPEND rows;
    never synchronous in uploads, never mutating review_status or evidence.
 6. Only then expose public trust.machine_review behind the latest-current

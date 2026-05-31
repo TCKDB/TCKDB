@@ -59,6 +59,11 @@ from app.services.machine_review.persistence import (
     create_record_machine_review_row,
     stored_projection_from_record_machine_review_row,
 )
+from app.services.machine_review.query import (
+    get_latest_record_machine_review_row,
+    get_record_machine_review_currency_for_record,
+    list_record_machine_review_rows_for_record,
+)
 from app.services.machine_review.inspection import (
     MachineReviewInspectionView,
     SubmissionMachineReviewInspection,
@@ -152,7 +157,10 @@ __all__ = [
     "create_record_machine_review_row",
     "derive_machine_review_status",
     "event_is_machine_review",
+    "get_latest_record_machine_review_row",
     "get_machine_review_summaries_for_record",
+    "get_record_machine_review_currency_for_record",
+    "list_record_machine_review_rows_for_record",
     "machine_review_result_from_audit_event",
     "map_findings_to_submission_records",
     "record_machine_reviews_from_audit_events",
