@@ -356,3 +356,14 @@ experience cheaply, with no new schema and no public surface, and is exactly
 what the exposure gate (Option C) requires as input. Option A is the natural
 follow-on once Option B shows the queue shape is right; Option C stays deferred
 until the gate questions can be answered.
+
+**Update — Option A has since been implemented** (subsequent to this
+checkpoint): the `machine_review_curator_task` table + `MachineReviewCuratorTaskState`
+enum (new Alembic revision), the task creation and lifecycle services, and the
+admin-only workflow API are now in place. The endpoints (list / get /
+build-for-submission / assign / start-review / resolve / reopen) are documented
+in `admin_machine_review_curator_task_api.md`. The invariants in §5 and the
+boundaries in §10 still hold: these endpoints are admin-only, do not grant
+curator access, never write `RecordReviewStatus` / `submission.status` /
+deterministic trust, and expose no public `trust.machine_review`. Option B
+(admin UI/mock) and Option C (public exposure) remain as above.

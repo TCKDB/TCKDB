@@ -26,6 +26,9 @@ eventually builds a curator review queue/UI.
 - `machine_review_admin_ui_mock.md` — the admin-only inspection view/mock that
   gathers the triage experience this workflow (and its public-exposure gate,
   §10) depends on, while keeping raw diagnostics admin-only (§6).
+- `admin_machine_review_curator_task_api.md` — the implemented admin-only API
+  that operationalises this workflow's triage-state axis (§4) and human-action
+  policy (§7) over the persisted curator task table.
 
 ---
 

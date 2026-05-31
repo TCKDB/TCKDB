@@ -26,6 +26,9 @@ eventually builds the curator review queue/UI.
   `RecordReviewStatus` (authoritative human review) this table must never touch.
 - `optional_llm_precheck.md` — the precheck plumbing whose `submission_audit_event`
   rows are the upstream source of findings.
+- `admin_machine_review_curator_task_api.md` — the implemented admin-only
+  workflow API (list/get/build/assign/start-review/resolve/reopen) over the
+  table this spec designs.
 
 ---
 
