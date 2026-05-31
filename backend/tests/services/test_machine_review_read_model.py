@@ -64,6 +64,7 @@ def _review(
     model: str | None = None,
     provider: str | None = None,
     submission_id: int | None = None,
+    audit_event_id: int | None = None,
     record_id: int | None = None,
 ) -> RecordMachineReview:
     """Build a record-scoped review pass wrapper."""
@@ -76,6 +77,7 @@ def _review(
         model=model,
         provider=provider,
         submission_id=submission_id,
+        audit_event_id=audit_event_id,
         record_id=record_id,
     )
 
@@ -169,6 +171,46 @@ def test_tie_break_is_deterministic():
     assert a.submission_id == 9
     assert a.model == "sub-9/model"
     assert a.status is MachineReviewStatus.machine_screened_warning
+
+
+def test_tie_break_prefers_higher_audit_event_id():
+    """Same reviewed_at: the higher audit_event_id wins (primary tie-break).
+
+    The audit event id dominates the submission_id fallback: here the *lower*
+    submission_id carries the *higher* audit event id, and the audit event id
+    decides. This is the spec's "tie-breaker = highest audit event id". The
+    older event's id is not discarded — it remains on its own review for the
+    per-record history.
+    """
+    older = _review(
+        status=MachineReviewStatus.machine_screened_needs_attention,
+        findings=(_finding(MachineReviewSeverity.critical),),
+        reviewed_at=_T0,
+        model="event-100/model",
+        submission_id=9,  # higher submission_id...
+        audit_event_id=100,  # ...but the OLDER (lower) audit event
+    )
+    newer = _review(
+        status=MachineReviewStatus.machine_screened_warning,
+        findings=(_finding(MachineReviewSeverity.warning),),
+        reviewed_at=_T0,
+        model="event-200/model",
+        submission_id=7,  # lower submission_id...
+        audit_event_id=200,  # ...but the NEWER (higher) audit event
+    )
+
+    a = build_machine_review_record_summary(
+        record_type="calculation", record_ref="calc_aaa", reviews=[older, newer]
+    )
+    b = build_machine_review_record_summary(
+        record_type="calculation", record_ref="calc_aaa", reviews=[newer, older]
+    )
+
+    assert a == b  # selection is stable regardless of input order
+    assert a.model == "event-200/model"
+    assert a.status is MachineReviewStatus.machine_screened_warning
+    # The older event id stays available on its own review for history.
+    assert older.audit_event_id == 100
 
 
 def test_tie_break_falls_through_to_input_order():

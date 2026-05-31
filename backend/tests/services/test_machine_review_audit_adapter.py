@@ -65,6 +65,7 @@ class _AuditEvent:
     actor_kind: Any = SubmissionActorKind.llm
     created_at: datetime | None = _T0
     submission_id: int | None = 5
+    id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -196,6 +197,54 @@ def test_valid_audit_event_maps_record_finding_to_record_review():
     assert projection.unmapped_findings == ()
     assert projection.mapping_warnings == ()
     assert projection.parse_warnings == ()
+
+
+def test_record_review_carries_source_audit_event_id():
+    """The projected review records which audit event it came from (provenance).
+
+    ``audit_event_id`` is read from ``event.id`` and is the read model's primary
+    latest-selection tie-break and the per-record history key.
+    """
+    event = _AuditEvent(
+        details_json=_details(
+            findings=(_record_finding(record_type="calculation", record_id=42),),
+        ),
+        id=777,
+    )
+
+    projection = record_machine_reviews_from_submission_audit_event(
+        event=event,
+        submission_record_links=[_Link(SubmissionRecordType.calculation, 42)],
+    )
+
+    assert projection.record_reviews[0].audit_event_id == 777
+
+
+def test_failed_review_label_with_record_finding_yields_failed_status():
+    """A failed reviewer label dominates the record-finding-derived status.
+
+    The payload's ``failed_to_review`` label is the reviewer-completion signal
+    for the pass; even though the finding alone would derive a ``warning``, the
+    mapped record's status is ``machine_review_failed`` (event-level outcome,
+    not a concern fanned out).
+    """
+    event = _AuditEvent(
+        details_json=_details(
+            label=LLMPrecheckLabel.failed_to_review,
+            findings=(_record_finding(record_type="calculation", record_id=42),),
+        ),
+    )
+
+    projection = record_machine_reviews_from_submission_audit_event(
+        event=event,
+        submission_record_links=[_Link(SubmissionRecordType.calculation, 42)],
+    )
+
+    assert len(projection.record_reviews) == 1
+    assert (
+        projection.record_reviews[0].status
+        is MachineReviewStatus.machine_review_failed
+    )
 
 
 # --------------------------------------------------------------------------- #

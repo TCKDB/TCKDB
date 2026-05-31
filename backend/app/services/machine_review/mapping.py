@@ -25,19 +25,40 @@ algorithm with the key field swapped; the structures carry ``record_id``
 through as passthrough metadata so a future persistence layer does not have
 to re-resolve it.
 
+Matching precedence (most specific first; the full policy is documented in
+``provisional_machine_review.md`` "Submission-to-record mapping policy"):
+
+1. exact ``(record_type, record_ref)`` of a linked record (in the audit path
+   ``record_ref`` is the stringified internal ``record_id``, so the spec's
+   "exact ``record_type`` + ``record_id``" and "exact ``record_type`` +
+   ``record_ref``" levels collapse here);
+2. the **single unambiguous** linked record of the finding's ``record_type``,
+   used only when the finding carries no ``record_ref``;
+3. otherwise unmapped, with a ``mapping_warnings`` entry for the defect cases.
+
+``evidence_keys`` are deterministic-evidence citations, never a matching key:
+the mapper does not infer a record from them (that would be guessing).
+
 Policy (spec §6 / §13, and the slice's required decisions):
 
 1. A finding with no ``record_type`` is submission-scoped only -> unmapped.
-2. A finding with ``record_type`` but no ``record_ref`` is not safely
-   mappable -> unmapped (warning).
-3. A finding maps only to the exact linked record it names.
-4. A finding never maps to a record merely because it shares the submission.
-5. Unknown ``record_type`` -> unmapped (warning); never raises.
-6. Unknown/unlinked ``record_ref`` -> unmapped (warning); never raises.
-7. Findings for records not linked to the submission do not map.
-8. Multiple findings may map to the same record.
-9. One submission may produce mapped and unmapped findings simultaneously.
-10. A mapped record's status is derived **only** from its own findings.
+2. A finding maps only to a record it unambiguously identifies (precedence
+   above); it never maps to a record merely because it shares the submission.
+3. Unknown ``record_type`` -> unmapped (warning); never raises.
+4. A ``record_ref`` that names a record not linked to the submission ->
+   unmapped (warning); the mapper never silently redirects it to a different
+   record (no guessing).
+5. A typed finding with no ``record_ref`` maps to the one linked record of that
+   type when exactly one exists; with several it is ambiguous -> unmapped
+   (warning); with none it is unmapped (warning).
+6. Multiple findings may map to the same record.
+7. One submission may produce mapped and unmapped findings simultaneously.
+8. A mapped record's *concern* status is derived **only** from its own findings
+   — never a submission-scoped finding, never a sibling record's. The single
+   event-level signal that dominates is the reviewer ``outcome`` (failed /
+   not_performed): it describes whether the reviewer ran, not the record's
+   quality, so it applies to every record the pass touched without being
+   fan-out of a concern severity.
 """
 
 from __future__ import annotations
@@ -111,15 +132,24 @@ class UnmappedReason(str, Enum):
     (rule 1). This is expected, not a defect; it carries no warning."""
 
     missing_record_ref = "missing_record_ref"
-    """``record_type`` present but no ``record_ref`` -> not safely mappable
-    (rule 2). Warns."""
+    """``record_type`` present, no ``record_ref``, and **no** linked record of
+    that type to fall back to -> nothing to map. Warns. (When exactly one linked
+    record of the type exists the finding maps instead; when several exist see
+    :attr:`ambiguous_record_type`.)"""
+
+    ambiguous_record_type = "ambiguous_record_type"
+    """``record_type`` present, no ``record_ref``, and **multiple** linked
+    records of that type -> the single-unambiguous-type fallback refuses to
+    guess which one. Warns. This is the anti-fan-out guard for type-only
+    findings."""
 
     unknown_record_type = "unknown_record_type"
-    """``record_type`` is outside the controlled vocabulary (rule 5). Warns."""
+    """``record_type`` is outside the controlled vocabulary. Warns."""
 
     unlinked_record = "unlinked_record"
-    """A valid, addressed record that is not linked to this submission
-    (rule 7) -> must not map. Warns. This is the anti-fan-out guard."""
+    """A finding naming an exact ``record_ref`` that is not linked to this
+    submission -> must not map, and is never redirected to a different record.
+    Warns. This is the anti-fan-out guard for ref-addressed findings."""
 
 
 @dataclass(frozen=True)
@@ -158,6 +188,7 @@ class MachineReviewRecordMapping:
 def _classify_finding(
     finding: MachineReviewFinding,
     linked_by_ref: dict[tuple[str, str], SubmissionRecordLinkLike],
+    linked_keys_by_type: dict[str, list[tuple[str, str]]],
 ) -> tuple[str, str] | UnmappedReason:
     """Decide a single finding's bucket.
 
@@ -170,73 +201,103 @@ def _classify_finding(
     if finding.record_type is None:
         return UnmappedReason.submission_scoped
 
-    # Rule 5: a record_type outside the controlled vocabulary cannot address
-    # any real record. Reported before the missing-ref check: the type is the
-    # more fundamental problem.
+    # Unknown record_type: a type outside the controlled vocabulary cannot
+    # address any real record. Reported first: the type is the more fundamental
+    # problem than any ref/fallback consideration.
     if finding.record_type not in _KNOWN_RECORD_TYPES:
         return UnmappedReason.unknown_record_type
 
-    # Rule 2/6: a typed finding with no ref names no specific record.
-    if finding.record_ref is None:
-        return UnmappedReason.missing_record_ref
+    # Precedence 1 — exact ref match. A ref-addressed finding maps only to the
+    # exact linked record it names; a record not in this submission's link set
+    # never matches and is never redirected (anti-fan-out core).
+    if finding.record_ref is not None:
+        key = (finding.record_type, finding.record_ref)
+        if key not in linked_by_ref:
+            return UnmappedReason.unlinked_record
+        return key
 
-    key = (finding.record_type, finding.record_ref)
-
-    # Rule 3/4/7: map only to the exact linked record. A record that is not in
-    # this submission's link set never matches — this is the anti-fan-out core.
-    if key not in linked_by_ref:
-        return UnmappedReason.unlinked_record
-
-    return key
+    # Precedence 2 — single-unambiguous-type fallback. A typed finding with no
+    # ref maps to the one linked record of that type iff exactly one exists;
+    # otherwise the mapper refuses to guess.
+    candidates = linked_keys_by_type.get(finding.record_type, [])
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        return UnmappedReason.ambiguous_record_type
+    return UnmappedReason.missing_record_ref
 
 
 def map_findings_to_submission_records(
     *,
     findings: Sequence[MachineReviewFinding],
     submission_record_links: Sequence[SubmissionRecordLinkLike],
+    outcome: MachineReviewOutcome = MachineReviewOutcome.completed,
 ) -> MachineReviewRecordMapping:
     """Map record-addressed machine-review findings to linked submission records.
 
-    Pure and DB-free. A finding maps to a record only when it explicitly names
-    that record's exact ``(record_type, record_ref)`` *and* that record is
-    linked to the submission; everything else is routed to ``unmapped_findings``
-    with a reason (and a human-readable ``mapping_warnings`` entry for the
-    defect cases). A submission-scoped finding (no ``record_type``) is never
-    promoted to any record.
+    Pure and DB-free. A finding maps to a record by the precedence in the
+    module docstring: exact ``(record_type, record_ref)`` of a linked record,
+    else the single unambiguous linked record of the finding's type (only when
+    the finding has no ``record_ref``), else unmapped. Everything unmapped is
+    routed to ``unmapped_findings`` with a reason (and a human-readable
+    ``mapping_warnings`` entry for the defect cases). A submission-scoped
+    finding (no ``record_type``) is never promoted to any record.
 
-    The returned ``mapped_by_record`` is keyed by ``(record_type, record_ref)``;
-    each :class:`MappedRecord` derives its status from only its own findings via
-    the shared :func:`derive_machine_review_status`.
+    ``outcome`` is the reviewer-completion signal for the pass these findings
+    came from (spec §3 "State vs. severity"). It is the *only* event-level input
+    allowed to influence per-record status, and only the non-``completed``
+    values do: ``failed`` -> every mapped record is ``machine_review_failed``,
+    ``not_performed`` -> ``not_run``. For ``completed`` (the default) each
+    record's status is derived from **only its own findings**, so a
+    submission-level concern can never fan out into a record. This keeps the
+    anti-fan-out invariant: a *concern* severity never crosses records; a
+    *reviewer outcome* legitimately applies to every record the pass touched.
+
+    The returned ``mapped_by_record`` is keyed by ``(record_type, record_ref)``.
     """
     # Index links by their public key. Links missing a resolved ref cannot be
     # matched by ref-addressed findings; a same-key link seen twice (e.g. two
     # roles) collapses to one record — role is irrelevant to record identity.
     linked_by_ref: dict[tuple[str, str], SubmissionRecordLinkLike] = {}
+    # Index the distinct record keys per type, for the single-unambiguous-type
+    # fallback. Insertion order is preserved and duplicates collapse, so a type
+    # with one distinct linked record has exactly one candidate key.
+    linked_keys_by_type: dict[str, list[tuple[str, str]]] = {}
     for link in submission_record_links:
         if link.record_ref is None:
             continue
-        linked_by_ref.setdefault((link.record_type, link.record_ref), link)
+        key = (link.record_type, link.record_ref)
+        if key in linked_by_ref:
+            continue
+        linked_by_ref[key] = link
+        linked_keys_by_type.setdefault(link.record_type, []).append(key)
 
     grouped: dict[tuple[str, str], list[MachineReviewFinding]] = {}
     unmapped: list[UnmappedFinding] = []
     warnings: list[str] = []
 
     for finding in findings:
-        outcome = _classify_finding(finding, linked_by_ref)
+        classification = _classify_finding(finding, linked_by_ref, linked_keys_by_type)
 
-        if isinstance(outcome, UnmappedReason):
-            unmapped.append(UnmappedFinding(finding=finding, reason=outcome))
-            if outcome is UnmappedReason.unknown_record_type:
+        if isinstance(classification, UnmappedReason):
+            unmapped.append(UnmappedFinding(finding=finding, reason=classification))
+            if classification is UnmappedReason.unknown_record_type:
                 warnings.append(
                     f"Finding cites unknown record_type "
                     f"{finding.record_type!r}; not mapped."
                 )
-            elif outcome is UnmappedReason.missing_record_ref:
+            elif classification is UnmappedReason.missing_record_ref:
                 warnings.append(
                     f"Finding for record_type {finding.record_type!r} has no "
-                    f"record_ref; not safely mappable."
+                    f"record_ref and no linked record of that type; not mapped."
                 )
-            elif outcome is UnmappedReason.unlinked_record:
+            elif classification is UnmappedReason.ambiguous_record_type:
+                warnings.append(
+                    f"Finding for record_type {finding.record_type!r} has no "
+                    f"record_ref and multiple linked records share that type; "
+                    f"not mapped (refusing to guess)."
+                )
+            elif classification is UnmappedReason.unlinked_record:
                 warnings.append(
                     f"Finding addresses {finding.record_type!r}/"
                     f"{finding.record_ref!r}, which is not linked to this "
@@ -245,7 +306,7 @@ def map_findings_to_submission_records(
             # submission_scoped is expected, not a defect -> no warning.
             continue
 
-        grouped.setdefault(outcome, []).append(finding)
+        grouped.setdefault(classification, []).append(finding)
 
     mapped_by_record: dict[tuple[str, str], MappedRecord] = {}
     for key, record_findings in grouped.items():
@@ -257,11 +318,10 @@ def map_findings_to_submission_records(
             record_ref=record_ref,
             record_id=link.record_id,
             findings=findings_tuple,
-            # Rule 10: status from only this record's findings; the review
-            # completed (findings exist), so the completed-outcome path applies.
-            derived_status=derive_machine_review_status(
-                findings_tuple, MachineReviewOutcome.completed
-            ),
+            # Status from only this record's findings (anti-fan-out), reconciled
+            # with the reviewer ``outcome``: failed/not_performed dominate;
+            # completed defers entirely to this record's finding severities.
+            derived_status=derive_machine_review_status(findings_tuple, outcome),
         )
 
     return MachineReviewRecordMapping(

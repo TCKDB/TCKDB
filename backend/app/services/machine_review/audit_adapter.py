@@ -71,6 +71,7 @@ from app.services.llm_precheck.schemas import (
     LLMPrecheckLabel,
     LLMPrecheckResult,
 )
+from app.services.machine_review.derivation import MachineReviewOutcome
 from app.services.machine_review.mapping import (
     SubmissionRecordLinkRef,
     UnmappedFinding,
@@ -409,6 +410,26 @@ def _parse_versioned_payload(
     return ParsedMachineReviewPayload(result=result, provider=provider)
 
 
+def _outcome_from_status(status: MachineReviewStatus) -> MachineReviewOutcome:
+    """Map a result-level machine-review status to a reviewer-completion outcome.
+
+    The status the payload carries (precheck ``label`` -> status, or the v2
+    ``status`` directly) is the reviewer's own verdict for the *pass*. Only its
+    two reviewer-completion values are event-level signals the mapper honors:
+
+    * ``machine_review_failed`` -> ``failed`` (the reviewer could not complete);
+    * ``not_run`` -> ``not_performed`` (the reviewer did not run);
+    * every other (concern) status -> ``completed``: the per-record status is
+      then derived from each record's own findings, never inherited from this
+      submission-level verdict (anti-fan-out).
+    """
+    if status is MachineReviewStatus.machine_review_failed:
+        return MachineReviewOutcome.failed
+    if status is MachineReviewStatus.not_run:
+        return MachineReviewOutcome.not_performed
+    return MachineReviewOutcome.completed
+
+
 def _link_refs_from_links(
     submission_record_links: Sequence[AuditRecordLink],
 ) -> list[SubmissionRecordLinkRef]:
@@ -471,10 +492,15 @@ def record_machine_reviews_from_submission_audit_event(
     mapping = map_findings_to_submission_records(
         findings=parsed.result.findings,
         submission_record_links=_link_refs_from_links(submission_record_links),
+        # The payload's own status is the reviewer-completion signal for this
+        # pass; failed/not_run dominate per-record status, concern statuses defer
+        # to each record's findings (anti-fan-out). See ``_outcome_from_status``.
+        outcome=_outcome_from_status(parsed.result.status),
     )
 
     reviewed_at = getattr(event, "created_at", None)
     submission_id = getattr(event, "submission_id", None)
+    audit_event_id = getattr(event, "id", None)
     record_reviews = tuple(
         RecordMachineReview.from_mapped_record(
             mapped,
@@ -483,6 +509,7 @@ def record_machine_reviews_from_submission_audit_event(
             provider=parsed.provider,
             submission_id=submission_id,
             curator_priority=parsed.result.curator_priority,
+            audit_event_id=audit_event_id,
         )
         for mapped in mapping.mapped_by_record.values()
     )

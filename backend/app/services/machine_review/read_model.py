@@ -83,6 +83,12 @@ class RecordMachineReview:
     provider: str | None = None
     reviewed_at: datetime | None = None
     submission_id: int | None = None
+    # The source audit event this pass was projected from. It is the primary
+    # latest-selection tie-break (a higher id is a strictly later event) and the
+    # per-record provenance: the history of which events contributed to a record
+    # is the set of ``audit_event_id`` across its reviews. ``None`` for
+    # hand-built test wrappers and any pass with no backing event.
+    audit_event_id: int | None = None
     # Internal id carried through as passthrough metadata for a future
     # persistence layer; governed by the internal-id policy, never surfaced.
     record_id: int | None = None
@@ -97,6 +103,7 @@ class RecordMachineReview:
         provider: str | None = None,
         submission_id: int | None = None,
         curator_priority: CuratorPriority | None = None,
+        audit_event_id: int | None = None,
     ) -> "RecordMachineReview":
         """Wrap a mapper :class:`MappedRecord` with one pass's review metadata.
 
@@ -115,6 +122,7 @@ class RecordMachineReview:
             provider=provider,
             reviewed_at=reviewed_at,
             submission_id=submission_id,
+            audit_event_id=audit_event_id,
             record_id=mapped.record_id,
         )
 
@@ -163,19 +171,26 @@ def _reviewed_at_rank(review: RecordMachineReview) -> tuple[int, ...]:
     return (1, review.reviewed_at.timestamp())
 
 
-def _tie_break_key(review: RecordMachineReview, index: int) -> tuple[int, int]:
+def _tie_break_key(review: RecordMachineReview, index: int) -> tuple[int, int, int]:
     """Deterministic tie-break when two reviews share the same ``reviewed_at``.
 
     Returns a sortable tuple where *greater = preferred* (selected as latest),
-    combined after :func:`_reviewed_at_rank`. Policy: prefer the higher
-    ``submission_id`` (a higher id tracks a later submission, since submissions
-    are created monotonically); a missing ``submission_id`` sorts lowest. If
-    those also tie — same or both-missing ``submission_id`` — the review later
-    in the caller-provided sequence wins. This is a total order, so equal
-    timestamps can never produce a non-deterministic selection.
+    combined after :func:`_reviewed_at_rank`. Policy, in order:
+
+    1. higher ``audit_event_id`` — the source audit events are created
+       monotonically, so a higher id is the strictly later event; this is the
+       spec's primary tie-break. A missing ``audit_event_id`` sorts lowest.
+    2. higher ``submission_id`` — a coarser monotonic fallback for hand-built
+       reviews with no backing event id; a missing ``submission_id`` sorts
+       lowest.
+    3. later input position — last-resort, keeps the order total.
+
+    This is a total order, so equal timestamps can never produce a
+    non-deterministic selection.
     """
+    audit_rank = review.audit_event_id if review.audit_event_id is not None else -1
     submission_rank = review.submission_id if review.submission_id is not None else -1
-    return (submission_rank, index)
+    return (audit_rank, submission_rank, index)
 
 
 def select_latest_machine_review_for_record(

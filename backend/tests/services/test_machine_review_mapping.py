@@ -17,6 +17,7 @@ from __future__ import annotations
 from app.services.machine_review import (
     MachineReviewCategory,
     MachineReviewFinding,
+    MachineReviewOutcome,
     MachineReviewSeverity,
     MachineReviewStatus,
     SubmissionRecordLinkRef,
@@ -148,12 +149,16 @@ def test_finding_for_unlinked_record_is_unmapped():
     assert "not linked" in mapping.mapping_warnings[0]
 
 
-def test_finding_with_missing_record_ref_is_unmapped():
-    """A typed finding with no record_ref is not safely mappable (rule 2/6)."""
+def test_typed_finding_with_no_ref_and_no_linked_record_of_type_is_unmapped():
+    """A typed finding with no ref and no linked record of that type is unmapped.
+
+    Precedence step 2 (single-unambiguous-type) has no candidate to fall back
+    to, so the finding stays unmapped with ``missing_record_ref``.
+    """
     links = [_link("calculation", "calc_aaa", 1)]
     finding = _finding(
         MachineReviewSeverity.warning,
-        record_type="calculation",
+        record_type="thermo",  # no thermo record is linked
         record_ref=None,
     )
 
@@ -164,7 +169,88 @@ def test_finding_with_missing_record_ref_is_unmapped():
     assert mapping.mapped_by_record == {}
     assert mapping.unmapped_findings[0].reason is UnmappedReason.missing_record_ref
     assert len(mapping.mapping_warnings) == 1
-    assert "no" in mapping.mapping_warnings[0].lower()
+    assert "no record_ref" in mapping.mapping_warnings[0]
+
+
+def test_typed_finding_with_no_ref_maps_to_single_linked_record_of_type():
+    """A typed finding with no ref maps to the one linked record of that type.
+
+    Precedence step 2: exactly one linked ``thermo`` record exists, so the
+    mapping is unambiguous and is allowed (no guessing required).
+    """
+    links = [
+        _link("calculation", "calc_aaa", 1),
+        _link("thermo", "thm_zzz", 4),  # the only linked thermo record
+    ]
+    finding = _finding(
+        MachineReviewSeverity.warning,
+        record_type="thermo",
+        record_ref=None,
+    )
+
+    mapping = map_findings_to_submission_records(
+        findings=[finding], submission_record_links=links
+    )
+
+    assert set(mapping.mapped_by_record) == {("thermo", "thm_zzz")}
+    record = mapping.mapped_by_record[("thermo", "thm_zzz")]
+    assert record.record_id == 4
+    assert record.findings == (finding,)
+    # The unrelated calculation record is never touched (no fan-out).
+    assert ("calculation", "calc_aaa") not in mapping.mapped_by_record
+    assert mapping.unmapped_findings == ()
+    assert mapping.mapping_warnings == ()
+
+
+def test_typed_finding_with_no_ref_does_not_guess_among_multiple_of_type():
+    """A typed finding with no ref stays unmapped when the type is ambiguous.
+
+    Two linked ``calculation`` records means the single-unambiguous-type
+    fallback refuses to guess (anti-fan-out for type-only findings).
+    """
+    links = [
+        _link("calculation", "calc_aaa", 1),
+        _link("calculation", "calc_bbb", 2),
+    ]
+    finding = _finding(
+        MachineReviewSeverity.critical,
+        record_type="calculation",
+        record_ref=None,
+    )
+
+    mapping = map_findings_to_submission_records(
+        findings=[finding], submission_record_links=links
+    )
+
+    assert mapping.mapped_by_record == {}
+    assert (
+        mapping.unmapped_findings[0].reason is UnmappedReason.ambiguous_record_type
+    )
+    assert len(mapping.mapping_warnings) == 1
+    assert "multiple linked records" in mapping.mapping_warnings[0]
+
+
+def test_ref_addressed_finding_is_not_redirected_to_single_record_of_type():
+    """An explicit non-matching ref is unlinked, never redirected via fallback.
+
+    Precedence step 1 (exact ref) fails and the type-only fallback must **not**
+    rescue a finding that explicitly named a different (absent) record — that
+    would be guessing.
+    """
+    links = [_link("calculation", "calc_aaa", 1)]  # exactly one calculation
+    finding = _finding(
+        MachineReviewSeverity.warning,
+        record_type="calculation",
+        record_ref="calc_does_not_exist",
+    )
+
+    mapping = map_findings_to_submission_records(
+        findings=[finding], submission_record_links=links
+    )
+
+    assert mapping.mapped_by_record == {}
+    assert mapping.unmapped_findings[0].reason is UnmappedReason.unlinked_record
+    assert "not linked" in mapping.mapping_warnings[0]
 
 
 def test_finding_with_unknown_record_type_is_unmapped():
@@ -327,3 +413,73 @@ def test_critical_finding_on_one_record_does_not_affect_other_records():
     # Record B is unaffected by record A's critical finding.
     assert record_b.derived_status is MachineReviewStatus.machine_screened_pass
     assert record_b.findings[0].severity is MachineReviewSeverity.info
+
+
+# --------------------------------------------------------------------------- #
+# Reviewer-outcome reconciliation (the one event-level signal that dominates)
+# --------------------------------------------------------------------------- #
+
+
+def test_failed_outcome_overrides_record_finding_severity():
+    """A failed reviewer outcome dominates per-record status (provider failure).
+
+    A reviewer failure describes the *pass*, not the record, so every record the
+    pass mapped becomes machine_review_failed regardless of finding severity —
+    this is event-level, not a concern fanned out across records.
+    """
+    links = [_link("kinetics", "kin_aaa", 9)]
+    finding = _finding(
+        MachineReviewSeverity.info,  # would otherwise derive a pass
+        record_type="kinetics",
+        record_ref="kin_aaa",
+    )
+
+    mapping = map_findings_to_submission_records(
+        findings=[finding],
+        submission_record_links=links,
+        outcome=MachineReviewOutcome.failed,
+    )
+
+    record = mapping.mapped_by_record[("kinetics", "kin_aaa")]
+    assert record.derived_status is MachineReviewStatus.machine_review_failed
+
+
+def test_not_performed_outcome_yields_not_run_status():
+    """A not_performed reviewer outcome yields not_run per mapped record."""
+    links = [_link("kinetics", "kin_aaa", 9)]
+    finding = _finding(
+        MachineReviewSeverity.warning,
+        record_type="kinetics",
+        record_ref="kin_aaa",
+    )
+
+    mapping = map_findings_to_submission_records(
+        findings=[finding],
+        submission_record_links=links,
+        outcome=MachineReviewOutcome.not_performed,
+    )
+
+    record = mapping.mapped_by_record[("kinetics", "kin_aaa")]
+    assert record.derived_status is MachineReviewStatus.not_run
+
+
+def test_completed_outcome_is_the_default_and_derives_from_findings():
+    """The default outcome derives status from each record's own findings.
+
+    Confirms the failed/not_performed tests above differ only by ``outcome``;
+    omitting it is equivalent to ``completed`` and preserves the per-record,
+    finding-driven derivation (no event-level concern leakage).
+    """
+    links = [_link("kinetics", "kin_aaa", 9)]
+    finding = _finding(
+        MachineReviewSeverity.warning,
+        record_type="kinetics",
+        record_ref="kin_aaa",
+    )
+
+    mapping = map_findings_to_submission_records(
+        findings=[finding], submission_record_links=links
+    )
+
+    record = mapping.mapped_by_record[("kinetics", "kin_aaa")]
+    assert record.derived_status is MachineReviewStatus.machine_screened_warning

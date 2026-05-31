@@ -139,6 +139,9 @@ change any deterministic evidence/trust field
 ```text
 1. Keep admin inspection as an internal/debug view.
 2. Define the record-level machine_review mapping policy (§6).
+   DONE at the pure layer — see "Submission-to-record mapping policy" between
+   §6 and §7 (matching precedence, latest-vs-history, severity/outcome
+   aggregation), implemented and tested, still unpersisted and unexposed.
 3. Add persistence (record_machine_review, §9) only if record-level
    machine_review becomes public/queryable — as a NEW Alembic revision.
 4. Only then expose public trust.machine_review (§10), labeled as machine
@@ -412,6 +415,144 @@ overstates coverage; records in one submission can differ in quality; a
 record can have multiple submission histories; latest submission precheck
 ≠ latest record assessment; advisory submission review ≠ record
 certification.
+
+---
+
+## Submission-to-record mapping policy (pure layer — implemented)
+
+This section documents the **pure, DB-free mapping policy** that projects a
+submission's machine-review findings onto its linked scientific records. It is
+implemented and tested (`app/services/machine_review/mapping.py` +
+`read_model.py` + the audit-adapter glue) but **persists nothing and exposes
+nothing publicly** — it is the prepared substrate for a future record-level
+`machine_review`, not that layer itself. It is the policy the admin inspection
+endpoint (layer 4, §0) already runs.
+
+It is unnumbered on purpose: it slots between §6 (the submission-vs-record
+gate) and §7 without renumbering the existing `§N` cross-references that this
+and sibling specs/code depend on.
+
+### Inputs
+
+```text
+submission_record_link rows      (record_type + record_id; ref resolved upstream)
+llm_precheck_recorded audit events (one machine-review pass each)
+machine-review findings           (severity, category, record_type, record_ref,
+                                    evidence_keys; record_id is normalised into
+                                    record_ref upstream by the audit adapter)
+```
+
+A finding addresses **at most one** record. The contract has no multi-record
+finding (see "Multi-record findings" below).
+
+### Matching precedence (most specific first)
+
+For each finding, deterministically:
+
+```text
+1. exact (record_type, record_ref) of a linked record   -> map to it
+2. single unambiguous linked record of the finding's
+   record_type, used only when the finding has no
+   record_ref                                            -> map to it
+3. otherwise                                             -> unmapped (+warning)
+```
+
+- In the audit path `record_ref` is the **stringified internal `record_id`**,
+  so the spec's "exact `record_type` + `record_id`" and "exact `record_type` +
+  `record_ref`" collapse into precedence 1. The internal id is carried through
+  as passthrough metadata, never surfaced publicly.
+- Precedence 2 (the **single-unambiguous-type fallback**) is the one bounded
+  relaxation of strict exact-matching: a finding that names only a type maps to
+  the one linked record of that type **iff exactly one exists**. It never
+  guesses among several.
+- `evidence_keys` are deterministic-evidence **citations, never a matching
+  key** — the mapper does not infer a record from them.
+
+### Unmapped finding behavior
+
+Nothing ever raises; every non-mapping finding is routed to
+`unmapped_findings` with a reason, and the *defect* cases also emit a
+`mapping_warnings` string:
+
+| Reason | When | Warning? |
+|---|---|---|
+| `submission_scoped` | no `record_type` (a whole-submission finding) | no — expected, not a defect |
+| `unknown_record_type` | `record_type` outside the controlled vocabulary | yes |
+| `unlinked_record` | exact `record_ref` names a record not linked to the submission; **never** redirected to another record | yes |
+| `ambiguous_record_type` | no `record_ref` and **multiple** linked records share the type — refuses to guess | yes |
+| `missing_record_ref` | no `record_ref` and **no** linked record of the type to fall back to | yes |
+
+Anti-fan-out is the through-line: a submission-level finding never becomes a
+record result, and a typed finding only resolves when the target is
+unambiguous.
+
+### Multi-record findings
+
+The finding contract addresses a single `(record_type, record_ref)`; there is
+**no** multi-record finding. A reviewer that wants to flag N records emits N
+findings, each mapped independently. Consequently a single finding is **never
+duplicated across records** — the only way a finding reaches a record is by
+naming it (precedence 1) or by being the sole record of its type (precedence
+2). This is the "duplicate only when explicit record references are present"
+MVP choice, realised by the one-record-per-finding contract.
+
+### Latest-vs-history rule
+
+Per record, the read model selects a single **latest** review:
+
+```text
+latest summary = newest review by reviewed_at
+tie-breaker    = highest audit_event_id, then highest submission_id,
+                 then later input position   (a total order; deterministic)
+history        = the audit_event_id of every review that mapped to the record;
+                 older ids are kept, never discarded
+```
+
+`findings_count` and `highest_severity` are taken from **only the selected
+review's** findings — which are already record-scoped — so a sibling record or
+a submission-scoped finding can never inflate them.
+
+### Severity / status aggregation
+
+Per-record `status` is derived deterministically from that record's **own**
+findings, reconciled with the pass's reviewer-completion `outcome`:
+
+```text
+reviewer outcome failed       -> machine_review_failed   (dominates findings)
+reviewer outcome not_performed-> not_run                 (dominates findings)
+otherwise (completed):
+  any finding critical         -> machine_screened_needs_attention
+  any finding warning          -> machine_screened_warning
+  only info / no findings       -> machine_screened_pass
+no review mapped to the record -> not_run                (by absence)
+```
+
+The reviewer `outcome` (failed / not_performed) is the **only** event-level
+signal allowed to influence per-record status, because it describes *whether
+the reviewer ran*, not the record's quality — so it legitimately applies to
+every record the pass touched. A *concern* severity (warning / needs_attention)
+is deliberately **never** inherited from a submission-level verdict: that would
+be fan-out. This is a stricter choice than "event status wins if stronger",
+made specifically to preserve the anti-fan-out invariant.
+
+### Why this is still not public record-level `machine_review`
+
+This is mapping **logic**, not a public record-level state. It is intentionally
+not exposed because:
+
+- nothing is **persisted** — projections are recomputed from audit events on
+  demand; there is no `record_machine_review` table (§9) and no migration;
+- no public read carries a `machine_review` block — the public
+  `trust.llm_precheck` fragment stays disabled/`not_run` (§0, §12);
+- multiple unresolved policy questions remain before exposure
+  (latest-vs-history retention, re-review on evidence change, multi-record
+  context, trigger model — §15);
+- human `review_status` remains authoritative regardless of any mapping
+  (§4, §11).
+
+Exposure requires, in order: a persistence decision (§9), then a public
+`trust.machine_review` read behind this mapping (§10), each gated on the §13
+tests — see §0 "Future path" and §16.
 
 ---
 
@@ -775,11 +916,17 @@ No new deterministic rubrics or changes to existing rubric outputs.
    *Done:* the pure mapping policy lives in
    `app/services/machine_review/mapping.py`
    (`map_findings_to_submission_records`) with the anti-fan-out rules
-   (§6/§13) and is covered by `tests/services/test_machine_review_mapping.py`.
-   It maps a finding only to the exact `(record_type, record_ref)` it names
-   when that record is linked to the submission; submission-scoped, unknown,
-   ref-less, and unlinked findings route to `unmapped_findings` with a
-   warning instead. No persistence or public exposure yet.
+   (§6/§13), covered by `tests/services/test_machine_review_mapping.py`,
+   `test_machine_review_read_model.py`, and `test_machine_review_audit_adapter.py`.
+   The full policy is documented in "Submission-to-record mapping policy"
+   (above, between §6 and §7): exact-`(record_type, record_ref)` matching first,
+   then a single-unambiguous-linked-record-of-type fallback, else
+   `unmapped_findings` + a `mapping_warnings` defect entry. Per-record status is
+   derived from each record's own findings, reconciled only with the reviewer
+   `outcome` (failed / not_performed dominate; concern severities never fan
+   out), and the read model selects the latest review by `reviewed_at` with
+   `audit_event_id` as the primary tie-break. No persistence or public exposure
+   yet.
 5. Add the `record_machine_review` table (Option B) in a **new Alembic
    revision** only when public record-level review is actually being
    implemented; implement `upgrade()`/`downgrade()`.
