@@ -675,9 +675,24 @@ the prior and on the provisional spec's §13 non-interference tests.
    conditions (no review, or a `context_schema_version` / `context_hash` /
    `prompt_version` / `rubric_versions` mismatch) into a read-only plan; it adds
    no `reviewed_at` TTL trigger and never treats provider/model as a trigger
-   dimension. **Execution (appending a fresh row, background/admin trigger,
-   provider wiring, upload wiring) and public exposure (step 6) remain NOT
-   done.**
+   dimension.
+   The **explicitly-invoked execution** half (append a row from a `run_*` plan
+   plus a supplied review) is also DONE:
+   `app/services/machine_review/rereview_execution.py`
+   (`execute_record_machine_rereview_plan` →
+   `MachineReviewReReviewExecutionResult` with status `appended` /
+   `skipped_current`), covered by
+   `tests/services/test_machine_review_rereview_execution.py`. It refuses to
+   append for `skip_current`; appends exactly one row for `run_not_reviewed` /
+   `run_stale` via the sole write path (`create_record_machine_review_row`,
+   flush-no-commit), stamping the plan's currency key and preserving
+   `source_submission_id` / `source_audit_event_id`. A conservative idempotency
+   guard re-checks live currency against the plan's recipe and skips
+   (`skipped_current`) when the record is already current, so re-running the same
+   unchanged plan never double-appends. It only *persists* a supplied review —
+   it does not produce one. Still **NOT done:** provider/fake-provider
+   orchestration that produces the review, background/scheduled triggers, an
+   admin route, upload-workflow wiring, and public exposure (step 6).
 6. Only then expose public trust.machine_review behind the latest-current
    selection (§4) and the display rules (§7), labelled as machine output,
    never altering deterministic fields, with the §9 tests green.

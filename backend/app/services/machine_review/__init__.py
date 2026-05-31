@@ -70,6 +70,11 @@ from app.services.machine_review.rereview import (
     plan_record_machine_rereview,
     should_run_machine_rereview,
 )
+from app.services.machine_review.rereview_execution import (
+    MachineReviewReReviewExecutionResult,
+    MachineReviewReReviewExecutionStatus,
+    execute_record_machine_rereview_plan,
+)
 from app.services.machine_review.inspection import (
     MachineReviewInspectionView,
     SubmissionMachineReviewInspection,
@@ -131,6 +136,8 @@ __all__ = [
     "MachineReviewProviderFindingV2",
     "MachineReviewProviderResultV2",
     "MachineReviewReReviewDecision",
+    "MachineReviewReReviewExecutionResult",
+    "MachineReviewReReviewExecutionStatus",
     "MachineReviewReReviewPlan",
     "MachineReviewRecordMapping",
     "MachineReviewRecordSummary",
@@ -165,6 +172,7 @@ __all__ = [
     "create_record_machine_review_row",
     "derive_machine_review_status",
     "event_is_machine_review",
+    "execute_record_machine_rereview_plan",
     "get_latest_record_machine_review_row",
     "get_machine_review_summaries_for_record",
     "get_record_machine_review_currency_for_record",
