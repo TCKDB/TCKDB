@@ -19,6 +19,11 @@ from app.services.machine_review.audit_adapter import (
     record_machine_reviews_from_audit_events,
     record_machine_reviews_from_submission_audit_event,
 )
+from app.services.machine_review.curator_tasks import (
+    CuratorTaskBuildResult,
+    build_curator_tasks_for_submission,
+    compute_finding_fingerprint,
+)
 from app.services.machine_review.derivation import (
     MachineReviewOutcome,
     derive_machine_review_status,
@@ -63,6 +68,7 @@ from app.services.machine_review.trust_adapter import (
 __all__ = [
     "AuditRecordLink",
     "CuratorPriority",
+    "CuratorTaskBuildResult",
     "InternalTrustEnvelopeWithMachineReview",
     "MachineReviewAuditProjection",
     "MachineReviewCategory",
@@ -84,11 +90,13 @@ __all__ = [
     "SubmissionRecordLinkRef",
     "UnmappedFinding",
     "UnmappedReason",
+    "build_curator_tasks_for_submission",
     "build_internal_machine_review_trust_fragment",
     "build_machine_review_record_summary",
     "build_machine_review_inspection_view",
     "build_private_trust_envelope_with_machine_review",
     "build_submission_machine_review_inspection",
+    "compute_finding_fingerprint",
     "derive_machine_review_status",
     "event_is_machine_review",
     "get_machine_review_summaries_for_record",
