@@ -11,6 +11,256 @@
         "title": "ActivationEnergyUnits",
         "type": "string"
       },
+      "AdminCuratorTaskAssignRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          }
+        },
+        "title": "AdminCuratorTaskAssignRequest",
+        "type": "object"
+      },
+      "AdminCuratorTaskBuildResponse": {
+        "additionalProperties": false,
+        "description": "Result of an explicit build-for-submission run (mirrors\n:class:`~app.services.machine_review.CuratorTaskBuildResult`).",
+        "properties": {
+          "created_count": {
+            "title": "Created Count",
+            "type": "integer"
+          },
+          "refreshed_count": {
+            "title": "Refreshed Count",
+            "type": "integer"
+          },
+          "reused_count": {
+            "title": "Reused Count",
+            "type": "integer"
+          },
+          "skipped_info_count": {
+            "title": "Skipped Info Count",
+            "type": "integer"
+          },
+          "skipped_terminal_count": {
+            "title": "Skipped Terminal Count",
+            "type": "integer"
+          },
+          "skipped_unmapped_count": {
+            "title": "Skipped Unmapped Count",
+            "type": "integer"
+          },
+          "task_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Task Ids",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "created_count",
+          "reused_count",
+          "refreshed_count",
+          "skipped_info_count",
+          "skipped_unmapped_count",
+          "skipped_terminal_count",
+          "task_ids",
+          "warnings"
+        ],
+        "title": "AdminCuratorTaskBuildResponse",
+        "type": "object"
+      },
+      "AdminCuratorTaskReopenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "clear_assignment": {
+            "default": false,
+            "title": "Clear Assignment",
+            "type": "boolean"
+          },
+          "target_state": {
+            "$ref": "#/components/schemas/MachineReviewCuratorTaskState",
+            "default": "needs_curator_review"
+          }
+        },
+        "title": "AdminCuratorTaskReopenRequest",
+        "type": "object"
+      },
+      "AdminCuratorTaskResolveRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "resolution_note": {
+            "title": "Resolution Note",
+            "type": "string"
+          },
+          "resolution_state": {
+            "$ref": "#/components/schemas/MachineReviewCuratorTaskState"
+          }
+        },
+        "required": [
+          "resolution_state",
+          "resolution_note"
+        ],
+        "title": "AdminCuratorTaskResolveRequest",
+        "type": "object"
+      },
+      "AdminCuratorTaskResponse": {
+        "additionalProperties": false,
+        "description": "Admin-only view of one curator task.\n\nDistinct from any public scientific schema; carries no public\n``trust.machine_review``. ``record_id`` is an internal id, acceptable here\nbecause the surface is admin-only (spec §3).",
+        "properties": {
+          "assigned_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finding_fingerprint": {
+            "title": "Finding Fingerprint",
+            "type": "string"
+          },
+          "findings_count": {
+            "title": "Findings Count",
+            "type": "integer"
+          },
+          "highest_severity": {
+            "$ref": "#/components/schemas/app__db__models__common__MachineReviewSeverity"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "machine_review_status": {
+            "$ref": "#/components/schemas/app__db__models__common__MachineReviewStatus"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "integer"
+          },
+          "record_type": {
+            "$ref": "#/components/schemas/SubmissionRecordType"
+          },
+          "resolution_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Note"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "resolved_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By"
+          },
+          "source_audit_event_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Audit Event Id"
+          },
+          "submission_id": {
+            "title": "Submission Id",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "workflow_state": {
+            "$ref": "#/components/schemas/MachineReviewCuratorTaskState"
+          }
+        },
+        "required": [
+          "id",
+          "submission_id",
+          "record_type",
+          "record_id",
+          "finding_fingerprint",
+          "workflow_state",
+          "machine_review_status",
+          "highest_severity",
+          "findings_count",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AdminCuratorTaskResponse",
+        "type": "object"
+      },
+      "AdminCuratorTaskStartReviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "assign_actor_if_unassigned": {
+            "default": true,
+            "title": "Assign Actor If Unassigned",
+            "type": "boolean"
+          }
+        },
+        "title": "AdminCuratorTaskStartReviewRequest",
+        "type": "object"
+      },
       "AdminMachineReviewRecordInspection": {
         "additionalProperties": false,
         "description": "Admin-only machine-review projection for one linked record.",
@@ -15423,6 +15673,19 @@
         "title": "LowestSPConformerObservationResultRead",
         "type": "object"
       },
+      "MachineReviewCuratorTaskState": {
+        "description": "Human triage state over an exact, mapped machine-review finding.\n\nThis is the *fourth* review axis and is intentionally distinct from\n:class:`MachineReviewStatus` (advisory machine output),\n:class:`RecordReviewStatus` (authoritative human review), and\n:class:`SubmissionStatus` (submission lifecycle / moderation). A curator\ntask tracks *whether a human has handled a machine finding* — it never\napproves, rejects, certifies, or otherwise mutates a record. See\n``backend/docs/specs/machine_review_curator_task_queue.md`` §2/§5.\n\nThe first three are **open** states (work outstanding); the last three\nare **terminal/resolved** states (see :meth:`is_terminal`).",
+        "enum": [
+          "untriaged",
+          "needs_curator_review",
+          "in_curator_review",
+          "resolved_no_action",
+          "resolved_human_reviewed",
+          "dismissed_machine_finding"
+        ],
+        "title": "MachineReviewCuratorTaskState",
+        "type": "string"
+      },
       "MachineReviewRecordSummary": {
         "additionalProperties": false,
         "description": "Internal summary of the latest machine-review state for one record.\n\nThis is the shape a future public ``trust.machine_review`` fragment (spec\n§4/§10) could render, prepared here but **not** exposed: nothing imports\nthis into a public response schema, and it is ``extra=\"forbid\"`` so it can\nnever carry a provider-supplied mutation payload. It is a projection of the\nsingle *selected latest* review, never an aggregate across passes.",
@@ -15446,7 +15709,7 @@
           "highest_severity": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MachineReviewSeverity"
+                "$ref": "#/components/schemas/app__services__machine_review__schemas__MachineReviewSeverity"
               },
               {
                 "type": "null"
@@ -15490,7 +15753,7 @@
             "title": "Reviewed At"
           },
           "status": {
-            "$ref": "#/components/schemas/MachineReviewStatus"
+            "$ref": "#/components/schemas/app__services__machine_review__schemas__MachineReviewStatus"
           },
           "submission_id": {
             "anyOf": [
@@ -15510,26 +15773,14 @@
         "title": "MachineReviewRecordSummary",
         "type": "object"
       },
-      "MachineReviewSeverity": {
-        "description": "Severity of a single machine-review finding (spec §8).",
+      "MachineReviewSeverity-Input": {
+        "description": "DB-layer mirror of the machine-review finding severity vocabulary.\n\nMirrors :class:`app.services.machine_review.schemas.MachineReviewSeverity`\nfor the persisted ``highest_severity`` snapshot column. Kept in lock-step\nwith the service-layer twin by a drift-guard test. See\n:class:`MachineReviewStatus` for why the token set is duplicated rather\nthan imported.",
         "enum": [
           "info",
           "warning",
           "critical"
         ],
         "title": "MachineReviewSeverity",
-        "type": "string"
-      },
-      "MachineReviewStatus": {
-        "description": "Provisional, advisory record-level machine-review state.\n\nA dedicated enum, intentionally distinct from\n:class:`~app.db.models.common.RecordReviewStatus` (human review) and\n:class:`~app.db.models.common.SubmissionPrecheckLabel` (submission\nprecheck). Authoritative for *nothing* the deterministic-evidence or\nhuman-review layers own; see the spec §2/§4.\n\n``machine_screened_blocking_concern`` from the spec is intentionally\n**not** defined here: it is reserved/deferred (spec §3, §15 Q1) and must\nonly be introduced when a concrete operational distinction from\n``machine_screened_needs_attention`` is actually wired.",
-        "enum": [
-          "not_run",
-          "machine_screened_pass",
-          "machine_screened_warning",
-          "machine_screened_needs_attention",
-          "machine_review_failed"
-        ],
-        "title": "MachineReviewStatus",
         "type": "string"
       },
       "MatchDetail": {
@@ -20269,6 +20520,37 @@
           "role"
         ],
         "title": "OutputGeometryEntry",
+        "type": "object"
+      },
+      "PaginatedResponse_AdminCuratorTaskResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminCuratorTaskResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "skip": {
+            "title": "Skip",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "PaginatedResponse[AdminCuratorTaskResponse]",
         "type": "object"
       },
       "PaginatedResponse_AppliedEnergyCorrectionRead_": {
@@ -35722,6 +36004,28 @@
         "title": "KineticsUncertaintyKind",
         "type": "string"
       },
+      "app__db__models__common__MachineReviewSeverity": {
+        "description": "DB-layer mirror of the machine-review finding severity vocabulary.\n\nMirrors :class:`app.services.machine_review.schemas.MachineReviewSeverity`\nfor the persisted ``highest_severity`` snapshot column. Kept in lock-step\nwith the service-layer twin by a drift-guard test. See\n:class:`MachineReviewStatus` for why the token set is duplicated rather\nthan imported.",
+        "enum": [
+          "info",
+          "warning",
+          "critical"
+        ],
+        "title": "MachineReviewSeverity",
+        "type": "string"
+      },
+      "app__db__models__common__MachineReviewStatus": {
+        "description": "DB-layer mirror of the advisory machine-review status vocabulary.\n\nThe authoritative vocabulary lives in the service layer as\n:class:`app.services.machine_review.schemas.MachineReviewStatus`. DB\nmodels must not import service-layer Pydantic schemas (see\n``.claude/rules/schema-rules.md``), so the token set is mirrored here for\nthe persisted *denormalised snapshot* column on\n``machine_review_curator_task``. The two are kept in lock-step by a\ndrift-guard test; this enum is display/ranking metadata only and is never\nauthoritative for anything the human-review or evidence layers own.",
+        "enum": [
+          "not_run",
+          "machine_screened_pass",
+          "machine_screened_warning",
+          "machine_screened_needs_attention",
+          "machine_review_failed"
+        ],
+        "title": "MachineReviewStatus",
+        "type": "string"
+      },
       "app__schemas__entities__workflow__WorkflowToolReleaseSummary": {
         "description": "Compact release view used when nested under a tool detail.\n\nField-wise identical to :class:`WorkflowToolReleaseRead`; named separately\nso the nested shape can evolve independently of the top-level read.",
         "properties": {
@@ -36708,6 +37012,28 @@
         "title": "ConformerIn",
         "type": "object"
       },
+      "app__services__machine_review__schemas__MachineReviewSeverity": {
+        "description": "Severity of a single machine-review finding (spec §8).",
+        "enum": [
+          "info",
+          "warning",
+          "critical"
+        ],
+        "title": "MachineReviewSeverity",
+        "type": "string"
+      },
+      "app__services__machine_review__schemas__MachineReviewStatus": {
+        "description": "Provisional, advisory record-level machine-review state.\n\nA dedicated enum, intentionally distinct from\n:class:`~app.db.models.common.RecordReviewStatus` (human review) and\n:class:`~app.db.models.common.SubmissionPrecheckLabel` (submission\nprecheck). Authoritative for *nothing* the deterministic-evidence or\nhuman-review layers own; see the spec §2/§4.\n\n``machine_screened_blocking_concern`` from the spec is intentionally\n**not** defined here: it is reserved/deferred (spec §3, §15 Q1) and must\nonly be introduced when a concrete operational distinction from\n``machine_screened_needs_attention`` is actually wired.",
+        "enum": [
+          "not_run",
+          "machine_screened_pass",
+          "machine_screened_warning",
+          "machine_screened_needs_attention",
+          "machine_review_failed"
+        ],
+        "title": "MachineReviewStatus",
+        "type": "string"
+      },
       "tckdb_schemas__enums__EnergyCorrectionApplicationRole": {
         "enum": [
           "zpe",
@@ -36792,6 +37118,919 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/machine-review/curator-tasks": {
+      "get": {
+        "description": "List curator tasks (admin only).\n\nDeterministic ordering: open states first, then highest severity first,\nthen most-recently-updated, with ``id`` as the final tie-break. Filters are\nANDed. Terminal tasks are included; filter on ``workflow_state`` to narrow.",
+        "operationId": "list_curator_tasks_api_v1_admin_machine_review_curator_tasks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workflow_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MachineReviewCuratorTaskState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assigned_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assigned To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "record_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SubmissionRecordType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Record Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "record_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Record Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "submission_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Submission Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "highest_severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MachineReviewSeverity-Input"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Highest Severity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_AdminCuratorTaskResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Curator Tasks",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/curator-tasks/build-for-submission/{submission_id}": {
+      "post": {
+        "description": "Explicitly build/upsert curator tasks for one submission (admin only).\n\nLoads the submission (404 if missing), projects its machine-review audit\nevents onto its linked records via the private inspection service, then\ncreates/upserts tasks for the exact mapped warning/critical findings.\nInfo, submission-scoped, unmapped, and parse-warning diagnostics never\nbecome tasks. Explicit/admin-triggered only — never runs on upload. Writes\nonly curator-task rows; ``submission.status`` is untouched.",
+        "operationId": "build_curator_tasks_for_submission_endpoint_api_v1_admin_machine_review_curator_tasks_build_for_submission__submission_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "title": "Submission Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCuratorTaskBuildResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Build Curator Tasks For Submission Endpoint",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/curator-tasks/{task_id}": {
+      "get": {
+        "description": "Return one curator task by id (admin only); 404 if missing.",
+        "operationId": "get_curator_task_api_v1_admin_machine_review_curator_tasks__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCuratorTaskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Curator Task",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/curator-tasks/{task_id}/assign": {
+      "post": {
+        "description": "Set or clear a task's assignee (admin only). ``assignee_id=null``\nunassigns. Does not change workflow state or any review/submission state.",
+        "operationId": "assign_curator_task_endpoint_api_v1_admin_machine_review_curator_tasks__task_id__assign_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCuratorTaskAssignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCuratorTaskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assign Curator Task Endpoint",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/curator-tasks/{task_id}/reopen": {
+      "post": {
+        "description": "Reopen a terminal task into an open state (admin only).\n\nClears the resolution triple; preserves ``assigned_to`` unless\n``clear_assignment=true``. Mutates no review or submission state.",
+        "operationId": "reopen_curator_task_endpoint_api_v1_admin_machine_review_curator_tasks__task_id__reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AdminCuratorTaskReopenRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCuratorTaskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reopen Curator Task Endpoint",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/curator-tasks/{task_id}/resolve": {
+      "post": {
+        "description": "Resolve a task into a terminal state (admin only).\n\n``resolution_note`` is required and non-empty; ``resolved_by`` is the\nauthenticated admin; ``resolved_at`` is set by the service. A non-terminal\n``resolution_state`` or a blank note yields 400. ``resolved_human_reviewed``\ndoes NOT write ``RecordReviewStatus`` — it only records that a human review\nhappened elsewhere.",
+        "operationId": "resolve_curator_task_endpoint_api_v1_admin_machine_review_curator_tasks__task_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCuratorTaskResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCuratorTaskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Curator Task Endpoint",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/curator-tasks/{task_id}/start-review": {
+      "post": {
+        "description": "Move an open task into ``in_curator_review`` (admin only).\n\nThe acting user defaults to the authenticated admin; a body may override\n``actor_user_id`` or disable the auto-assign side effect.",
+        "operationId": "start_curator_task_review_endpoint_api_v1_admin_machine_review_curator_tasks__task_id__start_review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AdminCuratorTaskStartReviewRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCuratorTaskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Curator Task Review Endpoint",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/submissions/{submission_id}/machine-review-inspection": {
       "get": {
         "description": "Inspect machine-review projections for one submission (admin only).\n\nLoads the submission (404 if missing), then projects its machine-review\naudit events onto its linked records via the private inspection service.\nNon-machine-review events are ignored. This is read-only: it never mutates\nsubmission status/lifecycle fields, review state, deterministic evidence,\nor scientific records.",

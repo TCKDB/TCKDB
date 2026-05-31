@@ -43,10 +43,11 @@ from app.api.errors import DomainError, NotFoundError
 from app.db.models.common import MachineReviewCuratorTaskState
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 
-# Terminal target states a reopen is allowed to move *back to* (open states a
-# reopened task can sensibly land in).
+# Open states a reopen is allowed to move a terminal task *back to*. All three
+# open states are valid landing spots; the default is needs_curator_review.
 _REOPEN_TARGETS: frozenset[MachineReviewCuratorTaskState] = frozenset(
     {
+        MachineReviewCuratorTaskState.untriaged,
         MachineReviewCuratorTaskState.needs_curator_review,
         MachineReviewCuratorTaskState.in_curator_review,
     }
@@ -199,16 +200,18 @@ def reopen_curator_task(
 ) -> MachineReviewCuratorTask:
     """Reopen a resolved/terminal task into an open state.
 
-    ``target_state`` must be ``needs_curator_review`` or ``in_curator_review``.
-    The resolution triple (``resolved_at`` / ``resolved_by`` /
+    ``target_state`` must be an open state (``untriaged``,
+    ``needs_curator_review``, or ``in_curator_review``); it defaults to
+    ``needs_curator_review``. The resolution triple (``resolved_at`` / ``resolved_by`` /
     ``resolution_note``) is cleared so the row satisfies the resolution
     consistency CHECK as an open task. ``assigned_to`` is preserved unless
     ``clear_assignment=True``. Mutates no human-review or submission state.
     """
     if target_state not in _REOPEN_TARGETS:
         raise DomainError(
-            "reopen target_state must be needs_curator_review or "
-            f"in_curator_review, got {target_state.value!r}."
+            "reopen target_state must be an open state (untriaged, "
+            "needs_curator_review, or in_curator_review), got "
+            f"{target_state.value!r}."
         )
 
     task = _get_task_or_404(session, task_id)
