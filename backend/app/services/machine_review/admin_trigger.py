@@ -59,6 +59,11 @@ from app.services.machine_review.producer import (
     FakeMachineReviewProducer,
     MachineReviewProducer,
 )
+from app.services.machine_review.recipe import (
+    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
+    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
+    public_rubric_name,
+)
 from app.services.record_review import get_record_review
 from app.services.trust.evaluator import (
     evaluate_computed_calculation,
@@ -82,9 +87,6 @@ from app.services.trust.rubrics import (
     COMPUTED_TRANSITION_STATE_V1,
     COMPUTED_TRANSPORT_V1,
 )
-
-#: Active machine-review prompt version (private constant; no config system yet).
-ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 
 
 @dataclass(frozen=True)
@@ -149,21 +151,6 @@ _RESOLVERS: dict[str, _RecordTypeResolver] = {
 SUPPORTED_RECORD_TYPES: tuple[str, ...] = tuple(_RESOLVERS)
 
 
-def _public_rubric_name(rubric: EvidenceRubric) -> str:
-    """Return the public ``<name>_v<version>`` rubric name (e.g. ``computed_kinetics_v1``)."""
-    return f"{rubric.name}_v{rubric.version}"
-
-
-#: The full active rubric-version recipe, derived from the trust rubric
-#: constants so it cannot drift from the deployed rubrics. Keyed by the public
-#: rubric name (``computed_*_v1``), valued by the integer rubric version as a
-#: string. A rubric bump changes both the key and the value, restaling reviews.
-ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS: dict[str, str] = {
-    _public_rubric_name(resolver.rubric): str(resolver.rubric.version)
-    for resolver in _RESOLVERS.values()
-}
-
-
 def _require_resolver(record_type: str) -> _RecordTypeResolver:
     """Return the resolver for ``record_type`` or raise :class:`DomainError` (400)."""
     resolver = _RESOLVERS.get(record_type)
@@ -183,7 +170,7 @@ def active_rubric_versions_for_record_type(record_type: str) -> dict[str, str]:
     :class:`DomainError` for an unsupported type.
     """
     resolver = _require_resolver(record_type)
-    name = _public_rubric_name(resolver.rubric)
+    name = public_rubric_name(resolver.rubric)
     return {name: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[name]}
 
 

@@ -122,7 +122,8 @@ Core lifecycle modules (`app/services/machine_review/`):
 | `orchestration.py`      | plan → produce → execute loop                              |
 | `persistence.py`        | Append `record_machine_review` row + row → projection      |
 | `query.py`              | Persisted-row query / currency read path                   |
-| `admin_trigger.py`      | Admin-only fake trigger: record resolver + active recipe   |
+| `recipe.py`             | Shared source of truth for the active prompt/rubric recipe  |
+| `admin_trigger.py`      | Admin-only fake trigger: record resolver (reads `recipe.py`) |
 | `inspection.py`         | Private diagnostic projection (admin inspection view)      |
 | `trust_adapter.py`      | Private (future) machine-review trust-envelope assembly    |
 
@@ -222,10 +223,12 @@ POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake
   exactly those with both a computed trust evaluator and a persisted home —
   `calculation`, `kinetics`, `thermo`, `statmech`, `transport`,
   `transition_state_entry`.
-- **Active recipe (private constants).** `prompt_version = "machine_review_v1"`;
-  `rubric_versions` is derived from the trust rubric constants
-  (e.g. `{"computed_calculation_v1": "1"}`), so a rubric bump restales reviews
-  without a second source of truth.
+- **Active recipe (shared private module).** Lives in
+  `machine_review/recipe.py` (the single source of truth for every consumer):
+  `prompt_version = "machine_review_v1"`; `rubric_versions` is derived from the
+  trust rubric constants (e.g. `{"computed_calculation_v1": "1"}`), so a rubric
+  bump restales reviews without a second source of truth. `recipe.py` also
+  exposes `MachineReviewActiveRecipe` / `get_active_machine_review_recipe()`.
 - **Producer:** `FakeMachineReviewProducer` only — the appended row carries
   `provider="fake"`, `model="fake-test"`.
 

@@ -375,9 +375,11 @@ admin-only endpoint
 `app/services/machine_review/admin_trigger.py::run_admin_fake_machine_review`).
 For one record it resolves the live deterministic `TrustFragment` from the
 existing computed trust evaluator (read-only — record-existence is a 404,
-unsupported type a 400), looks up the active prompt/rubric recipe (private
-constants derived from the trust rubric constants), and runs the private
-orchestration loop with the **fake** producer only. A `record_machine_review`
+unsupported type a 400), looks up the active prompt/rubric recipe (the shared
+private `app/services/machine_review/recipe.py` — prompt version plus
+rubric versions derived from the trust rubric constants, the single source of
+truth for all consumers), and runs the private orchestration loop with the
+**fake** producer only. A `record_machine_review`
 row is appended solely for `run_not_reviewed` / `run_stale`; an already-current
 record is skipped, so re-running an unchanged recipe is idempotent. It is
 maintainer/debug-only, mutates nothing outside `record_machine_review`, and is

@@ -10,12 +10,17 @@ submission precheck at the type level.
 """
 
 from app.services.machine_review.admin_trigger import (
-    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
     SUPPORTED_RECORD_TYPES,
     active_rubric_versions_for_record_type,
     resolve_record_trust_fragment,
     run_admin_fake_machine_review,
+)
+from app.services.machine_review.recipe import (
+    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
+    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
+    MachineReviewActiveRecipe,
+    get_active_machine_review_recipe,
+    public_rubric_name,
 )
 from app.services.machine_review.audit_adapter import (
     AuditRecordLink,
@@ -146,6 +151,7 @@ __all__ = [
     "FakeMachineReviewProducer",
     "GeometryValidationContext",
     "InternalTrustEnvelopeWithMachineReview",
+    "MachineReviewActiveRecipe",
     "MachineReviewAuditProjection",
     "MachineReviewCategory",
     "MachineReviewContextDigest",
@@ -201,6 +207,7 @@ __all__ = [
     "derive_machine_review_status",
     "event_is_machine_review",
     "execute_record_machine_rereview_plan",
+    "get_active_machine_review_recipe",
     "get_latest_record_machine_review_row",
     "get_machine_review_summaries_for_record",
     "get_record_machine_review_currency_for_record",
@@ -208,6 +215,7 @@ __all__ = [
     "machine_review_result_from_audit_event",
     "map_findings_to_submission_records",
     "plan_record_machine_rereview",
+    "public_rubric_name",
     "record_machine_reviews_from_audit_events",
     "record_machine_reviews_from_submission_audit_event",
     "reopen_curator_task",

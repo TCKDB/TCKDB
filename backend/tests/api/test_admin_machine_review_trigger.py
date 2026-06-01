@@ -378,6 +378,35 @@ def test_admin_fake_machine_review_response_contains_context_hash(
     assert dict(row.rubric_versions_json) == body["rubric_versions"]
 
 
+def test_admin_fake_trigger_uses_shared_active_recipe(
+    client, db_session, login_as, _api_admin_user
+):
+    """The trigger stamps the shared recipe (recipe.py), not a local copy.
+
+    The response prompt/rubric versions are sourced from the shared
+    ``machine_review.recipe`` module, so a recipe change flows through without a
+    second source of truth (readiness-audit risk R1).
+    """
+    from app.services.machine_review.recipe import (
+        ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
+        ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
+    )
+
+    calc = _make_opt_calc(db_session)
+    login_as(_api_admin_user)
+
+    body = client.post(_url("calculation", calc.id)).json()
+
+    assert body["prompt_version"] == ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+    # Only the rubric relevant to the record type is stamped, taken from the
+    # shared recipe (not re-derived locally).
+    assert body["rubric_versions"] == {
+        "computed_calculation_v1": ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[
+            "computed_calculation_v1"
+        ]
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Non-interference: submission status, human review, public trust shape
 # --------------------------------------------------------------------------- #

@@ -170,11 +170,13 @@ APIs. The OpenAPI golden snapshot includes the run-fake route.
 
 ## Known risks
 
-- **R1 — Active-recipe ownership will need a real home (low now).** The recipe
-  lives in `admin_trigger.py`. The moment a second consumer appears (a real
-  provider, a background re-review job), it should move to a small shared
-  `recipe`/config module so all callers agree on prompt/rubric versions. Easy to
-  refactor; flag before adding the second consumer.
+- **R1 — Active-recipe ownership — RESOLVED.** The recipe now lives in the
+  shared `machine_review/recipe.py`
+  (`ACTIVE_MACHINE_REVIEW_PROMPT_VERSION`, `ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS`
+  derived from the trust rubric constants, plus `MachineReviewActiveRecipe` /
+  `get_active_machine_review_recipe()`); `admin_trigger.py` imports it. A future
+  real provider / background re-review job reads the same module, so all
+  consumers agree on prompt/rubric versions from one source.
 - **R2 — `record_ref` is internal-id based (medium for public projection).**
   Persisted rows' `context_hash` is computed from `record_ref = str(record_id)`.
   A public projection keyed by `public_ref` must either keep the same id-based
