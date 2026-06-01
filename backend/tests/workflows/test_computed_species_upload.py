@@ -794,6 +794,149 @@ def test_thermo_block_persists_with_source_links(db_engine) -> None:
         assert {s.calculation_id for s in sources} == bundle_calc_ids
 
 
+# ---------------------------------------------------------------------------
+# Conformer-context invariant (audit: species-side calcs must carry
+# conformer_observation_id; products must trace to conformer observations)
+# ---------------------------------------------------------------------------
+
+
+def _bundle_multi_conformer_thermo_statmech() -> ComputedSpeciesUploadRequest:
+    """Two distinct methyl conformers, each with opt + freq, plus thermo and
+    statmech blocks whose source calculations reference calcs from both
+    conformers by bundle-local key.
+    """
+
+    def _conf(i: int) -> dict:
+        return {
+            "key": f"c{i}",
+            "geometry": {
+                "xyz_text": (
+                    "4\nmethyl\n"
+                    "C 0.0 0.0 0.0\n"
+                    "H 1.0 0.0 0.0\n"
+                    "H -0.5 0.866 0.0\n"
+                    f"H -0.5 -0.866 {0.001 * i}"
+                )
+            },
+            "primary_calculation": _calc(f"opt{i}", calc_type="opt"),
+            "additional_calculations": [_calc(f"freq{i}", calc_type="freq")],
+        }
+
+    return ComputedSpeciesUploadRequest(
+        species_entry={"smiles": "[CH3]", "charge": 0, "multiplicity": 2},
+        conformers=[_conf(0), _conf(1)],
+        thermo={
+            "h298_kj_mol": 146.7,
+            "s298_j_mol_k": 194.2,
+            "source_calculations": [
+                {"calculation_key": "opt0", "role": "opt"},
+                {"calculation_key": "freq0", "role": "freq"},
+                # Source calc drawn from the *second* conformer too.
+                {"calculation_key": "opt1", "role": "opt"},
+            ],
+        },
+        statmech={
+            "external_symmetry": 6,
+            "point_group": "D3h",
+            "is_linear": False,
+            "source_calculations": [
+                {"calculation_key": "freq0", "role": "freq"},
+                {"calculation_key": "freq1", "role": "freq"},
+            ],
+        },
+    )
+
+
+def test_bundle_species_calcs_carry_conformer_observation_id(db_engine) -> None:
+    """Every species-side calculation a computed-species bundle persists must
+    carry ``conformer_observation_id`` (the audit invariant). Mirrors the SQL
+    audit predicate: zero species-side calcs with a NULL conformer link.
+    """
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_computed_species_upload(
+            session, _bundle_multi_conformer_thermo_statmech()
+        )
+        spe_id = outcome.species_entry_id
+
+        # Direct mirror of the audit query, scoped to this species entry.
+        orphaned = session.scalars(
+            select(Calculation.id).where(
+                Calculation.species_entry_id == spe_id,
+                Calculation.transition_state_entry_id.is_(None),
+                Calculation.conformer_observation_id.is_(None),
+            )
+        ).all()
+        assert orphaned == []
+
+        # Every bundle calc matches the expected computed-species model.
+        bundle_calc_ids = []
+        for conf in outcome.conformers:
+            bundle_calc_ids.append(conf.primary_calculation.id)
+            bundle_calc_ids.extend(c.id for c in conf.additional_calculations)
+        assert len(bundle_calc_ids) == 4  # 2 conformers × (opt + freq)
+
+        calcs = session.scalars(
+            select(Calculation).where(Calculation.id.in_(bundle_calc_ids))
+        ).all()
+        for c in calcs:
+            assert c.species_entry_id == spe_id
+            assert c.transition_state_entry_id is None
+            assert c.conformer_observation_id is not None
+            # The conformer observation belongs to this species entry.
+            obs = session.get(ConformerObservation, c.conformer_observation_id)
+            assert obs is not None
+            grp = session.get(ConformerGroup, obs.conformer_group_id)
+            assert grp.species_entry_id == spe_id
+
+        # Two distinct conformers → two distinct observations preserved
+        # (conformer context is not collapsed onto the species entry).
+        observation_ids = {c.conformer_observation_id for c in calcs}
+        assert len(observation_ids) == 2
+
+
+def test_bundle_thermo_statmech_sources_trace_to_conformer_observations(
+    db_engine,
+) -> None:
+    """Computed thermo and statmech source calculations must trace back to a
+    conformer observation — i.e. each source calc carries a non-null
+    ``conformer_observation_id``.
+    """
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_computed_species_upload(
+            session, _bundle_multi_conformer_thermo_statmech()
+        )
+        assert outcome.thermo is not None
+        assert outcome.statmech is not None
+
+        thermo_sources = session.scalars(
+            select(ThermoSourceCalculation).where(
+                ThermoSourceCalculation.thermo_id == outcome.thermo.id
+            )
+        ).all()
+        assert len(thermo_sources) == 3
+        for s in thermo_sources:
+            calc = session.get(Calculation, s.calculation_id)
+            assert calc.conformer_observation_id is not None
+            obs = session.get(
+                ConformerObservation, calc.conformer_observation_id
+            )
+            assert obs is not None
+
+        statmech_sources = session.scalars(
+            select(StatmechSourceCalculation).where(
+                StatmechSourceCalculation.statmech_id == outcome.statmech.id
+            )
+        ).all()
+        assert len(statmech_sources) == 2
+        for s in statmech_sources:
+            calc = session.get(Calculation, s.calculation_id)
+            assert calc.conformer_observation_id is not None
+            obs = session.get(
+                ConformerObservation, calc.conformer_observation_id
+            )
+            assert obs is not None
+
+
 def test_thermo_role_type_mismatch_raises(db_engine) -> None:
     with Session(db_engine) as session, session.begin():
         # source role=opt but pointing at a freq calc → 422 in route, ValueError here.
