@@ -430,3 +430,72 @@ def test_evidence_completeness_counts_statmech_freq_sp_when_thermo_sources_empty
     assert checklist["has_source_calculations"] is True
     assert checklist["has_frequency_evidence"] is True
     assert checklist["has_sp_or_energy_evidence"] is True
+
+
+def test_statmech_fallback_pick_is_deterministic_with_multiple_statmech(db_session):
+    """Multiple coexisting statmech records on one species_entry are equal
+    candidates. The thermo provenance fallback must pick deterministically
+    (lowest statmech id) rather than depend on set-iteration order, so the
+    read never silently treats an arbitrary candidate as canonical and the
+    same response is reproducible across calls.
+
+    Regression for the product-selection audit: ``get_species_thermo`` and
+    ``_build_provenance`` previously both used ``next(iter(set))``, which could
+    surface one statmech's ref while borrowing a different statmech's source
+    calcs, non-deterministically.
+    """
+    from app.db.models.common import (
+        CalculationType,
+        ScientificOriginKind,
+        StatmechCalculationRole,
+    )
+    from app.db.models.statmech import Statmech, StatmechSourceCalculation
+    from tests.services.scientific_read._factories import (
+        make_calculation,
+        make_lot,
+    )
+
+    entry = _entry_with_smiles(db_session, smiles="C#CCNCNC")
+    # No ThermoSourceCalculation rows → provenance falls back to a statmech.
+    make_thermo_scalar(db_session, species_entry=entry)
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+
+    def _add_statmech_with_freq() -> tuple[Statmech, object]:
+        freq_calc = make_calculation(
+            db_session,
+            type=CalculationType.freq,
+            species_entry_id=entry.id,
+            lot_id=lot.id,
+        )
+        statmech = Statmech(
+            species_entry_id=entry.id,
+            scientific_origin=ScientificOriginKind.computed,
+        )
+        db_session.add(statmech)
+        db_session.flush()
+        db_session.add(
+            StatmechSourceCalculation(
+                statmech_id=statmech.id,
+                calculation_id=freq_calc.id,
+                role=StatmechCalculationRole.freq,
+            )
+        )
+        db_session.flush()
+        return statmech, freq_calc
+
+    first_stat, first_freq = _add_statmech_with_freq()
+    second_stat, _second_freq = _add_statmech_with_freq()
+    assert first_stat.id < second_stat.id
+
+    # Call twice — the pick must be stable, not order-dependent.
+    for _ in range(2):
+        prov = (
+            get_species_thermo(
+                db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+            )
+            .records[0]
+            .provenance
+        )
+        # Lowest-id statmech is surfaced AND supplies the borrowed freq calc.
+        assert prov.statmech_ref == first_stat.public_ref
+        assert prov.freq_calculation_ref == first_freq.public_ref

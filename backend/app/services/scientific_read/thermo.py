@@ -211,9 +211,16 @@ def get_species_thermo(
     # Phase 2 audit: load source-calc rows from the picked statmech so
     # thermo provenance and evidence completeness can fall back to them
     # when the thermo's own ThermoSourceCalculation rows are empty.
-    picked_statmech_id = (
-        next(iter(statmech_ids_by_entry), None) if statmech_ids_by_entry else None
-    )
+    #
+    # Deterministic fallback pick: the lowest statmech id. Coexisting
+    # statmech records are equal candidates; selecting via ``next(iter(set))``
+    # made the borrowed provenance depend on set-iteration order — both
+    # non-deterministic and a silent canonical choice among candidates. ``min``
+    # is reproducible and is kept in sync with the statmech_ref chosen in
+    # ``_build_provenance`` so the surfaced statmech and the borrowed source
+    # calcs always come from the same candidate. It does not imply the picked
+    # statmech is "the" statmech for the entry.
+    picked_statmech_id = min(statmech_ids_by_entry) if statmech_ids_by_entry else None
     statmech_sources = _load_statmech_sources(session, picked_statmech_id)
 
     # Determine model_kind per record (nasa | points | scalar) and apply filter.
@@ -735,7 +742,10 @@ def _build_provenance(
             statmech_sources, StatmechCalculationRole.sp
         )
 
-    statmech_id = next(iter(statmech_ids), None) if statmech_ids else None
+    # Deterministic: lowest statmech id, matching ``picked_statmech_id`` in
+    # ``get_species_thermo`` so the surfaced statmech_ref and the borrowed
+    # fallback source calcs come from the same candidate (not an arbitrary one).
+    statmech_id = min(statmech_ids) if statmech_ids else None
 
     return ThermoProvenance(
         primary_calculation=primary_calc_summary,
