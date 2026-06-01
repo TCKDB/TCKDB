@@ -307,6 +307,89 @@
         "title": "AdminMachineReviewRecordInspection",
         "type": "object"
       },
+      "AdminRunFakeMachineReviewResponse": {
+        "additionalProperties": false,
+        "description": "Admin-only response for an explicitly invoked fake machine-review run.\n\nMirrors :class:`~app.services.machine_review.MachineReviewOrchestrationResult`\none-for-one. ``extra=\"forbid\"`` so it can carry no mutation instruction; it\nreports an outcome, it does not perform one. No public ``trust.machine_review``.",
+        "properties": {
+          "appended_review_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Appended Review Id"
+          },
+          "context_hash": {
+            "title": "Context Hash",
+            "type": "string"
+          },
+          "context_schema_version": {
+            "title": "Context Schema Version",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/MachineReviewReReviewDecision"
+          },
+          "execution_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineReviewReReviewExecutionStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "integer"
+          },
+          "record_type": {
+            "title": "Record Type",
+            "type": "string"
+          },
+          "rubric_versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Rubric Versions",
+            "type": "object"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MachineReviewOrchestrationStatus"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "status",
+          "decision",
+          "record_type",
+          "record_id",
+          "context_hash",
+          "context_schema_version",
+          "prompt_version",
+          "rubric_versions"
+        ],
+        "title": "AdminRunFakeMachineReviewResponse",
+        "type": "object"
+      },
       "AdminSubmissionMachineReviewInspectionResponse": {
         "additionalProperties": false,
         "description": "Admin-only machine-review inspection response for one submission.\n\nPrivate/debugging shape — intentionally distinct from the public\nscientific ``TrustFragment``. ``record_summaries`` carries one entry per\nlinked record that received at least one mapped machine-review finding;\nsubmission-scoped, unlinked, and sibling findings appear only in the\ndiagnostics counters/warnings, never as a record summary.",
@@ -15684,6 +15767,35 @@
           "dismissed_machine_finding"
         ],
         "title": "MachineReviewCuratorTaskState",
+        "type": "string"
+      },
+      "MachineReviewOrchestrationStatus": {
+        "description": "Private outcome of an explicitly invoked machine-review orchestration run.\n\n``skipped_current`` — the plan (or the executor's idempotency guard) found\nthe record already current; nothing was appended. ``appended`` — exactly one\nrow was appended. ``failed_to_produce_review`` — a re-review was required but\nthe producer could not produce a review (it raised\n:class:`~app.services.machine_review.producer.MachineReviewProductionError`\nor returned invalid output); nothing was appended. This is a driver-side\nproduction failure, never a record verdict.",
+        "enum": [
+          "skipped_current",
+          "appended",
+          "failed_to_produce_review"
+        ],
+        "title": "MachineReviewOrchestrationStatus",
+        "type": "string"
+      },
+      "MachineReviewReReviewDecision": {
+        "description": "Decision for whether a record needs machine re-review.\n\nA direct, total mapping of the currency state the classifier can return for\nthe latest review (``current`` / ``not_run`` / ``stale``); the latest review\nis never ``historical``, so there is no decision for it.",
+        "enum": [
+          "skip_current",
+          "run_not_reviewed",
+          "run_stale"
+        ],
+        "title": "MachineReviewReReviewDecision",
+        "type": "string"
+      },
+      "MachineReviewReReviewExecutionStatus": {
+        "description": "Execution outcome for a private machine re-review attempt.\n\n``appended`` — exactly one row was appended. ``skipped_current`` — nothing\nwas appended, either because the plan already said ``skip_current`` or\nbecause the idempotency guard found the record already current at execution\ntime. There is no failure status here: producing the review (and any\nprovider failure → ``machine_review_failed``) happens upstream of this slice.",
+        "enum": [
+          "skipped_current",
+          "appended"
+        ],
+        "title": "MachineReviewReReviewExecutionStatus",
         "type": "string"
       },
       "MachineReviewRecordSummary": {
@@ -38026,6 +38138,122 @@
           }
         },
         "summary": "Start Curator Task Review Endpoint",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake": {
+      "post": {
+        "description": "Explicitly run fake machine review for one record (admin only).\n\nValidates ``record_type`` (400 if unsupported), loads the record (404 if\nmissing), builds its live deterministic trust/evidence fragment, looks up\nthe active prompt/rubric recipe, and runs the private fake machine-review\nloop. A ``record_machine_review`` row is appended only for\n``run_not_reviewed`` / ``run_stale``; an already-current record is skipped,\nso re-running an unchanged recipe is idempotent. Uses the fake producer\nonly; mutates nothing outside ``record_machine_review``.",
+        "operationId": "run_fake_machine_review_for_record_api_v1_admin_machine_review_records__record_type___record_id__run_fake_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_type",
+            "required": true,
+            "schema": {
+              "title": "Record Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRunFakeMachineReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Fake Machine Review For Record",
         "tags": [
           "admin"
         ]

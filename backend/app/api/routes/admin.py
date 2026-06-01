@@ -9,7 +9,7 @@ is a debugging surface, not public scientific trust.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
@@ -29,13 +29,17 @@ from app.db.models.common import (
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission
 from app.services.machine_review import (
+    MachineReviewOrchestrationStatus,
     MachineReviewRecordSummary,
+    MachineReviewReReviewDecision,
+    MachineReviewReReviewExecutionStatus,
     SubmissionMachineReviewInspection,
     assign_curator_task,
     build_curator_tasks_for_submission,
     build_submission_machine_review_inspection,
     reopen_curator_task,
     resolve_curator_task,
+    run_admin_fake_machine_review,
     start_curator_task_review,
 )
 
@@ -163,6 +167,93 @@ def inspect_submission_machine_review(
         submission_audit_events=submission.audit_events,
     )
     return _to_admin_inspection_response(inspection)
+
+
+# ---------------------------------------------------------------------------
+# Explicit fake machine-review trigger (admin debugging only)
+# ---------------------------------------------------------------------------
+#
+# Admin-only, explicitly invoked: run **fake** machine review for one record and
+# append a ``record_machine_review`` row only when the active recipe says one is
+# needed (``run_not_reviewed`` / ``run_stale``); an already-current record is
+# skipped. This is the maintainer/debug seam for the private re-review loop
+# (policy ``record_machine_review_policy.md`` §5.3) — it is **not** public
+# scientific trust exposure. It uses only the :class:`FakeMachineReviewProducer`
+# (no real provider, no RAG, no background worker), is not wired into uploads or
+# any public read, and emits no ``trust.machine_review``.
+#
+# The handler writes (at most) one row, and only through the orchestration /
+# executor path. It never mutates ``submission.status``, ``RecordReviewStatus``,
+# scientific records, deterministic evidence/trust, certification/benchmark
+# fields, or the public ``TrustFragment``. ``record_id`` is an internal id —
+# acceptable here because the durable table is internal-id based and the surface
+# is admin-only. Unsupported ``record_type`` -> 400 (``DomainError``); a missing
+# record -> 404 (``NotFoundError``), both via the global handlers.
+
+
+class AdminRunFakeMachineReviewResponse(BaseModel):
+    """Admin-only response for an explicitly invoked fake machine-review run.
+
+    Mirrors :class:`~app.services.machine_review.MachineReviewOrchestrationResult`
+    one-for-one. ``extra="forbid"`` so it can carry no mutation instruction; it
+    reports an outcome, it does not perform one. No public ``trust.machine_review``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: MachineReviewOrchestrationStatus
+    decision: MachineReviewReReviewDecision
+    execution_status: MachineReviewReReviewExecutionStatus | None = None
+    appended_review_id: int | None = None
+    record_type: str
+    record_id: int
+    context_hash: str
+    context_schema_version: str
+    prompt_version: str
+    rubric_versions: dict[str, str]
+    summary: str | None = None
+
+
+@router.post(
+    "/machine-review/records/{record_type}/{record_id}/run-fake",
+    response_model=AdminRunFakeMachineReviewResponse,
+)
+def run_fake_machine_review_for_record(
+    record_type: str,
+    record_id: int,
+    _admin: AppUser = Depends(require_admin),
+    session: Session = Depends(get_write_db),
+) -> AdminRunFakeMachineReviewResponse:
+    """Explicitly run fake machine review for one record (admin only).
+
+    Validates ``record_type`` (400 if unsupported), loads the record (404 if
+    missing), builds its live deterministic trust/evidence fragment, looks up
+    the active prompt/rubric recipe, and runs the private fake machine-review
+    loop. A ``record_machine_review`` row is appended only for
+    ``run_not_reviewed`` / ``run_stale``; an already-current record is skipped,
+    so re-running an unchanged recipe is idempotent. Uses the fake producer
+    only; mutates nothing outside ``record_machine_review``.
+    """
+    reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    result = run_admin_fake_machine_review(
+        session,
+        record_type=record_type,
+        record_id=record_id,
+        reviewed_at=reviewed_at,
+    )
+    return AdminRunFakeMachineReviewResponse(
+        status=result.status,
+        decision=result.decision,
+        execution_status=result.execution_status,
+        appended_review_id=result.appended_review_id,
+        record_type=result.record_type,
+        record_id=result.record_id,
+        context_hash=result.context_hash,
+        context_schema_version=result.context_schema_version,
+        prompt_version=result.prompt_version,
+        rubric_versions=result.rubric_versions,
+        summary=result.summary,
+    )
 
 
 # ---------------------------------------------------------------------------

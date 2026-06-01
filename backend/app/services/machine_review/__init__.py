@@ -9,6 +9,14 @@ machine-review axis is impossible to confuse with human review or the
 submission precheck at the type level.
 """
 
+from app.services.machine_review.admin_trigger import (
+    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
+    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
+    SUPPORTED_RECORD_TYPES,
+    active_rubric_versions_for_record_type,
+    resolve_record_trust_fragment,
+    run_admin_fake_machine_review,
+)
 from app.services.machine_review.audit_adapter import (
     AuditRecordLink,
     MachineReviewAuditProjection,
@@ -127,8 +135,11 @@ from app.services.machine_review.trust_adapter import (
 )
 
 __all__ = [
+    "ACTIVE_MACHINE_REVIEW_PROMPT_VERSION",
+    "ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS",
     "MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION",
     "MACHINE_REVIEW_V2_SCHEMA_VERSION",
+    "SUPPORTED_RECORD_TYPES",
     "AuditRecordLink",
     "CuratorPriority",
     "CuratorTaskBuildResult",
@@ -173,6 +184,7 @@ __all__ = [
     "SubmissionRecordLinkRef",
     "UnmappedFinding",
     "UnmappedReason",
+    "active_rubric_versions_for_record_type",
     "assign_curator_task",
     "build_curator_tasks_for_submission",
     "build_internal_machine_review_trust_fragment",
@@ -199,6 +211,8 @@ __all__ = [
     "record_machine_reviews_from_audit_events",
     "record_machine_reviews_from_submission_audit_event",
     "reopen_curator_task",
+    "resolve_record_trust_fragment",
+    "run_admin_fake_machine_review",
     "run_fake_record_machine_review",
     "run_record_machine_review_with_producer",
     "resolve_curator_task",

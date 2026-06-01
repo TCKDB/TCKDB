@@ -355,6 +355,24 @@ a curator disputes a stale or suspicious result
 debugging via the admin inspection endpoint surfaces a mapping/parse anomaly
 ```
 
+**DONE (admin / manual trigger, fake producer only):** the *"an admin
+explicitly requests re-review of a record"* path is implemented as an
+admin-only endpoint
+`POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake`
+(`app/api/routes/admin.py::run_fake_machine_review_for_record`, backed by
+`app/services/machine_review/admin_trigger.py::run_admin_fake_machine_review`).
+For one record it resolves the live deterministic `TrustFragment` from the
+existing computed trust evaluator (read-only — record-existence is a 404,
+unsupported type a 400), looks up the active prompt/rubric recipe (private
+constants derived from the trust rubric constants), and runs the private
+orchestration loop with the **fake** producer only. A `record_machine_review`
+row is appended solely for `run_not_reviewed` / `run_stale`; an already-current
+record is skipped, so re-running an unchanged recipe is idempotent. It is
+maintainer/debug-only, mutates nothing outside `record_machine_review`, and is
+covered by `tests/api/test_admin_machine_review_trigger.py`. **Still NOT done**
+here: a real/cloud/local provider, RAG, any background/scheduled trigger,
+upload-workflow wiring, and public `trust.machine_review` exposure (§7, step 6).
+
 ### 5.4 What a trigger does NOT do
 
 ```text
@@ -716,9 +734,21 @@ the prior and on the provisional spec's §13 non-interference tests.
    producer is called only for `run_*` (never for `skip_current`), and a
    producer that raises `MachineReviewProductionError` or returns invalid output
    yields `failed_to_produce_review` with no row appended. Only the **fake**
-   producer ships. Still **NOT done:** a real/cloud/local producer
-   implementation, background/scheduled triggers, an admin route, upload-workflow
-   wiring, and public exposure (step 6).
+   producer ships.
+   The **admin / manual trigger** that drives this loop for one record is also
+   DONE (fake producer only): admin-only
+   `POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake`
+   (`app/api/routes/admin.py`) over
+   `app/services/machine_review/admin_trigger.py::run_admin_fake_machine_review`
+   — see §5.3. It resolves the live `TrustFragment` from the computed trust
+   evaluator, applies the private active recipe, appends only for
+   `run_not_reviewed` / `run_stale` (current skips; unchanged recipe is
+   idempotent), is admin-gated (anon 401 / user+curator 403), and leaves
+   `submission.status` / `RecordReviewStatus` / scientific records / deterministic
+   evidence / the public `TrustFragment` untouched. Covered by
+   `tests/api/test_admin_machine_review_trigger.py`. Still **NOT done:** a
+   real/cloud/local producer implementation, RAG, background/scheduled triggers,
+   upload-workflow wiring, and public exposure (step 6).
 6. Only then expose public trust.machine_review behind the latest-current
    selection (§4) and the display rules (§7), labelled as machine output,
    never altering deterministic fields, with the §9 tests green.
