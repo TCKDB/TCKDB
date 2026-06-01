@@ -1,14 +1,23 @@
 # Record-Level Machine-Review Retention & Re-Review Policy
 
-**Status:** draft spec — design only. No code, no migration, no public API, no
-public `trust.machine_review`, no upload-workflow trigger, no real LLM
-provider, no RAG, no frontend.
-**Date:** 2026-05-31
-**Scope:** TCKDB backend design only. Defines the retention, staleness, and
-re-review policy that must exist *before* a persistent record-level machine
-review (`record_machine_review`, `provisional_machine_review.md` §9 Option B)
-can be added. Nothing here is implemented; it is the policy a future table and
-read layer will encode.
+**Status:** partially implemented. The **private/admin foundation** this policy
+defines now exists — context hashing, current/stale/historical currency
+classification, the append-only `record_machine_review` table + persistence,
+the persisted query service, the re-review planner and executor, the producer
+interface and **fake** producer, the admin-only fake-trigger endpoint, and the
+end-to-end lifecycle walkthrough (`machine_review_lifecycle.md`). Still **not
+implemented** (out of scope here): a real/cloud/local producer, RAG,
+background/scheduled triggers, upload-workflow wiring, **public
+`trust.machine_review` exposure**, frontend/curator UI, and public read filters
+such as `review_level=human_only` or `include_machine_reviewed=false`. There is
+**still no public scientific read-API exposure** — `TrustFragment` is unchanged
+and carries no `machine_review`.
+**Date:** 2026-05-31 (status updated 2026-06-01 after the private/admin foundation landed)
+**Scope:** TCKDB backend. Defines the retention, staleness, and re-review policy
+for a persistent record-level machine review (`record_machine_review`,
+`provisional_machine_review.md` §9 Option B). The private/admin foundation
+encoding this policy is implemented (see Status); the public read layer that
+would surface it is still deferred.
 **Audience:** TCKDB backend maintainers, trust-layer authors, future
 machine-review implementers.
 
