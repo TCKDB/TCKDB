@@ -18,6 +18,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     RecordReviewBadge,
     ReviewStatusSummary,
+    SelectionPolicy,
     SoftwareReleaseSummary,
     TemperatureCoverage,
 )
@@ -61,6 +62,9 @@ class ThermoReadRequest(BaseModel):
 
     sort: str | None = None  # rejected non-None per v0 sort policy.
     collapse: CollapseMode = CollapseMode.all
+    # Named, read-time policy governing which single record collapse=first
+    # selects. ``default`` keeps the standard thermo ranking.
+    selection_policy: SelectionPolicy = SelectionPolicy.default
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
@@ -144,6 +148,7 @@ class RequestEcho(BaseModel):
     filter: dict[str, object]
     sort: str
     collapse: CollapseMode
+    selection_policy: SelectionPolicy = SelectionPolicy.default
     include: list[str]
 
 

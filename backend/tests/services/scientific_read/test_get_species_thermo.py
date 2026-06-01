@@ -432,6 +432,55 @@ def test_evidence_completeness_counts_statmech_freq_sp_when_thermo_sources_empty
     assert checklist["has_sp_or_energy_evidence"] is True
 
 
+def test_collapse_first_named_policy_selects_explicitly(db_session):
+    """collapse=first with an explicit named selection_policy picks one
+    candidate by that policy; collapse=all is unaffected. 'default' ranks
+    by the standard thermo order (review status wins here); 'latest' picks
+    the most recent regardless of review status.
+    """
+    from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+    from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
+
+    entry = _entry_with_smiles(db_session, smiles="CCCO")
+    older_approved = make_thermo_scalar(db_session, species_entry=entry)
+    newer = make_thermo_scalar(db_session, species_entry=entry)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.thermo,
+        record_id=older_approved.id,
+        status=RecordReviewStatus.approved,
+    )
+
+    # collapse=all returns both candidates (non-canonical default).
+    all_resp = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    assert len(all_resp.records) == 2
+    assert all_resp.request.selection_policy == SelectionPolicy.default
+
+    # default policy → review status wins → the approved (older) record.
+    default_resp = get_species_thermo(
+        db_session,
+        species_entry_id=entry.id,
+        request=ThermoReadRequest(collapse=CollapseMode.first),
+    )
+    assert len(default_resp.records) == 1
+    assert default_resp.records[0].thermo_id == older_approved.id
+
+    # latest policy → newest record regardless of review status.
+    latest_resp = get_species_thermo(
+        db_session,
+        species_entry_id=entry.id,
+        request=ThermoReadRequest(
+            collapse=CollapseMode.first,
+            selection_policy=SelectionPolicy.latest,
+        ),
+    )
+    assert len(latest_resp.records) == 1
+    assert latest_resp.records[0].thermo_id == newer.id
+    assert latest_resp.request.selection_policy == SelectionPolicy.latest
+
+
 def test_statmech_fallback_pick_is_deterministic_with_multiple_statmech(db_session):
     """Multiple coexisting statmech records on one species_entry are equal
     candidates. The thermo provenance fallback must pick deterministically

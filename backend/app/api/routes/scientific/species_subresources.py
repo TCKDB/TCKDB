@@ -29,6 +29,7 @@ from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._response import omit_trust_unless_requested
 from app.db.models.common import RecordReviewStatus
+from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.schemas.reads.scientific_statmech_search import (
     ScientificStatmechSearchResponse,
 )
@@ -58,6 +59,8 @@ def species_statmech(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
+    collapse: CollapseMode = Query(CollapseMode.all),
+    selection_policy: SelectionPolicy = Query(SelectionPolicy.default),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -70,6 +73,12 @@ def species_statmech(
     ``sort=`` is rejected (v0). ``include=trust`` adds the
     ``computed_statmech_v1`` fragment per record; ``include=all`` does
     not include trust.
+
+    Statmech records are candidate products for the resolved form;
+    ``collapse=first`` returns the single record selected under the explicit
+    named ``selection_policy`` (default ``default``). ``collapse=all`` (the
+    default) returns every candidate. See
+    ``backend/docs/specs/scientific_product_candidacy.md``.
     """
     resolved_species_entry_id = resolve_species_entry_handle(
         session, species_entry_id
@@ -82,6 +91,8 @@ def species_statmech(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
+        collapse=collapse,
+        selection_policy=selection_policy,
         offset=offset,
         limit=limit,
     )
@@ -100,6 +111,8 @@ def species_transport(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
+    collapse: CollapseMode = Query(CollapseMode.all),
+    selection_policy: SelectionPolicy = Query(SelectionPolicy.default),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -112,6 +125,12 @@ def species_transport(
     ``sort=`` is rejected (v0). ``include=trust`` adds the
     ``computed_transport_v1`` fragment per record; ``include=all`` does
     not include trust.
+
+    Transport records are candidate products for the resolved form;
+    ``collapse=first`` returns the single record selected under the explicit
+    named ``selection_policy`` (default ``default``). ``collapse=all`` (the
+    default) returns every candidate. See
+    ``backend/docs/specs/scientific_product_candidacy.md``.
     """
     resolved_species_entry_id = resolve_species_entry_handle(
         session, species_entry_id
@@ -124,6 +143,8 @@ def species_transport(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
+        collapse=collapse,
+        selection_policy=selection_policy,
         offset=offset,
         limit=limit,
     )

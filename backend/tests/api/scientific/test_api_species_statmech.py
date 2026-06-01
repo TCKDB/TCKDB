@@ -280,6 +280,80 @@ def test_wrapper_agrees_with_search_for_pinned_entry(client, db_session):
 
 
 # ---------------------------------------------------------------------------
+# Collapse + named selection policy (read-time selection, no persistence)
+# ---------------------------------------------------------------------------
+
+
+def test_collapse_all_is_default_and_returns_all_candidates(client, db_session):
+    _, entry = _entry(db_session)
+    make_statmech(db_session, species_entry=entry)
+    make_statmech(db_session, species_entry=entry)
+    body = client.get(_url(entry.id)).json()
+    # Default is non-canonical: every candidate is returned.
+    assert body["request"]["collapse"] == "all"
+    assert body["request"]["selection_policy"] == "default"
+    assert body["pagination"]["total"] == 2
+    assert len(body["records"]) == 2
+
+
+def test_collapse_first_returns_single_record_with_pre_collapse_total(
+    client, db_session
+):
+    _, entry = _entry(db_session)
+    make_statmech(db_session, species_entry=entry)
+    make_statmech(db_session, species_entry=entry)
+    body = client.get(_url(entry.id, collapse="first")).json()
+    assert body["request"]["collapse"] == "first"
+    assert len(body["records"]) == 1
+    # total stays pre-collapse so clients see how many candidates exist.
+    assert body["pagination"]["total"] == 2
+
+
+def test_default_policy_selects_best_reviewed(client, db_session):
+    _, entry = _entry(db_session)
+    sm_old_approved = make_statmech(db_session, species_entry=entry)
+    make_statmech(db_session, species_entry=entry)  # newer, not reviewed
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.statmech,
+        record_id=sm_old_approved.id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(
+        _url(entry.id, collapse="first", selection_policy="default")
+    ).json()
+    assert body["request"]["selection_policy"] == "default"
+    assert (
+        body["records"][0]["statmech"]["statmech_ref"]
+        == sm_old_approved.public_ref
+    )
+
+
+def test_latest_policy_selects_newest_over_review_status(client, db_session):
+    _, entry = _entry(db_session)
+    sm_old_approved = make_statmech(db_session, species_entry=entry)
+    sm_new = make_statmech(db_session, species_entry=entry)  # newer
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.statmech,
+        record_id=sm_old_approved.id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(
+        _url(entry.id, collapse="first", selection_policy="latest")
+    ).json()
+    # 'latest' ignores review rank and picks the most recent candidate.
+    assert body["records"][0]["statmech"]["statmech_ref"] == sm_new.public_ref
+
+
+def test_invalid_selection_policy_returns_422(client, db_session):
+    _, entry = _entry(db_session)
+    make_statmech(db_session, species_entry=entry)
+    resp = client.get(_url(entry.id, collapse="first", selection_policy="bogus"))
+    assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
 # No mutation
 # ---------------------------------------------------------------------------
 

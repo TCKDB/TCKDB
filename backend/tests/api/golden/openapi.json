@@ -26930,6 +26930,16 @@
         "title": "ScientificTransportSearchResponse",
         "type": "object"
       },
+      "SelectionPolicy": {
+        "description": "Named, read-time selection policy used when ``collapse=first``.\n\nA selection policy makes \"show me one product for this species form\" an\n*explicit, named* choice rather than an implicit one. Policies rank\ncandidate products at read time only — none persists a curator decision.\n\nPolicies that would require a stored choice (``benchmark_reference``,\n``curator_pick``) are intentionally absent: they need the deferred\nproduct-selection persistence layer, not a read knob, and cannot be\nhonestly evaluated from the record data alone. See\n``backend/docs/specs/scientific_product_candidacy.md``.\n\n``default``        the endpoint's standard ranking.\n``latest``         most recently created first.\n``most_reviewed``  best review status first, then most recent.",
+        "enum": [
+          "default",
+          "latest",
+          "most_reviewed"
+        ],
+        "title": "SelectionPolicy",
+        "type": "string"
+      },
       "SoftwareRead": {
         "properties": {
           "created_at": {
@@ -36871,8 +36881,18 @@
         "type": "object"
       },
       "app__schemas__reads__scientific_statmech_search__RequestEcho": {
-        "description": "Echo of the parsed request — surfaced in the response envelope.",
+        "description": "Echo of the parsed request — surfaced in the response envelope.\n\n``collapse`` / ``selection_policy`` are populated by the per-species\nsubresource read (which supports an explicit named single-record policy)\nand left ``null`` by broad search, which always returns all candidates.",
         "properties": {
+          "collapse": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollapseMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -36884,6 +36904,16 @@
             },
             "title": "Include",
             "type": "array"
+          },
+          "selection_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelectionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sort": {
             "title": "Sort",
@@ -36945,6 +36975,10 @@
             },
             "title": "Include",
             "type": "array"
+          },
+          "selection_policy": {
+            "$ref": "#/components/schemas/SelectionPolicy",
+            "default": "default"
           },
           "sort": {
             "title": "Sort",
@@ -37048,8 +37082,18 @@
         "type": "object"
       },
       "app__schemas__reads__scientific_transport_search__RequestEcho": {
-        "description": "Echo of the parsed request — surfaced in the response envelope.",
+        "description": "Echo of the parsed request — surfaced in the response envelope.\n\n``collapse`` / ``selection_policy`` are populated by the per-species\nsubresource read (which supports an explicit named single-record policy)\nand left ``null`` by broad search, which always returns all candidates.",
         "properties": {
+          "collapse": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollapseMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -37061,6 +37105,16 @@
             },
             "title": "Include",
             "type": "array"
+          },
+          "selection_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelectionPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sort": {
             "title": "Sort",
@@ -53123,7 +53177,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/statmech": {
       "get": {
-        "description": "Return statmech records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=trust`` adds the\n``computed_statmech_v1`` fragment per record; ``include=all`` does\nnot include trust.",
+        "description": "Return statmech records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=trust`` adds the\n``computed_statmech_v1`` fragment per record; ``include=all`` does\nnot include trust.\n\nStatmech records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
         "operationId": "species_statmech_api_v1_scientific_species_entries__species_entry_id__statmech_get",
         "parameters": [
           {
@@ -53187,6 +53241,24 @@
                 }
               ],
               "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collapse",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CollapseMode",
+              "default": "all"
+            }
+          },
+          {
+            "in": "query",
+            "name": "selection_policy",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SelectionPolicy",
+              "default": "default"
             }
           },
           {
@@ -53435,6 +53507,15 @@
           },
           {
             "in": "query",
+            "name": "selection_policy",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SelectionPolicy",
+              "default": "default"
+            }
+          },
+          {
+            "in": "query",
             "name": "include",
             "required": false,
             "schema": {
@@ -53506,7 +53587,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/transport": {
       "get": {
-        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=trust`` adds the\n``computed_transport_v1`` fragment per record; ``include=all`` does\nnot include trust.",
+        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=trust`` adds the\n``computed_transport_v1`` fragment per record; ``include=all`` does\nnot include trust.\n\nTransport records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
         "operationId": "species_transport_api_v1_scientific_species_entries__species_entry_id__transport_get",
         "parameters": [
           {
@@ -53570,6 +53651,24 @@
                 }
               ],
               "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collapse",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CollapseMode",
+              "default": "all"
+            }
+          },
+          {
+            "in": "query",
+            "name": "selection_policy",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SelectionPolicy",
+              "default": "default"
             }
           },
           {

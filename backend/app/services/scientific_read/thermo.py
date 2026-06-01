@@ -37,7 +37,9 @@ from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
+    SelectionPolicy,
     SoftwareReleaseSummary,
+    simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_thermo import (
     RequestEcho,
@@ -397,7 +399,25 @@ def get_species_thermo(
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
     if collapse_first:
-        returned = records[:1]
+        if request.selection_policy is SelectionPolicy.default:
+            # Standard thermo ranking (sort_key) already applied above.
+            returned = records[:1]
+        else:
+            # Named policy re-ranks the selected record only; the default
+            # candidate order (collapse=all) is unaffected.
+            review_status_by_id = {
+                t.id: badges[t.id].status for t, _ in classified
+            }
+            ranked = sorted(
+                records,
+                key=lambda rec: simple_selection_sort_key(
+                    rec.thermo_id,
+                    policy=request.selection_policy,
+                    review_status_by_id=review_status_by_id,
+                    created_at_by_id=created_at,
+                ),
+            )
+            returned = ranked[:1]
     else:
         returned = records[offset : offset + limit]
 
@@ -406,6 +426,7 @@ def get_species_thermo(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
             collapse=request.collapse,
+            selection_policy=request.selection_policy,
             include=sorted(includes),
         ),
         species_entry_id=species_entry_id,
@@ -936,6 +957,7 @@ def _empty_response(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
             collapse=request.collapse,
+            selection_policy=request.selection_policy,
             include=sorted(includes),
         ),
         species_entry_id=species_entry_id,

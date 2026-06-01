@@ -30,7 +30,10 @@ from app.db.models.species import SpeciesEntry
 from app.db.models.transport import Transport
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
+    CollapseMode,
     RecordReviewBadge,
+    SelectionPolicy,
+    simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_transport import (
     ScientificTransportRecord,
@@ -71,6 +74,8 @@ def get_species_transport(
     include_rejected: bool = False,
     include_deprecated: bool = False,
     sort: str | None = None,
+    collapse: CollapseMode = CollapseMode.all,
+    selection_policy: SelectionPolicy = SelectionPolicy.default,
     offset: int = 0,
     limit: int = 50,
 ) -> ScientificTransportSearchResponse:
@@ -112,7 +117,7 @@ def get_species_transport(
     created_at_by_id = {row.id: row.created_at for row in rows}
     if not candidate_ids:
         return _empty_response(
-            species_entry_ref, includes, offset, limit
+            species_entry_ref, includes, offset, limit, collapse, selection_policy
         )
 
     badges = fetch_review_badges(
@@ -130,19 +135,34 @@ def get_species_transport(
     ]
     if not visible_ids:
         return _empty_response(
-            species_entry_ref, includes, offset, limit
+            species_entry_ref, includes, offset, limit, collapse, selection_policy
         )
 
     summary = review_summary(badges[cid] for cid in visible_ids)
-    visible_ids.sort(
-        key=lambda cid: (
-            REVIEW_RANK[badges[cid].status],
-            -created_at_by_id[cid].timestamp(),
-            -cid,
-        )
-    )
     total = len(visible_ids)
-    page_ids = visible_ids[offset : offset + limit]
+    if collapse is CollapseMode.first:
+        # Selection policy governs the single selected record only. The
+        # default candidate-list order is unchanged for collapse=all.
+        review_status_by_id = {cid: badges[cid].status for cid in visible_ids}
+        ranked = sorted(
+            visible_ids,
+            key=lambda cid: simple_selection_sort_key(
+                cid,
+                policy=selection_policy,
+                review_status_by_id=review_status_by_id,
+                created_at_by_id=created_at_by_id,
+            ),
+        )
+        page_ids = ranked[:1]
+    else:
+        visible_ids.sort(
+            key=lambda cid: (
+                REVIEW_RANK[badges[cid].status],
+                -created_at_by_id[cid].timestamp(),
+                -cid,
+            )
+        )
+        page_ids = visible_ids[offset : offset + limit]
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificTransportSearchResponse(
@@ -150,6 +170,8 @@ def get_species_transport(
             filter={"species_entry_ref": species_entry_ref},
             sort=_DEFAULT_SORT_ECHO,
             include=sorted(includes),
+            collapse=collapse,
+            selection_policy=selection_policy,
         ),
         review_summary=summary,
         records=records,
@@ -192,12 +214,16 @@ def _empty_response(
     includes: set[str],
     offset: int,
     limit: int,
+    collapse: CollapseMode = CollapseMode.all,
+    selection_policy: SelectionPolicy = SelectionPolicy.default,
 ) -> ScientificTransportSearchResponse:
     return ScientificTransportSearchResponse(
         request=RequestEcho(
             filter={"species_entry_ref": species_entry_ref},
             sort=_DEFAULT_SORT_ECHO,
             include=sorted(includes),
+            collapse=collapse,
+            selection_policy=selection_policy,
         ),
         review_summary=review_summary([]),
         records=[],

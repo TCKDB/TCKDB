@@ -33,6 +33,29 @@ class CollapseMode(str, Enum):
     first = "first"
 
 
+class SelectionPolicy(str, Enum):
+    """Named, read-time selection policy used when ``collapse=first``.
+
+    A selection policy makes "show me one product for this species form" an
+    *explicit, named* choice rather than an implicit one. Policies rank
+    candidate products at read time only — none persists a curator decision.
+
+    Policies that would require a stored choice (``benchmark_reference``,
+    ``curator_pick``) are intentionally absent: they need the deferred
+    product-selection persistence layer, not a read knob, and cannot be
+    honestly evaluated from the record data alone. See
+    ``backend/docs/specs/scientific_product_candidacy.md``.
+
+    ``default``        the endpoint's standard ranking.
+    ``latest``         most recently created first.
+    ``most_reviewed``  best review status first, then most recent.
+    """
+
+    default = "default"
+    latest = "latest"
+    most_reviewed = "most_reviewed"
+
+
 # Map review status to ranking key per L2. Lower wins.
 REVIEW_RANK: dict[RecordReviewStatus, int] = {
     RecordReviewStatus.approved: 0,
@@ -269,3 +292,26 @@ def status_at_or_above(threshold: RecordReviewStatus) -> set[RecordReviewStatus]
     """Set of statuses with ``review_rank <= threshold's rank`` (better or equal)."""
     threshold_rank = REVIEW_RANK[threshold]
     return {s for s, rank in REVIEW_RANK.items() if rank <= threshold_rank}
+
+
+def simple_selection_sort_key(
+    record_id: int,
+    *,
+    policy: SelectionPolicy,
+    review_status_by_id: dict[int, RecordReviewStatus],
+    created_at_by_id: dict[int, datetime],
+) -> tuple:
+    """Ranking key for review/recency-only candidate sets (statmech / transport).
+
+    Used by the per-species statmech and transport reads, whose record shapes
+    share only review status, created_at, and id (no temperature coverage or
+    evidence score like thermo). ``latest`` ranks purely by recency;
+    ``default`` and ``most_reviewed`` rank by review status first (the
+    historical per-species order). All policies break ties by created_at DESC
+    then id DESC so the order is total and deterministic.
+    """
+    ts = created_at_by_id[record_id].timestamp()
+    if policy is SelectionPolicy.latest:
+        return (-ts, -record_id)
+    rank = REVIEW_RANK[review_status_by_id[record_id]]
+    return (rank, -ts, -record_id)

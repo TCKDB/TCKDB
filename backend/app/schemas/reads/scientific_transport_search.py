@@ -25,8 +25,10 @@ from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
+    CollapseMode,
     Pagination,
     ReviewStatusSummary,
+    SelectionPolicy,
 )
 from app.schemas.reads.scientific_transport import (
     ScientificTransportRecord,
@@ -94,11 +96,18 @@ class TransportSearchRequest(BaseModel):
 
 
 class RequestEcho(BaseModel):
-    """Echo of the parsed request — surfaced in the response envelope."""
+    """Echo of the parsed request — surfaced in the response envelope.
+
+    ``collapse`` / ``selection_policy`` are populated by the per-species
+    subresource read (which supports an explicit named single-record policy)
+    and left ``null`` by broad search, which always returns all candidates.
+    """
 
     filter: dict[str, Any]
     sort: str
     include: list[str] = Field(default_factory=list)
+    collapse: CollapseMode | None = None
+    selection_policy: SelectionPolicy | None = None
 
 
 class ScientificTransportSearchResponse(BaseModel):

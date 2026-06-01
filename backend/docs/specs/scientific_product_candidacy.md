@@ -75,25 +75,42 @@ Read paths return candidates, and collapse to one only under explicit policy:
 
 | Path | Returns |
 |------|---------|
-| `GET /api/v1/scientific/species-entries/{id}/thermo` | list (paginated); honors `collapse` |
-| `GET /api/v1/scientific/species-entries/{id}/statmech` | list (paginated), all candidates |
-| `GET /api/v1/scientific/species-entries/{id}/transport` | list (paginated), all candidates |
-| `GET /api/v1/scientific/{thermo,statmech,transport}/search` | list (paginated) |
+| `GET /api/v1/scientific/species-entries/{id}/thermo` | list (paginated); honors `collapse` + `selection_policy` |
+| `GET /api/v1/scientific/species-entries/{id}/statmech` | list (paginated); honors `collapse` + `selection_policy` |
+| `GET /api/v1/scientific/species-entries/{id}/transport` | list (paginated); honors `collapse` + `selection_policy` |
+| `GET /api/v1/scientific/{thermo,statmech,transport}/search` | list (paginated); broad search returns all candidates |
 | `GET /api/v1/lookup/{thermo,statmech,transport}` | all matching records |
 | `GET /api/v1/{thermo,statmech,transport}` (primitive) | list (paginated) |
 | `GET /api/v1/{thermo,statmech,transport}/{id}` | single record by explicit id |
 
-- **Default is non-canonical.** The thermo read request defaults to
-  `collapse=all`.
-- **The only single-record collapse is explicit and named.** Thermo
-  `collapse=first` returns the top-ranked record under a documented,
-  deterministic ranking (temperature coverage → extrapolation distance →
-  review rank → evidence completeness → recency → id) and echoes the collapse
-  mode in the response. `statmech` and `transport` have no collapse mode and
-  always return the full candidate list.
+- **Default is non-canonical.** All three per-species reads default to
+  `collapse=all` + `selection_policy=default`, returning every candidate.
+- **Single-record collapse is explicit and named.** `collapse=first` returns
+  exactly one record, chosen by an explicit, named `selection_policy`. The
+  chosen `collapse` and `selection_policy` are echoed in the response; the
+  pre-collapse candidate count stays in `pagination.total`.
 
-Any "this is *the* species thermo" decision is a **read-time selection /
-review** concern, not a property of the stored record.
+### Named selection policies
+
+`selection_policy` (enum, defined in
+`app/schemas/reads/scientific_common.py::SelectionPolicy`) governs *only* which
+single record `collapse=first` returns — it never reorders the full
+`collapse=all` candidate list, and it never persists a choice:
+
+| Policy | Selects |
+|--------|---------|
+| `default` | the endpoint's standard ranking — for thermo: temperature coverage → extrapolation distance → review rank → evidence completeness → recency → id; for statmech/transport: review rank → recency → id |
+| `latest` | the most recently created candidate (recency → id) |
+| `most_reviewed` | best review status first, then recency → id |
+
+Policies that would require a *stored* curator decision (e.g.
+`benchmark_reference`, `curator_pick`) are intentionally **absent**: they cannot
+be evaluated from record data alone and need the deferred product-selection
+persistence layer, not a read knob.
+
+Any "this is *the* species thermo" decision is therefore a **read-time
+selection** concern (an explicit, named, non-persisted policy), not a property
+of the stored record.
 
 ## Implementation note: deterministic provenance fallback
 

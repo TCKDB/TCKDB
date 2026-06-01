@@ -16,7 +16,7 @@ from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._response import omit_trust_unless_requested
 from app.db.models.common import RecordReviewStatus
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.schemas.reads.scientific_thermo import (
     ScientificSpeciesThermoResponse,
     ThermoModelKindQuery,
@@ -49,6 +49,7 @@ def species_thermo(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     collapse: CollapseMode = Query(CollapseMode.all),
+    selection_policy: SelectionPolicy = Query(SelectionPolicy.default),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -76,6 +77,7 @@ def species_thermo(
         include_deprecated=include_deprecated,
         sort=sort,
         collapse=collapse,
+        selection_policy=selection_policy,
         include=parse_include(include),
         offset=offset,
         limit=limit,
