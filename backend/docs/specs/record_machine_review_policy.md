@@ -27,6 +27,9 @@ machine-review implementers.
   today recomputes the projection from audit events with no persistence.
 - `machine_review_provider_contract_v2.md` — the provider payload that would
   carry the `model`/`provider`/status a persisted row records.
+- `machine_review_lifecycle.md` — the end-to-end **implementation walkthrough**
+  of this policy: module map, data-flow diagram, privacy boundaries, and the
+  admin fake-trigger endpoint.
 
 ---
 
