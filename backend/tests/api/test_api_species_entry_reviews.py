@@ -5,8 +5,10 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.app import create_app
+from app.api.deps import get_db
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
@@ -296,12 +298,29 @@ class TestCreateSpeciesEntryReviewAuth:
             assert resp.status_code == 401
 
     def test_list_does_not_require_api_key(self, db_engine, _api_test_user):
-        """Reads follow the existing public-read convention on species-entry routes."""
+        """Reads follow the existing public-read convention on species-entry routes.
+
+        Builds a raw ``create_app()`` so the real auth chain runs (no
+        ``get_current_user`` override), but binds ``get_db`` to the migrated
+        test engine. Without that binding the app falls back to
+        ``settings.db_name`` (``tckdb_dev``), a developer-owned DB outside test
+        control whose schema may lag the ORM — which makes this a flaky read
+        against an arbitrary database rather than a real auth assertion.
+        """
         app = create_app()
-        with TestClient(app) as c:
-            # Expect 404 (missing entry) rather than 401 — proves auth isn't gating reads.
-            resp = c.get("/api/v1/species-entries/999999/reviews")
-            assert resp.status_code == 404
+        connection = db_engine.connect()
+        transaction = connection.begin()
+        session = Session(bind=connection, join_transaction_mode="create_savepoint")
+        app.dependency_overrides[get_db] = lambda: session
+        try:
+            with TestClient(app) as c:
+                # Expect 404 (missing entry), not 401 — proves auth isn't gating reads.
+                resp = c.get("/api/v1/species-entries/999999/reviews")
+                assert resp.status_code == 404
+        finally:
+            session.close()
+            transaction.rollback()
+            connection.close()
 
 
 def test_review_row_persists_in_db(client, db_session, as_curator):
