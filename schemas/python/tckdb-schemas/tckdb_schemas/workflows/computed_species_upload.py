@@ -722,6 +722,7 @@ class StatmechUploadRefInBundle(SchemaBase):
 class ComputedSpeciesUploadResult(BaseModel):
     species_entry_id: int
     type: str = "computed_species"
+    submission_id: int | None = None
     conformers: list[ConformerUploadRefInBundle]
     thermo: ThermoUploadRefInBundle | None = None
     statmech: StatmechUploadRefInBundle | None = None

@@ -8517,6 +8517,17 @@
             "title": "Species Entry Ids",
             "type": "array"
           },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
           "thermo_ids": {
             "items": {
               "type": "integer"
@@ -8654,6 +8665,17 @@
                 "type": "null"
               }
             ]
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
           },
           "thermo": {
             "anyOf": [
@@ -9997,6 +10019,17 @@
           "species_entry_id": {
             "title": "Species Entry Id",
             "type": "integer"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
           },
           "type": {
             "default": "conformer_observation",
@@ -14434,6 +14467,17 @@
             "title": "Reaction Entry Id",
             "type": "integer"
           },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
           "type": {
             "default": "kinetics",
             "title": "Type",
@@ -18013,6 +18057,17 @@
             ],
             "title": "Solve Id"
           },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
           "type": {
             "default": "network_pdep",
             "title": "Type",
@@ -20536,6 +20591,17 @@
             "title": "Id",
             "type": "integer"
           },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
           "type": {
             "default": "network",
             "title": "Type",
@@ -22778,6 +22844,17 @@
           "reaction_id": {
             "title": "Reaction Id",
             "type": "integer"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
           },
           "type": {
             "default": "reaction_entry",
@@ -30382,6 +30459,17 @@
             "title": "Species Entry Id",
             "type": "integer"
           },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
           "type": {
             "default": "statmech",
             "title": "Type",
@@ -30714,14 +30802,16 @@
         "type": "object"
       },
       "SubmissionKind": {
-        "description": "Family/category of a submission (thermo, reaction, network, …).\n\nThis is the submission-layer classification of the contribution itself\n— it is *not* provenance-tool identity; see ``workflow_tool`` /\n``workflow_tool_release`` for that. Values are intentionally aligned\nwith :class:`UploadJobKind` so the same token may be persisted in both\nplaces; ``other`` is added to cover submissions that do not map onto\nthe async upload pipeline.",
+        "description": "Family/category of a submission (thermo, reaction, network, …).\n\nThis is the submission-layer classification of the contribution itself\n— it is *not* provenance-tool identity; see ``workflow_tool`` /\n``workflow_tool_release`` for that.\n\nMost values overlap with :class:`UploadJobKind` so the same token may be\npersisted in both places. The overlap is not total: ``computed_species``\nand ``statmech`` are direct-upload kinds that have no async-job counterpart\n(they are not enqueueable via ``/jobs/*``), and ``other`` covers\nsubmissions that do not map onto any upload pipeline. Adding a value here\nthat is also an async kind should keep the two enums aligned.",
         "enum": [
           "computed_reaction",
+          "computed_species",
           "conformer",
           "reaction",
           "kinetics",
           "network",
           "network_pdep",
+          "statmech",
           "thermo",
           "transition_state",
           "transport",
@@ -33144,6 +33234,17 @@
             "title": "Species Entry Id",
             "type": "integer"
           },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
           "type": {
             "default": "thermo",
             "title": "Type",
@@ -34060,6 +34161,17 @@
           "reaction_entry_id": {
             "title": "Reaction Entry Id",
             "type": "integer"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
           },
           "transition_state_id": {
             "title": "Transition State Id",
@@ -35444,6 +35556,17 @@
           "species_entry_id": {
             "title": "Species Entry Id",
             "type": "integer"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
           },
           "type": {
             "default": "transport",

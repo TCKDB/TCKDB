@@ -121,12 +121,16 @@ def _computed_species_payload_with_thermo_and_statmech() -> dict:
     }
 
 
-def _assert_submission_tables_empty(db_session) -> None:
-    for model in (Submission, SubmissionAuditEvent, SubmissionRecordLink):
-        rows = db_session.execute(select(model)).all()
-        assert rows == [], (
-            f"{model.__tablename__} must be empty after a direct /uploads/* "
-            f"call; found {len(rows)} row(s)"
+def _assert_submissions_attributed_to(db_session, expected_user_id: int) -> None:
+    """A direct ``/uploads/*`` call now creates a submission wrapper; assert
+    every such submission (and its links) is attributed to the uploading
+    user, consistent with the created_by attribution this module checks."""
+    subs = db_session.scalars(select(Submission)).all()
+    assert subs, "expected at least one submission for the upload event"
+    for sub in subs:
+        assert sub.created_by == expected_user_id, (
+            f"submission id={sub.id} created_by={sub.created_by!r} "
+            f"!= expected {expected_user_id}"
         )
 
 
@@ -163,7 +167,7 @@ class TestConformerUploadAttribution:
         ):
             _all_share_created_by(db_session, model, _api_test_user)
 
-        _assert_submission_tables_empty(db_session)
+        _assert_submissions_attributed_to(db_session, _api_test_user)
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +195,7 @@ class TestComputedSpeciesUploadAttribution:
         ):
             _all_share_created_by(db_session, model, _api_test_user)
 
-        _assert_submission_tables_empty(db_session)
+        _assert_submissions_attributed_to(db_session, _api_test_user)
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +228,7 @@ class TestComputedReactionUploadAttribution:
         ):
             _all_share_created_by(db_session, model, _api_test_user)
 
-        _assert_submission_tables_empty(db_session)
+        _assert_submissions_attributed_to(db_session, _api_test_user)
 
 
 # ---------------------------------------------------------------------------
@@ -280,4 +284,4 @@ class TestCalculationArtifactUploadAttribution:
         assert len(artifact_rows) == 1
         assert artifact_rows[0].created_by == _api_test_user
 
-        _assert_submission_tables_empty(db_session)
+        _assert_submissions_attributed_to(db_session, _api_test_user)

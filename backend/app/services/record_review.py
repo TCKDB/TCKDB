@@ -47,6 +47,7 @@ from app.db.models.common import (
     SubmissionRecordType,
 )
 from app.db.models.record_review import RecordReview
+from app.db.models.submission import SubmissionRecordLink
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
@@ -202,10 +203,12 @@ def ensure_record_review(
     — this helper does not mutate ``status`` once written. Use
     :func:`set_record_review_status` (or ``bulk_*``) for status changes.
 
-    The default ``status=not_reviewed`` matches direct trusted ingest;
-    bundle submission flows pass ``status=under_review`` and a
-    ``submission_id`` explicitly. Callers must never rely on this helper
-    inferring moderation context.
+    The default ``status=not_reviewed`` is for internal/nested callers that
+    create records outside a contribution event. Both ingestion pathways —
+    direct ``/uploads/*`` and hosted ``/bundles/submit`` — pass
+    ``status=under_review`` and a ``submission_id`` explicitly (see
+    :class:`ReviewPolicy`). Callers must never rely on this helper inferring
+    moderation context.
     """
     if status in _TERMINAL_STATUSES:
         # Terminal statuses require an explicit reviewer, so they can't be
@@ -399,17 +402,61 @@ class ReviewPolicy:
     context from their environment; the route or higher-level orchestrator
     sets it explicitly:
 
-    * direct trusted ingest → ``ReviewPolicy()`` (default, ``not_reviewed``,
-      no submission link),
-    * bundle submission → ``ReviewPolicy(status=under_review,
-      submission_id=submission.id)``.
+    * legacy direct ingest → ``ReviewPolicy()`` (default, ``not_reviewed``,
+      no submission link) — kept for nested/internal callers and tests,
+    * direct ``/uploads/*`` ingest → ``ReviewPolicy(status=under_review,
+      submission_id=submission.id, link_records=True)``: every produced
+      record is initialised under review *and* linked to the submission,
+    * hosted bundle submission → ``ReviewPolicy(status=under_review,
+      submission_id=submission.id)``: the bundle workflow creates its own
+      curated ``submission_record_link`` rows, so it leaves
+      ``link_records`` False to avoid linking the full target set twice.
+
+    ``link_records`` only takes effect when ``submission_id`` is set.
     """
 
     status: RecordReviewStatus = RecordReviewStatus.not_reviewed
     submission_id: Optional[int] = None
+    link_records: bool = False
 
 
 _DEFAULT_REVIEW_POLICY = ReviewPolicy()
+
+
+def _ensure_record_link(
+    session: Session,
+    *,
+    submission_id: int,
+    record_type: SubmissionRecordType,
+    record_id: int,
+) -> None:
+    """Idempotently attach ``(record_type, record_id)`` to a submission.
+
+    Mirrors :func:`app.services.submission.link_record` but writes the model
+    row directly so this module stays free of a service-level import cycle
+    (``app.services.submission`` imports from here). Links are created with
+    ``role=None``; the curated, role-bearing links the bundle workflow makes
+    remain its own responsibility.
+    """
+    existing = session.scalar(
+        select(SubmissionRecordLink).where(
+            SubmissionRecordLink.submission_id == submission_id,
+            SubmissionRecordLink.record_type == record_type,
+            SubmissionRecordLink.record_id == record_id,
+            SubmissionRecordLink.role.is_(None),
+        )
+    )
+    if existing is not None:
+        return
+    session.add(
+        SubmissionRecordLink(
+            submission_id=submission_id,
+            record_type=record_type,
+            record_id=record_id,
+            role=None,
+        )
+    )
+    session.flush()
 
 
 def apply_review_policy(
@@ -424,16 +471,30 @@ def apply_review_policy(
     Idempotent — existing review rows are returned unchanged. Pass
     ``policy=None`` to opt out (used by callers that only want to recurse
     into nested workflows without double-writing).
+
+    When the policy carries a ``submission_id`` and ``link_records`` is set,
+    each target is also idempotently linked to that submission, so the upload
+    event's full record set is traceable through ``submission_record_link``.
     """
     if policy is None:
         return []
-    return bulk_ensure_record_reviews(
+    targets = list(targets)
+    reviews = bulk_ensure_record_reviews(
         session,
         targets=targets,
         status=policy.status,
         submission_id=policy.submission_id,
         created_by=created_by,
     )
+    if policy.submission_id is not None and policy.link_records:
+        for target in targets:
+            _ensure_record_link(
+                session,
+                submission_id=policy.submission_id,
+                record_type=target.record_type,
+                record_id=target.record_id,
+            )
+    return reviews
 
 
 __all__ = [

@@ -515,18 +515,24 @@ class SubmissionKind(str, Enum):
 
     This is the submission-layer classification of the contribution itself
     — it is *not* provenance-tool identity; see ``workflow_tool`` /
-    ``workflow_tool_release`` for that. Values are intentionally aligned
-    with :class:`UploadJobKind` so the same token may be persisted in both
-    places; ``other`` is added to cover submissions that do not map onto
-    the async upload pipeline.
+    ``workflow_tool_release`` for that.
+
+    Most values overlap with :class:`UploadJobKind` so the same token may be
+    persisted in both places. The overlap is not total: ``computed_species``
+    and ``statmech`` are direct-upload kinds that have no async-job counterpart
+    (they are not enqueueable via ``/jobs/*``), and ``other`` covers
+    submissions that do not map onto any upload pipeline. Adding a value here
+    that is also an async kind should keep the two enums aligned.
     """
 
     computed_reaction = "computed_reaction"
+    computed_species = "computed_species"
     conformer = "conformer"
     reaction = "reaction"
     kinetics = "kinetics"
     network = "network"
     network_pdep = "network_pdep"
+    statmech = "statmech"
     thermo = "thermo"
     transition_state = "transition_state"
     transport = "transport"

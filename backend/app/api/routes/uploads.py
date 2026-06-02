@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_write_db
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
+from app.db.models.common import SubmissionKind
 from app.schemas.entities.calculation import CalculationUploadRef
 from app.schemas.upload_warning import UploadWarning
 from app.services.provenance_warnings import (
@@ -25,6 +26,10 @@ from app.services.upload_reconciliation import (
     extract_freq_n_imag,
     reconcile_species_entry,
     reconcile_species_entry_full,
+)
+from app.services.upload_submission import (
+    mark_upload_ingested,
+    open_upload_submission,
 )
 
 # -- Workflow imports --------------------------------------------------------
@@ -73,6 +78,7 @@ router = APIRouter()
 class ConformerUploadResult(BaseModel):
     id: int
     type: str = "conformer_observation"
+    submission_id: int | None = None
     species_entry_id: int
     conformer_group_id: int
     primary_calculation: CalculationUploadRef
@@ -83,6 +89,7 @@ class ConformerUploadResult(BaseModel):
 class ReactionUploadResult(BaseModel):
     id: int
     type: str = "reaction_entry"
+    submission_id: int | None = None
     reaction_id: int
     warnings: list[UploadWarning] = []
 
@@ -90,6 +97,7 @@ class ReactionUploadResult(BaseModel):
 class KineticsUploadResult(BaseModel):
     id: int
     type: str = "kinetics"
+    submission_id: int | None = None
     reaction_entry_id: int
     warnings: list[UploadWarning] = []
 
@@ -97,12 +105,14 @@ class KineticsUploadResult(BaseModel):
 class NetworkUploadResult(BaseModel):
     id: int
     type: str = "network"
+    submission_id: int | None = None
     warnings: list[UploadWarning] = []
 
 
 class NetworkPDepUploadResult(BaseModel):
     id: int
     type: str = "network_pdep"
+    submission_id: int | None = None
     solve_id: int | None = None
     warnings: list[UploadWarning] = []
 
@@ -110,6 +120,7 @@ class NetworkPDepUploadResult(BaseModel):
 class StatmechUploadResult(BaseModel):
     id: int
     type: str = "statmech"
+    submission_id: int | None = None
     species_entry_id: int
     warnings: list[UploadWarning] = []
 
@@ -117,6 +128,7 @@ class StatmechUploadResult(BaseModel):
 class ThermoUploadResult(BaseModel):
     id: int
     type: str = "thermo"
+    submission_id: int | None = None
     species_entry_id: int
     warnings: list[UploadWarning] = []
 
@@ -124,6 +136,7 @@ class ThermoUploadResult(BaseModel):
 class TransitionStateUploadResult(BaseModel):
     id: int
     type: str = "transition_state_entry"
+    submission_id: int | None = None
     transition_state_id: int
     reaction_entry_id: int
     warnings: list[UploadWarning] = []
@@ -132,12 +145,14 @@ class TransitionStateUploadResult(BaseModel):
 class TransportUploadResult(BaseModel):
     id: int
     type: str = "transport"
+    submission_id: int | None = None
     species_entry_id: int
     warnings: list[UploadWarning] = []
 
 
 class ComputedReactionUploadResult(BaseModel):
     type: str = "computed_reaction"
+    submission_id: int | None = None
     reaction_entry_id: int
     reaction_id: int
     transition_state_entry_id: int | None = None
@@ -179,12 +194,16 @@ def upload_conformer(
         additional_calcs=request.additional_calculations,
         statmech=request.statmech,
     )
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.conformer
+    )
     outcome = persist_conformer_upload(
-        session, request, created_by=current_user.id
+        session, request, created_by=current_user.id, review_policy=sub.policy
     )
     observation = outcome.observation
     result = ConformerUploadResult(
         id=observation.id,
+        submission_id=sub.submission_id,
         species_entry_id=observation.conformer_group.species_entry_id,
         conformer_group_id=observation.conformer_group_id,
         primary_calculation=CalculationUploadRef(
@@ -204,6 +223,7 @@ def upload_conformer(
         ],
         warnings=warnings,
     )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -232,14 +252,19 @@ def upload_reaction(
             ws = reconcile_species_entry(p.species_entry)
             for w in ws:
                 warnings.append(w.model_copy(update={"field": f"products[{i}].{w.field}"}))
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.reaction
+    )
     reaction_entry = persist_reaction_upload(
-        session, request, created_by=current_user.id
+        session, request, created_by=current_user.id, review_policy=sub.policy
     )
     result = ReactionUploadResult(
         id=reaction_entry.id,
+        submission_id=sub.submission_id,
         reaction_id=reaction_entry.reaction_id,
         warnings=warnings,
     )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -267,14 +292,19 @@ def upload_kinetics(
         for w in ws:
             warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
     warnings.extend(collect_kinetics_provenance_warnings(request))
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.kinetics
+    )
     kinetics = persist_kinetics_upload(
-        session, request, created_by=current_user.id
+        session, request, created_by=current_user.id, review_policy=sub.policy
     )
     result = KineticsUploadResult(
         id=kinetics.id,
+        submission_id=sub.submission_id,
         reaction_entry_id=kinetics.reaction_entry_id,
         warnings=warnings,
     )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -292,10 +322,14 @@ def upload_network(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    network = persist_network_upload(
-        session, request, created_by=current_user.id
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.network
     )
-    result = NetworkUploadResult(id=network.id)
+    network = persist_network_upload(
+        session, request, created_by=current_user.id, review_policy=sub.policy
+    )
+    result = NetworkUploadResult(id=network.id, submission_id=sub.submission_id)
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -313,11 +347,17 @@ def upload_network_pdep(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.network_pdep
+    )
     network = persist_network_pdep_upload(
-        session, request, created_by=current_user.id
+        session, request, created_by=current_user.id, review_policy=sub.policy
     )
     solve_id = network.solves[0].id if network.solves else None
-    result = NetworkPDepUploadResult(id=network.id, solve_id=solve_id)
+    result = NetworkPDepUploadResult(
+        id=network.id, submission_id=sub.submission_id, solve_id=solve_id
+    )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -345,14 +385,19 @@ def upload_statmech(
         return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(collect_statmech_provenance_warnings(request))
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.statmech
+    )
     statmech = persist_statmech_upload(
-        session, request, created_by=current_user.id
+        session, request, created_by=current_user.id, review_policy=sub.policy
     )
     result = StatmechUploadResult(
         id=statmech.id,
+        submission_id=sub.submission_id,
         species_entry_id=statmech.species_entry_id,
         warnings=warnings,
     )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -372,14 +417,19 @@ def upload_thermo(
         return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(collect_thermo_provenance_warnings(request))
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.thermo
+    )
     thermo = persist_thermo_upload(
-        session, request, created_by=current_user.id
+        session, request, created_by=current_user.id, review_policy=sub.policy
     )
     result = ThermoUploadResult(
         id=thermo.id,
+        submission_id=sub.submission_id,
         species_entry_id=thermo.species_entry_id,
         warnings=warnings,
     )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -406,15 +456,20 @@ def upload_transition_state(
         ws = reconcile_species_entry(p.species_entry)
         for w in ws:
             warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.transition_state
+    )
     ts_entry = persist_transition_state_upload(
-        session, request, created_by=current_user.id
+        session, request, created_by=current_user.id, review_policy=sub.policy
     )
     result = TransitionStateUploadResult(
         id=ts_entry.id,
+        submission_id=sub.submission_id,
         transition_state_id=ts_entry.transition_state_id,
         reaction_entry_id=ts_entry.transition_state.reaction_entry_id,
         warnings=warnings,
     )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -441,14 +496,19 @@ def upload_transport(
         return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(collect_transport_provenance_warnings(request))
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.transport
+    )
     transport = persist_transport_upload(
-        session, request, created_by=current_user.id
+        session, request, created_by=current_user.id, review_policy=sub.policy
     )
     result = TransportUploadResult(
         id=transport.id,
+        submission_id=sub.submission_id,
         species_entry_id=transport.species_entry_id,
         warnings=warnings,
     )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -469,8 +529,11 @@ def upload_computed_species(
     if (replay := idem.maybe_replay()) is not None:
         return replay
     warnings = reconcile_species_entry(request.species_entry)
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.computed_species
+    )
     outcome = persist_computed_species_upload(
-        session, request, created_by=current_user.id
+        session, request, created_by=current_user.id, review_policy=sub.policy
     )
     conformer_refs = [
         ConformerUploadRefInBundle(
@@ -511,11 +574,13 @@ def upload_computed_species(
     )
     result = ComputedSpeciesUploadResult(
         species_entry_id=outcome.species_entry_id,
+        submission_id=sub.submission_id,
         conformers=conformer_refs,
         thermo=thermo_ref,
         statmech=statmech_ref,
         warnings=warnings,
     )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
 
@@ -533,9 +598,15 @@ def upload_computed_reaction(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    result_dict = persist_computed_reaction_upload(
-        session, request, created_by=current_user.id
+    sub = open_upload_submission(
+        session, created_by=current_user.id, kind=SubmissionKind.computed_reaction
     )
-    result = ComputedReactionUploadResult(**result_dict)
+    result_dict = persist_computed_reaction_upload(
+        session, request, created_by=current_user.id, review_policy=sub.policy
+    )
+    result = ComputedReactionUploadResult(
+        **result_dict, submission_id=sub.submission_id
+    )
+    mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result

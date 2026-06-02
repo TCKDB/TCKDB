@@ -23,12 +23,16 @@ from sqlalchemy import func, select
 
 from app.db.models.common import (
     RecordReviewStatus,
+    SubmissionAuditEventKind,
+    SubmissionKind,
     SubmissionRecordType,
+    SubmissionSourceKind,
     SubmissionStatus,
 )
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import (
     Submission,
+    SubmissionAuditEvent,
     SubmissionRecordLink,
 )
 
@@ -60,12 +64,20 @@ def _load_bundle(filename: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Direct uploads → not_reviewed, no submission rows
+# Direct uploads → reviewable submission, records under_review
 # ---------------------------------------------------------------------------
 
 
-class TestDirectUploadsCreateNotReviewedReviewRows:
-    def test_conformer_upload_creates_not_reviewed_rows(self, client, db_session):
+class TestDirectUploadsCreateUnderReviewSubmissions:
+    """Every accepted ``/uploads/*`` call creates a submission wrapper, links
+    the produced records to it, and initialises their review rows at
+    ``under_review`` — the same reviewable semantics as the hosted bundle
+    path, differing only by payload shape.
+    """
+
+    def test_conformer_upload_creates_submission_and_under_review_rows(
+        self, client, db_session
+    ):
         before_subs = (
             db_session.scalar(select(func.count()).select_from(Submission)) or 0
         )
@@ -77,13 +89,22 @@ class TestDirectUploadsCreateNotReviewedReviewRows:
         assert resp.status_code == 201, resp.text
         body = resp.json()
 
-        # Submission tables stay empty for direct ingest.
+        # A submission wrapper is created for the direct upload.
         after_subs = (
             db_session.scalar(select(func.count()).select_from(Submission)) or 0
         )
-        assert after_subs == before_subs
+        assert after_subs == before_subs + 1
 
-        # Primary record gets a not_reviewed review row.
+        submission_id = body["submission_id"]
+        assert submission_id is not None
+        submission = db_session.get(Submission, submission_id)
+        assert submission is not None
+        assert submission.submission_kind is SubmissionKind.conformer
+        assert submission.source_kind is SubmissionSourceKind.api
+        # Entered review, not approved: success != scientific approval.
+        assert submission.status is SubmissionStatus.pending
+
+        # Primary record gets an under_review review row linked to the submission.
         observation_id = body["id"]
         review = db_session.scalar(
             select(RecordReview).where(
@@ -93,9 +114,20 @@ class TestDirectUploadsCreateNotReviewedReviewRows:
             )
         )
         assert review is not None
-        assert review.status is RecordReviewStatus.not_reviewed
-        assert review.submission_id is None
+        assert review.status is RecordReviewStatus.under_review
+        assert review.submission_id == submission_id
         assert review.reviewed_by is None
+
+        # The observation is linked to the submission.
+        link = db_session.scalar(
+            select(SubmissionRecordLink).where(
+                SubmissionRecordLink.submission_id == submission_id,
+                SubmissionRecordLink.record_type
+                == SubmissionRecordType.conformer_observation,
+                SubmissionRecordLink.record_id == observation_id,
+            )
+        )
+        assert link is not None
 
         # Calculation gets one too — included by Decision 2 in the design.
         calc_id = body["primary_calculation"]["calculation_id"]
@@ -106,9 +138,24 @@ class TestDirectUploadsCreateNotReviewedReviewRows:
             )
         )
         assert calc_review is not None
-        assert calc_review.status is RecordReviewStatus.not_reviewed
+        assert calc_review.status is RecordReviewStatus.under_review
+        assert calc_review.submission_id == submission_id
 
-    def test_thermo_upload_creates_not_reviewed_row(self, client, db_session):
+        # Audit trail: submission_created + ingestion_succeeded.
+        kinds = {
+            e.event_kind
+            for e in db_session.scalars(
+                select(SubmissionAuditEvent).where(
+                    SubmissionAuditEvent.submission_id == submission_id
+                )
+            ).all()
+        }
+        assert SubmissionAuditEventKind.submission_created in kinds
+        assert SubmissionAuditEventKind.ingestion_succeeded in kinds
+
+    def test_thermo_upload_creates_submission_and_under_review_row(
+        self, client, db_session
+    ):
         resp = client.post(
             "/api/v1/uploads/thermo",
             json={
@@ -124,6 +171,8 @@ class TestDirectUploadsCreateNotReviewedReviewRows:
         assert resp.status_code == 201, resp.text
         body = resp.json()
         thermo_id = body["id"]
+        submission_id = body["submission_id"]
+        assert submission_id is not None
 
         review = db_session.scalar(
             select(RecordReview).where(
@@ -132,15 +181,26 @@ class TestDirectUploadsCreateNotReviewedReviewRows:
             )
         )
         assert review is not None
-        assert review.status is RecordReviewStatus.not_reviewed
-        assert review.submission_id is None
+        assert review.status is RecordReviewStatus.under_review
+        assert review.submission_id == submission_id
 
-        # Submission tables remain empty.
-        assert (
-            db_session.scalar(select(func.count()).select_from(Submission)) or 0
-        ) == 0
+        submission = db_session.get(Submission, submission_id)
+        assert submission is not None
+        assert submission.submission_kind is SubmissionKind.thermo
 
-    def test_computed_species_creates_review_rows(self, client, db_session):
+        # The thermo product is linked to the submission.
+        link = db_session.scalar(
+            select(SubmissionRecordLink).where(
+                SubmissionRecordLink.submission_id == submission_id,
+                SubmissionRecordLink.record_type == SubmissionRecordType.thermo,
+                SubmissionRecordLink.record_id == thermo_id,
+            )
+        )
+        assert link is not None
+
+    def test_computed_species_creates_submission_and_under_review_rows(
+        self, client, db_session
+    ):
         # Minimal valid computed-species bundle with one conformer + opt
         # primary calc.
         bundle = {
@@ -175,6 +235,12 @@ class TestDirectUploadsCreateNotReviewedReviewRows:
         assert resp.status_code == 201, resp.text
         body = resp.json()
 
+        submission_id = body["submission_id"]
+        assert submission_id is not None
+        submission = db_session.get(Submission, submission_id)
+        assert submission is not None
+        assert submission.submission_kind is SubmissionKind.computed_species
+
         species_review = db_session.scalar(
             select(RecordReview).where(
                 RecordReview.record_type == SubmissionRecordType.species_entry,
@@ -182,12 +248,19 @@ class TestDirectUploadsCreateNotReviewedReviewRows:
             )
         )
         assert species_review is not None
-        assert species_review.status is RecordReviewStatus.not_reviewed
+        assert species_review.status is RecordReviewStatus.under_review
+        assert species_review.submission_id == submission_id
 
-        # Submission tables stay empty.
-        assert (
-            db_session.scalar(select(func.count()).select_from(Submission)) or 0
-        ) == 0
+        # The species_entry is linked to the submission.
+        link = db_session.scalar(
+            select(SubmissionRecordLink).where(
+                SubmissionRecordLink.submission_id == submission_id,
+                SubmissionRecordLink.record_type
+                == SubmissionRecordType.species_entry,
+                SubmissionRecordLink.record_id == body["species_entry_id"],
+            )
+        )
+        assert link is not None
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +394,8 @@ class TestRecordReviewApi:
         resp = client.get(f"/api/v1/record-reviews/thermo/{thermo_id}")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "not_reviewed"
+        # Direct uploads now enter review as part of a submission.
+        assert body["status"] == "under_review"
         assert body["record_type"] == "thermo"
         assert body["record_id"] == thermo_id
 
@@ -333,12 +407,12 @@ class TestRecordReviewApi:
         self._seed_thermo(client)
         resp = client.get(
             "/api/v1/record-reviews",
-            params={"status": "not_reviewed", "limit": 50},
+            params={"status": "under_review", "limit": 50},
         )
         assert resp.status_code == 200
         rows = resp.json()
         assert rows
-        assert all(r["status"] == "not_reviewed" for r in rows)
+        assert all(r["status"] == "under_review" for r in rows)
 
     def test_patch_requires_curator(self, client):
         thermo_id = self._seed_thermo(client)

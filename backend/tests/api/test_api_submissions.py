@@ -895,15 +895,30 @@ _CONFORMER_PAYLOAD: dict = {
 }
 
 
-class TestDirectUploadsLeaveSubmissionTablesEmpty:
-    def test_conformer_upload_does_not_create_submission(
-        self, client, db_session
-    ):
+class TestDirectUploadsCreateSubmission:
+    """Direct ``/uploads/*`` calls are reviewable contributions: each creates
+    a submission, an audit trail, and record links — the same wrapper the
+    hosted bundle path produces, differing only by payload shape.
+    """
+
+    def test_conformer_upload_creates_submission(self, client, db_session):
         resp = client.post("/api/v1/uploads/conformers", json=_CONFORMER_PAYLOAD)
         assert resp.status_code == 201
+        submission_id = resp.json()["submission_id"]
+        assert submission_id is not None
 
-        for model in (Submission, SubmissionAuditEvent, SubmissionRecordLink):
-            count = db_session.scalar(
-                select(func.count()).select_from(model)
-            ) or 0
-            assert count == 0, f"{model.__tablename__} unexpectedly populated"
+        submission = db_session.get(Submission, submission_id)
+        assert submission is not None
+        assert submission.submission_kind is SubmissionKind.conformer
+
+        # Audit events and record links exist for the upload event.
+        for model in (SubmissionAuditEvent, SubmissionRecordLink):
+            count = (
+                db_session.scalar(
+                    select(func.count())
+                    .select_from(model)
+                    .where(model.submission_id == submission_id)
+                )
+                or 0
+            )
+            assert count > 0, f"{model.__tablename__} unexpectedly empty"
