@@ -13,6 +13,9 @@ class JobEnqueueResponse(BaseModel):
     job_id: str
     status: UploadJobStatus
     kind: UploadJobKind
+    #: Submission wrapper created for this async upload event. The worker
+    #: links records and flips review/audit state against this submission.
+    submission_id: int | None = None
 
 
 class JobStatusResponse(BaseModel):

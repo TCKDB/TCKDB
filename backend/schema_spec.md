@@ -433,28 +433,29 @@ Notes:
 
 ## 6. Submission and Moderation Layer
 
-### 6.0 Two ingest planes
+### 6.0 Ingest planes
 
-TCKDB has two distinct ingestion paths. They share the same scientific
-schema and both populate `created_by` from the authenticated `app_user`,
-but they differ in moderation lifecycle:
+**Every accepted upload creates a `submission`** — the audit wrapper for an
+upload event that produced (or attempted to produce) scientific records. The
+planes share the same scientific schema and all attribute records via
+`created_by`; they differ by payload shape and review default, not by whether
+they are auditable. See `docs/specs/ingestion_submission_model.md` for the full
+model.
 
-| Plane | Routes | Submission lifecycle | Intended actor |
-|-------|--------|----------------------|----------------|
-| Direct ingest | `/api/v1/uploads/*`, `/api/v1/calculations/{id}/artifacts` | None — `submission*` tables remain empty | Trusted workflow tools (e.g. ARC), curators, admins via API key |
-| Moderated submission | `/api/v1/bundles/submit`, `/api/v1/submissions/*` | `submission` + `submission_audit_event` + `submission_record_link` rows are created | Public/community contributors |
+| Plane | Routes | Submission / review on success | Notes |
+|-------|--------|--------------------------------|-------|
+| Synchronous direct | `/api/v1/uploads/*` | `submission` (`pending`) + `submission_created` + `ingestion_succeeded` + `submission_record_link` rows + `record_review` `under_review` | One submission per upload; full review-target set linked, plus artifact evidence links |
+| Async job | `/api/v1/jobs/*` → worker | submission created at enqueue (`pending`, `upload_job_id` set); worker links/records on success, or marks `failed` on terminal failure | Durable failure audit |
+| Moderated bundle | `/api/v1/bundles/submit`, `/api/v1/submissions/*` | `submission` (`pending`) + audit + curated `submission_record_link` + `record_review` `under_review` | Multi-record community contribution |
+| Artifact attach | `/api/v1/calculations/{id}/artifacts` | none of its own | Second-phase artifact upload against an existing calculation |
 
-Direct ingest writes scientific records that are immediately live and
-attributed via `created_by`, with no review step. Moderated submission
-wraps the same scientific workflows with a `submission` shell so a
-curator can later approve, reject, or supersede the contribution; the
-scientific rows are still attributed via `created_by` independently of
-the submission's status.
+Successful ingestion is **not** scientific approval: a successful submission
+sits at `status = pending` with records `under_review`; a curator later
+approves/rejects/supersedes via `/submissions/*`. Failed uploads are recorded
+durably with `status = failed` and an `ingestion_failed` audit event, and never
+leave partial scientific records.
 
-`tckdb-client` currently only targets the direct-ingest plane. The
-moderated plane is consumed by the contribution-bundle endpoint and the
-new `/submissions/*` curator API exposed by
-`backend/app/api/routes/submissions.py`.
+`tckdb-client` targets the synchronous direct plane.
 
 ### 6.1 Submission
 
@@ -484,9 +485,16 @@ Fields:
 
 Notes:
 
-- `submission` represents one moderated user contribution event
-- it links optionally to an `upload_job` — the column is reserved for a future
-  async-moderated path; no current ingest path populates it
+- `submission` represents one upload/import event (every accepted upload
+  creates one; see §6.0)
+- `status` — `submission_status` enum:
+  `pending | precheck_passed | auto_flagged | approved | rejected | superseded | failed`.
+  `failed` is a system-set terminal state for an upload whose ingestion failed
+  (async job out of retries, or a sync upload that raised during persistence);
+  it is distinct from curator `rejected` (which requires a reviewer and reason)
+  and is never curator-approvable or public.
+- `upload_job_id` links to the `upload_job` for async (`/jobs/*`) uploads; it is
+  set at enqueue time and null for synchronous uploads
 - indexes support lookup by creator, upload job, and `(status, created_at)`
 - approving or rejecting your own submission is forbidden
 - rejected submissions must include a `rejection_reason`
@@ -530,6 +538,13 @@ Fields:
 Notes:
 
 - this table maps a submission to created or affected scientific records
+- `record_type` is the `submission_record_type` enum; it includes scientific
+  identity/result types plus `artifact` for uploaded evidence files
+- uploaded calculation artifacts are linked with `role = "artifact"` as
+  contribution evidence; unlike scientific records they get **no**
+  `record_review` row
+- `role = NULL` rows are the review-target links; role-bearing rows are the
+  bundle's curated links and artifact evidence links
 - lookup is indexed both by submission and by `(record_type, record_id)`
 - dedupe is enforced on `(submission_id, record_type, record_id, role)`
 

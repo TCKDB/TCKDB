@@ -436,3 +436,134 @@ class TestAuthorization:
             json=_hydrogen_bundle_payload(),
         )
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Artifact → submission links (ingestion-audit model)
+# ---------------------------------------------------------------------------
+
+
+class TestArtifactSubmissionLinks:
+    """Uploaded artifacts are linked to the submission as evidence
+    (role="artifact"), but are never given record_review rows.
+    """
+
+    def test_computed_species_artifacts_linked_to_submission(
+        self, client, db_session, stub_store_artifact
+    ):
+        import copy as _copy
+
+        from sqlalchemy import select
+
+        from app.db.models.common import SubmissionRecordType
+        from app.db.models.record_review import RecordReview
+        from app.db.models.submission import SubmissionRecordLink
+
+        payload = _hydrogen_bundle_payload()
+        payload["conformers"][0]["primary_calculation"]["artifacts"] = [
+            _opt_log_artifact()
+        ]
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        assert resp.status_code == 201, resp.text
+        submission_id = resp.json()["submission_id"]
+        assert submission_id is not None
+
+        art_links = db_session.scalars(
+            select(SubmissionRecordLink).where(
+                SubmissionRecordLink.submission_id == submission_id,
+                SubmissionRecordLink.record_type == SubmissionRecordType.artifact,
+            )
+        ).all()
+        assert art_links, "uploaded artifact should be linked to the submission"
+        assert all(link.role == "artifact" for link in art_links)
+
+        # Artifacts are evidence, not reviewable records: no record_review rows.
+        for link in art_links:
+            review = db_session.scalar(
+                select(RecordReview).where(
+                    RecordReview.record_type == SubmissionRecordType.artifact,
+                    RecordReview.record_id == link.record_id,
+                )
+            )
+            assert review is None
+
+    def test_computed_reaction_artifacts_linked_to_submission(
+        self, client, db_session, stub_store_artifact
+    ):
+        import copy as _copy
+
+        from sqlalchemy import select
+
+        from app.db.models.common import SubmissionRecordType
+        from app.db.models.submission import SubmissionRecordLink
+        from tests.api.test_api_kfir_rxn import _BUNDLE as _COMPUTED_REACTION_BUNDLE
+
+        bundle = _copy.deepcopy(_COMPUTED_REACTION_BUNDLE)
+        # Attach an artifact to one species-side calculation.
+        bundle["species"][0]["calculations"][0]["artifacts"] = [_opt_log_artifact()]
+
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        assert resp.status_code == 201, resp.text
+        submission_id = resp.json()["submission_id"]
+        assert submission_id is not None
+
+        art_links = db_session.scalars(
+            select(SubmissionRecordLink).where(
+                SubmissionRecordLink.submission_id == submission_id,
+                SubmissionRecordLink.record_type == SubmissionRecordType.artifact,
+            )
+        ).all()
+        assert art_links, "computed-reaction artifact should be linked"
+        assert all(link.role == "artifact" for link in art_links)
+
+    def test_idempotent_replay_does_not_duplicate_artifact_links(
+        self, client, db_session, stub_store_artifact
+    ):
+        from sqlalchemy import func, select
+
+        from app.db.models.common import SubmissionRecordType
+        from app.db.models.submission import Submission, SubmissionRecordLink
+
+        payload = _hydrogen_bundle_payload()
+        payload["conformers"][0]["primary_calculation"]["artifacts"] = [
+            _opt_log_artifact()
+        ]
+        headers = {"Idempotency-Key": "computed-species-artifact-idem-001"}
+
+        first = client.post(
+            "/api/v1/uploads/computed-species", json=payload, headers=headers
+        )
+        assert first.status_code == 201, first.text
+        submission_id = first.json()["submission_id"]
+
+        def _artifact_link_count() -> int:
+            return (
+                db_session.scalar(
+                    select(func.count())
+                    .select_from(SubmissionRecordLink)
+                    .where(
+                        SubmissionRecordLink.submission_id == submission_id,
+                        SubmissionRecordLink.record_type
+                        == SubmissionRecordType.artifact,
+                    )
+                )
+                or 0
+            )
+
+        subs_after_first = (
+            db_session.scalar(select(func.count()).select_from(Submission)) or 0
+        )
+        artifact_links_after_first = _artifact_link_count()
+        assert artifact_links_after_first > 0
+
+        # Replay: same key + body returns the stored response, no new rows.
+        second = client.post(
+            "/api/v1/uploads/computed-species", json=payload, headers=headers
+        )
+        assert second.status_code == 201, second.text
+        assert second.json()["submission_id"] == submission_id
+
+        assert (
+            db_session.scalar(select(func.count()).select_from(Submission)) or 0
+        ) == subs_after_first
+        assert _artifact_link_count() == artifact_links_after_first

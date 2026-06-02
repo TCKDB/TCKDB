@@ -44,32 +44,90 @@ seam. Direct uploads additionally set `link_records=True` so the workflow's full
 review-target set is linked; the bundle path keeps its own curated, role-bearing
 `submission_record_link` rows.
 
+## Async upload jobs (`/jobs/*`)
+
+Async uploads are wrapped in the **same** submission model, on the Option-C
+"submission at enqueue" design:
+
+1. **Enqueue** (`POST /jobs/*`, `202`): create the `upload_job`, then create a
+   `submission` (`status = pending`, `source_kind = api`) with
+   `submission.upload_job_id` pointing at the job, plus a `submission_created`
+   audit event. The enqueue response carries `submission_id`. The contribution
+   event is therefore auditable from the moment it is accepted — even if the
+   worker never runs.
+2. **Worker success**: the worker runs the ingestion under the job's submission
+   (`ReviewPolicy(under_review, submission_id, link_records=True)`), so records
+   are persisted under review, linked to the submission, and an
+   `ingestion_succeeded` audit event is appended. Status stays `pending`.
+3. **Worker terminal failure** (retries exhausted): in a transaction separate
+   from the rolled-back persistence attempt, the worker appends an
+   `ingestion_failed` audit event and sets `submission.status = failed`. No
+   partial scientific records survive (the persistence transaction rolled back).
+   Retryable failures leave the submission `pending` for the next attempt.
+
+Async jobs are **never** auto-reviewed or auto-approved.
+
+## Artifact links
+
+Uploaded calculation artifacts are linked to the submission as evidence:
+`submission_record_link` rows with `record_type = artifact`, `role = "artifact"`.
+This is derived centrally in `apply_review_policy` from the linked `calculation`
+targets, so it applies uniformly to every upload path (sync and async).
+
+Artifacts are evidence, **not** reviewable scientific results: they receive a
+record link but **never** a `record_review` row.
+
+**Geometry is intentionally not linked.** Geometries are content-addressed and
+deduplicated — one row is reused across many uploads — so linking a geometry to
+a submission would falsely imply the submission owns or produced it. If geometry
+provenance per upload is ever needed, it should be expressed through the
+calculation's input/output geometry attachments (which carry roles like
+`final`), not through `submission_record_link`.
+
 ## Wiring
 
 - Routes: `app/api/routes/uploads.py` — each handler wraps its workflow call
-  with `open_upload_submission(...)` / `mark_upload_ingested(...)` from
-  `app/services/upload_submission.py`.
+  with `open_upload_submission(...)` / `mark_upload_ingested(...)` and is
+  decorated with `@audit_sync_upload_failure(kind)` for durable failure audit;
+  helpers live in `app/services/upload_submission.py`.
+- Async: `app/api/routes/jobs.py` (`open_job_submission` at enqueue) and
+  `app/workers/upload_worker.py` (`review_policy_for_submission`,
+  `mark_ingestion_succeeded` / `mark_ingestion_failed`).
 - Policy + linking: `app/services/record_review.py` — `ReviewPolicy` carries
   `status`, `submission_id`, `link_records`; `apply_review_policy` writes the
-  `record_review` rows and (when `link_records`) the `submission_record_link`
-  rows from one target list.
+  `record_review` rows, the `submission_record_link` rows, and the artifact
+  evidence links from one target list.
 - Submission lifecycle: `app/services/submission.py` — `create_submission`,
-  `mark_ingestion_succeeded`, `link_record`, curator approve/reject.
+  `mark_ingestion_succeeded`, `mark_ingestion_failed`, `link_record`, curator
+  approve/reject.
 
-## Transactionality
+## Transactionality & failed ingestion
 
-The submission, scientific records, links, audit events, and review rows commit
-or roll back together. On the synchronous route path, `get_write_db` rolls the
-whole transaction back if the workflow raises, so a failed upload leaves **no
-orphan submission**. `ingestion_failed` is therefore reserved for a future
-async/two-phase path that can commit a failure record independently of the
-records it was importing.
+Scientific persistence is always atomic: a failed upload never leaves partial
+scientific records, links, or review rows.
+
+- **Synchronous `/uploads/*`**: the scientific transaction (`get_write_db`)
+  rolls back fully on failure, so the in-band submission is discarded. To still
+  answer "who attempted what, when, on which route, why did it fail", the route
+  decorator records a durable failed submission in a **separate** transaction:
+  `submission.status = failed` + `submission_created` + `ingestion_failed`, with
+  no scientific records, links, or review rows. This best-effort audit never
+  masks the original upload error. Only authenticated, request-parsed payloads
+  reach this path — invalid payloads are rejected by FastAPI before the route
+  body and never create a submission.
+- **Async `/jobs/*`**: the submission committed at enqueue is durable; terminal
+  worker failure flips it to `failed` (see above).
+
+`SubmissionStatus.failed` is a system-set terminal state distinct from curator
+`rejected` (which carries reviewer/reason invariants). `failed` is never
+curator-approvable and never public.
 
 ## Idempotency
 
 Idempotency is unchanged and route-level (header `Idempotency-Key`). A replay
 returns the stored response — including the original `submission_id` — and
-creates no second submission or duplicate links.
+creates no second submission, duplicate record links, or duplicate artifact
+links. Failed attempts do not store an idempotency record, so a retry re-attempts.
 
 ## What is unchanged
 
@@ -78,7 +136,4 @@ creates no second submission or duplicate links.
   state around them but never mark a product canonical.
 - Identity deduplication (species, geometry, level-of-theory, reaction, …) is
   unchanged.
-- Artifact persistence and compensation are unchanged.
-- The async `/jobs/*` worker path is **not** yet wrapped in submissions
-  (`computed_species`/`statmech` are not async-enqueueable anyway); wrapping it
-  is a follow-up that should reuse `open_upload_submission`.
+- Artifact persistence and compensation are unchanged (linking is additive).

@@ -46,10 +46,14 @@ from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
 )
+from app.db.models.calculation import CalculationArtifact
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import SubmissionRecordLink
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
+
+#: Role recorded on ``submission_record_link`` rows for artifact evidence.
+_ARTIFACT_LINK_ROLE = "artifact"
 
 _TERMINAL_STATUSES = frozenset(
     {
@@ -429,21 +433,27 @@ def _ensure_record_link(
     submission_id: int,
     record_type: SubmissionRecordType,
     record_id: int,
+    role: Optional[str] = None,
 ) -> None:
-    """Idempotently attach ``(record_type, record_id)`` to a submission.
+    """Idempotently attach ``(record_type, record_id, role)`` to a submission.
 
     Mirrors :func:`app.services.submission.link_record` but writes the model
     row directly so this module stays free of a service-level import cycle
-    (``app.services.submission`` imports from here). Links are created with
-    ``role=None``; the curated, role-bearing links the bundle workflow makes
-    remain its own responsibility.
+    (``app.services.submission`` imports from here). Review-target links use
+    ``role=None``; artifact evidence links use ``role="artifact"``. The
+    curated links the bundle workflow makes remain its own responsibility.
     """
+    role_predicate = (
+        SubmissionRecordLink.role.is_(None)
+        if role is None
+        else SubmissionRecordLink.role == role
+    )
     existing = session.scalar(
         select(SubmissionRecordLink).where(
             SubmissionRecordLink.submission_id == submission_id,
             SubmissionRecordLink.record_type == record_type,
             SubmissionRecordLink.record_id == record_id,
-            SubmissionRecordLink.role.is_(None),
+            role_predicate,
         )
     )
     if existing is not None:
@@ -453,10 +463,26 @@ def _ensure_record_link(
             submission_id=submission_id,
             record_type=record_type,
             record_id=record_id,
-            role=None,
+            role=role,
         )
     )
     session.flush()
+
+
+def _artifact_ids_for_calculations(
+    session: Session, calculation_ids: Iterable[int]
+) -> list[int]:
+    """Return ids of every ``calculation_artifact`` under the given calcs."""
+    ids = {cid for cid in calculation_ids}
+    if not ids:
+        return []
+    return list(
+        session.scalars(
+            select(CalculationArtifact.id).where(
+                CalculationArtifact.calculation_id.in_(ids)
+            )
+        ).all()
+    )
 
 
 def apply_review_policy(
@@ -475,6 +501,10 @@ def apply_review_policy(
     When the policy carries a ``submission_id`` and ``link_records`` is set,
     each target is also idempotently linked to that submission, so the upload
     event's full record set is traceable through ``submission_record_link``.
+    Uploaded artifacts attached to any linked ``calculation`` target are
+    additionally linked as evidence (``role="artifact"``) — they are *not*
+    given ``record_review`` rows, since an artifact is contribution evidence,
+    not a reviewable scientific result.
     """
     if policy is None:
         return []
@@ -493,6 +523,19 @@ def apply_review_policy(
                 submission_id=policy.submission_id,
                 record_type=target.record_type,
                 record_id=target.record_id,
+            )
+        calc_ids = [
+            t.record_id
+            for t in targets
+            if t.record_type is SubmissionRecordType.calculation
+        ]
+        for artifact_id in _artifact_ids_for_calculations(session, calc_ids):
+            _ensure_record_link(
+                session,
+                submission_id=policy.submission_id,
+                record_type=SubmissionRecordType.artifact,
+                record_id=artifact_id,
+                role=_ARTIFACT_LINK_ROLE,
             )
     return reviews
 

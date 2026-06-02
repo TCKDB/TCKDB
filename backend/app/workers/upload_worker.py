@@ -22,8 +22,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import SessionLocal
-from app.db.models.common import UploadJobKind, UploadJobStatus
+from app.db.models.common import SubmissionStatus, UploadJobKind, UploadJobStatus
+from app.db.models.submission import Submission
 from app.db.models.upload_job import UploadJob
+from app.services.record_review import ReviewPolicy
+from app.services.submission import mark_ingestion_failed, mark_ingestion_succeeded
+from app.services.upload_submission import review_policy_for_submission
 
 logger = logging.getLogger(__name__)
 
@@ -65,21 +69,21 @@ def _claim_one_job(session: Session) -> UploadJob | None:
 # Handlers — one per upload kind, each returns a JSON-serialisable dict
 # ---------------------------------------------------------------------------
 
-def _run_computed_reaction(session: Session, job: UploadJob) -> dict:
+def _run_computed_reaction(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
     from app.workflows.computed_reaction import persist_computed_reaction_upload
 
     request = ComputedReactionUploadRequest.model_validate(job.payload)
-    return persist_computed_reaction_upload(session, request, created_by=job.created_by)
+    return persist_computed_reaction_upload(session, request, created_by=job.created_by, review_policy=review_policy)
 
 
-def _run_conformer(session: Session, job: UploadJob) -> dict:
+def _run_conformer(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.conformer_upload import ConformerUploadRequest
     from app.workflows.conformer import persist_conformer_upload
 
     request = ConformerUploadRequest.model_validate(job.payload)
     outcome = persist_conformer_upload(
-        session, request, created_by=job.created_by
+        session, request, created_by=job.created_by, review_policy=review_policy
     )
     obs = outcome.observation
     return {
@@ -105,12 +109,12 @@ def _run_conformer(session: Session, job: UploadJob) -> dict:
     }
 
 
-def _run_reaction(session: Session, job: UploadJob) -> dict:
+def _run_reaction(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.reaction_upload import ReactionUploadRequest
     from app.workflows.reaction import persist_reaction_upload
 
     request = ReactionUploadRequest.model_validate(job.payload)
-    entry = persist_reaction_upload(session, request, created_by=job.created_by)
+    entry = persist_reaction_upload(session, request, created_by=job.created_by, review_policy=review_policy)
     return {
         "type": "reaction_entry",
         "id": entry.id,
@@ -118,12 +122,12 @@ def _run_reaction(session: Session, job: UploadJob) -> dict:
     }
 
 
-def _run_kinetics(session: Session, job: UploadJob) -> dict:
+def _run_kinetics(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
     from app.workflows.kinetics import persist_kinetics_upload
 
     request = KineticsUploadRequest.model_validate(job.payload)
-    kinetics = persist_kinetics_upload(session, request, created_by=job.created_by)
+    kinetics = persist_kinetics_upload(session, request, created_by=job.created_by, review_policy=review_policy)
     return {
         "type": "kinetics",
         "id": kinetics.id,
@@ -131,31 +135,31 @@ def _run_kinetics(session: Session, job: UploadJob) -> dict:
     }
 
 
-def _run_network(session: Session, job: UploadJob) -> dict:
+def _run_network(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.network_upload import NetworkUploadRequest
     from app.workflows.network import persist_network_upload
 
     request = NetworkUploadRequest.model_validate(job.payload)
-    network = persist_network_upload(session, request, created_by=job.created_by)
+    network = persist_network_upload(session, request, created_by=job.created_by, review_policy=review_policy)
     return {"type": "network", "id": network.id}
 
 
-def _run_network_pdep(session: Session, job: UploadJob) -> dict:
+def _run_network_pdep(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
     from app.workflows.network_pdep import persist_network_pdep_upload
 
     request = NetworkPDepUploadRequest.model_validate(job.payload)
-    network = persist_network_pdep_upload(session, request, created_by=job.created_by)
+    network = persist_network_pdep_upload(session, request, created_by=job.created_by, review_policy=review_policy)
     solve_id = network.solves[0].id if network.solves else None
     return {"type": "network_pdep", "id": network.id, "solve_id": solve_id}
 
 
-def _run_thermo(session: Session, job: UploadJob) -> dict:
+def _run_thermo(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.thermo_upload import ThermoUploadRequest
     from app.workflows.thermo import persist_thermo_upload
 
     request = ThermoUploadRequest.model_validate(job.payload)
-    thermo = persist_thermo_upload(session, request, created_by=job.created_by)
+    thermo = persist_thermo_upload(session, request, created_by=job.created_by, review_policy=review_policy)
     return {
         "type": "thermo",
         "id": thermo.id,
@@ -163,12 +167,12 @@ def _run_thermo(session: Session, job: UploadJob) -> dict:
     }
 
 
-def _run_transition_state(session: Session, job: UploadJob) -> dict:
+def _run_transition_state(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.transition_state_upload import TransitionStateUploadRequest
     from app.workflows.transition_state import persist_transition_state_upload
 
     request = TransitionStateUploadRequest.model_validate(job.payload)
-    ts_entry = persist_transition_state_upload(session, request, created_by=job.created_by)
+    ts_entry = persist_transition_state_upload(session, request, created_by=job.created_by, review_policy=review_policy)
     return {
         "type": "transition_state_entry",
         "id": ts_entry.id,
@@ -177,12 +181,12 @@ def _run_transition_state(session: Session, job: UploadJob) -> dict:
     }
 
 
-def _run_transport(session: Session, job: UploadJob) -> dict:
+def _run_transport(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
     from app.schemas.workflows.transport_upload import TransportUploadRequest
     from app.workflows.transport import persist_transport_upload
 
     request = TransportUploadRequest.model_validate(job.payload)
-    transport = persist_transport_upload(session, request, created_by=job.created_by)
+    transport = persist_transport_upload(session, request, created_by=job.created_by, review_policy=review_policy)
     return {
         "type": "transport",
         "id": transport.id,
@@ -207,13 +211,47 @@ _DISPATCH: dict[UploadJobKind, callable] = {
 # Job execution
 # ---------------------------------------------------------------------------
 
+def _submission_for_job(session: Session, job: UploadJob) -> Submission | None:
+    """Return the submission wrapper created for this job at enqueue time.
+
+    Returns ``None`` for legacy jobs enqueued before submissions were wired
+    (those simply run without submission/review side effects).
+    """
+    return session.scalar(
+        select(Submission).where(Submission.upload_job_id == str(job.id))
+    )
+
+
 def run_one_job(session: Session, job: UploadJob) -> None:
-    """Execute a claimed job and write the result/error back to the row."""
+    """Execute a claimed job and write the result/error back to the row.
+
+    Runs the ingestion under the job's submission: records are persisted
+    under review and linked to the submission, and an ``ingestion_succeeded``
+    audit event is appended. The submission status stays ``pending`` —
+    successful ingestion is not scientific approval.
+    """
     handler = _DISPATCH.get(job.kind)
     if handler is None:
         raise NotImplementedError(f"No handler registered for job kind {job.kind!r}")
 
-    result = handler(session, job)
+    submission = _submission_for_job(session, job)
+    policy = (
+        review_policy_for_submission(submission)
+        if submission is not None
+        else ReviewPolicy()
+    )
+
+    result = handler(session, job, policy)
+
+    if submission is not None:
+        mark_ingestion_succeeded(
+            session,
+            submission=submission,
+            summary=f"Ingested async {job.kind.value} job.",
+        )
+        if isinstance(result, dict):
+            result = {**result, "submission_id": submission.id}
+
     job.status = UploadJobStatus.complete
     job.completed_at = _utcnow()
     job.result = result
@@ -242,12 +280,25 @@ def _process_one_cycle() -> bool:
 
         except Exception as exc:
             logger.exception("job %s (%s) failed: %s", job_id, job_kind, exc)
+            # This block runs in a *fresh* transaction after the persistence
+            # transaction above rolled back — so no partial scientific records
+            # survive. The submission was committed at enqueue, so on terminal
+            # failure we durably record the failed attempt against it.
             with session.begin():
                 job = session.get(UploadJob, job_id)
                 job.error = f"{type(exc).__name__}: {exc}"
                 if job.attempts >= job.max_attempts:
                     job.status = UploadJobStatus.failed
                     job.completed_at = _utcnow()
+                    submission = _submission_for_job(session, job)
+                    if submission is not None:
+                        mark_ingestion_failed(
+                            session,
+                            submission=submission,
+                            reason=job.error,
+                            details_json={"upload_job_id": job_id},
+                        )
+                        submission.status = SubmissionStatus.failed
                     logger.warning(
                         "job %s exhausted %d attempts — marked failed",
                         job_id, job.max_attempts,

@@ -17,10 +17,15 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import func, select
 
+from sqlalchemy.orm import Session
+
 from app.db.models.common import (
     RecordReviewStatus,
+    SubmissionAuditEventKind,
     SubmissionKind,
     SubmissionRecordType,
+    SubmissionStatus,
+    UploadJobKind,
 )
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import (
@@ -28,6 +33,7 @@ from app.db.models.submission import (
     SubmissionAuditEvent,
     SubmissionRecordLink,
 )
+from app.db.models.upload_job import UploadJob
 
 # Reuse ready-made, schema-valid payloads from the per-kind upload suites.
 from tests.api.test_api_kfir_rxn import _BUNDLE as _COMPUTED_REACTION_BUNDLE
@@ -253,3 +259,115 @@ class TestIdempotentReplayDoesNotDuplicateSubmission:
         # No second submission, no duplicate links.
         assert _submission_count(db_session) == subs_after_first
         assert len(_links_for(db_session, first_submission_id)) == links_after_first
+
+
+# ---------------------------------------------------------------------------
+# Async enqueue creates the submission wrapper (requirement 1)
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncEnqueueCreatesSubmission:
+    def test_enqueue_creates_submission_linked_to_job(self, client, db_session):
+        resp = client.post(
+            "/api/v1/jobs/transport", json=_transport_payload()
+        )
+        assert resp.status_code == 202, resp.text
+        body = resp.json()
+
+        submission_id = body["submission_id"]
+        assert submission_id is not None
+        job_id = body["job_id"]
+
+        submission = db_session.get(Submission, submission_id)
+        assert submission is not None
+        # The submission is linked to its async job and classified by kind.
+        assert submission.upload_job_id == job_id
+        assert submission.submission_kind is SubmissionKind.transport
+        # Awaiting processing, not approved.
+        assert submission.status is SubmissionStatus.pending
+
+        # submission_created audit exists; no record links yet (worker not run).
+        kinds = {
+            e.event_kind
+            for e in db_session.scalars(
+                select(SubmissionAuditEvent).where(
+                    SubmissionAuditEvent.submission_id == submission_id
+                )
+            ).all()
+        }
+        assert SubmissionAuditEventKind.submission_created in kinds
+        assert not _links_for(db_session, submission_id)
+
+
+# ---------------------------------------------------------------------------
+# Sync durable failed-ingestion audit (requirement: Part 3)
+# ---------------------------------------------------------------------------
+
+
+class TestSyncFailedUploadAudit:
+    def test_record_failed_upload_persists_failed_submission(
+        self, db_engine, _api_test_user
+    ):
+        """A failed synchronous upload durably records a ``failed`` submission
+        with an ``ingestion_failed`` audit event and no scientific records,
+        links, or review rows — in its own committed transaction.
+        """
+        from app.services.upload_submission import record_failed_upload
+
+        submission_id = record_failed_upload(
+            created_by=_api_test_user,
+            kind=SubmissionKind.thermo,
+            error_summary="ValueError: simulated parse/persist failure",
+            session_factory=lambda: Session(bind=db_engine),
+        )
+        assert submission_id is not None
+
+        try:
+            with Session(db_engine) as s:
+                submission = s.get(Submission, submission_id)
+                assert submission is not None
+                assert submission.status is SubmissionStatus.failed
+                assert submission.submission_kind is SubmissionKind.thermo
+                assert submission.created_by == _api_test_user
+
+                kinds = {
+                    e.event_kind
+                    for e in s.scalars(
+                        select(SubmissionAuditEvent).where(
+                            SubmissionAuditEvent.submission_id == submission_id
+                        )
+                    ).all()
+                }
+                assert SubmissionAuditEventKind.submission_created in kinds
+                assert SubmissionAuditEventKind.ingestion_failed in kinds
+
+                # No scientific record links or review rows for a failed attempt.
+                assert (
+                    s.scalar(
+                        select(func.count())
+                        .select_from(SubmissionRecordLink)
+                        .where(SubmissionRecordLink.submission_id == submission_id)
+                    )
+                    or 0
+                ) == 0
+                assert (
+                    s.scalar(
+                        select(func.count())
+                        .select_from(RecordReview)
+                        .where(RecordReview.submission_id == submission_id)
+                    )
+                    or 0
+                ) == 0
+        finally:
+            with Session(db_engine) as s:
+                with s.begin():
+                    s.execute(
+                        SubmissionAuditEvent.__table__.delete().where(
+                            SubmissionAuditEvent.submission_id == submission_id
+                        )
+                    )
+                    s.execute(
+                        Submission.__table__.delete().where(
+                            Submission.id == submission_id
+                        )
+                    )

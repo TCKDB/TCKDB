@@ -24,6 +24,7 @@ from app.db.models.app_user import AppUser
 from app.db.models.common import UploadJobKind, UploadJobStatus
 from app.db.models.upload_job import UploadJob
 from app.schemas.jobs import JobEnqueueResponse, JobStatusResponse
+from app.services.upload_submission import open_job_submission
 from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
@@ -44,7 +45,13 @@ _enqueue_deps = [Depends(require_supported_tckdb_client)]
 
 
 def _enqueue(session: Session, kind: UploadJobKind, request, user_id: int) -> JobEnqueueResponse:
-    """Insert a job row and return the enqueue response."""
+    """Insert a job row and its submission wrapper, return the enqueue response.
+
+    The submission is created at enqueue time so the contribution event is
+    auditable from acceptance. The worker links records and flips audit/review
+    state against it later; a worker failure leaves the submission durable
+    (marked ``failed``) rather than losing the attempt.
+    """
     job = UploadJob(
         kind=kind,
         status=UploadJobStatus.queued,
@@ -53,7 +60,18 @@ def _enqueue(session: Session, kind: UploadJobKind, request, user_id: int) -> Jo
     )
     session.add(job)
     session.flush()
-    return JobEnqueueResponse(job_id=str(job.id), status=job.status, kind=job.kind)
+    submission = open_job_submission(
+        session,
+        created_by=user_id,
+        job_kind=kind,
+        upload_job_id=str(job.id),
+    )
+    return JobEnqueueResponse(
+        job_id=str(job.id),
+        status=job.status,
+        kind=job.kind,
+        submission_id=submission.id,
+    )
 
 
 # ---------------------------------------------------------------------------

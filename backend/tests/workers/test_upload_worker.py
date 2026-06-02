@@ -162,7 +162,7 @@ def test_claim_one_job_returns_none_when_queue_empty(worker_db):
 def test_process_one_cycle_marks_job_complete_on_success(worker_db, monkeypatch):
     expected_result = {"type": "thermo", "id": 1234, "species_entry_id": 42}
 
-    def stub_handler(session, job):
+    def stub_handler(session, job, review_policy=None):
         return expected_result
 
     monkeypatch.setitem(upload_worker._DISPATCH, UploadJobKind.thermo, stub_handler)
@@ -192,7 +192,7 @@ def test_process_one_cycle_marks_job_complete_on_success(worker_db, monkeypatch)
 def test_process_one_cycle_requeues_on_failure_when_attempts_remain(
     worker_db, monkeypatch,
 ):
-    def failing_handler(session, job):
+    def failing_handler(session, job, review_policy=None):
         raise ValueError("boom")
 
     monkeypatch.setitem(upload_worker._DISPATCH, UploadJobKind.thermo, failing_handler)
@@ -229,7 +229,7 @@ def test_process_one_cycle_requeues_on_failure_when_attempts_remain(
 def test_process_one_cycle_marks_failed_when_attempts_exhausted(
     worker_db, monkeypatch,
 ):
-    def failing_handler(session, job):
+    def failing_handler(session, job, review_policy=None):
         raise RuntimeError("kaboom")
 
     monkeypatch.setitem(upload_worker._DISPATCH, UploadJobKind.thermo, failing_handler)
@@ -278,7 +278,7 @@ def test_dispatch_routes_each_kind_to_its_handler(worker_db, monkeypatch, kind):
     """
     calls: list[tuple[UploadJobKind, dict]] = []
 
-    def stub_handler(session, job):
+    def stub_handler(session, job, review_policy=None):
         calls.append((job.kind, dict(job.payload)))
         return {"dispatched_kind": job.kind.value, "echo": job.payload}
 
@@ -364,11 +364,11 @@ def test_worker_dispatches_transport_job_to_transport_handler(
     """
     calls: list[UploadJobKind] = []
 
-    def stub_transport(session, job):
+    def stub_transport(session, job, review_policy=None):
         calls.append(job.kind)
         return {"type": "transport", "id": 999, "species_entry_id": 1}
 
-    def wrong_handler(session, job):  # pragma: no cover — must not be called
+    def wrong_handler(session, job, review_policy=None):  # pragma: no cover — must not be called
         raise AssertionError(
             f"transport job was misrouted to handler for {job.kind!r}"
         )
@@ -418,7 +418,9 @@ def test_run_transport_handler_persists_transport_via_canonical_workflow(
         created_by=_api_test_user,
     )
 
-    result = upload_worker._run_transport(db_session, job)
+    result = upload_worker._run_transport(
+        db_session, job, upload_worker.ReviewPolicy()
+    )
 
     assert result["type"] == "transport"
     assert "id" in result
@@ -433,7 +435,7 @@ def test_transport_job_is_requeued_on_transient_failure(worker_db, monkeypatch):
     """A failing transport handler below max_attempts must leave the job
     back in ``queued`` with attempts incremented, not prematurely failed.
     """
-    def flaky_handler(session, job):
+    def flaky_handler(session, job, review_policy=None):
         raise ValueError("transient transport failure")
 
     monkeypatch.setitem(
@@ -467,7 +469,7 @@ def test_transport_job_is_marked_failed_when_attempts_exhausted(
     """After ``max_attempts`` failures a transport job must terminate in
     ``failed`` with the error populated and no successful result.
     """
-    def always_failing(session, job):
+    def always_failing(session, job, review_policy=None):
         raise RuntimeError("permanent transport failure")
 
     monkeypatch.setitem(
@@ -494,3 +496,159 @@ def test_transport_job_is_marked_failed_when_attempts_exhausted(
         assert persisted.completed_at is not None
         assert "RuntimeError" in persisted.error
         assert "permanent transport failure" in persisted.error
+
+
+# ---------------------------------------------------------------------------
+# Submission/audit/review wiring (ingestion-audit model)
+# ---------------------------------------------------------------------------
+
+
+def _thermo_job_payload() -> dict:
+    """Minimal valid thermo upload payload for worker-submission tests."""
+    return {
+        "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+        "scientific_origin": "computed",
+        "h298_kj_mol": 217.998,
+    }
+
+
+def test_run_one_job_links_records_and_initializes_under_review(
+    db_session, _api_test_user,
+):
+    """A worker success persists records under review, links them to the
+    job's submission, and appends an ``ingestion_succeeded`` audit event.
+
+    Exercised through ``run_one_job`` on the per-test transactional session
+    so everything rolls back at teardown (no committed pollution).
+    """
+    from app.db.models.common import (
+        RecordReviewStatus,
+        SubmissionAuditEventKind,
+        SubmissionRecordType,
+    )
+    from app.db.models.record_review import RecordReview
+    from app.db.models.submission import Submission, SubmissionAuditEvent, SubmissionRecordLink
+    from app.services.upload_submission import open_job_submission
+    from sqlalchemy import select
+
+    job = UploadJob(
+        kind=UploadJobKind.thermo,
+        status=UploadJobStatus.processing,
+        payload=_thermo_job_payload(),
+        attempts=1,
+        max_attempts=3,
+        created_by=_api_test_user,
+    )
+    db_session.add(job)
+    db_session.flush()
+    submission = open_job_submission(
+        db_session,
+        created_by=_api_test_user,
+        job_kind=UploadJobKind.thermo,
+        upload_job_id=str(job.id),
+    )
+    db_session.flush()
+
+    upload_worker.run_one_job(db_session, job)
+
+    assert job.status == UploadJobStatus.complete
+    assert job.result["submission_id"] == submission.id
+    thermo_id = job.result["id"]
+
+    # Records are linked to the submission.
+    links = db_session.scalars(
+        select(SubmissionRecordLink).where(
+            SubmissionRecordLink.submission_id == submission.id
+        )
+    ).all()
+    assert links, "worker success should create submission_record_link rows"
+
+    # The thermo product is under review and points at the submission.
+    review = db_session.scalar(
+        select(RecordReview).where(
+            RecordReview.record_type == SubmissionRecordType.thermo,
+            RecordReview.record_id == thermo_id,
+        )
+    )
+    assert review is not None
+    assert review.status is RecordReviewStatus.under_review
+    assert review.submission_id == submission.id
+
+    # ingestion_succeeded audit event exists; submission stays pending.
+    kinds = {
+        e.event_kind
+        for e in db_session.scalars(
+            select(SubmissionAuditEvent).where(
+                SubmissionAuditEvent.submission_id == submission.id
+            )
+        ).all()
+    }
+    assert SubmissionAuditEventKind.ingestion_succeeded in kinds
+
+
+def test_terminal_worker_failure_records_durable_ingestion_failed(
+    worker_db, monkeypatch, _api_test_user,
+):
+    """When a job exhausts retries, the worker durably marks its submission
+    ``failed`` and appends an ``ingestion_failed`` audit event — with no
+    partial scientific records (the persistence transaction rolled back).
+    """
+    from app.db.models.common import SubmissionAuditEventKind, SubmissionStatus
+    from app.db.models.submission import Submission, SubmissionAuditEvent
+    from app.services.upload_submission import open_job_submission
+    from sqlalchemy import select
+
+    def failing_handler(session, job, review_policy=None):
+        raise RuntimeError("kaboom-before-persistence")
+
+    monkeypatch.setitem(
+        upload_worker._DISPATCH, UploadJobKind.thermo, failing_handler
+    )
+
+    with worker_db.begin():
+        job = _insert_job(
+            worker_db,
+            kind=UploadJobKind.thermo,
+            attempts=2,
+            max_attempts=3,
+            payload=_thermo_job_payload(),
+        )
+        job.created_by = _api_test_user
+        submission = open_job_submission(
+            worker_db,
+            created_by=_api_test_user,
+            job_kind=UploadJobKind.thermo,
+            upload_job_id=str(job.id),
+        )
+        job_id = job.id
+        submission_id = submission.id
+
+    try:
+        assert upload_worker._process_one_cycle() is True
+
+        with worker_db.begin():
+            worker_db.expire_all()
+            assert worker_db.get(UploadJob, job_id).status == UploadJobStatus.failed
+            sub = worker_db.get(Submission, submission_id)
+            assert sub.status is SubmissionStatus.failed
+            kinds = {
+                e.event_kind
+                for e in worker_db.scalars(
+                    select(SubmissionAuditEvent).where(
+                        SubmissionAuditEvent.submission_id == submission_id
+                    )
+                ).all()
+            }
+            assert SubmissionAuditEventKind.ingestion_failed in kinds
+    finally:
+        # Worker committed to the real DB — clean up the submission rows we
+        # created (the worker_db fixture only clears upload_job).
+        with worker_db.begin():
+            worker_db.execute(
+                text("DELETE FROM submission_audit_event WHERE submission_id = :sid"),
+                {"sid": submission_id},
+            )
+            worker_db.execute(
+                text("DELETE FROM submission WHERE id = :sid"),
+                {"sid": submission_id},
+            )

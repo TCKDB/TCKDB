@@ -33,8 +33,10 @@ review) and the records' ``record_review.status`` is ``under_review``.
 
 from __future__ import annotations
 
+import functools
+import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from sqlalchemy.orm import Session
 
@@ -42,10 +44,60 @@ from app.db.models.common import (
     RecordReviewStatus,
     SubmissionKind,
     SubmissionSourceKind,
+    SubmissionStatus,
+    UploadJobKind,
 )
 from app.db.models.submission import Submission
 from app.services.record_review import ReviewPolicy
-from app.services.submission import create_submission, mark_ingestion_succeeded
+from app.services.submission import (
+    create_submission,
+    mark_ingestion_failed,
+    mark_ingestion_succeeded,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def review_policy_for_submission(submission: Submission) -> ReviewPolicy:
+    """Standard ingest policy: records enter review and link to the submission."""
+    return ReviewPolicy(
+        status=RecordReviewStatus.under_review,
+        submission_id=submission.id,
+        link_records=True,
+    )
+
+
+def submission_kind_for_job_kind(job_kind: UploadJobKind) -> SubmissionKind:
+    """Map an async ``UploadJobKind`` onto the submission-layer classification.
+
+    The token vocabularies are aligned (every ``UploadJobKind`` value is a
+    valid ``SubmissionKind``), so this is a direct value mapping.
+    """
+    return SubmissionKind(job_kind.value)
+
+
+def open_job_submission(
+    session: Session,
+    *,
+    created_by: int | None,
+    job_kind: UploadJobKind,
+    upload_job_id: str,
+) -> Submission:
+    """Create the submission wrapper for an enqueued async upload job.
+
+    Called at enqueue time so the contribution event is auditable from the
+    moment it is accepted for processing — even if the worker later fails or
+    never runs. The worker links records / flips audit state against this
+    submission via its ``upload_job_id``.
+    """
+    return create_submission(
+        session,
+        created_by=created_by,
+        submission_kind=submission_kind_for_job_kind(job_kind),
+        source_kind=SubmissionSourceKind.api,
+        upload_job_id=upload_job_id,
+        title=f"Async {job_kind.value} upload",
+    )
 
 
 @dataclass
@@ -111,8 +163,103 @@ def mark_upload_ingested(
     )
 
 
+# ---------------------------------------------------------------------------
+# Durable failed-ingestion audit (synchronous uploads)
+# ---------------------------------------------------------------------------
+
+
+def record_failed_upload(
+    *,
+    created_by: int,
+    kind: SubmissionKind,
+    error_summary: str,
+    session_factory: Optional[Callable[[], Session]] = None,
+) -> Optional[int]:
+    """Durably record a failed synchronous upload in its own transaction.
+
+    A synchronous ``/uploads/*`` failure rolls back its scientific
+    persistence atomically (no partial records) — which also discards the
+    submission opened for the attempt. To still answer "who attempted what,
+    when, on which route, and why did it fail", this opens a *fresh* session
+    (independent of the request's rolled-back transaction) and writes:
+
+    * a ``submission`` with ``status=failed`` (system terminal state),
+    * a ``submission_created`` audit event,
+    * an ``ingestion_failed`` audit event with the error summary.
+
+    It creates **no** scientific records, record links, or review rows. It is
+    best-effort: any error here is logged and swallowed so the failure audit
+    never masks the original upload error. Only payloads that already passed
+    authentication and request parsing reach this path; invalid payloads are
+    rejected by FastAPI before the route body and never create a submission.
+
+    Returns the failed submission id, or ``None`` if recording itself failed.
+    """
+    if session_factory is None:
+        # Lazy import keeps this service free of an app-layer import at module
+        # load time.
+        from app.api.deps import SessionLocal as session_factory  # type: ignore
+
+    try:
+        with session_factory() as session:
+            with session.begin():
+                submission = create_submission(
+                    session,
+                    created_by=created_by,
+                    submission_kind=kind,
+                    source_kind=SubmissionSourceKind.api,
+                    title=f"Failed {kind.value} upload",
+                )
+                mark_ingestion_failed(
+                    session,
+                    submission=submission,
+                    reason=error_summary,
+                )
+                submission.status = SubmissionStatus.failed
+                submission_id = submission.id
+            return submission_id
+    except Exception:  # pragma: no cover - audit must never mask the real error
+        logger.exception("failed to record failed-upload audit (kind=%s)", kind)
+        return None
+
+
+def audit_sync_upload_failure(kind: SubmissionKind) -> Callable:
+    """Decorator: durably audit a synchronous upload route's failures.
+
+    Wraps an authenticated ``/uploads/*`` handler so that any exception
+    raised after request parsing/auth records a durable failed submission
+    (see :func:`record_failed_upload`) before propagating — the scientific
+    transaction still rolls back atomically. The handler must take a
+    ``current_user`` keyword (every upload route does).
+    """
+
+    def decorator(fn: Callable) -> Callable:
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as exc:
+                user = kwargs.get("current_user")
+                if user is not None:
+                    record_failed_upload(
+                        created_by=user.id,
+                        kind=kind,
+                        error_summary=f"{type(exc).__name__}: {exc}",
+                    )
+                raise
+
+        return wrapper
+
+    return decorator
+
+
 __all__ = [
     "UploadSubmissionContext",
     "open_upload_submission",
     "mark_upload_ingested",
+    "open_job_submission",
+    "review_policy_for_submission",
+    "submission_kind_for_job_kind",
+    "record_failed_upload",
+    "audit_sync_upload_failure",
 ]

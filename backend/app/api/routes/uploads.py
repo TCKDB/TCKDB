@@ -28,6 +28,7 @@ from app.services.upload_reconciliation import (
     reconcile_species_entry_full,
 )
 from app.services.upload_submission import (
+    audit_sync_upload_failure,
     mark_upload_ingested,
     open_upload_submission,
 )
@@ -180,6 +181,7 @@ class ComputedReactionUploadResult(BaseModel):
     response_model=ConformerUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.conformer)
 def upload_conformer(
     request: ConformerUploadRequest,
     session: Session = Depends(get_write_db),
@@ -233,6 +235,7 @@ def upload_conformer(
     response_model=ReactionUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.reaction)
 def upload_reaction(
     request: ReactionUploadRequest,
     session: Session = Depends(get_write_db),
@@ -274,6 +277,7 @@ def upload_reaction(
     response_model=KineticsUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.kinetics)
 def upload_kinetics(
     request: KineticsUploadRequest,
     session: Session = Depends(get_write_db),
@@ -314,6 +318,7 @@ def upload_kinetics(
     response_model=NetworkUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.network)
 def upload_network(
     request: NetworkUploadRequest,
     session: Session = Depends(get_write_db),
@@ -339,6 +344,7 @@ def upload_network(
     response_model=NetworkPDepUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.network_pdep)
 def upload_network_pdep(
     request: NetworkPDepUploadRequest,
     session: Session = Depends(get_write_db),
@@ -367,6 +373,7 @@ def upload_network_pdep(
     response_model=StatmechUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.statmech)
 def upload_statmech(
     request: StatmechUploadRequest,
     session: Session = Depends(get_write_db),
@@ -407,6 +414,7 @@ def upload_statmech(
     response_model=ThermoUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.thermo)
 def upload_thermo(
     request: ThermoUploadRequest,
     session: Session = Depends(get_write_db),
@@ -439,6 +447,7 @@ def upload_thermo(
     response_model=TransitionStateUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.transition_state)
 def upload_transition_state(
     request: TransitionStateUploadRequest,
     session: Session = Depends(get_write_db),
@@ -479,6 +488,7 @@ def upload_transition_state(
     response_model=TransportUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.transport)
 def upload_transport(
     request: TransportUploadRequest,
     session: Session = Depends(get_write_db),
@@ -518,6 +528,7 @@ def upload_transport(
     response_model=ComputedSpeciesUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.computed_species)
 def upload_computed_species(
     request: ComputedSpeciesUploadRequest,
     session: Session = Depends(get_write_db),
@@ -590,6 +601,7 @@ def upload_computed_species(
     response_model=ComputedReactionUploadResult,
     status_code=201,
 )
+@audit_sync_upload_failure(SubmissionKind.computed_reaction)
 def upload_computed_reaction(
     request: ComputedReactionUploadRequest,
     session: Session = Depends(get_write_db),

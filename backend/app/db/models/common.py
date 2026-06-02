@@ -465,6 +465,12 @@ class SubmissionStatus(str, Enum):
     approved = "approved"
     rejected = "rejected"
     superseded = "superseded"
+    # System-set terminal state for an upload event whose ingestion failed
+    # (e.g. an async job that exhausted retries, or a synchronous upload that
+    # raised during persistence). Distinct from ``rejected``, which is a
+    # curator decision and carries reviewer/reason invariants. ``failed`` is
+    # never curator-approvable and never public.
+    failed = "failed"
 
 
 class SubmissionActorKind(str, Enum):
@@ -571,6 +577,10 @@ class SubmissionRecordType(str, Enum):
     network = "network"
     network_solve = "network_solve"
     applied_energy_correction = "applied_energy_correction"
+    # Uploaded evidence file attached to a calculation. Linked to a submission
+    # for traceability (role="artifact") but never carries a record_review row:
+    # artifacts are contribution evidence, not reviewable scientific results.
+    artifact = "artifact"
 
 
 class RecordReviewStatus(str, Enum):

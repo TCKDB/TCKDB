@@ -13173,6 +13173,17 @@
           },
           "status": {
             "$ref": "#/components/schemas/UploadJobStatus"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
           }
         },
         "required": [
@@ -31097,7 +31108,8 @@
           "transport",
           "network",
           "network_solve",
-          "applied_energy_correction"
+          "applied_energy_correction",
+          "artifact"
         ],
         "title": "SubmissionRecordType",
         "type": "string"
@@ -31161,7 +31173,8 @@
           "auto_flagged",
           "approved",
           "rejected",
-          "superseded"
+          "superseded",
+          "failed"
         ],
         "title": "SubmissionStatus",
         "type": "string"
