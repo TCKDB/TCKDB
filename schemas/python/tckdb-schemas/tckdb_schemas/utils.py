@@ -22,6 +22,29 @@ def normalize_required_text(value: str) -> str:
     return normalized
 
 
+_KNOWN_TUNNELING = frozenset({"none", "wigner", "eckart", "sct"})
+
+
+def normalize_tunneling_model(value):
+    """Coerce a producer-supplied tunneling model to a canonical token.
+
+    Case-insensitive; folds any unrecognized non-empty value to ``other``,
+    mirroring the DB migration (DR-0032). ``None``/blank → ``None``. Real
+    producers (e.g. ARC) emit ``"Eckart"``, which normalizes to ``eckart``.
+    Returns a string the enum field then coerces (or ``None``).
+    """
+    if value is None:
+        return None
+    # Accept an already-resolved enum member (read path, ORM → schema):
+    # use its raw ``.value`` rather than ``str(member)`` which, for a
+    # str-mixin Enum, can render as ``"TunnelingModel.eckart"``.
+    raw = getattr(value, "value", value)
+    text = str(raw).strip().lower()
+    if not text:
+        return None
+    return text if text in _KNOWN_TUNNELING else "other"
+
+
 def generate_orcid_check_digit(base_digits: str) -> str:
     """Generate the ISO 7064 Mod 11-2 ORCID check digit."""
 

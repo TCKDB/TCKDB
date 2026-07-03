@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import CHAR, BigInteger, Text, UniqueConstraint
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, PublicRefMixin, TimestampMixin
+from app.db.models.common import SpinTreatment
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
@@ -26,6 +28,12 @@ class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
     solvent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     solvent_model: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Restricted / unrestricted / restricted-open — part of LOT identity
+    # (DR-0034). NULL = unspecified (distinct from an explicit 'unknown').
+    spin_treatment: Mapped[Optional[SpinTreatment]] = mapped_column(
+        SAEnum(SpinTreatment, name="spin_treatment"),
+        nullable=True,
+    )
 
     lot_hash: Mapped[str] = mapped_column(CHAR(64), nullable=False)
 

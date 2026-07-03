@@ -204,10 +204,10 @@ def test_queue_generator_consumes_parsed_catalog_and_writes_nonzero(
     queue records because the parsed catalog itself was empty."""
 
     from scripts.cccbdb_generate_form_queue import (
-        load_catalog_entries,
-        generate_queue,
-        write_queue_file,
         QueueGenFilters,
+        generate_queue,
+        load_catalog_entries,
+        write_queue_file,
     )
 
     catalog_json = tmp_path / "catalog.json"
@@ -239,9 +239,9 @@ def test_require_inchikey_skips_only_rows_without_inchikey(
     not."""
 
     from scripts.cccbdb_generate_form_queue import (
-        load_catalog_entries,
-        generate_queue,
         QueueGenFilters,
+        generate_queue,
+        load_catalog_entries,
     )
 
     catalog_json = tmp_path / "catalog.json"
@@ -268,10 +268,10 @@ def test_queue_records_do_not_use_raw_href_as_entry_url(
     queue ever points at."""
 
     from scripts.cccbdb_generate_form_queue import (
-        load_catalog_entries,
-        generate_queue,
-        write_queue_file,
         QueueGenFilters,
+        generate_queue,
+        load_catalog_entries,
+        write_queue_file,
     )
 
     catalog_json = tmp_path / "catalog.json"

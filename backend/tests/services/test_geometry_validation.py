@@ -18,10 +18,8 @@ from app.services.gaussian_output_parser import (
     extract_final_geometry_from_file,
 )
 from app.services.geometry_validation import (
-    GeometryValidationResult,
     validate_calculation_geometry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -91,7 +89,7 @@ class TestGeometryExtraction:
 
     def test_ts_log_correct_elements(self):
         atoms = extract_final_geometry_from_file(TS_LOG)
-        elements = {sym: 0 for sym in ("N", "C", "H", "O")}
+        elements = dict.fromkeys(("N", "C", "H", "O"), 0)
         for a in atoms:
             elements[a[0]] = elements.get(a[0], 0) + 1
         assert elements == {"N": 4, "C": 7, "H": 17, "O": 1}
@@ -197,7 +195,7 @@ class TestValidationService:
     def test_high_rmsd_warns(self, opt_atoms):
         """Isomorphic but high RMSD → warning."""
         # Create a distorted version of the geometry (shift all x by 2 Å)
-        distorted = tuple(
+        _distorted = tuple(
             (sym, x + 2.0, y + 2.0, z + 2.0) for sym, x, y, z in opt_atoms
         )
         # Use a very small threshold to trigger the warning

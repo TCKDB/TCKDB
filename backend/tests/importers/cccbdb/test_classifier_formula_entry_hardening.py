@@ -15,8 +15,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-import pytest
-
 from app.importers.cccbdb.crawl_plan import CrawlTarget
 from app.importers.cccbdb.diagnostics import (
     Classification,

@@ -3,23 +3,22 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from app.db.models.common import (
+    CalculationType,
     RigidRotorKind,
     ScientificOriginKind,
     StatmechCalculationRole,
     StatmechTreatmentKind,
 )
-from app.db.models.common import CalculationType
 from app.schemas.common import SchemaBase
 from app.schemas.entities.statmech import (
     StatmechSourceCalculationCreate,
     StatmechTorsionCreate,
 )
 from app.schemas.fragments.calculation import (
-    CalculationPayload,
     CalculationWithResultsPayload,
 )
-from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.fragments.geometry import GeometryPayload
+from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.fragments.refs import FreqScaleFactorRef, SoftwareReleaseRef, WorkflowToolReleaseRef
 from app.schemas.utils import normalize_optional_text
 from app.schemas.workflows.energy_correction_upload import (
@@ -27,6 +26,19 @@ from app.schemas.workflows.energy_correction_upload import (
 )
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.schemas.workflows.transport_upload import TransportUploadPayload
+
+
+class ElectronicLevelIn(SchemaBase):
+    """One electronic energy level for the electronic partition function.
+
+    Ordered (energy, degeneracy) pairs relative to the ground state
+    (DR-0033). E.g. OH X²Π: level 1 (0 cm⁻¹, g=2), level 2 (~139 cm⁻¹,
+    g=2). ``level_index`` is 1-based and unique within a statmech record.
+    """
+
+    level_index: int = Field(ge=1)
+    energy_cm1: float = Field(ge=0)
+    degeneracy: int = Field(ge=1)
 
 
 class ConformerUploadStatmechPayload(SchemaBase):
@@ -52,6 +64,7 @@ class ConformerUploadStatmechPayload(SchemaBase):
 
     freq_scale_factor: FreqScaleFactorRef | None = None
     uses_projected_frequencies: bool | None = None
+    optical_isomers: int | None = Field(default=None, ge=1)
     note: str | None = None
 
     uploaded_calculation_role: StatmechCalculationRole | None = None
@@ -59,11 +72,21 @@ class ConformerUploadStatmechPayload(SchemaBase):
         default_factory=list
     )
     torsions: list[StatmechTorsionCreate] = Field(default_factory=list)
+    electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def normalize_optional_text_fields(self) -> Self:
         self.point_group = normalize_optional_text(self.point_group)
         self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def validate_electronic_levels(self) -> Self:
+        indices = [lvl.level_index for lvl in self.electronic_levels]
+        if len(set(indices)) != len(indices):
+            raise ValueError(
+                "electronic_levels level_index values must be unique."
+            )
         return self
 
 

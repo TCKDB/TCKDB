@@ -12,7 +12,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Iterator
 
-import pytest
 from sqlalchemy.orm import Session
 
 from app.api.routes.uploads import ComputedReactionUploadResult
@@ -22,7 +21,6 @@ from app.schemas.workflows.computed_reaction_upload import (
     ComputedReactionUploadRequest,
 )
 from app.workflows.computed_reaction import persist_computed_reaction_upload
-
 
 _XYZ_H = "1\nH\nH 0.0 0.0 0.0"
 _XYZ_CH3 = (

@@ -15,7 +15,6 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -66,11 +65,11 @@ def _create_species_entry(session: Session, *, inchi_key: str) -> int:
         text(
             """
             INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind)
-            VALUES ('molecule', '[H]', :inchi_key, 0, 1, 'achiral')
+            VALUES ('molecule', :smiles, :inchi_key, 0, 1, 'achiral')
             RETURNING id
             """
         ),
-        {"inchi_key": inchi_key},
+        {"smiles": inchi_key, "inchi_key": inchi_key},
     ).scalar_one()
     return session.connection().execute(
         text(

@@ -14,7 +14,6 @@ import pkgutil
 import app.db.models as models_pkg
 import app.schemas.workflows as workflows_pkg
 
-
 # Non-mapper model modules (shared enums / helpers). They do not register
 # tables, so the registration-parity check ignores them.
 _NON_MAPPER_MODEL_MODULES = frozenset({"common"})

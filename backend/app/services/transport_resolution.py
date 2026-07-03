@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.db.models.transport import Transport, TransportSourceCalculation
 from app.schemas.entities.transport import TransportSourceCalculationCreate
 from app.schemas.workflows.transport_upload import TransportUploadPayload

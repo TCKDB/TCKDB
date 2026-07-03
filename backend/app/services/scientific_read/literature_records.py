@@ -39,10 +39,10 @@ from app.db.models.thermo import Thermo
 from app.db.models.transport import Transport
 from app.schemas.reads.scientific_common import RecordReviewBadge
 from app.schemas.reads.scientific_literature_records import (
+    SUPPORTED_RECORD_TYPES,
     LiteratureLinkedRecordSummary,
     LiteratureRecordsRequest,
     RequestEcho,
-    SUPPORTED_RECORD_TYPES,
     ScientificLiteratureRecordsResponse,
 )
 from app.services.scientific_read.common import (
@@ -58,7 +58,6 @@ from app.services.scientific_read.handles import resolve_literature_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",

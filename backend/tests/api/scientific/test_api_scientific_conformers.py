@@ -21,7 +21,6 @@ from tests.services.scientific_read._factories import (
     attach_conformer_selection,
     attach_geometry_validation,
     attach_scf_stability,
-    make_calculation,
     make_calculation_with_conformer,
     make_conformer_group,
     make_conformer_observation,
@@ -33,16 +32,16 @@ from tests.services.scientific_read._factories import (
     set_review,
 )
 
-
 # ---------------------------------------------------------------------------
 # Local fixtures
 # ---------------------------------------------------------------------------
 
 
 def _make_species_entry(db_session):
-    species = make_species(
-        db_session, smiles="CC", inchi_key=next_inchi_key("CONF")
-    )
+    # No fixed smiles: species identity is (smiles, charge, multiplicity)
+    # (DR-0031), and these helpers are called repeatedly to build distinct
+    # species. make_species defaults to a unique smiles per call.
+    species = make_species(db_session, inchi_key=next_inchi_key("CONF"))
     return species, make_species_entry(db_session, species)
 
 
@@ -192,7 +191,7 @@ def test_cg_detail_species_context_present(client, db_session):
     sp = body["record"]["species"]
     assert sp["species_ref"] == species.public_ref
     assert sp["species_entry_ref"] == entry.public_ref
-    assert sp["canonical_smiles"] == "CC"
+    assert sp["canonical_smiles"] == species.smiles
     # CHAR(27) column right-pads with spaces in the DB; compare trimmed.
     assert sp["inchi_key"].rstrip() == species.inchi_key.rstrip()
 

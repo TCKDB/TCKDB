@@ -9,15 +9,15 @@ import pytest
 
 from app.db.models.common import ArtifactKind
 from app.services.artifact_storage import (
+    MAX_ARTIFACT_BYTES,
+    MAX_TOTAL_UPLOAD_BYTES,
     ArtifactValidationError,
+    _ensure_bucket,
+    _get_s3_client,
     content_addressed_key,
     store_artifact,
     validate_artifact,
     validate_total_upload_size,
-    _get_s3_client,
-    _ensure_bucket,
-    MAX_ARTIFACT_BYTES,
-    MAX_TOTAL_UPLOAD_BYTES,
 )
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"

@@ -75,7 +75,6 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 
-
 _LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 

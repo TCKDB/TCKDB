@@ -70,7 +70,7 @@ def _strict_b64decode(filename: str, content_base64: str) -> bytes:
     except (binascii.Error, ValueError) as exc:
         raise ArtifactValidationError(
             f"Artifact '{filename}' has invalid base64 content: {exc}"
-        )
+        ) from exc
 
 
 def _decode_one(artifact_in: ArtifactIn) -> _DecodedArtifact:

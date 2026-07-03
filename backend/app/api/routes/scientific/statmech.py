@@ -38,7 +38,6 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.statmech import get_statmech
 from app.services.scientific_read.statmech_search import search_statmech
 
-
 router = APIRouter(prefix="/statmech")
 
 

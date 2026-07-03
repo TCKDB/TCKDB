@@ -13,7 +13,6 @@ import pytest
 
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 
-
 # ---------------------------------------------------------------------------
 # Fixture helpers
 # ---------------------------------------------------------------------------

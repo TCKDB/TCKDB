@@ -19,7 +19,6 @@ from app.services.calculation_resolution import _level_of_theory_hash
 from app.services.geometry_resolution import geometry_create_from_payload
 from app.services.reaction_resolution import reaction_stoichiometry_hash
 
-
 # ---------------------------------------------------------------------------
 # geom_hash
 # ---------------------------------------------------------------------------
@@ -120,6 +119,22 @@ def test_lot_hash_treats_none_and_omitted_fields_as_equivalent() -> None:
     equivalent LoT rows into duplicates."""
     a = _level_of_theory_hash(_lot(dispersion=None))
     b = _level_of_theory_hash(_lot())
+    assert a == b
+
+
+def test_lot_hash_distinguishes_spin_treatment() -> None:
+    """Restricted-open vs unrestricted of the same method/basis are
+    genuinely different levels of theory (DR-0034) and must not collapse."""
+    ro = _level_of_theory_hash(_lot(method="CCSD(T)", spin_treatment="restricted_open"))
+    u = _level_of_theory_hash(_lot(method="CCSD(T)", spin_treatment="unrestricted"))
+    assert ro != u
+
+
+def test_lot_hash_omitted_spin_equals_unknown() -> None:
+    """Omitted spin_treatment folds to 'unknown' in the hash, so a producer
+    that leaves it out matches one that says 'unknown' explicitly."""
+    a = _level_of_theory_hash(_lot(method="CCSD(T)"))
+    b = _level_of_theory_hash(_lot(method="CCSD(T)", spin_treatment="unknown"))
     assert a == b
 
 

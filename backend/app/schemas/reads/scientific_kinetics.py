@@ -35,7 +35,6 @@ from app.schemas.reads.scientific_common import (
 )
 from app.services.trust.models import TrustFragment
 
-
 # ---------------------------------------------------------------------------
 # Request
 # ---------------------------------------------------------------------------

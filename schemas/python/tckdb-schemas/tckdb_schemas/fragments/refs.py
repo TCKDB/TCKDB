@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Self
 from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.enums import FrequencyScaleKind
+from tckdb_schemas.enums import FrequencyScaleKind, SpinTreatment
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 
 if TYPE_CHECKING:
@@ -68,6 +68,7 @@ class LevelOfTheoryRef(SchemaBase):
     solvent: str | None = None
     solvent_model: str | None = None
     keywords: str | None = None
+    spin_treatment: SpinTreatment | None = None
 
     @field_validator("method")
     @classmethod

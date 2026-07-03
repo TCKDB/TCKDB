@@ -26,7 +26,6 @@ from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
 )
 
-
 # ---------------------------------------------------------------------------
 # Supported record types
 # ---------------------------------------------------------------------------
@@ -148,10 +147,10 @@ class ScientificLiteratureRecordsResponse(BaseModel):
 
 
 __all__ = [
+    "SUPPORTED_RECORD_TYPES",
     "LiteratureLinkedRecordSummary",
     "LiteratureLinkedRecordType",
     "LiteratureRecordsRequest",
     "RequestEcho",
-    "SUPPORTED_RECORD_TYPES",
     "ScientificLiteratureRecordsResponse",
 ]

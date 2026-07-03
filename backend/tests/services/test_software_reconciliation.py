@@ -16,7 +16,6 @@ import pytest
 from app.schemas.fragments.refs import SoftwareReleaseRef
 from app.services.gaussian_parameter_parser import parse_software_version
 from app.services.software_reconciliation import (
-    SoftwareReconciliationResult,
     parsed_dict_to_ref,
     reconcile_software_provenance,
 )

@@ -127,7 +127,18 @@ class ArtifactKind(str, Enum):
     output_log = "output_log"
     checkpoint = "checkpoint"
     formatted_checkpoint = "formatted_checkpoint"
+    hessian = "hessian"
     ancillary = "ancillary"
+
+
+class HessianSource(str, Enum):
+    """Where a stored Cartesian Hessian matrix was obtained from."""
+
+    parsed_fchk = "parsed_fchk"
+    parsed_hess = "parsed_hess"
+    parsed_log = "parsed_log"
+    uploaded = "uploaded"
+    derived = "derived"
 
 
 class SCFStabilityStatus(str, Enum):
@@ -165,6 +176,42 @@ class ArrheniusAUnits(str, Enum):
 class KineticsModelKind(str, Enum):
     arrhenius = "arrhenius"
     modified_arrhenius = "modified_arrhenius"
+    lindemann = "lindemann"
+    troe = "troe"
+    sri = "sri"
+    plog = "plog"
+    chebyshev = "chebyshev"
+
+
+class TunnelingModel(str, Enum):
+    """Tunneling correction applied to a rate coefficient (DR-0032)."""
+
+    none = "none"
+    wigner = "wigner"
+    eckart = "eckart"
+    sct = "sct"
+    other = "other"
+
+
+class SpinTreatment(str, Enum):
+    """Spin treatment of the electronic-structure method (DR-0034)."""
+
+    restricted = "restricted"
+    unrestricted = "unrestricted"
+    restricted_open = "restricted_open"
+    unknown = "unknown"
+
+
+class PressureContext(str, Enum):
+    """What a rate coefficient means w.r.t. pressure (DR-0032).
+
+    ``high_p_limit`` = k∞; ``apparent_at_pressure`` requires a
+    ``pressure_bar``; ``pressure_dependent`` defers to an associated model.
+    """
+
+    high_p_limit = "high_p_limit"
+    apparent_at_pressure = "apparent_at_pressure"
+    pressure_dependent = "pressure_dependent"
 
 
 class KineticsUncertaintyKind(str, Enum):

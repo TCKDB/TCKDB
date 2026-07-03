@@ -33,7 +33,7 @@ from app.db.models.common import (
     IRCDirection,
     PathSearchMethod,
 )
-from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.db.models.transition_state import TransitionState
 from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     IRCPointPayload,
@@ -45,7 +45,6 @@ from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
 from app.workflows.transition_state import persist_transition_state_upload
-
 
 # ---------------------------------------------------------------------------
 # Helpers

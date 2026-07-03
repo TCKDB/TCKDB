@@ -20,9 +20,9 @@ from tests.services.scientific_read._factories import (
 
 
 def _entry(db_session):
-    species = make_species(
-        db_session, smiles="CC", inchi_key=next_inchi_key("THAPI")
-    )
+    # No fixed smiles: identity is (smiles, charge, multiplicity) (DR-0031)
+    # and this helper is called repeatedly to build distinct species.
+    species = make_species(db_session, inchi_key=next_inchi_key("THAPI"))
     return make_species_entry(db_session, species)
 
 

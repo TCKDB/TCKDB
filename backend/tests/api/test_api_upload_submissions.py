@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import func, select
-
 from sqlalchemy.orm import Session
 
 from app.db.models.common import (
@@ -25,7 +24,6 @@ from app.db.models.common import (
     SubmissionKind,
     SubmissionRecordType,
     SubmissionStatus,
-    UploadJobKind,
 )
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import (
@@ -33,7 +31,6 @@ from app.db.models.submission import (
     SubmissionAuditEvent,
     SubmissionRecordLink,
 )
-from app.db.models.upload_job import UploadJob
 
 # Reuse ready-made, schema-valid payloads from the per-kind upload suites.
 from tests.api.test_api_kfir_rxn import _BUNDLE as _COMPUTED_REACTION_BUNDLE

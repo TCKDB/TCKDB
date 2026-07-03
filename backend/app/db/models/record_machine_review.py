@@ -48,7 +48,6 @@ from sqlalchemy import (
     Index,
     String,
     Text,
-    func,
     text,
 )
 from sqlalchemy import Enum as SAEnum

@@ -8,4 +8,4 @@ and energy-correction upload flows. Literature rows are created/resolved by
 ``app.services.literature_resolution`` when a parent upload embeds one.
 """
 
-from tckdb_schemas.literature import LiteratureUploadRequest  # noqa: F401
+from tckdb_schemas.literature import LiteratureUploadRequest

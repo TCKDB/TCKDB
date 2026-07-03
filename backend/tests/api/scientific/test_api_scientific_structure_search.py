@@ -20,10 +20,8 @@ from app.db.models.common import (
 from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
-    next_inchi_key,
     set_review,
 )
-
 
 SEARCH_URL = "/api/v1/scientific/species/structure-search"
 

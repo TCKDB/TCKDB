@@ -8,7 +8,6 @@ badge, internal-id policy, available_sections, and include validation
 from __future__ import annotations
 
 from app.db.models.calculation import (
-    CalculationArtifact,
     CalculationConstraint,
     CalculationDependency,
     CalculationFreqResult,
@@ -23,7 +22,6 @@ from app.db.models.calculation import (
     CalculationScanPoint,
     CalculationScanResult,
 )
-from app.db.models.software import Software, SoftwareRelease
 from app.db.models.common import (
     ArtifactKind,
     CalculationDependencyRole,
@@ -36,13 +34,14 @@ from app.db.models.common import (
     ParameterSource,
     PathSearchMethod,
     RecordReviewStatus,
-    SCFStabilityStatus,
     ScanCoordinateKind,
+    SCFStabilityStatus,
     SubmissionRecordType,
-    TransitionStateEntryStatus,  # noqa: F401  (used by helper)
+    TransitionStateEntryStatus,
     ValidationStatus,
 )
 from app.db.models.reaction import ChemReaction, ReactionEntry
+from app.db.models.software import Software, SoftwareRelease
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from tests.services.scientific_read._factories import (
     attach_artifact,
@@ -60,7 +59,6 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
     set_review,
 )
-
 
 # All heavy include tokens have shipped a summary loader. The only
 # include token still rejected is ``all``, which is policy-deferred
@@ -107,7 +105,7 @@ def _make_ts_entry(db_session) -> TransitionStateEntry:
 
 def _make_species_owned_calc(db_session, **kwargs):
     species = make_species(
-        db_session, smiles="CCO", inchi_key=next_inchi_key("CALC")
+        db_session, inchi_key=next_inchi_key("CALC")
     )
     entry = make_species_entry(db_session, species)
     calc = make_calculation(
@@ -242,7 +240,7 @@ def test_detail_species_owned_calculation_owner_block(client, db_session):
     se = owner["species_entry"]
     assert se["species_ref"] == species.public_ref
     assert se["species_entry_ref"] == entry.public_ref
-    assert se["canonical_smiles"] == "CCO"
+    assert se["canonical_smiles"] == species.smiles
     # Species.inchi_key is stored as CHAR(27); the synthetic test key
     # is shorter than 27 chars, so the column comes back trailing-padded.
     # Real InChI keys are exactly 27 chars and avoid this. Compare on
@@ -753,7 +751,7 @@ def test_detail_include_results_does_not_expose_internal_ids(
         block = results[sub]
         if block is None:
             continue
-        assert not any(k.endswith("_id") for k in block.keys())
+        assert not any(k.endswith("_id") for k in block)
         assert "id" not in block
 
 

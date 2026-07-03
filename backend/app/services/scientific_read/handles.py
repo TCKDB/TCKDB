@@ -26,8 +26,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError
-
-logger = logging.getLogger(__name__)
 from app.db.models.calculation import Calculation
 from app.db.models.energy_correction import (
     EnergyCorrectionScheme,
@@ -36,6 +34,8 @@ from app.db.models.energy_correction import (
 from app.db.models.geometry import Geometry
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
+from app.db.models.network import Network
+from app.db.models.network_pdep import NetworkKinetics, NetworkSolve
 from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.db.models.species import (
     ConformerGroup,
@@ -43,15 +43,15 @@ from app.db.models.species import (
     Species,
     SpeciesEntry,
 )
-from app.db.models.network import Network
-from app.db.models.network_pdep import NetworkKinetics, NetworkSolve
 from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
 from app.services.public_refs import PREFIXES
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
-    from app.db.base import Base
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -511,29 +511,29 @@ __all__ = [
     "is_ref_handle",
     "parse_handle",
     "prefix_for",
-    "resolve_path_handle",
-    "resolve_filter_ref",
+    "reconcile_calculation_pair",
     "reconcile_id_ref",
-    "resolve_species_entry_handle",
-    "resolve_reaction_entry_handle",
-    "resolve_geometry_handle",
+    "reconcile_level_of_theory_pair",
+    "reconcile_reaction_entry_pair",
+    "reconcile_reaction_pair",
+    "reconcile_species_entry_pair",
+    "reconcile_species_pair",
     "resolve_calculation_handle",
-    "resolve_transition_state_handle",
-    "resolve_transition_state_entry_handle",
     "resolve_conformer_group_handle",
     "resolve_conformer_observation_handle",
-    "resolve_statmech_handle",
-    "resolve_transport_handle",
-    "resolve_network_handle",
-    "resolve_network_solve_handle",
-    "resolve_network_kinetics_handle",
-    "resolve_literature_handle",
-    "resolve_frequency_scale_factor_handle",
     "resolve_energy_correction_scheme_handle",
-    "reconcile_species_pair",
-    "reconcile_species_entry_pair",
-    "reconcile_reaction_pair",
-    "reconcile_reaction_entry_pair",
-    "reconcile_level_of_theory_pair",
-    "reconcile_calculation_pair",
+    "resolve_filter_ref",
+    "resolve_frequency_scale_factor_handle",
+    "resolve_geometry_handle",
+    "resolve_literature_handle",
+    "resolve_network_handle",
+    "resolve_network_kinetics_handle",
+    "resolve_network_solve_handle",
+    "resolve_path_handle",
+    "resolve_reaction_entry_handle",
+    "resolve_species_entry_handle",
+    "resolve_statmech_handle",
+    "resolve_transition_state_entry_handle",
+    "resolve_transition_state_handle",
+    "resolve_transport_handle",
 ]

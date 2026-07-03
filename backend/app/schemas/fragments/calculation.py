@@ -4,21 +4,10 @@ internal-resolved request shape stay backend-side because they carry
 backend FK ids.
 """
 
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
-from pydantic import Field, model_validator
-
-from app.db.models.common import (
-    CalculationQuality,
-    CalculationType,
-)
-from app.schemas.common import SchemaBase
-from app.schemas.fragments.refs import (
-    LevelOfTheoryRef,
-    SoftwareReleaseRef,
-    WorkflowToolReleaseRef,
-)
-from tckdb_schemas.fragments.calculation import (  # noqa: F401  (re-exported)
+from pydantic import model_validator
+from tckdb_schemas.fragments.calculation import (
     CalculationConstraintCreate,
     CalculationConstraintPayload,
     CalculationParameterObservation,
@@ -37,9 +26,27 @@ from tckdb_schemas.fragments.calculation import (  # noqa: F401  (re-exported)
     WavefunctionDiagnosticPayload,
 )
 
+from app.db.models.common import (
+    CalculationQuality,
+    CalculationType,
+)
+from app.schemas.common import SchemaBase
+from app.schemas.fragments.refs import (
+    LevelOfTheoryRef,
+    SoftwareReleaseRef,
+    WorkflowToolReleaseRef,
+)
+
 
 class CalculationOwnerRequiredMixin:
     """Shared validator for calculation schemas that require exactly one owner."""
+
+    if TYPE_CHECKING:
+        # Provided by the concrete Pydantic models that mix this in. Declared
+        # here for the type checker only — real annotations would make Pydantic
+        # collect them as fields on the mixin itself.
+        species_entry_id: int | None
+        transition_state_entry_id: int | None
 
     @model_validator(mode="after")
     def validate_exactly_one_owner(self) -> Self:

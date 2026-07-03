@@ -22,7 +22,6 @@ from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
-    NetworkKineticsModelKind,
     SubmissionRecordType,
 )
 from app.db.models.level_of_theory import LevelOfTheory
@@ -68,7 +67,6 @@ from app.services.scientific_read.network_kinetics import (
     _LEGAL_INCLUDE_TOKENS,
     build_network_kinetics_record,
 )
-
 
 # Filters that satisfy the at-least-one-filter guard. Trust knobs
 # (``include_rejected`` / ``include_deprecated`` / ``min_review_status``)
@@ -470,11 +468,7 @@ def _request_filter_echo(
     request: NetworkKineticsSearchRequest,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for name in _MEANINGFUL_FILTER_FIELDS + (
-        "include_rejected",
-        "include_deprecated",
-        "min_review_status",
-    ):
+    for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "min_review_status"):
         value = getattr(request, name)
         if value is None:
             continue

@@ -42,7 +42,6 @@ from app.services.calculation_resolution import (
 )
 from app.services.geometry_resolution import resolve_geometry_payload
 
-
 _SOFTWARE = {"name": "gaussian", "version": "16", "revision": "C.02"}
 _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
 
@@ -62,11 +61,11 @@ def _create_species_entry(session: Session, *, inchi_key: str) -> int:
         text(
             """
             INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind)
-            VALUES ('molecule', '[H]', :inchi_key, 0, 1, 'achiral')
+            VALUES ('molecule', :smiles, :inchi_key, 0, 1, 'achiral')
             RETURNING id
             """
         ),
-        {"inchi_key": inchi_key},
+        {"smiles": inchi_key, "inchi_key": inchi_key},
     ).scalar_one()
     return session.connection().execute(
         text(

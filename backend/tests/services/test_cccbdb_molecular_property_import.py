@@ -30,7 +30,6 @@ from app.services.cccbdb_molecular_property_import import (
     import_cccbdb_molecular_property_payloads,
 )
 
-
 WATER_INCHIKEY = "XLYOFNOQVPJJNP-UHFFFAOYSA-N"
 ETHANOL_INCHIKEY = "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
 

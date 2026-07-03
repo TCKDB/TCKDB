@@ -32,24 +32,48 @@ def _make_species_entry(
     charge: int,
     multiplicity: int,
 ) -> SpeciesEntry:
-    species = Species(
-        kind=MoleculeKind.molecule,
-        smiles=smiles,
-        inchi_key=inchi_key,
-        charge=charge,
-        multiplicity=multiplicity,
-        stereo_kind=StereoKind.achiral,
+    # Get-or-create by identity (smiles, charge, multiplicity) — DR-0031.
+    # Other committing workflow tests persist common molecules (e.g. "CCO")
+    # to the shared DB, so a blind INSERT here would collide; reuse the
+    # existing species row when present. A fresh species_entry is always
+    # created below.
+    species = session.scalar(
+        select(Species).where(
+            Species.smiles == smiles,
+            Species.charge == charge,
+            Species.multiplicity == multiplicity,
+        )
     )
-    session.add(species)
-    session.flush()
+    if species is None:
+        species = Species(
+            kind=MoleculeKind.molecule,
+            smiles=smiles,
+            inchi_key=inchi_key,
+            charge=charge,
+            multiplicity=multiplicity,
+            stereo_kind=StereoKind.achiral,
+        )
+        session.add(species)
+        session.flush()
 
-    species_entry = SpeciesEntry(
-        species_id=species.id,
-        kind=StationaryPointKind.minimum,
-        electronic_state_kind=SpeciesEntryStateKind.ground,
+    # Get-or-create the entry too: when the species was reused (above), it
+    # may already carry an equivalent ground/minimum entry, and a second
+    # insert would violate the species_entry identity constraint.
+    species_entry = session.scalar(
+        select(SpeciesEntry).where(
+            SpeciesEntry.species_id == species.id,
+            SpeciesEntry.kind == StationaryPointKind.minimum,
+            SpeciesEntry.electronic_state_kind == SpeciesEntryStateKind.ground,
+        )
     )
-    session.add(species_entry)
-    session.flush()
+    if species_entry is None:
+        species_entry = SpeciesEntry(
+            species_id=species.id,
+            kind=StationaryPointKind.minimum,
+            electronic_state_kind=SpeciesEntryStateKind.ground,
+        )
+        session.add(species_entry)
+        session.flush()
     return species_entry
 
 
@@ -164,16 +188,20 @@ def test_persist_reaction_upload_reuses_graph_layer_for_matching_submission(
 ) -> None:
     with Session(db_engine) as session:
         with session.begin():
+            # Distinct species that still balance (isomers, both C2H6O):
+            # under DR-0031 two "[He]" resolve to one species, which would
+            # collapse this to a self-reaction. Ethanol -> dimethyl ether
+            # keeps two distinct graph participants and stays balanced.
             reactant_entry = _make_species_entry(
                 session,
-                smiles="[He]",
+                smiles="CCO",
                 inchi_key="REACTIONUPLD000000000000001",
                 charge=0,
                 multiplicity=1,
             )
             product_entry = _make_species_entry(
                 session,
-                smiles="[He]",
+                smiles="COC",
                 inchi_key="REACTIONUPLD000000000000002",
                 charge=0,
                 multiplicity=1,
@@ -331,9 +359,11 @@ def test_pseudo_species_participant_skips_elemental_balance(db_engine) -> None:
     reaction from strict elemental-balance rejection in this first pass."""
     with Session(db_engine) as session:
         with session.begin():
+            # Unique smiles (identity is smiles+charge+multiplicity, DR-0031);
+            # balance is skipped for pseudo reactions so it is never parsed.
             ordinary_entry = _make_species_entry(
                 session,
-                smiles="[H]",
+                smiles="pseudo-ordinary-0001",
                 inchi_key="PSEUDOBALANCE0000000000001",
                 charge=0,
                 multiplicity=2,

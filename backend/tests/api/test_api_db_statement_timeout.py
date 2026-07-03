@@ -18,14 +18,13 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
 from app.api.deps import _install_statement_timeout_listener
 from app.api.errors import register_exception_handlers
-
 
 # ---------------------------------------------------------------------------
 # Listener applies SET statement_timeout

@@ -35,7 +35,6 @@ from app.services.contribution_bundle_export import (
 from app.workflows.kinetics import persist_kinetics_upload
 from app.workflows.thermo import persist_thermo_upload
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CLI_SCRIPT = REPO_ROOT / "scripts" / "export_contribution_bundle.py"
 

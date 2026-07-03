@@ -27,7 +27,6 @@ from app.importers.cccbdb.diagnostics.runner import (
     run_diagnostics,
 )
 
-
 # ---------------------------------------------------------------------------
 # Synthetic HTML samples
 # ---------------------------------------------------------------------------

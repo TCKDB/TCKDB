@@ -35,17 +35,17 @@ from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
     CalculationDependency,
+    CalculationFreqResult,
     CalculationGeometryValidation,
     CalculationInputGeometry,
-    CalculationOutputGeometry,
-    CalculationParameter,
-    CalculationSCFStability,
-    CalculationFreqResult,
     CalculationIRCResult,
     CalculationOptResult,
+    CalculationOutputGeometry,
+    CalculationParameter,
     CalculationPathSearchResult,
-    CalculationSPResult,
     CalculationScanResult,
+    CalculationSCFStability,
+    CalculationSPResult,
 )
 from app.db.models.common import (
     CalculationQuality,
@@ -70,12 +70,11 @@ from app.schemas.reads.scientific_calculation_search import (
 )
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
-    RecordReviewBadge,
 )
 from app.services.scientific_read.calculations import (
+    _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
     _NOT_IMPLEMENTED_INCLUDE_TOKENS,
-    _INTERNAL_INCLUDE_TOKENS,
     build_record,
 )
 from app.services.scientific_read.common import (
@@ -88,13 +87,11 @@ from app.services.scientific_read.common import (
     visible_statuses,
 )
 from app.services.scientific_read.handles import (
-    NO_MATCH,
     resolve_filter_ref,
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-
 
 # Filter knobs that count as "meaningful" for the at-least-one-filter rule.
 # Pure pagination/include/review knobs are intentionally excluded so callers
@@ -831,12 +828,7 @@ def _request_filter_echo(request: CalculationsSearchRequest) -> dict[str, Any]:
     envelope.
     """
     out: dict[str, Any] = {}
-    for name in _MEANINGFUL_FILTER_FIELDS + (
-        "include_rejected",
-        "include_deprecated",
-        "include_rejected_quality",
-        "min_review_status",
-    ):
+    for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "include_rejected_quality", "min_review_status"):
         value = getattr(request, name)
         if value is None:
             continue

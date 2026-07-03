@@ -46,7 +46,6 @@ from app.services.geometry_validation import (
 from app.workflows.computed_reaction import persist_computed_reaction_upload
 from app.workflows.computed_species import persist_computed_species_upload
 
-
 # ---------------------------------------------------------------------------
 # Geometry / SMILES fixtures (chosen so RDKit can perceive a real graph;
 # pure single-atom species would be degenerate for the isomorphism test).
@@ -158,13 +157,15 @@ def _make_minimal_species_calc(
     session: Session,
     *,
     inchi_key: str,
-    smiles: str = "O",
+    smiles: str | None = None,
 ) -> Calculation:
     """Build a Species + SpeciesEntry + bare opt Calculation row with no
     attached geometries. Used by skip-path tests that want a calc
     without any input/output geometry link."""
+    # Species identity is (smiles, charge, multiplicity) (DR-0031); default
+    # to the unique inchi_key so repeated/cross-test calls don't collide.
     species = Species(
-        smiles=smiles,
+        smiles=smiles if smiles is not None else inchi_key,
         inchi_key=inchi_key,
         charge=0,
         multiplicity=1,

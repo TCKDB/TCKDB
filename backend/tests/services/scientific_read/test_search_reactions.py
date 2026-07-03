@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
-from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_reactions import (
     ReactionDirectionQuery,
     ReactionSearchRequest,

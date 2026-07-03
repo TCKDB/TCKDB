@@ -20,7 +20,6 @@ import app.workers.upload_worker as upload_worker
 from app.db.models.common import UploadJobKind, UploadJobStatus
 from app.db.models.upload_job import UploadJob
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -284,7 +283,7 @@ def test_dispatch_routes_each_kind_to_its_handler(worker_db, monkeypatch, kind):
 
     # Replace every handler: if dispatch routes to the wrong kind, we'll
     # still land in a stub but ``calls[0][0]`` won't match the expected kind.
-    stub_dispatch = {k: stub_handler for k in UploadJobKind}
+    stub_dispatch = dict.fromkeys(UploadJobKind, stub_handler)
     monkeypatch.setattr(upload_worker, "_DISPATCH", stub_dispatch)
 
     payload = {"kind_marker": kind.value, "n": 7}
@@ -373,7 +372,7 @@ def test_worker_dispatches_transport_job_to_transport_handler(
             f"transport job was misrouted to handler for {job.kind!r}"
         )
 
-    stub_dispatch = {k: wrong_handler for k in UploadJobKind}
+    stub_dispatch = dict.fromkeys(UploadJobKind, wrong_handler)
     stub_dispatch[UploadJobKind.transport] = stub_transport
     monkeypatch.setattr(upload_worker, "_DISPATCH", stub_dispatch)
 
@@ -521,15 +520,16 @@ def test_run_one_job_links_records_and_initializes_under_review(
     Exercised through ``run_one_job`` on the per-test transactional session
     so everything rolls back at teardown (no committed pollution).
     """
+    from sqlalchemy import select
+
     from app.db.models.common import (
         RecordReviewStatus,
         SubmissionAuditEventKind,
         SubmissionRecordType,
     )
     from app.db.models.record_review import RecordReview
-    from app.db.models.submission import Submission, SubmissionAuditEvent, SubmissionRecordLink
+    from app.db.models.submission import SubmissionAuditEvent, SubmissionRecordLink
     from app.services.upload_submission import open_job_submission
-    from sqlalchemy import select
 
     job = UploadJob(
         kind=UploadJobKind.thermo,
@@ -593,10 +593,11 @@ def test_terminal_worker_failure_records_durable_ingestion_failed(
     ``failed`` and appends an ``ingestion_failed`` audit event — with no
     partial scientific records (the persistence transaction rolled back).
     """
+    from sqlalchemy import select
+
     from app.db.models.common import SubmissionAuditEventKind, SubmissionStatus
     from app.db.models.submission import Submission, SubmissionAuditEvent
     from app.services.upload_submission import open_job_submission
-    from sqlalchemy import select
 
     def failing_handler(session, job, review_policy=None):
         raise RuntimeError("kaboom-before-persistence")

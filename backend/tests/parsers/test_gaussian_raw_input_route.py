@@ -28,7 +28,6 @@ from app.services.gaussian_parameter_parser import (
     extract_gaussian_route_text,
 )
 
-
 # A real-world raw Gaussian input as supplied by the bug report.
 RAW_INPUT_SINGLE_LINE_ROUTE = (
     "%chk=check.chk\n"

@@ -5,11 +5,13 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Double,
     ForeignKey,
     Index,
     Integer,
     SmallInteger,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -87,6 +89,9 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=True,
     )
     uses_projected_frequencies: Mapped[Optional[bool]] = mapped_column(nullable=True)
+    # Number of optical isomers (enantiomers). Contributes R*ln(n) to the
+    # entropy (DR-0033). NULL = unspecified; 1 = achiral / no contribution.
+    optical_isomers: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     species_entry: Mapped["SpeciesEntry"] = relationship(
@@ -109,12 +114,56 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         back_populates="statmech",
         cascade="all, delete-orphan",
     )
+    electronic_levels: Mapped[list["StatmechElectronicLevel"]] = relationship(
+        back_populates="statmech",
+        order_by="StatmechElectronicLevel.level_index",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint(
             "external_symmetry IS NULL OR external_symmetry >= 1",
             name="external_symmetry_ge_1",
         ),
+        CheckConstraint(
+            "optical_isomers IS NULL OR optical_isomers >= 1",
+            name="optical_isomers_ge_1",
+        ),
+    )
+
+
+class StatmechElectronicLevel(Base):
+    """One electronic energy level for the electronic partition function.
+
+    q_elec = Σ gᵢ·exp(−εᵢ/kT). Store the low-lying electronic states as
+    ordered (energy, degeneracy) pairs (DR-0033): the ground state is
+    ``level_index=1`` at ``energy_cm1=0`` with its degeneracy; excited
+    states follow. Needed for open-shell atoms/radicals with low-lying
+    states (OH ²Π spin-orbit splitting, O(³P), halogen atoms) where a bare
+    term symbol is insufficient.
+    """
+
+    __tablename__ = "statmech_electronic_level"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    statmech_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("statmech.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    level_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    energy_cm1: Mapped[float] = mapped_column(Double, nullable=False)
+    degeneracy: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    statmech: Mapped["Statmech"] = relationship(back_populates="electronic_levels")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "statmech_id", "level_index", name="uq_statmech_electronic_level"
+        ),
+        CheckConstraint("level_index >= 1", name="level_index_ge_1"),
+        CheckConstraint("energy_cm1 >= 0", name="energy_cm1_ge_0"),
+        CheckConstraint("degeneracy >= 1", name="degeneracy_ge_1"),
     )
 
 

@@ -35,15 +35,12 @@ from app.db.models.species import (
 from app.db.models.statmech import Statmech
 from app.db.models.submission import (
     Submission,
-    SubmissionAuditEvent,
-    SubmissionRecordLink,
 )
 from app.db.models.thermo import Thermo
 from app.db.models.transition_state import (
     TransitionState,
     TransitionStateEntry,
 )
-
 from tests.api.test_api_kfir_rxn import _BUNDLE as _COMPUTED_REACTION_BUNDLE
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"

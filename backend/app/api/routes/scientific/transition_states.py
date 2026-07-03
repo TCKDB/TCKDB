@@ -43,7 +43,6 @@ from app.services.scientific_read.transition_states_search import (
     search_transition_states,
 )
 
-
 # Two prefixes, two routers, one module.
 ts_router = APIRouter(prefix="/transition-states")
 tse_router = APIRouter(prefix="/transition-state-entries")

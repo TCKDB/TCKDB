@@ -5,6 +5,8 @@ Each test class uploads data first, then verifies reads work correctly.
 
 from __future__ import annotations
 
+from sqlalchemy import select
+
 from app.db.models.author import Author
 from app.db.models.calculation import CalculationConstraint
 from app.db.models.common import ConformerSelectionKind, ConstraintKind
@@ -12,13 +14,10 @@ from app.db.models.energy_correction import (
     EnergyCorrectionScheme,
     FrequencyScaleFactor,
 )
-from sqlalchemy import select
-
 from app.db.models.literature import Literature
 from app.db.models.literature_author import LiteratureAuthor
 from app.db.models.species import ConformerGroup, ConformerObservation
 from app.db.models.transport import Transport
-
 
 # ---------------------------------------------------------------------------
 # Test payloads

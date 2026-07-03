@@ -5,7 +5,6 @@ from typing import Literal
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.chemistry.geometry import parse_xyz
 from app.db.models.common import CalculationType, SubmissionRecordType
 from app.db.models.species import ConformerObservation

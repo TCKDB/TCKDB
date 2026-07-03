@@ -41,12 +41,12 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import DomainError
 from app.db.models.app_user import AppUser
+from app.db.models.calculation import CalculationArtifact
 from app.db.models.common import (
     AppUserRole,
     RecordReviewStatus,
     SubmissionRecordType,
 )
-from app.db.models.calculation import CalculationArtifact
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import SubmissionRecordLink
 
@@ -473,7 +473,7 @@ def _artifact_ids_for_calculations(
     session: Session, calculation_ids: Iterable[int]
 ) -> list[int]:
     """Return ids of every ``calculation_artifact`` under the given calcs."""
-    ids = {cid for cid in calculation_ids}
+    ids = set(calculation_ids)
     if not ids:
         return []
     return list(
@@ -544,11 +544,11 @@ __all__ = [
     "RecordRef",
     "ReviewPolicy",
     "apply_review_policy",
-    "ensure_record_review",
-    "set_record_review_status",
-    "bulk_set_record_review_status",
     "bulk_ensure_record_reviews",
+    "bulk_set_record_review_status",
+    "ensure_record_review",
     "get_record_review",
     "get_reviews_for_records",
     "list_record_reviews",
+    "set_record_review_status",
 ]

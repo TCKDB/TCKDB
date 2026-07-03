@@ -115,7 +115,7 @@ def run_llm_precheck_for_submission(
             error_kind="malformed_output",
         )
         return result
-    except Exception as exc:  # noqa: BLE001 - precheck must never fail caller workflows.
+    except Exception as exc:
         result = _failed_to_review_result(f"AI Review Assistant failed to review: {exc}")
         _record_precheck_attempt(
             session,

@@ -21,7 +21,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from typing import Any, Iterable
+from typing import Iterable
 
 from app.importers.cccbdb import (
     PARSER_VERSION,
@@ -40,7 +40,6 @@ from app.importers.cccbdb.normalizers.units import (
     UnsupportedUnitError,
     convert_to_canonical,
 )
-
 
 # ---------------------------------------------------------------------------
 # Per-property configuration

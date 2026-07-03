@@ -61,7 +61,7 @@ def _fetch(url: str) -> str:
             )
             response.raise_for_status()
             return response.text
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last_exc = exc
             if attempt == 0:
                 time.sleep(2.0)

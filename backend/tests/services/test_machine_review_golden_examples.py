@@ -33,12 +33,9 @@ import json
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.app import create_app
-from app.api.deps import get_db, get_write_db
 from app.db.models.common import (
     SubmissionActorKind,
     SubmissionAuditEventKind,

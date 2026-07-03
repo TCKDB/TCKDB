@@ -7,7 +7,7 @@ All cross-references inside the bundle are local string keys; **no
 database FK ids are accepted anywhere** (DR-0029 Requirement 1).
 """
 
-from tckdb_schemas.workflows.computed_species_upload import (  # noqa: F401
+from tckdb_schemas.workflows.computed_species_upload import (
     AppliedEnergyCorrectionInBundle,
     CalculationDependencyInBundle,
     CalculationInBundle,

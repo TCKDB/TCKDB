@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+from rdkit import Chem
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
-
-from rdkit import Chem
 
 from app.chemistry.species import (
     canonical_species_identity,
@@ -50,7 +49,16 @@ def resolve_species(
         ident_mol = identity_mol_from_smiles(payload.smiles)
         stereo_kind, _auto_label = classify_stereo_kind(ident_mol)
 
-    species = session.scalar(select(Species).where(Species.inchi_key == inchi_key))
+    # Identity is (canonical_smiles, charge, multiplicity) — see DR-0031.
+    # inchi_key is stored for cross-notation search but is NOT the dedup
+    # key: it cannot distinguish spin states (singlet vs triplet CH2) and
+    # wrongly merges some tautomers (2-pyridone vs 2-hydroxypyridine).
+    identity_filter = (
+        Species.smiles == canonical_smiles,
+        Species.charge == payload.charge,
+        Species.multiplicity == payload.multiplicity,
+    )
+    species = session.scalar(select(Species).where(*identity_filter))
     if species is None:
         try:
             with session.begin_nested():
@@ -65,7 +73,7 @@ def resolve_species(
                 session.add(species)
                 session.flush()
         except IntegrityError:
-            species = session.scalar(select(Species).where(Species.inchi_key == inchi_key))
+            species = session.scalar(select(Species).where(*identity_filter))
 
     return species
 

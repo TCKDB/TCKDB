@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timedelta
-from typing import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,7 +21,6 @@ from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 from app.db.models.idempotency import IdempotencyRecord
 from app.db.models.species import ConformerObservation
-
 
 CONFORMER_ENDPOINT = "/api/v1/uploads/conformers"
 THERMO_ENDPOINT = "/api/v1/uploads/thermo"
@@ -220,7 +218,6 @@ class TestScoping:
         self, db_engine, _api_test_user, second_user_id, db_session
     ) -> None:
         """Both users use the same key on the same endpoint — both succeed."""
-        from sqlalchemy.orm import Session
 
         # Build two TestClients sharing the txn-scoped session, each
         # forced to a different current_user.

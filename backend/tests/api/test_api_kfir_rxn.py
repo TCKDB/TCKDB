@@ -402,7 +402,9 @@ class TestKfirRxn2Bundle:
         fwd_kin = client.get(f"/api/v1/kinetics/{fwd_kin_id}").json()
         assert fwd_kin["n"] == pytest.approx(4.75152)
         assert fwd_kin["ea_kj_mol"] == pytest.approx(16.6648, abs=0.01)
-        assert fwd_kin["tunneling_model"] == "Eckart"
+        # DR-0032: tunneling_model is now a normalized enum token
+        # ("Eckart" from the ARC payload folds to canonical "eckart").
+        assert fwd_kin["tunneling_model"] == "eckart"
 
         # NH3 thermo with NASA coefficients survived
         thermo_id = data["thermo_ids"][0]  # NH3 thermo

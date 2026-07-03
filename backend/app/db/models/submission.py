@@ -44,9 +44,9 @@ from app.db.base import Base, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     SubmissionActorKind,
     SubmissionAuditEventKind,
+    SubmissionKind,
     SubmissionPrecheckLabel,
     SubmissionRecordType,
-    SubmissionKind,
     SubmissionSourceKind,
     SubmissionStatus,
 )

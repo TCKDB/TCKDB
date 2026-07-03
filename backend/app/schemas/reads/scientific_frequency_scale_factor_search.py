@@ -16,8 +16,14 @@ from pydantic import BaseModel, Field
 from app.db.models.common import FrequencyScaleKind
 from app.schemas.reads._field_bounds import (
     MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_METHOD_LENGTH as _MAX_METHOD_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
 )
 from app.schemas.reads.scientific_common import (

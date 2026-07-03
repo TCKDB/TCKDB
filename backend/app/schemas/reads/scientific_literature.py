@@ -21,7 +21,6 @@ from pydantic import BaseModel, Field
 from app.db.models.common import LiteratureKind
 from app.schemas.reads.scientific_common import ReviewStatusSummary
 
-
 # ---------------------------------------------------------------------------
 # Request echo
 # ---------------------------------------------------------------------------

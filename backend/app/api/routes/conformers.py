@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
-
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import (

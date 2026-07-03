@@ -36,7 +36,6 @@ from app.services.scientific_read.structure_search import (
     search_species_by_structure,
 )
 
-
 router = APIRouter(prefix="/species")
 
 

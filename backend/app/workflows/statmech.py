@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionRecordType
 from app.db.models.statmech import Statmech
@@ -160,10 +159,12 @@ def persist_statmech_upload(
         statmech_treatment=request.statmech_treatment,
         freq_scale_factor=request.freq_scale_factor,
         uses_projected_frequencies=request.uses_projected_frequencies,
+        optical_isomers=request.optical_isomers,
         note=request.note,
         uploaded_calculation_role=None,
         source_calculations=resolved_sources,
         torsions=resolved_torsions,
+        electronic_levels=request.electronic_levels,
     )
 
     statmech = resolve_or_create_statmech(

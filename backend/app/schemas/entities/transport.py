@@ -10,7 +10,6 @@ from app.schemas.common import (
 )
 from app.schemas.utils import normalize_optional_text
 
-
 # ---------------------------------------------------------------------------
 # Transport source calculation link
 # ---------------------------------------------------------------------------

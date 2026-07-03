@@ -32,7 +32,6 @@ from app.db.models.common import ActivationEnergyUnits, ReactionRole
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import (
     ChemReaction,
-    ReactionEntry,
     ReactionEntryStructureParticipant,
 )
 from app.db.models.species import SpeciesEntry
@@ -52,7 +51,6 @@ from app.schemas.workflows.contribution_bundle import (
     BundleSubmissionSourceKind,
     ContributionBundleV0,
 )
-
 
 # Schema version of the local DB at the time of writing. The local export
 # stamps this into the bundle so a future hosted importer can refuse

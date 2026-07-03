@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.db.models.statmech import (
     Statmech,
+    StatmechElectronicLevel,
     StatmechSourceCalculation,
     StatmechTorsion,
     StatmechTorsionDefinition,
@@ -90,11 +90,22 @@ def resolve_or_create_statmech(
         statmech_treatment=payload.statmech_treatment,
         frequency_scale_factor_id=fsf_id,
         uses_projected_frequencies=payload.uses_projected_frequencies,
+        optical_isomers=payload.optical_isomers,
         note=payload.note,
         created_by=created_by,
     )
     session.add(statmech)
     session.flush()
+
+    for level in payload.electronic_levels:
+        session.add(
+            StatmechElectronicLevel(
+                statmech_id=statmech.id,
+                level_index=level.level_index,
+                energy_cm1=level.energy_cm1,
+                degeneracy=level.degeneracy,
+            )
+        )
 
     # Attach source calculations
     if payload.uploaded_calculation_role is not None:

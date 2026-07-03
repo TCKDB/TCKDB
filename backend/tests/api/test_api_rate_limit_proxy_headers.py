@@ -23,7 +23,6 @@ from app.api.config import settings
 from app.api.deps import get_db, get_write_db
 from app.api.rate_limit import parse_forwarded_header, reset_rate_limit_store
 
-
 # ---------------------------------------------------------------------------
 # Pure parser tests
 # ---------------------------------------------------------------------------

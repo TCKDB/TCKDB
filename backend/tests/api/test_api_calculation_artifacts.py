@@ -15,7 +15,6 @@ from __future__ import annotations
 import base64
 import hashlib
 from pathlib import Path
-from typing import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -443,7 +442,6 @@ class TestStorageFailure:
         default exception handler's choice; the correctness property
         asserted here is the cleanup, not the status code.
         """
-        import pytest as _pytest
         from sqlalchemy.exc import IntegrityError
 
         calc_id = _create_calc_via_conformer_upload(client)

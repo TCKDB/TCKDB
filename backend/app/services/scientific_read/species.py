@@ -5,16 +5,11 @@ See docs/specs/read_api_mvp.md §Endpoint 1 for the contract.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
-    RecordReviewStatus,
-    SpeciesEntryStateKind,
-    StationaryPointKind,
     SubmissionRecordType,
 )
 from app.db.models.species import (
@@ -395,7 +390,7 @@ def _compute_availability(
         ).all()
     )
 
-    calc_counts: dict[int, int] = {eid: 0 for eid in entry_ids}
+    calc_counts: dict[int, int] = dict.fromkeys(entry_ids, 0)
     for entry_id, count in session.execute(
         select(Calculation.species_entry_id, func.count(Calculation.id))
         .where(Calculation.species_entry_id.in_(entry_ids))

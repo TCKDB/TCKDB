@@ -37,11 +37,11 @@ from app.db.models.calculation import (
     CalculationIRCResult,
     CalculationOptResult,
     CalculationOutputGeometry,
-    CalculationSPResult,
     CalculationScanCoordinate,
     CalculationScanPoint,
     CalculationScanPointCoordinateValue,
     CalculationScanResult,
+    CalculationSPResult,
 )
 from app.db.models.common import (
     ArtifactKind,
@@ -79,14 +79,13 @@ from app.db.models.statmech import (
     StatmechTorsion,
     StatmechTorsionDefinition,
 )
-from app.db.models.thermo import Thermo, ThermoNASA
+from app.db.models.thermo import Thermo
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.workflows.computed_reaction_upload import (
     BundleKineticsIn,
     ComputedReactionUploadRequest,
 )
 from app.workflows.computed_reaction import persist_computed_reaction_upload
-
 
 # ---------------------------------------------------------------------------
 # Geometry strings (minimal but valid XYZ blocks)
@@ -685,7 +684,7 @@ def test_species_reuse_across_participants(db_engine) -> None:
                 SpeciesEntry.id.in_(summary["species_entry_ids"])
             )
         ).all()
-        h_species_ids = {
+        _h_species_ids = {
             se.species_id for se in species_entries if se.species_id is not None
         }
         h_single = {
@@ -734,7 +733,7 @@ def test_artifact_persists_and_links_to_calculation(db_engine, monkeypatch) -> N
 
     with _isolated_session(db_engine) as session:
         request = ComputedReactionUploadRequest(**payload)
-        summary = persist_computed_reaction_upload(session, request)
+        _summary = persist_computed_reaction_upload(session, request)
 
         # There should be exactly one artifact in the whole bundle.
         all_artifacts = session.scalars(select(CalculationArtifact)).all()

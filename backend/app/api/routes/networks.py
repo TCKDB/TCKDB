@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import DataIntegrityError, NotFoundError
-from app.db.models.common import NetworkKineticsModelKind
 from app.api.routes._pagination import PaginatedResponse
+from app.db.models.common import NetworkKineticsModelKind
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
     NetworkChannel,

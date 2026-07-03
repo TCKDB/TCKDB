@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401  — ensure all mappers are loaded
 from app.db.models.common import SubmissionRecordType
 from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.workflows.reaction_upload import (

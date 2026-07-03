@@ -22,17 +22,16 @@ from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, ValidationError
+from tckdb_schemas.fragments.geometry import GeometryPayload
+from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 
 from app.importers.cccbdb.crawl_plan import EXPERIMENTAL_PILOT
 from app.importers.cccbdb.snapshot import SnapshotConfig, run_snapshot
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
-from tckdb_schemas.fragments.geometry import GeometryPayload
-from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 
 # Reuse the same fixture-backed fetcher used by the snapshot unit tests.
 from tests.importers.cccbdb.test_snapshot import FixtureFetcher
-
 
 # ---------------------------------------------------------------------------
 # Helpers

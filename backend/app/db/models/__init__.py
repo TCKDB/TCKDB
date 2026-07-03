@@ -1,5 +1,12 @@
 """Eagerly import ORM model modules so mapper configuration sees the full graph."""
 
+# Install the global before_insert listener that auto-populates ``public_ref``
+# on every PublicRefMixin row. Done here so any code path that imports the
+# models package wires the listener exactly once. Idempotent.
+from app.services.public_refs import (
+    install_public_ref_listener as _install_public_ref_listener,
+)
+
 from . import (
     api_key,
     app_user,
@@ -31,13 +38,6 @@ from . import (
     workflow,
 )
 
-# Install the global before_insert listener that auto-populates ``public_ref``
-# on every PublicRefMixin row. Done here so any code path that imports the
-# models package wires the listener exactly once. Idempotent.
-from app.services.public_refs import (  # noqa: E402
-    install_public_ref_listener as _install_public_ref_listener,
-)
-
 _install_public_ref_listener()
 
 
@@ -58,6 +58,7 @@ __all__ = [
     "network",
     "network_pdep",
     "reaction",
+    "record_machine_review",
     "record_review",
     "software",
     "species",

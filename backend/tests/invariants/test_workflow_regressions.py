@@ -15,7 +15,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models.calculation import Calculation, CalculationSPResult
+from app.db.models.calculation import CalculationSPResult
 from app.db.models.common import CalculationType
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
@@ -26,7 +26,6 @@ from app.services.calculation_resolution import (
 )
 from app.services.species_resolution import resolve_species_entry
 from app.workflows.thermo import persist_thermo_upload
-
 
 # ---------------------------------------------------------------------------
 # Workflow regression 1: thermo upload preserves invariant-relevant fields
@@ -101,7 +100,7 @@ def test_thermo_upload_preserves_nasa_coefficients_and_tabulated_points(
             .order_by(ThermoPoint.temperature_k)
         ).all()
         assert len(points) == len(_THERMO_POINTS)
-        for persisted, expected in zip(points, _THERMO_POINTS):
+        for persisted, expected in zip(points, _THERMO_POINTS, strict=False):
             assert persisted.temperature_k == pytest.approx(expected["temperature_k"])
             assert persisted.cp_j_mol_k == pytest.approx(expected["cp_j_mol_k"])
             assert persisted.h_kj_mol == pytest.approx(expected["h_kj_mol"])

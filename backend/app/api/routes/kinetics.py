@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
+from app.api.routes._pagination import PaginatedResponse
 from app.db.models.common import KineticsModelKind, ScientificOriginKind
 from app.db.models.kinetics import Kinetics
 from app.schemas.entities.kinetics import KineticsRead
-from app.api.routes._pagination import PaginatedResponse
 
 router = APIRouter()
 

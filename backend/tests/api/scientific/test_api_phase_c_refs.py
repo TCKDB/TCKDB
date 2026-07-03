@@ -28,7 +28,6 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
 )
 
-
 # ---------------------------------------------------------------------------
 # Path handle: species-entries/{handle}/thermo
 # ---------------------------------------------------------------------------

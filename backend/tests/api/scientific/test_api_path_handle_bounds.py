@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import pytest
 
-
 _HUGE = "x" * 256
 
 

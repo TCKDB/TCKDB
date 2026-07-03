@@ -52,7 +52,6 @@ from starlette.responses import JSONResponse, Response
 
 from app.api.config import settings
 
-
 # ---------------------------------------------------------------------------
 # Storage
 # ---------------------------------------------------------------------------

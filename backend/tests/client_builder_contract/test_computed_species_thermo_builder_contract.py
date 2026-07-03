@@ -13,17 +13,17 @@ import pytest
 
 pytest.importorskip("tckdb_client.builders")
 
-from tckdb_client.builders import (  # noqa: E402
+from tckdb_client.builders import (
     Calculation,
     ComputedSpeciesUpload,
     Geometry,
     LevelOfTheory,
-    Species,
     SoftwareRelease,
+    Species,
     Thermo,
 )
 
-from app.schemas.workflows.computed_species_upload import (  # noqa: E402
+from app.schemas.workflows.computed_species_upload import (
     ComputedSpeciesUploadRequest,
 )
 

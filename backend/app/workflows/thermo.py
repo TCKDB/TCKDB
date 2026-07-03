@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
@@ -29,7 +28,6 @@ from app.services.record_review import (
 )
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
-
 
 _THERMO_ROLE_TO_CALC_TYPE: dict[ThermoCalculationRole, CalculationType] = {
     ThermoCalculationRole.opt: CalculationType.opt,

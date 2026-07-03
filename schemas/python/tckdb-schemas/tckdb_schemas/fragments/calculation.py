@@ -9,6 +9,7 @@ from tckdb_schemas.enums import (
     CalculationQuality,
     CalculationType,
     ConstraintKind,
+    HessianSource,
     IRCDirection,
     PathSearchMethod,
     SCFStabilityStatus,
@@ -20,7 +21,6 @@ from tckdb_schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constraint payload (lives in fragments so calculation upload payloads can
@@ -294,6 +294,63 @@ class SCFStabilityPayload(SchemaBase):
                 "scf_stability.status = 'unstable' records that an "
                 "instability remains. Use 'stabilized' if a stable "
                 "wavefunction was subsequently obtained."
+            )
+        return self
+
+
+class HessianPayload(SchemaBase):
+    """Optional inline Cartesian Hessian (second-derivative) matrix.
+
+    The Hessian is the primitive from which harmonic frequencies, normal
+    modes, and thermochemistry are derived. It is meaningful only relative
+    to a specific atomic configuration, ordering, and orientation, so the
+    payload carries its own ``geometry``: the resolution layer dedupes it
+    through the content-addressed geometry seam (so it usually coincides
+    with the calculation's input geometry with no duplication) and stores
+    the resulting ``geometry_id`` as a mandatory binding.
+
+    Only the lower triangle including the diagonal of the symmetric 3N×3N
+    matrix is stored, row-major, in fixed units of hartree/bohr². For
+    ``N`` atoms that is exactly ``3N(3N+1)/2`` values.
+
+    Attaches to ``freq`` calculations and to ``opt`` calculations run with
+    an analytic Hessian (``opt=calcall``-style). See DR-0030.
+
+    :param geometry: The geometry the Hessian was computed at.
+    :param lower_triangle_hartree_bohr2: Packed lower triangle (with
+        diagonal), row-major, length ``3N(3N+1)/2``, in hartree/bohr².
+    :param source: Where the matrix was obtained from.
+    :param parser_version: Optional version tag of the parser that
+        produced the matrix.
+    :param note: Optional free-text annotation.
+    """
+
+    geometry: GeometryPayload
+    lower_triangle_hartree_bohr2: list[float] = Field(min_length=1)
+    source: HessianSource
+    parser_version: str | None = None
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_triangle_length(self) -> Self:
+        # Standard XYZ: the first line is the integer atom count. If it is
+        # malformed we defer to the backend geometry parser for the precise
+        # error rather than duplicating its diagnostics here.
+        stripped = self.geometry.xyz_text.strip().splitlines()
+        if not stripped:
+            return self
+        try:
+            n = int(stripped[0].strip())
+        except ValueError:
+            return self
+        expected = (3 * n) * (3 * n + 1) // 2
+        actual = len(self.lower_triangle_hartree_bohr2)
+        if actual != expected:
+            raise ValueError(
+                f"hessian.lower_triangle_hartree_bohr2 has {actual} entries "
+                f"but a {n}-atom Hessian lower triangle must have exactly "
+                f"{expected} (= 3N(3N+1)/2 for N={n}). Provide the packed "
+                f"lower triangle including the diagonal, row-major."
             )
         return self
 
@@ -614,6 +671,7 @@ class CalculationWithResultsPayload(CalculationPayload):
 
     scf_stability: SCFStabilityPayload | None = None
     wavefunction_diagnostic: WavefunctionDiagnosticPayload | None = None
+    hessian: HessianPayload | None = None
 
     input_geometries: list[GeometryPayload] = Field(
         default_factory=list,

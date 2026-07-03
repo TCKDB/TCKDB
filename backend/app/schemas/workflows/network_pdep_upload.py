@@ -34,25 +34,24 @@ from app.db.models.common import (
 from app.schemas.common import SchemaBase
 from app.schemas.fragments.artifact import ArtifactIn
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
-from app.schemas.fragments.geometry import GeometryPayload
-from app.schemas.reaction_family import find_canonical_reaction_family
 from app.schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+from app.schemas.reaction_family import find_canonical_reaction_family
 
 # Re-exported for backwards compatibility — ArtifactIn now lives in
 # app/schemas/fragments/artifact.py.
 __all__ = ("ArtifactIn",)
-from app.schemas.utils import normalize_optional_text
-from app.schemas.workflows.literature_upload import LiteratureUploadRequest
-from app.schemas.workflows.transport_upload import TransportUploadPayload
-from tckdb_schemas.shared.calculation_in import (  # noqa: F401  (re-exported)
+from tckdb_schemas.shared.calculation_in import (
     CalculationIn,
     GeometryIn,
     calculation_in_to_with_results_payload,
 )
 
+from app.schemas.utils import normalize_optional_text
+from app.schemas.workflows.literature_upload import LiteratureUploadRequest
+from app.schemas.workflows.transport_upload import TransportUploadPayload
 
 # ---------------------------------------------------------------------------
 # Species

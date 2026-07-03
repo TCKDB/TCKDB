@@ -1,0 +1,40 @@
+! Hand-authored CHEMKIN mechanism for the end-to-end round-trip test
+! (license-clean fixture, owned by the backend integration suite).
+!
+! Exercises the four kinetics forms whose CHEMKIN<->TCKDB fidelity the
+! round trip guards: modified Arrhenius, Troe falloff + a collider list,
+! PLOG, and Chebyshev. Plus NASA-7 thermo and transport for every species.
+!
+! Deliberately EXCLUDES the simple third-body (A+B+M) case -- a backend
+! A-units validation fix is landing separately; the round-trip test carries
+! a skipped placeholder for it.
+ELEMENTS
+H O C AR
+END
+
+SPECIES
+H  H2  O  O2  OH  H2O  CH3  CH4  AR
+END
+
+REACTIONS    CAL/MOLE   MOLES
+! R1 -- modified Arrhenius, bimolecular, reversible
+H + O2 <=> O + OH                        2.000E+14   0.000   16800.0
+! R2 -- Troe falloff with a collider-efficiency list
+CH3 + H (+M) <=> CH4 (+M)                1.270E+16  -0.630     383.0
+    LOW  /  2.477E+33   -4.760   2440.0 /
+    TROE /  0.7830   74.00   2941.0   6964.0 /
+    H2/2.0/  H2O/6.0/  AR/0.70/
+! R3 -- PLOG, bimolecular
+OH + H2 <=> H + H2O                      2.160E+08   1.510    3430.0
+    PLOG /  0.1    1.000E+08   1.400   3200.0 /
+    PLOG /  1.0    2.160E+08   1.510   3430.0 /
+    PLOG / 10.0    5.000E+08   1.600   3700.0 /
+! R4 -- Chebyshev surface
+H2 + O2 <=> OH + OH                      1.000E+00   0.000       0.0
+    TCHEB /  300.0   2500.0 /
+    PCHEB /  0.01    100.0 /
+    CHEB  /  3   3 /
+    CHEB  /  1.0E+01   2.0E-01   3.0E-02 /
+    CHEB  /  4.0E-01   5.0E-02   6.0E-03 /
+    CHEB  /  7.0E-02   8.0E-03   9.0E-04 /
+END

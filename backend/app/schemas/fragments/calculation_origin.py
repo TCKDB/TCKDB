@@ -1,7 +1,7 @@
 """Re-export shim — calculation-origin metadata now lives in
 ``tckdb_schemas.fragments.calculation_origin``."""
 
-from tckdb_schemas.fragments.calculation_origin import (  # noqa: F401
+from tckdb_schemas.fragments.calculation_origin import (
     CalculationOriginKind,
     CalculationOriginMetadata,
     ReusedFromCalculationRef,
@@ -9,6 +9,6 @@ from tckdb_schemas.fragments.calculation_origin import (  # noqa: F401
 
 __all__ = [
     "CalculationOriginKind",
-    "ReusedFromCalculationRef",
     "CalculationOriginMetadata",
+    "ReusedFromCalculationRef",
 ]

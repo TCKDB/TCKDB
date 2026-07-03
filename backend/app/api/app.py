@@ -26,10 +26,9 @@ async def _lifespan(app: FastAPI):
     (``python -m app.workers.upload_worker``), which is recommended for
     production.
     """
-    thread = None
     if os.getenv("TCKDB_INLINE_WORKER", "false").lower() == "true":
         from app.workers.upload_worker import run_worker_thread
-        thread = run_worker_thread()
+        run_worker_thread()
 
     yield
 

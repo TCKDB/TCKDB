@@ -39,7 +39,6 @@ from app.db.models.network_pdep import (
 )
 from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
-    ReviewStatusSummary,
 )
 from app.schemas.reads.scientific_network import (
     NetworkReviewEntry,
@@ -75,7 +74,6 @@ from app.services.scientific_read.networks import (
     _build_solve_review_history,
     _build_source_calculations,
 )
-
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "coefficients",

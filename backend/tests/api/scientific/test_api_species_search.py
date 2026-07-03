@@ -28,9 +28,16 @@ def test_get_returns_200_with_envelope(client, db_session):
 
 
 def test_get_parses_collapse_offset_limit(client, db_session):
-    a = make_species(db_session, smiles="X", inchi_key=next_inchi_key("CO1"))
+    # Two spin variants (same smiles, different multiplicity) — distinct
+    # species under DR-0031 that both match a by-smiles search, giving two
+    # pre-collapse candidates.
+    a = make_species(
+        db_session, smiles="X", inchi_key=next_inchi_key("CO1"), multiplicity=1
+    )
     make_species_entry(db_session, a)
-    b = make_species(db_session, smiles="X", inchi_key=next_inchi_key("CO2"))
+    b = make_species(
+        db_session, smiles="X", inchi_key=next_inchi_key("CO2"), multiplicity=3
+    )
     make_species_entry(db_session, b)
 
     resp = client.get(

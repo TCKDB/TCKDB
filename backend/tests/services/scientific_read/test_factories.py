@@ -24,8 +24,8 @@ def test_make_chem_reaction_populates_stoichiometry_hash(db_session):
     """Factory mirrors production by computing ``stoichiometry_hash``
     so the public-ref listener takes the content-derived path instead
     of the id()-based fallback."""
-    a = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("FHA"))
-    b = make_species(db_session, smiles="O", inchi_key=next_inchi_key("FHB"))
+    a = make_species(db_session, inchi_key=next_inchi_key("FHA"))
+    b = make_species(db_session, inchi_key=next_inchi_key("FHB"))
     rxn = make_chem_reaction(db_session, reactants=[a], products=[b])
     assert rxn.stoichiometry_hash is not None
     assert len(rxn.stoichiometry_hash) == 64
@@ -44,12 +44,10 @@ def test_many_chem_reactions_get_distinct_public_refs(db_session):
     refs: set[str] = set()
     hashes: set[str] = set()
     for i in range(20):
-        rs = make_species(
-            db_session, smiles="C", inchi_key=next_inchi_key(f"DR{i}")
-        )
-        ps = make_species(
-            db_session, smiles="O", inchi_key=next_inchi_key(f"DP{i}")
-        )
+        # Unique species per iteration (identity is smiles+charge+mult,
+        # DR-0031) so each reaction is genuinely distinct.
+        rs = make_species(db_session, inchi_key=next_inchi_key(f"DR{i}"))
+        ps = make_species(db_session, inchi_key=next_inchi_key(f"DP{i}"))
         rxn = make_chem_reaction(db_session, reactants=[rs], products=[ps])
         refs.add(rxn.public_ref)
         hashes.add(rxn.stoichiometry_hash)
@@ -62,8 +60,8 @@ def test_make_chem_reaction_is_get_or_create(db_session):
     returns the same row, not two duplicates that would trip the
     ``stoichiometry_hash`` unique constraint.
     """
-    a = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("GOCA"))
-    b = make_species(db_session, smiles="O", inchi_key=next_inchi_key("GOCB"))
+    a = make_species(db_session, inchi_key=next_inchi_key("GOCA"))
+    b = make_species(db_session, inchi_key=next_inchi_key("GOCB"))
     first = make_chem_reaction(db_session, reactants=[a], products=[b])
     second = make_chem_reaction(db_session, reactants=[a], products=[b])
     assert first.id == second.id

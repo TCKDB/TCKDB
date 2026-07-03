@@ -8,13 +8,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
+from app.api.routes._pagination import PaginatedResponse
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.db.models.transition_state import TransitionState
 from app.schemas.entities.kinetics import KineticsRead
 from app.schemas.entities.reaction import ChemReactionRead, ReactionEntryRead
 from app.schemas.entities.transition_state import TransitionStateRead
-from app.api.routes._pagination import PaginatedResponse
 
 router = APIRouter()
 

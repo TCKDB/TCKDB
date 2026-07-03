@@ -22,12 +22,12 @@ from app.db.models.common import (
     StatmechCalculationRole,
     StatmechTreatmentKind,
 )
-from app.db.models.literature import Literature
-from app.db.models.software import SoftwareRelease
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     FrequencyScaleFactor,
 )
+from app.db.models.literature import Literature
+from app.db.models.software import SoftwareRelease
 from app.db.models.statmech import (
     Statmech,
     StatmechSourceCalculation,
@@ -37,7 +37,6 @@ from app.db.models.statmech import (
 from app.db.models.workflow import WorkflowToolRelease
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
 from app.workflows.statmech import persist_statmech_upload
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -685,3 +684,54 @@ def test_fsf_in_statmech_does_not_create_applied_energy_correction(db_engine) ->
 
         assert statmech.frequency_scale_factor_id is not None
         assert aec_after == aec_before
+
+
+# ---------------------------------------------------------------------------
+# DR-0033: optical isomers + electronic energy levels
+# ---------------------------------------------------------------------------
+
+
+def test_optical_isomers_and_electronic_levels_persist(db_engine) -> None:
+    from app.db.models.statmech import Statmech, StatmechElectronicLevel
+
+    # OH-like: doublet ground state split by spin-orbit coupling (~139 cm-1),
+    # each level doubly degenerate; a single chiral center would give
+    # optical_isomers=2 (here we just exercise the storage).
+    request = _basic_request(
+        species_entry={"smiles": "[OH]", "charge": 0, "multiplicity": 2},
+        optical_isomers=1,
+        electronic_levels=[
+            {"level_index": 1, "energy_cm1": 0.0, "degeneracy": 2},
+            {"level_index": 2, "energy_cm1": 139.7, "degeneracy": 2},
+        ],
+    )
+    with Session(db_engine) as session, session.begin():
+        statmech = persist_statmech_upload(session, request)
+        session.flush()
+
+        row = session.get(Statmech, statmech.id)
+        assert row.optical_isomers == 1
+        levels = session.scalars(
+            select(StatmechElectronicLevel)
+            .where(StatmechElectronicLevel.statmech_id == statmech.id)
+            .order_by(StatmechElectronicLevel.level_index)
+        ).all()
+        assert [(lvl.energy_cm1, lvl.degeneracy) for lvl in levels] == [
+            (0.0, 2),
+            (139.7, 2),
+        ]
+
+
+def test_duplicate_electronic_level_index_rejected() -> None:
+    with pytest.raises(ValidationError, match="level_index values must be unique"):
+        _basic_request(
+            electronic_levels=[
+                {"level_index": 1, "energy_cm1": 0.0, "degeneracy": 1},
+                {"level_index": 1, "energy_cm1": 100.0, "degeneracy": 1},
+            ],
+        )
+
+
+def test_optical_isomers_zero_rejected() -> None:
+    with pytest.raises(ValidationError):
+        _basic_request(optical_isomers=0)

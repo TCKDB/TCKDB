@@ -17,9 +17,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Any
 from urllib.parse import urljoin
-
 
 _WS_RE = re.compile(r"\s+")
 _SUB_TAGS_RE = re.compile(r"<sub>(.*?)</sub>", re.IGNORECASE | re.DOTALL)
@@ -321,7 +319,7 @@ def _candidate_from_row(
     # If the formula slot didn't yield a formula, retry by scanning
     # cells for a single HTML cell that contains ``<sub>``.
     if formula is None:
-        for i, html_cell in enumerate(cells_html):
+        for _i, html_cell in enumerate(cells_html):
             if "<sub" in html_cell.lower():
                 formula = _formula_from_html(html_cell)
                 break

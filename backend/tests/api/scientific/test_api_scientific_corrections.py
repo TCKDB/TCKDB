@@ -4,12 +4,9 @@ energy-correction-scheme detail + search endpoints.
 
 from __future__ import annotations
 
-import pytest
-
 from app.db.models.common import (
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
-    EnergyUnit,
     FrequencyScaleKind,
     MeliusBacComponentKind,
 )
@@ -26,10 +23,8 @@ from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
     make_statmech,
-    make_workflow_tool_release,
     next_inchi_key,
 )
-
 
 # ---------------------------------------------------------------------------
 # URL helpers

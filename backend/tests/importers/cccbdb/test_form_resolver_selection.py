@@ -10,8 +10,6 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import pytest
-
 from app.importers.cccbdb.form_resolver import (
     FormQueueRecord,
     FormResolverConfig,
@@ -92,13 +90,13 @@ def _choose_then_data_session() -> FakeSession:
 
 
 def _record(**overrides) -> FormQueueRecord:
-    base = dict(
-        species_key="ethanol",
-        formula="C2H6O",
-        name="Ethanol",
-        target_kind="atomization_energy",
-        entry_url="https://cccbdb.nist.gov/ea1x.asp",
-    )
+    base = {
+        "species_key": "ethanol",
+        "formula": "C2H6O",
+        "name": "Ethanol",
+        "target_kind": "atomization_energy",
+        "entry_url": "https://cccbdb.nist.gov/ea1x.asp",
+    }
     base.update(overrides)
     return FormQueueRecord(**base)
 

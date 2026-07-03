@@ -49,7 +49,6 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 
-
 # ECS is not reviewable. ``review`` is not a legal token; ``include=all``
 # expands to ``corrections,used_by,literature`` minus internal_ids per
 # standard policy.

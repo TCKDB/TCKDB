@@ -330,7 +330,7 @@ class TestConformerGroupingAcrossReactions:
             assert len(conformers) == 2, (
                 f"Expected 2 observations for N#CC[O], got {len(conformers)}"
             )
-            group_ids = set(c["conformer_group_id"] for c in conformers)
+            group_ids = {c["conformer_group_id"] for c in conformers}
             assert len(group_ids) == 1, (
                 f"Expected 1 conformer group for identical "
                 f"N#CC[O], got {len(group_ids)}"
@@ -361,7 +361,7 @@ class TestConformerGroupingAcrossReactions:
                         f"/api/v1/species-entries/{eid}/conformers"
                     ).json()
                     assert len(conformers) == 2
-                    group_ids = set(c["conformer_group_id"] for c in conformers)
+                    group_ids = {c["conformer_group_id"] for c in conformers}
                     # Whether 1 or 2 groups depends on torsion delta —
                     # both are valid, system must decide deterministically
                     assert len(group_ids) in (1, 2)
@@ -392,7 +392,7 @@ class TestConformerGroupingAcrossReactions:
                     assert len(conformers) == 3, (
                         f"Expected 3 [H] observations, got {len(conformers)}"
                     )
-                    group_ids = set(c["conformer_group_id"] for c in conformers)
+                    group_ids = {c["conformer_group_id"] for c in conformers}
                     assert len(group_ids) == 1, (
                         f"Expected 1 group for identical [H], got {len(group_ids)}"
                     )

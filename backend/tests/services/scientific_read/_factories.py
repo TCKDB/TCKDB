@@ -22,64 +22,38 @@ from app.db.models.calculation import (
     CalculationSCFStability,
     CalculationSPResult,
 )
-from app.db.models.geometry import Geometry
 from app.db.models.common import (
     AppUserRole,
     ArrheniusAUnits,
     ArtifactKind,
     CalculationDependencyRole,
     CalculationGeometryRole,
-    CalculationQuality,
     CalculationType,
     ConformerSelectionKind,
-    KineticsModelKind,
-    MoleculeKind,
-    RecordReviewStatus,
-    ReactionRole,
-    SCFStabilityStatus,
-    ScientificOriginKind,
-    SpeciesEntryStateKind,
-    StationaryPointKind,
-    StereoKind,
-    SubmissionRecordType,
-    ValidationStatus,
-)
-from app.db.models.species import (
-    ConformerGroup,
-    ConformerObservation,
-    ConformerSelection,
-)
-from app.db.models.kinetics import Kinetics
-from app.db.models.level_of_theory import LevelOfTheory
-from app.db.models.reaction import (
-    ChemReaction,
-    ReactionEntry,
-    ReactionEntryStructureParticipant,
-    ReactionParticipant,
-)
-from app.db.models.record_review import RecordReview
-from app.db.models.species import Species, SpeciesEntry
-from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
-from app.db.models.common import (
-    ScientificOriginKind as _ScientificOriginKind,
-    StatmechCalculationRole,
-    StatmechTreatmentKind,
-    TorsionTreatmentKind,
-    TransitionStateEntryStatus,
-)
-from app.db.models.statmech import (
-    Statmech,
-    StatmechSourceCalculation,
-    StatmechTorsion,
-    StatmechTorsionDefinition,
-)
-from app.db.models.common import TransportCalculationRole
-from app.db.models.common import (
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     EnergyUnit,
     FrequencyScaleKind,
+    KineticsModelKind,
     MeliusBacComponentKind,
+    MoleculeKind,
+    ReactionRole,
+    RecordReviewStatus,
+    SCFStabilityStatus,
+    ScientificOriginKind,
+    SpeciesEntryStateKind,
+    StationaryPointKind,
+    StatmechCalculationRole,
+    StatmechTreatmentKind,
+    StereoKind,
+    SubmissionRecordType,
+    TorsionTreatmentKind,
+    TransitionStateEntryStatus,
+    TransportCalculationRole,
+    ValidationStatus,
+)
+from app.db.models.common import (
+    ScientificOriginKind as _ScientificOriginKind,
 )
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
@@ -89,10 +63,34 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
     FrequencyScaleFactor,
 )
+from app.db.models.geometry import Geometry
+from app.db.models.kinetics import Kinetics
+from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
+from app.db.models.reaction import (
+    ChemReaction,
+    ReactionEntry,
+    ReactionEntryStructureParticipant,
+    ReactionParticipant,
+)
+from app.db.models.record_review import RecordReview
 from app.db.models.software import Software
-from app.db.models.transport import Transport, TransportSourceCalculation
+from app.db.models.species import (
+    ConformerGroup,
+    ConformerObservation,
+    ConformerSelection,
+    Species,
+    SpeciesEntry,
+)
+from app.db.models.statmech import (
+    Statmech,
+    StatmechSourceCalculation,
+    StatmechTorsion,
+    StatmechTorsionDefinition,
+)
+from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.db.models.transport import Transport, TransportSourceCalculation
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 
 _INCHI_COUNTER = 0
@@ -106,19 +104,36 @@ def next_inchi_key(prefix: str = "ABCDEF") -> str:
     return stem[:27]
 
 
+_SMILES_COUNTER = 0
+
+
+def unique_smiles() -> str:
+    """Return a distinct, RDKit-valid SMILES per call (linear alkane).
+
+    Species identity is (smiles, charge, multiplicity) (DR-0031), so
+    fixtures that need several *distinct* species — or that run against the
+    shared session-scoped DB where other tests committed common SMILES —
+    must not reuse a literal like ``"CCO"``. Callers that assert on a
+    specific SMILES still pass one explicitly.
+    """
+    global _SMILES_COUNTER
+    _SMILES_COUNTER += 1
+    return "C" * _SMILES_COUNTER
+
+
 def make_species(
     session: Session,
     *,
-    smiles: str,
+    smiles: str | None = None,
     inchi_key: str | None = None,
     charge: int = 0,
     multiplicity: int = 1,
     kind: MoleculeKind = MoleculeKind.molecule,
 ) -> Species:
-    """Create a Species row."""
+    """Create a Species row. ``smiles`` defaults to a unique value."""
     species = Species(
         kind=kind,
-        smiles=smiles,
+        smiles=smiles if smiles is not None else unique_smiles(),
         inchi_key=inchi_key or next_inchi_key(),
         charge=charge,
         multiplicity=multiplicity,
@@ -227,6 +242,7 @@ def make_lot(
     don't trip the constraint when they don't care which LOT they get.
     """
     import hashlib
+
     from sqlalchemy import select as _select
 
     raw = f"{method}|{basis or ''}".encode()
@@ -292,8 +308,9 @@ def make_chem_reaction(
     from sqlalchemy import select as _select
 
     if stoichiometry_hash is None:
-        from app.services.reaction_resolution import reaction_stoichiometry_hash
         from collections import Counter
+
+        from app.services.reaction_resolution import reaction_stoichiometry_hash
 
         stoichiometry_hash = reaction_stoichiometry_hash(
             reversible=reversible,

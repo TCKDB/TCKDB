@@ -14,9 +14,7 @@ from app.schemas.fragments.calculation import (
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
 from app.services.upload_reconciliation import (
-    W_CHARGE_MISMATCH,
     W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
-    W_MULTIPLICITY_MISMATCH,
     W_N_IMAG_CONTRADICTS_MINIMUM,
     W_N_IMAG_HIGHER_ORDER_SADDLE,
     W_N_IMAG_SUGGESTS_TS,
@@ -26,7 +24,6 @@ from app.services.upload_reconciliation import (
     reconcile_species_entry,
     reconcile_species_entry_full,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

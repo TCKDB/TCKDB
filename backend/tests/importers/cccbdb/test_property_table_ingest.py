@@ -33,8 +33,6 @@ from app.importers.cccbdb.models import (
 )
 from app.importers.cccbdb.parsers import parse_molecule_catalog_page
 from app.importers.cccbdb.property_table_ingest import (
-    PilotIngestionResult,
-    PropertyTableFetcher,
     PropertyTableIngestor,
     PropertyTableParser,
     ingest_property_pilot,

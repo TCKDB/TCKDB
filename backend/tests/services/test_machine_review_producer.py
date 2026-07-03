@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 
 from app.db.models.common import SubmissionActorKind, SubmissionAuditEventKind, SubmissionKind
 from app.db.models.record_machine_review import RecordMachineReviewRow
-from app.db.models.submission import Submission, SubmissionAuditEvent
+from app.db.models.submission import SubmissionAuditEvent
 from app.services.machine_review import (
     FakeMachineReviewProducer,
     MachineReviewEvidenceContext,

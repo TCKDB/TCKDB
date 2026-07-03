@@ -32,7 +32,6 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import (
     CalculationQuality,
-    CalculationType,
     KineticsCalculationRole,
     ReactionRole,
     StatmechCalculationRole,

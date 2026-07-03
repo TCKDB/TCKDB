@@ -32,7 +32,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError
@@ -47,15 +47,14 @@ from app.db.models.calculation import (
     CalculationSCFStability,
     CalculationSPResult,
 )
-from app.db.models.geometry import Geometry
 from app.db.models.common import (
     CalculationGeometryRole,
     CalculationQuality,
     CalculationType,
     SubmissionRecordType,
 )
+from app.db.models.geometry import Geometry
 from app.db.models.level_of_theory import LevelOfTheory
-from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import (
     ConformerAssignmentScheme,
@@ -70,7 +69,6 @@ from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     LevelOfTheorySummary,
     Pagination,
-    RecordReviewBadge,
     ReviewStatusSummary,
     SCFStabilitySummary,
     SoftwareReleaseSummary,
@@ -676,14 +674,11 @@ def _load_geometries(
         all_geom_ids.update(g for g, _ in outs)
     geom_refs: dict[int, str] = {}
     if all_geom_ids:
-        geom_refs = {
-            gid: ref
-            for gid, ref in session.execute(
+        geom_refs = dict(session.execute(
                 select(Geometry.id, Geometry.public_ref).where(
                     Geometry.id.in_(all_geom_ids)
                 )
-            ).all()
-        }
+            ).all())
 
     out: dict[int, GeometryBlock] = {}
     for cid in calc_ids:
@@ -851,15 +846,12 @@ def _load_conformer_contexts(
     scheme_ids = {row[3] for row in obs_rows if row[3] is not None}
     scheme_ref_by_id: dict[int, str] = {}
     if scheme_ids:
-        scheme_ref_by_id = {
-            sid: ref
-            for sid, ref in session.execute(
+        scheme_ref_by_id = dict(session.execute(
                 select(
                     ConformerAssignmentScheme.id,
                     ConformerAssignmentScheme.public_ref,
                 ).where(ConformerAssignmentScheme.id.in_(scheme_ids))
-            ).all()
-        }
+            ).all())
 
     selections_by_group: dict[int, list[str]] = defaultdict(list)
     if group_ids:

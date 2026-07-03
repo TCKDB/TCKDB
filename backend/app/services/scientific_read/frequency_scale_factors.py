@@ -23,7 +23,7 @@ from app.db.models.energy_correction import (
     FrequencyScaleFactor,
 )
 from app.db.models.literature import Literature
-from app.db.models.software import Software, SoftwareRelease
+from app.db.models.software import Software
 from app.db.models.statmech import Statmech
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
@@ -49,7 +49,6 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-
 
 # FSF is not reviewable (no SubmissionRecordType entry), so ``review``
 # is intentionally not a legal token. ``include=all`` expands to

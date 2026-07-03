@@ -22,7 +22,7 @@ from tests.services.scientific_read._factories import (
 )
 
 
-def _entry_with_smiles(db_session, smiles: str = "CC"):
+def _entry_with_smiles(db_session, smiles: str | None = None):
     species = make_species(
         db_session, smiles=smiles, inchi_key=next_inchi_key("TH")
     )
@@ -441,7 +441,7 @@ def test_collapse_first_named_policy_selects_explicitly(db_session):
     from app.db.models.common import RecordReviewStatus, SubmissionRecordType
     from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 
-    entry = _entry_with_smiles(db_session, smiles="CCCO")
+    entry = _entry_with_smiles(db_session)
     older_approved = make_thermo_scalar(db_session, species_entry=entry)
     newer = make_thermo_scalar(db_session, species_entry=entry)
     set_review(

@@ -20,8 +20,6 @@ from app.db.models.common import (
 )
 from app.db.models.submission import (
     Submission,
-    SubmissionAuditEvent,
-    SubmissionRecordLink,
 )
 from app.services.submission import (
     append_audit_event,
@@ -39,7 +37,6 @@ from app.services.submission import (
     reject_submission,
     supersede_submission,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

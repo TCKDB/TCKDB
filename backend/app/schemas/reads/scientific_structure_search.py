@@ -39,7 +39,6 @@ from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
 )
 
-
 # ---------------------------------------------------------------------------
 # Search-mode and query-kind enums
 # ---------------------------------------------------------------------------

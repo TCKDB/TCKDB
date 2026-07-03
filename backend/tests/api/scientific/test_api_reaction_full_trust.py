@@ -18,7 +18,6 @@ from app.db.models.common import (
     CalculationDependencyRole,
     CalculationQuality,
     CalculationType,
-    KineticsCalculationRole,
     RecordReviewStatus,
     SubmissionRecordType,
     TransitionStateEntryStatus,

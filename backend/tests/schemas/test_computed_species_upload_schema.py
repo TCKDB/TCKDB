@@ -11,12 +11,9 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.workflows.computed_species_upload import (
-    CalculationInBundle,
     ComputedSpeciesUploadRequest,
-    ConformerInBundle,
     ThermoInBundle,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -4,7 +4,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "dev" / "ensure_test_db_port.py"
 spec = importlib.util.spec_from_file_location("ensure_test_db_port", SCRIPT_PATH)
 assert spec is not None

@@ -6,7 +6,7 @@ workflow: species (with conformers, geometries, calculations, thermo),
 a reaction, an optional transition state, and one or more kinetics fits.
 """
 
-from tckdb_schemas.workflows.computed_reaction_upload import (  # noqa: F401
+from tckdb_schemas.workflows.computed_reaction_upload import (
     BundleKineticsIn,
     BundleReactionParticipant,
     BundleSpeciesIn,

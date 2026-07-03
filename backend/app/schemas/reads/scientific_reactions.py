@@ -12,8 +12,14 @@ from pydantic import BaseModel, Field, field_validator
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads._field_bounds import (
     MAX_FAMILY_LENGTH as _MAX_FAMILY_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_PARTICIPANTS_PER_REACTION as _MAX_PARTICIPANTS_PER_REACTION,
+)
+from app.schemas.reads._field_bounds import (
     MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
 )
 from app.schemas.reads.scientific_common import (

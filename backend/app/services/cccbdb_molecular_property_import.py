@@ -54,7 +54,6 @@ from app.schemas.entities.molecular_property_observation import (
     MolecularPropertyObservationCreate,
 )
 
-
 _logger = logging.getLogger(__name__)
 
 
@@ -421,7 +420,7 @@ def import_cccbdb_molecular_property_payloads(
             )
 
     try:
-        for raw, source_path in zip(payloads, source_paths_list):
+        for raw, source_path in zip(payloads, source_paths_list, strict=False):
             disposition = _process_one(
                 session,
                 raw,
@@ -536,7 +535,7 @@ def _process_one(
             nested.commit()
         else:
             nested.rollback()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         nested.rollback()
         warnings.append(
             f"row insert failed: {type(exc).__name__}: {exc}"

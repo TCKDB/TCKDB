@@ -4,16 +4,16 @@ for ``species_entry`` remain here.
 """
 
 from pydantic import BaseModel, Field
+from tckdb_schemas.fragments.identity import (
+    _IDENTITY_TEXT_FIELDS,
+    SpeciesEntryIdentityValidatorMixin,
+)
 
 from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
 from app.schemas.common import SchemaBase, TimestampedCreatedByReadSchema
-from tckdb_schemas.fragments.identity import (  # noqa: F401  (re-exported)
-    _IDENTITY_TEXT_FIELDS,
-    SpeciesEntryIdentityValidatorMixin,
-)
 
 
 class SpeciesEntryBase(SpeciesEntryIdentityValidatorMixin, BaseModel):

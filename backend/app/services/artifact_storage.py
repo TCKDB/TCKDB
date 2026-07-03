@@ -93,6 +93,8 @@ _TEXT_KINDS = {
     ArtifactKind.output_log,
     ArtifactKind.input,
     ArtifactKind.formatted_checkpoint,
+    # .hess (ORCA) and .fchk (Gaussian) Hessian sidecars are both ASCII text.
+    ArtifactKind.hessian,
 }
 
 # ---------------------------------------------------------------------------
@@ -164,11 +166,11 @@ def validate_artifact(
     if kind in _TEXT_KINDS:
         try:
             content.decode("utf-8")
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as exc:
             raise ArtifactValidationError(
                 f"Artifact kind '{kind.value}' must be valid UTF-8 text, "
                 f"but the content contains invalid byte sequences."
-            )
+            ) from exc
 
     # -- Output log signature check --
     if kind == ArtifactKind.output_log:
@@ -180,7 +182,7 @@ def validate_artifact(
 def _validate_output_log_signature(content: bytes) -> None:
     """Verify that an output_log artifact contains a recognized ESS header."""
     head = content[:_SIGNATURE_WINDOW]
-    for ess_name, signature in OUTPUT_LOG_SIGNATURES.items():
+    for _ess_name, signature in OUTPUT_LOG_SIGNATURES.items():
         if signature in head:
             return
 

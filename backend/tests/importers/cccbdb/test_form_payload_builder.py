@@ -14,7 +14,6 @@ import pytest
 
 from app.db.models.common import MolecularPropertyKind, ScientificOriginKind
 from app.importers.cccbdb.form_payload_builder import (
-    CCCBDBFormPayloadBuildResult,
     build_atomization_energy_payloads_from_form_result,
     load_parsed_form_result,
 )

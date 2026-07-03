@@ -36,7 +36,6 @@ from app.db.models.submission import (
     SubmissionRecordLink,
 )
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
 

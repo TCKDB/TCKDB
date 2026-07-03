@@ -31,8 +31,6 @@ from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
-    CalculationType,
-    RecordReviewStatus,
     StatmechCalculationRole,
     SubmissionRecordType,
 )
@@ -80,7 +78,6 @@ from app.services.scientific_read.statmech import (
     _LEGAL_INCLUDE_TOKENS,
     build_statmech_record,
 )
-
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "species_ref",
@@ -465,11 +462,7 @@ def _empty_response(
 
 def _request_filter_echo(request: StatmechSearchRequest) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for name in _MEANINGFUL_FILTER_FIELDS + (
-        "include_rejected",
-        "include_deprecated",
-        "min_review_status",
-    ):
+    for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "min_review_status"):
         value = getattr(request, name)
         if value is None:
             continue

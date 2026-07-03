@@ -11,7 +11,6 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 import pytest
 
@@ -21,7 +20,6 @@ from app.importers.cccbdb.form_resolver import (
     SessionResponse,
     discover_form,
     load_queue_file,
-    resolve_one_record,
     run_form_resolver_queue,
 )
 

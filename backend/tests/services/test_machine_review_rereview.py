@@ -15,7 +15,6 @@ from sqlalchemy import func, select
 
 from app.db.models.common import SubmissionKind
 from app.db.models.record_machine_review import RecordMachineReviewRow
-from app.db.models.submission import Submission
 from app.services.machine_review import (
     MachineReviewContextDigest,
     MachineReviewCurrencyState,

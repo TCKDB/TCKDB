@@ -255,11 +255,11 @@ def audit_sync_upload_failure(kind: SubmissionKind) -> Callable:
 
 __all__ = [
     "UploadSubmissionContext",
-    "open_upload_submission",
+    "audit_sync_upload_failure",
     "mark_upload_ingested",
     "open_job_submission",
+    "open_upload_submission",
+    "record_failed_upload",
     "review_policy_for_submission",
     "submission_kind_for_job_kind",
-    "record_failed_upload",
-    "audit_sync_upload_failure",
 ]

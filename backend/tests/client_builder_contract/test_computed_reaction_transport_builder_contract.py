@@ -14,23 +14,23 @@ import pytest
 
 pytest.importorskip("tckdb_client.builders")
 
-from tckdb_client.builders import (  # noqa: E402
+from tckdb_client.builders import (
     Calculation,
     ChemReaction,
     ComputedReactionUpload,
     Geometry,
     Kinetics,
     LevelOfTheory,
-    Species,
     SoftwareRelease,
-    Transport,
+    Species,
     TransitionState,
+    Transport,
 )
 
-from app.schemas.workflows.computed_reaction_upload import (  # noqa: E402
+from app.schemas.workflows.computed_reaction_upload import (
     ComputedReactionUploadRequest,
 )
-from app.schemas.workflows.transport_upload import (  # noqa: E402
+from app.schemas.workflows.transport_upload import (
     TransportUploadPayload,
 )
 

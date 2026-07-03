@@ -384,7 +384,7 @@ class TestLowestSPConformerObservation:
     def test_nonexistent_species_entry_returns_404(self, client, db_session):
         lot = _make_lot(db_session, "dummy", "basis")
         resp = client.get(
-            f"/api/v1/species-entries/999999/conformer-observations/lowest-sp",
+            "/api/v1/species-entries/999999/conformer-observations/lowest-sp",
             params={"lot_id": lot.id},
         )
         assert resp.status_code == 404

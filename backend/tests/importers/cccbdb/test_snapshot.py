@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from app.importers.cccbdb.crawl_plan import EXPERIMENTAL_PILOT, CrawlTarget
+from app.importers.cccbdb.crawl_plan import EXPERIMENTAL_PILOT
 from app.importers.cccbdb.snapshot import (
     BUILDER_VERSION,
     SNAPSHOT_VERSION,

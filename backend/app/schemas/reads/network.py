@@ -38,7 +38,6 @@ from app.schemas.entities.software import SoftwareReleaseRead
 from app.schemas.entities.species_entry import SpeciesEntryRead
 from app.schemas.entities.workflow import WorkflowToolReleaseRead
 
-
 # ---------------------------------------------------------------------------
 # Network species / reaction link reads (embed the linked entity)
 # ---------------------------------------------------------------------------

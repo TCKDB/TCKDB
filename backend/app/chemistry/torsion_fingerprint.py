@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from rdkit import Chem
 from rdkit.Chem import rdMolTransforms
 
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -392,7 +391,7 @@ def kabsch_rmsd(
 
     # Kabsch: find optimal rotation via SVD
     H = B_c.T @ A_c
-    U, S, Vt = np.linalg.svd(H)
+    U, _S, Vt = np.linalg.svd(H)
 
     # Correct for reflection
     d = np.linalg.det(Vt.T @ U.T)
@@ -464,7 +463,7 @@ def _find_matches_using_smiles_graph(
     """
     # Build element→indices maps for XYZ atoms
     xyz_by_elem: dict[str, list[int]] = {}
-    for i, (elem, x, y, z) in enumerate(xyz_atoms):
+    for i, (elem, _x, _y, _z) in enumerate(xyz_atoms):
         xyz_by_elem.setdefault(elem, []).append(i)
 
     ref_by_elem: dict[str, list[int]] = {}
@@ -481,8 +480,8 @@ def _find_matches_using_smiles_graph(
     # Use the SMILES mol as both query and target (self-match gives all
     # valid atom permutations that preserve the graph)
     query_params = Chem.AdjustQueryParameters.NoAdjustments()
-    query_params.makeAtomsGeneric = False
-    query_params.makeBondsGeneric = True
+    query_params.makeAtomsGeneric = False  # type: ignore[assignment]  # RDKit stubs mistype this attr
+    query_params.makeBondsGeneric = True  # type: ignore[assignment]  # RDKit stubs mistype this attr
     query = Chem.AdjustQueryProperties(ref_mol, query_params)
 
     # Self-match: find all graph automorphisms of the reference mol
@@ -496,14 +495,9 @@ def _find_matches_using_smiles_graph(
     # then compose with a distance-based xyz→ref assignment.
 
     # First, find the best distance-based assignment for each element group
-    # (greedy: for each element, assign XYZ atoms to ref atoms by proximity)
-    import numpy as np
-
-    xyz_coords = np.array([(x, y, z) for _, x, y, z in xyz_atoms])
-
-    # We need 3D coords on ref_mol to compute distances — but ref_mol
-    # doesn't have coords yet. Use the XYZ coords via element-order
-    # assignment as an initial guess.
+    # Assign XYZ atoms to reference atoms by element order. (A
+    # proximity-based refinement was intended here but is not implemented;
+    # see plan.md discovered-issues 2026-07-02.)
     base_mapping: dict[int, int] = {}  # xyz_idx → ref_idx
     for elem in xyz_by_elem:
         xyz_indices = xyz_by_elem[elem]
@@ -512,7 +506,7 @@ def _find_matches_using_smiles_graph(
             base_mapping[xyz_indices[0]] = ref_indices[0]
         else:
             # Multiple atoms of same element — use element-order for now
-            for xi, ri in zip(xyz_indices, ref_indices):
+            for xi, ri in zip(xyz_indices, ref_indices, strict=False):
                 base_mapping[xi] = ri
 
     # Build match tuples in the format (match[xyz_idx] = ref_idx)
@@ -564,7 +558,7 @@ def resolve_atom_mapping(
             xyz_mol = _build_mol_from_xyz(xyz_atoms)
             if xyz_mol.GetNumAtoms() == ref_mol.GetNumAtoms():
                 params = Chem.AdjustQueryParameters.NoAdjustments()
-                params.makeBondsGeneric = True
+                params.makeBondsGeneric = True  # type: ignore[assignment]  # RDKit stubs mistype this attr
                 xyz_query = Chem.AdjustQueryProperties(xyz_mol, params)
                 matches = list(ref_mol.GetSubstructMatches(xyz_query, uniquify=False))
         except (ValueError, RuntimeError):
@@ -796,7 +790,7 @@ def compare_conformers(
 
     # --- Flexible molecules (rotors > 0) ---
     # Verify rotor slots match
-    for s1, s2 in zip(fp1.rotor_slots, fp2.rotor_slots):
+    for s1, s2 in zip(fp1.rotor_slots, fp2.rotor_slots, strict=False):
         if s1.canonical_key != s2.canonical_key:
             return ConformerComparisonResult(
                 same_basin=False, kabsch_rmsd=rmsd, is_rigid=False,

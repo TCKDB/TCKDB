@@ -3,7 +3,6 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.db.models.common import LiteratureKind
 from app.db.models.literature import Literature
 from app.schemas.entities.literature import LiteratureCreate

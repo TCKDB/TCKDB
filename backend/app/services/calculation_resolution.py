@@ -10,13 +10,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 
-import app.db.models  # noqa: F401
 from app.db.models.calculation import (
     Calculation,
     CalculationConstraint,
     CalculationDependency,
     CalculationFreqMode,
     CalculationFreqResult,
+    CalculationHessian,
     CalculationInputGeometry,
     CalculationIRCPoint,
     CalculationIRCResult,
@@ -84,6 +84,13 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
         "solvent": ref.solvent,
         "solvent_model": ref.solvent_model,
         "keywords": ref.keywords,
+        # DR-0034: spin treatment is part of LOT identity. NULL folds to
+        # "unknown" in the hash so a row that omits it and a row that says
+        # "unknown" are the same level of theory.
+        "spin_treatment": (
+            getattr(ref.spin_treatment, "value", ref.spin_treatment)
+            or "unknown"
+        ),
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -176,6 +183,7 @@ def resolve_level_of_theory_ref(
                     solvent=ref.solvent,
                     solvent_model=ref.solvent_model,
                     keywords=ref.keywords,
+                    spin_treatment=ref.spin_treatment,
                     lot_hash=lot_hash,
                 )
                 session.add(level_of_theory)
@@ -542,6 +550,24 @@ def persist_calculation_result(
                 t1_norm=wfn.t1_norm,
                 largest_t2_amplitude=wfn.largest_t2_amplitude,
                 note=wfn.note,
+            )
+        )
+
+    if calc_upload.hessian is not None:
+        hess = calc_upload.hessian
+        # Bind the Hessian to the exact geometry it was computed at. The
+        # content-addressed geometry seam dedupes by XYZ hash, so this
+        # normally resolves to the same row as the calc's input geometry.
+        hess_geom = resolve_geometry_payload(session, hess.geometry)
+        session.add(
+            CalculationHessian(
+                calculation_id=calculation.id,
+                geometry_id=hess_geom.id,
+                natoms=hess_geom.natoms,
+                lower_triangle_hartree_bohr2=hess.lower_triangle_hartree_bohr2,
+                source=hess.source,
+                parser_version=hess.parser_version,
+                note=hess.note,
             )
         )
 

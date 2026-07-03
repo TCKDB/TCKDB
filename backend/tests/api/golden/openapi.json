@@ -1219,6 +1219,7 @@
           "output_log",
           "checkpoint",
           "formatted_checkpoint",
+          "hessian",
           "ancillary"
         ],
         "title": "ArtifactKind",
@@ -1761,7 +1762,7 @@
       },
       "BundleKineticsIn": {
         "additionalProperties": false,
-        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional multiplicative reaction-path degeneracy\n    associated with the reported kinetics expression. ``None`` means\n    no claim is made; do not interpret it as ``1.0``.\n:param note: Optional note.",
+        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional multiplicative reaction-path degeneracy\n    associated with the reported kinetics expression. ``None`` means\n    no claim is made; do not interpret it as ``1.0``.\n:param note: Optional note.",
         "properties": {
           "a": {
             "anyOf": [
@@ -1828,6 +1829,11 @@
             ],
             "title": "Degeneracy"
           },
+          "is_third_body": {
+            "default": false,
+            "title": "Is Third Body",
+            "type": "boolean"
+          },
           "model_kind": {
             "$ref": "#/components/schemas/KineticsModelKind",
             "default": "modified_arrhenius"
@@ -1864,6 +1870,28 @@
               }
             ],
             "title": "Note"
+          },
+          "pressure_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Bar"
+          },
+          "pressure_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/tckdb_schemas__enums__PressureContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "product_keys": {
             "items": {
@@ -1941,13 +1969,12 @@
           "tunneling_model": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/tckdb_schemas__enums__TunnelingModel"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Tunneling Model"
+            ]
           }
         },
         "required": [
@@ -7413,6 +7440,16 @@
               }
             ]
           },
+          "hessian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HessianPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "input_geometries": {
             "description": "Geometries this calculation was run on. When empty, the workflow falls back to the conformer's reference geometry for calculation types in {freq, sp}; opt skips. List order maps to input_order = 1, 2, 3, ... in the database.",
             "items": {
@@ -8010,6 +8047,87 @@
         "title": "CalculationsSearchRequest",
         "type": "object"
       },
+      "ChebyshevUpload": {
+        "additionalProperties": false,
+        "description": "A standalone Chebyshev k(T,P) surface (DR-0032 Part C).\n\n``coefficients`` is the n_temperature × n_pressure coefficient matrix\n(list of rows).",
+        "properties": {
+          "coefficients": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Coefficients",
+            "type": "array"
+          },
+          "n_pressure": {
+            "minimum": 1.0,
+            "title": "N Pressure",
+            "type": "integer"
+          },
+          "n_temperature": {
+            "minimum": 1.0,
+            "title": "N Temperature",
+            "type": "integer"
+          },
+          "pmax_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmax Bar"
+          },
+          "pmin_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmin Bar"
+          },
+          "tmax_k": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmax K"
+          },
+          "tmin_k": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmin K"
+          }
+        },
+        "required": [
+          "n_temperature",
+          "n_pressure",
+          "coefficients"
+        ],
+        "title": "ChebyshevUpload",
+        "type": "object"
+      },
       "ChemReactionRead": {
         "properties": {
           "created_at": {
@@ -8078,6 +8196,51 @@
           "reversible"
         ],
         "title": "ChemReactionRead",
+        "type": "object"
+      },
+      "ChemkinExportRequest": {
+        "description": "POST body for the CHEMKIN export.",
+        "properties": {
+          "energy_units": {
+            "default": "cal/mol",
+            "description": "REACTIONS energy unit: cal/mol|kcal/mol|j/mol|kj/mol|k",
+            "title": "Energy Units",
+            "type": "string"
+          },
+          "include_transport": {
+            "default": true,
+            "title": "Include Transport",
+            "type": "boolean"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "approved"
+          },
+          "naming_policy": {
+            "default": "formula",
+            "description": "formula | public_ref",
+            "title": "Naming Policy",
+            "type": "string"
+          },
+          "seed": {
+            "$ref": "#/components/schemas/_SeedBody"
+          },
+          "selection_policy": {
+            "$ref": "#/components/schemas/SelectionPolicy",
+            "default": "default"
+          }
+        },
+        "required": [
+          "seed"
+        ],
+        "title": "ChemkinExportRequest",
         "type": "object"
       },
       "CollapseMode": {
@@ -10058,6 +10221,13 @@
         "additionalProperties": false,
         "description": "Workflow-facing statmech payload nested under conformer upload.\n\nThe backend resolves referenced software/workflow provenance, creates or\nreuses the owning ``Statmech`` row for the resolved species entry, and links\nthe newly created upload calculation as a source calculation when requested.",
         "properties": {
+          "electronic_levels": {
+            "items": {
+              "$ref": "#/components/schemas/ElectronicLevelIn"
+            },
+            "title": "Electronic Levels",
+            "type": "array"
+          },
           "external_symmetry": {
             "anyOf": [
               {
@@ -10111,6 +10281,18 @@
               }
             ],
             "title": "Note"
+          },
+          "optical_isomers": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optical Isomers"
           },
           "point_group": {
             "anyOf": [
@@ -11053,6 +11235,34 @@
         "title": "DryRunRecordType",
         "type": "string"
       },
+      "ElectronicLevelIn": {
+        "additionalProperties": false,
+        "description": "One electronic energy level for the electronic partition function.\n\nOrdered (energy, degeneracy) pairs relative to the ground state\n(DR-0033). E.g. OH X²Π: level 1 (0 cm⁻¹, g=2), level 2 (~139 cm⁻¹,\ng=2). ``level_index`` is 1-based and unique within a statmech record.",
+        "properties": {
+          "degeneracy": {
+            "minimum": 1.0,
+            "title": "Degeneracy",
+            "type": "integer"
+          },
+          "energy_cm1": {
+            "minimum": 0.0,
+            "title": "Energy Cm1",
+            "type": "number"
+          },
+          "level_index": {
+            "minimum": 1.0,
+            "title": "Level Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "level_index",
+          "energy_cm1",
+          "degeneracy"
+        ],
+        "title": "ElectronicLevelIn",
+        "type": "object"
+      },
       "EnergyCorrectionApplicationRole-Output": {
         "description": "Semantic role of an applied energy correction result.",
         "enum": [
@@ -11847,6 +12057,163 @@
           "checklist"
         ],
         "title": "EvidenceCompletenessBreakdown",
+        "type": "object"
+      },
+      "FalloffUpload": {
+        "additionalProperties": false,
+        "description": "Pressure-dependent falloff parameters (DR-0032 Part B).\n\nThe high-pressure-limit (k∞) Arrhenius parameters are the top-level\n``a``/``n``/``reported_ea`` on the kinetics request; this block carries\nthe low-pressure-limit (k0) Arrhenius and the broadening coefficients.\nWhich broadening columns matter is set by the request ``model_kind``\n(``lindemann`` = none; ``troe`` = ``troe_*``; ``sri`` = ``sri_*``).",
+        "properties": {
+          "low_a": {
+            "title": "Low A",
+            "type": "number"
+          },
+          "low_a_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrheniusAUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "low_ea_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low Ea Kj Mol"
+          },
+          "low_n": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low N"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "sri_a": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sri A"
+          },
+          "sri_b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sri B"
+          },
+          "sri_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sri C"
+          },
+          "sri_d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sri D"
+          },
+          "sri_e": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sri E"
+          },
+          "troe_alpha": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Troe Alpha"
+          },
+          "troe_t1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Troe T1"
+          },
+          "troe_t2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Troe T2"
+          },
+          "troe_t3": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Troe T3"
+          }
+        },
+        "required": [
+          "low_a"
+        ],
+        "title": "FalloffUpload",
         "type": "object"
       },
       "FreqResultPayload": {
@@ -12807,6 +13174,67 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HessianPayload": {
+        "additionalProperties": false,
+        "description": "Optional inline Cartesian Hessian (second-derivative) matrix.\n\nThe Hessian is the primitive from which harmonic frequencies, normal\nmodes, and thermochemistry are derived. It is meaningful only relative\nto a specific atomic configuration, ordering, and orientation, so the\npayload carries its own ``geometry``: the resolution layer dedupes it\nthrough the content-addressed geometry seam (so it usually coincides\nwith the calculation's input geometry with no duplication) and stores\nthe resulting ``geometry_id`` as a mandatory binding.\n\nOnly the lower triangle including the diagonal of the symmetric 3N×3N\nmatrix is stored, row-major, in fixed units of hartree/bohr². For\n``N`` atoms that is exactly ``3N(3N+1)/2`` values.\n\nAttaches to ``freq`` calculations and to ``opt`` calculations run with\nan analytic Hessian (``opt=calcall``-style). See DR-0030.\n\n:param geometry: The geometry the Hessian was computed at.\n:param lower_triangle_hartree_bohr2: Packed lower triangle (with\n    diagonal), row-major, length ``3N(3N+1)/2``, in hartree/bohr².\n:param source: Where the matrix was obtained from.\n:param parser_version: Optional version tag of the parser that\n    produced the matrix.\n:param note: Optional free-text annotation.",
+        "properties": {
+          "geometry": {
+            "$ref": "#/components/schemas/GeometryPayload"
+          },
+          "lower_triangle_hartree_bohr2": {
+            "items": {
+              "type": "number"
+            },
+            "minItems": 1,
+            "title": "Lower Triangle Hartree Bohr2",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "parser_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parser Version"
+          },
+          "source": {
+            "$ref": "#/components/schemas/HessianSource"
+          }
+        },
+        "required": [
+          "geometry",
+          "lower_triangle_hartree_bohr2",
+          "source"
+        ],
+        "title": "HessianPayload",
+        "type": "object"
+      },
+      "HessianSource": {
+        "description": "Where a stored Cartesian Hessian matrix was obtained from.",
+        "enum": [
+          "parsed_fchk",
+          "parsed_hess",
+          "parsed_log",
+          "uploaded",
+          "derived"
+        ],
+        "title": "HessianSource",
+        "type": "string"
+      },
       "IRCDirection": {
         "enum": [
           "forward",
@@ -13290,7 +13718,12 @@
       "KineticsModelKind": {
         "enum": [
           "arrhenius",
-          "modified_arrhenius"
+          "modified_arrhenius",
+          "lindemann",
+          "troe",
+          "sri",
+          "plog",
+          "chebyshev"
         ],
         "title": "KineticsModelKind",
         "type": "string"
@@ -13660,6 +14093,11 @@
             "title": "Id",
             "type": "integer"
           },
+          "is_third_body": {
+            "default": false,
+            "title": "Is Third Body",
+            "type": "boolean"
+          },
           "literature_id": {
             "anyOf": [
               {
@@ -13707,6 +14145,28 @@
               }
             ],
             "title": "Note"
+          },
+          "pressure_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Bar"
+          },
+          "pressure_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PressureContext-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reaction_entry_id": {
             "title": "Reaction Entry Id",
@@ -13760,13 +14220,12 @@
           "tunneling_model": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/TunnelingModel-Output"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Tunneling Model"
+            ]
           },
           "workflow_tool_release_id": {
             "anyOf": [
@@ -14255,7 +14714,7 @@
       },
       "KineticsUploadRequest": {
         "additionalProperties": false,
-        "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional reaction-path degeneracy.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
+        "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional reaction-path degeneracy.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
         "properties": {
           "a": {
             "anyOf": [
@@ -14299,6 +14758,16 @@
               }
             ]
           },
+          "chebyshev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChebyshevUpload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "d_reported_ea": {
             "anyOf": [
               {
@@ -14330,6 +14799,21 @@
                 "type": "null"
               }
             ]
+          },
+          "falloff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FalloffUpload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_third_body": {
+            "default": false,
+            "title": "Is Third Body",
+            "type": "boolean"
           },
           "literature": {
             "anyOf": [
@@ -14378,6 +14862,35 @@
             ],
             "title": "Note"
           },
+          "plog_entries": {
+            "items": {
+              "$ref": "#/components/schemas/PlogEntryUpload"
+            },
+            "title": "Plog Entries",
+            "type": "array"
+          },
+          "pressure_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Bar"
+          },
+          "pressure_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__db__models__common__PressureContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "reaction": {
             "$ref": "#/components/schemas/KineticsReactionUpload"
           },
@@ -14415,6 +14928,13 @@
               }
             ]
           },
+          "third_body_efficiencies": {
+            "items": {
+              "$ref": "#/components/schemas/ThirdBodyEfficiencyUpload"
+            },
+            "title": "Third Body Efficiencies",
+            "type": "array"
+          },
           "tmax_k": {
             "anyOf": [
               {
@@ -14442,13 +14962,12 @@
           "tunneling_model": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/app__db__models__common__TunnelingModel"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Tunneling Model"
+            ]
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -14703,6 +15222,16 @@
               }
             ],
             "title": "Solvent Model"
+          },
+          "spin_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpinTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -21914,6 +22443,65 @@
         "title": "PathSearchSummary",
         "type": "object"
       },
+      "PlogEntryUpload": {
+        "additionalProperties": false,
+        "description": "One pressure entry of a standalone PLOG rate (DR-0032 Part C).",
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "a_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrheniusAUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ea_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ea Kj Mol"
+          },
+          "entry_index": {
+            "minimum": 1.0,
+            "title": "Entry Index",
+            "type": "integer"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "pressure_bar": {
+            "exclusiveMinimum": 0.0,
+            "title": "Pressure Bar",
+            "type": "number"
+          }
+        },
+        "required": [
+          "entry_index",
+          "pressure_bar",
+          "a"
+        ],
+        "title": "PlogEntryUpload",
+        "type": "object"
+      },
       "PointGeometryLink": {
         "description": "Lightweight geometry-link projection shared by every per-point\npath-data endpoint (``/scan``, ``/irc``, future ``/path-search``).\n\nUsed when ``include_geometries=true``. Carries ``geometry_ref``\nplus the cheap metadata the geometry table can hand back without\ninlining XYZ coordinates. Full coordinate data lives behind\n``GET /scientific/geometries/{geometry_ref}`` — this schema\ndeliberately stops short of inlining ``xyz_text``, atom rows, or\ncoordinate arrays.",
         "properties": {
@@ -21960,6 +22548,16 @@
         ],
         "title": "PointGeometryLink",
         "type": "object"
+      },
+      "PressureContext-Output": {
+        "description": "What a rate coefficient means with respect to pressure (DR-0032).\n\n``high_p_limit``: the high-pressure-limit rate k∞.\n``apparent_at_pressure``: an apparent rate at a specific pressure\n    (requires ``kinetics.pressure_bar``).\n``pressure_dependent``: a record whose full P-dependence lives in an\n    associated model (a network solve, or a falloff/PLOG table).\nNULL (unset) means the pressure context was not specified.",
+        "enum": [
+          "high_p_limit",
+          "apparent_at_pressure",
+          "pressure_dependent"
+        ],
+        "title": "PressureContext",
+        "type": "string"
       },
       "PressureUnit": {
         "enum": [
@@ -28409,6 +29007,17 @@
         "title": "SpeciesScientificRecord",
         "type": "object"
       },
+      "SpinTreatment": {
+        "description": "Spin treatment of the electronic-structure method (DR-0034).",
+        "enum": [
+          "restricted",
+          "unrestricted",
+          "restricted_open",
+          "unknown"
+        ],
+        "title": "SpinTreatment",
+        "type": "string"
+      },
       "StationaryPointKind": {
         "enum": [
           "minimum",
@@ -30316,6 +30925,13 @@
             "title": "Calculations",
             "type": "array"
           },
+          "electronic_levels": {
+            "items": {
+              "$ref": "#/components/schemas/ElectronicLevelIn"
+            },
+            "title": "Electronic Levels",
+            "type": "array"
+          },
           "external_symmetry": {
             "anyOf": [
               {
@@ -30369,6 +30985,18 @@
               }
             ],
             "title": "Note"
+          },
+          "optical_isomers": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optical Isomers"
           },
           "point_group": {
             "anyOf": [
@@ -33279,6 +33907,26 @@
         "title": "ThermoUploadResult",
         "type": "object"
       },
+      "ThirdBodyEfficiencyUpload": {
+        "additionalProperties": false,
+        "description": "A per-collider third-body efficiency for a falloff/third-body rate.\n\nThe collider is given by scientific content (a species identity), which\nthe workflow resolves to a graph-level species. ``efficiency`` scales\nthe effective bath-gas concentration [M] contributed by that collider.",
+        "properties": {
+          "collider": {
+            "$ref": "#/components/schemas/SpeciesEntryIdentityPayload"
+          },
+          "efficiency": {
+            "minimum": 0.0,
+            "title": "Efficiency",
+            "type": "number"
+          }
+        },
+        "required": [
+          "collider",
+          "efficiency"
+        ],
+        "title": "ThirdBodyEfficiencyUpload",
+        "type": "object"
+      },
       "TorsionTreatmentKind": {
         "enum": [
           "hindered_rotor",
@@ -35663,6 +36311,18 @@
         "title": "TrustLLMPrecheck",
         "type": "object"
       },
+      "TunnelingModel-Output": {
+        "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
+        "enum": [
+          "none",
+          "wigner",
+          "eckart",
+          "sct",
+          "other"
+        ],
+        "title": "TunnelingModel",
+        "type": "string"
+      },
       "UploadJobKind": {
         "enum": [
           "computed_reaction",
@@ -36235,6 +36895,56 @@
         "title": "WorkflowToolSummary",
         "type": "object"
       },
+      "_SeedBody": {
+        "properties": {
+          "all_reactions": {
+            "default": false,
+            "title": "All Reactions",
+            "type": "boolean"
+          },
+          "reaction_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Family"
+          },
+          "reaction_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Refs"
+          },
+          "species_refs": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Refs"
+          }
+        },
+        "title": "_SeedBody",
+        "type": "object"
+      },
       "app__db__models__common__EnergyCorrectionApplicationRole": {
         "description": "Semantic role of an applied energy correction result.",
         "enum": [
@@ -36282,6 +36992,28 @@
           "machine_review_failed"
         ],
         "title": "MachineReviewStatus",
+        "type": "string"
+      },
+      "app__db__models__common__PressureContext": {
+        "description": "What a rate coefficient means with respect to pressure (DR-0032).\n\n``high_p_limit``: the high-pressure-limit rate k∞.\n``apparent_at_pressure``: an apparent rate at a specific pressure\n    (requires ``kinetics.pressure_bar``).\n``pressure_dependent``: a record whose full P-dependence lives in an\n    associated model (a network solve, or a falloff/PLOG table).\nNULL (unset) means the pressure context was not specified.",
+        "enum": [
+          "high_p_limit",
+          "apparent_at_pressure",
+          "pressure_dependent"
+        ],
+        "title": "PressureContext",
+        "type": "string"
+      },
+      "app__db__models__common__TunnelingModel": {
+        "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
+        "enum": [
+          "none",
+          "wigner",
+          "eckart",
+          "sct",
+          "other"
+        ],
+        "title": "TunnelingModel",
         "type": "string"
       },
       "app__schemas__entities__workflow__WorkflowToolReleaseSummary": {
@@ -37359,6 +38091,28 @@
           "multiplicative"
         ],
         "title": "KineticsUncertaintyKind",
+        "type": "string"
+      },
+      "tckdb_schemas__enums__PressureContext": {
+        "description": "What a rate coefficient means w.r.t. pressure (DR-0032).\n\n``high_p_limit`` = k∞; ``apparent_at_pressure`` requires a\n``pressure_bar``; ``pressure_dependent`` defers to an associated model.",
+        "enum": [
+          "high_p_limit",
+          "apparent_at_pressure",
+          "pressure_dependent"
+        ],
+        "title": "PressureContext",
+        "type": "string"
+      },
+      "tckdb_schemas__enums__TunnelingModel": {
+        "description": "Tunneling correction applied to a rate coefficient (DR-0032).",
+        "enum": [
+          "none",
+          "wigner",
+          "eckart",
+          "sct",
+          "other"
+        ],
+        "title": "TunnelingModel",
         "type": "string"
       },
       "tckdb_schemas__workflows__computed_reaction_upload__ConformerIn": {
@@ -49357,6 +50111,249 @@
         ]
       }
     },
+    "/api/v1/scientific/export/chemkin": {
+      "post": {
+        "description": "Export a CHEMKIN mechanism zip (chem.inp/therm.dat/tran.dat + manifest).\n\nCHEMKIN cannot represent multiple candidates per record, so selection is\nforced to ``collapse=first``. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
+        "operationId": "export_chemkin_api_v1_scientific_export_chemkin_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChemkinExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Chemkin",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/export/ndjson": {
+      "get": {
+        "description": "Stream a native NDJSON export for the seed selection.\n\nEmits a header ``manifest`` line, then one ``species`` / ``reaction``\nline per record (computed lazily), then a trailing ``export_summary``\nline with the gap list. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
+        "operationId": "export_ndjson_api_v1_scientific_export_ndjson_get",
+        "parameters": [
+          {
+            "description": "reaction_entry or chem_reaction public refs",
+            "in": "query",
+            "name": "reaction_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "reaction_entry or chem_reaction public refs",
+              "title": "Reaction Ref"
+            }
+          },
+          {
+            "description": "species_entry public refs (species-only export)",
+            "in": "query",
+            "name": "species_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "species_entry public refs (species-only export)",
+              "title": "Species Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reaction_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reaction Family"
+            }
+          },
+          {
+            "description": "export all reactions (capped, logged)",
+            "in": "query",
+            "name": "all",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "export all reactions (capped, logged)",
+              "title": "All",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "approved",
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collapse",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CollapseMode",
+              "default": "first"
+            }
+          },
+          {
+            "in": "query",
+            "name": "selection_policy",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SelectionPolicy",
+              "default": "default"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Ndjson",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
     "/api/v1/scientific/frequency-scale-factors/search": {
       "get": {
         "description": "Frequency-scale-factor search.\n\nAND-combines the supplied filters; at least one meaningful filter\nis required. Explicit ``False`` bool filter values count as\nmeaningful — see\n``backend/docs/specs/scientific_correction_reads.md``.",
@@ -50427,6 +51424,102 @@
           }
         },
         "summary": "Scientific Literature Records",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/meta/basis-sets": {
+      "get": {
+        "description": "Distinct level-of-theory basis sets with usage counts.",
+        "operationId": "get_basis_sets_api_v1_scientific_meta_basis_sets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Basis Sets Api V1 Scientific Meta Basis Sets Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Basis Sets",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/meta/methods": {
+      "get": {
+        "description": "Distinct level-of-theory methods with usage counts.",
+        "operationId": "get_methods_api_v1_scientific_meta_methods_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Methods Api V1 Scientific Meta Methods Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Methods",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/meta/reaction-families": {
+      "get": {
+        "description": "Canonical reaction families with usage counts (0 if unused).",
+        "operationId": "get_reaction_families_api_v1_scientific_meta_reaction_families_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Reaction Families Api V1 Scientific Meta Reaction Families Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Reaction Families",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/meta/software": {
+      "get": {
+        "description": "Distinct software names with usage counts.",
+        "operationId": "get_software_api_v1_scientific_meta_software_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Software Api V1 Scientific Meta Software Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Software",
         "tags": [
           "scientific"
         ]

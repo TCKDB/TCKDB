@@ -9,13 +9,11 @@ artifact endpoint tests.
 from __future__ import annotations
 
 import base64
-import hashlib
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 from app.api.app import create_app
 from app.api.deps import get_db, get_write_db
@@ -451,7 +449,6 @@ class TestArtifactSubmissionLinks:
     def test_computed_species_artifacts_linked_to_submission(
         self, client, db_session, stub_store_artifact
     ):
-        import copy as _copy
 
         from sqlalchemy import select
 

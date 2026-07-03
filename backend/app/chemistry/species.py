@@ -249,7 +249,14 @@ def canonical_species_identity(
     :returns: ``(canonical_smiles, inchi_key)`` for the graph identity.
     :raises ValueError:
         If the payload is not a supported molecule upload or if the stated
-        charge/multiplicity disagrees with the parsed SMILES identity.
+        charge disagrees with the parsed SMILES identity.
+
+    Multiplicity is NOT validated against the SMILES: standard SMILES does
+    not encode spin state, so the radical count RDKit infers is only a
+    hint. The uploaded ``multiplicity`` is authoritative — this is what
+    lets singlet CH₂ (SMILES ``[CH2]`` implies a triplet) and the singlet/
+    triplet O₂ states be represented. Species identity carries multiplicity
+    as part of its unique key; see DR-0031.
     """
 
     if payload.molecule_kind != MoleculeKind.molecule:
@@ -257,15 +264,10 @@ def canonical_species_identity(
 
     ident = identity_mol_from_smiles(payload.smiles)
     charge = formal_charge(ident)
-    multiplicity = spin_multiplicity(ident)
 
     if charge != payload.charge:
         raise ValueError(
             f"species_entry.charge={payload.charge} does not match SMILES charge {charge}"
-        )
-    if multiplicity != payload.multiplicity:
-        raise ValueError(
-            "species_entry.multiplicity does not match multiplicity implied by SMILES"
         )
 
     canonical_smiles = Chem.MolToSmiles(ident, canonical=True)

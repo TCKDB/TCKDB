@@ -14,24 +14,22 @@ from sqlalchemy.orm import Session
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     Calculation,
-    CalculationConstraint,
     CalculationDependency,
     CalculationFreqResult,
     CalculationInputGeometry,
     CalculationOutputGeometry,
-    CalculationSPResult,
-    CalculationWavefunctionDiagnostic,
     CalculationScanCoordinate,
     CalculationScanPoint,
     CalculationScanPointCoordinateValue,
     CalculationScanResult,
+    CalculationSPResult,
+    CalculationWavefunctionDiagnostic,
 )
 from app.db.models.common import (
     AppUserRole,
     CalculationDependencyRole,
     CalculationType,
 )
-from app.db.models.species import ConformerGroup, ConformerObservation
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -41,6 +39,7 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
     FrequencyScaleFactor,
 )
+from app.db.models.species import ConformerGroup, ConformerObservation
 from app.db.models.statmech import (
     Statmech,
     StatmechSourceCalculation,
@@ -48,7 +47,6 @@ from app.db.models.statmech import (
     StatmechTorsionDefinition,
 )
 from app.db.models.thermo import (
-    Thermo,
     ThermoNASA,
     ThermoPoint,
     ThermoSourceCalculation,
@@ -60,7 +58,6 @@ from app.schemas.workflows.computed_species_upload import (
     ComputedSpeciesUploadRequest,
 )
 from app.workflows.computed_species import persist_computed_species_upload
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1315,6 +1312,8 @@ def test_per_role_child_uniqueness_does_not_block_unrestricted_role(
     constraint under test is the per-role child uniqueness check."""
     from app.services.calculation_resolution import (
         _ONE_PARENT_PER_CHILD_ROLES,
+    )
+    from app.services.calculation_resolution import (
         add_dependency_edge_idempotent as _add_dependency_edge_idempotent,
     )
 

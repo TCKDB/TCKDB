@@ -1,19 +1,22 @@
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.db.models.common import (
     ArrheniusAUnits,
     KineticsCalculationRole,
     KineticsModelKind,
     KineticsUncertaintyKind,
+    PressureContext,
     ScientificOriginKind,
+    TunnelingModel,
 )
 from app.schemas.common import (
     ORMBaseSchema,
     SchemaBase,
     TimestampedCreatedByReadSchema,
 )
+from app.schemas.utils import normalize_tunneling_model
 
 
 class KineticsSourceCalculationBase(BaseModel):
@@ -57,6 +60,7 @@ class KineticsBase(BaseModel):
     :param reaction_entry_id: Owning reaction-entry id.
     :param scientific_origin: Scientific origin category for this kinetics record.
     :param model_kind: Kinetics functional form.
+    :param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).
     :param literature_id: Optional linked literature row.
     :param workflow_tool_release_id: Optional workflow provenance.
     :param software_release_id: Optional software provenance.
@@ -74,6 +78,7 @@ class KineticsBase(BaseModel):
     reaction_entry_id: int
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius
+    is_third_body: bool = False
 
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None
@@ -93,8 +98,26 @@ class KineticsBase(BaseModel):
     tmax_k: float | None = Field(default=None, gt=0)
 
     degeneracy: float | None = None
-    tunneling_model: str | None = None
+    tunneling_model: TunnelingModel | None = None
+    pressure_context: PressureContext | None = None
+    pressure_bar: float | None = Field(default=None, gt=0)
     note: str | None = None
+
+    @field_validator("tunneling_model", mode="before")
+    @classmethod
+    def _normalize_tunneling(cls, v):
+        return normalize_tunneling_model(v)
+
+    @model_validator(mode="after")
+    def validate_pressure_context(self) -> Self:
+        if (
+            self.pressure_context == PressureContext.apparent_at_pressure
+            and self.pressure_bar is None
+        ):
+            raise ValueError(
+                "pressure_context='apparent_at_pressure' requires pressure_bar."
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_temperature_range(self) -> Self:
@@ -157,6 +180,7 @@ class KineticsUpdate(SchemaBase):
     reaction_entry_id: int | None = None
     scientific_origin: ScientificOriginKind | None = None
     model_kind: KineticsModelKind | None = None
+    is_third_body: bool | None = None
 
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None
@@ -176,8 +200,15 @@ class KineticsUpdate(SchemaBase):
     tmax_k: float | None = Field(default=None, gt=0)
 
     degeneracy: float | None = None
-    tunneling_model: str | None = None
+    tunneling_model: TunnelingModel | None = None
+    pressure_context: PressureContext | None = None
+    pressure_bar: float | None = Field(default=None, gt=0)
     note: str | None = None
+
+    @field_validator("tunneling_model", mode="before")
+    @classmethod
+    def _normalize_tunneling(cls, v):
+        return normalize_tunneling_model(v)
 
     @model_validator(mode="after")
     def validate_temperature_range_when_complete(self) -> Self:

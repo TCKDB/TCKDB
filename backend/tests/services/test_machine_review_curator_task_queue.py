@@ -21,7 +21,7 @@ downgrade against the shared session DB would break sibling tests.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models.common import (
@@ -67,14 +67,14 @@ def _make_audit_event(db_session, submission_id: int) -> SubmissionAuditEvent:
 
 
 def _make_task(db_session, submission_id: int, **overrides) -> MachineReviewCuratorTask:
-    defaults = dict(
-        submission_id=submission_id,
-        record_type=SubmissionRecordType.kinetics,
-        record_id=101,
-        finding_fingerprint="a" * 64,
-        machine_review_status=DBMachineReviewStatus.machine_screened_warning,
-        highest_severity=DBMachineReviewSeverity.warning,
-    )
+    defaults = {
+        "submission_id": submission_id,
+        "record_type": SubmissionRecordType.kinetics,
+        "record_id": 101,
+        "finding_fingerprint": "a" * 64,
+        "machine_review_status": DBMachineReviewStatus.machine_screened_warning,
+        "highest_severity": DBMachineReviewSeverity.warning,
+    }
     defaults.update(overrides)
     task = MachineReviewCuratorTask(**defaults)
     db_session.add(task)

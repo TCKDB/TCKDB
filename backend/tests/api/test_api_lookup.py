@@ -131,9 +131,9 @@ class TestSpeciesLookup:
             "/api/v1/lookup/species",
             params={"smiles": "[H][H]", "charge": 0, "multiplicity": 1},
         )
-        species_item = [
+        species_item = next(
             r for r in resp.json()["results"] if r["resource_type"] == "species"
-        ][0]
+        )
         assert species_item["summary"]["charge"] == 0
         assert species_item["summary"]["multiplicity"] == 1
         assert species_item["links"]["self"].startswith("/api/v1/species/")
@@ -232,10 +232,10 @@ class TestThermoLookup:
             "/api/v1/lookup/species",
             params={"smiles": "[H][H]", "charge": 0, "multiplicity": 1},
         )
-        entry_id = [
+        entry_id = next(
             r for r in sp_resp.json()["results"]
             if r["resource_type"] == "species_entry"
-        ][0]["id"]
+        )["id"]
 
         resp = client.get("/api/v1/lookup/thermo", params={"species_entry_id": entry_id})
         assert resp.json()["match"]["status"] == "none"
@@ -249,10 +249,10 @@ class TestThermoLookup:
             "/api/v1/lookup/species",
             params={"smiles": "[H][H]", "charge": 0, "multiplicity": 1},
         )
-        entry_id = [
+        entry_id = next(
             r for r in sp_resp.json()["results"]
             if r["resource_type"] == "species_entry"
-        ][0]["id"]
+        )["id"]
 
         resp = client.get("/api/v1/lookup/thermo", params={"species_entry_id": entry_id})
         data = resp.json()
@@ -304,7 +304,7 @@ class TestSpeciesCalculationLookup:
         )
         data = resp.json()
         assert data["match"]["status"] == "exact"
-        calc = [r for r in data["results"] if r["resource_type"] == "calculation"][0]
+        calc = next(r for r in data["results"] if r["resource_type"] == "calculation")
         geom = calc["summary"]["geometry"]
         assert geom is not None
         assert "H" in geom["xyz_text"]
@@ -328,7 +328,7 @@ class TestSpeciesCalculationLookup:
             },
         )
         data = resp.json()
-        calc = [r for r in data["results"] if r["resource_type"] == "calculation"][0]
+        calc = next(r for r in data["results"] if r["resource_type"] == "calculation")
         assert calc["summary"]["geometry"] is None
         assert calc["summary"]["geometry_status"] == "not_applicable"
 
@@ -342,7 +342,7 @@ class TestSpeciesCalculationLookup:
                 "type": "opt", "method": "wb97xd", "basis": "def2tzvp",
             },
         )
-        calc = [r for r in resp.json()["results"] if r["resource_type"] == "calculation"][0]
+        calc = next(r for r in resp.json()["results"] if r["resource_type"] == "calculation")
         assert "geometry" not in calc["summary"]
 
     def test_no_species_codes(self, client):
@@ -553,7 +553,7 @@ class TestReactionLookup:
                 "product_multiplicities": 2,
             },
         )
-        rxn = [r for r in resp.json()["results"] if r["resource_type"] == "reaction"][0]
+        rxn = next(r for r in resp.json()["results"] if r["resource_type"] == "reaction")
         assert rxn["summary"]["reversible"] is True
         assert rxn["links"]["self"].startswith("/api/v1/reactions/")
 

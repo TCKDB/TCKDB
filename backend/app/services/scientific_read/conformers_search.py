@@ -36,7 +36,6 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import (
     CalculationType,
-    RecordReviewStatus,
     SubmissionRecordType,
 )
 from app.db.models.level_of_theory import LevelOfTheory
@@ -80,7 +79,6 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-
 
 # Filter knobs that count as "meaningful" for the at-least-one-filter rule.
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
@@ -588,11 +586,7 @@ def _empty_response(
 def _request_filter_echo(request: ConformersSearchRequest) -> dict[str, Any]:
     """Return the caller's filter inputs verbatim (post-parse)."""
     out: dict[str, Any] = {}
-    for name in _MEANINGFUL_FILTER_FIELDS + (
-        "include_rejected",
-        "include_deprecated",
-        "min_review_status",
-    ):
+    for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "min_review_status"):
         value = getattr(request, name)
         if value is None:
             continue

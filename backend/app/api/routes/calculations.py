@@ -18,14 +18,8 @@ from app.api.deps import (
 )
 from app.api.errors import NotFoundError
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
-from app.db.models.app_user import AppUser
-from app.schemas.fragments.artifact import ArtifactIn
-from app.schemas.upload_warning import UploadWarning
-from app.services.artifact_persistence import persist_artifact_batch
-from app.services.calculation_parameter_extraction import (
-    try_extract_parameters_from_input_upload,
-)
 from app.api.routes._pagination import PaginatedResponse
+from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -48,8 +42,8 @@ from app.db.models.calculation import (
     CalculationSPResult,
     CalculationWavefunctionDiagnostic,
 )
-from app.db.models.geometry import Geometry
 from app.db.models.common import CalculationQuality, CalculationType
+from app.db.models.geometry import Geometry
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.schemas.entities.calculation import (
@@ -62,10 +56,10 @@ from app.schemas.entities.calculation import (
     CalculationIRCPointRead,
     CalculationIRCResultRead,
     CalculationOptResultRead,
-    CalculationPathSearchPointRead,
-    CalculationPathSearchResultRead,
     CalculationOutputGeometryDetailRead,
     CalculationParameterRead,
+    CalculationPathSearchPointRead,
+    CalculationPathSearchResultRead,
     CalculationRead,
     CalculationScanCoordinateRead,
     CalculationScanPointRead,
@@ -73,6 +67,12 @@ from app.schemas.entities.calculation import (
     CalculationSCFStabilityRead,
     CalculationSPResultRead,
     CalculationWavefunctionDiagnosticRead,
+)
+from app.schemas.fragments.artifact import ArtifactIn
+from app.schemas.upload_warning import UploadWarning
+from app.services.artifact_persistence import persist_artifact_batch
+from app.services.calculation_parameter_extraction import (
+    try_extract_parameters_from_input_upload,
 )
 
 router = APIRouter()

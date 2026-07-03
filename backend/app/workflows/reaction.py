@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.db.models.common import ReactionRole, SubmissionRecordType
 from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant
+from app.schemas.workflows.reaction_upload import (
+    ReactionParticipantUpload,
+    ReactionUploadRequest,
+)
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
     resolve_chem_reaction,
@@ -15,10 +18,6 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry_reference
-from app.schemas.workflows.reaction_upload import (
-    ReactionParticipantUpload,
-    ReactionUploadRequest,
-)
 
 
 def _resolve_participant_upload(

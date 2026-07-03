@@ -48,8 +48,6 @@ from app.db.models.thermo import (
 from app.db.models.workflow import WorkflowToolRelease
 from app.schemas.entities.thermo import (
     ThermoCreate,
-    ThermoNASACreate,
-    ThermoPointCreate,
     ThermoSourceCalculationCreate,
 )
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
@@ -57,7 +55,6 @@ from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo
 from app.workflows.thermo import _assert_calculation_owned_by, persist_thermo_upload
-
 
 # ---------------------------------------------------------------------------
 # Helpers

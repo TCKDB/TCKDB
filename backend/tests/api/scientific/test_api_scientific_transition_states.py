@@ -11,13 +11,11 @@ Covers:
 from __future__ import annotations
 
 from app.db.models.calculation import (
-    CalculationArtifact,
     CalculationDependency,
     CalculationFreqResult,
     CalculationOutputGeometry,
 )
 from app.db.models.common import (
-    ArtifactKind,
     CalculationDependencyRole,
     CalculationGeometryRole,
     CalculationQuality,
@@ -45,7 +43,6 @@ from tests.services.scientific_read._factories import (
     set_review,
 )
 
-
 # ---------------------------------------------------------------------------
 # Local fixture helpers
 # ---------------------------------------------------------------------------
@@ -67,10 +64,10 @@ def _make_reaction_with_ts(
         statuses = [TransitionStateEntryStatus.optimized] * n_entries
     assert len(statuses) == n_entries
 
-    sp_a = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("TSA"))
-    sp_b = make_species(db_session, smiles="O", inchi_key=next_inchi_key("TSB"))
-    sp_c = make_species(db_session, smiles="C", inchi_key=next_inchi_key("TSC"))
-    sp_d = make_species(db_session, smiles="[OH]", inchi_key=next_inchi_key("TSD"))
+    sp_a = make_species(db_session, inchi_key=next_inchi_key("TSA"))
+    sp_b = make_species(db_session, inchi_key=next_inchi_key("TSB"))
+    sp_c = make_species(db_session, inchi_key=next_inchi_key("TSC"))
+    sp_d = make_species(db_session, inchi_key=next_inchi_key("TSD"))
     se_a = make_species_entry(db_session, sp_a)
     se_b = make_species_entry(db_session, sp_b)
     se_c = make_species_entry(db_session, sp_c)

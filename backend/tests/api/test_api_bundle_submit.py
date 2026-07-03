@@ -19,23 +19,21 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.api.app import create_app
-from app.api.deps import get_current_user, get_db, get_write_db
+from app.api.deps import get_db, get_write_db
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
-    AppUserRole,
     SubmissionAuditEventKind,
     SubmissionRecordType,
     SubmissionStatus,
 )
 from app.db.models.kinetics import Kinetics
-from app.db.models.species import Species, SpeciesEntry
+from app.db.models.species import Species
 from app.db.models.submission import (
     Submission,
     SubmissionAuditEvent,
     SubmissionRecordLink,
 )
 from app.db.models.thermo import Thermo
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"

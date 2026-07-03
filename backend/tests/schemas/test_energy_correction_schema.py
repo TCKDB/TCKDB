@@ -22,7 +22,6 @@ from app.schemas.entities.energy_correction import (
     FrequencyScaleFactorUpdate,
 )
 
-
 # ---------------------------------------------------------------------------
 # EnergyCorrectionSchemeAtomParam
 # ---------------------------------------------------------------------------

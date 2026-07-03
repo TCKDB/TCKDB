@@ -14,7 +14,6 @@ SHA-256.
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select
@@ -30,10 +29,9 @@ from app.db.models.common import (
     CalculationType,
     ParameterSource,
 )
-from app.db.models.species import Species, SpeciesEntry
 from app.db.models.software import Software, SoftwareRelease
+from app.db.models.species import Species, SpeciesEntry
 from scripts import extract_calculation_parameters as script_mod
-
 
 # A minimal Gaussian input file — Link0 + route line — that the
 # Gaussian parser can extract parameters from.
@@ -73,12 +71,12 @@ def stub_load_artifact_bytes(monkeypatch) -> dict[str, bytes]:
     def _fake_load(sha256: str, *, client=None, bucket=None) -> bytes:
         try:
             return store[sha256]
-        except KeyError:
+        except KeyError as exc:
             from app.services.artifact_storage import ArtifactStorageUnavailable
 
             raise ArtifactStorageUnavailable(
                 f"test stub: no content registered for sha={sha256}"
-            )
+            ) from exc
 
     # Patch the symbol the bridge module imported, not just the source
     # module — the bridge took a function reference at import time.
@@ -117,7 +115,7 @@ def _seed_calc(
 
     species = Species(
         kind="molecule",
-        smiles="[H]",
+        smiles=_next_inchi_key(),
         inchi_key=_next_inchi_key(),
         charge=0,
         multiplicity=2,
@@ -226,11 +224,11 @@ class TestRunBackfill:
     ):
         # Calc A: has parser rows already → must be skipped.
         calc_a, _ = _seed_calc(db_session)
-        from app.services.calculation_resolution import (
-            persist_calculation_parameters,
-        )
         from app.schemas.fragments.calculation import (
             CalculationParameterObservation,
+        )
+        from app.services.calculation_resolution import (
+            persist_calculation_parameters,
         )
 
         persist_calculation_parameters(
@@ -268,11 +266,11 @@ class TestRunBackfill:
         self, db_session, stub_load_artifact_bytes
     ):
         calc_id, _ = _seed_calc(db_session)
-        from app.services.calculation_resolution import (
-            persist_calculation_parameters,
-        )
         from app.schemas.fragments.calculation import (
             CalculationParameterObservation,
+        )
+        from app.services.calculation_resolution import (
+            persist_calculation_parameters,
         )
 
         persist_calculation_parameters(
@@ -338,7 +336,7 @@ class TestRunBackfill:
         # extraction will skip with a warning but the run keeps going.
         species = Species(
             kind="molecule",
-            smiles="[H]",
+            smiles=_next_inchi_key(),
             inchi_key=_next_inchi_key(),
             charge=0,
             multiplicity=2,

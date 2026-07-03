@@ -17,7 +17,6 @@ from __future__ import annotations
 import pytest
 
 from app.api.errors import NotFoundError
-from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import SpeciesEntry
 from app.services.scientific_read.handles import (
     NO_MATCH,
@@ -25,7 +24,6 @@ from app.services.scientific_read.handles import (
     reconcile_level_of_theory_pair,
     reconcile_species_entry_pair,
     resolve_filter_ref,
-    resolve_path_handle,
     resolve_species_entry_handle,
 )
 from tests.services.scientific_read._factories import (
@@ -34,7 +32,6 @@ from tests.services.scientific_read._factories import (
     make_species_entry,
     next_inchi_key,
 )
-
 
 # ---------------------------------------------------------------------------
 # parse_handle
@@ -77,7 +74,7 @@ def test_parse_handle_leading_zero_rejected():
 
 def _species_entry(db_session):
     species = make_species(
-        db_session, smiles="C#CCO", inchi_key=next_inchi_key("PCH")
+        db_session, inchi_key=next_inchi_key("PCH")
     )
     return make_species_entry(db_session, species)
 

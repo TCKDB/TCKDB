@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 _EXPECTED_PATHS = {
     "/api/v1/scientific/species/search",
     "/api/v1/scientific/reactions/search",

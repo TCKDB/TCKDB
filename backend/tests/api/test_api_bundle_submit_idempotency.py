@@ -21,7 +21,6 @@ from app.db.models.submission import (
 )
 from app.db.models.thermo import Thermo
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
 ENDPOINT = "/api/v1/bundles/submit"

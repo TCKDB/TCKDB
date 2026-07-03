@@ -33,7 +33,7 @@ The builder NEVER:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -53,7 +53,6 @@ from app.importers.cccbdb.parsers.form_result import (
 from app.schemas.entities.molecular_property_observation import (
     MolecularPropertyObservationCreate,
 )
-
 
 # Map of supported target_kind → (MolecularPropertyKind, property_label).
 # Only targets whose semantics fit a single scalar+unit go here; the

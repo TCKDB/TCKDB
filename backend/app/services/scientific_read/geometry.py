@@ -118,7 +118,7 @@ def get_geometry(
             GeometryAtomPayload(
                 atom_index=a.atom_index, element=elem, x=a.x, y=a.y, z=a.z
             )
-            for a, elem in zip(atoms, elements)
+            for a, elem in zip(atoms, elements, strict=False)
         ],
         xyz_text=geometry.xyz_text,
         created_at=geometry.created_at,

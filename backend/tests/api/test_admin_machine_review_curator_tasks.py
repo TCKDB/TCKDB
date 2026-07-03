@@ -24,10 +24,10 @@ from sqlalchemy.orm import Session
 
 from app.api.app import create_app
 from app.api.deps import get_db, get_write_db
-from app.db.models.common import SubmissionKind, SubmissionRecordType
 from app.db.models.common import MachineReviewCuratorTaskState as _STATE
 from app.db.models.common import MachineReviewSeverity as DBSeverity
 from app.db.models.common import MachineReviewStatus as DBStatus
+from app.db.models.common import SubmissionKind, SubmissionRecordType
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import Submission

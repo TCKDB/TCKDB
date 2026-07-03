@@ -12,10 +12,9 @@ from __future__ import annotations
 from enum import Enum
 
 import pytest
-
-from app.db.models import common as db_enums
 from tckdb_schemas import enums as wire_enums
 
+from app.db.models import common as db_enums
 
 # (backend_enum, wire_enum) pairs to compare. Mirrors the audited
 # upload-facing enum closure documented in tckdb_schemas/enums.py.

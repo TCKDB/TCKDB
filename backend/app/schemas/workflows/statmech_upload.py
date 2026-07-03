@@ -16,6 +16,9 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from tckdb_schemas.statmech_bits import (
+    StatmechTorsionCoordinateIn,
+)
 
 from app.db.models.common import (
     RigidRotorKind,
@@ -33,10 +36,8 @@ from app.schemas.fragments.refs import (
     WorkflowToolReleaseRef,
 )
 from app.schemas.utils import normalize_optional_text
+from app.schemas.workflows.conformer_upload import ElectronicLevelIn
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
-from tckdb_schemas.statmech_bits import (  # noqa: F401  (re-exported)
-    StatmechTorsionCoordinateIn,
-)
 
 
 class StatmechCalculationIn(SchemaBase):
@@ -159,6 +160,7 @@ class StatmechUploadRequest(SchemaBase):
 
     freq_scale_factor: FreqScaleFactorRef | None = None
     uses_projected_frequencies: bool | None = None
+    optical_isomers: int | None = Field(default=None, ge=1)
     note: str | None = None
 
     calculations: list[StatmechCalculationIn] = Field(default_factory=list)
@@ -168,11 +170,21 @@ class StatmechUploadRequest(SchemaBase):
     )
 
     torsions: list[StatmechTorsionIn] = Field(default_factory=list)
+    electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def normalize_text_fields(self) -> Self:
         self.point_group = normalize_optional_text(self.point_group)
         self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def validate_electronic_levels(self) -> Self:
+        indices = [lvl.level_index for lvl in self.electronic_levels]
+        if len(set(indices)) != len(indices):
+            raise ValueError(
+                "electronic_levels level_index values must be unique."
+            )
         return self
 
     @model_validator(mode="after")

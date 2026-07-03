@@ -10,12 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, exists, select
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
-    RecordReviewStatus,
     SubmissionRecordType,
 )
 from app.db.models.level_of_theory import LevelOfTheory
@@ -53,7 +52,6 @@ from app.services.scientific_read.transport import (
     _LEGAL_INCLUDE_TOKENS,
     build_transport_record,
 )
-
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "species_ref",
@@ -375,11 +373,7 @@ def _empty_response(
 
 def _request_filter_echo(request: TransportSearchRequest) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for name in _MEANINGFUL_FILTER_FIELDS + (
-        "include_rejected",
-        "include_deprecated",
-        "min_review_status",
-    ):
+    for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "min_review_status"):
         value = getattr(request, name)
         if value is None:
             continue

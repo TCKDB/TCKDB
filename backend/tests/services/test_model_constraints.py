@@ -5,14 +5,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 
-def _create_species(connection, *, inchi_key: str, smiles: str = "[H]") -> int:
+def _create_species(connection, *, inchi_key: str, smiles: str | None = None) -> int:
     return connection.execute(
         text("""
             INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind)
             VALUES ('molecule', :smiles, :inchi_key, 0, 1, 'achiral')
             RETURNING id
             """),
-        {"smiles": smiles, "inchi_key": inchi_key},
+        {"smiles": smiles or inchi_key, "inchi_key": inchi_key},
     ).scalar_one()
 
 

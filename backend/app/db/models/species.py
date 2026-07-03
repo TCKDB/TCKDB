@@ -69,7 +69,16 @@ class Species(Base, TimestampMixin, PublicRefMixin):
     )
 
     __table_args__ = (
-        UniqueConstraint("inchi_key"),
+        # Identity = canonical SMILES + charge + multiplicity (DR-0031).
+        # Canonical SMILES distinguishes tautomers that standard InChIKey
+        # merges; multiplicity distinguishes spin states that SMILES/InChI
+        # cannot encode (singlet vs triplet CH2, O2 states).
+        UniqueConstraint(
+            "smiles", "charge", "multiplicity", name="uq_species_identity"
+        ),
+        # inchi_key stays for cross-notation / external-DB lookup but is
+        # non-unique: one InChIKey may map to several species.
+        Index("ix_species_inchi_key", "inchi_key"),
         CheckConstraint("multiplicity >= 1", name="multiplicity_ge_1"),
     )
 

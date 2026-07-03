@@ -53,15 +53,15 @@ class TestInputBlockExtraction:
         assert len(input_lines) > 0
 
     def test_keyword_lines_present(self, input_lines):
-        keyword_lines = [l for l in input_lines if l.strip().startswith("!")]
+        keyword_lines = [line for line in input_lines if line.strip().startswith("!")]
         assert len(keyword_lines) >= 1
 
     def test_block_sections_present(self, input_lines):
-        block_lines = [l for l in input_lines if l.strip().startswith("%")]
+        block_lines = [line for line in input_lines if line.strip().startswith("%")]
         assert len(block_lines) >= 1
 
     def test_coordinate_header_present(self, input_lines):
-        coord_lines = [l for l in input_lines if l.strip().startswith("*")]
+        coord_lines = [line for line in input_lines if line.strip().startswith("*")]
         assert len(coord_lines) >= 1
 
 

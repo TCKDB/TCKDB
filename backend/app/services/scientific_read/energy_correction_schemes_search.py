@@ -47,7 +47,6 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 
-
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "energy_correction_scheme_ref",
     "name",

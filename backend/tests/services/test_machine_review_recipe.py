@@ -55,7 +55,7 @@ def test_active_machine_review_recipe_derives_rubric_versions_from_trust_constan
     expected = {
         public_rubric_name(rubric): str(rubric.version) for rubric in _ACTIVE_RUBRICS
     }
-    assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS == expected
+    assert expected == ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
     assert get_active_machine_review_recipe().rubric_versions == expected
 
     # Each key carries the version it maps to (key/value can't silently diverge).

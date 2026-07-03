@@ -7,7 +7,6 @@ import pytest
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
-    StationaryPointKind,
     SubmissionRecordType,
 )
 from app.schemas.reads.scientific_common import CollapseMode
@@ -20,7 +19,6 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
     set_review,
 )
-
 
 # ---------------------------------------------------------------------------
 # Identity matching
@@ -40,7 +38,7 @@ def test_search_by_smiles_returns_canonical_species(db_session):
 
 def test_search_by_inchi_key_matches(db_session):
     inchi_key = next_inchi_key("INCHI1")
-    species = make_species(db_session, smiles="CC", inchi_key=inchi_key)
+    species = make_species(db_session, inchi_key=inchi_key)
     make_species_entry(db_session, species)
 
     response = search_species(
@@ -259,12 +257,16 @@ def test_include_thermo_populates_thermo_summary_with_ids(db_session):
 
 
 def test_collapse_first_returns_at_most_one_with_pre_collapse_total(db_session):
+    # Two spin variants of the same structure: same smiles, different
+    # multiplicity. Under DR-0031 these are distinct species (identity =
+    # smiles + charge + multiplicity) that both match a by-smiles search,
+    # so the search yields two pre-collapse candidates.
     species_a = make_species(
-        db_session, smiles="C1", inchi_key=next_inchi_key("CO1")
+        db_session, smiles="C1", inchi_key=next_inchi_key("CO1"), multiplicity=1
     )
     make_species_entry(db_session, species_a)
     species_b = make_species(
-        db_session, smiles="C1", inchi_key=next_inchi_key("CO2")
+        db_session, smiles="C1", inchi_key=next_inchi_key("CO2"), multiplicity=3
     )
     make_species_entry(db_session, species_b)
 

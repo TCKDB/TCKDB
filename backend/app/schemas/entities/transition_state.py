@@ -9,7 +9,6 @@ from app.schemas.common import (
 )
 from app.schemas.utils import normalize_optional_text
 
-
 # ---------------------------------------------------------------------------
 # TransitionState (reaction-channel-level TS concept)
 # ---------------------------------------------------------------------------

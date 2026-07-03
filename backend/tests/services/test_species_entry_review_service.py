@@ -12,7 +12,7 @@ from app.db.models.common import (
     SpeciesEntryReviewRole,
     StereoKind,
 )
-from app.db.models.species import Species, SpeciesEntry, SpeciesEntryReview
+from app.db.models.species import Species, SpeciesEntry
 from app.services.species_entry_review import (
     create_species_entry_review,
     list_species_entry_reviews,

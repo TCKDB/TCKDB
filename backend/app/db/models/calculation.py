@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -20,7 +21,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
@@ -32,6 +33,7 @@ from app.db.models.common import (
     CalculationType,
     ConstraintKind,
     CoordinateUnit,
+    HessianSource,
     IRCDirection,
     ParameterSource,
     PathSearchMethod,
@@ -230,6 +232,12 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     scf_stability: Mapped[Optional["CalculationSCFStability"]] = relationship(
         back_populates="calculation",
         foreign_keys="CalculationSCFStability.calculation_id",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    hessian: Mapped[Optional["CalculationHessian"]] = relationship(
+        back_populates="calculation",
+        foreign_keys="CalculationHessian.calculation_id",
         uselist=False,
         cascade="all, delete-orphan",
     )
@@ -1303,6 +1311,63 @@ class CalculationSCFStability(Base, TimestampMixin, CreatedByMixin):
         CheckConstraint(
             "NOT (status = 'stabilized' AND instability_count = 0)",
             name="stabilized_has_instability",
+        ),
+    )
+
+
+class CalculationHessian(Base, TimestampMixin, CreatedByMixin):
+    """Cartesian second-derivative (Hessian) matrix for a calculation.
+
+    A one-row-per-calculation side table (absent by default, like
+    :class:`CalculationSCFStability`). Stores the packed lower triangle
+    (including the diagonal) of the symmetric 3N×3N Cartesian
+    force-constant matrix, row-major, in fixed units of hartree/bohr².
+    The matrix is meaningless without its atomic configuration, ordering,
+    and orientation, so ``geometry_id`` is mandatory: it binds the Hessian
+    to the exact :class:`~app.db.models.geometry.Geometry` it was computed
+    at (deduped through the content-addressed geometry seam, so it usually
+    coincides with the calculation's input geometry with no duplication).
+
+    See DR-0030 for the full rationale.
+    """
+
+    __tablename__ = "calc_hessian"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    geometry_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("geometry.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    natoms: Mapped[int] = mapped_column(Integer, nullable=False)
+    lower_triangle_hartree_bohr2: Mapped[list[float]] = mapped_column(
+        ARRAY(Float), nullable=False
+    )
+    source: Mapped[HessianSource] = mapped_column(
+        SAEnum(HessianSource, name="hessian_source"),
+        nullable=False,
+    )
+    parser_version: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    calculation: Mapped["Calculation"] = relationship(
+        back_populates="hessian",
+        foreign_keys=[calculation_id],
+    )
+    geometry: Mapped["Geometry"] = relationship(foreign_keys=[geometry_id])
+
+    __table_args__ = (
+        CheckConstraint("natoms >= 1", name="hessian_natoms_ge_1"),
+        # Packed lower triangle (with diagonal) of a symmetric 3N×3N matrix
+        # has exactly 3N(3N+1)/2 entries.
+        CheckConstraint(
+            "cardinality(lower_triangle_hartree_bohr2) "
+            "= (3 * natoms) * (3 * natoms + 1) / 2",
+            name="hessian_lower_triangle_cardinality",
         ),
     )
 

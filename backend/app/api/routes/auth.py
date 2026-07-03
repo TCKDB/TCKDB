@@ -142,7 +142,9 @@ def register(
         session.flush()
     except IntegrityError:
         session.rollback()
-        raise HTTPException(status_code=409, detail="Username or email already in use.")
+        raise HTTPException(
+            status_code=409, detail="Username or email already in use."
+        ) from None
 
     ttl = session_ttl_for_role(user.role)
     _, token = create_session(session, user, ttl=ttl)

@@ -27,7 +27,6 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 
-
 CCCBDB_BASE_URL = "https://cccbdb.nist.gov/"
 EXPERIMENTAL_INDEX_URLS: tuple[str, ...] = (
     "https://cccbdb.nist.gov/exp2x.asp",

@@ -1035,9 +1035,10 @@ def _entry_with_reactant_conformer(
     # The reactant species_entry was created inline by _entry; look it
     # up via the reaction-entry's structure participants so we can
     # attach a conformer group to it.
+    from sqlalchemy import select as _select
+
     from app.db.models.reaction import ReactionEntryStructureParticipant
     from app.db.models.species import SpeciesEntry
-    from sqlalchemy import select as _select
 
     reactant_entry_id = db_session.scalar(
         _select(ReactionEntryStructureParticipant.species_entry_id)
@@ -1066,7 +1067,7 @@ def _entry_with_reactant_conformer(
 
 # ReactionRole is needed but the file imports a `ReactionRole` from common;
 # keep the helper import close so the test file stays self-contained.
-from app.db.models.common import ReactionRole as _ReactionRole  # noqa: E402
+from app.db.models.common import ReactionRole as _ReactionRole
 
 
 def test_full_conformers_section_groups_by_species_participant(

@@ -16,7 +16,6 @@ from app.chemistry.units import (
 )
 from app.db.models.common import ActivationEnergyUnits, ArrheniusAUnits
 
-
 # ---------------------------------------------------------------------------
 # Invariant 1: activation-energy unit conversion is physically correct
 # ---------------------------------------------------------------------------

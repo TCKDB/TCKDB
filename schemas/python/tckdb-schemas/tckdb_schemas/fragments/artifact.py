@@ -24,6 +24,11 @@ KIND_ALLOWED_EXTENSIONS: dict[ArtifactKind, frozenset[str]] = {
     ArtifactKind.output_log: frozenset({".out", ".log", ".orca"}),
     ArtifactKind.checkpoint: frozenset({".chk", ".gbw"}),
     ArtifactKind.formatted_checkpoint: frozenset({".fchk"}),
+    # Raw Hessian sidecars: ORCA ``.hess``, Gaussian formatted checkpoint
+    # ``.fchk`` (Cartesian Force Constants block). The parsed matrix in
+    # ``calc_hessian`` is the queryable source of truth; this artifact is
+    # the byte-exact audit trail. See DR-0030.
+    ArtifactKind.hessian: frozenset({".hess", ".fchk"}),
     ArtifactKind.ancillary: frozenset(
         {".txt", ".dat", ".csv", ".json", ".yml", ".yaml"}
     ),

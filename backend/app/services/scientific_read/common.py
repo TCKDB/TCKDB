@@ -14,7 +14,6 @@ Each service module imports from here so the rules are defined once.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
@@ -24,7 +23,6 @@ from app.api.config import settings
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
 from app.schemas.reads.scientific_common import (
-    DEFAULT_LIMIT,
     MAX_LIMIT,
     REVIEW_RANK,
     Pagination,
@@ -114,7 +112,7 @@ def validate_includes(
         explicit = requested_set - {"all"}
         bad = explicit - legal
         if bad:
-            sorted_legal = sorted(legal_no_all) + ["all"]
+            sorted_legal = [*sorted(legal_no_all), "all"]
             raise ValueError(
                 "unknown_include_token: "
                 f"token(s) {sorted(bad)!r} not legal for {endpoint_name}. "
@@ -124,7 +122,7 @@ def validate_includes(
 
     bad = requested_set - legal
     if bad:
-        sorted_legal = sorted(legal_no_all) + ["all"]
+        sorted_legal = [*sorted(legal_no_all), "all"]
         raise ValueError(
             "unknown_include_token: "
             f"token(s) {sorted(bad)!r} not legal for {endpoint_name}. "

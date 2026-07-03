@@ -78,11 +78,10 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.transition_states import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
-    build_entry_record,
     _build_reaction_context,
     _build_ts_core_block,
+    build_entry_record,
 )
-
 
 # Filter knobs that count as "meaningful" for the at-least-one-filter rule.
 # Pure pagination / include / review knobs are deliberately excluded.
@@ -556,11 +555,7 @@ def _empty_response(
 def _request_filter_echo(request: TransitionStatesSearchRequest) -> dict[str, Any]:
     """Return the caller's filter inputs verbatim (post-parse)."""
     out: dict[str, Any] = {}
-    for name in _MEANINGFUL_FILTER_FIELDS + (
-        "include_rejected",
-        "include_deprecated",
-        "min_review_status",
-    ):
+    for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "min_review_status"):
         value = getattr(request, name)
         if value is None:
             continue

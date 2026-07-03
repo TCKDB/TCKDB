@@ -18,11 +18,9 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models.calculation import (
-    Calculation,
     CalculationWavefunctionDiagnostic,
 )
 from app.schemas.fragments.calculation import WavefunctionDiagnosticPayload
-
 
 KEY_HEADER = "Idempotency-Key"
 REPLAYED_HEADER = "Idempotency-Replayed"

@@ -39,10 +39,12 @@ from app.api.routes.scientific import (
     calculations,
     conformers,
     corrections,
+    export,
     geometries,
     kinetics,
     kinetics_search,
     literature,
+    meta,
     networks,
     provenance,
     reactions,
@@ -73,6 +75,7 @@ scientific_router.include_router(species_subresources.router)
 scientific_router.include_router(provenance.router)
 scientific_router.include_router(thermo_search.router)
 scientific_router.include_router(kinetics_search.router)
+scientific_router.include_router(meta.router)
 scientific_router.include_router(species_calculations_search.router)
 scientific_router.include_router(geometries.router)
 # Specialized full-data path endpoints registered before the detail
@@ -96,5 +99,6 @@ scientific_router.include_router(literature.router)
 scientific_router.include_router(corrections.fsf_router)
 scientific_router.include_router(corrections.ecs_router)
 scientific_router.include_router(artifacts.router)
+scientific_router.include_router(export.router)
 
 __all__ = ["scientific_router"]

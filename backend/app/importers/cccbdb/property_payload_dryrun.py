@@ -68,7 +68,7 @@ from app.importers.cccbdb.property_table_ingest import (
     PropertyTableIngestor,
     PropertyTableParser,
 )
-from app.importers.cccbdb.snapshot import Fetcher, HttpFetcher
+from app.importers.cccbdb.snapshot import Fetcher
 from app.schemas.entities.molecular_property_observation import (
     MolecularPropertyObservationCreate,
 )
@@ -372,7 +372,7 @@ def _run_one_target(
 
     try:
         table = parser_obj.parse(target, html)
-    except Exception as exc:  # noqa: BLE001 - keep going across targets
+    except Exception as exc:
         result.warnings.append(f"parser_error: {type(exc).__name__}: {exc}")
         result.warning_count = len(result.warnings)
         result.resolve_health()
@@ -490,7 +490,6 @@ def main(argv: list[str] | None = None) -> int:
         unknown property_kind, etc.).
     """
 
-    import sys
 
     parser = _build_arg_parser()
     args = parser.parse_args(argv)

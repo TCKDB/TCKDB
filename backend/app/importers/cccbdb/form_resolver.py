@@ -53,9 +53,9 @@ from app.importers.cccbdb.diagnostics.classifier import (
     classify_html,
 )
 from app.importers.cccbdb.parsers import (
+    SUPPORTED_TARGET_KINDS,
     CCCBDBSelectionCandidate,
     CCCBDBSpeciesSelectionPage,
-    SUPPORTED_TARGET_KINDS,
     canonicalize_cas,
     parse_form_result_page,
     parse_species_selection_page,
@@ -668,7 +668,7 @@ def resolve_one_record(
 
     try:
         entry_resp = session.get(record.entry_url)
-    except Exception as exc:  # noqa: BLE001 — keep queue going
+    except Exception as exc:
         result.resolver_warnings.append(
             f"GET entry_url failed: {type(exc).__name__}: {exc}"
         )
@@ -702,7 +702,7 @@ def resolve_one_record(
         post_resp = session.post(
             form.action_url, data={form.formula_field: record.formula}
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         result.resolver_warnings.append(
             f"POST {form.action_url} failed: {type(exc).__name__}: {exc}"
         )
@@ -770,7 +770,7 @@ def resolve_one_record(
                 selection_page.form_action_url,
                 data=outcome.selected.form_fields(),
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             result.resolver_warnings.append(
                 f"POST {selection_page.form_action_url} failed: "
                 f"{type(exc).__name__}: {exc}"

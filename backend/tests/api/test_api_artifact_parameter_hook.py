@@ -24,7 +24,7 @@ from app.db.models.calculation import (
     CalculationArtifact,
     CalculationParameter,
 )
-from app.db.models.common import ArtifactKind, ParameterSource
+from app.db.models.common import ParameterSource
 from app.schemas.fragments.calculation import CalculationParameterObservation
 from app.services.calculation_resolution import persist_calculation_parameters
 

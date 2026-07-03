@@ -27,7 +27,6 @@ from app.api.config import settings
 from app.api.deps import get_db, get_write_db
 from app.api.rate_limit import reset_rate_limit_store
 
-
 # A real authenticated mutating route; the upload handler will refuse
 # the bogus credential well before parsing the body, so the limiter
 # decision is observable independent of the request shape.

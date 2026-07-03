@@ -24,7 +24,6 @@ from app.db.models.app_user import AppUser
 from app.db.models.common import UploadJobKind, UploadJobStatus
 from app.db.models.upload_job import UploadJob
 from app.schemas.jobs import JobEnqueueResponse, JobStatusResponse
-from app.services.upload_submission import open_job_submission
 from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
@@ -34,6 +33,7 @@ from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.schemas.workflows.transition_state_upload import TransitionStateUploadRequest
 from app.schemas.workflows.transport_upload import TransportUploadRequest
+from app.services.upload_submission import open_job_submission
 
 router = APIRouter()
 

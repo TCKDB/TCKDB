@@ -15,14 +15,12 @@ from app.importers.cccbdb.form_resolver import FormQueueRecord
 from scripts.cccbdb_generate_form_queue import (
     CatalogEntry,
     QueueGenFilters,
-    QueueGenResult,
     generate_queue,
     generate_species_key,
     load_catalog_entries,
     main,
     write_queue_file,
 )
-
 
 # ---------------------------------------------------------------------------
 # Catalog loading
@@ -218,7 +216,7 @@ class TestQueueGeneration:
         assert keys == {"ethanol", "dimethyl_ether"}
 
     def test_deduplicates_repeated_catalog_entries(self):
-        rows = _entries() + [_entries()[0]]  # duplicate water row
+        rows = [*_entries(), _entries()[0]]  # duplicate water row
         result = generate_queue(
             rows,
             target_kind="atomization_energy",
@@ -229,7 +227,7 @@ class TestQueueGeneration:
         assert result.skipped_duplicate == 1
 
     def test_skips_entries_without_formula(self):
-        rows = _entries() + [CatalogEntry(formula=None, name="Mystery")]
+        rows = [*_entries(), CatalogEntry(formula=None, name="Mystery")]
         result = generate_queue(
             rows,
             target_kind="atomization_energy",

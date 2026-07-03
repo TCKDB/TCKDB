@@ -25,7 +25,6 @@ from app.db.models.thermo import Thermo
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.workflows.thermo import persist_thermo_upload
 
-
 # ---------------------------------------------------------------------------
 # NASA-7 reference evaluation (used only for continuity checking in tests)
 # ---------------------------------------------------------------------------

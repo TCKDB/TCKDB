@@ -26,7 +26,6 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
 
-
 _INCHI_COUNTER = 0
 
 
@@ -42,11 +41,11 @@ def _create_species_entry(connection, *, inchi_key: str) -> int:
         text(
             """
             INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind)
-            VALUES ('molecule', '[H]', :inchi_key, 0, 1, 'achiral')
+            VALUES ('molecule', :smiles, :inchi_key, 0, 1, 'achiral')
             RETURNING id
             """
         ),
-        {"inchi_key": inchi_key},
+        {"smiles": inchi_key, "inchi_key": inchi_key},
     ).scalar_one()
     return connection.execute(
         text(

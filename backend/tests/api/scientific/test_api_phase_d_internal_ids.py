@@ -23,11 +23,9 @@ from __future__ import annotations
 from app.db.models.common import (
     CalculationType,
     RecordReviewStatus,
-    ScientificOriginKind,
     SubmissionRecordType,
 )
 from tests.services.scientific_read._factories import (
-    attach_sp_result,
     make_calculation,
     make_chem_reaction,
     make_kinetics,
@@ -39,7 +37,6 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
     set_review,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

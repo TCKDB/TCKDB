@@ -15,8 +15,6 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 
 from app.chemistry.torsion_fingerprint import (
-    AtomMappingResult,
-    ConformerComparisonResult,
     RotorSlot,
     TorsionFingerprint,
     circular_difference,
@@ -30,7 +28,6 @@ from app.chemistry.torsion_fingerprint import (
     normalize_angle,
     resolve_atom_mapping,
 )
-
 
 # ---------------------------------------------------------------------------
 # Circular difference
@@ -1002,7 +999,8 @@ class TestMappingAmbiguityTorsionCorrectness:
         If they differ, the canonical dihedral quartet selection is broken.
         """
         from app.chemistry.torsion_fingerprint import (
-            _build_mol_from_xyz, compute_torsion_fingerprint,
+            _build_mol_from_xyz,
+            compute_torsion_fingerprint,
         )
 
         smiles = "ClCCCl"
@@ -1064,7 +1062,8 @@ class TestMappingAmbiguityTorsionCorrectness:
         3. Produce the same canonical fingerprint from any input ordering.
         """
         from app.chemistry.torsion_fingerprint import (
-            _build_mol_from_xyz, compute_torsion_fingerprint,
+            _build_mol_from_xyz,
+            compute_torsion_fingerprint,
         )
 
         smiles = "O=CC(Cl)(Cl)Cl"
@@ -1111,7 +1110,7 @@ class TestMappingAmbiguityTorsionCorrectness:
             all_bins.append(fp.quantized_bins)
 
         # Mappings SHOULD disagree (3 distinct bin vectors)
-        distinct = set(tuple(b) for b in all_bins)
+        distinct = {tuple(b) for b in all_bins}
         assert len(distinct) == 3, (
             f"Expected 3 distinct fingerprints from 6 Cl permutations, "
             f"got {len(distinct)}: {distinct}"
@@ -1202,7 +1201,8 @@ class TestAllMappingConsistency:
     def _enumerate_and_fingerprint(smiles, xyz_atoms):
         """Return (n_heavy_mappings, list_of_fingerprints) for all valid mappings."""
         from app.chemistry.torsion_fingerprint import (
-            _build_mol_from_xyz, compute_torsion_fingerprint,
+            _build_mol_from_xyz,
+            compute_torsion_fingerprint,
         )
         ref_mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
         xyz_mol = _build_mol_from_xyz(xyz_atoms)
@@ -1263,7 +1263,7 @@ class TestAllMappingConsistency:
         )
         assert n == 6
 
-        distinct_bins = set(tuple(fp.quantized_bins) for fp in fps)
+        distinct_bins = {tuple(fp.quantized_bins) for fp in fps}
         assert len(distinct_bins) == 3
 
         # The minimum should match what resolve_atom_mapping returns
@@ -1461,7 +1461,8 @@ class TestMultiRotorPartialSymmetry:
     def test_multi_rotor_all_mappings_enumerated(self):
         """Verify all 8 mappings and that the canonical choice equals lex-min."""
         from app.chemistry.torsion_fingerprint import (
-            _build_mol_from_xyz, compute_torsion_fingerprint,
+            _build_mol_from_xyz,
+            compute_torsion_fingerprint,
         )
         ref_mol = Chem.AddHs(Chem.MolFromSmiles(self._SMILES))
         xyz_mol = _build_mol_from_xyz(self._ORIGINAL)
@@ -1497,7 +1498,7 @@ class TestMultiRotorPartialSymmetry:
             all_bins.append(fp.quantized_bins)
 
         # Multiple distinct fingerprints from symmetry
-        distinct = set(tuple(b) for b in all_bins)
+        distinct = {tuple(b) for b in all_bins}
         assert len(distinct) > 1
 
         # resolve_atom_mapping must pick the lex-min

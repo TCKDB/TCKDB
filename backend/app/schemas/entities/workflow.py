@@ -11,7 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.common import SchemaBase, TimestampedReadSchema
 from app.schemas.utils import normalize_optional_text, normalize_required_text
 
-
 # ---------------------------------------------------------------------------
 # Workflow tool
 # ---------------------------------------------------------------------------

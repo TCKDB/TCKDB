@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
@@ -32,7 +31,6 @@ from app.schemas.entities.thermo import ThermoSourceCalculationCreate
 from app.schemas.fragments.calculation import CalculationWithResultsPayload
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.computed_species_upload import (
-    CalculationDependencyInBundle,
     CalculationInBundle,
     ComputedSpeciesUploadRequest,
     ConformerInBundle,
@@ -75,7 +73,6 @@ from app.services.record_review import (
 )
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
-
 
 # ---------------------------------------------------------------------------
 # Thermo role/type compatibility (mirror DR-0028 helpers in workflows/thermo)

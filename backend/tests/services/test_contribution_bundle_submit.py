@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 
 from app.api.errors import DomainError
 from app.db.models.app_user import AppUser
@@ -40,8 +41,6 @@ from app.workflows.contribution_bundle_submit import (
     _is_blocking,
     submit_contribution_bundle,
 )
-from sqlalchemy import select
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
@@ -203,12 +202,13 @@ class TestSubmitContributionBundle:
         property cannot be tested through the route.)
         """
         from sqlalchemy import func
+
         from app.workflows import contribution_bundle_submit as submit_module
 
         user = _make_user(db_session, "rollback-tester")
         bundle = _load_bundle("thermo-bundle-v0.json")
 
-        def _boom(*args, **kwargs):  # noqa: ANN001 - test stub
+        def _boom(*args, **kwargs):
             raise RuntimeError("simulated workflow failure")
 
         monkeypatch.setattr(submit_module, "persist_thermo_upload", _boom)

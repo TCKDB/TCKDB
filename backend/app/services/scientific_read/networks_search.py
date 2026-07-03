@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import and_, exists, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     NetworkKineticsModelKind,
-    RecordReviewStatus,
     SubmissionRecordType,
 )
 from app.db.models.level_of_theory import LevelOfTheory
@@ -56,7 +55,6 @@ from app.services.scientific_read.networks import (
     _LEGAL_INCLUDE_TOKENS,
     build_network_record,
 )
-
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "network_ref",
@@ -503,11 +501,7 @@ def _empty_response(
 
 def _request_filter_echo(request: NetworkSearchRequest) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for name in _MEANINGFUL_FILTER_FIELDS + (
-        "include_rejected",
-        "include_deprecated",
-        "min_review_status",
-    ):
+    for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "min_review_status"):
         value = getattr(request, name)
         if value is None:
             continue

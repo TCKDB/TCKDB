@@ -583,7 +583,7 @@ __all__ = [
     "_DETAIL_LEGAL_INCLUDE_TOKENS",
     "_INTERNAL_INCLUDE_TOKENS",
     "_LEGAL_INCLUDE_TOKENS",
-    "build_transport_trust_fragment",
     "build_transport_record",
+    "build_transport_trust_fragment",
     "get_transport",
 ]

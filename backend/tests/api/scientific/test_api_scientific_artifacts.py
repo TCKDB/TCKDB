@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from app.db.models.calculation import CalculationArtifact
 from app.db.models.common import (
     ArtifactKind,
-    CalculationQuality,
     CalculationType,
     RecordReviewStatus,
     SubmissionRecordType,
@@ -26,7 +24,6 @@ from tests.services.scientific_read._factories import (
     set_review,
 )
 
-
 SEARCH_URL = "/api/v1/scientific/artifacts/search"
 
 
@@ -38,7 +35,7 @@ SEARCH_URL = "/api/v1/scientific/artifacts/search"
 def _make_species_owned_calc(db_session, **kw):
     species = make_species(
         db_session,
-        smiles=kw.pop("smiles", "CCO"),
+        smiles=kw.pop("smiles", None),
         inchi_key=next_inchi_key("ART"),
     )
     entry = make_species_entry(db_session, species)
@@ -257,11 +254,11 @@ def test_search_by_method_and_basis(client, db_session):
     lot_match = make_lot(db_session, method="b3lyp", basis="def2tzvp")
     lot_other = make_lot(db_session, method="wb97xd", basis="6-31g")
     species_a = make_species(
-        db_session, smiles="CCO", inchi_key=next_inchi_key("LOTA")
+        db_session, inchi_key=next_inchi_key("LOTA")
     )
     entry_a = make_species_entry(db_session, species_a)
     species_b = make_species(
-        db_session, smiles="CCN", inchi_key=next_inchi_key("LOTB")
+        db_session, inchi_key=next_inchi_key("LOTB")
     )
     entry_b = make_species_entry(db_session, species_b)
     calc_match = make_calculation(
@@ -372,7 +369,7 @@ def test_search_by_conformer_observation_ref(client, db_session):
 
 
 def test_search_by_created_after_before(client, db_session):
-    from datetime import datetime, timezone, timedelta
+    from datetime import timedelta
 
     _, _, calc = _make_species_owned_calc(db_session)
     a = attach_artifact(db_session, calculation=calc)
@@ -455,9 +452,9 @@ def test_pagination_envelope(client, db_session):
 
 def test_deterministic_ordering(client, db_session):
     _, _, calc = _make_species_owned_calc(db_session)
-    a1 = attach_artifact(db_session, calculation=calc, filename="a.log")
-    a2 = attach_artifact(db_session, calculation=calc, filename="b.log")
-    a3 = attach_artifact(db_session, calculation=calc, filename="c.log")
+    _a1 = attach_artifact(db_session, calculation=calc, filename="a.log")
+    _a2 = attach_artifact(db_session, calculation=calc, filename="b.log")
+    _a3 = attach_artifact(db_session, calculation=calc, filename="c.log")
     body1 = client.get(SEARCH_URL + "?calculation_ref=" + calc.public_ref).json()
     body2 = client.get(SEARCH_URL + "?calculation_ref=" + calc.public_ref).json()
     fn1 = [r["artifact"]["filename"] for r in body1["records"]]
@@ -496,7 +493,7 @@ def test_include_calculation_populates_lot_software_workflow(
 ):
     lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
     species = make_species(
-        db_session, smiles="CCO", inchi_key=next_inchi_key("INC")
+        db_session, inchi_key=next_inchi_key("INC")
     )
     entry = make_species_entry(db_session, species)
     calc = make_calculation(
@@ -515,7 +512,7 @@ def test_include_calculation_populates_lot_software_workflow(
 def test_default_include_set_calculation_context_present(client, db_session):
     lot = make_lot(db_session, method="hf", basis="sto-3g")
     species = make_species(
-        db_session, smiles="O", inchi_key=next_inchi_key("DFL")
+        db_session, inchi_key=next_inchi_key("DFL")
     )
     entry = make_species_entry(db_session, species)
     calc = make_calculation(

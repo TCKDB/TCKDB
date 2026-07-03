@@ -11,16 +11,12 @@ Focuses on:
 
 from __future__ import annotations
 
-import pytest
-
 from app.services.gaussian_parameter_parser import (
     _extract_link0,
     _extract_route_line,
     _parse_route_tokens,
-    parse_gaussian_log,
     parse_method_basis,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

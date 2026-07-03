@@ -67,7 +67,6 @@ def test_authenticated_legacy_route_succeeds(
 ):
     """A request bearing a valid API-key should pass the gate."""
     from app.db.models.api_key import ApiKey
-    from app.db.models.app_user import AppUser
 
     monkeypatch.setattr(settings, "legacy_reads_require_auth", True)
     # Mint a fresh raw key + matching hash so the gate's

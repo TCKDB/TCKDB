@@ -23,7 +23,6 @@ from app.services.geometry_validation import validate_calculation_geometry
 from app.workflows.reaction import persist_reaction_upload
 from app.workflows.thermo import _assert_calculation_owned_by
 
-
 # ---------------------------------------------------------------------------
 # Invariant 1: geometry atom-count consistency
 # ---------------------------------------------------------------------------

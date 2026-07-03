@@ -8,7 +8,6 @@ from app.db.models.common import LiteratureKind
 from app.schemas.common import ORMBaseSchema, SchemaBase, TimestampedReadSchema
 from app.schemas.utils import normalize_optional_text, normalize_required_text
 
-
 # ---------------------------------------------------------------------------
 # Literature ↔ Author link
 # ---------------------------------------------------------------------------

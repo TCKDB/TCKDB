@@ -24,7 +24,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator
 
-
 _LANE_FLAT = "flat_property_table"
 _LANE_FORM = "form_result"
 
@@ -129,7 +128,7 @@ def filter_payloads_by_property_kind(
 
     if not property_kinds:
         return list(payloads)
-    allowed = {k for k in property_kinds}
+    allowed = set(property_kinds)
     return [
         p for p in payloads
         if p.payload.get("property_kind") in allowed

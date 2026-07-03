@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.chemistry.units import convert_ea_to_kj_mol
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType, KineticsCalculationRole
@@ -12,7 +11,6 @@ from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_resolution import resolve_software_release_ref
-
 
 # ---------------------------------------------------------------------------
 # Kinetics source-calculation role/type/owner compatibility
@@ -183,6 +181,7 @@ def resolve_kinetics_upload(
         reaction_entry_id=reaction_entry_id,
         scientific_origin=request.scientific_origin,
         model_kind=request.model_kind,
+        is_third_body=request.is_third_body,
         literature_id=literature.id if literature is not None else None,
         software_release_id=(
             software_release.id if software_release is not None else None
@@ -210,6 +209,8 @@ def resolve_kinetics_upload(
         tmax_k=request.tmax_k,
         degeneracy=request.degeneracy,
         tunneling_model=request.tunneling_model,
+        pressure_context=request.pressure_context,
+        pressure_bar=request.pressure_bar,
         note=request.note,
         source_calculations=[],
     )
@@ -233,6 +234,7 @@ def persist_kinetics(
         reaction_entry_id=kinetics_create.reaction_entry_id,
         scientific_origin=kinetics_create.scientific_origin,
         model_kind=kinetics_create.model_kind,
+        is_third_body=kinetics_create.is_third_body,
         literature_id=kinetics_create.literature_id,
         workflow_tool_release_id=kinetics_create.workflow_tool_release_id,
         software_release_id=kinetics_create.software_release_id,
@@ -248,6 +250,8 @@ def persist_kinetics(
         tmax_k=kinetics_create.tmax_k,
         degeneracy=kinetics_create.degeneracy,
         tunneling_model=kinetics_create.tunneling_model,
+        pressure_context=kinetics_create.pressure_context,
+        pressure_bar=kinetics_create.pressure_bar,
         note=kinetics_create.note,
         created_by=created_by,
     )

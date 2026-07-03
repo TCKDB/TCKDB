@@ -17,7 +17,6 @@ from sqlalchemy import select
 from app.api.app import create_app
 from app.api.config import settings
 from app.api.deps import get_db, get_write_db
-from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 from app.db.models.user_session import UserSession

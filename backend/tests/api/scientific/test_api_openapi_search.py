@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 _NEW_PATHS = {
     "/api/v1/scientific/thermo/search",
     "/api/v1/scientific/kinetics/search",

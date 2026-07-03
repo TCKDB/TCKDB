@@ -100,7 +100,6 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 
-
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "species",
     "reactions",

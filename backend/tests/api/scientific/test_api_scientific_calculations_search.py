@@ -11,7 +11,6 @@ from app.db.models.calculation import (
     CalculationParameterVocab,
     CalculationPathSearchPoint,
     CalculationPathSearchResult,
-    CalculationSCFStability,
     CalculationScanCoordinate,
     CalculationScanPoint,
     CalculationScanResult,
@@ -27,8 +26,8 @@ from app.db.models.common import (
     ParameterSource,
     PathSearchMethod,
     RecordReviewStatus,
-    SCFStabilityStatus,
     ScanCoordinateKind,
+    SCFStabilityStatus,
     SubmissionRecordType,
     TransitionStateEntryStatus,
     ValidationStatus,
@@ -51,7 +50,6 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
     set_review,
 )
-
 
 SEARCH_URL = "/api/v1/scientific/calculations/search"
 
@@ -79,7 +77,7 @@ def _attach_input_geometry(db_session, *, calculation, geometry, input_order):
 def _make_species_owned_calc(db_session, **kw):
     species = make_species(
         db_session,
-        smiles=kw.pop("smiles", "CCO"),
+        smiles=kw.pop("smiles", None),
         inchi_key=next_inchi_key("SRCH"),
     )
     entry = make_species_entry(db_session, species)
@@ -156,7 +154,7 @@ def test_get_search_pure_pagination_does_not_count_as_filter(
 
 def test_get_search_rejects_client_sort(client, db_session):
     resp = client.get(
-        SEARCH_URL + f"?calculation_type=opt&sort=created_at"
+        SEARCH_URL + "?calculation_type=opt&sort=created_at"
     )
     assert resp.status_code == 422
     assert "client_sort_not_supported" in resp.text
@@ -2208,7 +2206,7 @@ def test_search_post_supports_include_scan(client, db_session):
 
 
 def test_search_include_scan_get_post_parity(client, db_session):
-    calc = _make_scan_calc_with_data(db_session)
+    _calc = _make_scan_calc_with_data(db_session)
     body_get = client.get(
         SEARCH_URL + "?calculation_type=scan&include=scan"
     ).json()
@@ -2363,7 +2361,7 @@ def test_search_post_supports_include_irc(client, db_session):
 
 
 def test_search_include_irc_get_post_parity(client, db_session):
-    calc = _make_irc_calc_with_data(db_session)
+    _calc = _make_irc_calc_with_data(db_session)
     body_get = client.get(
         SEARCH_URL + "?calculation_type=irc&include=irc"
     ).json()
@@ -2517,7 +2515,7 @@ def test_search_post_supports_include_path_search(client, db_session):
 
 
 def test_search_include_path_search_get_post_parity(client, db_session):
-    calc = _make_path_search_calc_with_data(db_session)
+    _calc = _make_path_search_calc_with_data(db_session)
     body_get = client.get(
         SEARCH_URL + "?calculation_type=path_search&include=path_search"
     ).json()

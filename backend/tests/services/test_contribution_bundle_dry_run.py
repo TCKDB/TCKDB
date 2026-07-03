@@ -11,16 +11,15 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.db.models.kinetics import Kinetics
 from app.db.models.literature import Literature
 from app.db.models.reaction import ChemReaction
 from app.db.models.software import SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.thermo import Thermo
-from app.db.models.kinetics import Kinetics
 from app.db.models.workflow import WorkflowToolRelease
 from app.schemas.contribution_bundle_dry_run import (
     DryRunAction,
@@ -35,7 +34,6 @@ from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
 from app.workflows.kinetics import persist_kinetics_upload
 from app.workflows.thermo import persist_thermo_upload
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"

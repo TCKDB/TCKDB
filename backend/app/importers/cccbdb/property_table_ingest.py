@@ -52,8 +52,8 @@ from app.importers.cccbdb.builders import (
     build_molecular_property_payloads_from_property_table,
 )
 from app.importers.cccbdb.crawl_plan import (
-    EXPERIMENTAL_PROPERTIES_PILOT,
     CATALOG_PILOT,
+    EXPERIMENTAL_PROPERTIES_PILOT,
     CrawlTarget,
 )
 from app.importers.cccbdb.models import (
@@ -68,11 +68,9 @@ from app.importers.cccbdb.parsers import (
 from app.importers.cccbdb.snapshot import (
     Fetcher,
     HttpFetcher,
-    RecordResult,
     SnapshotConfig,
     run_snapshot,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fetcher
@@ -341,10 +339,10 @@ def ingest_property_pilot(
 
 
 __all__ = [
+    "CATALOG_PILOT",  # re-exported for caller convenience
     "PilotIngestionResult",
     "PropertyTableFetcher",
     "PropertyTableIngestor",
     "PropertyTableParser",
     "ingest_property_pilot",
-    "CATALOG_PILOT",  # re-exported for caller convenience
 ]

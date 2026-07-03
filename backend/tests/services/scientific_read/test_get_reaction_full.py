@@ -161,7 +161,7 @@ def test_full_returns_empty_transition_states_for_experimental_only_entry(db_ses
 
 def test_min_review_status_filters_kinetics_section_but_keeps_entry(db_session):
     _, entry = _setup_reaction_with_kinetics(db_session)
-    k_unreviewed = make_kinetics(db_session, reaction_entry=entry)
+    _k_unreviewed = make_kinetics(db_session, reaction_entry=entry)
 
     response = get_reaction_full(
         db_session,
@@ -278,7 +278,6 @@ def test_full_formats_ts_calculation_dependency_with_real_db_row(db_session):
         TransitionStateEntry,
     )
     from app.schemas.reads.scientific_provenance import ReactionFullReadRequest
-
     from tests.services.scientific_read._factories import attach_dependency
 
     _, entry = _setup_reaction_with_kinetics(db_session)
@@ -344,7 +343,6 @@ def test_full_handles_multiple_ts_dependency_roles(db_session):
         TransitionStateEntry,
     )
     from app.schemas.reads.scientific_provenance import ReactionFullReadRequest
-
     from tests.services.scientific_read._factories import attach_dependency
 
     _, entry = _setup_reaction_with_kinetics(db_session)

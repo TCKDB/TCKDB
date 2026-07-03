@@ -9,7 +9,6 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -19,8 +18,6 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
     FrequencyScaleFactor,
 )
-from app.db.models.software import Software
-from app.db.models.workflow import WorkflowToolRelease
 from app.schemas.fragments.refs import FreqScaleFactorRef
 from app.schemas.workflows.energy_correction_upload import (
     AppliedEnergyCorrectionUploadPayload,

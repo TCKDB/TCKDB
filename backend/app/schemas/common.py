@@ -7,8 +7,7 @@ have no role in the upload wire contract.
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
-
-from tckdb_schemas.common import SchemaBase  # noqa: F401  (re-exported)
+from tckdb_schemas.common import SchemaBase
 
 
 class ORMBaseSchema(BaseModel):

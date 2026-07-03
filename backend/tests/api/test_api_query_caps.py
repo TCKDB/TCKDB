@@ -6,10 +6,7 @@ Covers the limit/offset/geometry/full caps defined in
 
 from __future__ import annotations
 
-import pytest
-
 from app.api.config import settings
-
 
 # ---------------------------------------------------------------------------
 # Pagination caps

@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from app.importers.cccbdb import (
     PARSER_VERSION,
@@ -35,7 +35,6 @@ from app.importers.cccbdb import (
     SOURCE_RELEASE,
 )
 from app.importers.cccbdb.crawl_plan import (
-    EXPERIMENTAL_PILOT,
     PILOTS,
     CrawlTarget,
     UnverifiedUrlError,
@@ -135,7 +134,7 @@ class HttpFetcher:
                     error=None,
                     final_url=response.url,
                 )
-            except Exception as exc:  # noqa: BLE001 - keep retry logic broad
+            except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
                 if attempt < self.retries:
                     time.sleep(self.retry_sleep_seconds)
@@ -513,7 +512,7 @@ def _snapshot_one(
                 source_url=target.source_url,
                 source_record_key=target.species_key,
             )
-    except Exception as exc:  # noqa: BLE001 - we want to log + continue
+    except Exception as exc:
         result.parser_error = f"{type(exc).__name__}: {exc}"
         _logger.warning(
             "Parser failed for %s: %s", target.species_key, result.parser_error
@@ -559,7 +558,7 @@ def _snapshot_one(
             )
 
             build_result = build_experimental_species_payload(record)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             result.builder_error = f"{type(exc).__name__}: {exc}"
             _logger.warning(
                 "Builder failed for %s: %s",
@@ -597,7 +596,7 @@ def _resolve_html(
             raw_dir, target.species_key, target.page_kind
         )
         if cached is not None:
-            cached_path, sha = cached
+            cached_path, _sha = cached
             result.retrieved_at = None  # cache-served: no fresh retrieval
             result.http_status = None
             return cached_path.read_text(encoding="utf-8"), True
@@ -744,13 +743,13 @@ def main(argv: list[str] | None = None) -> int:
 
 __all__ = [
     "BUILDER_VERSION",
-    "Fetcher",
+    "SNAPSHOT_VERSION",
     "FetchResult",
+    "Fetcher",
     "HttpFetcher",
     "RecordResult",
     "SnapshotConfig",
     "SnapshotFailed",
-    "SNAPSHOT_VERSION",
     "main",
     "run_snapshot",
 ]

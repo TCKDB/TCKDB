@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation, CalculationArtifact
@@ -67,7 +67,6 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "calculation",
@@ -565,11 +564,7 @@ def _request_filter_echo(
     request: ScientificArtifactSearchRequest,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for name in _MEANINGFUL_FILTER_FIELDS + (
-        "include_rejected",
-        "include_deprecated",
-        "min_review_status",
-    ):
+    for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "min_review_status"):
         value = getattr(request, name)
         if value is None:
             continue

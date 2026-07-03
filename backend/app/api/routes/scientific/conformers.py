@@ -41,7 +41,6 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 
-
 cg_router = APIRouter(prefix="/conformer-groups")
 co_router = APIRouter(prefix="/conformer-observations")
 search_router = APIRouter(prefix="/conformers")

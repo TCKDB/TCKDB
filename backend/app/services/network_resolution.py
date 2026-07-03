@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.schemas.entities.network import NetworkCreate
 from app.schemas.workflows.network_upload import NetworkUploadRequest

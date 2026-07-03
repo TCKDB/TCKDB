@@ -33,25 +33,25 @@ def _context(**overrides) -> MachineReviewEvidenceContext:
     validations, artifact kinds); individual tests override one field to assert
     its effect on the digest.
     """
-    base = dict(
-        record_type="kinetics",
-        record_ref="kin_aaa",
-        rubric_name="computed_kinetics_v1",
-        rubric_version=1,
-        passed_checks=("a_present", "ea_present"),
-        missing_checks=("uncertainty_present",),
-        warning_checks=("thin_provenance",),
-        not_applicable_checks=("irc_evidence_present",),
-        hard_fail_reason=None,
-        source_calculations=(
+    base = {
+        "record_type": "kinetics",
+        "record_ref": "kin_aaa",
+        "rubric_name": "computed_kinetics_v1",
+        "rubric_version": 1,
+        "passed_checks": ("a_present", "ea_present"),
+        "missing_checks": ("uncertainty_present",),
+        "warning_checks": ("thin_provenance",),
+        "not_applicable_checks": ("irc_evidence_present",),
+        "hard_fail_reason": None,
+        "source_calculations": (
             SourceCalculationContext(ref="calc_sp", role="sp"),
             SourceCalculationContext(ref="calc_opt", role="opt"),
         ),
-        geometry_validations=(
+        "geometry_validations": (
             GeometryValidationContext(ref="geo_1", status="valid"),
         ),
-        artifact_kinds=("input", "output"),
-    )
+        "artifact_kinds": ("input", "output"),
+    }
     base.update(overrides)
     return MachineReviewEvidenceContext(**base)
 

@@ -57,7 +57,6 @@ from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
     ReactionEntryStructureParticipant,
-    ReactionParticipant,
 )
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.statmech import Statmech
@@ -492,7 +491,7 @@ def _resolve_species_list(
     Returns None if any species cannot be resolved.
     """
     species_rows: list[Species] = []
-    for i, (smi, chg, mult) in enumerate(zip(smiles_list, charges, multiplicities)):
+    for i, (smi, chg, mult) in enumerate(zip(smiles_list, charges, multiplicities, strict=False)):
         payload = SpeciesEntryIdentityPayload(smiles=smi, charge=chg, multiplicity=mult)
         try:
             _csmi, inchi_key = canonical_species_identity(payload)

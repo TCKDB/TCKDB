@@ -33,7 +33,7 @@ from tests.services.scientific_read._factories import (
 
 def _make_species_entry(db_session):
     species = make_species(
-        db_session, smiles="CCO", inchi_key=next_inchi_key("TRAN")
+        db_session, inchi_key=next_inchi_key("TRAN")
     )
     return species, make_species_entry(db_session, species)
 
@@ -172,7 +172,7 @@ def test_detail_species_context_present(client, db_session):
     sp = body["record"]["species"]
     assert sp["species_ref"] == species.public_ref
     assert sp["species_entry_ref"] == entry.public_ref
-    assert sp["canonical_smiles"] == "CCO"
+    assert sp["canonical_smiles"] == species.smiles
     assert sp["inchi_key"].rstrip() == species.inchi_key.rstrip()
 
 

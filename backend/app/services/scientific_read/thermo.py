@@ -568,7 +568,7 @@ def _geometry_validations(
             CalculationGeometryValidation.validation_status,
         ).where(CalculationGeometryValidation.calculation_id.in_(calc_ids))
     ).all()
-    return {cid: status for cid, status in rows}
+    return dict(rows)
 
 
 def _scf_stabilities(
@@ -582,7 +582,7 @@ def _scf_stabilities(
             CalculationSCFStability.status,
         ).where(CalculationSCFStability.calculation_id.in_(calc_ids))
     ).all()
-    return {cid: status for cid, status in rows}
+    return dict(rows)
 
 
 def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
@@ -653,7 +653,7 @@ def _calc_refs(session: Session, calc_ids: set[int]) -> dict[int, str]:
             Calculation.id.in_(calc_ids)
         )
     ).all()
-    return {cid: ref for cid, ref in rows}
+    return dict(rows)
 
 
 def _load_statmech_refs(
@@ -666,7 +666,7 @@ def _load_statmech_refs(
             Statmech.id.in_(statmech_ids)
         )
     ).all()
-    return {sid: ref for sid, ref in rows}
+    return dict(rows)
 
 
 # ---------------------------------------------------------------------------

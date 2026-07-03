@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 
 from app.importers.cccbdb.parsers.species_selection import (
-    CCCBDBSelectionCandidate,
     canonicalize_cas,
     parse_species_selection_page,
     structural_to_hill_formula,

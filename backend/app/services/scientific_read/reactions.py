@@ -478,7 +478,7 @@ def _resolve_participant_smiles(
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id.in_(species_entry_ids))
     ).all()
-    return {se_id: smiles for se_id, smiles in rows}
+    return dict(rows)
 
 
 def _resolve_participant_refs(
@@ -492,7 +492,7 @@ def _resolve_participant_refs(
             SpeciesEntry.id.in_(species_entry_ids)
         )
     ).all()
-    return {se_id: ref for se_id, ref in rows}
+    return dict(rows)
 
 
 def _compute_availability(
@@ -501,7 +501,7 @@ def _compute_availability(
     if not entry_ids:
         return {}
 
-    kinetics_count_by_entry: dict[int, int] = {eid: 0 for eid in entry_ids}
+    kinetics_count_by_entry: dict[int, int] = dict.fromkeys(entry_ids, 0)
     for entry_id, count in session.execute(
         select(Kinetics.reaction_entry_id, func.count(Kinetics.id))
         .where(Kinetics.reaction_entry_id.in_(entry_ids))

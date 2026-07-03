@@ -332,11 +332,7 @@ def _parse_thermo(
                     )
                     continue
                 uncertainty_f = _parse_float_or_none(raw_uncertainty)
-                if uncertainty_f is not None and dim == "energy":
-                    uncertainty_f, _ = convert_to_canonical(
-                        uncertainty_f, raw_units, dim
-                    )
-                elif uncertainty_f is not None and dim == "entropy_or_heat_capacity":
+                if (uncertainty_f is not None and dim == "energy") or (uncertainty_f is not None and dim == "entropy_or_heat_capacity"):
                     uncertainty_f, _ = convert_to_canonical(
                         uncertainty_f, raw_units, dim
                     )
@@ -380,7 +376,7 @@ def _resolve_thermo_columns(header_norm: list[str]) -> dict[str, int] | None:
 
 def _normalize_property_label(label: str) -> str:
     cleaned = _clean_text(label).lower()
-    cleaned = cleaned.replace("–", "-")  # en-dash -> hyphen
+    cleaned = cleaned.replace("–", "-")  # noqa: RUF001 — literal en-dash is the normalization target
     return cleaned
 
 
@@ -413,14 +409,14 @@ def _parse_statmech(
         heading_norm = heading.lower()
         if any(tok in heading_norm for tok in ("rotational",)):
             rotational = _parse_rotational(tables, warnings)
-            raw_blocks["rotational_raw"] = [t for t in tables]
+            raw_blocks["rotational_raw"] = list(tables)
             continue
         if any(
             tok in heading_norm
             for tok in ("vibration", "frequencies", "fundamentals")
         ):
             frequencies = _parse_frequencies(tables, warnings)
-            raw_blocks["frequencies_raw"] = [t for t in tables]
+            raw_blocks["frequencies_raw"] = list(tables)
             continue
         # Otherwise treat as a summary table.
         for table in tables:

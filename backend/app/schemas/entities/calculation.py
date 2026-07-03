@@ -8,6 +8,16 @@ from datetime import datetime
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
+from tckdb_schemas.fragments.scan import (
+    CalculationScanCoordinateCreate,
+    CalculationScanCoordinatePayload,
+    CalculationScanPointCoordinateValueCreate,
+    CalculationScanPointCoordinateValuePayload,
+    CalculationScanPointCreate,
+    CalculationScanPointPayload,
+    CalculationScanResultCreate,
+    CalculationScanResultPayload,
+)
 
 from app.db.models.common import (
     ArtifactKind,
@@ -24,25 +34,12 @@ from app.db.models.common import (
 from app.schemas.common import (
     ORMBaseSchema,
     SchemaBase,
-    TimestampedCreatedByReadSchema,
     TimestampedReadSchema,
 )
 from app.schemas.entities.geometry import GeometryRead
 from app.schemas.fragments.calculation import (
-    CalculationConstraintCreate,
     CalculationConstraintPayload,
     CalculationOwnerRequiredMixin,
-)
-from app.schemas.fragments.geometry import GeometryPayload
-from tckdb_schemas.fragments.scan import (  # noqa: F401  (re-exported scan tree)
-    CalculationScanCoordinateCreate,
-    CalculationScanCoordinatePayload,
-    CalculationScanPointCoordinateValueCreate,
-    CalculationScanPointCoordinateValuePayload,
-    CalculationScanPointCreate,
-    CalculationScanPointPayload,
-    CalculationScanResultCreate,
-    CalculationScanResultPayload,
 )
 
 

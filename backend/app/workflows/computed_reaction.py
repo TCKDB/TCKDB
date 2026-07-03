@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.chemistry.geometry import parse_xyz
 from app.chemistry.units import convert_ea_to_kj_mol
 from app.db.models.calculation import Calculation
@@ -21,16 +20,17 @@ from app.db.models.common import (
     SubmissionRecordType,
 )
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
+from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant
+from app.db.models.species import ConformerObservation
 from app.db.models.statmech import (
     Statmech,
     StatmechSourceCalculation,
     StatmechTorsion,
     StatmechTorsionDefinition,
 )
-from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant
-from app.db.models.species import ConformerObservation
 from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.computed_reaction_upload import (
     ComputedReactionCalculationIn,
     ComputedReactionUploadRequest,
@@ -50,16 +50,16 @@ from app.services.calculation_resolution import (
     resolve_workflow_tool_release_ref,
 )
 from app.services.calculation_scan_resolution import persist_calculation_scan
-from app.services.kinetics_resolution import (
-    assert_kinetics_source_role_compatible,
-)
+from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
     create_applied_energy_correction,
     resolve_or_create_freq_scale_factor_ref,
 )
-from app.services.conformer_resolution import resolve_conformer_group
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.geometry_validation import run_and_persist_geometry_validation
+from app.services.kinetics_resolution import (
+    assert_kinetics_source_role_compatible,
+)
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
@@ -71,7 +71,6 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry
-from app.schemas.fragments.geometry import GeometryPayload
 
 
 def _persist_calculation(
@@ -165,7 +164,7 @@ def _persist_calculation(
 
 def _anchor_species_calculation_to_observation(
     calculation: Calculation,
-    calc_in: CalculationIn,
+    calc_in: ComputedReactionCalculationIn,
     observation_id_by_geometry_key: dict[str, int],
 ) -> None:
     """Anchor a species-owned calculation to the conformer observation for its geometry key."""
@@ -823,6 +822,7 @@ def persist_computed_reaction_upload(
             reaction_entry_id=kin_entry.id,
             scientific_origin=kin.scientific_origin,
             model_kind=kin.model_kind,
+            is_third_body=kin.is_third_body,
             literature_id=literature.id if literature else None,
             software_release_id=(
                 bundle_analysis_software_release.id
@@ -844,6 +844,8 @@ def persist_computed_reaction_upload(
             tmax_k=kin.tmax_k,
             degeneracy=kin.degeneracy,
             tunneling_model=kin.tunneling_model,
+            pressure_context=kin.pressure_context,
+            pressure_bar=kin.pressure_bar,
             note=kin.note,
             created_by=created_by,
         )

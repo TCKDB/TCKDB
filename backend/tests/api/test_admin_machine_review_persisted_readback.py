@@ -50,7 +50,6 @@ from app.services.llm_precheck.schemas import (
 from app.services.machine_review.providers import (
     FakeMachineReviewProvider,
     MachineReviewContext,
-    machine_review_v2_result_to_details_json,
 )
 from app.services.machine_review.schemas import (
     MACHINE_REVIEW_V2_SCHEMA_VERSION,

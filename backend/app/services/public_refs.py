@@ -36,11 +36,11 @@ import hashlib
 import secrets
 from typing import TYPE_CHECKING, Any, Callable
 
-from sqlalchemy import event, inspect
+from sqlalchemy import event
 from sqlalchemy.orm import Mapper, Session
 
 if TYPE_CHECKING:
-    from app.db.base import Base
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -203,9 +203,15 @@ def _canonical_lot(obj: Any) -> str:
 
 
 def _canonical_species(obj: Any) -> str:
-    """Species identity: ``(inchi_key, charge, multiplicity, stereo_kind)``."""
+    """Species identity: ``(smiles, charge, multiplicity, stereo_kind)``.
+
+    Must track the species dedup key (DR-0031). Keying the public ref on
+    ``inchi_key`` instead of the canonical ``smiles`` would collide the
+    refs of standard-InChIKey-merged tautomers (2-pyridone vs
+    2-hydroxypyridine), which are now distinct species.
+    """
     return (
-        f"species:inchi_key={obj.inchi_key};"
+        f"species:smiles={obj.smiles};"
         f"charge={obj.charge};"
         f"multiplicity={obj.multiplicity};"
         f"stereo_kind={getattr(obj.stereo_kind, 'value', obj.stereo_kind)}"
@@ -441,7 +447,7 @@ def install_public_ref_listener() -> None:
     for the same callable.
     """
     @event.listens_for(Mapper, "before_insert")
-    def _before_insert(mapper, connection, target):  # noqa: ARG001
+    def _before_insert(mapper, connection, target):
         cls_name = type(target).__name__
         if cls_name not in PREFIXES:
             return
@@ -530,10 +536,10 @@ __all__ = [
     "PREFIXES",
     "PUBLIC_REF_BODY_LEN",
     "PUBLIC_REF_LEN",
+    "backfill_public_refs",
+    "ensure_public_ref",
+    "generate_ref_for",
+    "install_public_ref_listener",
     "make_content_ref",
     "make_opaque_ref",
-    "generate_ref_for",
-    "ensure_public_ref",
-    "install_public_ref_listener",
-    "backfill_public_refs",
 ]

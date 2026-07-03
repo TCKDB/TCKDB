@@ -31,7 +31,7 @@ router = APIRouter()
 def dry_run_bundle(
     bundle: ContributionBundleV0,
     session: Session = Depends(get_db),
-    current_user: AppUser = Depends(get_current_user),  # noqa: ARG001 - auth gate
+    current_user: AppUser = Depends(get_current_user),
 ) -> ContributionBundleDryRunResult:
     """Preview what a real import would do for a contribution bundle.
 

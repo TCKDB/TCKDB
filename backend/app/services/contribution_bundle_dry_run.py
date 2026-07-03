@@ -50,7 +50,6 @@ from app.services.reaction_resolution import reaction_stoichiometry_hash
 from app.services.software_resolution import normalize_software_name
 from app.services.species_resolution import null_safe_equals
 
-
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -268,7 +267,7 @@ def _preview_species_entry_identity(
     """
     try:
         canonical_smiles, inchi_key = canonical_species_identity(payload)
-    except Exception as exc:  # noqa: BLE001 - schema-shaped errors only
+    except Exception as exc:
         return (
             [
                 ContributionBundleDryRunItem(

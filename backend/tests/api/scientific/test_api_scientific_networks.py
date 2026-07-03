@@ -40,7 +40,6 @@ from tests.services.scientific_read._factories import (
     set_review,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -66,7 +65,7 @@ def _make_simple_network(
     n = make_network(db_session, name=f"net-{next_inchi_key('NET')}")
     out = {"network": n}
 
-    sp = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("NA"))
+    sp = make_species(db_session, inchi_key=next_inchi_key("NA"))
     se = make_species_entry(db_session, sp)
     out["species"] = sp
     out["species_entry"] = se
@@ -77,7 +76,7 @@ def _make_simple_network(
 
     if with_reaction:
         sp2 = make_species(
-            db_session, smiles="O", inchi_key=next_inchi_key("NB")
+            db_session, inchi_key=next_inchi_key("NB")
         )
         chem = make_chem_reaction(db_session, reactants=[sp], products=[sp2])
         se2 = make_species_entry(db_session, sp2)
@@ -700,7 +699,7 @@ def test_search_by_method_and_basis(client, db_session):
         with_source_calc=True,
         source_calc_lot=lot_a,
     )
-    fx_b = _make_simple_network(
+    _fx_b = _make_simple_network(
         db_session,
         with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
         with_source_calc=True,
@@ -850,7 +849,7 @@ def test_search_include_rejected_sorts_last(client, db_session):
 def test_search_pagination_envelope(client, db_session):
     se = make_species_entry(
         db_session,
-        make_species(db_session, smiles="N", inchi_key=next_inchi_key("NX")),
+        make_species(db_session, inchi_key=next_inchi_key("NX")),
     )
     for _ in range(4):
         n = make_network(db_session, name="pag")
@@ -869,7 +868,7 @@ def test_search_pagination_envelope(client, db_session):
 
 def test_search_deterministic_ordering_review_then_created(client, db_session):
     a = _make_simple_network(db_session)
-    b = _make_simple_network(db_session)
+    _b = _make_simple_network(db_session)
     set_review(
         db_session,
         record_type=SubmissionRecordType.network,
@@ -1117,7 +1116,7 @@ def test_solve_detail_available_sections_keys(client, db_session):
 def test_solve_detail_include_bath_gas(client, db_session):
     fx = _make_simple_network(db_session, with_solve=True)
     bath_sp = make_species(
-        db_session, smiles="[N]", inchi_key=next_inchi_key("NBA")
+        db_session, inchi_key=next_inchi_key("NBA")
     )
     bath_se = make_species_entry(db_session, bath_sp)
     attach_network_solve_bath_gas(
@@ -1499,7 +1498,7 @@ def test_solve_search_by_has_bath_gas_true_and_false(client, db_session):
     fx_a = _make_simple_network(db_session, with_solve=True)
     fx_b = _make_simple_network(db_session, with_solve=True)
     bath_sp = make_species(
-        db_session, smiles="[N]", inchi_key=next_inchi_key("NSB")
+        db_session, inchi_key=next_inchi_key("NSB")
     )
     bath_se = make_species_entry(db_session, bath_sp)
     attach_network_solve_bath_gas(
@@ -1676,7 +1675,7 @@ def test_solve_search_by_method_and_basis(client, db_session):
         with_source_calc=True,
         source_calc_lot=lot_a,
     )
-    fx_b = _make_simple_network(
+    _fx_b = _make_simple_network(
         db_session,
         with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
         with_source_calc=True,
@@ -1814,7 +1813,7 @@ def test_solve_search_deterministic_ordering_review_then_created(
     client, db_session
 ):
     fx_a = _make_simple_network(db_session, with_solve=True)
-    fx_b = _make_simple_network(db_session, with_solve=True)
+    _fx_b = _make_simple_network(db_session, with_solve=True)
     set_review(
         db_session,
         record_type=SubmissionRecordType.network_solve,
@@ -1867,7 +1866,7 @@ def test_solve_search_post_rejects_query_string_search_fields(
 def test_solve_search_include_bath_gas_on_records(client, db_session):
     fx = _make_simple_network(db_session, with_solve=True)
     bath_sp = make_species(
-        db_session, smiles="[N]", inchi_key=next_inchi_key("NSBG")
+        db_session, inchi_key=next_inchi_key("NSBG")
     )
     bath_se = make_species_entry(db_session, bath_sp)
     attach_network_solve_bath_gas(

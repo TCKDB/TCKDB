@@ -14,7 +14,6 @@ from app.schemas.fragments.calculation import (
     PathSearchResultPayload,
 )
 
-
 _SOFTWARE = {"name": "gaussian", "version": "16"}
 _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
 

@@ -1,0 +1,23 @@
+! Species         Shape    LJ-depth  LJ-diam   DiplMom   Polzblty  RotRelaxNum Data     
+! Name            Index    epsilon/k_B sigma     mu        alpha     Zrot      Source   
+Ar                  0     136.501     3.330     0.000     0.000     0.000    ! GRI-Mech
+He                  0      10.200     2.576     0.000     0.000     0.000    ! NOx2018
+Ne                  0     148.600     3.758     0.000     0.000     0.000    ! Epsilon & sigma estimated with fixed Lennard Jones Parameters. This is the fallback method! Try improving transport databases!
+NH3(1)              2     481.001     2.920     1.470     0.000    10.000    ! GRI-Mech
+O2(2)               1     107.400     3.458     0.000     1.600     3.800    ! GRI-Mech
+CH4(3)              2     141.400     3.746     0.000     2.600    13.000    ! GRI-Mech
+H2(4)               1      38.000     2.920     0.000     0.790   280.000    ! GRI-Mech
+HO2(52)             2     107.400     3.458     0.000     0.000     1.000    ! GRI-Mech
+NH2(47)             2      80.000     2.650     0.000     2.260     4.000    ! GRI-Mech
+NO[O](144)          2     436.674     4.597     0.000     0.000     0.000    ! Epsilon & sigma estimated with Tc=567.11 K, Pc=84.79 bar (from Joback method)
+CH3(24)             2     144.001     3.800     0.000     0.000     0.000    ! GRI-Mech
+CO[O](145)          2     417.000     3.690     1.700     0.000     2.000    ! NOx2018
+OH(10)              1      80.000     2.750     0.000     0.000     0.000    ! GRI-Mech
+H2O2(90)            2     107.400     3.458     0.000     0.000     3.800    ! GRI-Mech
+H2O(48)             2     572.402     2.605     1.844     0.000     4.000    ! GRI-Mech
+CH3O(75)            2     417.002     3.690     1.700     0.000     2.000    ! GRI-Mech
+CH2O(76)            2     498.002     3.590     0.000     0.000     2.000    ! GRI-Mech
+H(9)                0     145.000     2.050     0.000     0.000     0.000    ! GRI-Mech
+O(7)                0      80.000     2.750     0.000     0.000     0.000    ! GRI-Mech
+C2H6(127)           2     252.301     4.302     0.000     0.000     1.500    ! GRI-Mech
+CN(148)             2     481.800     3.626     0.000     0.000     1.000    ! NOx2018

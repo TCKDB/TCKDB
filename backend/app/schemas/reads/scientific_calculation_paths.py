@@ -25,7 +25,6 @@ from app.schemas.reads.scientific_calculation import (
 )
 from app.schemas.reads.scientific_common import Pagination
 
-
 # ---------------------------------------------------------------------------
 # Request echo
 # ---------------------------------------------------------------------------

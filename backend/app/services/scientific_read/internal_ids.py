@@ -20,7 +20,6 @@ from pydantic import BaseModel
 
 from app.api.config import settings as default_settings
 
-
 # ---------------------------------------------------------------------------
 # Stripping rules
 # ---------------------------------------------------------------------------
@@ -210,9 +209,9 @@ def _extract_resolved_includes(payload: BaseModel) -> set[str]:
 
 
 __all__ = [
+    "apply_internal_ids_visibility",
+    "filter_internal_ids_from_resolved",
     "is_internal_id_key",
     "should_include_internal_ids",
-    "filter_internal_ids_from_resolved",
     "strip_internal_ids",
-    "apply_internal_ids_visibility",
 ]

@@ -7,12 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
-from app.db.models.common import RecordReviewStatus
+from app.db.models.common import NetworkKineticsModelKind, RecordReviewStatus
 from app.schemas.reads.scientific_network import (
     ScientificNetworkDetailResponse,
     ScientificNetworkSolveDetailResponse,
 )
-from app.db.models.common import NetworkKineticsModelKind
 from app.schemas.reads.scientific_network_kinetics import (
     ScientificNetworkKineticsDetailResponse,
 )
@@ -42,7 +41,6 @@ from app.services.scientific_read.network_solves_search import (
 )
 from app.services.scientific_read.networks import get_network, get_network_solve
 from app.services.scientific_read.networks_search import search_networks
-
 
 router = APIRouter(prefix="/networks")
 solve_router = APIRouter(prefix="/network-solves")

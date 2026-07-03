@@ -10,7 +10,6 @@ Covers:
 
 from __future__ import annotations
 
-
 # ---------------------------------------------------------------------------
 # Payload helpers
 # ---------------------------------------------------------------------------
@@ -197,8 +196,8 @@ class TestGeometryLookup:
                     "type": "opt", "method": "wb97xd", "basis": "def2tzvp",
                     "include": "geometry"},
         )
-        calc = [r for r in sc.json()["results"]
-                if r["resource_type"] == "calculation"][0]
+        calc = next(r for r in sc.json()["results"]
+                if r["resource_type"] == "calculation")
         geom_id = calc["summary"]["geometry"]["geometry_id"]
         # Fetch canonical geometry to obtain its stored hash
         geom_resp = client.get(f"/api/v1/geometries/{geom_id}")
@@ -406,7 +405,7 @@ class TestNetworkLookup:
         assert "network_exists" in codes
         items = [r for r in data["results"] if r["resource_type"] == "network"]
         assert any(it["id"] == network_id for it in items)
-        matched = [it for it in items if it["id"] == network_id][0]
+        matched = next(it for it in items if it["id"] == network_id)
         assert matched["summary"]["name"] == "lookup-net"
         assert matched["summary"]["species_count"] >= 4
         assert matched["links"]["self"] == f"/api/v1/networks/{network_id}"

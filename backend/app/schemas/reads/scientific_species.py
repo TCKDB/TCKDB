@@ -14,9 +14,17 @@ from app.db.models.common import (
 )
 from app.schemas.reads._field_bounds import (
     MAX_FORMULA_LENGTH as _MAX_FORMULA_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_INCHI_KEY_LENGTH as _MAX_INCHI_KEY_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_INCHI_LENGTH as _MAX_INCHI_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
@@ -25,7 +33,6 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
 )
-
 
 # ---------------------------------------------------------------------------
 # Request

@@ -31,23 +31,23 @@ from app.importers.cccbdb.diagnostics.form_discovery import (
     discover_forms,
 )
 from app.importers.cccbdb.diagnostics.runner import (
+    PILOT_TARGETS,
     DiagnosticReport,
     DiagnosticResult,
     DiagnosticTarget,
-    PILOT_TARGETS,
     Transport,
     TransportResponse,
     run_diagnostics,
 )
 
 __all__ = [
+    "PILOT_TARGETS",
     "Classification",
     "DiagnosticReport",
     "DiagnosticResult",
     "DiagnosticTarget",
     "DiscoveredForm",
     "FormField",
-    "PILOT_TARGETS",
     "Transport",
     "TransportResponse",
     "classify_html",

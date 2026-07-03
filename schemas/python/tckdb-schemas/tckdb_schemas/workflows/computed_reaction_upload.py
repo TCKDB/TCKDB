@@ -25,6 +25,8 @@ from tckdb_schemas.enums import (
     KineticsCalculationRole,
     KineticsModelKind,
     KineticsUncertaintyKind,
+    PressureContext,
+    TunnelingModel,
     RigidRotorKind,
     ScientificOriginKind,
     StatmechTreatmentKind,
@@ -55,7 +57,7 @@ from tckdb_schemas.shared.calculation_in import (
 )
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate
-from tckdb_schemas.utils import normalize_optional_text
+from tckdb_schemas.utils import normalize_optional_text, normalize_tunneling_model
 from tckdb_schemas.workflows.computed_species_upload import (
     AppliedEnergyCorrectionInBundle,
     CalculationDependencyInBundle,
@@ -574,6 +576,7 @@ class BundleKineticsIn(SchemaBase):
     :param product_keys: Species keys on the product side of this fit.
     :param scientific_origin: Scientific origin category.
     :param model_kind: Kinetics functional form.
+    :param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).
     :param a: Arrhenius pre-exponential factor.
     :param a_units: Units for A.
     :param n: Temperature exponent.
@@ -593,6 +596,7 @@ class BundleKineticsIn(SchemaBase):
 
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius
+    is_third_body: bool = False
 
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
@@ -609,7 +613,9 @@ class BundleKineticsIn(SchemaBase):
     tmax_k: float | None = Field(default=None, gt=0)
 
     degeneracy: float | None = Field(default=None, gt=0)
-    tunneling_model: str | None = None
+    tunneling_model: TunnelingModel | None = None
+    pressure_context: PressureContext | None = None
+    pressure_bar: float | None = Field(default=None, gt=0)
     note: str | None = None
 
     source_calculations: list[KineticsSourceCalculationIn] = Field(
@@ -625,10 +631,25 @@ class BundleKineticsIn(SchemaBase):
         ),
     )
 
+    @field_validator("tunneling_model", mode="before")
+    @classmethod
+    def _normalize_tunneling(cls, v):
+        return normalize_tunneling_model(v)
+
     @model_validator(mode="after")
     def normalize_text(self) -> Self:
-        self.tunneling_model = normalize_optional_text(self.tunneling_model)
         self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def validate_pressure_context(self) -> Self:
+        if (
+            self.pressure_context == PressureContext.apparent_at_pressure
+            and self.pressure_bar is None
+        ):
+            raise ValueError(
+                "pressure_context='apparent_at_pressure' requires pressure_bar."
+            )
         return self
 
     @model_validator(mode="after")

@@ -110,7 +110,7 @@ class RequestsTransport:
                 text=resp.text,
                 error=None,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return TransportResponse(
                 status_code=None,
                 final_url=None,
@@ -130,7 +130,7 @@ class RequestsTransport:
                 text=resp.text,
                 error=None,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return TransportResponse(
                 status_code=None,
                 final_url=None,

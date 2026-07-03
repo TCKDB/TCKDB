@@ -343,7 +343,6 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - CLI shim
 
     import argparse
     import logging
-    import sys
 
     parser = argparse.ArgumentParser(
         prog="cccbdb_import_saved_species_page",

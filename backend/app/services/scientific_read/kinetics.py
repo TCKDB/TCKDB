@@ -24,7 +24,6 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationType,
     KineticsCalculationRole,
-    PathSearchMethod,
     RecordReviewStatus,
     SCFStabilityStatus,
     SubmissionRecordType,
@@ -329,7 +328,9 @@ def get_reaction_kinetics(
 
         ts_opt_calc_id = provenance.ts_opt_calculation_id
         ts_sp_calc_id = provenance.ts_sp_calculation_id
-        ts_freq_calc_id = provenance.ts_freq_calculation_id
+        # NOTE: provenance.ts_freq_calculation_id is intentionally not yet
+        # fed into the evidence breakdown — see plan.md discovered-issues
+        # 2026-07-02 (TS frequency evidence omitted from kinetics trust).
 
         evidence = _evidence_breakdown(
             kinetics=k,
@@ -643,19 +644,19 @@ class _CalcMeta:
 
     __slots__ = (
         "id",
-        "type",
-        "transition_state_entry_id",
-        "lot_id",
-        "lot_ref",
-        "lot_method",
         "lot_basis",
         "lot_dispersion",
+        "lot_id",
+        "lot_method",
+        "lot_ref",
         "lot_solvent",
+        "parameters_json",
+        "software_name",
         "software_release_id",
         "software_release_ref",
-        "software_name",
         "software_version",
-        "parameters_json",
+        "transition_state_entry_id",
+        "type",
     )
 
     def __init__(
@@ -768,7 +769,7 @@ def _calc_refs(session: Session, calc_ids: set[int]) -> dict[int, str]:
             Calculation.id.in_(calc_ids)
         )
     ).all()
-    return {cid: ref for cid, ref in rows}
+    return dict(rows)
 
 
 def _ts_entry_refs(
@@ -781,7 +782,7 @@ def _ts_entry_refs(
             TransitionStateEntry.id.in_(ts_entry_ids)
         )
     ).all()
-    return {tid: ref for tid, ref in rows}
+    return dict(rows)
 
 
 def _geometry_validations(
@@ -795,7 +796,7 @@ def _geometry_validations(
             CalculationGeometryValidation.validation_status,
         ).where(CalculationGeometryValidation.calculation_id.in_(calc_ids))
     ).all()
-    return {cid: status for cid, status in rows}
+    return dict(rows)
 
 
 def _scf_stabilities(
@@ -809,7 +810,7 @@ def _scf_stabilities(
             CalculationSCFStability.status,
         ).where(CalculationSCFStability.calculation_id.in_(calc_ids))
     ).all()
-    return {cid: status for cid, status in rows}
+    return dict(rows)
 
 
 def _ts_entry_ids_for_reaction(session: Session, reaction_entry_id: int) -> set[int]:
@@ -916,7 +917,7 @@ def _software_id_by_release_id(
             SoftwareRelease.id.in_(release_ids)
         )
     ).all()
-    return {rid: sid for rid, sid in rows}
+    return dict(rows)
 
 
 # ---------------------------------------------------------------------------

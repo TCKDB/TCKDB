@@ -16,13 +16,12 @@ See ``backend/docs/specs/scientific_statmech_reads.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import and_, exists, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
-    CalculationType,
     RecordReviewStatus,
     StatmechCalculationRole,
     SubmissionRecordType,
@@ -77,7 +76,6 @@ from app.services.trust import (
     build_trust_fragment,
     evaluate_loaded_statmech,
 )
-
 
 # ---------------------------------------------------------------------------
 # Include policy

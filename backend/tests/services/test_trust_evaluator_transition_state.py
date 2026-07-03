@@ -55,12 +55,10 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.trust import (
     COMPUTED_TRANSITION_STATE_V1,
     EvidenceBadge,
-    EvidenceOutcome,
     HardFailReason,
     evaluate_computed_transition_state_entry,
     evaluate_loaded_transition_state_entry,
 )
-
 
 _TS_COUNTER = itertools.count(1)
 
@@ -77,10 +75,14 @@ def _next_geom_hash() -> str:
     return hashlib.sha256(_next_token().encode()).hexdigest()
 
 
-def _make_species(db_session: Session) -> Species:
+def _make_species(db_session: Session, smiles: str | None = None) -> Species:
+    # Species identity is (smiles, charge, multiplicity) (DR-0031), so each
+    # fixture species needs a distinct smiles or it collides with sibling /
+    # cross-test species on the shared DB. Trust evaluation never parses
+    # smiles, so a unique placeholder is sufficient here.
     sp = Species(
         kind=MoleculeKind.molecule,
-        smiles="CCO",
+        smiles=smiles if smiles is not None else _next_token(),
         inchi_key=_next_inchi_key(),
         charge=0,
         multiplicity=1,

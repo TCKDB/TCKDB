@@ -17,7 +17,6 @@ from app.chemistry.torsion_fingerprint import (
 from app.db.models.species import (
     ConformerAssignmentScheme,
     ConformerGroup,
-    ConformerObservation,
     SpeciesEntry,
 )
 

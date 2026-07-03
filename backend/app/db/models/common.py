@@ -189,7 +189,23 @@ class ArtifactKind(str, Enum):
     output_log = "output_log"
     checkpoint = "checkpoint"
     formatted_checkpoint = "formatted_checkpoint"
+    hessian = "hessian"
     ancillary = "ancillary"
+
+
+class HessianSource(str, Enum):
+    """Where a stored Cartesian Hessian matrix was obtained from.
+
+    Mirrors the "observation, not possibility" discipline of the rest of
+    the calculation provenance: a row records how the matrix actually
+    reached TCKDB, not a capability claim.
+    """
+
+    parsed_fchk = "parsed_fchk"
+    parsed_hess = "parsed_hess"
+    parsed_log = "parsed_log"
+    uploaded = "uploaded"
+    derived = "derived"
 
 
 class SCFStabilityStatus(str, Enum):
@@ -255,6 +271,64 @@ class ArrheniusAUnits(str, Enum):
 class KineticsModelKind(str, Enum):
     arrhenius = "arrhenius"
     modified_arrhenius = "modified_arrhenius"
+    # Pressure-dependent falloff forms (DR-0032 Part B). The k∞ Arrhenius
+    # lives on the kinetics row; k0 and broadening params live in
+    # ``kinetics_falloff``.
+    lindemann = "lindemann"
+    troe = "troe"
+    sri = "sri"
+    # Standalone pressure-dependent fits (DR-0032 Part C) — parameters in
+    # ``kinetics_plog`` / ``kinetics_chebyshev`` with no master-equation
+    # solve required (for literature fits).
+    plog = "plog"
+    chebyshev = "chebyshev"
+
+
+class TunnelingModel(str, Enum):
+    """Tunneling correction applied to a rate coefficient (DR-0032).
+
+    Machine tokens, per the project enum policy (replaces the former
+    free-text ``kinetics.tunneling_model`` column). ``other`` is the
+    escape hatch for anything not yet in this set.
+    """
+
+    none = "none"
+    wigner = "wigner"
+    eckart = "eckart"
+    sct = "sct"
+    other = "other"
+
+
+class SpinTreatment(str, Enum):
+    """Spin treatment of the electronic-structure method (DR-0034).
+
+    Restricted (R), unrestricted (U), and restricted-open-shell (RO) treatments
+    of the same method/basis are genuinely different levels of theory —
+    e.g. UCCSD(T) vs ROCCSD(T), or UB3LYP vs ROB3LYP — and differ at the
+    kJ/mol level for radicals. Part of the level-of-theory identity so they
+    do not collapse to one row. ``unknown`` = not specified by the producer.
+    """
+
+    restricted = "restricted"
+    unrestricted = "unrestricted"
+    restricted_open = "restricted_open"
+    unknown = "unknown"
+
+
+class PressureContext(str, Enum):
+    """What a rate coefficient means with respect to pressure (DR-0032).
+
+    ``high_p_limit``: the high-pressure-limit rate k∞.
+    ``apparent_at_pressure``: an apparent rate at a specific pressure
+        (requires ``kinetics.pressure_bar``).
+    ``pressure_dependent``: a record whose full P-dependence lives in an
+        associated model (a network solve, or a falloff/PLOG table).
+    NULL (unset) means the pressure context was not specified.
+    """
+
+    high_p_limit = "high_p_limit"
+    apparent_at_pressure = "apparent_at_pressure"
+    pressure_dependent = "pressure_dependent"
 
 
 class KineticsUncertaintyKind(str, Enum):

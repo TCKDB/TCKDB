@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Iterable
 
-
 _WS_RE = re.compile(r"\s+")
 _SUB_TAGS_RE = re.compile(r"<sub>(.*?)</sub>", re.IGNORECASE | re.DOTALL)
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -213,7 +212,7 @@ def _largest_table_with_header(
     first row contains every ``expected_headers`` label
     (case-insensitive)."""
 
-    for table, table_html in zip(extractor.tables, extractor.tables_html):
+    for table, table_html in zip(extractor.tables, extractor.tables_html, strict=False):
         if not table:
             continue
         header_lc = [c.lower() for c in table[0]]
@@ -335,7 +334,7 @@ def _parse_atomization_energy(
     unc_idx = _ci_index(column_names, "unc.")
 
     rows: list[FormResultRow] = []
-    for i, (cells, cells_html) in enumerate(zip(body_text, body_html)):
+    for i, (cells, cells_html) in enumerate(zip(body_text, body_html, strict=False)):
         row = FormResultRow(row_index=i)
         for col_i, col_name in enumerate(column_names):
             if col_i < len(cells):
@@ -391,8 +390,8 @@ def _parse_float(row: list[str], idx: int | None) -> float | None:
 
 
 __all__ = [
+    "SUPPORTED_TARGET_KINDS",
     "CCCBDBFormResultTable",
     "FormResultRow",
-    "SUPPORTED_TARGET_KINDS",
     "parse_form_result_page",
 ]

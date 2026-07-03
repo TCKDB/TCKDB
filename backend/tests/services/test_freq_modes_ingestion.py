@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
-    FreqResultPayload,
-    FrequencyModePayload,
 )
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.workflows.network_pdep_upload import (
@@ -30,21 +28,20 @@ from app.services.upload_reconciliation import (
     reconcile_species_entry_full,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _bundle_freq_calc(**overrides) -> CalculationIn:
-    base = dict(
-        key="freq1",
-        type="freq",
-        software_release={"name": "Gaussian", "version": "16"},
-        level_of_theory={"method": "wB97X-D", "basis": "def2-TZVP"},
-        freq_n_imag=0,
-        freq_zpe_hartree=0.05,
-    )
+    base = {
+        "key": "freq1",
+        "type": "freq",
+        "software_release": {"name": "Gaussian", "version": "16"},
+        "level_of_theory": {"method": "wB97X-D", "basis": "def2-TZVP"},
+        "freq_n_imag": 0,
+        "freq_zpe_hartree": 0.05,
+    }
     base.update(overrides)
     return CalculationIn(**base)
 

@@ -8,13 +8,15 @@ from app.db.models.common import (
     ArrheniusAUnits,
     KineticsModelKind,
     KineticsUncertaintyKind,
+    PressureContext,
     ScientificOriginKind,
+    TunnelingModel,
 )
 from app.schemas.common import SchemaBase
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
-from app.schemas.reaction_family import find_canonical_reaction_family
 from app.schemas.fragments.refs import LevelOfTheoryRef, SoftwareReleaseRef, WorkflowToolReleaseRef
-from app.schemas.utils import normalize_optional_text
+from app.schemas.reaction_family import find_canonical_reaction_family
+from app.schemas.utils import normalize_optional_text, normalize_tunneling_model
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 
 
@@ -73,6 +75,74 @@ class KineticsReactionUpload(SchemaBase):
         return self
 
 
+class FalloffUpload(SchemaBase):
+    """Pressure-dependent falloff parameters (DR-0032 Part B).
+
+    The high-pressure-limit (k∞) Arrhenius parameters are the top-level
+    ``a``/``n``/``reported_ea`` on the kinetics request; this block carries
+    the low-pressure-limit (k0) Arrhenius and the broadening coefficients.
+    Which broadening columns matter is set by the request ``model_kind``
+    (``lindemann`` = none; ``troe`` = ``troe_*``; ``sri`` = ``sri_*``).
+    """
+
+    low_a: float
+    low_a_units: ArrheniusAUnits | None = None
+    low_n: float | None = None
+    low_ea_kj_mol: float | None = None
+
+    troe_alpha: float | None = None
+    troe_t3: float | None = None
+    troe_t1: float | None = None
+    troe_t2: float | None = None
+
+    sri_a: float | None = None
+    sri_b: float | None = None
+    sri_c: float | None = None
+    sri_d: float | None = None
+    sri_e: float | None = None
+
+    note: str | None = None
+
+
+class ThirdBodyEfficiencyUpload(SchemaBase):
+    """A per-collider third-body efficiency for a falloff/third-body rate.
+
+    The collider is given by scientific content (a species identity), which
+    the workflow resolves to a graph-level species. ``efficiency`` scales
+    the effective bath-gas concentration [M] contributed by that collider.
+    """
+
+    collider: SpeciesEntryIdentityPayload
+    efficiency: float = Field(ge=0)
+
+
+class PlogEntryUpload(SchemaBase):
+    """One pressure entry of a standalone PLOG rate (DR-0032 Part C)."""
+
+    entry_index: int = Field(ge=1)
+    pressure_bar: float = Field(gt=0)
+    a: float
+    a_units: ArrheniusAUnits | None = None
+    n: float | None = None
+    ea_kj_mol: float | None = None
+
+
+class ChebyshevUpload(SchemaBase):
+    """A standalone Chebyshev k(T,P) surface (DR-0032 Part C).
+
+    ``coefficients`` is the n_temperature × n_pressure coefficient matrix
+    (list of rows).
+    """
+
+    n_temperature: int = Field(ge=1)
+    n_pressure: int = Field(ge=1)
+    tmin_k: float | None = Field(default=None, gt=0)
+    tmax_k: float | None = Field(default=None, gt=0)
+    pmin_bar: float | None = Field(default=None, gt=0)
+    pmax_bar: float | None = Field(default=None, gt=0)
+    coefficients: list[list[float]]
+
+
 class KineticsUploadRequest(SchemaBase):
     """Workflow-facing kinetics upload payload.
 
@@ -89,6 +159,9 @@ class KineticsUploadRequest(SchemaBase):
     :param reaction: Reaction described by scientific content.
     :param scientific_origin: Scientific origin category.
     :param model_kind: Kinetics functional form.
+    :param is_third_body: True for a simple ``+M`` third-body reaction (no
+        falloff), which raises the effective main-line Arrhenius A-units
+        order by one.
     :param energy_level_of_theory: SP level of theory for source-calc auto-resolution.
     :param literature: Optional literature submission payload.
     :param software_release: Optional software provenance reference (fitting tool).
@@ -108,6 +181,7 @@ class KineticsUploadRequest(SchemaBase):
     reaction: KineticsReactionUpload
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius
+    is_third_body: bool = False
 
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
@@ -130,13 +204,37 @@ class KineticsUploadRequest(SchemaBase):
     tmax_k: float | None = Field(default=None, gt=0)
 
     degeneracy: float | None = None
-    tunneling_model: str | None = None
+    tunneling_model: TunnelingModel | None = None
+    pressure_context: PressureContext | None = None
+    pressure_bar: float | None = Field(default=None, gt=0)
+
+    falloff: FalloffUpload | None = None
+    third_body_efficiencies: list[ThirdBodyEfficiencyUpload] = Field(
+        default_factory=list
+    )
+    plog_entries: list[PlogEntryUpload] = Field(default_factory=list)
+    chebyshev: ChebyshevUpload | None = None
     note: str | None = None
+
+    @field_validator("tunneling_model", mode="before")
+    @classmethod
+    def _normalize_tunneling(cls, v):
+        return normalize_tunneling_model(v)
 
     @model_validator(mode="after")
     def normalize_optional_text_fields(self) -> Self:
-        self.tunneling_model = normalize_optional_text(self.tunneling_model)
         self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def validate_pressure_context(self) -> Self:
+        if (
+            self.pressure_context == PressureContext.apparent_at_pressure
+            and self.pressure_bar is None
+        ):
+            raise ValueError(
+                "pressure_context='apparent_at_pressure' requires pressure_bar."
+            )
         return self
 
     @model_validator(mode="after")
@@ -183,6 +281,14 @@ class KineticsUploadRequest(SchemaBase):
     def validate_a_units_vs_molecularity(self) -> Self:
         if self.a_units is None:
             return self
+        # A *simple* third-body reaction (generic ``+M`` collider, no
+        # falloff) carries a ``[M]`` term on the main line, raising the
+        # effective concentration order of the main-line Arrhenius rate by
+        # one. Falloff reactions keep ``len(reactants)``: their main line is
+        # the high-pressure limit k∞ (M excluded); the low-pressure k0
+        # (order + 1) is validated separately via falloff.low_a_units.
         molecularity = len(self.reaction.reactants)
+        if self.is_third_body and self.falloff is None:
+            molecularity += 1
         validate_a_units_for_molecularity(self.a_units, molecularity)
         return self

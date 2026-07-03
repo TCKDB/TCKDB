@@ -28,7 +28,6 @@ from app.services.provenance_warnings import (
     collect_transport_provenance_warnings,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fragment fixtures
 # ---------------------------------------------------------------------------

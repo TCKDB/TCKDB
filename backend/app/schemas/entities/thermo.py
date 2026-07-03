@@ -7,18 +7,18 @@ because they carry FK ids.
 from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
+from tckdb_schemas.thermo import (
+    ThermoNASABase,
+    ThermoNASACreate,
+    ThermoPointBase,
+    ThermoPointCreate,
+)
 
 from app.db.models.common import ScientificOriginKind, ThermoCalculationRole
 from app.schemas.common import (
     ORMBaseSchema,
     SchemaBase,
     TimestampedCreatedByReadSchema,
-)
-from tckdb_schemas.thermo import (  # noqa: F401  (re-exported)
-    ThermoNASABase,
-    ThermoNASACreate,
-    ThermoPointBase,
-    ThermoPointCreate,
 )
 
 

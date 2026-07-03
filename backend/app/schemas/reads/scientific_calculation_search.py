@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -25,18 +24,22 @@ from app.db.models.common import (
 )
 from app.schemas.reads._field_bounds import (
     MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_METHOD_LENGTH as _MAX_METHOD_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_SMILES_LENGTH as _MAX_PARAMETER_VALUE_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
-
-# Parameter keys are short tokens (route-line / canonical-vocab style);
-# values can be long when they hold lists or formatted text. We reuse
-# the SMILES bound (2048) for value lengths to avoid adding a new
-# field-bounds constant for one filter.
-_MAX_PARAMETER_KEY_LENGTH: int = _MAX_METHOD_LENGTH
 from app.schemas.reads.scientific_calculation import (
     ScientificCalculationRecord,
 )
@@ -46,6 +49,12 @@ from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
     SCFStabilityStatusValue,
 )
+
+# Parameter keys are short tokens (route-line / canonical-vocab style);
+# values can be long when they hold lists or formatted text. We reuse
+# the SMILES bound (2048) for value lengths to avoid adding a new
+# field-bounds constant for one filter.
+_MAX_PARAMETER_KEY_LENGTH: int = _MAX_METHOD_LENGTH
 
 
 class CalculationOwnerKind(str, Enum):

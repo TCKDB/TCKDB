@@ -47,7 +47,6 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 
-
 # ---------------------------------------------------------------------------
 # Include policy
 # ---------------------------------------------------------------------------

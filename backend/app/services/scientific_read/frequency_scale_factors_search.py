@@ -45,7 +45,6 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 
-
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "frequency_scale_factor_ref",
     "value",

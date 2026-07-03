@@ -82,8 +82,18 @@ def test_persist_conformer_upload_creates_expected_rows(db_engine) -> None:
 
             # The conformer geometry is still resolved as a Geometry row
             # via the upload's top-level ``geometry`` field, even when no
-            # per-calc output_geometry row is written.
-            geometry = session.scalar(select(Geometry).order_by(Geometry.id))
+            # per-calc output_geometry row is written. Scope the lookup to
+            # THIS calculation's input geometry rather than the global
+            # lowest-id row — the shared session-scoped test DB accumulates
+            # committed geometries from other tests, so a global
+            # ``order_by(Geometry.id)`` is not isolation-safe.
+            input_geom_link = session.scalar(
+                select(CalculationInputGeometry).where(
+                    CalculationInputGeometry.calculation_id == calculation.id
+                )
+            )
+            assert input_geom_link is not None
+            geometry = session.get(Geometry, input_geom_link.geometry_id)
             assert geometry is not None
             assert geometry.natoms == 1
 

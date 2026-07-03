@@ -19,7 +19,6 @@ import json
 
 from sqlalchemy.orm import Session
 
-import app.db.models  # noqa: F401
 from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import (
     Calculation,
@@ -42,9 +41,6 @@ from app.db.models.network_pdep import (
 )
 from app.db.models.species import ConformerObservation
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
-from app.services.conformer_resolution import resolve_conformer_group
-from app.services.geometry_resolution import resolve_geometry_payload
-from app.services.species_resolution import resolve_species_entry
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.network_pdep_upload import (
     CalculationIn,
@@ -60,6 +56,8 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_workflow_tool_release_ref,
 )
+from app.services.conformer_resolution import resolve_conformer_group
+from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.record_review import (
     RecordRef,
@@ -67,6 +65,7 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.software_resolution import resolve_software_release_ref
+from app.services.species_resolution import resolve_species_entry
 from app.services.transport_resolution import resolve_and_create_transport
 from app.workflows.reaction import persist_reaction_upload
 
@@ -519,7 +518,7 @@ def persist_network_pdep_upload(
                 )
 
     # Reaction links
-    for rxn_key, rxn_entry in reaction_key_to_entry.items():
+    for _rxn_key, rxn_entry in reaction_key_to_entry.items():
         session.add(
             NetworkReaction(
                 network_id=network.id,

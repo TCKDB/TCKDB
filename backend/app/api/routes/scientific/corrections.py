@@ -60,7 +60,6 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 
-
 fsf_router = APIRouter(prefix="/frequency-scale-factors")
 ecs_router = APIRouter(prefix="/energy-correction-schemes")
 
@@ -298,4 +297,4 @@ def scientific_energy_correction_scheme_detail(
     )
 
 
-__all__ = ["fsf_router", "ecs_router"]
+__all__ = ["ecs_router", "fsf_router"]

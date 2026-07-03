@@ -21,19 +21,13 @@ from app.api.errors import NotFoundError
 from app.db.models.calculation import (
     Calculation,
     CalculationIRCPoint,
-    CalculationIRCResult,
     CalculationPathSearchPoint,
-    CalculationPathSearchResult,
-    CalculationScanCoordinate,
     CalculationScanPoint,
     CalculationScanPointCoordinateValue,
-    CalculationScanResult,
 )
 from app.db.models.geometry import Geometry
 from app.schemas.reads.scientific_calculation import (
     CalculationCoreBlock,
-    CalculationIRCSummary,
-    CalculationScanSummary,
 )
 from app.schemas.reads.scientific_calculation_paths import (
     IRCPointDetail,
@@ -65,7 +59,6 @@ from app.services.scientific_read.handles import resolve_calculation_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-
 
 # Path-data endpoints share an include policy: only ``internal_ids``
 # (and the ``all`` shorthand) is legal. ``include_geometries`` is its

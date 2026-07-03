@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -24,18 +23,17 @@ from app.schemas.reads.scientific_calculation import (
     CalculationPathSearchSummary,
     CalculationScanSummary,
 )
+from app.schemas.reads.scientific_common import (
+    CalculationEvidenceSummary,
+    RecordReviewBadge,
+    ReviewStatusSummary,
+)
 from app.schemas.reads.scientific_conformer import (
     AvailableConformerSections,
     ConformerCalculationEvidenceSummary,
     ConformerGroupCoreBlock,
     ConformerObservationsSummary,
     ConformerSelectionSummary,
-)
-from app.schemas.reads.scientific_common import (
-    CalculationEvidenceSummary,
-    PathSearchSummary,
-    RecordReviewBadge,
-    ReviewStatusSummary,
 )
 from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_transition_state import (

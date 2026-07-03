@@ -34,7 +34,6 @@ from app.services.scientific_read.literature_records import (
     get_literature_records,
 )
 
-
 router = APIRouter(prefix="/literature")
 
 

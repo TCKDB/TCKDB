@@ -16,7 +16,6 @@ import pytest
 
 from app.importers.cccbdb.crawl_plan import EXPERIMENTAL_PROPERTIES_PILOT
 from app.importers.cccbdb.property_payload_dryrun import (
-    DryRunSummary,
     TargetDryRunResult,
     _select_targets,
     main,
@@ -253,8 +252,9 @@ class TestInvalidPayloadHandling:
     def test_validation_error_recorded_not_raised(self, tmp_path, monkeypatch):
         # Force every payload to fail validation by patching
         # ``model_validate`` with a stub that always raises.
-        from app.importers.cccbdb import property_payload_dryrun as mod
         from pydantic import ValidationError
+
+        from app.importers.cccbdb import property_payload_dryrun as mod
 
         class _FakeError(ValidationError):
             """Standalone ValidationError-shaped exception. We can't
@@ -478,9 +478,6 @@ class TestHealthGate:
         the in-memory facade rather than monkey-patching the
         scalar parser — simpler and avoids surprising other tests."""
 
-        from app.importers.cccbdb.property_payload_dryrun import (
-            TargetDryRunResult,
-        )
 
         result = TargetDryRunResult(
             property_kind="dipole",
@@ -495,9 +492,6 @@ class TestHealthGate:
         )
 
     def test_quarantined_when_workflow_ready_is_false(self):
-        from app.importers.cccbdb.property_payload_dryrun import (
-            TargetDryRunResult,
-        )
 
         result = TargetDryRunResult(
             property_kind="future_kind",
@@ -510,9 +504,6 @@ class TestHealthGate:
         assert result.health == "quarantined"
 
     def test_skipped_missing_cache_resolves_to_skipped(self):
-        from app.importers.cccbdb.property_payload_dryrun import (
-            TargetDryRunResult,
-        )
 
         result = TargetDryRunResult(
             property_kind="dipole",
@@ -530,7 +521,7 @@ class TestHealthGate:
             archive_dir=archive, output_dir=out, use_cache_only=True
         )
         assert set(summary.health_summary.keys()) == set(_FIXTURE_BY_KIND)
-        for kind, health in summary.health_summary.items():
+        for _kind, health in summary.health_summary.items():
             assert health in {"healthy", "unhealthy", "quarantined", "skipped"}
 
 

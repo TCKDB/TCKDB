@@ -127,41 +127,41 @@ def test_calculation_dependency_schema_rejects_self_edge() -> None:
 # ---------------------------------------------------------------------------
 
 
-_CARTESIAN_OK = dict(
-    constraint_index=1,
-    constraint_kind=ConstraintKind.cartesian_atom,
-    atom1_index=3,
-)
-_BOND_OK = dict(
-    constraint_index=2,
-    constraint_kind=ConstraintKind.bond,
-    atom1_index=1,
-    atom2_index=2,
-    target_value=1.45,
-)
-_ANGLE_OK = dict(
-    constraint_index=3,
-    constraint_kind=ConstraintKind.angle,
-    atom1_index=1,
-    atom2_index=2,
-    atom3_index=3,
-)
-_DIHEDRAL_OK = dict(
-    constraint_index=4,
-    constraint_kind=ConstraintKind.dihedral,
-    atom1_index=1,
-    atom2_index=2,
-    atom3_index=3,
-    atom4_index=4,
-)
-_IMPROPER_OK = dict(
-    constraint_index=5,
-    constraint_kind=ConstraintKind.improper,
-    atom1_index=1,
-    atom2_index=2,
-    atom3_index=3,
-    atom4_index=4,
-)
+_CARTESIAN_OK = {
+    "constraint_index": 1,
+    "constraint_kind": ConstraintKind.cartesian_atom,
+    "atom1_index": 3,
+}
+_BOND_OK = {
+    "constraint_index": 2,
+    "constraint_kind": ConstraintKind.bond,
+    "atom1_index": 1,
+    "atom2_index": 2,
+    "target_value": 1.45,
+}
+_ANGLE_OK = {
+    "constraint_index": 3,
+    "constraint_kind": ConstraintKind.angle,
+    "atom1_index": 1,
+    "atom2_index": 2,
+    "atom3_index": 3,
+}
+_DIHEDRAL_OK = {
+    "constraint_index": 4,
+    "constraint_kind": ConstraintKind.dihedral,
+    "atom1_index": 1,
+    "atom2_index": 2,
+    "atom3_index": 3,
+    "atom4_index": 4,
+}
+_IMPROPER_OK = {
+    "constraint_index": 5,
+    "constraint_kind": ConstraintKind.improper,
+    "atom1_index": 1,
+    "atom2_index": 2,
+    "atom3_index": 3,
+    "atom4_index": 4,
+}
 
 
 @pytest.mark.parametrize(
@@ -269,11 +269,11 @@ def test_calculation_constraint_rejects_atom_index_below_1() -> None:
 
 
 def _minimal_calc_payload(**overrides) -> dict:
-    base = dict(
-        type=CalculationType.opt,
-        software_release={"name": "Gaussian"},
-        level_of_theory={"method": "wB97X-D"},
-    )
+    base = {
+        "type": CalculationType.opt,
+        "software_release": {"name": "Gaussian"},
+        "level_of_theory": {"method": "wB97X-D"},
+    }
     base.update(overrides)
     return base
 

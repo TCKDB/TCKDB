@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 
 from app.api.app import create_app
 
-
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT_DFT = {"method": "B3LYP", "basis": "6-31G(d)"}
 

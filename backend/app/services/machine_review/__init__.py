@@ -15,13 +15,6 @@ from app.services.machine_review.admin_trigger import (
     resolve_record_trust_fragment,
     run_admin_fake_machine_review,
 )
-from app.services.machine_review.recipe import (
-    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
-    MachineReviewActiveRecipe,
-    get_active_machine_review_recipe,
-    public_rubric_name,
-)
 from app.services.machine_review.audit_adapter import (
     AuditRecordLink,
     MachineReviewAuditProjection,
@@ -44,14 +37,6 @@ from app.services.machine_review.context_hash import (
     SourceCalculationContext,
     build_machine_review_context_hash,
 )
-from app.services.machine_review.currency import (
-    MachineReviewCurrencyClassification,
-    MachineReviewCurrencyKey,
-    MachineReviewCurrencyState,
-    MachineReviewStaleReason,
-    StoredMachineReviewProjection,
-    classify_machine_review_currency,
-)
 from app.services.machine_review.curator_task_lifecycle import (
     assign_curator_task,
     reopen_curator_task,
@@ -63,41 +48,17 @@ from app.services.machine_review.curator_tasks import (
     build_curator_tasks_for_submission,
     compute_finding_fingerprint,
 )
+from app.services.machine_review.currency import (
+    MachineReviewCurrencyClassification,
+    MachineReviewCurrencyKey,
+    MachineReviewCurrencyState,
+    MachineReviewStaleReason,
+    StoredMachineReviewProjection,
+    classify_machine_review_currency,
+)
 from app.services.machine_review.derivation import (
     MachineReviewOutcome,
     derive_machine_review_status,
-)
-from app.services.machine_review.orchestration import (
-    MachineReviewOrchestrationResult,
-    MachineReviewOrchestrationStatus,
-    run_fake_record_machine_review,
-    run_record_machine_review_with_producer,
-)
-from app.services.machine_review.producer import (
-    FakeMachineReviewProducer,
-    MachineReviewProducer,
-    MachineReviewProductionError,
-)
-from app.services.machine_review.persistence import (
-    classify_record_machine_review_currency_from_rows,
-    create_record_machine_review_row,
-    stored_projection_from_record_machine_review_row,
-)
-from app.services.machine_review.query import (
-    get_latest_record_machine_review_row,
-    get_record_machine_review_currency_for_record,
-    list_record_machine_review_rows_for_record,
-)
-from app.services.machine_review.rereview import (
-    MachineReviewReReviewDecision,
-    MachineReviewReReviewPlan,
-    plan_record_machine_rereview,
-    should_run_machine_rereview,
-)
-from app.services.machine_review.rereview_execution import (
-    MachineReviewReReviewExecutionResult,
-    MachineReviewReReviewExecutionStatus,
-    execute_record_machine_rereview_plan,
 )
 from app.services.machine_review.inspection import (
     MachineReviewInspectionView,
@@ -116,11 +77,50 @@ from app.services.machine_review.mapping import (
     UnmappedReason,
     map_findings_to_submission_records,
 )
+from app.services.machine_review.orchestration import (
+    MachineReviewOrchestrationResult,
+    MachineReviewOrchestrationStatus,
+    run_fake_record_machine_review,
+    run_record_machine_review_with_producer,
+)
+from app.services.machine_review.persistence import (
+    classify_record_machine_review_currency_from_rows,
+    create_record_machine_review_row,
+    stored_projection_from_record_machine_review_row,
+)
+from app.services.machine_review.producer import (
+    FakeMachineReviewProducer,
+    MachineReviewProducer,
+    MachineReviewProductionError,
+)
+from app.services.machine_review.query import (
+    get_latest_record_machine_review_row,
+    get_record_machine_review_currency_for_record,
+    list_record_machine_review_rows_for_record,
+)
 from app.services.machine_review.read_model import (
     MachineReviewRecordSummary,
     RecordMachineReview,
     build_machine_review_record_summary,
     select_latest_machine_review_for_record,
+)
+from app.services.machine_review.recipe import (
+    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
+    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
+    MachineReviewActiveRecipe,
+    get_active_machine_review_recipe,
+    public_rubric_name,
+)
+from app.services.machine_review.rereview import (
+    MachineReviewReReviewDecision,
+    MachineReviewReReviewPlan,
+    plan_record_machine_rereview,
+    should_run_machine_rereview,
+)
+from app.services.machine_review.rereview_execution import (
+    MachineReviewReReviewExecutionResult,
+    MachineReviewReReviewExecutionStatus,
+    execute_record_machine_rereview_plan,
 )
 from app.services.machine_review.schemas import (
     MACHINE_REVIEW_V2_SCHEMA_VERSION,
@@ -185,9 +185,9 @@ __all__ = [
     "StoredMachineReviewProjection",
     "SubmissionAuditEventLike",
     "SubmissionMachineReviewInspection",
-    "SubmissionRecordMachineReviewInspection",
     "SubmissionRecordLinkLike",
     "SubmissionRecordLinkRef",
+    "SubmissionRecordMachineReviewInspection",
     "UnmappedFinding",
     "UnmappedReason",
     "active_rubric_versions_for_record_type",
@@ -196,8 +196,8 @@ __all__ = [
     "build_internal_machine_review_trust_fragment",
     "build_machine_review_context_hash",
     "build_machine_review_evidence_context_from_trust",
-    "build_machine_review_record_summary",
     "build_machine_review_inspection_view",
+    "build_machine_review_record_summary",
     "build_private_trust_envelope_with_machine_review",
     "build_submission_machine_review_inspection",
     "classify_machine_review_currency",
@@ -219,11 +219,11 @@ __all__ = [
     "record_machine_reviews_from_audit_events",
     "record_machine_reviews_from_submission_audit_event",
     "reopen_curator_task",
+    "resolve_curator_task",
     "resolve_record_trust_fragment",
     "run_admin_fake_machine_review",
     "run_fake_record_machine_review",
     "run_record_machine_review_with_producer",
-    "resolve_curator_task",
     "select_latest_machine_review_for_record",
     "should_run_machine_rereview",
     "start_curator_task_review",

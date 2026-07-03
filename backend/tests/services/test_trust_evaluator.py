@@ -112,6 +112,7 @@ from app.services.trust import (
 
 _INCHI_COUNTER = iter(range(10_000))
 _GEOM_COUNTER = iter(range(10_000))
+_SMILES_COUNTER = iter(range(10_000))
 
 
 def _next_inchi_key() -> str:
@@ -124,10 +125,14 @@ def _next_geom_hash() -> str:
     return hashlib.sha256(f"trust-eval-geom-{next(_GEOM_COUNTER)}".encode()).hexdigest()
 
 
-def _make_species(db_session: Session) -> Species:
+def _make_species(db_session: Session, smiles: str | None = None) -> Species:
+    # Species identity is (smiles, charge, multiplicity) (DR-0031), so each
+    # fixture species needs a distinct smiles or it collides with sibling /
+    # cross-test species on the shared DB. Trust evaluation never parses
+    # smiles, so a unique placeholder is sufficient here.
     sp = Species(
         kind=MoleculeKind.molecule,
-        smiles="CCO",
+        smiles=smiles if smiles is not None else f"trust-eval-species-{next(_SMILES_COUNTER)}",
         inchi_key=_next_inchi_key(),
         charge=0,
         multiplicity=1,
