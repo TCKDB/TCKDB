@@ -85,6 +85,7 @@ dev = [
     "pytest-cov>=4",
     "httpx>=0.27",
     "ruff>=0.4",
+    "mypy>=1.10",
 ]
 # RDKit is intentionally optional and split out:
 #   - Conda/mamba developers get the conda-forge build via
@@ -117,15 +118,80 @@ exclude = ["tests*", "alembic*", "scripts*"]
 testpaths = ["tests"]
 pythonpath = ["."]
 
-# Ruff configuration. Conservative defaults — no project linting policy
-# exists yet, so this only sets line length and target Python so a
-# casual `ruff check` doesn't fight common code patterns.
+# Ruff configuration. Enforced in CI (see .github/workflows/backend-ci.yml).
 [tool.ruff]
 line-length = 120
 target-version = "py313"
 
 [tool.ruff.lint]
-# Start with the small, low-controversy set. Expand once a project
-# linting policy is agreed.
-select = ["E", "F", "W", "I"]
-ignore = ["E501"]  # line-length handled by formatter, not lint
+# E/F/W/I: pycodestyle, pyflakes, import sorting.
+# B: bugbear correctness checks. C4: comprehension hygiene.
+# RUF: ruff-native checks (unused noqa, __all__ sorting, mutable defaults).
+# Deliberately NOT enabled (mechanical churn, low bug-value for this repo,
+# adopt only as dedicated churn-only changes if ever): SIM (style
+# simplifications), PTH (os.path -> pathlib), UP (pyupgrade rewrites).
+select = ["E", "F", "W", "I", "B", "C4", "RUF"]
+ignore = [
+    "E501",   # line-length handled by formatter, not lint
+    "B008",   # function call in default arg — FastAPI Depends() idiom
+    "RUF002", # ambiguous unicode in docstrings — scientific notation (Å, ², ⟨S²⟩)
+    "RUF003", # ambiguous unicode in comments — same reason
+    "RUF012", # mutable class default — Pydantic v2 copies defaults per-instance, so `= []` is safe on models
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Pytest idioms that are noise in test code but kept strict in app code:
+# RUF059 (unused unpacked variable — `obj, _resp = make_x(...)` helpers),
+# RUF043 (unescaped regex in pytest.raises(match=...) — deliberately loose
+#   substring matches, not anchored regexes),
+# B017 (pytest.raises(Exception) on DB-rejection tests — narrowing to the
+#   driver's exception type would couple tests to psycopg internals),
+# E402 (imports placed near their point of use to keep a test file
+#   self-contained — a readability choice authors made deliberately).
+"tests/**" = ["RUF059", "RUF043", "B017", "E402"]
+# conftest imports fixtures by name so sibling test modules can request
+# them; those imports look "unused" to F401 but are the sharing mechanism.
+"tests/**/conftest.py" = ["RUF059", "RUF043", "F401"]
+
+# Re-export hubs: modules that import composed schema/service symbols
+# purely to re-expose them for downstream `from <hub> import X`. The
+# codebase uses implicit re-exports (no __all__), so F401 flags these as
+# unused even though removing them breaks importers (verified: F401
+# --fix here strips `SchemaBase` and breaks the app). Converting these
+# to explicit `__all__` / `import X as X` re-exports and re-enabling
+# F401 is tracked follow-up work (plan.md, Phase 1 notes). F401 stays
+# active everywhere else.
+"app/schemas/common.py" = ["F401"]
+"app/schemas/utils.py" = ["F401"]
+"app/schemas/reaction_family.py" = ["F401"]
+"app/schemas/upload_warning.py" = ["F401"]
+"app/schemas/entities/calculation.py" = ["F401"]
+"app/schemas/entities/species_entry.py" = ["F401"]
+"app/schemas/fragments/artifact.py" = ["F401"]
+"app/schemas/fragments/calculation.py" = ["F401"]
+"app/schemas/fragments/geometry.py" = ["F401"]
+"app/schemas/fragments/identity.py" = ["F401"]
+"app/schemas/fragments/refs.py" = ["F401"]
+"app/schemas/workflows/computed_reaction_upload.py" = ["F401"]
+"app/schemas/workflows/computed_species_upload.py" = ["F401"]
+"app/schemas/workflows/energy_correction_upload.py" = ["F401"]
+"app/schemas/workflows/literature_upload.py" = ["F401"]
+"app/schemas/workflows/network_pdep_upload.py" = ["F401"]
+"app/services/calculation_resolution.py" = ["F401"]
+"app/services/energy_correction_resolution.py" = ["F401"]
+"app/services/kinetics_resolution.py" = ["F401"]
+"app/services/literature_resolution.py" = ["F401"]
+"app/workflows/transport.py" = ["F401"]
+
+# mypy configuration. Scoped adoption: strict-ish on the layers with the
+# highest annotation quality (models, schemas, chemistry); widen the
+# `files` list per-package as layers are brought up to standard.
+[tool.mypy]
+python_version = "3.13"
+files = ["app/db", "app/schemas", "app/chemistry"]
+follow_imports = "silent"
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+no_implicit_optional = true

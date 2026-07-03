@@ -68,6 +68,14 @@ dependencies:
   - rdkit
   - numpy
 
+  # Interoperability: Cantera validates exported CHEMKIN mechanisms
+  # (`app/services/scientific_read/chemkin_serialize.validate_chemkin_mechanism`
+  # runs ck2yaml + a strict Solution load, the ground-truth check that a
+  # downstream interpreter will accept the file). Imported lazily, so it is an
+  # optional runtime dependency; it is required by the CHEMKIN export-validation
+  # tests. Conda-forge is the reliable source for Cantera.
+  - cantera
+
   # Artifact storage (MinIO / S3) and outbound HTTP (literature lookup).
   - boto3
   - requests

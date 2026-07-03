@@ -1,32 +1,24 @@
-name: Backend CI
+name: Backend Nightly (full suite)
+
+# The PR-gating workflow (backend-ci.yml) runs only the API and scientific
+# tiers for speed. This nightly run executes the complete test suite
+# (backend/scripts/test-full.sh, ~4,700 tests) so regressions in the
+# untier-gated areas (workflows, invariants, parsers, CLI, importers)
+# surface within a day instead of at the next manual pre-push run.
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/backend-ci.yml"
-      - "Makefile"
-      - "docker-compose.yml"
-      - "backend/**"
-      - "schemas/python/tckdb-schemas/**"
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/backend-ci.yml"
-      - "Makefile"
-      - "docker-compose.yml"
-      - "backend/**"
-      - "schemas/python/tckdb-schemas/**"
+  schedule:
+    - cron: "17 2 * * *" # 02:17 UTC nightly
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  backend-ci:
-    name: Backend CI
+  full-suite:
+    name: Full test suite
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     services:
       postgres:
@@ -100,34 +92,6 @@ jobs:
           conda run -n tckdb_env python -m pip install -e schemas/python/tckdb-schemas
           conda run -n tckdb_env python -m pip install -e "backend[dev]"
 
-      - name: Lint (ruff)
-        working-directory: backend
-        run: conda run -n tckdb_env ruff check app tests
-
-      - name: Type check (mypy, scoped)
-        working-directory: backend
-        run: conda run -n tckdb_env mypy
-
-      - name: Hygiene checks
-        run: |
-          git diff --check
-          bash -n backend/scripts/test-fast.sh
-          bash -n backend/scripts/test-api.sh
-          bash -n backend/scripts/test-scientific.sh
-          bash -n backend/scripts/test-full.sh
-          bash -n backend/scripts/test-profile.sh
-          bash -n backend/scripts/update-openapi-golden.sh
-          make help
-
-      - name: Alembic upgrade head
-        working-directory: backend
-        run: |
-          conda run -n tckdb_env alembic upgrade head
-          heads_output="$(conda run -n tckdb_env alembic heads)"
-          printf '%s\n' "$heads_output"
-          test "$(printf '%s\n' "$heads_output" | grep -c '(head)')" -eq 1
-          conda run -n tckdb_env alembic current
-
       - name: Initialize artifact bucket
         run: |
           conda run -n tckdb_env python - <<'PY'
@@ -153,12 +117,5 @@ jobs:
               s3.create_bucket(Bucket=bucket)
           PY
 
-      - name: OpenAPI golden snapshot
-        working-directory: backend
-        run: conda run -n tckdb_env pytest tests/api/test_openapi_snapshot.py -q
-
-      - name: API test gate
-        run: conda run -n tckdb_env bash backend/scripts/test-api.sh --maxfail=5
-
-      - name: Scientific read and service gate
-        run: conda run -n tckdb_env bash backend/scripts/test-scientific.sh --maxfail=5
+      - name: Full test suite
+        run: conda run -n tckdb_env bash backend/scripts/test-full.sh

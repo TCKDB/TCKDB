@@ -300,3 +300,6 @@ data/external/cccbdb/
 .vtrace/state.json
 .vtrace/index.sqlite
 .vtrace/config.json
+
+# Ignore the entire vtrace cache dir (supersedes the specific entries above)
+.vtrace/
