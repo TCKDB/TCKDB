@@ -181,6 +181,7 @@ if present.
 - **`submission`** groups records uploaded together as one logical
   contribution. Uploads are submission-scoped and self-contained.
 - **`record_review`** captures human moderation state per record —
-  draft, pending, approved, rejected, deprecated. Read endpoints
+  `not_reviewed`, `under_review`, `approved`, `rejected`, `deprecated`
+  (the `RecordReviewStatus` enum). Read endpoints
   default to filtering by `min_review_status`, so anonymous readers
   see curated data unless they explicitly opt into raw drafts.

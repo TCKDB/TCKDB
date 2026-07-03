@@ -1,6 +1,6 @@
 # Project Status Map
 
-**Last updated:** 2026-04-02
+**Last updated:** 2026-07-02 (audit pass — see `docs/audits/backend_assessment_2026-07-02.md`)
 
 | Area | Schema | Upload | Read | Tests | Read for demo |
 |---|---|---|---|---|---|
@@ -17,9 +17,9 @@
 | **Level of Theory** | yes | yes | yes | yes | yes |
 | **Software** | yes | yes | yes | yes | yes |
 | **Literature** | yes | yes | yes | yes | yes |
-| **Transport** | yes | partial | yes | yes | yes |
-| **Network** | yes | yes | no | partial | no |
-| **Network PDep** | yes | yes | no | partial | no |
+| **Transport** | yes | yes | yes | yes | yes |
+| **Network** | yes | yes | yes | partial | yes |
+| **Network PDep** | yes | yes | yes | partial | yes |
 | **Computed Reaction** | yes | yes | n/a | partial | n/a |
 | **Lookup (search)** | yes | n/a | yes | yes | yes |
 | **Jobs (async)** | yes | yes | yes | partial | maybe |
@@ -34,8 +34,8 @@
 
 ## Notes
 
-- **Transport**: Read API at `/transport` with list + get-by-id + 5 filters. No standalone upload workflow (created via conformer and network-pdep uploads). 10 tests covering happy-path field serialization, all filters, and species sub-resource parity.
-- **Network / Network PDep**: Upload workflows and workflow-level tests exist, but no read API routes are registered.
+- **Transport**: Read API at `/transport` with list + get-by-id + 5 filters. Standalone upload workflow now exists (`POST /uploads/transport`, `app/workflows/transport.py`), in addition to creation via conformer and network-pdep uploads.
+- **Network / Network PDep**: Upload workflows exist and read routes are registered both on the legacy surface (`/networks`, `app/api/router.py`) and the scientific surface (`app/api/routes/scientific/networks.py`: network list/search, solves, network kinetics). Dedicated end-to-end network read tests remain thinner than other areas ("partial").
 - **Computed Reaction**: A bundle upload that creates species, reactions, transition states, kinetics, and calculations. Reads are served through each individual entity's endpoints.
 - **Statmech / Energy Corrections**: API read tests exist but only cover empty-list and not-found scenarios; no upload-then-read integration tests yet.
 - **Jobs**: Async job queue endpoints exist with worker infrastructure, but test coverage is implicit (tested through upload tests, not dedicated job lifecycle tests).
