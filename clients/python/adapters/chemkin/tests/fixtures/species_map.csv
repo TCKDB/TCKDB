@@ -1,0 +1,4 @@
+# User-supplied structure map: name,smiles[,charge,multiplicity]
+name,smiles,charge,multiplicity
+CH3,[CH3],0,2
+CH4,C,0,1

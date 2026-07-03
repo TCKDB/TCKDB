@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tckdb-chemkin"
+version = "0.1.0"
+description = "CHEMKIN mechanism importer adapter for TCKDB (parser + identity + payload builder + uploader)."
+requires-python = ">=3.11"
+dependencies = [
+    "tckdb-client",
+    # RDKit is required for the identity-resolver stage; installed via conda in
+    # the tckdb_env development environment (rdkit-pypi on pip if needed).
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+tckdb-chemkin-import = "tckdb_chemkin.cli:main"
+
+[tool.setuptools]
+packages = ["tckdb_chemkin"]

@@ -1,0 +1,11 @@
+! Units fixture: KCAL/MOLE + MOLECULES header (spec §7 conversion test).
+ELEMENTS
+H O C
+END
+SPECIES
+H  H2  CH3  CH4
+END
+REACTIONS   KCAL/MOLE   MOLECULES
+! bimolecular; Ea = 12.0 kcal/mol; A in cm3/molecule/s
+H + CH4 <=> CH3 + H2                     5.000E-11   0.000      12.0
+END
