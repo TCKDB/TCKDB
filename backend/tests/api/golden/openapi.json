@@ -4381,6 +4381,16 @@
             ],
             "title": "Geometry Key"
           },
+          "hessian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HessianPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "key": {
             "minLength": 1,
             "title": "Key",
@@ -4554,6 +4564,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FreqResultPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hessian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HessianPayload"
               },
               {
                 "type": "null"
@@ -8336,6 +8356,16 @@
               }
             ],
             "title": "Geometry Key"
+          },
+          "hessian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HessianPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "input_geometries": {
             "items": {

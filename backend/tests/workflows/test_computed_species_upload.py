@@ -16,6 +16,7 @@ from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
     CalculationFreqResult,
+    CalculationHessian,
     CalculationInputGeometry,
     CalculationOutputGeometry,
     CalculationScanCoordinate,
@@ -178,6 +179,54 @@ def test_bundle_sp_calc_with_wavefunction_diagnostic_persists(
         assert rows[0].t1_diagnostic == pytest.approx(0.0179)
         assert rows[0].d1_diagnostic == pytest.approx(0.045)
         assert rows[0].note == "ORCA CCSD(T)"
+
+
+def test_bundle_freq_calc_with_hessian_persists(db_engine) -> None:
+    """A bundle freq additional calc carrying a ``hessian`` persists one
+    ``calculation_hessian`` row bound to the geometry the Hessian was
+    computed at, with the correct triangle length (3N(3N+1)/2)."""
+    with Session(db_engine) as session, session.begin():
+        user_id = _ensure_user(session, username="bundle_hessian")
+        bundle = _hydrogen_bundle()
+        # 1-atom geometry → 3N = 3 → lower triangle length = 3*4/2 = 6.
+        triangle = [float(i) for i in range(6)]
+        bundle.conformers[0].additional_calculations = [
+            type(bundle.conformers[0].primary_calculation)(
+                **_calc(
+                    "freq0",
+                    calc_type="freq",
+                    hessian={
+                        "geometry": dict(_H_GEOM),
+                        "lower_triangle_hartree_bohr2": triangle,
+                        "source": "parsed_fchk",
+                    },
+                )
+            ),
+        ]
+        outcome = persist_computed_species_upload(
+            session, bundle, created_by=user_id
+        )
+
+        freq_id = outcome.conformers[0].additional_calculations[0].id
+        rows = session.scalars(
+            select(CalculationHessian).where(
+                CalculationHessian.calculation_id == freq_id
+            )
+        ).all()
+        assert len(rows) == 1
+        hess = rows[0]
+        assert hess.natoms == 1
+        assert len(hess.lower_triangle_hartree_bohr2) == 6
+        assert hess.geometry_id is not None
+        # The Hessian binds to the same content-addressed geometry as the
+        # conformer/freq input geometry (H atom at origin).
+        input_geom = session.scalar(
+            select(CalculationInputGeometry).where(
+                CalculationInputGeometry.calculation_id == freq_id
+            )
+        )
+        assert input_geom is not None
+        assert hess.geometry_id == input_geom.geometry_id
 
 
 def test_bundle_with_freq_and_sp_creates_auto_dependencies(db_engine) -> None:

@@ -32,6 +32,7 @@ from app.db.models.calculation import (
     CalculationArtifact,
     CalculationDependency,
     CalculationFreqResult,
+    CalculationHessian,
     CalculationInputGeometry,
     CalculationIRCPoint,
     CalculationIRCResult,
@@ -473,6 +474,47 @@ def test_full_round_trip_persistence(db_engine) -> None:
         assert kin.reaction_entry_id == summary["reaction_entry_id"]
         assert ts.reaction_entry_id == kin.reaction_entry_id
         assert kin.ea_kj_mol == 10.0
+
+
+def test_ts_freq_calc_with_hessian_persists(db_engine) -> None:
+    """A TS freq calculation carrying a ``hessian`` persists one
+    ``calculation_hessian`` row bound to the TS geometry with the correct
+    triangle length (5-atom TS → 3N=15 → 15*16/2 = 120 entries)."""
+    with _isolated_session(db_engine) as session:
+        session.add(AppUser(id=577, username="computed_rxn_ts_hessian"))
+        session.flush()
+
+        payload = _minimal_payload()
+        triangle = [float(i) for i in range(120)]
+        payload["transition_state"]["calculations"][0]["hessian"] = {
+            "geometry": {"xyz_text": _XYZ_TS_CH3H},
+            "lower_triangle_hartree_bohr2": triangle,
+            "source": "parsed_fchk",
+        }
+        request = ComputedReactionUploadRequest(**payload)
+        summary = persist_computed_reaction_upload(
+            session, request, created_by=577
+        )
+
+        ts_entry_id = summary["transition_state_entry_id"]
+        # Locate the TS freq calculation (owned by the TS entry, type freq).
+        freq_calc = session.scalar(
+            select(Calculation).where(
+                Calculation.transition_state_entry_id == ts_entry_id,
+                Calculation.type == CalculationType.freq,
+            )
+        )
+        assert freq_calc is not None
+        rows = session.scalars(
+            select(CalculationHessian).where(
+                CalculationHessian.calculation_id == freq_calc.id
+            )
+        ).all()
+        assert len(rows) == 1
+        hess = rows[0]
+        assert hess.natoms == 5
+        assert len(hess.lower_triangle_hartree_bohr2) == 120
+        assert hess.geometry_id is not None
 
 
 def test_canonical_direction_kinetics_reuses_canonical_reaction_entry(

@@ -19,6 +19,7 @@ from tckdb_schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     FreqResultPayload,
     FrequencyModePayload,
+    HessianPayload,
     OptResultPayload,
     SPResultPayload,
 )
@@ -79,6 +80,9 @@ class CalculationIn(SchemaBase):
     freq_imag_freq_cm1: float | None = None
     freq_zpe_hartree: float | None = None
     freq_frequencies_cm1: list[float] | None = None
+
+    # Optional inline Cartesian Hessian (geometry-bound at persistence).
+    hessian: HessianPayload | None = None
 
     # Parsed execution-control parameters (routed through the shared seam).
     parameters: list[CalculationParameterObservation] | None = None
@@ -160,6 +164,7 @@ def calculation_in_to_with_results_payload(
         opt_result=opt_result,
         freq_result=freq_result,
         sp_result=sp_result,
+        hessian=calc_in.hessian,
         parameters=calc_in.parameters,
         parameters_json=calc_in.parameters_json,
         parameters_parser_version=calc_in.parameters_parser_version,

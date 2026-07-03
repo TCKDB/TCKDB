@@ -31,6 +31,7 @@ from tckdb_schemas.fragments.calculation import (
     CalculationConstraintCreate,
     CalculationParameterObservation,
     FreqResultPayload,
+    HessianPayload,
     IRCResultPayload,
     OptResultPayload,
     OutputGeometryEntry,
@@ -141,6 +142,7 @@ class CalculationInBundle(SchemaBase):
     scan_result: CalculationScanResultCreate | None = None
 
     wavefunction_diagnostic: WavefunctionDiagnosticPayload | None = None
+    hessian: HessianPayload | None = None
 
     input_geometries: list[GeometryPayload] = Field(
         default_factory=list,
