@@ -1,0 +1,26 @@
+# Keep the Docker build context small and safe.
+# CRITICAL: never send local conda/micromamba envs or secrets into the image.
+.git
+.github
+**/.vtrace
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# Local environments accidentally created inside the tree (e.g. backend/y/envs).
+backend/y/
+**/envs/
+**/.venv
+**/venv
+
+# Secrets / local config — supplied at runtime, never baked into the image.
+**/.env
+**/.env.*
+!**/.env.example
+
+# Docs, notebooks, and other non-runtime material.
+docs/
+**/*.ipynb
+node_modules/
