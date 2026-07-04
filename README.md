@@ -550,7 +550,6 @@ Specs and policy:
 - [docs/specs/public_identifier_policy.md](docs/specs/public_identifier_policy.md) — refs vs integer IDs as public handles.
 - [docs/specs/internal_ids_visibility_policy.md](docs/specs/internal_ids_visibility_policy.md) — when (and only when) internal IDs are surfaced.
 - [docs/specs/public_read_abuse_controls.md](docs/specs/public_read_abuse_controls.md) — rate-limit and query-budget controls for hosted deployments.
-- [docs/specs/read_api_mvp.md](docs/specs/read_api_mvp.md) — read-API surface area.
 - [docs/specs/arc-tckdb-adapter-v0-spec.md](docs/specs/arc-tckdb-adapter-v0-spec.md) — example workflow-tool adapter.
 - [docs/specs/tckdb-client-v0-spec.md](docs/specs/tckdb-client-v0-spec.md) — Python client v0 contract.
 

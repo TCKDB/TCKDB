@@ -389,7 +389,7 @@ Phase D.1 must update:
   — make explicit that integer IDs are opt-in via `include=internal_ids`.
 - [`docs/guides/scientific_read_demo_data.md`](../guides/scientific_read_demo_data.md)
   — example queries should not assume integer IDs in responses.
-- [`docs/specs/read_api_mvp.md`](./read_api_mvp.md) — add a Phase D
+- `docs/specs/read_api_mvp.md` — add a Phase D
   section to the include-vocabulary table.
 - [`docs/specs/species_calculation_search_api.md`](./species_calculation_search_api.md)
   — note Phase D shape for the bare integer arrays.

@@ -67,7 +67,6 @@ nav:
       - Core Concepts: guides/core_concepts.md
       - Public Identifiers: specs/public_identifier_policy.md
       - Internal ID Visibility: specs/internal_ids_visibility_policy.md
-      - Read API MVP: specs/read_api_mvp.md
   - Guides:
       - Query Cookbook: guides/scientific_query_cookbook.md
       - Public Hosted Querying: guides/public_hosted_querying.md
@@ -94,6 +93,7 @@ nav:
 # Excluded so the still-present local copies are not built (avoids strict
 # "not in nav" errors) and their content is not shipped to the public site.
 exclude_docs: |
+  specs/read_api_mvp.md
   roadmaps/
   audits/
   paper/

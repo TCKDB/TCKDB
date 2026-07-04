@@ -87,7 +87,7 @@ The boundary is intentional:
 
 - **TCKDB backend** owns scientific read/query semantics, filtering,
   deterministic ranking, provenance summaries, and review/trust state.
-  Documented in [`docs/specs/read_api_mvp.md`](../specs/read_api_mvp.md).
+  Documented in `docs/specs/read_api_mvp.md`.
 - **`tckdb-client`** is a thin Python HTTP client. It serializes
   parameters, calls the backend, and returns parsed JSON. It does not
   rank, select, or interpret responses.

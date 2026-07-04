@@ -3,7 +3,7 @@
 **Status:** Draft / pending implementation
 **Owners:** Calvin
 **Date:** 2026-05-10
-**Builds on:** Phases 2–6 (locked); see [docs/specs/read_api_mvp.md](read_api_mvp.md), [docs/guides/workflow_tool_scientific_reads.md](../guides/workflow_tool_scientific_reads.md).
+**Builds on:** Phases 2–6 (locked); see docs/specs/read_api_mvp.md, [docs/guides/workflow_tool_scientific_reads.md](../guides/workflow_tool_scientific_reads.md).
 **Code change in this phase:** **none** — design only.
 
 ---

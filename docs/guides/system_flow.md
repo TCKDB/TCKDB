@@ -216,7 +216,7 @@ explicitly opt into drafts.
 | Trust & review | `services/{record_review,trust,machine_review,llm_precheck}/` | [`automated_trust_layer.md`](../../backend/docs/specs/automated_trust_layer.md) |
 | Uploads & idempotency | `api/routes/uploads.py`, `services/upload_reconciliation.py` | DR-0024 |
 | Bundles / offline | `api/routes/bundles*.py` | [`contribution-bundles/v0-format.md`](../contribution-bundles/v0-format.md) |
-| Read/query API | `services/scientific_read/`, `api/routes/` | [`read_api_mvp.md`](../specs/read_api_mvp.md) |
+| Read/query API | `services/scientific_read/`, `api/routes/` | `read_api_mvp.md` |
 | Async jobs | `workers/upload_worker.py`, `db/models/upload_job.py` | [`upload_worker_tests_spec.md`](../upload_worker_tests_spec.md) |
 | Auth & roles | `api/` dependencies | [`auth-and-roles-v1-spec.md`](../auth-and-roles-v1-spec.md) |
 
