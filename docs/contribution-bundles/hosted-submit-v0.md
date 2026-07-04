@@ -6,8 +6,8 @@ database through the existing thermo/kinetics upload workflows. A
 `submission` row plus matching audit and record-link rows are created so
 the contribution is fully traceable.
 
-This is milestone 7 of the
-[implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md).
+This is milestone 7 of the local-offline-and-hosted-submission
+implementation plan.
 The previous milestone shipped read-only dry-run; this milestone is the
 first **write** path for contribution bundles.
 

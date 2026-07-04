@@ -2,7 +2,7 @@
 
 ## Goal
 
-Implement `POST /api/v1/uploads/computed-species` per [DR-0029](../decisions/0029-computed-species-bundle-upload-endpoint.md). One contributor/workflow-facing bundle endpoint that accepts a complete computed-species result (identity + conformers + per-conformer calculations and artifacts + optional thermo) using **local string keys** for in-bundle cross-references, and persists the whole thing in a single SQL transaction with full-batch artifact compensation on failure.
+Implement `POST /api/v1/uploads/computed-species` per DR-0029. One contributor/workflow-facing bundle endpoint that accepts a complete computed-species result (identity + conformers + per-conformer calculations and artifacts + optional thermo) using **local string keys** for in-bundle cross-references, and persists the whole thing in a single SQL transaction with full-batch artifact compensation on failure.
 
 > **Invariants for the implementer.**
 > 1. The bundle is self-contained — no `existing_calculation_id` anywhere in the bundle schema.
@@ -13,11 +13,11 @@ Implement `POST /api/v1/uploads/computed-species` per [DR-0029](../decisions/002
 
 ## Required reading
 
-- [DR-0029](../decisions/0029-computed-species-bundle-upload-endpoint.md) — the architectural decision this spec implements.
-- [DR-0028](../decisions/0028-thermo-upload-reference-existing-calculations.md) — role/type compatibility rules and error semantics this spec inherits.
-- [DR-0027](../decisions/0027-offline-payload-bundle-format-and-replay-engine-location.md) — artifact compensation pattern reused here; `payload_kind = "computed_species"` for offline replay.
-- [DR-0026](../decisions/0026-calculation-origin-and-reuse-provenance.md) — `parameters_json.tckdb_origin` flows through unchanged.
-- [DR-0024](../decisions/0024-upload-idempotency-keys.md) — server-side cache contract.
+- DR-0029 — the architectural decision this spec implements.
+- DR-0028 — role/type compatibility rules and error semantics this spec inherits.
+- DR-0027 — artifact compensation pattern reused here; `payload_kind = "computed_species"` for offline replay.
+- DR-0026 — `parameters_json.tckdb_origin` flows through unchanged.
+- DR-0024 — server-side cache contract.
 
 ## Out of scope (deferred per DR-0029)
 

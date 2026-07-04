@@ -46,7 +46,6 @@ Choose the path that matches what you are trying to do:
   [Uploads and workflow-tool integration](#uploads-and-workflow-tool-integration).
 - To deploy it for a lab or group, see
   [Quick start: self-hosted single-node deployment](#quick-start-self-hosted-single-node-deployment).
-- To work on the backend code, see [Development notes](#development-notes).
 
 If you are primarily a chemistry user, the shortest useful path is:
 install the prerequisites, run the local quick start, load the demo
@@ -368,8 +367,7 @@ conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8010
 
 For production use, run it under a process manager — see
 [examples/deployment/systemd/tckdb-api.service](examples/deployment/systemd/tckdb-api.service)
-for a reference systemd unit. Backend container packaging is tracked
-under [docs/roadmaps/backend-container-packaging-spec.md](docs/roadmaps/backend-container-packaging-spec.md).
+for a reference systemd unit.
 
 **Ingress is optional and pluggable.** Cloudflare Tunnel is one
 supported option, behind the `cloudflare` Compose profile:
@@ -556,10 +554,6 @@ Specs and policy:
 - [docs/specs/arc-tckdb-adapter-v0-spec.md](docs/specs/arc-tckdb-adapter-v0-spec.md) — example workflow-tool adapter.
 - [docs/specs/tckdb-client-v0-spec.md](docs/specs/tckdb-client-v0-spec.md) — Python client v0 contract.
 
-Roadmaps:
-- [docs/roadmaps/export_import_roadmap.md](docs/roadmaps/export_import_roadmap.md) — cross-instance data movement.
-- [docs/roadmaps/backend-container-packaging-spec.md](docs/roadmaps/backend-container-packaging-spec.md) — API containerization plan.
-
 ---
 
 ## Repository layout
@@ -572,7 +566,7 @@ backend/scripts/                      Admin, auth, deployment, and
                                       diagnostic helpers
 clients/python/          Thin Python HTTP client
 docs/                                 Curated documentation
-                                      (deployment/, guides/, specs/, roadmaps/)
+                                      (deployment/, guides/, specs/)
 examples/                             Deployment and client examples
                                       (systemd units, env templates,
                                       simple client scripts)
@@ -586,34 +580,6 @@ backend/.env.example                  Backend application env template
 Makefile                              Local-dev convenience targets
                                       (use `make help` to discover)
 ```
-
----
-
-## Development notes
-
-- **Python style.** Backend code uses `Mapped[...]` /
-  `mapped_column(...)` typing for SQLAlchemy models. ORM classes are
-  `PascalCase`; modules are `snake_case`. Service, workflow, and
-  schema entry points should carry useful docstrings.
-- **Layering.** Identity (what something is) ↔ Result (computed
-  values) ↔ Provenance (how it was produced) ↔ Curation (human
-  review). Upload schemas never expose FK IDs — workflows resolve
-  scientific content into refs in the service layer.
-- **Tests.** Pytest auto-creates a `tckdb_test` database, runs
-  migrations against it, and rolls each test back. Run with:
-  ```bash
-  conda run -n tckdb_env pytest backend/tests
-  ```
-- **Schema policy (pre-1.0).** The scientific schema is still
-  evolving. Until it is finalized, all schema changes are folded into
-  the **single initial Alembic migration** (`d861dfd60891`) — new
-  migration files are not created. After local edits to that
-  migration, the dev DB must be dropped and recreated; the test
-  fixture rebuilds the DB per-test so the test suite is unaffected.
-  Incremental Alembic migrations will start once the schema is
-  finalized for production.
-- **Discoverability.** `make help` lists local-dev targets;
-  `make doctor` is the first stop when something will not start.
 
 ---
 

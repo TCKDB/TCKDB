@@ -2,8 +2,8 @@
 
 Status: implemented (service + CLI; bundle file output only)
 See: [Bundle v0 format](v0-format.md),
-[Local bundle export v0 spec](../roadmaps/local-bundle-export-v0-spec.md),
-[Local-offline implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md)
+Local bundle export v0 spec,
+Local-offline implementation plan
 
 ## What this milestone does
 
@@ -29,8 +29,7 @@ disk.
 - It does not package external artifacts (logs, geometries) into the
   bundle — only the manifest *shape* exists in v0.
 
-These remain on the
-[implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md)
+These remain on the local-offline implementation plan
 as later milestones.
 
 ## Supported export roots
@@ -240,5 +239,4 @@ conda run -n tckdb_env pytest tests/services/test_contribution_bundle_export.py 
 
 These bundles are not sent anywhere. There is no hosted dry-run, no
 hosted submit, no push-to-hosted UX, and no import endpoint. Those
-arrive in later milestones on the
-[local-offline implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md).
+arrive in later milestones on the local-offline implementation plan.

@@ -3,13 +3,12 @@
 **Status:** Draft (Phase 2)
 **Owners:** Calvin
 **Date:** 2026-05-09
-**Parent roadmap:** [docs/roadmaps/read_api_phases.md](../roadmaps/read_api_phases.md)
 **Sister specs (still authoritative for their slice):**
 [lookup-expansion-spec.md](../lookup-expansion-spec.md),
 [conformer_read_schema_and_endpoints.md](../conformer_read_schema_and_endpoints.md),
 [network_read_api_spec_harness.md](../network_read_api_spec_harness.md),
 [workflow-tool-read-api.md](../workflow-tool-read-api.md),
-[DR-0016](../decisions/0016-chemistry-first-lookup-api.md).
+DR-0016.
 
 ---
 

@@ -6,7 +6,7 @@ real import would do — without creating any scientific records,
 submissions, upload jobs, audit events, or record links.
 
 This is a preview-only milestone (milestone 6 of the
-[implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md)).
+local-offline-and-hosted-submission implementation plan).
 There is intentionally no hosted submit/import route yet.
 
 ## Endpoint

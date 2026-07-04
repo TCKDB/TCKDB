@@ -1,8 +1,8 @@
 # Contribution Bundle v0 — Format Specification
 
 Status: implemented (schema/format only)
-See: [DR-0023 Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md),
-[contribution-bundle-v0-format-spec roadmap](../roadmaps/contribution-bundle-v0-format-spec.md)
+See: DR-0023 Local/Offline and Hosted Submission Model,
+contribution-bundle-v0-format-spec roadmap
 
 ## What this document covers
 

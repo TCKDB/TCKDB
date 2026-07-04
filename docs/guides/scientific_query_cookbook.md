@@ -149,7 +149,7 @@ print("software_release_ref :", sw.get("software_release_ref"),
       f"({sw.get('software')} {sw.get('version')})")
 ```
 
-Important detail (see [thermo provenance audit](../audits/thermo_provenance_geometry_audit.md)):
+Important detail:
 
 - For computed thermo derived from a statmech, the read service **falls back** to the statmech's source calculations when the thermo itself didn't declare any. So `freq_calculation_ref` and `sp_calculation_ref` are usually populated even when the thermo has no `ThermoSourceCalculation` rows of its own.
 - Explicit thermo source calcs always take precedence over the statmech fallback. The fallback is invisible to the caller — the response shape is identical either way.
@@ -281,7 +281,7 @@ print("output_geometries          :",
       [g["geometry_ref"] for g in geom["output_geometries"]])
 ```
 
-Geometry expectations by calculation type (see [thermo / geometry audit](../audits/thermo_provenance_geometry_audit.md)):
+Geometry expectations by calculation type:
 
 | Type | `input_geometries` | `output_geometries` | `primary_output_geometry_ref` |
 |---|---|---|---|
@@ -400,6 +400,4 @@ Two related rules:
 - [Workflow-tool integration guide](workflow_tool_scientific_reads.md) — the long-form prose tour of the read API.
 - [Public identifier policy](../specs/public_identifier_policy.md) — the design behind the `*_ref` scheme.
 - [Internal-ID visibility policy](../specs/internal_ids_visibility_policy.md) — Phase D contract for the `internal_ids` opt-in.
-- [Thermo provenance & geometry audit](../audits/thermo_provenance_geometry_audit.md) — explains why thermo provenance is populated even for statmech-derived records, and why SP returns no output geometry.
-- [Public-ref identity audit](../audits/public_ref_identity_audit.md) — canonicalizer ↔ resolver ↔ DB identity verification.
 - [Scientific read demo data](scientific_read_demo_data.md) — the local seed dataset you can hit with every recipe in this cookbook.

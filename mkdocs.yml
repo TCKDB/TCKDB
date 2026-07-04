@@ -89,3 +89,16 @@ nav:
       - Documentation Index: README.md
       - Public Read Abuse Controls: specs/public_read_abuse_controls.md
       - API Containerization Notes: deployment/api_containerization_notes.md
+
+# Internal/dev-facing docs kept on disk but untracked and unpublished.
+# Excluded so the still-present local copies are not built (avoids strict
+# "not in nav" errors) and their content is not shipped to the public site.
+exclude_docs: |
+  roadmaps/
+  audits/
+  paper/
+  decisions/
+  specs/bulk_export_design.md
+  specs/chemkin_importer_design.md
+  specs/codex-prompt-upload-idempotency-key.md
+  specs/mcp_readonly_integration.md

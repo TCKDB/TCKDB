@@ -2,7 +2,7 @@
 
 ## Goal
 
-Implement the offline replay engine and CLI in `tckdb-client` per [DR-0027](../decisions/0027-offline-payload-bundle-format-and-replay-engine-location.md). The engine walks a TCKDB Offline Payload Bundle directory on disk, posts the saved payloads to a TCKDB instance via the existing HTTP client, and updates each sidecar's status atomically.
+Implement the offline replay engine and CLI in `tckdb-client` per DR-0027. The engine walks a TCKDB Offline Payload Bundle directory on disk, posts the saved payloads to a TCKDB instance via the existing HTTP client, and updates each sidecar's status atomically.
 
 The engine is chemistry-blind: it does not parse payload content, does not validate ESS signatures, does not import ARC. It dispatches on `payload_kind`, hands JSON or bytes to `tckdb-client`'s existing `request_json` / `upload`, and records the response.
 
@@ -44,7 +44,7 @@ Two sidecar variants in v0, both identifiable by `payload_kind`. Both must inclu
 | `bundle_format_version` | string | ✅ | `"0"` for v0. Engine rejects mismatches. |
 | `payload_kind` | string | ✅ | Dispatch key. v0 values: `conformer_calculation`, `calculation_artifact`. |
 | `endpoint` | string | ✅ | Path the engine POSTs to (e.g. `/uploads/conformers`, `/calculations/6/artifacts`). |
-| `idempotency_key` | string | ✅ | Stored at producer time per [DR-0025](../decisions/0025-arc-idempotency-key-derivation.md); replay reuses unchanged. |
+| `idempotency_key` | string | ✅ | Stored at producer time per DR-0025; replay reuses unchanged. |
 | `base_url` | string | ✅ | The base URL the producer originally targeted. May be overridden by `--base-url` at replay time. |
 | `status` | enum | ✅ | `pending` \| `uploaded` \| `failed` \| `skipped`. State machine below. |
 | `last_error` | string \| null | optional | Most recent failure detail. Cleared on successful upload. |

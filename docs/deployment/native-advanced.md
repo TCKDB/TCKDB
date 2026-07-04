@@ -125,9 +125,7 @@ conda env create -f environment.yml          # or your project's manifest
 conda run -n tckdb_env python -V
 ```
 
-Once a standardized Python dependency manifest is in place
-(tracked in
-[backend-container-packaging-spec.md](../roadmaps/backend-container-packaging-spec.md)),
+Once a standardized Python dependency manifest is in place,
 backend container packaging will land too — at which point native
 install becomes even more clearly the *advanced* path.
 
@@ -307,8 +305,7 @@ Things that bite people on native installs:
 - Backups, networking, and service supervision are simpler when the
   DB and object store are isolated container processes with named
   volumes.
-- A standardized backend container image is on the roadmap
-  ([backend-container-packaging-spec.md](../roadmaps/backend-container-packaging-spec.md)).
+- A standardized backend container image is on the roadmap.
   When it ships, a Docker-based shared deployment becomes a single
   `docker compose up` deployment — the gap between native and
   Docker will widen, not narrow.
@@ -340,6 +337,5 @@ the path the project's tooling is optimized for.
 - [Shared private deployment](shared-private-deployment.md)
 - [Client access from HPC](client-access-from-hpc.md)
 - [Generic client targeting](../clients/generic-client-targeting.md)
-- [Backend container packaging spec](../roadmaps/backend-container-packaging-spec.md)
-- [DR-0022 — Auth and Roles v1](../decisions/0022-auth-and-roles-v1.md)
-- [DR-0023 — Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md)
+- DR-0022 — Auth and Roles v1
+- DR-0023 — Local/Offline and Hosted Submission Model

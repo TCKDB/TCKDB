@@ -102,7 +102,7 @@ shared scientific resource.
 - May receive contribution bundles from offline/local instances — the
   cross-instance data-movement path is the export/import flow
   documented in
-  [export_import_roadmap.md](../roadmaps/export_import_roadmap.md).
+  export_import_roadmap.md.
 - Operationally indistinguishable from a self-hosted instance from
   the backend's perspective; what changes is the policy posture and
   the operator's commitments to availability, backups, and review SLA.
@@ -171,7 +171,7 @@ TCKDB is usable on an air-gapped HPC environment as a Mode 1
 - Export files manually after job completion. When data is to leave
   the air-gapped environment, the export path is the contribution
   bundle, not a database dump — see
-  [export_import_roadmap.md](../roadmaps/export_import_roadmap.md).
+  export_import_roadmap.md.
 - Workflow tools should always use the configured `TCKDB_BASE_URL`
   and `TCKDB_API_KEY` rather than hard-coded URLs, so the same code
   works against the air-gapped local instance and against any future
@@ -196,9 +196,7 @@ TCKDB instance it is configured against.
 | TLS | Not required | Required (edge cert via Cloudflare or origin cert via proxy) | Required |
 | Secrets management | `.env` on local disk | `.env.selfhosted` outside repo, restricted perms | Operator-managed (vault/secret store) |
 
-The full hosted-mode threat model and abuse controls are documented in
-[security_public_read_abuse_audit.md](../audits/security_public_read_abuse_audit.md)
-and
+The full hosted-mode abuse controls are documented in
 [public_read_abuse_controls.md](../specs/public_read_abuse_controls.md).
 
 ## Data movement between modes
@@ -222,8 +220,7 @@ Bundle export and import:
 - support dry-run, validate-only, and submit-for-review modes on
   import.
 
-The full design and phased rollout are in
-[export_import_roadmap.md](../roadmaps/export_import_roadmap.md). The
+The full design and phased rollout are tracked internally. The
 bundle format work in progress is tracked under
 [`docs/contribution-bundles/`](../contribution-bundles/) and the
 related roadmap specs (`local-bundle-export-v0-spec.md`,
@@ -251,6 +248,5 @@ related roadmap specs (`local-bundle-export-v0-spec.md`,
   framing-neutral entry point for the public read surface.
 - [workflow_tool_scientific_reads.md](../guides/workflow_tool_scientific_reads.md)
   — workflow-tool integration patterns.
-- [export_import_roadmap.md](../roadmaps/export_import_roadmap.md) —
-  cross-instance data movement.
-- [DR-0023 — Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md).
+- Cross-instance data movement is handled through the contribution
+  bundle export/import flow.

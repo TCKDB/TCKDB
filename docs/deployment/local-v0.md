@@ -13,8 +13,7 @@ for the wider taxonomy.
 > A single-machine private deployment does **not** sync to hosted, and
 > it does **not** import or export contribution bundles.
 > Local-to-hosted contribution is handled separately through
-> contribution bundles. See
-> [docs/decisions/0023-local-offline-and-hosted-submission-model.md](../decisions/0023-local-offline-and-hosted-submission-model.md).
+> contribution bundles.
 
 > **Need a shared lab/group instance?** See
 > [shared-private-deployment.md](shared-private-deployment.md).
@@ -364,8 +363,7 @@ product, separate schema, or separate scientific validation path.
 
 ## Future work
 
-- **Backend container packaging.** Tracked as its own milestone in
-  [docs/roadmaps/backend-container-packaging-spec.md](../roadmaps/backend-container-packaging-spec.md).
+- **Backend container packaging.** Tracked as its own milestone.
   Local v0 deliberately runs the API and worker on the host because
   the repo has not yet standardized a Python dependency manifest.
   Containerizing the backend without that foundation is out of scope.
@@ -385,9 +383,6 @@ product, separate schema, or separate scientific validation path.
 
 ## Reference
 
-- [docs/roadmaps/local-v0-deployment-spec.md](../roadmaps/local-v0-deployment-spec.md) — milestone spec
-- [docs/decisions/0023-local-offline-and-hosted-submission-model.md](../decisions/0023-local-offline-and-hosted-submission-model.md) — architecture decision
-- [docs/decisions/0022-auth-and-roles-v1.md](../decisions/0022-auth-and-roles-v1.md) — auth model used by local and hosted alike
 - [Deployment guide overview](README.md) — the full taxonomy
 - [Shared private deployment](shared-private-deployment.md) — same backend on a shared lab/group machine
 - [Client access from HPC](client-access-from-hpc.md) — HPC jobs as TCKDB clients; Apptainer/Singularity is deferred packaging

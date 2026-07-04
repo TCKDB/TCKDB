@@ -9,7 +9,7 @@ that first if the terms below are unfamiliar.
 
 Everything here is anchored to real code (`path:line`) so you can jump
 straight to the seam. Design *rationale* lives in the decision records
-under [`docs/decisions/`](../decisions/INDEX.md); this doc is about
+under `docs/decisions/`; this doc is about
 *mechanism*, not justification.
 
 ---
@@ -147,7 +147,7 @@ Using the conformer workflow as the canonical example:
 > **Why this shape?** Upload schemas carry *scientific content*, never
 > FK IDs. Identity resolution, dedup, and parent attachment happen here
 > in services/workflows — never in the user-facing schema. See
-> [DR-0021](../decisions/0021-submission-scoped-upload-workflows.md).
+> DR-0021.
 
 ### Step 3 — Async variant (`app/workers/upload_worker.py`)
 
@@ -206,15 +206,15 @@ explicitly opt into drafts.
 | Subsystem | Code | Start-here doc |
 |---|---|---|
 | Identity (species/reactions/TS) | `db/models/species*.py`, `services/species_resolution.py`, `reaction_resolution.py` | [`species_design.md`](../species_design.md) |
-| Conformers | `services/conformer_resolution.py`, `workflows/conformer.py` | [DR-0005](../decisions/0005-conformer-group-torsional-basin-matching.md) |
+| Conformers | `services/conformer_resolution.py`, `workflows/conformer.py` | DR-0005 |
 | Calculations | `services/calculation_resolution.py`, `db/models/calculation*.py` | [`scientific_calculation_reads.md`](../../backend/docs/specs/scientific_calculation_reads.md) |
 | Scientific products | `services/{statmech,thermo,kinetics,transport}_resolution.py` | [`scientific_product_candidacy.md`](../../backend/docs/specs/scientific_product_candidacy.md) |
-| Pressure-dependent networks | `workflows/network*.py`, `services/network_resolution.py` | [DR-0001](../decisions/0001-pressure-dependent-kinetics-architecture.md) |
-| Provenance (software/LOT) | `services/software_resolution.py`, `db/models/level_of_theory.py` | [DR-0008](../decisions/0008-software-provenance-reconciliation.md) |
+| Pressure-dependent networks | `workflows/network*.py`, `services/network_resolution.py` | DR-0001 |
+| Provenance (software/LOT) | `services/software_resolution.py`, `db/models/level_of_theory.py` | DR-0008 |
 | Literature | `services/literature_resolution.py`, `literature_metadata.py` | [`literature_policy.md`](../literature_policy.md) |
 | Submissions & ingestion | `services/upload_submission.py`, `workflows/` | [`ingestion_submission_model.md`](../../backend/docs/specs/ingestion_submission_model.md) |
 | Trust & review | `services/{record_review,trust,machine_review,llm_precheck}/` | [`automated_trust_layer.md`](../../backend/docs/specs/automated_trust_layer.md) |
-| Uploads & idempotency | `api/routes/uploads.py`, `services/upload_reconciliation.py` | [DR-0024](../decisions/0024-upload-idempotency-keys.md) |
+| Uploads & idempotency | `api/routes/uploads.py`, `services/upload_reconciliation.py` | DR-0024 |
 | Bundles / offline | `api/routes/bundles*.py` | [`contribution-bundles/v0-format.md`](../contribution-bundles/v0-format.md) |
 | Read/query API | `services/scientific_read/`, `api/routes/` | [`read_api_mvp.md`](../specs/read_api_mvp.md) |
 | Async jobs | `workers/upload_worker.py`, `db/models/upload_job.py` | [`upload_worker_tests_spec.md`](../upload_worker_tests_spec.md) |

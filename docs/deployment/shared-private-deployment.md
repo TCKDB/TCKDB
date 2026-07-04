@@ -12,8 +12,7 @@ control.
 > "lab-server" deployment in older docs and code. It is not a fork, a
 > lite schema, or a separate codebase. It is the same TCKDB
 > application with different operational policy. See
-> [the deployment guide overview](README.md) and
-> [DR-0023](../decisions/0023-local-offline-and-hosted-submission-model.md).
+> [the deployment guide overview](README.md).
 
 This is a deployment-guidance document. It does **not** ship new
 runtime code, container images, or installer automation. See
@@ -129,15 +128,13 @@ host:
 | Reverse proxy | TLS, routing, header forwarding, access control       | Host or separate appliance          |
 
 The backend and worker run on the host because the repo has not yet
-standardized a Python dependency manifest; see
-[backend-container-packaging-spec.md](../roadmaps/backend-container-packaging-spec.md).
+standardized a Python dependency manifest.
 
 ---
 
 ## Authentication and registration policy
 
-Auth is the model from
-[DR-0022](../decisions/0022-auth-and-roles-v1.md):
+Auth is the model from DR-0022 — Auth and Roles v1:
 
 - **Sessions** for humans (login, mint API keys).
 - **API keys** for clients (`X-API-Key` header), per-user.
@@ -468,8 +465,8 @@ with separate users, separate API keys, and separate data.
 
 This document deliberately does **not** include:
 
-- a backend Dockerfile or container image (tracked in
-  [backend-container-packaging-spec.md](../roadmaps/backend-container-packaging-spec.md));
+- a backend Dockerfile or container image (tracked as a separate
+  milestone);
 - production-grade SRE (HA, failover, observability, secrets
   management, cookie hardening, full TLS playbooks);
 - Kubernetes deployment;
@@ -492,6 +489,5 @@ This document deliberately does **not** include:
 - [Native advanced install](native-advanced.md)
 - [Generic client targeting](../clients/generic-client-targeting.md)
 - [Manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted-v0.md)
-- [DR-0022 — Auth and Roles v1](../decisions/0022-auth-and-roles-v1.md)
-- [DR-0023 — Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md)
-- [Implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md)
+- DR-0022 — Auth and Roles v1
+- DR-0023 — Local/Offline and Hosted Submission Model

@@ -131,7 +131,7 @@ The full key-management surface lives at:
 - `GET  /auth/api-keys` — list keys (session-only)
 - `DELETE /auth/api-keys/{id}` — revoke a key (session-only)
 
-See [DR-0022 — Auth and Roles v1](../decisions/0022-auth-and-roles-v1.md)
+See DR-0022 — Auth and Roles v1
 for the full auth model.
 
 ### Sending a key
@@ -247,7 +247,7 @@ re-executing the write.
 Use it whenever a client may retry a request after a network glitch,
 process restart, queued HPC job re-submission, or operator-driven
 replay of a saved payload. The behavior is contractual — see
-[DR-0024 — Upload Idempotency Keys](../decisions/0024-upload-idempotency-keys.md).
+DR-0024 — Upload Idempotency Keys.
 
 ### Sending the header
 
@@ -381,7 +381,7 @@ delivered later through **contribution bundles**: a portable export of
 selected scientific records that hosted imports through its existing
 validation, deduplication, and submission/moderation pipeline. Bundles are
 not raw database dumps and not a sync mechanism. See
-[DR-0023 — Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md)
+DR-0023 — Local/Offline and Hosted Submission Model
 for the full rationale.
 
 Until contribution bundles ship, the only way to put data on a given
@@ -444,10 +444,10 @@ instance is to upload it to that instance directly via its API.
 - [Native advanced install](../deployment/native-advanced.md) —
   fallback infrastructure strategy when Docker and Apptainer are
   unavailable.
-- [DR-0022 — Auth and Roles v1](../decisions/0022-auth-and-roles-v1.md) —
+- DR-0022 — Auth and Roles v1 —
   authoritative description of the dual-mode auth (sessions for humans,
   API keys for clients) referenced throughout this document.
-- [DR-0023 — Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md)
+- DR-0023 — Local/Offline and Hosted Submission Model
   — the architectural commitment that local, lab-server, and hosted
   instances run the same backend and that contribution flows through
   bundles, not sync.

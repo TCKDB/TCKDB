@@ -1,8 +1,6 @@
 # Manual local-to-hosted contribution flow — v0
 
 Status: implemented (documentation milestone)
-Spec: [`manual-local-to-hosted-flow-v0-spec.md`](../roadmaps/manual-local-to-hosted-flow-v0-spec.md)
-Roadmap: [`local-offline-and-hosted-submission-implementation-plan.md`](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md)
 
 ## Overview
 
@@ -322,7 +320,7 @@ you already have, e.g.
 `<lab>:<run-id>:<bundle-kind>` or
 `<arc-job-id>:<bundle-export-timestamp>`. Random per-attempt keys
 defeat retry safety. The full contract lives in
-[DR-0024 — Upload Idempotency Keys](../decisions/0024-upload-idempotency-keys.md);
+DR-0024 — Upload Idempotency Keys;
 client-side guidance in
 [Generic client targeting → Retry safety with `Idempotency-Key`](../clients/generic-client-targeting.md#retry-safety-with-idempotency-key).
 
@@ -455,8 +453,7 @@ If a feature is not listed in steps 1–4 above, it is not part of v0.
 ## Future UX path
 
 The manual command-line flow is the floor, not the ceiling. Future
-milestones on the
-[implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md)
+milestones on the local-offline implementation plan
 will layer on:
 
 - a frontend bundle authoring + upload page on the local instance,
@@ -495,5 +492,3 @@ It contains no business logic and is functionally equivalent to the
   shared lab/group instance as a bundle source
 - [Client access from HPC](../deployment/client-access-from-hpc.md) —
   submitting from HPC jobs
-- [DR-0023: Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md)
-- [Implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md)

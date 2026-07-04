@@ -73,8 +73,7 @@ cut across deployment scenarios and are not scenarios themselves:
 | Native install | [native-advanced.md](native-advanced.md) | Advanced fallback when Docker and Apptainer are both unavailable. |
 | Apptainer / Singularity | (deferred) | Future packaging; tracked as a future milestone. See [client-access-from-hpc.md §Apptainer/Singularity (deferred packaging)](client-access-from-hpc.md#apptainersingularity-deferred-packaging). |
 
-A backend container image is tracked separately in
-[backend-container-packaging-spec.md](../roadmaps/backend-container-packaging-spec.md);
+A backend container image is tracked separately as a future milestone;
 when it lands, Docker Compose becomes a single-command deployment.
 
 ---
@@ -100,7 +99,6 @@ This is the rule the rest of this directory follows.
 - [Self-hosting TCKDB](self_hosting.md) — end-to-end guide: containerized vs native (systemd) API, Cloudflare tunnel/loopback exposure, scheduled `pg_dump` backups, and the CI/CD image build — with the arm64 (Raspberry Pi) rationale
 - [Production checklist](production_checklist.md) — the canonical list of env vars and pre-flight checks that must hold before any hosted / shared / public deployment is exposed
 - [Generic client targeting](../clients/generic-client-targeting.md) — the canonical `base_url` + `api_key` client model
-- [DR-0022 — Auth and Roles v1](../decisions/0022-auth-and-roles-v1.md) — auth model used by every deployment
-- [DR-0023 — Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md) — same-schema commitment
-- [Implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md) — milestone tracking
+- DR-0022 — Auth and Roles v1 — auth model used by every deployment
+- DR-0023 — Local/Offline and Hosted Submission Model — same-schema commitment
 - [Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md) — operator runbook for `alembic upgrade` on a real database (bootstrap, upgrade, backup, rollback, public-ref backfill)

@@ -282,8 +282,7 @@ current deployment story. This section exists so that the question
 Status today:
 
 - **Backend image** — depends on a resolved Python dependency manifest
-  for the API/worker, which is tracked separately in
-  [backend-container-packaging-spec.md](../roadmaps/backend-container-packaging-spec.md).
+  for the API/worker, which is tracked separately.
   An Apptainer backend image cannot land before that. Even when it
   does, **a per-job backend container is the wrong pattern** — see
   [Anti-patterns](#anti-patterns) above. The realistic Apptainer use
@@ -328,8 +327,7 @@ This document does **not** cover:
 
 - Apptainer / Singularity image build files (deferred — see
   [§Apptainer/Singularity (deferred packaging)](#apptainersingularity-deferred-packaging)).
-- A backend Dockerfile (tracked in
-  [backend-container-packaging-spec.md](../roadmaps/backend-container-packaging-spec.md)).
+- A backend Dockerfile (tracked as a separate milestone).
 - Native install automation.
 - Cluster-specific deployment recipes (Slurm/PBS/LSF specifics beyond
   the env-variable patterns above).
@@ -351,6 +349,5 @@ This document does **not** cover:
   infrastructure strategy
 - [Generic client targeting](../clients/generic-client-targeting.md)
 - [Manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted-v0.md)
-- [DR-0022 — Auth and Roles v1](../decisions/0022-auth-and-roles-v1.md)
-- [DR-0023 — Local/Offline and Hosted Submission Model](../decisions/0023-local-offline-and-hosted-submission-model.md)
-- [Implementation plan](../roadmaps/local-offline-and-hosted-submission-implementation-plan.md)
+- DR-0022 — Auth and Roles v1
+- DR-0023 — Local/Offline and Hosted Submission Model

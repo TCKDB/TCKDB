@@ -3,7 +3,6 @@
 **Status:** Draft / pending implementation
 **Owners:** Calvin
 **Date:** 2026-05-10
-**Parent roadmap:** [docs/roadmaps/read_api_phases.md](../roadmaps/read_api_phases.md)
 **Builds on:** Phases 2–6 (locked); see [docs/specs/read_api_mvp.md](read_api_mvp.md), [docs/guides/workflow_tool_scientific_reads.md](../guides/workflow_tool_scientific_reads.md).
 **Code change in this phase:** **none** — design only.
 

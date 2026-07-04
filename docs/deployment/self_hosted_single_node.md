@@ -10,8 +10,7 @@
 > TCKDB**. For the broader picture (the three deployment modes,
 > domain/tunnel requirements, air-gapped HPC notes, and how data
 > moves between instances) see
-> [deployment_modes.md](deployment_modes.md) and the
-> [export/import roadmap](../roadmaps/export_import_roadmap.md).
+> [deployment_modes.md](deployment_modes.md).
 
 The deployment exposes anonymous reads under `/api/v1/scientific/*`
 publicly through a reverse-proxy/tunnel (Cloudflare Tunnel in this
@@ -972,10 +971,9 @@ backups, smoke tests — is identical to a non-Pi host.
   `check_selfhosted_deployment.sh` sanity-check script.
 - [deployment_modes.md](deployment_modes.md) — the three deployment
   modes and how this recipe fits into Mode 2.
-- [export_import_roadmap.md](../roadmaps/export_import_roadmap.md) —
-  cross-instance data movement (offline → hosted, etc.).
+- Cross-instance data movement (offline → hosted, etc.) is handled
+  through the contribution bundle export/import flow.
 - [`.env.selfhosted.example`](../../.env.selfhosted.example) — full annotated env file.
 - [`docker-compose.yml`](../../docker-compose.yml) — the data-plane stack.
 - [`examples/deployment/systemd/`](../../examples/deployment/systemd/) — host service units.
-- [`docs/audits/security_public_read_abuse_audit.md`](../audits/security_public_read_abuse_audit.md) — the threat model that motivates the hosted toggles above.
-- [`docs/specs/public_read_abuse_controls.md`](../specs/public_read_abuse_controls.md) — the implemented abuse-control spec these env vars wire.
+- [`docs/specs/public_read_abuse_controls.md`](../specs/public_read_abuse_controls.md) — the implemented abuse-control spec these env vars wire, including the threat model that motivates the hosted toggles above.

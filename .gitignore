@@ -264,7 +264,16 @@ docs/*.md
 docs/audits/
 docs/decisions/
 docs/roadmaps/
+docs/paper/
 docs/clients/
+
+# Internal design/prompt specs kept local but not published. The user-facing
+# contract specs under docs/specs/ (referenced by mkdocs nav or shipped as
+# client/upload contracts) remain tracked.
+docs/specs/bulk_export_design.md
+docs/specs/chemkin_importer_design.md
+docs/specs/codex-prompt-upload-idempotency-key.md
+docs/specs/mcp_readonly_integration.md
 
 # LibreOffice/OpenOffice lock files
 .~lock.*#

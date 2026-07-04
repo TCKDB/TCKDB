@@ -2,8 +2,7 @@
 
 > **Status:** Phase D.0 audit / Phase D.1 policy.
 > Audit + policy only — no code behavior changes in this phase.
-> Companion to [`docs/specs/public_identifier_policy.md`](./public_identifier_policy.md)
-> and the [read-API phase roadmap](../roadmaps/read_api_phases.md).
+> Companion to [`docs/specs/public_identifier_policy.md`](./public_identifier_policy.md).
 
 ## Purpose
 
@@ -605,6 +604,4 @@ If OpenAPI consumers complain, revisit (c) for the next major version.
 
 ---
 
-*See also: [`docs/specs/public_identifier_policy.md`](./public_identifier_policy.md),
-[`docs/roadmaps/read_api_phases.md`](../roadmaps/read_api_phases.md),
-[`docs/audits/hosted_query_readiness.md`](../audits/hosted_query_readiness.md).*
+*See also: [`docs/specs/public_identifier_policy.md`](./public_identifier_policy.md).*

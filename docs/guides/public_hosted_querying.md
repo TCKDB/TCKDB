@@ -347,7 +347,6 @@ surface for anonymous public reads.
 ## Known non-blocking follow-ups
 
 Surfaced by the real-data usability audit
-([docs/audits/real_data_query_usability_audit.md](../audits/real_data_query_usability_audit.md))
 and tracked here so consumers know what to expect. None block public
 hosted querying.
 
@@ -371,4 +370,3 @@ hosted querying.
 - [scientific_read_demo_data.md](scientific_read_demo_data.md) — demo data setup.
 - [`clients/python/README.md`](../../clients/python/README.md) — client install, configure, auth matrix.
 - [internal_ids_visibility_policy.md](../specs/internal_ids_visibility_policy.md) — internal-IDs contract.
-- [real_data_query_usability_audit.md](../audits/real_data_query_usability_audit.md) — usability audit and known follow-ups.

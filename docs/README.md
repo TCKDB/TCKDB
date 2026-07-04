@@ -12,9 +12,6 @@ landing page for each curated subdirectory is linked below.
 | [deployment/](deployment/) | Deployment scenarios — local v0, self-hosted single-node, shared private, and HPC client access. Start with [deployment/README.md](deployment/README.md). |
 | [guides/](guides/) | How-to guides oriented at users and workflow tools (querying, demo data, cookbook examples). |
 | [specs/](specs/) | Tracked specifications for APIs, schemas, and upload semantics. |
-| [audits/](audits/) | Threat-model / security-posture audits. Internal — gitignored. |
-| [decisions/](decisions/) | Design decision records. Internal — gitignored. |
-| [roadmaps/](roadmaps/) | Long-form roadmap notes. Internal — gitignored. |
 
 ## Docs hygiene policy
 
