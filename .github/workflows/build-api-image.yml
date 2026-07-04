@@ -1,8 +1,10 @@
 name: build-api-image
 
-# Build the TCKDB API container and push it to GitHub Container Registry
-# (ghcr.io) on every push to main that touches the backend, plus on manual
-# dispatch. This is the "build + publish" half of CI/CD; the "deploy" half
+# Build the TCKDB API container and push it to Docker Hub
+# (docker.io/<DOCKERHUB_USERNAME>/tckdb-api) on every push to main that touches
+# the backend, plus on manual dispatch. Credentials come from the repo secrets
+# DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (a Docker Hub access token, never a
+# password). This is the "build + publish" half of CI/CD; the "deploy" half
 # (a host pulling the new image, restarting, and running migrations) is
 # described in docs/deployment/self_hosting.md and is intentionally NOT
 # automated here — it needs a per-deployment decision (webhook / Watchtower /
@@ -17,15 +19,11 @@ on:
       - '.github/workflows/build-api-image.yml'
   workflow_dispatch:
 
-env:
-  IMAGE: ghcr.io/${{ github.repository }}/tckdb-api
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write            # push to ghcr.io
     steps:
       - uses: actions/checkout@v4
 
@@ -38,14 +36,14 @@ jobs:
 
       - uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # Docker Hub is the default registry; log in with the repo secrets.
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE }}
+          images: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tckdb-api
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=long
