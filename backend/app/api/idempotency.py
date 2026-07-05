@@ -106,29 +106,23 @@ class IdempotencyContext:
 def _endpoint_key(request: Request) -> str:
     """Stable endpoint identity for the idempotency record's scope.
 
-    Routes with no path parameters resolve to their template path, which
-    equals the concrete URL — behavior unchanged.
+    Uses the concrete request path (``request.url.path``), e.g.
+    ``/api/v1/uploads/conformers`` or
+    ``/api/v1/uploads/calculations/10/artifacts``. This differentiates the
+    idempotency uniqueness scope
+    ``(user_id, request_method, endpoint, idempotency_key)`` per target
+    resource, so a client reusing one idempotency key against different
+    resource targets (``POST /calculations/10/artifacts`` vs
+    ``/calculations/20/artifacts``) is correctly treated as two distinct
+    writes.
 
-    Routes with path parameters substitute the parameter values back into
-    the template (e.g. ``/calculations/10/artifacts``) so the stored
-    ``endpoint`` value differentiates per target resource. This is what
-    makes the idempotency uniqueness scope
-    ``(user_id, request_method, endpoint, idempotency_key)`` correctly
-    distinguish ``POST /calculations/10/artifacts`` from
-    ``POST /calculations/20/artifacts`` when a client reuses the same
-    idempotency key across different resource targets.
+    Previously derived from ``request.scope["route"].path`` on the assumption
+    that the route template equalled the full concrete path. Newer Starlette
+    returns the leaf-relative template for nested routers (``/conformers``
+    instead of ``/api/v1/uploads/conformers``), so the concrete URL path is
+    used directly — version-robust and identical to the intended behavior.
     """
-    route = request.scope.get("route")
-    template = getattr(route, "path", None)
-    path_params = request.scope.get("path_params") or {}
-    if not path_params:
-        return template or request.url.path
-    if template is None:
-        return request.url.path
-    try:
-        return template.format(**path_params)
-    except (KeyError, IndexError):
-        return request.url.path
+    return request.url.path
 
 
 async def idempotency_dependency(
