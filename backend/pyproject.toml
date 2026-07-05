@@ -195,3 +195,12 @@ check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = false
 no_implicit_optional = true
+
+# Some rdkit-stubs releases ship a syntactically-broken .pyi
+# (rdchem.pyi: "parameter without a default follows parameter with a default"),
+# which makes mypy fail at parse time. Skip following rdkit imports and its
+# stubs so mypy treats rdkit as Any instead of parsing the broken stub.
+[[tool.mypy.overrides]]
+module = "rdkit.*"
+follow_imports = "skip"
+follow_imports_for_stubs = true
