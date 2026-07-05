@@ -8,7 +8,7 @@ rolled-back-write non-storage, and expired-key-as-new behaviour.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -82,7 +82,7 @@ class TestFirstKeyedUpload:
         assert rec is not None
         assert rec.status_code == 201
         assert rec.response_body_json["type"] == "conformer_observation"
-        assert rec.expires_at > datetime.utcnow() + timedelta(days=29)
+        assert rec.expires_at > datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=29)
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +377,7 @@ class TestExpiredKey:
             payload_hash=payload_hash,
             status_code=201,
             response_body_json={"id": -1, "type": "stale"},
-            expires_at=datetime.utcnow() - timedelta(days=1),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1),
         )
         db_session.add(stale)
         db_session.flush()

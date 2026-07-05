@@ -7,7 +7,7 @@ in tests/api/test_api_upload_idempotency.py.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -130,7 +130,7 @@ class TestLookupAndConflict:
             response_body=body or {"id": 1},
         )
         if expires_in is not None:
-            rec.expires_at = datetime.utcnow() + expires_in
+            rec.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + expires_in
         db_session.flush()
         return rec
 
@@ -212,7 +212,7 @@ class TestRecordResponse:
     def test_record_sets_expires_at_30_days_out(
         self, db_session, _api_test_user
     ) -> None:
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc).replace(tzinfo=None)
         rec = record_response(
             db_session,
             user_id=_api_test_user,
@@ -224,7 +224,7 @@ class TestRecordResponse:
             response_body={"id": 1, "type": "thermo"},
         )
         db_session.flush()
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc).replace(tzinfo=None)
         delta = rec.expires_at - before
         assert IDEMPOTENCY_TTL - timedelta(seconds=2) <= delta <= IDEMPOTENCY_TTL + (
             after - before
@@ -277,7 +277,7 @@ class TestDeleteExpiredRecords:
             status_code=201,
             response_body={"id": 2},
         )
-        dead.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        dead.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
         db_session.flush()
 
         deleted = delete_expired_records(db_session)

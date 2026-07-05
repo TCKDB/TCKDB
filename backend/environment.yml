@@ -43,30 +43,46 @@ name: tckdb_env
 channels:
   - conda-forge
 
+# ----------------------------------------------------------------------------
+# Version pinning policy
+# ----------------------------------------------------------------------------
+# Direct dependencies are pinned to exact versions so a fresh env (CI, a new
+# workstation, the multi-arch Docker image) resolves the SAME stack every time,
+# and upgrades are a deliberate, reviewed change instead of a surprise from an
+# unpinned solve. Unpinned drift broke CI twice: a FastAPI/Starlette bump
+# changed `request.scope["route"].path` semantics, and an `rdkit-stubs` release
+# shipped a syntactically-broken `.pyi`. To upgrade a package: bump its version
+# here, run the tests, and commit. conda pins are version-only (build hashes
+# still float), so they stay portable across linux-64 (CI) and linux-aarch64
+# (the Raspberry Pi / arm64 image). `python` is intentionally left at the minor
+# (3.13) so patch/security updates flow without a manual bump.
+
 dependencies:
   - python=3.13
 
   # Web framework + ASGI server. `uvicorn-standard` pulls in
-  # httptools / uvloop / websockets / watchfiles, which match what the
-  # current dev env runs.
-  - fastapi
-  - uvicorn-standard
+  # httptools / uvloop / websockets / watchfiles. `starlette` is pinned
+  # explicitly (fastapi depends on it) because a minor bump changed
+  # `request.scope["route"].path` semantics and broke idempotency scoping.
+  - fastapi=0.135.1
+  - starlette=0.52.1
+  - uvicorn-standard=0.42.0
 
   # ORM + driver + migrations. `psycopg-c` is the optional C accelerator
   # used by `psycopg` v3 when available.
-  - sqlalchemy
-  - psycopg
-  - psycopg-c
-  - alembic
+  - sqlalchemy=2.0.46
+  - psycopg=3.3.3
+  - psycopg-c=3.3.3
+  - alembic=1.18.4
 
   # Validation / settings.
-  - pydantic
-  - pydantic-settings
-  - python-dotenv
+  - pydantic=2.12.5
+  - pydantic-settings=2.13.1
+  - python-dotenv=1.2.1
 
   # Chemistry.
-  - rdkit
-  - numpy
+  - rdkit=2025.9.6
+  - numpy=2.4.2
 
   # Interoperability: Cantera validates exported CHEMKIN mechanisms
   # (`app/services/scientific_read/chemkin_serialize.validate_chemkin_mechanism`
@@ -74,18 +90,18 @@ dependencies:
   # downstream interpreter will accept the file). Imported lazily, so it is an
   # optional runtime dependency; it is required by the CHEMKIN export-validation
   # tests. Conda-forge is the reliable source for Cantera.
-  - cantera
+  - cantera=3.2.0
 
   # Artifact storage (MinIO / S3) and outbound HTTP (literature lookup).
-  - boto3
-  - requests
+  - boto3=1.42.76
+  - requests=2.32.5
 
   # YAML I/O (ARC output.yml ingest, config).
-  - pyyaml
+  - pyyaml=6.0.3
 
   # pip-only deps (not packaged on conda-forge).
   - pip
   - pip:
       # Drop-in replacement for the abandoned `isbnlib`; the runtime
       # import path remains `import isbnlib`.
-      - isbnlib2
+      - isbnlib2==3.11.9

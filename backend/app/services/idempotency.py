@@ -17,7 +17,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import delete, select
@@ -100,6 +100,16 @@ class IdempotencyLookup:
     same_payload: bool
 
 
+def _utcnow() -> datetime:
+    """Naive UTC 'now', matching the tz-naive ``DateTime`` columns this module
+    reads and writes (``IdempotencyRecord.expires_at`` is
+    ``DateTime(timezone=False)``). ``datetime.utcnow()`` is deprecated; this is
+    the non-deprecated equivalent (aware UTC stripped back to naive) and
+    mirrors the ``_utcnow`` helper in ``app/workers/upload_worker.py``.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def find_existing_record(
     session: Session,
     *,
@@ -115,7 +125,7 @@ def find_existing_record(
     remain on disk until cleanup but never participate in replay or
     conflict checks.
     """
-    now = now or datetime.utcnow()
+    now = now or _utcnow()
     stmt = (
         select(IdempotencyRecord)
         .where(IdempotencyRecord.user_id == user_id)
@@ -179,7 +189,7 @@ def record_response(
     dependency). If the route's transaction rolls back, no record is left
     behind — that is the contract for retryable failures.
     """
-    now = now or datetime.utcnow()
+    now = now or _utcnow()
     record = IdempotencyRecord(
         user_id=user_id,
         request_method=request_method,
@@ -200,7 +210,7 @@ def delete_expired_records(session: Session, *, now: datetime | None = None) -> 
     No scheduler is wired up — call from a cron job, ad-hoc command, or
     test as needed.
     """
-    now = now or datetime.utcnow()
+    now = now or _utcnow()
     result = session.execute(
         delete(IdempotencyRecord).where(IdempotencyRecord.expires_at <= now)
     )
