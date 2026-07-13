@@ -16,7 +16,11 @@ from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
     CalculationDependency,
+    CalculationFreqMode,
+    CalculationFreqResult,
     CalculationGeometryValidation,
+    CalculationHessian,
+    CalculationInputGeometry,
     CalculationOptResult,
     CalculationOutputGeometry,
     CalculationSCFStability,
@@ -34,6 +38,7 @@ from app.db.models.common import (
     EnergyCorrectionSchemeKind,
     EnergyUnit,
     FrequencyScaleKind,
+    HessianSource,
     KineticsModelKind,
     MeliusBacComponentKind,
     MoleculeKind,
@@ -63,7 +68,7 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
     FrequencyScaleFactor,
 )
-from app.db.models.geometry import Geometry
+from app.db.models.geometry import Geometry, GeometryAtom
 from app.db.models.kinetics import Kinetics
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
@@ -333,22 +338,27 @@ def make_chem_reaction(
     session.add(reaction)
     session.flush()
 
-    for sp in reactants:
+    # Collapse duplicates into stoichiometry (A + A -> stoichiometry=2),
+    # mirroring the compressed participant contract of the resolver and
+    # matching the Counter-based hash computed above.
+    from collections import Counter as _Counter
+
+    for sp_id, count in _Counter(sp.id for sp in reactants).items():
         session.add(
             ReactionParticipant(
                 reaction_id=reaction.id,
-                species_id=sp.id,
+                species_id=sp_id,
                 role=ReactionRole.reactant,
-                stoichiometry=1,
+                stoichiometry=count,
             )
         )
-    for sp in products:
+    for sp_id, count in _Counter(sp.id for sp in products).items():
         session.add(
             ReactionParticipant(
                 reaction_id=reaction.id,
-                species_id=sp.id,
+                species_id=sp_id,
                 role=ReactionRole.product,
-                stoichiometry=1,
+                stoichiometry=count,
             )
         )
     session.flush()
@@ -606,6 +616,105 @@ def attach_output_geometry(
         geometry_id=geometry.id,
         output_order=output_order,
         role=role,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_geometry_atoms(
+    session: Session,
+    *,
+    geometry: Geometry,
+    symbols: list[str],
+    coords: list[list[float]],
+) -> list[GeometryAtom]:
+    """Attach per-atom coordinate rows to a geometry (1-based atom_index)."""
+    rows: list[GeometryAtom] = []
+    for i, (sym, (x, y, z)) in enumerate(zip(symbols, coords, strict=True), start=1):
+        atom = GeometryAtom(
+            geometry_id=geometry.id,
+            atom_index=i,
+            element=sym,
+            x=x,
+            y=y,
+            z=z,
+        )
+        session.add(atom)
+        rows.append(atom)
+    session.flush()
+    return rows
+
+
+def attach_input_geometry(
+    session: Session,
+    *,
+    calculation: Calculation,
+    geometry: Geometry,
+    input_order: int = 1,
+) -> CalculationInputGeometry:
+    """Attach a CalculationInputGeometry link (for sp/freq calcs)."""
+    row = CalculationInputGeometry(
+        calculation_id=calculation.id,
+        geometry_id=geometry.id,
+        input_order=input_order,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_freq_result(
+    session: Session,
+    *,
+    calculation: Calculation,
+    frequencies_cm1: list[float],
+    zpe_hartree: float | None = None,
+) -> CalculationFreqResult:
+    """Attach a CalculationFreqResult plus its per-mode rows.
+
+    Imaginary modes are supplied as negative wavenumbers; ``n_imag`` and
+    ``imag_freq_cm1`` are derived from the sign, matching the schema's
+    signed-frequency convention.
+    """
+    imag = [f for f in frequencies_cm1 if f < 0]
+    result = CalculationFreqResult(
+        calculation_id=calculation.id,
+        n_imag=len(imag),
+        imag_freq_cm1=imag[0] if imag else None,
+        zpe_hartree=zpe_hartree,
+    )
+    session.add(result)
+    for i, freq in enumerate(frequencies_cm1, start=1):
+        session.add(
+            CalculationFreqMode(
+                calculation_id=calculation.id,
+                mode_index=i,
+                frequency_cm1=freq,
+                is_imaginary=freq < 0,
+            )
+        )
+    session.flush()
+    return result
+
+
+def attach_hessian(
+    session: Session,
+    *,
+    calculation: Calculation,
+    geometry: Geometry,
+    natoms: int,
+    source: HessianSource = HessianSource.parsed_log,
+) -> CalculationHessian:
+    """Attach a CalculationHessian with a correctly-sized zero lower triangle."""
+    n = 3 * natoms
+    lower_triangle = [0.0] * (n * (n + 1) // 2)
+    row = CalculationHessian(
+        calculation_id=calculation.id,
+        geometry_id=geometry.id,
+        natoms=natoms,
+        lower_triangle_hartree_bohr2=lower_triangle,
+        source=source,
     )
     session.add(row)
     session.flush()

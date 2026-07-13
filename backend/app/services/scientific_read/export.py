@@ -321,7 +321,7 @@ def _dumps(obj: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_seed(
+def resolve_seed(
     session: Session, seed: SeedSelection, *, all_cap: int
 ) -> tuple[list[int], list[int]]:
     """Resolve a seed to ``(reaction_entry_ids, standalone_species_entry_ids)``.
@@ -426,7 +426,7 @@ def _closure_species_entry_ids(
 # ---------------------------------------------------------------------------
 
 
-def _select_candidate_ids(
+def select_candidate_ids(
     session: Session,
     *,
     model,
@@ -546,7 +546,7 @@ def _build_species_record(
 
     gaps: list[ExportGap] = []
 
-    thermo_ids, thermo_status = _select_candidate_ids(
+    thermo_ids, thermo_status = select_candidate_ids(
         session,
         model=Thermo,
         parent_column=Thermo.species_entry_id,
@@ -566,7 +566,7 @@ def _build_species_record(
             )
         )
 
-    transport_ids, transport_status = _select_candidate_ids(
+    transport_ids, transport_status = select_candidate_ids(
         session,
         model=Transport,
         parent_column=Transport.species_entry_id,
@@ -629,7 +629,7 @@ def _build_reaction_record(
             product_refs.append(ref)
 
     gaps: list[ExportGap] = []
-    kin_ids, kin_status = _select_candidate_ids(
+    kin_ids, kin_status = select_candidate_ids(
         session,
         model=Kinetics,
         parent_column=Kinetics.reaction_entry_id,
@@ -688,7 +688,7 @@ def build_export_record_set(
     :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
         request over the cap.
     """
-    reaction_entry_ids, standalone_species_ids = _resolve_seed(
+    reaction_entry_ids, standalone_species_ids = resolve_seed(
         session, seed, all_cap=all_cap
     )
     participants_by_entry = _closure_species_entry_ids(session, reaction_entry_ids)
@@ -766,7 +766,7 @@ def iter_export_ndjson(
     generator is returned, so the route can surface a 422 before the
     streaming response has started.
     """
-    reaction_entry_ids, standalone_species_ids = _resolve_seed(
+    reaction_entry_ids, standalone_species_ids = resolve_seed(
         session, seed, all_cap=all_cap
     )
     participants_by_entry = _closure_species_entry_ids(session, reaction_entry_ids)
@@ -884,4 +884,6 @@ __all__ = [
     "SpeciesExportRecord",
     "build_export_record_set",
     "iter_export_ndjson",
+    "resolve_seed",
+    "select_candidate_ids",
 ]

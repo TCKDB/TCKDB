@@ -1,6 +1,6 @@
 """Bulk-export endpoints (docs/specs/bulk_export_design.md §3).
 
-Two curator-gated, streaming exports over the scientific surface:
+Four curator-gated, streaming exports over the scientific surface:
 
 * ``GET  /scientific/export/ndjson``  — lossless TCKDB NDJSON, streamed one
   record per line via a server-side generator (never materializes the
@@ -8,10 +8,17 @@ Two curator-gated, streaming exports over the scientific surface:
 * ``POST /scientific/export/chemkin`` — a zip of ``chem.inp`` / ``therm.dat``
   / ``tran.dat`` + ``manifest.json``, ready for Cantera/CHEMKIN. POST
   because it carries options (units, transport, naming policy).
+* ``GET  /scientific/export/ml/species.ndjson`` — ML dataset, one record
+  per ``(species_entry, geometry)``: identity, Cartesian coordinates,
+  LOT-labelled electronic energies, frequencies, optional Hessian, and
+  the thermo summary.
+* ``GET  /scientific/export/ml/reactions.ndjson`` — ML dataset, one record
+  per ``reaction_entry``, RDB7-compatible in spirit: reactant/product
+  SMILES, Arrhenius kinetics, electronic forward barrier, TS geometry.
 
-Both are above the normal read cap, so they are gated on the curator/admin
+All are above the normal read cap, so they are gated on the curator/admin
 role. Thin handlers over
-``app.services.scientific_read.{export,chemkin_serialize}``.
+``app.services.scientific_read.{export,chemkin_serialize,ml_dataset}``.
 """
 
 from __future__ import annotations
@@ -37,6 +44,11 @@ from app.services.scientific_read.export import (
     SeedSelection,
     build_export_record_set,
     iter_export_ndjson,
+)
+from app.services.scientific_read.ml_dataset import (
+    MLFilters,
+    iter_ml_reactions_ndjson,
+    iter_ml_species_ndjson,
 )
 
 router = APIRouter(prefix="/export")
@@ -160,6 +172,122 @@ def export_chemkin(
         media_type="application/zip",
         headers={"Content-Disposition": "attachment; filename=tckdb_chemkin_export.zip"},
     )
+
+
+# ---------------------------------------------------------------------------
+# ML-dataset exports (the "living RDB7" surface)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/ml/species.ndjson")
+def export_ml_species(
+    session: Session = Depends(get_db),
+    _user: AppUser = Depends(require_curator_or_admin),
+    species_ref: list[str] | None = Query(
+        None, description="species_entry public refs to export"
+    ),
+    all: bool = Query(
+        False, description="export all species entries (capped, curator-gated)"
+    ),
+    min_review_status: RecordReviewStatus | None = Query(
+        RecordReviewStatus.approved,
+        description="identity trust floor; species_entry below it are skipped",
+    ),
+    lot_ref: str | None = Query(
+        None,
+        description="restrict energies to one level_of_theory public ref",
+    ),
+    element: list[str] | None = Query(
+        None,
+        description="element allow-list; only geometries whose atoms are a "
+        "subset are emitted (e.g. element=C&element=H&element=O)",
+    ),
+    include_hessian: bool = Query(
+        False, description="include the Cartesian Hessian block when present"
+    ),
+    limit: int | None = Query(None, ge=1),
+    offset: int = Query(0, ge=0),
+) -> StreamingResponse:
+    """Stream a species/conformer-centric ML dataset as NDJSON (JSONL).
+
+    One record per ``(species_entry, geometry)`` carrying species identity,
+    Cartesian geometry, LOT-labelled electronic energies, frequencies,
+    optional Hessian, and the species thermo summary. Curator/admin only.
+
+    ``min_review_status`` defaults to ``approved``; on a pre-curation
+    corpus (nothing approved yet) that exports zero records — pass
+    ``min_review_status=under_review`` (or lower) to export uncurated data.
+
+    :raises ValueError: 422 for an empty/unresolvable seed, an unknown
+        ``lot_ref``, or an ``all`` request over the export cap.
+    """
+    filters = MLFilters(
+        min_review_status=min_review_status,
+        lot_ref=lot_ref,
+        elements=(
+            frozenset(e.strip() for e in element if e.strip()) if element else None
+        ),
+        include_hessian=include_hessian,
+        limit=limit,
+        offset=offset,
+    )
+    # Resolve the seed eagerly so a bad request 422s before the stream starts.
+    line_iter = iter_ml_species_ndjson(
+        session,
+        species_refs=species_ref,
+        all_species=all,
+        filters=filters,
+    )
+    return StreamingResponse(line_iter, media_type="application/x-ndjson")
+
+
+@router.get("/ml/reactions.ndjson")
+def export_ml_reactions(
+    session: Session = Depends(get_db),
+    _user: AppUser = Depends(require_curator_or_admin),
+    reaction_ref: list[str] | None = Query(
+        None, description="reaction_entry or chem_reaction public refs"
+    ),
+    reaction_family: str | None = Query(None),
+    all: bool = Query(
+        False, description="export all reactions (capped, curator-gated)"
+    ),
+    min_review_status: RecordReviewStatus | None = Query(
+        RecordReviewStatus.approved,
+        description="identity trust floor; reaction_entry below it are skipped",
+    ),
+    limit: int | None = Query(None, ge=1),
+    offset: int = Query(0, ge=0),
+) -> StreamingResponse:
+    """Stream a reaction-centric, RDB7-compatible ML dataset as NDJSON.
+
+    One record per ``reaction_entry`` carrying reactant/product SMILES,
+    Arrhenius kinetics with LOT labels, a best-effort electronic forward
+    barrier, a reaction enthalpy, and the TS geometry+energy. The RDB7
+    column mapping is documented on
+    ``app.services.scientific_read.ml_dataset.MLReactionRecord``.
+    Curator/admin only.
+
+    ``min_review_status`` defaults to ``approved``; on a pre-curation
+    corpus (nothing approved yet) that exports zero records — pass
+    ``min_review_status=under_review`` (or lower) to export uncurated data.
+
+    :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
+        request over the export cap.
+    """
+    filters = MLFilters(
+        min_review_status=min_review_status,
+        limit=limit,
+        offset=offset,
+    )
+    line_iter = iter_ml_reactions_ndjson(
+        session,
+        reaction_refs=reaction_ref,
+        reaction_family=reaction_family,
+        all_reactions=all,
+        filters=filters,
+    )
+    return StreamingResponse(line_iter, media_type="application/x-ndjson")
 
 
 __all__ = ["router"]
