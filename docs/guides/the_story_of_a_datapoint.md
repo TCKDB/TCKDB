@@ -150,13 +150,15 @@ translating Dana's payload, and the first job is identity resolution.
 ### Species
 
 Dana's payload says `CCCCO`. The species-resolution service
-canonicalizes that SMILES with RDKit, derives an InChIKey, and asks:
-*do we already know this molecule?* If yes — and after a few years of
-community uploads, the answer for n-butanol is certainly yes — her
-contribution attaches to the existing `species` row. If no, one is
-created. Either way, **there is exactly one n-butanol in the
-database**, no matter how many people have uploaded it, in how many
-notations.
+canonicalizes that SMILES with RDKit and asks: *do we already know this
+`(canonical_smiles, charge, multiplicity)` combination?* If yes — and
+after a few years of community uploads, the answer for neutral,
+closed-shell n-butanol is certainly yes — her contribution attaches to
+the existing `species` row. If no, one is created. Either way, **there
+is exactly one neutral, closed-shell n-butanol in the database**, no
+matter how many people have uploaded it, in how many notations. An
+InChIKey is also derived and stored for cross-notation search, but it
+is not part of the dedup key (DR-0031) — see below.
 
 One level down sits the `species_entry`: a specific *scientific form*
 of the species — this stereochemistry, this electronic state, this
@@ -176,11 +178,14 @@ geometry and a status: guess → optimized → validated → rejected).
 
 Identity resolution is where near-collisions are handled once,
 centrally, instead of by every client differently. It is also — being
-the deduplication point — where the database's chemical opinions live,
-and where its known soft spots are (spin states that InChI cannot
-distinguish, tautomers that standard InChIKey merges; see the current
-assessment for the honest list). The architecture localizes those
-problems: fixing identity logic is a change to one service, not to a
+the deduplication point — where the database's chemical opinions live.
+Standard InChIKey alone cannot distinguish spin states (singlet vs.
+triplet CH₂) and over-merges some tautomers (2-pyridone vs.
+2-hydroxypyridine) — which is exactly why identity is keyed on
+`(canonical_smiles, charge, multiplicity)` rather than InChIKey (see
+DR-0031); InChIKey is retained only as a non-unique, cross-notation
+search index. The architecture localizes chemistry-identity questions
+like this: fixing identity logic is a change to one service, not to a
 million stored results.
 
 ### Levels of theory, software, literature

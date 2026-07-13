@@ -1,13 +1,21 @@
 # Transition-State Trust Rubric — `computed_transition_state_v1`
 
-**Status:** draft spec — design only, no code yet
-**Date:** 2026-05-28
+**Status:** implemented — `computed_transition_state_v1` ships in
+`app/services/trust/rubrics.py` and is wired into the standalone
+transition-state-entry detail read and propagated into the composite
+`reaction-entries/{id}/full` read (updated 2026-07-13; original design
+below is retained as rationale). See
+[trust_read_api_current.md](trust_read_api_current.md) for the current,
+maintained endpoint contract.
+**Date:** 2026-05-28 (original design)
 **Companion to:** [automated_trust_layer.md](automated_trust_layer.md),
 [scientific_transition_state_reads.md](scientific_transition_state_reads.md),
 [trust_read_api_current.md](trust_read_api_current.md)
-**Scope:** Backend only. No code, no migrations, no read-API changes, no
-LLM/RAG integration. No ARC or `tckdb-client` changes. Does not introduce
-or change transition-state curation UI.
+**Scope (at design time):** Backend only. No code, no migrations, no
+read-API changes, no LLM/RAG integration. No ARC or `tckdb-client`
+changes. Does not introduce or change transition-state curation UI. (This
+scope note describes the state when the spec was written; the feature is
+now implemented — see Status above.)
 
 ---
 

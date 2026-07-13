@@ -21,7 +21,10 @@ scientific form of that thing.
 
 - **`species`** is the graph-level molecular identity — the
   connectivity that defines "ethanol" or "the OH radical", keyed by
-  canonicalized SMILES/InChI. Two equally valid Gaussian and Orca
+  `(canonical_smiles, charge, multiplicity)`. InChIKey is derived and
+  stored for cross-notation search but is not part of the dedup key —
+  standard InChI can't represent spin state and over-merges some
+  tautomers (DR-0031). Two equally valid Gaussian and Orca
   optimizations of ethanol refer to the same `species`.
 - **`species_entry`** is a resolved scientific form of a species: a
   particular stereochemistry, electronic state, isotopologue label, or

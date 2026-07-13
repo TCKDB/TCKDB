@@ -124,10 +124,14 @@ Using the conformer workflow as the canonical example:
 
 1. **Resolve identity** — `resolve_species_entry`
    (`app/services/species_resolution.py`): canonicalize SMILES via
-   RDKit → InChIKey → look up or create `Species`, then look up or
-   create `SpeciesEntry` on the `(species_id, kind, stereo_label,
-   electronic_state, …)` tuple. Races are handled with a nested
-   transaction + `IntegrityError` fallback.
+   RDKit, then look up or create `Species` keyed on
+   `(canonical_smiles, charge, multiplicity)` — InChIKey is computed and
+   stored alongside for cross-notation search but is **not** the dedup
+   key (it cannot represent spin states and wrongly merges some
+   tautomers; see DR-0031) — then look up or create `SpeciesEntry` on
+   the `(species_id, kind, stereo_label, electronic_state, …)` tuple.
+   Races are handled with a nested transaction + `IntegrityError`
+   fallback.
 2. **Resolve provenance** — `resolve_geometry_payload` (dedupe by XYZ
    hash) and `resolve_and_persist_calculation_with_results`
    (`calculation_resolution.py`) create the `Calculation` hub and its

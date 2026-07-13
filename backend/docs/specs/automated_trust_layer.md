@@ -1,7 +1,15 @@
 # Automated Trust / Evidence Layer
 
-**Status:** draft spec — design only, no code yet
-**Date:** 2026-05-26
+**Status:** implemented (design doc, retained for rationale) — the
+deterministic evaluator, rubrics, and read-API wiring described below have
+shipped (`app/services/trust/{evaluator,rubrics,fragment,models}.py`).
+This document is no longer "design only"; treat
+[`trust_read_api_current.md`](trust_read_api_current.md) as the
+authoritative, up-to-date statement of which endpoints and rubrics are
+actually wired — this file documents the design rationale and may lag
+behind the shipped surface in specific details (see the "Current wiring"
+note before §10).
+**Date:** 2026-05-26 (original design); status line updated 2026-07-13.
 **Scope:** Backend only. No changes to ARC, `tckdb-client`, upload schemas,
 ingest pipelines, or curator workflow. No LLM dependency introduced. No
 frontend or public SQL/GraphQL surface defined.
@@ -250,20 +258,30 @@ strong ratio **and** zero failed required-checks.
   "evidence": {
     "rubric": "computed_kinetics_v1",
     "label": "well_supported",
-    "passed_checks": 8,
-    "possible_checks": 11,
+    "passed_checks": ["reaction_entry_present", "kinetics_model_present", "..."],
     "missing_checks": [
-      "irc_evidence",
-      "uncertainty",
-      "scf_stability"
+      "irc_evidence_present",
+      "uncertainty_present"
     ],
-    "warnings": [
+    "warning_checks": [
       "geometry_validation_not_available"
     ],
+    "not_applicable_checks": [],
+    "passed_count": 8,
+    "possible_count": 11,
+    "evidence_completeness": 0.73,
     "is_certified": false
   }
 }
 ```
+
+As shipped, `passed_checks` / `missing_checks` / `warning_checks` /
+`not_applicable_checks` are the *name lists*, and `passed_count` /
+`possible_count` are their numeric counterparts — this is the same shape
+as the canonical read-fragment example in §10.1 (`EvidenceEvaluation` in
+`app/services/trust/models.py`). An earlier draft of this example
+conflated the two (`passed_checks`/`possible_checks` as bare integers);
+that shape was never implemented.
 
 The `is_certified` field is **always** the result of curator action,
 never of the automated layer. Automated evaluation can never set it to
@@ -520,11 +538,16 @@ are documented in the companion spec.
 `frequency_source_has_zero_imaginary_modes_for_validated_ts`,
 `frequency_source_has_multiple_imaginary_modes_for_validated_ts`.
 
-**Status:** spec only — not yet implemented and not yet wired into
-the read API. The reaction-entry `/full?include=trust` endpoint does
-not currently emit TS trust; see
-[transition_state_trust_rubric.md §10](transition_state_trust_rubric.md#10-future-read-api-integration)
-for the planned wiring.
+**Status (updated 2026-07-13):** implemented and wired. The rubric
+ships as `COMPUTED_TRANSITION_STATE_V1` in
+`app/services/trust/rubrics.py` and is attached on the standalone
+`GET /scientific/transition-state-entries/{ref}?include=trust` read. It
+is also propagated into the composite
+`GET /scientific/reaction-entries/{id}/full?include=trust` read under
+`transition_states[*].trust`. It is **not** wired into the parent
+TS-concept detail read (`/scientific/transition-states/{ref}`) or the
+TS-entry search/list surface — both reject the `trust` include token.
+See `trust_read_api_current.md` for the exact contract per endpoint.
 
 ### 9.8 `experimental_thermo_v1`
 
@@ -544,10 +567,40 @@ for the planned wiring.
 
 ---
 
+## Current wiring note (2026-07-13)
+
+The three bullets below summarize where this spec stands relative to the
+shipped code, verified against `app/services/trust/` and
+`app/api/routes/scientific/` on 2026-07-13:
+
+- **The trust fragment is opt-in (`include=trust`) on detail/read
+  endpoints only**, never on search/list endpoints and never expanded by
+  `include=all`. The endpoint list has grown past the three shown in §10
+  below — calculation, kinetics, and thermo were first, but statmech,
+  transport, standalone transition-state-entry, and the composite
+  `reaction-entries/{id}/full` read (which propagates trust into embedded
+  kinetics / calculation / transition-state-entry sections) also carry it
+  now. `trust_read_api_current.md` is the maintained, exhaustive endpoint
+  table — §10 here is illustrative, not exhaustive.
+- **Search endpoints filter on `record_review.status` (via
+  `min_review_status` / `include_rejected` / `include_deprecated`
+  parameters), not on any trust label.** The `trust_status`-based default
+  filtering and opt-in query parameters sketched in §10.3
+  (`include_unreviewed`, `min_evidence_label`, `trust_status=`, etc.) were
+  never implemented; they remain a design sketch only.
+- **The TS rubric is implemented, not spec-only.**
+  `computed_transition_state_v1` ships in `app/services/trust/rubrics.py`
+  and is wired into the standalone transition-state-entry detail read and
+  propagated into `reaction-entries/{id}/full`. §9.7 below is updated
+  accordingly; `transition_state_trust_rubric.md` is a companion
+  reference, not an open design gap.
+
 ## 10. Read API: `trust` fragment
 
-The trust fragment is opt-in on the currently shipped calculation,
-kinetics, and thermo detail reads:
+The trust fragment is opt-in on detail/read endpoints; see the "Current
+wiring note" immediately above and `trust_read_api_current.md` for the
+exhaustive, maintained endpoint list. The endpoints below were the
+original MVP set (calculation, kinetics, thermo detail reads):
 
 - `GET /api/v1/scientific/calculations/{calculation_ref_or_id}?include=trust`
 - `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics?include=trust`
@@ -758,27 +811,30 @@ edited.**
 
 ---
 
-## 12. Evaluator service shape (informative)
+## 12. Evaluator service shape
 
-This section is descriptive, not normative — the implementation may
-shape itself differently. It exists to make the contract concrete.
+This section originally sketched a `rubrics/` sub-package split one file
+per rubric. **As shipped (updated 2026-07-13), the rubrics live together
+in a single `rubrics.py` module** rather than the per-rubric package
+below; the rest of the shape (models/evaluator/fragment split) matches:
 
 ```text
 app/services/trust/
   __init__.py
-  rubrics/
-    __init__.py
-    base.py                # EvidenceCheck, EvidenceRubric, registry
-    computed_kinetics_v1.py
-    computed_thermo_v1.py
-    computed_statmech_v1.py
-    computed_transport_v1.py
-    computed_calculation_v1.py
-    experimental_kinetics_v1.py
-    experimental_thermo_v1.py
-  evaluator.py             # evaluate(record) -> EvaluationResult
-  fragment.py              # build_trust_fragment(record, evaluation) -> TrustFragment
+  models.py     # EvidenceCheckSpec, EvidenceCheckResult, EvidenceEvaluation,
+                 # EvidenceRubric, TrustFragment, TrustLLMPrecheck, label_from_completeness
+  rubrics.py    # all EvidenceRubric definitions (computed_calculation_v1,
+                 # computed_kinetics_v1, computed_thermo_v1, computed_statmech_v1,
+                 # computed_transport_v1, computed_transition_state_v1) + the
+                 # record_type -> rubric registry
+  evaluator.py  # select_rubric(record_type), per-record hard-fail detection,
+                 # evaluate/aggregate helpers -> EvidenceEvaluation
+  fragment.py   # build_trust_fragment(evaluation, review_status=...) -> TrustFragment
 ```
+
+The experimental rubrics (`experimental_kinetics_v1`,
+`experimental_thermo_v1`) sketched in §9.6/§9.8 are not present in
+`rubrics.py` as of this update; treat them as still design-only.
 
 The evaluator entrypoint:
 
