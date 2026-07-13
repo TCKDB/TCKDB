@@ -626,6 +626,31 @@ class CalculationWavefunctionDiagnosticSummary(BaseModel):
     created_at: datetime | None = None
 
 
+class CalculationSpinDiagnosticSummary(BaseModel):
+    """Parsed spin-contamination ``<S^2>`` evidence for the
+    ``include=spin_diagnostic`` heavy include.
+
+    The companion to :class:`CalculationWavefunctionDiagnosticSummary`. A
+    row exists only when ``<S^2>`` was actually parsed from an unrestricted
+    calculation; absence reads as "not parsed / not applicable / not
+    reported" via ``available_sections.has_spin_diagnostic``.
+
+    The schema constrains at most one row per calculation
+    (PK = ``calculation_id``); the wrapping field is still a list for
+    API symmetry — it will contain zero or one entry.
+
+    Thresholds for interpreting spin contamination are deliberately NOT
+    enforced or labelled by the schema — readers and curators apply
+    heuristics on top.
+    """
+
+    s_squared: float | None = None
+    s_squared_expected: float | None = None
+    s_squared_annihilated: float | None = None
+    note: str | None = None
+    created_at: datetime | None = None
+
+
 class CalculationDependencySummary(BaseModel):
     """One edge in the calculation-dependency graph, projected for the
     ``include=dependencies`` heavy include of the calculation detail
@@ -695,6 +720,7 @@ class AvailableCalculationSections(BaseModel):
     has_geometry_validation: bool
     has_scf_stability: bool
     has_wavefunction_diagnostic: bool
+    has_spin_diagnostic: bool
     has_scan: bool
     has_irc: bool
     has_path_search: bool
@@ -735,6 +761,7 @@ class ScientificCalculationRecord(BaseModel):
     wavefunction_diagnostic: (
         list[CalculationWavefunctionDiagnosticSummary] | None
     ) = None
+    spin_diagnostic: list[CalculationSpinDiagnosticSummary] | None = None
     parameters: list[CalculationParameterSummary] | None = None
     constraints: list[CalculationConstraintSummary] | None = None
     review_history: list[CalculationReviewEntry] | None = None
@@ -776,6 +803,7 @@ __all__ = [
     "CalculationSPResultSummary",
     "CalculationScanResultSummary",
     "CalculationScanSummary",
+    "CalculationSpinDiagnosticSummary",
     "CalculationWavefunctionDiagnosticSummary",
     "RequestEcho",
     "ScanCoordinateSummary",

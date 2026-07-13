@@ -27,6 +27,7 @@ from app.db.models.calculation import (
     CalculationPathSearchPoint,
     CalculationPathSearchResult,
     CalculationSCFStability,
+    CalculationSpinDiagnostic,
     CalculationSPResult,
     CalculationWavefunctionDiagnostic,
 )
@@ -655,6 +656,18 @@ def persist_calculation_result(
                 t1_norm=wfn.t1_norm,
                 largest_t2_amplitude=wfn.largest_t2_amplitude,
                 note=wfn.note,
+            )
+        )
+
+    if calc_upload.spin_diagnostic is not None:
+        spin = calc_upload.spin_diagnostic
+        session.add(
+            CalculationSpinDiagnostic(
+                calculation_id=calculation.id,
+                s_squared=spin.s_squared,
+                s_squared_expected=spin.s_squared_expected,
+                s_squared_annihilated=spin.s_squared_annihilated,
+                note=spin.note,
             )
         )
 

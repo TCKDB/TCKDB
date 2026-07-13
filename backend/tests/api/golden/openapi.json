@@ -1345,6 +1345,10 @@
             "title": "Has Scf Stability",
             "type": "boolean"
           },
+          "has_spin_diagnostic": {
+            "title": "Has Spin Diagnostic",
+            "type": "boolean"
+          },
           "has_wavefunction_diagnostic": {
             "title": "Has Wavefunction Diagnostic",
             "type": "boolean"
@@ -1361,6 +1365,7 @@
           "has_geometry_validation",
           "has_scf_stability",
           "has_wavefunction_diagnostic",
+          "has_spin_diagnostic",
           "has_scan",
           "has_irc",
           "has_path_search"
@@ -4313,7 +4318,7 @@
       },
       "CalculationIn": {
         "additionalProperties": false,
-        "description": "A calculation defined within this upload.\n\n:param key: Globally unique local key for this calculation.\n:param type: Calculation type (opt, freq, sp, irc, scan).\n:param quality: Curation quality flag.\n:param geometry_key: Local key referencing a geometry defined elsewhere\n    in the payload. For species calculations, typically points to a\n    conformer's geometry. For TS calculations, defaults to the TS geometry.\n:param software_release: Required software provenance reference.\n:param level_of_theory: Required level-of-theory reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param literature_id: Optional literature provenance id.\n:param sp_electronic_energy_hartree: SP result (if type=sp).\n:param opt_converged: Opt result (if type=opt).\n:param opt_n_steps: Opt result (if type=opt).\n:param opt_final_energy_hartree: Opt result (if type=opt).\n:param freq_n_imag: Freq result (if type=freq).\n:param freq_imag_freq_cm1: Freq result (if type=freq).\n:param freq_zpe_hartree: Freq result (if type=freq).\n:param parameters: Optional parsed execution-control parameter observations,\n    routed through the shared calculation persistence seam.\n:param parameters_json: Optional JSON snapshot from the parser.\n:param parameters_parser_version: Optional parser version tag.\n:param parameters_extracted_at: Optional extraction timestamp.\n:param artifacts: Optional list of file artifacts (logs, inputs, etc.).",
+        "description": "A calculation defined within this upload.\n\n:param key: Globally unique local key for this calculation.\n:param type: Calculation type (opt, freq, sp, irc, scan).\n:param quality: Curation quality flag.\n:param geometry_key: Local key referencing a geometry defined elsewhere\n    in the payload. For species calculations, typically points to a\n    conformer's geometry. For TS calculations, defaults to the TS geometry.\n:param software_release: Required software provenance reference.\n:param level_of_theory: Required level-of-theory reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param literature_id: Optional literature provenance id.\n:param sp_electronic_energy_hartree: SP result (if type=sp).\n:param opt_converged: Opt result (if type=opt).\n:param opt_n_steps: Opt result (if type=opt).\n:param opt_final_energy_hartree: Opt result (if type=opt).\n:param freq_n_imag: Freq result (if type=freq).\n:param freq_imag_freq_cm1: Freq result (if type=freq).\n:param freq_zpe_hartree: Freq result (if type=freq).\n:param parameters: Optional parsed execution-control parameter observations,\n    routed through the shared calculation persistence seam.\n:param parameters_json: Optional JSON snapshot from the parser.\n:param parameters_parser_version: Optional parser version tag.\n:param parameters_extracted_at: Optional extraction timestamp.\n:param wavefunction_diagnostic: Optional inline T1/D1 wavefunction\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param spin_diagnostic: Optional inline spin-contamination ``<S^2>``\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param artifacts: Optional list of file artifacts (logs, inputs, etc.).",
         "properties": {
           "artifacts": {
             "items": {
@@ -4511,8 +4516,28 @@
             ],
             "title": "Sp Electronic Energy Hartree"
           },
+          "spin_diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpinDiagnosticPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "type": {
             "$ref": "#/components/schemas/CalculationType"
+          },
+          "wavefunction_diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WavefunctionDiagnosticPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -4714,6 +4739,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SPResultPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spin_diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpinDiagnosticPayload"
               },
               {
                 "type": "null"
@@ -7196,6 +7231,69 @@
         "title": "CalculationScanSummary",
         "type": "object"
       },
+      "CalculationSpinDiagnosticSummary": {
+        "description": "Parsed spin-contamination ``<S^2>`` evidence for the\n``include=spin_diagnostic`` heavy include.\n\nThe companion to :class:`CalculationWavefunctionDiagnosticSummary`. A\nrow exists only when ``<S^2>`` was actually parsed from an unrestricted\ncalculation; absence reads as \"not parsed / not applicable / not\nreported\" via ``available_sections.has_spin_diagnostic``.\n\nThe schema constrains at most one row per calculation\n(PK = ``calculation_id``); the wrapping field is still a list for\nAPI symmetry — it will contain zero or one entry.\n\nThresholds for interpreting spin contamination are deliberately NOT\nenforced or labelled by the schema — readers and curators apply\nheuristics on top.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "s_squared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S Squared"
+          },
+          "s_squared_annihilated": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S Squared Annihilated"
+          },
+          "s_squared_expected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S Squared Expected"
+          }
+        },
+        "title": "CalculationSpinDiagnosticSummary",
+        "type": "object"
+      },
       "CalculationType": {
         "enum": [
           "opt",
@@ -7600,6 +7698,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SPResultPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spin_diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpinDiagnosticPayload"
               },
               {
                 "type": "null"
@@ -8531,8 +8639,28 @@
             ],
             "title": "Sp Electronic Energy Hartree"
           },
+          "spin_diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpinDiagnosticPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "type": {
             "$ref": "#/components/schemas/CalculationType"
+          },
+          "wavefunction_diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WavefunctionDiagnosticPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -25069,6 +25197,20 @@
               }
             ]
           },
+          "spin_diagnostic": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationSpinDiagnosticSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spin Diagnostic"
+          },
           "trust": {
             "anyOf": [
               {
@@ -29035,6 +29177,57 @@
           "multiplicity"
         ],
         "title": "SpeciesScientificRecord",
+        "type": "object"
+      },
+      "SpinDiagnosticPayload": {
+        "additionalProperties": false,
+        "description": "Optional inline spin-contamination ``<S^2>`` evidence parsed from a\ncalculation's output.\n\nThe companion block to :class:`WavefunctionDiagnosticPayload`: T1/D1 stay\nthere, spin-contamination signals land here. Carries the observed\n``<S^2>`` and, when the ESS reports them, the ideal ``S(S+1)`` for the\ntarget spin state and the ``<S^2>`` after annihilation of the first spin\ncontaminant.\n\nApplies to any UNRESTRICTED calculation (not just coupled cluster). The\nproducer contract is to emit the block only when ``<S^2>`` was actually\nparsed; ``s_squared`` is required because the row exists precisely because\nthat observation is present. Omit the block entirely for restricted /\nclosed-shell runs that have no contamination to report.\n\n:param s_squared: Observed ``<S^2>`` expectation value.\n:param s_squared_expected: Ideal ``S(S+1)`` for the target spin state as\n    reported by the ESS, when reported.\n:param s_squared_annihilated: ``<S^2>`` after annihilation of the first\n    spin contaminant (e.g. Gaussian's \"after annihilation\" value), when\n    reported.\n:param note: Optional free-text annotation.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "s_squared": {
+            "minimum": 0.0,
+            "title": "S Squared",
+            "type": "number"
+          },
+          "s_squared_annihilated": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S Squared Annihilated"
+          },
+          "s_squared_expected": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S Squared Expected"
+          }
+        },
+        "required": [
+          "s_squared"
+        ],
+        "title": "SpinDiagnosticPayload",
         "type": "object"
       },
       "SpinTreatment": {
@@ -50210,6 +50403,361 @@
           }
         },
         "summary": "Export Chemkin",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/export/ml/reactions.ndjson": {
+      "get": {
+        "description": "Stream a reaction-centric, RDB7-compatible ML dataset as NDJSON.\n\nOne record per ``reaction_entry`` carrying reactant/product SMILES,\nArrhenius kinetics with LOT labels, a best-effort electronic forward\nbarrier, a reaction enthalpy, and the TS geometry+energy. The RDB7\ncolumn mapping is documented on\n``app.services.scientific_read.ml_dataset.MLReactionRecord``.\nCurator/admin only.\n\n``min_review_status`` defaults to ``approved``; on a pre-curation\ncorpus (nothing approved yet) that exports zero records — pass\n``min_review_status=under_review`` (or lower) to export uncurated data.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
+        "operationId": "export_ml_reactions_api_v1_scientific_export_ml_reactions_ndjson_get",
+        "parameters": [
+          {
+            "description": "reaction_entry or chem_reaction public refs",
+            "in": "query",
+            "name": "reaction_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "reaction_entry or chem_reaction public refs",
+              "title": "Reaction Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reaction_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reaction Family"
+            }
+          },
+          {
+            "description": "export all reactions (capped, curator-gated)",
+            "in": "query",
+            "name": "all",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "export all reactions (capped, curator-gated)",
+              "title": "All",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "identity trust floor; reaction_entry below it are skipped",
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "approved",
+              "description": "identity trust floor; reaction_entry below it are skipped",
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Ml Reactions",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/export/ml/species.ndjson": {
+      "get": {
+        "description": "Stream a species/conformer-centric ML dataset as NDJSON (JSONL).\n\nOne record per ``(species_entry, geometry)`` carrying species identity,\nCartesian geometry, LOT-labelled electronic energies, frequencies,\noptional Hessian, and the species thermo summary. Curator/admin only.\n\n``min_review_status`` defaults to ``approved``; on a pre-curation\ncorpus (nothing approved yet) that exports zero records — pass\n``min_review_status=under_review`` (or lower) to export uncurated data.\n\n:raises ValueError: 422 for an empty/unresolvable seed, an unknown\n    ``lot_ref``, or an ``all`` request over the export cap.",
+        "operationId": "export_ml_species_api_v1_scientific_export_ml_species_ndjson_get",
+        "parameters": [
+          {
+            "description": "species_entry public refs to export",
+            "in": "query",
+            "name": "species_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "species_entry public refs to export",
+              "title": "Species Ref"
+            }
+          },
+          {
+            "description": "export all species entries (capped, curator-gated)",
+            "in": "query",
+            "name": "all",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "export all species entries (capped, curator-gated)",
+              "title": "All",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "identity trust floor; species_entry below it are skipped",
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "approved",
+              "description": "identity trust floor; species_entry below it are skipped",
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "description": "restrict energies to one level_of_theory public ref",
+            "in": "query",
+            "name": "lot_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "restrict energies to one level_of_theory public ref",
+              "title": "Lot Ref"
+            }
+          },
+          {
+            "description": "element allow-list; only geometries whose atoms are a subset are emitted (e.g. element=C&element=H&element=O)",
+            "in": "query",
+            "name": "element",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "element allow-list; only geometries whose atoms are a subset are emitted (e.g. element=C&element=H&element=O)",
+              "title": "Element"
+            }
+          },
+          {
+            "description": "include the Cartesian Hessian block when present",
+            "in": "query",
+            "name": "include_hessian",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "include the Cartesian Hessian block when present",
+              "title": "Include Hessian",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Ml Species",
         "tags": [
           "scientific"
         ]

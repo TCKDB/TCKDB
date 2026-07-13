@@ -399,6 +399,37 @@ class WavefunctionDiagnosticPayload(SchemaBase):
         return self
 
 
+class SpinDiagnosticPayload(SchemaBase):
+    """Optional inline spin-contamination ``<S^2>`` evidence parsed from a
+    calculation's output.
+
+    The companion block to :class:`WavefunctionDiagnosticPayload`: T1/D1 stay
+    there, spin-contamination signals land here. Carries the observed
+    ``<S^2>`` and, when the ESS reports them, the ideal ``S(S+1)`` for the
+    target spin state and the ``<S^2>`` after annihilation of the first spin
+    contaminant.
+
+    Applies to any UNRESTRICTED calculation (not just coupled cluster). The
+    producer contract is to emit the block only when ``<S^2>`` was actually
+    parsed; ``s_squared`` is required because the row exists precisely because
+    that observation is present. Omit the block entirely for restricted /
+    closed-shell runs that have no contamination to report.
+
+    :param s_squared: Observed ``<S^2>`` expectation value.
+    :param s_squared_expected: Ideal ``S(S+1)`` for the target spin state as
+        reported by the ESS, when reported.
+    :param s_squared_annihilated: ``<S^2>`` after annihilation of the first
+        spin contaminant (e.g. Gaussian's "after annihilation" value), when
+        reported.
+    :param note: Optional free-text annotation.
+    """
+
+    s_squared: float = Field(ge=0)
+    s_squared_expected: float | None = Field(default=None, ge=0)
+    s_squared_annihilated: float | None = Field(default=None, ge=0)
+    note: str | None = None
+
+
 class IRCPointPayload(SchemaBase):
     """Upload-facing inline payload for one IRC-path sampled point.
 
@@ -671,6 +702,7 @@ class CalculationWithResultsPayload(CalculationPayload):
 
     scf_stability: SCFStabilityPayload | None = None
     wavefunction_diagnostic: WavefunctionDiagnosticPayload | None = None
+    spin_diagnostic: SpinDiagnosticPayload | None = None
     hessian: HessianPayload | None = None
 
     input_geometries: list[GeometryPayload] = Field(

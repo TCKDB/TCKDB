@@ -42,6 +42,7 @@ from app.db.models.calculation import (
     CalculationScanPoint,
     CalculationScanPointCoordinateValue,
     CalculationScanResult,
+    CalculationSpinDiagnostic,
     CalculationSPResult,
 )
 from app.db.models.common import (
@@ -515,6 +516,51 @@ def test_ts_freq_calc_with_hessian_persists(db_engine) -> None:
         assert hess.natoms == 5
         assert len(hess.lower_triangle_hartree_bohr2) == 120
         assert hess.geometry_id is not None
+
+
+def test_ts_calc_with_spin_diagnostic_persists(db_engine) -> None:
+    """A TS calculation carrying an inline ``spin_diagnostic`` persists one
+    ``calc_spin_diagnostic`` (<S^2>) row anchored to the TS calc.
+
+    Proves the shared ``CalculationIn`` change (adding the diagnostic field
+    plus adapter forwarding) reaches ``persist_calculation_result`` through
+    the computed_reaction route — the field is no longer dropped by
+    ``extra='forbid'`` and is no longer silently ignored by the adapter."""
+    with _isolated_session(db_engine) as session:
+        session.add(AppUser(id=591, username="computed_rxn_ts_spin"))
+        session.flush()
+
+        payload = _minimal_payload()
+        payload["transition_state"]["calculations"][0]["spin_diagnostic"] = {
+            "s_squared": 1.0123,
+            "s_squared_expected": 0.75,
+            "s_squared_annihilated": 0.7599,
+            "note": "UHF TS",
+        }
+        request = ComputedReactionUploadRequest(**payload)
+        summary = persist_computed_reaction_upload(
+            session, request, created_by=591
+        )
+
+        ts_entry_id = summary["transition_state_entry_id"]
+        # ``calculations[0]`` is the TS freq calc (see _minimal_payload).
+        ts_calc = session.scalar(
+            select(Calculation).where(
+                Calculation.transition_state_entry_id == ts_entry_id,
+                Calculation.type == CalculationType.freq,
+            )
+        )
+        assert ts_calc is not None
+        rows = session.scalars(
+            select(CalculationSpinDiagnostic).where(
+                CalculationSpinDiagnostic.calculation_id == ts_calc.id
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].s_squared == pytest.approx(1.0123)
+        assert rows[0].s_squared_expected == pytest.approx(0.75)
+        assert rows[0].s_squared_annihilated == pytest.approx(0.7599)
+        assert rows[0].note == "UHF TS"
 
 
 def test_canonical_direction_kinetics_reuses_canonical_reaction_entry(

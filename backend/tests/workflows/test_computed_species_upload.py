@@ -23,6 +23,7 @@ from app.db.models.calculation import (
     CalculationScanPoint,
     CalculationScanPointCoordinateValue,
     CalculationScanResult,
+    CalculationSpinDiagnostic,
     CalculationSPResult,
     CalculationWavefunctionDiagnostic,
 )
@@ -179,6 +180,47 @@ def test_bundle_sp_calc_with_wavefunction_diagnostic_persists(
         assert rows[0].t1_diagnostic == pytest.approx(0.0179)
         assert rows[0].d1_diagnostic == pytest.approx(0.045)
         assert rows[0].note == "ORCA CCSD(T)"
+
+
+def test_bundle_sp_calc_with_spin_diagnostic_persists(
+    db_engine,
+) -> None:
+    """A bundle SP additional calc carrying ``spin_diagnostic`` persists one
+    ``calc_spin_diagnostic`` (<S^2>) row anchored to the SP calculation row.
+    Guards ``computed_species._to_payload`` forwarding of
+    ``spin_diagnostic``."""
+    with Session(db_engine) as session, session.begin():
+        user_id = _ensure_user(session, username="bundle_spin_diag")
+        bundle = _hydrogen_bundle()
+        bundle.conformers[0].additional_calculations = [
+            type(bundle.conformers[0].primary_calculation)(
+                **_calc(
+                    "sp0",
+                    calc_type="sp",
+                    spin_diagnostic={
+                        "s_squared": 0.7854,
+                        "s_squared_expected": 0.75,
+                        "s_squared_annihilated": 0.7502,
+                        "note": "UHF doublet",
+                    },
+                )
+            ),
+        ]
+        outcome = persist_computed_species_upload(
+            session, bundle, created_by=user_id
+        )
+
+        sp_id = outcome.conformers[0].additional_calculations[0].id
+        rows = session.scalars(
+            select(CalculationSpinDiagnostic).where(
+                CalculationSpinDiagnostic.calculation_id == sp_id
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].s_squared == pytest.approx(0.7854)
+        assert rows[0].s_squared_expected == pytest.approx(0.75)
+        assert rows[0].s_squared_annihilated == pytest.approx(0.7502)
+        assert rows[0].note == "UHF doublet"
 
 
 def test_bundle_freq_calc_with_hessian_persists(db_engine) -> None:

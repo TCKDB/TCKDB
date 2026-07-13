@@ -269,6 +269,11 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    spin_diagnostic: Mapped[Optional["CalculationSpinDiagnostic"]] = relationship(
+        back_populates="calculation",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     geometry_validation: Mapped[Optional["CalculationGeometryValidation"]] = relationship(
         back_populates="calculation",
         cascade="all, delete-orphan",
@@ -1447,5 +1452,63 @@ class CalculationWavefunctionDiagnostic(Base, TimestampMixin, CreatedByMixin):
         CheckConstraint(
             "largest_t2_amplitude IS NULL OR largest_t2_amplitude >= 0",
             name="largest_t2_amplitude_ge_0",
+        ),
+    )
+
+
+class CalculationSpinDiagnostic(Base, TimestampMixin, CreatedByMixin):
+    """Parsed spin-contamination ``<S^2>`` evidence for a calculation.
+
+    The companion to :class:`CalculationWavefunctionDiagnostic`: where that
+    table carries coupled-cluster / multireference scalars, this one carries
+    the spin-contamination signals an ESS reports for an *unrestricted*
+    calculation — the observed ``<S^2>``, the ideal ``S(S+1)`` for the target
+    spin state, and (when the software prints it) the ``<S^2>`` after
+    annihilation of the first spin contaminant. The row is producer-supplied
+    evidence about the quality of the electronic-structure result; it is
+    deliberately not interpreted by the schema (no thresholds, no "clean /
+    contaminated" labels) — readers and curators apply heuristics on top.
+
+    Wavefunction diagnostics (T1/D1) said their ``<S^2>`` signals "will land
+    in a separate diagnostic table"; this is that table.
+
+    Producer contract (not enforced by DB):
+
+    * Emit a row only when ``<S^2>`` was actually parsed from the calculation
+      output. Absence of a row reads as "not parsed / not applicable / not
+      reported" — there is no ``not_checked`` sentinel.
+    * Applies to any UNRESTRICTED calculation (not just coupled cluster);
+      restricted (closed-shell / RO) runs have no ``<S^2>`` contamination to
+      report and should omit the block.
+    """
+
+    __tablename__ = "calc_spin_diagnostic"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    s_squared: Mapped[float] = mapped_column(nullable=False)
+    s_squared_expected: Mapped[Optional[float]] = mapped_column(nullable=True)
+    s_squared_annihilated: Mapped[Optional[float]] = mapped_column(nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    calculation: Mapped["Calculation"] = relationship(
+        back_populates="spin_diagnostic",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "s_squared >= 0",
+            name="s_squared_ge_0",
+        ),
+        CheckConstraint(
+            "s_squared_expected IS NULL OR s_squared_expected >= 0",
+            name="s_squared_expected_ge_0",
+        ),
+        CheckConstraint(
+            "s_squared_annihilated IS NULL OR s_squared_annihilated >= 0",
+            name="s_squared_annihilated_ge_0",
         ),
     )

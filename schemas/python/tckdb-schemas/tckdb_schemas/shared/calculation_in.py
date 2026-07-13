@@ -21,7 +21,9 @@ from tckdb_schemas.fragments.calculation import (
     FrequencyModePayload,
     HessianPayload,
     OptResultPayload,
+    SpinDiagnosticPayload,
     SPResultPayload,
+    WavefunctionDiagnosticPayload,
 )
 from tckdb_schemas.fragments.refs import (
     LevelOfTheoryRef,
@@ -55,6 +57,10 @@ class CalculationIn(SchemaBase):
     :param parameters_json: Optional JSON snapshot from the parser.
     :param parameters_parser_version: Optional parser version tag.
     :param parameters_extracted_at: Optional extraction timestamp.
+    :param wavefunction_diagnostic: Optional inline T1/D1 wavefunction
+        diagnostic, forwarded to the shared calculation persistence seam.
+    :param spin_diagnostic: Optional inline spin-contamination ``<S^2>``
+        diagnostic, forwarded to the shared calculation persistence seam.
     :param artifacts: Optional list of file artifacts (logs, inputs, etc.).
     """
 
@@ -83,6 +89,10 @@ class CalculationIn(SchemaBase):
 
     # Optional inline Cartesian Hessian (geometry-bound at persistence).
     hessian: HessianPayload | None = None
+
+    # Optional inline post-hoc diagnostics (forwarded to the shared seam).
+    wavefunction_diagnostic: WavefunctionDiagnosticPayload | None = None
+    spin_diagnostic: SpinDiagnosticPayload | None = None
 
     # Parsed execution-control parameters (routed through the shared seam).
     parameters: list[CalculationParameterObservation] | None = None
@@ -165,6 +175,8 @@ def calculation_in_to_with_results_payload(
         freq_result=freq_result,
         sp_result=sp_result,
         hessian=calc_in.hessian,
+        wavefunction_diagnostic=calc_in.wavefunction_diagnostic,
+        spin_diagnostic=calc_in.spin_diagnostic,
         parameters=calc_in.parameters,
         parameters_json=calc_in.parameters_json,
         parameters_parser_version=calc_in.parameters_parser_version,

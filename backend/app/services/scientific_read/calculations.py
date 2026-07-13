@@ -33,6 +33,7 @@ from app.db.models.calculation import (
     CalculationScanPoint,
     CalculationScanResult,
     CalculationSCFStability,
+    CalculationSpinDiagnostic,
     CalculationSPResult,
     CalculationWavefunctionDiagnostic,
 )
@@ -75,6 +76,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationScanResultSummary,
     CalculationScanSummary,
     CalculationSCFStabilitySummary,
+    CalculationSpinDiagnosticSummary,
     CalculationSPResultSummary,
     CalculationWavefunctionDiagnosticSummary,
     RequestEcho,
@@ -124,6 +126,7 @@ _HEAVY_INCLUDE_TOKENS: frozenset[str] = frozenset(
         "geometry_validation",
         "scf_stability",
         "wavefunction_diagnostic",
+        "spin_diagnostic",
         "parameters",
         "constraints",
         "review",
@@ -329,6 +332,10 @@ def build_record(
             session, calc.id
         )
 
+    spin_diagnostic_block: list[CalculationSpinDiagnosticSummary] | None = None
+    if "spin_diagnostic" in includes:
+        spin_diagnostic_block = _build_spin_diagnostic(session, calc.id)
+
     parameters_block: list[CalculationParameterSummary] | None = None
     if "parameters" in includes:
         parameters_block = _build_parameters(session, calc.id)
@@ -386,6 +393,7 @@ def build_record(
         geometry_validation=geometry_validation_block,
         scf_stability=scf_stability_block,
         wavefunction_diagnostic=wavefunction_diagnostic_block,
+        spin_diagnostic=spin_diagnostic_block,
         parameters=parameters_block,
         constraints=constraints_block,
         review_history=review_history_block,
@@ -733,6 +741,10 @@ def _build_provenance_and_sections(
         session, CalculationWavefunctionDiagnostic, calculation_id
     )
 
+    has_spin_diagnostic = _exists_for_calc(
+        session, CalculationSpinDiagnostic, calculation_id
+    )
+
     converged = _load_converged_flag(session, calc, calculation_id)
 
     submission_id, submission_ref = _load_submission_link(
@@ -758,6 +770,7 @@ def _build_provenance_and_sections(
         has_geometry_validation=has_geometry_validation,
         has_scf_stability=has_scf_stability,
         has_wavefunction_diagnostic=has_wavefunction_diagnostic,
+        has_spin_diagnostic=has_spin_diagnostic,
         has_scan=has_scan,
         has_irc=has_irc,
         has_path_search=has_path_search,
@@ -1793,6 +1806,34 @@ def _build_wavefunction_diagnostic(
             d1_diagnostic=row.d1_diagnostic,
             t1_norm=row.t1_norm,
             largest_t2_amplitude=row.largest_t2_amplitude,
+            note=row.note,
+            created_at=row.created_at,
+        )
+    ]
+
+
+def _build_spin_diagnostic(
+    session: Session, calculation_id: int
+) -> list[CalculationSpinDiagnosticSummary]:
+    """Return the spin-diagnostic row for *calculation_id* as a list.
+
+    The schema constrains at most one row per calculation. Absence reads
+    as "not parsed / not applicable / not reported" via an empty list
+    (mirrors the wavefunction-diagnostic include pattern). Thresholds for
+    interpreting spin contamination are deliberately not applied here.
+    """
+    row = session.scalar(
+        select(CalculationSpinDiagnostic).where(
+            CalculationSpinDiagnostic.calculation_id == calculation_id
+        )
+    )
+    if row is None:
+        return []
+    return [
+        CalculationSpinDiagnosticSummary(
+            s_squared=row.s_squared,
+            s_squared_expected=row.s_squared_expected,
+            s_squared_annihilated=row.s_squared_annihilated,
             note=row.note,
             created_at=row.created_at,
         )

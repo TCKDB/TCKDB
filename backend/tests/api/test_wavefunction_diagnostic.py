@@ -328,3 +328,47 @@ class TestReadEndpoint:
         assert data["t1_norm"] is None
         assert data["largest_t2_amplitude"] is None
         assert data["note"] == "ORCA"
+
+
+# ---------------------------------------------------------------------------
+# Scientific detail read endpoint: include=wavefunction_diagnostic
+# ---------------------------------------------------------------------------
+
+
+class TestScientificReadInclude:
+    def test_cc_single_point_t1_flows_upload_to_include_read(self, client):
+        """End-to-end: a CCSD(T) single-point carrying a T1 diagnostic is
+        persisted from the upload and served back by the scientific detail
+        endpoint under ``include=wavefunction_diagnostic``."""
+        resp = client.post(
+            "/api/v1/uploads/conformers",
+            json=_conformer_payload(
+                calc_type="sp",
+                wavefunction_diagnostic={
+                    "t1_diagnostic": 0.0179,
+                    "d1_diagnostic": 0.045,
+                    "note": "CCSD(T)",
+                },
+            ),
+        )
+        assert resp.status_code == 201, resp.text
+        calc_id = client.get(
+            "/api/v1/calculations"
+        ).json()["items"][0]["id"]
+
+        read = client.get(
+            f"/api/v1/scientific/calculations/{calc_id}"
+            "?include=wavefunction_diagnostic"
+        )
+        assert read.status_code == 200, read.text
+        record = read.json()["record"]
+        assert (
+            record["available_sections"]["has_wavefunction_diagnostic"] is True
+        )
+
+        block = record["wavefunction_diagnostic"]
+        assert isinstance(block, list)
+        assert len(block) == 1
+        assert block[0]["t1_diagnostic"] == pytest.approx(0.0179)
+        assert block[0]["d1_diagnostic"] == pytest.approx(0.045)
+        assert block[0]["note"] == "CCSD(T)"

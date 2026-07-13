@@ -932,6 +932,24 @@ Table calc_sp_result {
   electronic_energy_uncertainty_hartree double
 }
 
+Table calc_spin_diagnostic {
+  calculation_id bigint [pk, not null, ref: > calculation.id]
+  s_squared double [not null]
+  s_squared_expected double
+  s_squared_annihilated double
+  note text
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+
+  checks {
+    `s_squared_annihilated IS NULL OR s_squared_annihilated >= 0` [name: 'ck_calc_spin_diagnostic_s_squared_annihilated_ge_0']
+    `s_squared_expected IS NULL OR s_squared_expected >= 0` [name: 'ck_calc_spin_diagnostic_s_squared_expected_ge_0']
+    `s_squared >= 0` [name: 'ck_calc_spin_diagnostic_s_squared_ge_0']
+  }
+
+  Note: 'Parsed spin-contamination ``<S^2>`` evidence for a calculation.'
+}
+
 Table calc_wavefunction_diagnostic {
   calculation_id bigint [pk, not null, ref: > calculation.id]
   t1_diagnostic double

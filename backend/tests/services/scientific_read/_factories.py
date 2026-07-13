@@ -24,6 +24,7 @@ from app.db.models.calculation import (
     CalculationOptResult,
     CalculationOutputGeometry,
     CalculationSCFStability,
+    CalculationSpinDiagnostic,
     CalculationSPResult,
 )
 from app.db.models.common import (
@@ -756,6 +757,28 @@ def attach_scf_stability(
     row = CalculationSCFStability(
         calculation_id=calculation.id,
         status=status,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_spin_diagnostic(
+    session: Session,
+    *,
+    calculation: Calculation,
+    s_squared: float = 0.7538,
+    s_squared_expected: float | None = 0.75,
+    s_squared_annihilated: float | None = 0.7501,
+    note: str | None = None,
+) -> CalculationSpinDiagnostic:
+    """Attach a CalculationSpinDiagnostic (<S^2>) row."""
+    row = CalculationSpinDiagnostic(
+        calculation_id=calculation.id,
+        s_squared=s_squared,
+        s_squared_expected=s_squared_expected,
+        s_squared_annihilated=s_squared_annihilated,
+        note=note,
     )
     session.add(row)
     session.flush()

@@ -22,6 +22,7 @@ from tckdb_schemas.fragments.calculation import (
     PathSearchPointPayload,
     PathSearchResultPayload,
     SCFStabilityPayload,
+    SpinDiagnosticPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
 )

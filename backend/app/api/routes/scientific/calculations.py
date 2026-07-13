@@ -239,6 +239,7 @@ _OMITTABLE_RECORD_KEYS: dict[str, str] = {
     "geometry_validation": "geometry_validation",
     "scf_stability": "scf_stability",
     "wavefunction_diagnostic": "wavefunction_diagnostic",
+    "spin_diagnostic": "spin_diagnostic",
     "parameters": "parameters",
     "constraints": "constraints",
     "review": "review_history",
