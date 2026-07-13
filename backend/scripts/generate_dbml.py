@@ -27,6 +27,65 @@ OUTPUT = REPO_ROOT / "schema.dbml"
 
 
 # ---------------------------------------------------------------------------
+# Deterministic ordering helpers
+#
+# SQLAlchemy exposes `Table.indexes`, `Table.constraints`, and
+# `Table.foreign_key_constraints` as plain Python `set`s, whose iteration
+# order is not guaranteed stable across interpreter runs (hash randomization
+# / insertion-order artifacts of reflection). Every place we iterate one of
+# these must sort first, with a tiebreak key that can never itself tie, so
+# regenerating on an unchanged schema always produces byte-identical output.
+# `Table.columns` is an ordered `ColumnCollection` (declaration order) and
+# does not need this treatment.
+# ---------------------------------------------------------------------------
+
+
+def _sorted_tables(metadata) -> list:
+    """Tables in a stable, name-sorted order (independent of import/declaration order)."""
+    return sorted(metadata.tables.values(), key=lambda t: t.name)
+
+
+def _sorted_indexes(table) -> list:
+    """`table.indexes` (a set) sorted by name, then by column list as a tiebreak."""
+    return sorted(
+        table.indexes,
+        key=lambda idx: (idx.name or "", tuple(c.name for c in idx.columns)),
+    )
+
+
+def _sorted_constraints(table, constraint_type) -> list:
+    """`table.constraints` (a set) filtered to `constraint_type`, sorted deterministically."""
+    matching = [c for c in table.constraints if isinstance(c, constraint_type)]
+    if constraint_type is CheckConstraint:
+        return sorted(matching, key=lambda c: (c.name or "", str(c.sqltext)))
+    return sorted(
+        matching,
+        key=lambda c: (c.name or "", tuple(col.name for col in c.columns)),
+    )
+
+
+def _sorted_foreign_key_constraints(table) -> list:
+    """`table.foreign_key_constraints` (a set) sorted deterministically."""
+    return sorted(
+        table.foreign_key_constraints,
+        key=lambda fkc: (
+            fkc.name or "",
+            tuple(c.name for c in fkc.columns),
+            tuple(e.column.table.name for e in fkc.elements),
+            tuple(e.column.name for e in fkc.elements),
+        ),
+    )
+
+
+def _sorted_foreign_keys(col) -> list:
+    """`col.foreign_keys` (a set) sorted deterministically by referenced target."""
+    return sorted(
+        col.foreign_keys,
+        key=lambda fk: (fk.column.table.name, fk.column.name),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Type mapping
 # ---------------------------------------------------------------------------
 
@@ -98,7 +157,7 @@ def _col_type_str(col) -> str:
 def _collect_enums(metadata) -> dict[str, list[str]]:
     """Collect all enum types referenced by columns in the metadata."""
     enums: dict[str, list[str]] = {}
-    for table in metadata.sorted_tables:
+    for table in _sorted_tables(metadata):
         for col in table.columns:
             sa_type = col.type
             enum_class = getattr(sa_type, "enum_class", None)
@@ -131,7 +190,7 @@ def _col_attributes(col, pk_col_names: set[str], table) -> str:
 
     # Inline FK ref
     if col.foreign_keys:
-        fk = next(iter(col.foreign_keys))
+        fk = _sorted_foreign_keys(col)[0]
         target = f"{fk.column.table.name}.{fk.column.name}"
         attrs.append(f"ref: > {target}")
 
@@ -165,7 +224,7 @@ def _render_column(col, pk_col_names: set[str], table) -> str:
 def _render_indexes(table, pk_col_names: set[str]) -> list[str]:
     """Render non-PK indexes as DBML index entries."""
     lines = []
-    for idx in table.indexes:
+    for idx in _sorted_indexes(table):
         col_names = [c.name for c in idx.columns]
         if set(col_names) == pk_col_names:
             continue
@@ -184,25 +243,24 @@ def _render_indexes(table, pk_col_names: set[str]) -> list[str]:
         lines.append(f"    {expr}{attr_str}")
 
     # Also render UniqueConstraints that aren't already covered by indexes
-    for constraint in table.constraints:
-        if isinstance(constraint, UniqueConstraint):
-            col_names = [c.name for c in constraint.columns]
-            if set(col_names) == pk_col_names:
-                continue
-            # Check if already covered by an index
-            existing_index_cols = {
-                frozenset(c.name for c in idx.columns) for idx in table.indexes
-            }
-            if frozenset(col_names) in existing_index_cols:
-                continue
-            if len(col_names) == 1:
-                expr = col_names[0]
-            else:
-                expr = f"({', '.join(col_names)})"
-            attrs = ["unique"]
-            if constraint.name:
-                attrs.append(f"name: '{constraint.name}'")
-            lines.append(f"    {expr} [{', '.join(attrs)}]")
+    for constraint in _sorted_constraints(table, UniqueConstraint):
+        col_names = [c.name for c in constraint.columns]
+        if set(col_names) == pk_col_names:
+            continue
+        # Check if already covered by an index
+        existing_index_cols = {
+            frozenset(c.name for c in idx.columns) for idx in table.indexes
+        }
+        if frozenset(col_names) in existing_index_cols:
+            continue
+        if len(col_names) == 1:
+            expr = col_names[0]
+        else:
+            expr = f"({', '.join(col_names)})"
+        attrs = ["unique"]
+        if constraint.name:
+            attrs.append(f"name: '{constraint.name}'")
+        lines.append(f"    {expr} [{', '.join(attrs)}]")
 
     return lines
 
@@ -215,11 +273,10 @@ def _render_indexes(table, pk_col_names: set[str]) -> list[str]:
 def _render_checks(table) -> list[str]:
     """Render check constraints as DBML check entries."""
     lines = []
-    for constraint in table.constraints:
-        if isinstance(constraint, CheckConstraint):
-            expr = str(constraint.sqltext)
-            name = constraint.name or ""
-            lines.append(f"    `{expr}` [name: '{name}']")
+    for constraint in _sorted_constraints(table, CheckConstraint):
+        expr = str(constraint.sqltext)
+        name = constraint.name or ""
+        lines.append(f"    `{expr}` [name: '{name}']")
     return lines
 
 
@@ -246,7 +303,14 @@ _TABLE_NOTES: dict[str, str] = {}
 
 def _collect_table_notes():
     """Collect docstrings from ORM model classes keyed by table name."""
-    for mapper in Base.registry.mappers:
+    # `Base.registry.mappers` is a set; sort by tablename for determinism
+    # (harmless here since each tablename maps to a single class, but keeps
+    # the collection order stable and cheap to reason about).
+    mappers = sorted(
+        Base.registry.mappers,
+        key=lambda m: getattr(m.class_, "__tablename__", "") or "",
+    )
+    for mapper in mappers:
         cls = mapper.class_
         tablename = getattr(cls, "__tablename__", None)
         if tablename and cls.__doc__:
@@ -264,8 +328,8 @@ def _collect_table_notes():
 def _collect_composite_refs(metadata) -> list[str]:
     """Collect composite foreign keys that need standalone Ref lines."""
     refs = []
-    for table in metadata.sorted_tables:
-        for fkc in table.foreign_key_constraints:
+    for table in _sorted_tables(metadata):
+        for fkc in _sorted_foreign_key_constraints(table):
             if len(fkc.columns) > 1:
                 local_cols = ", ".join(c.name for c in fkc.columns)
                 referred_cols = ", ".join(
@@ -346,7 +410,7 @@ def generate_dbml() -> str:
         parts.append("\n".join(block))
 
     # Tables
-    for table in metadata.sorted_tables:
+    for table in _sorted_tables(metadata):
         parts.append(_render_table(table))
 
     # Composite FKs

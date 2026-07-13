@@ -71,8 +71,16 @@ if TYPE_CHECKING:
 # SQL fragment listing the terminal (resolved/dismissed) workflow states. Kept
 # as a module constant so the model CHECK constraint and any future service
 # code stay aligned with :meth:`MachineReviewCuratorTaskState.terminal_states`.
+# `terminal_states()` returns a `frozenset`, whose iteration order is not
+# stable across interpreter runs (hash randomization). Iterate the enum class
+# itself instead (deterministic declaration order) and filter to the terminal
+# members — this also matches the literal order already baked into the
+# deployed migration's `_TERMINAL_STATE_VALUES` tuple
+# (alembic/versions/b8c9d0e1f2a3_add_machine_review_curator_task.py), so the
+# rendered CHECK constraint text doesn't drift from what's already deployed.
+_TERMINAL_STATES = MachineReviewCuratorTaskState.terminal_states()
 _TERMINAL_STATES_SQL = ", ".join(
-    f"'{state.value}'" for state in MachineReviewCuratorTaskState.terminal_states()
+    f"'{state.value}'" for state in MachineReviewCuratorTaskState if state in _TERMINAL_STATES
 )
 
 
