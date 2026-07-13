@@ -36,8 +36,10 @@ from app.db.models.common import (
     CalculationType,
     IRCDirection,
     ParameterSource,
+    SoftwareReconciliationStatus,
 )
 from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.software import SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.entities.calculation import CalculationCreateResolved
 from app.schemas.fragments.calculation import (
@@ -51,9 +53,14 @@ from app.schemas.fragments.calculation import (
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.refs import (
     LevelOfTheoryRef,
+    SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.services.software_reconciliation import (
+    SoftwareReconciliationResult,
+    reconcile_software_provenance,
+)
 from app.services.software_resolution import resolve_software_release_ref
 
 
@@ -255,6 +262,104 @@ def persist_calculation(
     session.add(calculation)
     session.flush()
     return calculation
+
+
+# ---------------------------------------------------------------------------
+# Software provenance reconciliation (DR-0008)
+# ---------------------------------------------------------------------------
+
+
+def software_release_to_declared_ref(
+    release: SoftwareRelease | None,
+) -> SoftwareReleaseRef | None:
+    """Reconstruct an upload-facing declared ref from a persisted release.
+
+    Used by the parser seam, which only has the resolved
+    ``calculation.software_release`` row rather than the original upload
+    payload. Returns ``None`` when there is no release or no software name
+    to compare against.
+
+    :param release: Persisted ``SoftwareRelease`` row (may be ``None``).
+    :returns: Equivalent ``SoftwareReleaseRef`` or ``None``.
+    """
+
+    if release is None:
+        return None
+    name = release.software.name if release.software is not None else None
+    if not name:
+        return None
+    return SoftwareReleaseRef(
+        name=name,
+        version=release.version,
+        revision=release.revision,
+        build=release.build,
+    )
+
+
+def _format_observed_banner(parsed_software: dict | None) -> str | None:
+    """Render the parser-observed software dict into a compact banner string.
+
+    Joins the meaningful non-empty fields (name, version, build,
+    release date) into a single human-readable/queryable token. Returns
+    ``None`` when the parser reported no software banner.
+    """
+
+    if not parsed_software:
+        return None
+    tokens = [
+        str(parsed_software[key])
+        for key in ("name", "version", "build", "release_date_raw")
+        if parsed_software.get(key)
+    ]
+    banner = " ".join(tokens)
+    return banner or None
+
+
+def record_software_reconciliation(
+    calculation: Calculation,
+    *,
+    declared_ref: SoftwareReleaseRef | None = None,
+    parsed_software: dict | None = None,
+) -> SoftwareReconciliationResult | None:
+    """Reconcile declared vs observed software provenance onto a calculation.
+
+    Runs :func:`reconcile_software_provenance` and persists the outcome on
+    the ``calculation`` row (``software_reconciliation_status`` and, when a
+    banner was observed, ``observed_software_banner``). See DR-0008.
+
+    This is **non-blocking provenance**, not a trust gate: a ``mismatch``
+    is recorded and the declared value still wins on ``software_release_id``
+    — the upload is never rejected. When ``declared_ref`` is omitted the
+    declared side is reconstructed from ``calculation.software_release``, so
+    the parser seam can call this with only ``parsed_software``.
+
+    :param calculation: The calculation row to annotate (already persisted).
+    :param declared_ref: User-declared software ref; reconstructed from the
+        persisted release when omitted.
+    :param parsed_software: Parser-observed software dict (the ``software``
+        entry emitted by the ESS parsers), or ``None`` when no banner was
+        parsed.
+    :returns: The reconciliation result, or ``None`` when neither a declared
+        ref nor a parsed banner is available (nothing recorded — the row is
+        left NULL rather than fabricating a status).
+    """
+
+    if declared_ref is None:
+        declared_ref = software_release_to_declared_ref(calculation.software_release)
+
+    if declared_ref is None and not parsed_software:
+        return None
+
+    result = reconcile_software_provenance(
+        declared=declared_ref, parsed=parsed_software
+    )
+    calculation.software_reconciliation_status = SoftwareReconciliationStatus(
+        result.match_status
+    )
+    banner = _format_observed_banner(parsed_software)
+    if banner is not None:
+        calculation.observed_software_banner = banner
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1130,6 +1235,16 @@ def resolve_and_persist_calculation_with_results(
     )
     resolved = resolve_calculation_create_request(session, request)
     calculation = persist_calculation(session, resolved, created_by=created_by)
+    # DR-0008: record declared software provenance at ingest. No parser
+    # banner reaches this seam (the upload payload carries only the declared
+    # ref), so this resolves to ``declared_only``; the parser seam
+    # (extract_and_store_calculation_parameters) later upgrades the status
+    # to matched/enriched/mismatch/parsed_only when a banner is observed.
+    record_software_reconciliation(
+        calculation,
+        declared_ref=calc_upload.software_release,
+        parsed_software=None,
+    )
     persist_calculation_result(session, calculation, calc_upload)
     persist_calculation_parameters(
         session,

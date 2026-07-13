@@ -39,6 +39,7 @@ from app.db.models.common import (
     PathSearchMethod,
     ScanCoordinateKind,
     SCFStabilityStatus,
+    SoftwareReconciliationStatus,
     ValidationStatus,
 )
 
@@ -123,6 +124,26 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
     parameters_extracted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=False), nullable=True, doc="When parameters were extracted"
+    )
+
+    # --- Software provenance reconciliation (DR-0008) -----------------------
+    # Records how the user-declared software_release related to the version
+    # banner observed by the ESS output parser. Provenance, not a trust gate:
+    # a mismatch is recorded here (declared value still wins on
+    # ``software_release_id``), never used to reject the upload. NULL means
+    # reconciliation was never run for this row.
+    software_reconciliation_status: Mapped[
+        Optional[SoftwareReconciliationStatus]
+    ] = mapped_column(
+        SAEnum(SoftwareReconciliationStatus, name="software_reconciliation_status"),
+        nullable=True,
+        index=True,
+        doc="Outcome of declared-vs-observed software provenance reconciliation.",
+    )
+    observed_software_banner: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Raw software version banner observed by the ESS output parser, when available.",
     )
 
     species_entry: Mapped[Optional["SpeciesEntry"]] = relationship(

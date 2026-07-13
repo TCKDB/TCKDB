@@ -45,7 +45,11 @@ from app.services.artifact_storage import (
     ArtifactStorageUnavailable,
     load_artifact_bytes,
 )
-from app.services.calculation_resolution import persist_calculation_parameters
+from app.services.calculation_resolution import (
+    persist_calculation_parameters,
+    record_software_reconciliation,
+    software_release_to_declared_ref,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +231,27 @@ def extract_and_store_calculation_parameters(
 
     software = _resolve_software(calculation, artifact_text)
     parsed = _run_parser(software, artifact_text)
+
+    # DR-0008: reconcile the declared software_release against the version
+    # banner the parser just observed, and persist the outcome on the
+    # calculation. Non-blocking: a mismatch is recorded, never raised, and
+    # any failure here must not abort parameter extraction / the upload.
+    try:
+        record_software_reconciliation(
+            calculation,
+            declared_ref=software_release_to_declared_ref(
+                calculation.software_release
+            ),
+            parsed_software=parsed.get("software"),
+        )
+    except Exception as exc:  # pragma: no cover - defensive, never blocks
+        logger.warning(
+            "software provenance reconciliation skipped for calculation "
+            "id=%s: %s: %s",
+            calculation.id,
+            type(exc).__name__,
+            exc,
+        )
 
     observations = [_to_observation(p) for p in parsed.get("parameters", [])]
     effective_parser_version = parser_version or parsed.get("parser_version")

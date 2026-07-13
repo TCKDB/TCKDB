@@ -236,6 +236,35 @@ class ParameterSource(str, Enum):
     curated = "curated"
 
 
+class SoftwareReconciliationStatus(str, Enum):
+    """Outcome of reconciling user-declared vs parser-observed software
+    provenance on a ``calculation`` (DR-0008).
+
+    The user declares a software release in the upload payload; the ESS
+    output parser observes a version banner. This status records how the
+    two sources related when the calculation was ingested:
+
+    * ``matched`` — both sources agree.
+    * ``enriched`` — user gave partial info, the parser filled the gaps.
+    * ``mismatch`` — the sources disagree on at least one field. The
+      declared value still takes precedence (this is provenance, not a
+      trust gate); the disagreement is recorded, never rejected.
+    * ``declared_only`` — user declared, no parseable banner was observed.
+    * ``parsed_only`` — no user declaration, only a parsed banner.
+
+    A NULL value means reconciliation was never run for the calculation
+    (e.g. importer-created rows with neither a declared release nor a
+    parsed banner). Values mirror
+    ``SoftwareReconciliationResult.match_status`` exactly.
+    """
+
+    matched = "matched"
+    enriched = "enriched"
+    mismatch = "mismatch"
+    declared_only = "declared_only"
+    parsed_only = "parsed_only"
+
+
 class TransitionStateEntryStatus(str, Enum):
     guess = "guess"
     optimized = "optimized"
