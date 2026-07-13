@@ -5,7 +5,7 @@ See docs/specs/read_api_mvp.md §Endpoint 1 for the contract.
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import Text, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
@@ -123,6 +123,20 @@ def search_species(
             "missing_identifier: at least one of {smiles, inchi, inchi_key, "
             "formula, species_ref, species_entry_ref} is required."
         )
+
+    # InChI is not stored on Species and cannot be cheaply (re)computed from
+    # the stored RDKit mol in Postgres, so it can never be used to filter.
+    # If it is the *only* identifier supplied — i.e. no other identifier
+    # narrows the query — we must not silently fall through to "no filter
+    # at all" (which would return every species in the database). Per v0
+    # policy this returns an empty result set instead. If inchi is
+    # supplied alongside another real identifier, that identifier still
+    # narrows the query as usual; inchi itself is simply not verified.
+    other_identifier_narrows = any(
+        v is not None for v in (request.smiles, request.inchi_key, request.formula)
+    ) or species_ref_id is not None or species_entry_ref_id is not None
+    if request.inchi is not None and not other_identifier_narrows:
+        return _empty_response(request, includes, offset, limit)
 
     species_rows = _query_matching_species(
         session,
@@ -315,18 +329,28 @@ def _query_matching_species(
             .where(SpeciesEntry.id == species_entry_ref_id)
             .scalar_subquery()
         )
-    # inchi and formula are not stored on Species directly in the current
-    # schema; if either is supplied alongside other filters they AND-combine
-    # by yielding zero rows when inconsistent. For v0 we treat unsupported
-    # identifier filters as "no record matches" rather than raising — this
-    # matches the AND-with-empty-result rule from the spec.
-    if request.inchi is not None or request.formula is not None:
-        # We have no column to filter against → results AND to empty unless
-        # the other identifiers happen to find rows. To keep semantics
-        # honest, we accept the query but the rows are constrained only by
-        # the other identifiers; downstream entry filtering may further
-        # narrow. A future schema addition could surface inchi/formula.
-        pass
+    if request.formula is not None:
+        # Species has no stored formula column, but the RDKit cartridge can
+        # derive it on the fly from the identity SMILES: mol_formula() over
+        # mol_from_smiles(sp.smiles) yields Hill notation (e.g. "H2O",
+        # "C3H6"), with a trailing charge suffix for ions (e.g. "HO-",
+        # "H4N+"). This is computed per-query rather than stored, so it is
+        # exact-match only and does NOT distinguish isotopologues (the
+        # cartridge's default mol_formula() ignores isotope labels — heavy
+        # water reports as "H2O", same as light water). mol_from_smiles()
+        # returns SQL NULL for any row whose SMILES fails to parse, which
+        # simply excludes that row rather than raising.
+        #
+        # Match is case-sensitive and exact; we only strip incidental
+        # surrounding whitespace from client input.
+        formula_expr = func.mol_formula(func.mol_from_smiles(Species.smiles)).cast(Text)
+        stmt = stmt.where(formula_expr == request.formula.strip())
+    # inchi is not stored on Species and cannot be cheaply (re)computed by
+    # the cartridge, so it is never used to filter here. The inchi-only
+    # "would return everything" case is short-circuited to an empty result
+    # earlier in search_species(); when inchi is supplied alongside another
+    # real identifier we simply rely on that identifier and leave inchi
+    # unverified (echoed back to the caller but not filtered).
     return session.scalars(stmt).all()
 
 

@@ -48,8 +48,15 @@ class SpeciesSearchRequest(BaseModel):
     """
 
     smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
+    # inchi has no stored/derivable column to filter against (see
+    # species.py::search_species); an inchi-only query returns an empty
+    # result set rather than the unfiltered species table.
     inchi: str | None = Field(default=None, max_length=_MAX_INCHI_LENGTH)
     inchi_key: str | None = Field(default=None, max_length=_MAX_INCHI_KEY_LENGTH)
+    # Matched via the RDKit cartridge's mol_formula(mol_from_smiles(...))
+    # against the species' identity SMILES: Hill notation, e.g. "H2O",
+    # "C3H6", with a trailing charge suffix for ions ("HO-", "H4N+").
+    # Exact, case-sensitive match; isotopes are not distinguished.
     formula: str | None = Field(default=None, max_length=_MAX_FORMULA_LENGTH)
 
     charge: int | None = None

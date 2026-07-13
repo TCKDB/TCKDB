@@ -82,6 +82,91 @@ def test_no_identifier_raises(db_session):
 
 
 # ---------------------------------------------------------------------------
+# Formula filter (RDKit cartridge derived) — regression coverage for the
+# "formula silently returns everything" bug.
+# ---------------------------------------------------------------------------
+
+
+def test_search_by_formula_returns_water_and_excludes_cyclopropane(db_session):
+    water = make_species(db_session, smiles="O", inchi_key=next_inchi_key("H2O"))
+    make_species_entry(db_session, water)
+    cyclopropane = make_species(
+        db_session, smiles="C1CC1", inchi_key=next_inchi_key("C3H6")
+    )
+    make_species_entry(db_session, cyclopropane)
+
+    response = search_species(db_session, SpeciesSearchRequest(formula="H2O"))
+
+    species_ids = {rec.species_id for rec in response.records}
+    assert water.id in species_ids
+    assert cyclopropane.id not in species_ids
+    assert len(response.records) == 1
+
+
+def test_search_by_formula_nonexistent_returns_empty(db_session):
+    water = make_species(db_session, smiles="O", inchi_key=next_inchi_key("H2ONF"))
+    make_species_entry(db_session, water)
+
+    response = search_species(
+        db_session, SpeciesSearchRequest(formula="XeF99999")
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 0
+
+
+def test_search_by_formula_matches_charged_ion_suffix(db_session):
+    hydroxide = make_species(
+        db_session, smiles="[OH-]", charge=-1, inchi_key=next_inchi_key("OHION")
+    )
+    make_species_entry(db_session, hydroxide)
+    water = make_species(db_session, smiles="O", inchi_key=next_inchi_key("H2OION"))
+    make_species_entry(db_session, water)
+
+    response = search_species(db_session, SpeciesSearchRequest(formula="HO-"))
+
+    species_ids = {rec.species_id for rec in response.records}
+    assert hydroxide.id in species_ids
+    assert water.id not in species_ids
+
+
+# ---------------------------------------------------------------------------
+# InChI filter — no stored/derivable column, so an inchi-only query must
+# never silently return the full unfiltered species table.
+# ---------------------------------------------------------------------------
+
+
+def test_search_by_inchi_only_returns_empty_not_everything(db_session):
+    species_a = make_species(db_session, smiles="O", inchi_key=next_inchi_key("INCHIONLY1"))
+    make_species_entry(db_session, species_a)
+    species_b = make_species(db_session, smiles="C1CC1", inchi_key=next_inchi_key("INCHIONLY2"))
+    make_species_entry(db_session, species_b)
+
+    response = search_species(
+        db_session,
+        SpeciesSearchRequest(inchi="InChI=1S/H2O/h1H2"),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 0
+
+
+def test_search_by_inchi_with_smiles_still_filters_by_smiles(db_session):
+    # inchi cannot be verified, but a co-supplied real identifier (smiles)
+    # still narrows the query as usual — inchi is echoed, not filtered.
+    species = make_species(db_session, smiles="CCO", inchi_key=next_inchi_key("INCHIWS"))
+    make_species_entry(db_session, species)
+
+    response = search_species(
+        db_session,
+        SpeciesSearchRequest(smiles="CCO", inchi="InChI=1S/C2H6O/..."),
+    )
+
+    assert len(response.records) == 1
+    assert response.records[0].species_id == species.id
+
+
+# ---------------------------------------------------------------------------
 # Default trust posture
 # ---------------------------------------------------------------------------
 
