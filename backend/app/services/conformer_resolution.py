@@ -105,6 +105,28 @@ def resolve_conformer_group(
     :param xyz_atoms: Parsed XYZ atoms (needed for torsion extraction).
     :returns: (conformer_group, fingerprint_or_none, scheme_or_none).
     """
+    # Serialize basin resolution per species_entry to close a read-then-create
+    # race: two concurrent uploads of the same physical basin would both SELECT
+    # existing groups (below), both find no match, and both INSERT — silently
+    # forking one basin into duplicate conformer_group rows (or colliding on the
+    # (species_entry_id, label) unique constraint via a racy COUNT-based index).
+    # A transaction-scoped advisory lock makes the second caller block until the
+    # first commits, so it then sees the committed group and dedups correctly.
+    # The xact variant auto-releases at commit/rollback (cannot leak); we take it
+    # inside the caller's transaction and never open our own. The key is
+    # namespaced by species_entry.id so distinct entries never block each other
+    # (cross-entry hash collisions only cause rare, harmless extra blocking).
+    # Do NOT remove this lock without a DB-level basin-identity unique constraint.
+    session.execute(
+        select(
+            func.pg_advisory_xact_lock(
+                func.hashtextextended(
+                    f"conformer_group_resolve:{species_entry.id}", 0
+                )
+            )
+        )
+    )
+
     scheme = _get_default_scheme(session)
     params = _get_scheme_params(scheme)
     threshold = params["torsion_match_threshold_degrees"]
