@@ -278,6 +278,7 @@ def _build_statmech_payload(
         "is_linear": conformer.is_linear,
         "rigid_rotor_kind": rrk_map.get(conformer.rigid_rotor_kind) if conformer.rigid_rotor_kind else None,
         "external_symmetry": conformer.external_symmetry,
+        "optical_isomers": conformer.optical_isomers,
         "statmech_treatment": stm_map.get(conformer.statmech_treatment) if conformer.statmech_treatment else None,
         "freq_scale_factor": freq_scale_factor_ref,
     }

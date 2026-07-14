@@ -471,6 +471,7 @@ class StatmechInBundle(SchemaBase):
         to compute statmech.
     :param workflow_tool_release: Optional workflow-tool provenance.
     :param external_symmetry: External symmetry number.
+    :param optical_isomers: Number of optical isomers (>= 1).
     :param point_group: Optional point-group label.
     :param is_linear: Whether the molecule is linear.
     :param rigid_rotor_kind: Rotational treatment classification.
@@ -494,6 +495,7 @@ class StatmechInBundle(SchemaBase):
     workflow_tool_release: WorkflowToolReleaseRef | None = None
 
     external_symmetry: int | None = Field(default=None, ge=1)
+    optical_isomers: int | None = Field(default=None, ge=1)
     point_group: str | None = None
 
     is_linear: bool | None = None

@@ -43,7 +43,6 @@ from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.fragments.refs import (
     FreqScaleFactorRef,
-    LevelOfTheoryRef,
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
@@ -357,6 +356,7 @@ class BundleStatmechIn(SchemaBase):
     :param is_linear: Whether the molecule is linear.
     :param rigid_rotor_kind: Rotational treatment classification.
     :param external_symmetry: External symmetry number.
+    :param optical_isomers: Number of optical isomers (>= 1).
     :param point_group: Optional point-group label (e.g. ``"C2v"``).
     :param statmech_treatment: Overall statmech treatment classification.
     :param freq_scale_factor: Frequency scale factor applied.
@@ -373,6 +373,7 @@ class BundleStatmechIn(SchemaBase):
     is_linear: bool | None = None
     rigid_rotor_kind: RigidRotorKind | None = None
     external_symmetry: int | None = Field(default=None, ge=1)
+    optical_isomers: int | None = Field(default=None, ge=1)
     point_group: str | None = None
     statmech_treatment: StatmechTreatmentKind | None = None
     freq_scale_factor: FreqScaleFactorRef | None = None

@@ -952,6 +952,60 @@ def test_statmech_point_group_persists_on_species_block(db_engine) -> None:
         assert statmech.point_group == "D3h"
 
 
+def test_statmech_optical_isomers_persists_on_species_block(db_engine) -> None:
+    """Per-species statmech blocks accept and persist ``optical_isomers``."""
+    payload = _minimal_payload()
+    payload["species"][0]["statmech"] = {
+        "is_linear": False,
+        "external_symmetry": 6,
+        "optical_isomers": 2,
+        "statmech_treatment": "rrho",
+    }
+
+    with _isolated_session(db_engine) as session:
+        request = ComputedReactionUploadRequest(**payload)
+        summary = persist_computed_reaction_upload(session, request)
+
+        ch3_entry_id = summary["species_entry_ids"][0]
+        statmech = session.scalars(
+            select(Statmech).where(Statmech.species_entry_id == ch3_entry_id)
+        ).one()
+        assert statmech.optical_isomers == 2
+
+
+def test_statmech_optical_isomers_defaults_null_when_omitted(db_engine) -> None:
+    """A statmech block without ``optical_isomers`` still validates and
+    stores NULL — old bundle payloads remain valid."""
+    payload = _minimal_payload()
+    payload["species"][0]["statmech"] = {
+        "is_linear": False,
+        "external_symmetry": 6,
+        "statmech_treatment": "rrho",
+    }
+
+    with _isolated_session(db_engine) as session:
+        request = ComputedReactionUploadRequest(**payload)
+        summary = persist_computed_reaction_upload(session, request)
+
+        ch3_entry_id = summary["species_entry_ids"][0]
+        statmech = session.scalars(
+            select(Statmech).where(Statmech.species_entry_id == ch3_entry_id)
+        ).one()
+        assert statmech.optical_isomers is None
+
+
+def test_statmech_optical_isomers_zero_rejected(db_engine) -> None:
+    """``optical_isomers`` below 1 is rejected at the schema layer (422)."""
+    payload = _minimal_payload()
+    payload["species"][0]["statmech"] = {
+        "is_linear": False,
+        "optical_isomers": 0,
+        "statmech_treatment": "rrho",
+    }
+    with pytest.raises(ValidationError, match="greater than or equal to 1"):
+        ComputedReactionUploadRequest(**payload)
+
+
 def test_statmech_source_calculations_persist_for_species_owned_calcs(db_engine) -> None:
     """Statmech source_calculations links resolve and persist correctly."""
     payload = _minimal_payload()

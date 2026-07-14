@@ -1614,6 +1614,71 @@ def test_computed_species_statmech_block_persists_with_fsf(db_engine) -> None:
         assert aec_after == aec_before
 
 
+def test_computed_species_statmech_optical_isomers_persists(db_engine) -> None:
+    """The computed-species bundle accepts ``optical_isomers`` on the
+    inline statmech block and persists it (reads back as given). This
+    reaches the DB column through the bundle path, closing the gap where
+    only the standalone statmech path carried it."""
+    bundle = _hydrogen_bundle(
+        statmech={
+            "scientific_origin": "computed",
+            "is_linear": True,
+            "external_symmetry": 1,
+            "optical_isomers": 2,
+            "statmech_treatment": "rrho",
+        },
+    )
+
+    with Session(db_engine) as session, session.begin():
+        user_id = _ensure_user(session, username="bundle_optical")
+        outcome = persist_computed_species_upload(
+            session, bundle, created_by=user_id
+        )
+
+        assert outcome.statmech is not None
+        statmech = session.get(Statmech, outcome.statmech.id)
+        assert statmech is not None
+        assert statmech.optical_isomers == 2
+
+
+def test_computed_species_statmech_optical_isomers_defaults_null(db_engine) -> None:
+    """A statmech block without ``optical_isomers`` still validates and
+    stores NULL — old bundle payloads remain valid."""
+    bundle = _hydrogen_bundle(
+        statmech={
+            "scientific_origin": "computed",
+            "is_linear": True,
+            "external_symmetry": 1,
+            "statmech_treatment": "rrho",
+        },
+    )
+
+    with Session(db_engine) as session, session.begin():
+        user_id = _ensure_user(session, username="bundle_optical_null")
+        outcome = persist_computed_species_upload(
+            session, bundle, created_by=user_id
+        )
+
+        assert outcome.statmech is not None
+        statmech = session.get(Statmech, outcome.statmech.id)
+        assert statmech is not None
+        assert statmech.optical_isomers is None
+
+
+def test_computed_species_statmech_optical_isomers_zero_rejected(db_engine) -> None:
+    """``optical_isomers`` below 1 is rejected at the schema layer (422)."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="greater than or equal to 1"):
+        _hydrogen_bundle(
+            statmech={
+                "is_linear": True,
+                "optical_isomers": 0,
+                "statmech_treatment": "rrho",
+            },
+        )
+
+
 def test_computed_species_statmech_source_key_must_resolve(db_engine) -> None:
     """Statmech ``source_calculations`` keys are validated against the
     bundle's global calc namespace at the schema layer; ghost keys are

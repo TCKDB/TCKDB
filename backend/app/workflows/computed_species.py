@@ -816,6 +816,7 @@ def _persist_statmech_block(
             workflow_tool_release.id if workflow_tool_release is not None else None
         ),
         external_symmetry=s.external_symmetry,
+        optical_isomers=s.optical_isomers,
         point_group=s.point_group,
         is_linear=s.is_linear,
         rigid_rotor_kind=s.rigid_rotor_kind,

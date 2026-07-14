@@ -653,6 +653,7 @@ def persist_computed_reaction_upload(
                 is_linear=s.is_linear,
                 rigid_rotor_kind=s.rigid_rotor_kind,
                 external_symmetry=s.external_symmetry,
+                optical_isomers=s.optical_isomers,
                 point_group=s.point_group,
                 statmech_treatment=s.statmech_treatment,
                 frequency_scale_factor_id=fsf_id,
