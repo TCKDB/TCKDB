@@ -585,11 +585,11 @@ class NetworkPDepUploadRequest(SchemaBase):
 
         # Micro reaction participants must reference defined species
         for rxn in self.micro_reactions:
-            for p in rxn.reactants + rxn.products:
-                if p.species_key not in species_keys:
+            for rp in rxn.reactants + rxn.products:
+                if rp.species_key not in species_keys:
                     raise ValueError(
                         f"Micro reaction '{rxn.key}' references undefined "
-                        f"species_key '{p.species_key}'."
+                        f"species_key '{rp.species_key}'."
                     )
 
         # TS must reference defined micro reactions
@@ -658,8 +658,8 @@ class NetworkPDepUploadRequest(SchemaBase):
             for p in state.participants:
                 used.add(p.species_key)
         for rxn in self.micro_reactions:
-            for p in rxn.reactants + rxn.products:
-                used.add(p.species_key)
+            for rp in rxn.reactants + rxn.products:
+                used.add(rp.species_key)
         if self.solve:
             for bg in self.solve.bath_gas:
                 used.add(bg.species_key)
