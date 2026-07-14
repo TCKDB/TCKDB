@@ -13,11 +13,28 @@ What it does
    ``/scientific/*`` endpoints, no auth) plus two DB-only fields (see below).
 2. Assembles an Arkane ``thermo('NASA')`` input purely from TCKDB-stored data,
    using explicit statmech ``modes`` (IdealGasTranslation / NonlinearRotor /
-   HarmonicOscillator) — the moments of inertia are computed here from the
-   TCKDB geometry + atomic masses, which is exactly the completeness claim.
+   HarmonicOscillator, plus ``HinderedRotor`` for floppy species) — the moments
+   of inertia are computed here from the TCKDB geometry + atomic masses, which
+   is exactly the completeness claim.
 3. Runs Arkane in the ``rmg_env`` conda environment (via subprocess).
 4. Numerically compares Arkane's recomputed S298 and Cp(T) against the thermo
    TCKDB already stores for that species.
+
+Hindered rotors (floppy species)
+---------------------------------
+For species with torsions, each rotor is reconstructed from TCKDB:
+  * SYMMETRY number and PIVOT atoms          -> API statmech ``torsions``
+  * scan POTENTIAL (energy vs dihedral)      -> API ``/calculations/{ref}/scan``
+  * rotating-TOP atom set                    -> DERIVED from stored geometry
+    connectivity (``torsion.top_description`` is NULL; the top is a
+    deterministic graph property of an acyclic single-bond rotor)
+The reduced moment of inertia (rmgpy option=3) and the Fourier potential fit
+are computed with rmgpy (in ``rmg_env``) so they match Arkane exactly, then
+embedded as literals. The R torsional modes are dropped from the harmonic list
+(the R lowest stored frequencies) so they are not double-counted. Example:
+
+    conda run -n tckdb_env python backend/scripts/validation/arkane_statmech_roundtrip.py \
+        --species-entry-ref spe_sgidibgknrjbvcetgc6xsej74q   # ethylperoxy CCO[O]
 
 Primary comparison targets are S298 and Cp(300/500/1000/1500 K): they depend
 only on geometry + frequencies + symmetry number + multiplicity + optical
@@ -28,10 +45,17 @@ correction-reference difference, NOT a statmech-completeness failure.
 
 Data accessibility split (a finding in its own right)
 -----------------------------------------------------
-Most data is reachable over the public read API. Two pieces are NOT exposed by
-the API and must be read directly from the DB (read-only):
+Most data is reachable over the public read API, including the full rotor scan
+potential (``/calculations/{ref}/scan``) and torsion topology. Pieces NOT on the
+API (read directly from the DB, read-only) or not stored at all:
   * per-mode harmonic frequencies   -> table ``calc_freq_mode.frequency_cm1``
-  * ``statmech.optical_isomers``     -> column exists but omitted from payload
+                                       (DB only; not on the API)
+  * ``statmech.optical_isomers``     -> column exists but is NULL for the ARC
+                                       corpus and omitted from the payload; the
+                                       harness instead derives it from the
+                                       API-served ``point_group`` (C1 -> 2)
+  * rotor top atom set               -> ``torsion.top_description`` is NULL;
+                                       derived here from geometry connectivity
 
 Usage
 -----
@@ -85,10 +109,43 @@ ATOMIC_MASS = {
 
 CP_TEMPERATURES = (300.0, 500.0, 1000.0, 1500.0)
 
+AMU_ANGSTROM2_TO_KG_M2 = 1.66053906660e-47  # 1 amu*angstrom^2 in kg*m^2
+
+# Covalent radii (angstrom) — only used to reconstruct the molecular bond graph
+# from the stored geometry so the rotating-top atom set can be derived (TCKDB
+# does not store the top; see docs/validation findings). Distance-based bonds
+# are unambiguous for the small, well-optimized species this harness targets.
+COVALENT_RADII = {
+    "H": 0.31, "D": 0.31, "C": 0.76, "N": 0.71, "O": 0.66,
+    "F": 0.57, "S": 1.05, "Cl": 1.02, "P": 1.07, "Br": 1.20,
+}
+
 
 # --------------------------------------------------------------------------- #
 # Live data access
 # --------------------------------------------------------------------------- #
+def optical_isomers_from_point_group(point_group: str | None) -> int | None:
+    """Infer optical-isomer count from a Schoenflies point group.
+
+    A point group is *chiral* (2 optical isomers) iff it contains only proper
+    rotations — i.e. the pure-rotation groups C1, Cn, Dn, T, O, I. Any group
+    with an improper element (a mirror plane, inversion centre, or Sn axis:
+    Cs, Ci, Cnv, Cnh, Dnh, Dnd, Sn, Td, Oh, Ih ...) is achiral (1). This mirrors
+    Arkane's own optical-isomer determination and lets the round-trip recover
+    the value from the *stored* ``point_group`` when the dedicated
+    ``optical_isomers`` column is NULL.
+    """
+    if not point_group:
+        return None
+    pg = point_group.strip()
+    if pg in {"T", "O", "I"}:
+        return 2
+    import re as _re
+    if _re.fullmatch(r"C\d+", pg) or _re.fullmatch(r"D\d+", pg):
+        return 2  # pure-rotation groups Cn / Dn (includes C1) -> chiral
+    return 1
+
+
 def api_get(path: str) -> dict:
     """GET a public scientific read endpoint and return parsed JSON."""
     url = f"{API_BASE}{path}"
@@ -198,8 +255,24 @@ def gather_species(species_entry_ref: str) -> dict:
     )
     raw_oi = rows[0][0] if rows and rows[0] else ""
     data["optical_isomers_stored"] = int(raw_oi) if raw_oi else None
-    data["optical_isomers"] = data["optical_isomers_stored"] or 1  # Arkane default
-    data["sources"]["optical_isomers"] = "DB statmech (API GAP)"
+    # When the dedicated column is NULL, fall back to the stored point group
+    # (served on the API). C1/Cn/Dn are chiral -> 2. This is load-bearing for
+    # floppy/chiral species: a wrong value shifts S298 by R*ln(2) ~ 5.76 J/mol/K.
+    data["optical_isomers_from_pg"] = optical_isomers_from_point_group(
+        data["point_group"]
+    )
+    if data["optical_isomers_stored"] is not None:
+        data["optical_isomers"] = data["optical_isomers_stored"]
+        data["sources"]["optical_isomers"] = "DB statmech (API GAP)"
+    elif data["optical_isomers_from_pg"] is not None:
+        data["optical_isomers"] = data["optical_isomers_from_pg"]
+        data["sources"]["optical_isomers"] = (
+            f"DERIVED from API point_group={data['point_group']} "
+            "(statmech.optical_isomers NULL)"
+        )
+    else:
+        data["optical_isomers"] = 1  # Arkane default
+        data["sources"]["optical_isomers"] = "default=1 (no stored value)"
 
     # --- stored thermo (API): S298, H298, NASA ---
     thermo = api_get(
@@ -211,6 +284,190 @@ def gather_species(species_entry_ref: str) -> dict:
     data["thermo_ref"] = thermo["thermo_ref"]
     data["sources"]["stored_thermo"] = "API thermo"
     return data
+
+
+# --------------------------------------------------------------------------- #
+# Hindered-rotor data (torsions + scan potentials)
+# --------------------------------------------------------------------------- #
+def build_bond_graph(symbols, coords) -> dict[int, set[int]]:
+    """Reconstruct a 1-indexed bond graph from geometry via covalent radii.
+
+    Needed only because TCKDB does not store the rotor top atom set; the top is
+    a deterministic graph property once bonds are known. A pair is bonded when
+    their separation is < 1.3 x (r_cov(a) + r_cov(b)).
+    """
+    n = len(symbols)
+    adj: dict[int, set[int]] = {i: set() for i in range(1, n + 1)}
+    for i in range(n):
+        for j in range(i + 1, n):
+            d = float(np.linalg.norm(coords[i] - coords[j]))
+            cutoff = 1.3 * (COVALENT_RADII[symbols[i]] + COVALENT_RADII[symbols[j]])
+            if d < cutoff:
+                adj[i + 1].add(j + 1)
+                adj[j + 1].add(i + 1)
+    return adj
+
+
+def derive_top(adj: dict[int, set[int]], pivots: tuple[int, int]) -> list[int]:
+    """1-indexed rotating-top atom set: the side of the pivot bond reachable
+    from ``pivots[0]`` after the pivot bond is cut. Deterministic for an
+    acyclic single-bond rotor (exactly two disconnected sides). Includes the
+    pivot atom ``pivots[0]``, as rmgpy's reduced-MOI routine requires.
+    """
+    p0, p1 = pivots
+    seen = {p0}
+    stack = [p0]
+    while stack:
+        node = stack.pop()
+        for nb in adj[node]:
+            if node == p0 and nb == p1:
+                continue  # cut the pivot bond
+            if nb == p0 and node != p0:
+                continue
+            if nb not in seen:
+                seen.add(nb)
+                stack.append(nb)
+    if p1 in seen:
+        raise RuntimeError(
+            f"Pivot bond {pivots} is in a ring (both sides connected); this "
+            "rotor is not a simple single-bond internal rotation."
+        )
+    return sorted(seen)
+
+
+def gather_rotors(data: dict) -> None:
+    """Collect hindered-rotor inputs for each torsion, recording provenance.
+
+    Per rotor Arkane needs: the scan POTENTIAL (energy vs dihedral), the PIVOT
+    atoms, the rotating-TOP atom set, and the rotor SYMMETRY number. Where each
+    comes from in TCKDB is recorded in ``data['sources']``.
+    """
+    sm = api_get(
+        f"/species-entries/{data['species_entry_ref']}/statmech?include=torsions"
+    )["records"][0]
+    torsions = sm.get("torsions") or []
+    adj = build_bond_graph(data["symbols"], data["coords"])
+    rotors = []
+    for t in torsions:
+        if t.get("treatment_kind") != "hindered_rotor":
+            continue
+        coord = t["coordinates"][0]
+        pivots = (coord["atom2_index"], coord["atom3_index"])  # API dihedral -> pivots
+        top = derive_top(adj, pivots)
+        scan_ref = t["source_scan_calculation_ref"]
+
+        # scan potential (energy vs dihedral) — full trajectory from the API
+        # specialized scan endpoint.
+        # /scan paginates (server max limit=200); rotor scans are well under.
+        scan = api_get(f"/calculations/{scan_ref}/scan?limit=200")
+        total = scan.get("pagination", {}).get("total")
+        if total is not None and total > 200:
+            raise RuntimeError(
+                f"scan {scan_ref} has {total} points (>200); paginated fetch "
+                "not implemented (no rotor scan in this corpus needs it)."
+            )
+        pts = sorted(scan["points"], key=lambda p: p["point_index"])
+        angles_deg, v_kjmol = [], []
+        for p in pts:
+            ang = p["coordinate_values"][0]["coordinate_value"]
+            angles_deg.append(float(ang))
+            v_kjmol.append(float(p["relative_energy_kj_mol"]))
+        # drop a duplicate 360 deg endpoint if present (scan wraps 0..360)
+        if len(angles_deg) >= 2 and abs((angles_deg[-1] - angles_deg[0]) - 360.0) < 1e-3:
+            angles_deg = angles_deg[:-1]
+            v_kjmol = v_kjmol[:-1]
+
+        rotors.append({
+            "torsion_index": t["torsion_index"],
+            "pivots": list(pivots),
+            "top": top,
+            "symmetry": t["symmetry_number"],
+            "scan_ref": scan_ref,
+            "top_description_stored": t.get("top_description"),
+            "n_scan_points": len(angles_deg),
+            "barrier_kj_mol": max(v_kjmol) - min(v_kjmol),
+            "angles_rad": [math.radians(a) for a in angles_deg],
+            "v_j_mol": [v * 1000.0 for v in v_kjmol],
+        })
+    data["rotors"] = rotors
+    if rotors:
+        data["sources"]["rotor_symmetry"] = "API statmech torsions"
+        data["sources"]["rotor_pivots"] = "API statmech torsions (dihedral atoms)"
+        data["sources"]["rotor_potential"] = "API calc scan endpoint (/scan)"
+        data["sources"]["rotor_top"] = "DERIVED from API geometry (top_description NULL)"
+
+
+def compute_rotor_terms(data: dict) -> None:
+    """Compute each rotor's reduced moment of inertia + Fourier potential fit.
+
+    Runs a small rmgpy snippet in ``rmg_env`` so the reduced MOI (option=3, the
+    ARC/Arkane default) and Fourier fit exactly match Arkane's own routines. The
+    resulting inertia (amu*angstrom^2) and Fourier coefficients (kJ/mol) are then
+    embedded as literals in the Arkane input, keeping it fully auditable.
+    """
+    if not data.get("rotors"):
+        return
+    payload = {
+        "symbols": data["symbols"],
+        "coords": data["coords"].tolist(),
+        "masses": [ATOMIC_MASS[s] for s in data["symbols"]],
+        "rotors": [
+            {
+                "pivots": r["pivots"],
+                "top": r["top"],
+                "angles_rad": r["angles_rad"],
+                "v_j_mol": r["v_j_mol"],
+            }
+            for r in data["rotors"]
+        ],
+    }
+    snippet = r'''
+import json, sys
+import numpy as np
+from rmgpy.statmech import Conformer, HinderedRotor
+with open(sys.argv[1]) as _fh:  # conda run does not forward stdin reliably
+    inp = json.load(_fh)
+coords = np.array(inp["coords"], float)
+masses = np.array(inp["masses"], float)
+conf = Conformer(
+    mass=(masses.tolist(), "amu"),
+    coordinates=(coords.tolist(), "angstrom"),
+)
+out = []
+KG_M2_PER_AMU_A2 = 1.66053906660e-47
+for r in inp["rotors"]:
+    i_si = conf.get_internal_reduced_moment_of_inertia(r["pivots"], r["top"], option=3)
+    inertia_amu_a2 = i_si / KG_M2_PER_AMU_A2
+    hr = HinderedRotor(
+        inertia=(inertia_amu_a2, "amu*angstrom^2"), symmetry=1,
+    )
+    angle = np.array(r["angles_rad"], float)
+    V = np.array(r["v_j_mol"], float)
+    hr.fit_fourier_potential_to_data(angle, V)
+    coeffs = (hr.fourier.value_si / 1000.0).tolist()  # J/mol -> kJ/mol
+    out.append({"inertia_amu_a2": inertia_amu_a2, "fourier_kj_mol": coeffs})
+json.dump(out, sys.stdout)
+'''
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, prefix="rotor_terms_"
+    ) as tf:
+        json.dump(payload, tf)
+        payload_path = tf.name
+    try:
+        proc = subprocess.run(
+            ["conda", "run", "-n", RMG_ENV, "python", "-c", snippet, payload_path],
+            capture_output=True, text=True,
+        )
+    finally:
+        os.unlink(payload_path)
+    if proc.returncode != 0 or not proc.stdout.strip():
+        raise RuntimeError(
+            f"rotor-term computation failed in {RMG_ENV}:\n{proc.stderr[-2000:]}"
+        )
+    terms = json.loads(proc.stdout)
+    for rotor, term in zip(data["rotors"], terms):
+        rotor["inertia_amu_a2"] = term["inertia_amu_a2"]
+        rotor["fourier_kj_mol"] = term["fourier_kj_mol"]
 
 
 # --------------------------------------------------------------------------- #
@@ -247,8 +504,27 @@ def build_arkane_input(data: dict, work_dir: str) -> str:
     """Write an Arkane input.py built purely from TCKDB-stored data."""
     moments, mol_weight = principal_moments(data["symbols"], data["coords"])
     scale = data["freq_scale_factor"]
-    scaled_freqs = [round(f * scale, 4) for f in data["frequencies_cm1"]]
+    rotors = data.get("rotors") or []
+    n_rotors = len(rotors)
+
+    # When hindered rotors replace R torsional modes, those R modes must be
+    # removed from the harmonic-oscillator list to avoid double-counting. TCKDB
+    # stores the full unprojected 3N-6 spectrum; the torsional modes are the R
+    # lowest frequencies for these species, so we drop the R lowest. (This is an
+    # approximation to Arkane's Hessian projection; see the findings doc.)
+    all_freqs = sorted(float(f) for f in data["frequencies_cm1"])
+    dropped = all_freqs[:n_rotors]
+    kept = all_freqs[n_rotors:]
+    scaled_freqs = [round(f * scale, 4) for f in kept]
     e0 = (data["electronic_energy_hartree"] + data["zpe_hartree"]) * HARTREE_TO_KJMOL
+
+    rotor_blocks = ""
+    for r in rotors:
+        rotor_blocks += (
+            f"        HinderedRotor(inertia=({r['inertia_amu_a2']:.10f}, "
+            f"'amu*angstrom^2'), symmetry={r['symmetry']}, "
+            f"fourier=({r['fourier_kj_mol']}, 'kJ/mol')),\n"
+        )
 
     if data["is_linear"]:
         # linear molecule: one non-zero moment of inertia
@@ -264,11 +540,13 @@ def build_arkane_input(data: dict, work_dir: str) -> str:
         )
 
     label = "SPC"
+    use_rotors = "True" if n_rotors else "False"
     content = f"""#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Arkane input assembled purely from TCKDB-stored data for {data['smiles']}
 # species_entry_ref={data['species_entry_ref']}  statmech_ref={data['statmech_ref']}
-useHinderedRotors = False
+# hindered rotors: {n_rotors} (torsional freqs dropped from HO list: {[round(x,2) for x in dropped]})
+useHinderedRotors = {use_rotors}
 useAtomCorrections = False
 useBondCorrections = False
 
@@ -278,7 +556,7 @@ species('{label}',
         IdealGasTranslation(mass=({mol_weight:.6f}, 'amu')),
         {rotor},
         HarmonicOscillator(frequencies=({scaled_freqs}, 'cm^-1')),
-    ],
+{rotor_blocks}    ],
     spinMultiplicity = {data['multiplicity']},
     opticalIsomers = {data['optical_isomers']},
 )
@@ -291,6 +569,7 @@ thermo('{label}', 'NASA')
     data["_moments"] = moments.tolist()
     data["_mol_weight"] = mol_weight
     data["_scaled_freqs"] = scaled_freqs
+    data["_dropped_freqs"] = dropped
     return input_path
 
 
@@ -354,11 +633,22 @@ def build_report(data: dict, arkane: dict) -> str:
     p("Assembled statmech inputs (all from TCKDB):")
     p(f"  external symmetry : {data['external_symmetry']}")
     p(f"  optical isomers   : stored={data['optical_isomers_stored']} "
-      f"used={data['optical_isomers']}")
+      f"pg_derived={data.get('optical_isomers_from_pg')} "
+      f"(from point_group={data['point_group']}) used={data['optical_isomers']}")
     p(f"  freq scale factor : {data['freq_scale_factor']}")
-    p(f"  n frequencies     : {len(data['frequencies_cm1'])}")
+    p(f"  n frequencies     : {len(data['frequencies_cm1'])} stored, "
+      f"{len(data['_scaled_freqs'])} used as HO (dropped "
+      f"{[round(x,2) for x in data.get('_dropped_freqs', [])]} cm^-1 as torsions)")
     p(f"  principal moments : {[round(x,4) for x in data['_moments']]} amu*A^2")
     p(f"  molecular weight  : {data['_mol_weight']:.5f} amu")
+    if data.get("rotors"):
+        p(f"  hindered rotors   : {len(data['rotors'])}")
+        for r in data["rotors"]:
+            p(f"    rotor {r['torsion_index']}: pivots={r['pivots']} "
+              f"top={r['top']} sym={r['symmetry']} "
+              f"I_red={r['inertia_amu_a2']:.4f} amu*A^2 "
+              f"V_barrier={r['barrier_kj_mol']:.2f} kJ/mol "
+              f"({r['n_scan_points']} scan pts)")
     p("")
     p("Data provenance (API vs direct-DB):")
     for key, source in data["sources"].items():
@@ -422,6 +712,11 @@ def main() -> int:
 
     print(f"[1/4] Reading species {args.species_entry_ref} from live TCKDB ...")
     data = gather_species(args.species_entry_ref)
+    gather_rotors(data)
+    if data.get("rotors"):
+        print(f"      {len(data['rotors'])} hindered rotor(s) found; "
+              "computing reduced MOI + Fourier fits in rmg_env ...")
+        compute_rotor_terms(data)
 
     work_dir = (
         os.path.join(os.environ.get("CLAUDE_JOB_DIR", "/tmp"), "arkane_roundtrip")

@@ -1,8 +1,14 @@
 # Arkane statmech round-trip — TCKDB statmech-completeness validation
 
-**Verdict: PROVEN (for this species).** TCKDB stores enough statmech data to
-regenerate a species' entropy and heat capacity with Arkane, without the
-original ESS output files. S298 and Cp(T) reproduce to **< 0.01 %**.
+**Verdict: PROVEN, for both a rigid and a floppy species.** TCKDB stores enough
+statmech data to regenerate a species' entropy and heat capacity with Arkane,
+without the original ESS output files.
+
+* **Rigid** (methane, no rotors): S298 and Cp(T) reproduce to **< 0.01 %**.
+* **Floppy** (ethylperoxy `CCO[O]`, 2 hindered rotors): S298 to **0.02 %** and
+  Cp(T) to **< 0.06 %** — once the optical-isomer count is recovered from the
+  stored `point_group` (see the floppy-species section below; the dedicated
+  `optical_isomers` column is NULL, which alone costs a real 1.84 % S298 error).
 
 This is a paper validation exhibit paralleling the Cantera/CHEMKIN round-trip.
 Harness: [`backend/scripts/validation/arkane_statmech_roundtrip.py`](../../backend/scripts/validation/arkane_statmech_roundtrip.py).
@@ -151,3 +157,157 @@ match tolerance. H298 of formation is not reproduced only because the atom-energ
 correction reference was intentionally not applied. The one actionable finding is
 that two required statmech inputs (per-mode frequencies, `optical_isomers`) are
 currently DB-only and should be exposed on the read API.
+
+---
+
+# Floppy species with hindered rotors — ethylperoxy `CCO[O]`
+
+**Verdict: PROVEN.** TCKDB stores (or serves the primitives to derive) everything
+Arkane needs to regenerate the thermo of a floppy species with internal rotation.
+Reconstructing both hindered rotors from stored data reproduces **S298 to 0.02 %**
+and **Cp(T) to < 0.06 %**. This is the harder case the methane exhibit flagged as
+the natural follow-up: the internal-rotation treatment is where a completeness
+gap was most likely, and it held.
+
+```
+conda run -n tckdb_env python backend/scripts/validation/arkane_statmech_roundtrip.py \
+    --species-entry-ref spe_sgidibgknrjbvcetgc6xsej74q
+```
+
+## Species chosen
+
+**Ethylperoxy radical (`CCO[O]`, CH₃CH₂OO·)** —
+`species_entry_ref = spe_sgidibgknrjbvcetgc6xsej74q`, `statmech_ref =
+sm_5hzn2hvewlshlm5g6bc6webxbq`. Chosen because it is a genuinely floppy,
+low-symmetry (point group **C1**), doublet (multiplicity 2) radical with **two
+1-D hindered rotors** — the CH₃ methyl torsion (symmetry 3) and the C–O·O
+skeletal torsion (symmetry 1) — and it is present in the ARC corpus with complete
+rotor scans (`has_rotor_scans = true`, `torsion_count = 2`). Level of theory:
+geometry/frequencies at `b3lyp/def2tzvp` (Gaussian 16), single point at the same
+level, frequency scale factor 0.999, treated by Arkane under ARC 1.1.0.
+
+## Where each rotor datum came from (API vs DB vs derived)
+
+Rotor reconstruction needs, per rotor: the scan **potential**, the **pivot**
+atoms, the rotating-**top** atom set, and the rotor **symmetry** number.
+
+| Datum | Source | Endpoint / table |
+|---|---|---|
+| Rotor **symmetry** number (3, 1) | **API** | `/scientific/species-entries/{ref}/statmech?include=torsions` → `torsions[].symmetry_number` |
+| Rotor **pivots** | **API** | same torsions payload — the dihedral `coordinates[0].atom2_index`/`atom3_index` |
+| Rotor **potential** (energy vs dihedral, 46 points) | **API** | `/scientific/calculations/{scan_ref}/scan` → `points[].relative_energy_kj_mol` + `coordinate_values` |
+| Rotor **top** atom set | **DERIVED** | `torsions[].top_description` is **NULL**; reconstructed from stored geometry connectivity |
+| Per-mode harmonic frequencies (21) | **DB only** | `calc_freq_mode.frequency_cm1` — still not on the API |
+| **`optical_isomers`** (= 2) | **DERIVED** | `statmech.optical_isomers` is **NULL**; recovered from the API-served `point_group = C1` |
+
+The full rotor scan trajectory **is** on the public API (the specialized
+`GET /scientific/calculations/{ref}/scan` endpoint returns every point's
+dihedral and relative energy) — a notable improvement over the methane findings,
+which predicted this would be DB-only. So the single most load-bearing rotor
+datum, the potential, is API-reachable.
+
+## Method (rotor path added to the harness)
+
+For each torsion the harness:
+
+1. reads symmetry + pivots from the API torsions payload and the full scan
+   potential from the API `/scan` endpoint;
+2. **derives the rotating top** — TCKDB does not store it (`top_description`
+   NULL), but for an acyclic single-bond rotor the top is a deterministic graph
+   property: reconstruct the bond graph from the stored geometry (covalent-radii
+   cutoff), cut the pivot bond, and take the connected side. This is
+   reconstruction from stored primitives, not a guess (the same status as
+   recomputing moments of inertia from geometry);
+3. computes the **reduced moment of inertia** (rmgpy `option=3`, the ARC/Arkane
+   default) and **fits the Fourier potential** using rmgpy itself (run in
+   `rmg_env`), so both match Arkane exactly, then embeds them as literals in the
+   Arkane input;
+4. **drops the R torsional modes from the harmonic list** to avoid
+   double-counting. TCKDB stores the full unprojected 3N−6 = 21 frequencies; the
+   two torsions are the two lowest (108.3, 231.4 cm⁻¹), which are removed, giving
+   19 harmonic oscillators + 2 `HinderedRotor` modes.
+
+Assembled rotor terms: rotor 1 (CH₃) pivots (1,2), top {1,5,6,7}, σ=3,
+I_red = 2.60 amu·Å², barrier 12.55 kJ/mol; rotor 2 (C–O) pivots (2,3), top
+{1,2,5,6,7,8,9}, σ=1, I_red = 6.54 amu·Å², barrier 8.70 kJ/mol.
+
+## Results
+
+Tolerance considered a "match": **S298 within ~0.5 J/mol/K**, **Cp within ~1 %**.
+Both are met with large margin.
+
+### S298 (J/mol/K) — independent of the energy reference
+
+| Optical-isomer count used | Arkane S298 | abs Δ vs stored (315.945) | % Δ |
+|---|---:|---:|---:|
+| `opticalIsomers = 1` (naïve default) | 310.118 | 5.827 | **1.844 %** |
+| `opticalIsomers = 2` (derived from `point_group = C1`) | 315.879 | **0.066** | **0.021 %** |
+
+The 1.84 % error with the naïve default is **exactly R·ln 2 = 5.76 J/mol/K** — an
+entropy-only offset (Cp is unaffected either way), the fingerprint of a missing
+chirality factor. Ethylperoxy's gauche minimum (C–C–O–O dihedral ≈ 62°) is
+chiral, so the original Arkane run correctly used `opticalIsomers = 2`. Deriving
+the count from the stored `point_group` recovers it and closes the gap.
+
+### Cp(T) (J/mol/K) — independent of the energy reference
+
+| T (K) | TCKDB (NASA) | Arkane | abs Δ | % Δ |
+|---:|---:|---:|---:|---:|
+| 300 | 73.912 | 73.869 | 0.043 | 0.059 % |
+| 500 | 101.433 | 101.416 | 0.017 | 0.017 % |
+| 1000 | 147.789 | 147.775 | 0.014 | 0.009 % |
+| 1500 | 169.082 | 169.084 | 0.002 | 0.001 % |
+
+Cp is reproduced to well under 0.1 % at every temperature — including 300 K,
+where the two low-frequency torsional/rotor modes dominate. That the rotor
+treatment lands the low-T Cp this precisely is the strongest evidence the stored
+rotor data (potential + topology + symmetry) is complete and correctly assembled.
+
+### H298 (kJ/mol) — secondary / stretch target
+
+| | Value |
+|---|---|
+| TCKDB stored H298f (with corrections) | −19.532 |
+| Arkane recomputed (no corrections) | −602 704.572 |
+
+Same caveat as methane: with no atom-energy/bond corrections applied, Arkane
+returns an **absolute** enthalpy, not a formation enthalpy. The difference is a
+correction-reference difference, not a statmech-completeness failure.
+
+## Concrete completeness gaps found (floppy species)
+
+The rotor round-trip succeeds, but it surfaces three storage/serving gaps —
+progressively less severe:
+
+1. **`optical_isomers` is NULL and off the API — and it is load-bearing for
+   floppy/chiral species.** Unlike methane (where the Arkane default of 1 is
+   coincidentally correct), ethylperoxy is chiral, so the missing value causes a
+   **real 1.84 % S298 error** if a consumer takes the naïve default. The value is
+   *recoverable* here from the stored `point_group` (C1 ⇒ 2), but that inference
+   is not something a generic API consumer would know to make. **Recommended: (a)
+   populate `statmech.optical_isomers` for the corpus, and (b) expose it (and
+   `point_group`) on the statmech read payload.**
+2. **Rotor `top_description` is NULL.** The rotating-top atom set is not stored.
+   It is derivable from the stored geometry for simple acyclic rotors, but for
+   ring or coupled rotors that derivation is ambiguous, so storing the top
+   explicitly would make the data self-describing. Symmetry and pivots *are*
+   served, so this is the only rotor-topology piece missing.
+3. **Per-mode harmonic frequencies remain DB-only** (`calc_freq_mode`), same as
+   the methane finding — still the single most important statmech input that no
+   `/scientific/*` endpoint returns.
+
+The good news dominates: the rotor **potential** — the datum most likely to be
+missing — is fully served by the `/scan` endpoint, and symmetry + pivots are on
+the torsions payload. No rotor data had to be fabricated.
+
+## Conclusion
+
+For ethylperoxy, **TCKDB is statmech-complete for a floppy, multi-rotor,
+chiral radical**: geometry, the full unprojected frequency set, both rotor scan
+potentials, rotor symmetries and pivots, multiplicity, and (via `point_group`)
+the optical-isomer count regenerate S298 to 0.02 % and Cp(T) to < 0.06 % of the
+stored values. The load-bearing actionable finding is that **`optical_isomers`
+must be populated and exposed** — for a chiral species the naïve default is
+wrong by R·ln 2 (1.84 % of S298), whereas for methane it was harmlessly correct.
+Storing the rotor `top` explicitly and exposing per-mode frequencies are the two
+lesser follow-ups.
