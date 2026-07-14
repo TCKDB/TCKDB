@@ -996,3 +996,236 @@ def test_pdep_channel_kinetics_rejects_plog_model_kind() -> None:
     ]
     with pytest.raises(ValueError, match="not yet supported"):
         NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_species_statmech_persists_via_shared_seam(db_engine) -> None:
+    """A network species carrying a statmech block persists a Statmech row
+    (external_symmetry / optical_isomers) with a resolved source-calc link,
+    reusing the computed-species bundle's shared statmech seam."""
+    from app.db.models.statmech import Statmech, StatmechSourceCalculation
+
+    payload = _full_payload(include_solve=False)
+    # Attach statmech to the ethyl species, referencing its own freq calc.
+    ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
+    ethyl["statmech"] = {
+        "external_symmetry": 2,
+        "optical_isomers": 2,
+        "point_group": "C2",
+        "source_calculations": [
+            {"calculation_key": "ethyl_freq", "role": "freq"},
+        ],
+    }
+
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**payload)
+        persist_network_pdep_upload(session, request, created_by=None)
+
+        statmechs = session.scalars(select(Statmech)).all()
+        assert len(statmechs) == 1
+        sm = statmechs[0]
+        assert sm.external_symmetry == 2
+        assert sm.optical_isomers == 2
+        assert sm.point_group == "C2"
+
+        # The statmech is owned by a species entry, and its source-calc link
+        # resolved to a calculation owned by that same species entry.
+        source_links = session.scalars(
+            select(StatmechSourceCalculation).where(
+                StatmechSourceCalculation.statmech_id == sm.id
+            )
+        ).all()
+        assert len(source_links) == 1
+        link = source_links[0]
+        assert link.role.value == "freq"
+
+        linked_calc = session.get(Calculation, link.calculation_id)
+        assert linked_calc is not None
+        assert linked_calc.species_entry_id == sm.species_entry_id
+
+
+def test_pdep_species_statmech_rejects_cross_species_source_calculation() -> None:
+    """A species statmech may only source from that species's OWN calcs.
+
+    Referencing a transition-state calc key (defined globally but owned by a
+    TS, not the species) must be rejected at request construction, not left
+    to blow up as a KeyError during persistence.
+    """
+    payload = _full_payload(include_solve=False)
+    ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
+    ethyl["statmech"] = {
+        "external_symmetry": 2,
+        "optical_isomers": 2,
+        # ts_assoc_sp is a defined global calc key, but it belongs to a TS.
+        "source_calculations": [
+            {"calculation_key": "ts_assoc_sp", "role": "sp"},
+        ],
+    }
+    with pytest.raises(ValueError, match="not one of that species's own"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def _payload_with_ethyl_scan() -> dict:
+    """``_full_payload`` with a scan-type calc added to the ethyl species so
+    torsion source_scan_calculation_key references can resolve."""
+    payload = _full_payload(include_solve=False)
+    ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
+    ethyl["calculations"].append(
+        {
+            "key": "ethyl_scan", "type": "scan", "geometry_key": "ethyl_geom",
+            "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+        }
+    )
+    return payload
+
+
+def test_pdep_species_statmech_torsion_scan_persists(db_engine) -> None:
+    """A per-species torsion with a scan-type source persists and links the
+    scan calculation owned by the same species entry."""
+    from app.db.models.statmech import Statmech, StatmechTorsion
+
+    payload = _payload_with_ethyl_scan()
+    ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
+    ethyl["statmech"] = {
+        "external_symmetry": 1,
+        "optical_isomers": 1,
+        "torsions": [
+            {
+                "torsion_index": 1,
+                "symmetry_number": 3,
+                "treatment_kind": "hindered_rotor",
+                "dimension": 1,
+                "top_description": "CH3 about C-C",
+                "source_scan_calculation_key": "ethyl_scan",
+            }
+        ],
+    }
+
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**payload)
+        persist_network_pdep_upload(session, request, created_by=None)
+
+        sm = session.scalars(select(Statmech)).one()
+        torsions = session.scalars(
+            select(StatmechTorsion).where(StatmechTorsion.statmech_id == sm.id)
+        ).all()
+        assert len(torsions) == 1
+        torsion = torsions[0]
+        assert torsion.source_scan_calculation_id is not None
+        scan_calc = session.get(Calculation, torsion.source_scan_calculation_id)
+        assert scan_calc is not None
+        assert scan_calc.type == CalculationType.scan
+        # The scan calc is owned by the same species entry as the statmech.
+        assert scan_calc.species_entry_id == sm.species_entry_id
+
+
+def test_pdep_species_statmech_torsion_rejects_undefined_scan_key() -> None:
+    """An undefined torsion scan key is rejected at construction, not left to
+    a persist-time KeyError."""
+    payload = _payload_with_ethyl_scan()
+    ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
+    ethyl["statmech"] = {
+        "torsions": [
+            {"torsion_index": 1, "source_scan_calculation_key": "no_such_scan"}
+        ],
+    }
+    with pytest.raises(ValueError, match="not one of that species's own"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_species_statmech_torsion_rejects_non_scan_type_key() -> None:
+    """A torsion scan key that resolves to a non-scan calc is rejected at
+    construction (otherwise the seam would silently link a wrong calc)."""
+    payload = _payload_with_ethyl_scan()
+    ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
+    ethyl["statmech"] = {
+        # ethyl_freq is one of ethyl's own calcs, but it is a freq, not a scan.
+        "torsions": [
+            {"torsion_index": 1, "source_scan_calculation_key": "ethyl_freq"}
+        ],
+    }
+    with pytest.raises(ValueError, match="must reference a scan-type"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_species_statmech_torsion_rejects_cross_species_scan_key() -> None:
+    """A torsion scan key owned by ANOTHER species is rejected at construction
+    (species-local scoping), rather than being silently persisted as a
+    cross-species torsion->scan link."""
+    payload = _payload_with_ethyl_scan()
+    # Add a scan calc to O2 as well, so the key is scan-type but foreign.
+    o2 = next(sp for sp in payload["species"] if sp["key"] == "O2")
+    o2["calculations"].append(
+        {
+            "key": "O2_scan", "type": "scan", "geometry_key": "O2_geom",
+            "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+        }
+    )
+    ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
+    ethyl["statmech"] = {
+        "torsions": [
+            {"torsion_index": 1, "source_scan_calculation_key": "O2_scan"}
+        ],
+    }
+    with pytest.raises(ValueError, match="not one of that species's own"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> None:
+    """Direct unit test of the shared seam's torsion ownership guard.
+
+    Bypasses the network request validator to prove the seam itself rejects a
+    torsion whose scan calc is owned by a different species entry with a clean
+    ValueError (not a silent cross-species link). The single-species bundle
+    path can never hit this branch, so it is a strict no-op there.
+    """
+    from app.db.models.statmech import StatmechTorsion
+    from app.schemas.workflows.network_pdep_upload import StatmechInBundle
+    from app.workflows.computed_species import _persist_statmech_block
+
+    payload = _full_payload(include_solve=False)
+    # Give O2 a scan calc owned by the O2 species entry (the only scan calc).
+    o2 = next(sp for sp in payload["species"] if sp["key"] == "O2")
+    o2["calculations"].append(
+        {
+            "key": "O2_scan", "type": "scan", "geometry_key": "O2_geom",
+            "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+        }
+    )
+
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**payload)
+        network = persist_network_pdep_upload(session, request)
+        assert network.id is not None
+
+        # Resolve the O2 scan calc and a species entry that is NOT its owner.
+        o2_scan = session.scalars(
+            select(Calculation).where(Calculation.type == CalculationType.scan)
+        ).one()
+        foreign_calc = session.scalars(
+            select(Calculation).where(
+                Calculation.species_entry_id.isnot(None),
+                Calculation.species_entry_id != o2_scan.species_entry_id,
+            )
+        ).first()
+        assert foreign_calc is not None
+        foreign_entry_id = foreign_calc.species_entry_id
+        assert foreign_entry_id != o2_scan.species_entry_id
+
+        statmech = StatmechInBundle(
+            torsions=[
+                {"torsion_index": 1, "source_scan_calculation_key": "O2_scan"}
+            ],
+        )
+        # Feed the seam a calc-key map pointing at O2's scan calc while
+        # claiming a different species entry owns the statmech.
+        with pytest.raises(ValueError, match="different species entry"):
+            _persist_statmech_block(
+                session,
+                statmech,
+                species_entry_id=foreign_entry_id,
+                calc_keys_to_id={"O2_scan": o2_scan},
+                created_by=None,
+            )
+        # No torsion row was persisted for a foreign scan link.
+        leaked = session.scalars(select(StatmechTorsion)).all()
+        assert leaked == []

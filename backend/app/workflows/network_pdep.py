@@ -70,6 +70,7 @@ from app.services.record_review import (
 from app.services.software_resolution import resolve_software_release_ref
 from app.services.species_resolution import resolve_species_entry
 from app.services.transport_resolution import resolve_and_create_transport
+from app.workflows.computed_species import _persist_statmech_block
 from app.workflows.reaction import persist_reaction_upload
 
 
@@ -186,6 +187,10 @@ def persist_network_pdep_upload(
     species_key_to_entry: dict[str, object] = {}
     geometry_key_to_id: dict[str, int] = {}
     calculation_key_to_id: dict[str, int] = {}
+    # Parallel map of calc key → persisted Calculation ORM object, used by
+    # the shared statmech seam (which resolves source calculations against
+    # Calculation rows, checking species-entry ownership).
+    calculation_key_to_calc: dict[str, Calculation] = {}
     reaction_key_to_entry: dict[str, object] = {}
     observation_id_by_geometry_key: dict[str, int] = {}
     # Review-row targets accumulated as records are written; used at the end
@@ -227,6 +232,7 @@ def persist_network_pdep_upload(
                 created_by=created_by,
             )
             calculation_key_to_id[conf.calculation.key] = calculation.id
+            calculation_key_to_calc[conf.calculation.key] = calculation
             review_targets.append(
                 RecordRef(SubmissionRecordType.calculation, calculation.id)
             )
@@ -280,6 +286,7 @@ def persist_network_pdep_upload(
                 created_by=created_by,
             )
             calculation_key_to_id[calc_in.key] = calculation.id
+            calculation_key_to_calc[calc_in.key] = calculation
             review_targets.append(
                 RecordRef(SubmissionRecordType.calculation, calculation.id)
             )
@@ -302,6 +309,24 @@ def persist_network_pdep_upload(
             )
             review_targets.append(
                 RecordRef(SubmissionRecordType.transport, transport_row.id)
+            )
+
+    # ------------------------------------------------------------------
+    # 3c. Process species-level statmech (reuses the bundle's shared seam)
+    # ------------------------------------------------------------------
+    for sp in request.species:
+        if sp.statmech is None:
+            continue
+        statmech_row = _persist_statmech_block(
+            session,
+            sp.statmech,
+            species_entry_id=species_key_to_entry[sp.key].id,
+            calc_keys_to_id=calculation_key_to_calc,
+            created_by=created_by,
+        )
+        if statmech_row is not None:
+            review_targets.append(
+                RecordRef(SubmissionRecordType.statmech, statmech_row.id)
             )
 
     # ------------------------------------------------------------------
