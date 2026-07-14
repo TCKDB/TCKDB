@@ -799,3 +799,200 @@ def test_pdep_workflow_persists_calculation_artifacts(
     finally:
         transaction.rollback()
         connection.close()
+
+
+def test_pdep_workflow_persists_and_reads_back_channel_kinetics(db_engine) -> None:
+    """A Chebyshev ``channel_kinetics`` entry on the solve produces a
+    ``NetworkKinetics`` + ``NetworkKineticsChebyshev`` row for the referenced
+    channel, and round-trips through the existing network-kinetics read path.
+    """
+    from app.db.models.network_pdep import (
+        NetworkKinetics,
+        NetworkKineticsChebyshev,
+    )
+    from app.services.scientific_read.network_kinetics import (
+        get_network_kinetics,
+    )
+
+    n_t, n_p = 6, 4
+    # Distinct values so the round-trip is unambiguous.
+    grid = [[float(t * 10 + p) for p in range(n_p)] for t in range(n_t)]
+
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "chebyshev",
+            "chebyshev": {
+                "n_temperature": n_t,
+                "n_pressure": n_p,
+                "coefficients": grid,
+            },
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "pmin_bar": 0.01,
+            "pmax_bar": 100.0,
+            "rate_units": "cm3_mol_s",
+            "pressure_units": "bar",
+            "temperature_units": "kelvin",
+            "stores_log10_k": True,
+            "note": "fitted from ME solve",
+        }
+    ]
+
+    with Session(db_engine) as session, session.begin():
+        request = NetworkPDepUploadRequest(**payload)
+        network = persist_network_pdep_upload(session, request)
+        session.flush()
+
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+
+        # The association channel (entrance -> well_RO2) it references.
+        assoc_channel = session.scalars(
+            select(NetworkChannel).where(
+                NetworkChannel.network_id == network.id,
+                NetworkChannel.kind == "association",
+            )
+        ).one()
+
+        # -- NetworkKinetics parent row --
+        nk_rows = session.scalars(select(NetworkKinetics)).all()
+        assert len(nk_rows) == 1
+        nk = nk_rows[0]
+        assert nk.channel_id == assoc_channel.id
+        assert nk.solve_id == solve.id
+        assert nk.model_kind.value == "chebyshev"
+        assert nk.tmin_k == 300.0
+        assert nk.tmax_k == 2000.0
+        assert nk.pmin_bar == 0.01
+        assert nk.pmax_bar == 100.0
+        assert nk.rate_units.value == "cm3_mol_s"
+        assert nk.pressure_units.value == "bar"
+        assert nk.temperature_units.value == "kelvin"
+        assert nk.stores_log10_k is True
+
+        # -- Chebyshev child row: stored JSONB shape --
+        cheb = session.scalars(select(NetworkKineticsChebyshev)).one()
+        assert cheb.network_kinetics_id == nk.id
+        assert cheb.n_temperature == n_t
+        assert cheb.n_pressure == n_p
+        assert cheb.coefficients == {"coeffs": grid}
+
+        # -- Read back through the existing read service (round-trip) --
+        resp = get_network_kinetics(
+            session,
+            network_kinetics_handle=str(nk.id),
+            include=["coefficients"],
+        )
+        core = resp.record.network_kinetics
+        assert core.model_kind.value == "chebyshev"
+        assert core.chebyshev_shape == f"{n_t}x{n_p}"
+        # Units survive the round-trip.
+        assert core.rate_units.value == "cm3_mol_s"
+        assert core.pressure_units.value == "bar"
+        assert core.temperature_units.value == "kelvin"
+        assert core.stores_log10_k is True
+        assert core.tmin_k == 300.0
+        assert core.pmax_bar == 100.0
+
+        # Coefficients survive the round-trip: read side flattens the matrix
+        # into (temperature_order, pressure_order, coefficient) triples.
+        coeff_block = resp.record.coefficients
+        assert coeff_block is not None
+        assert coeff_block.n_temperature == n_t
+        assert coeff_block.n_pressure == n_p
+        assert len(coeff_block.coefficients) == n_t * n_p
+        read_back = {
+            (c.temperature_order, c.pressure_order): c.coefficient
+            for c in coeff_block.coefficients
+        }
+        for t in range(n_t):
+            for p in range(n_p):
+                assert read_back[(t, p)] == grid[t][p]
+
+
+def test_pdep_channel_kinetics_rejects_undefined_channel() -> None:
+    """A ``channel_kinetics`` entry referencing a distinct state pair with no
+    matching ``channels`` entry is rejected by the parent's channel-reference
+    integrity validator (not the source!=sink guard)."""
+    payload = _full_payload(include_solve=True)
+    # Drop the reverse (dissociation) channel so (well_RO2 -> entrance) is a
+    # valid distinct-state pair that is NOT a declared channel. The remaining
+    # association channel still keeps the two states connected.
+    payload["channels"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "kind": "association",
+        }
+    ]
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "well_RO2",
+            "sink_state_key": "entrance",
+            "model_kind": "chebyshev",
+            "chebyshev": {
+                "n_temperature": 2,
+                "n_pressure": 2,
+                "coefficients": [[1.0, 2.0], [3.0, 4.0]],
+            },
+        }
+    ]
+    with pytest.raises(ValueError, match="references undefined channel"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_channel_kinetics_rejects_duplicate_within_payload() -> None:
+    """Two channel_kinetics entries for the same (source, sink) pair within one
+    payload are rejected (would silently write two rows for one channel/solve)."""
+    payload = _full_payload(include_solve=True)
+    entry = {
+        "source_state_key": "entrance",
+        "sink_state_key": "well_RO2",
+        "model_kind": "chebyshev",
+        "chebyshev": {
+            "n_temperature": 2,
+            "n_pressure": 2,
+            "coefficients": [[1.0, 2.0], [3.0, 4.0]],
+        },
+    }
+    payload["solve"]["channel_kinetics"] = [entry, {**entry}]
+    with pytest.raises(ValueError, match="unique"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_channel_kinetics_rejects_non_finite_coefficient() -> None:
+    """A NaN Chebyshev coefficient is rejected at the schema layer (not a
+    500 at JSONB insert time)."""
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "chebyshev",
+            "chebyshev": {
+                "n_temperature": 2,
+                "n_pressure": 2,
+                "coefficients": [[1.0, float("nan")], [3.0, 4.0]],
+            },
+        }
+    ]
+    with pytest.raises(ValueError, match="finite"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_channel_kinetics_rejects_plog_model_kind() -> None:
+    """Phase A is Chebyshev-only: PLOG/tabulated uploads are rejected."""
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "plog",
+        }
+    ]
+    with pytest.raises(ValueError, match="not yet supported"):
+        NetworkPDepUploadRequest(**payload)

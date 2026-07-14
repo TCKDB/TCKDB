@@ -21,15 +21,20 @@ are rejected when channels are explicitly provided.
 See DR-0001 for design rationale.
 """
 
+import math
 from typing import Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
 from app.db.models.common import (
+    ArrheniusAUnits,
     CalculationType,
     NetworkChannelKind,
+    NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
+    PressureUnit,
     ScientificOriginKind,
+    TemperatureUnit,
 )
 from app.schemas.common import SchemaBase
 from app.schemas.fragments.artifact import ArtifactIn
@@ -380,6 +385,131 @@ class SolveSourceCalculationIn(SchemaBase):
     role: NetworkSolveCalculationRole
 
 
+class ChebyshevKineticsIn(SchemaBase):
+    """Chebyshev-polynomial fit of a phenomenological k(T,P).
+
+    :param n_temperature: Number of temperature basis polynomials (rows).
+    :param n_pressure: Number of pressure basis polynomials (columns).
+    :param coefficients: 2D coefficient grid, ``n_temperature`` rows each of
+        length ``n_pressure``. Persisted as ``{"coeffs": [[...], ...]}`` JSONB
+        to match the network-kinetics read path.
+    """
+
+    n_temperature: int = Field(ge=1)
+    n_pressure: int = Field(ge=1)
+    coefficients: list[list[float]] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_grid_dimensions(self) -> Self:
+        if len(self.coefficients) != self.n_temperature:
+            raise ValueError(
+                f"Chebyshev coefficients must have n_temperature="
+                f"{self.n_temperature} rows, got {len(self.coefficients)}."
+            )
+        for i, row in enumerate(self.coefficients):
+            if len(row) != self.n_pressure:
+                raise ValueError(
+                    f"Chebyshev coefficients row {i} must have n_pressure="
+                    f"{self.n_pressure} columns, got {len(row)}."
+                )
+            for j, value in enumerate(row):
+                if not math.isfinite(value):
+                    raise ValueError(
+                        f"Chebyshev coefficient at ({i}, {j}) must be finite, "
+                        f"got {value!r}."
+                    )
+        return self
+
+
+class NetworkKineticsIn(SchemaBase):
+    """Fitted phenomenological k(T,P) for one channel under this solve.
+
+    Phase A supports Chebyshev fits only. The channel is referenced by its
+    ``(source_state_key, sink_state_key)`` state-key pair (channels carry no
+    local key of their own).
+
+    :param source_state_key: Local key of the referenced channel's source state.
+    :param sink_state_key: Local key of the referenced channel's sink state.
+    :param model_kind: Parameterization kind (``chebyshev`` only for now).
+    :param chebyshev: Chebyshev coefficients (required when
+        ``model_kind == chebyshev``).
+    :param tmin_k: Minimum temperature of validity in K.
+    :param tmax_k: Maximum temperature of validity in K.
+    :param pmin_bar: Minimum pressure of validity in bar.
+    :param pmax_bar: Maximum pressure of validity in bar.
+    :param rate_units: Units of the fitted rate coefficient.
+    :param pressure_units: Units the fit's pressure axis is expressed in.
+    :param temperature_units: Units the fit's temperature axis is expressed in.
+    :param stores_log10_k: Whether the coefficients fit ``log10(k)`` (Chebyshev
+        convention) rather than ``k`` directly.
+    :param note: Optional free-text note.
+    """
+
+    source_state_key: str = Field(min_length=1)
+    sink_state_key: str = Field(min_length=1)
+    model_kind: NetworkKineticsModelKind
+
+    chebyshev: ChebyshevKineticsIn | None = None
+
+    tmin_k: float | None = Field(default=None, gt=0)
+    tmax_k: float | None = Field(default=None, gt=0)
+    pmin_bar: float | None = Field(default=None, gt=0)
+    pmax_bar: float | None = Field(default=None, gt=0)
+    rate_units: ArrheniusAUnits | None = None
+    pressure_units: PressureUnit | None = None
+    temperature_units: TemperatureUnit | None = None
+    stores_log10_k: bool | None = None
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def normalize_text(self) -> Self:
+        self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def validate_source_ne_sink(self) -> Self:
+        if self.source_state_key == self.sink_state_key:
+            raise ValueError("source_state_key and sink_state_key must differ.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_model_payload(self) -> Self:
+        """Phase A supports Chebyshev only.
+
+        PLOG/tabulated fits have model rows (``network_kinetics_plog`` /
+        ``network_kinetics_point``) but no upload write path yet. Reject them
+        explicitly; the schema is structured so they can be added later.
+        """
+        if self.model_kind == NetworkKineticsModelKind.chebyshev:
+            if self.chebyshev is None:
+                raise ValueError(
+                    "chebyshev coefficients are required when "
+                    "model_kind == 'chebyshev'."
+                )
+        else:
+            raise ValueError(
+                "PLOG/tabulated network kinetics upload not yet supported "
+                "(Phase A is Chebyshev-only)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_ranges(self) -> Self:
+        if (
+            self.tmin_k is not None
+            and self.tmax_k is not None
+            and self.tmin_k > self.tmax_k
+        ):
+            raise ValueError("tmin_k must be less than or equal to tmax_k.")
+        if (
+            self.pmin_bar is not None
+            and self.pmax_bar is not None
+            and self.pmin_bar > self.pmax_bar
+        ):
+            raise ValueError("pmin_bar must be less than or equal to pmax_bar.")
+        return self
+
+
 class NetworkSolveIn(SchemaBase):
     """Master-equation solve configuration and provenance.
 
@@ -398,6 +528,8 @@ class NetworkSolveIn(SchemaBase):
     :param bath_gas: Bath gas composition.
     :param energy_transfer: Energy transfer model parameters.
     :param source_calculations: Calculations used in this solve, by local key and role.
+    :param channel_kinetics: Fitted phenomenological k(T,P) for channels, each
+        referencing its channel by ``(source_state_key, sink_state_key)``.
     :param note: Optional free-text note.
     """
 
@@ -420,6 +552,7 @@ class NetworkSolveIn(SchemaBase):
     bath_gas: list[BathGasIn] = Field(default_factory=list)
     energy_transfer: EnergyTransferIn | None = None
     source_calculations: list[SolveSourceCalculationIn] = Field(default_factory=list)
+    channel_kinetics: list[NetworkKineticsIn] = Field(default_factory=list)
     note: str | None = None
 
     @model_validator(mode="after")
@@ -636,6 +769,29 @@ class NetworkPDepUploadRequest(SchemaBase):
                         f"calculation_key '{sc.calculation_key}'."
                     )
 
+            # Channel kinetics must reference defined states and a defined
+            # channel (source, sink) pair.
+            channel_pairs = {
+                (ch.source_state_key, ch.sink_state_key) for ch in self.channels
+            }
+            for nk in self.solve.channel_kinetics:
+                if nk.source_state_key not in state_keys:
+                    raise ValueError(
+                        f"channel_kinetics references undefined source_state_key "
+                        f"'{nk.source_state_key}'."
+                    )
+                if nk.sink_state_key not in state_keys:
+                    raise ValueError(
+                        f"channel_kinetics references undefined sink_state_key "
+                        f"'{nk.sink_state_key}'."
+                    )
+                if (nk.source_state_key, nk.sink_state_key) not in channel_pairs:
+                    raise ValueError(
+                        f"channel_kinetics references undefined channel "
+                        f"({nk.source_state_key} -> {nk.sink_state_key}); "
+                        f"no matching entry in 'channels'."
+                    )
+
         return self
 
     @model_validator(mode="after")
@@ -646,6 +802,30 @@ class NetworkPDepUploadRequest(SchemaBase):
         ]
         if len(set(pairs)) != len(pairs):
             raise ValueError("Channels must be unique by (source_state_key, sink_state_key).")
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_channel_kinetics(self) -> Self:
+        """Ensure no duplicate channel_kinetics within one payload.
+
+        Two entries sharing the same ``(source_state_key, sink_state_key)``
+        would silently write two ``NetworkKinetics`` rows for one
+        (channel, solve) pair — user error within a single upload. Multiple
+        rows per (channel, solve) across separate uploads remain legitimate
+        under append-only semantics; only the within-payload duplicate is
+        rejected here.
+        """
+        if self.solve is None:
+            return self
+        pairs = [
+            (nk.source_state_key, nk.sink_state_key)
+            for nk in self.solve.channel_kinetics
+        ]
+        if len(set(pairs)) != len(pairs):
+            raise ValueError(
+                "channel_kinetics entries must be unique by "
+                "(source_state_key, sink_state_key) within one payload."
+            )
         return self
 
     @model_validator(mode="after")

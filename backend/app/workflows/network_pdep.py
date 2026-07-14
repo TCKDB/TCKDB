@@ -9,7 +9,8 @@ Pipeline (single transaction):
 4. Resolve micro reactions (local key → reaction_entry)
 5. Process transition states (TS → TS entry → geometry → calcs)
 6. Create network + states + channels + flat membership + reaction links
-7. Create solve (with source_calculations using calc key→id map)
+7. Create solve (with source_calculations using calc key→id map, plus
+   fitted per-channel k(T,P) network kinetics referenced by state-key pair)
 """
 
 from __future__ import annotations
@@ -32,6 +33,8 @@ from app.db.models.common import (
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
     NetworkChannel,
+    NetworkKinetics,
+    NetworkKineticsChebyshev,
     NetworkSolve,
     NetworkSolveBathGas,
     NetworkSolveEnergyTransfer,
@@ -464,15 +467,18 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     # 8. Create channels
     # ------------------------------------------------------------------
+    channel_pair_to_row: dict[tuple[str, str], NetworkChannel] = {}
     for ch_in in request.channels:
-        session.add(
-            NetworkChannel(
-                network_id=network.id,
-                source_state_id=state_key_to_row[ch_in.source_state_key].id,
-                sink_state_id=state_key_to_row[ch_in.sink_state_key].id,
-                kind=ch_in.kind,
-            )
+        channel_row = NetworkChannel(
+            network_id=network.id,
+            source_state_id=state_key_to_row[ch_in.source_state_key].id,
+            sink_state_id=state_key_to_row[ch_in.sink_state_key].id,
+            kind=ch_in.kind,
         )
+        session.add(channel_row)
+        channel_pair_to_row[
+            (ch_in.source_state_key, ch_in.sink_state_key)
+        ] = channel_row
     session.flush()
 
     # ------------------------------------------------------------------
@@ -605,6 +611,40 @@ def persist_network_pdep_upload(
                     role=sc.role,
                 )
             )
+
+        # Fitted phenomenological k(T,P) per channel (Chebyshev only).
+        for nk_in in solve_in.channel_kinetics:
+            channel_row = channel_pair_to_row[
+                (nk_in.source_state_key, nk_in.sink_state_key)
+            ]
+            network_kinetics = NetworkKinetics(
+                channel_id=channel_row.id,
+                solve_id=solve.id,
+                model_kind=nk_in.model_kind,
+                tmin_k=nk_in.tmin_k,
+                tmax_k=nk_in.tmax_k,
+                pmin_bar=nk_in.pmin_bar,
+                pmax_bar=nk_in.pmax_bar,
+                rate_units=nk_in.rate_units,
+                pressure_units=nk_in.pressure_units,
+                temperature_units=nk_in.temperature_units,
+                stores_log10_k=nk_in.stores_log10_k,
+                note=nk_in.note,
+            )
+            session.add(network_kinetics)
+            session.flush()
+
+            # Phase A: schema validation guarantees Chebyshev with coefficients.
+            cheb_in = nk_in.chebyshev
+            if cheb_in is not None:
+                session.add(
+                    NetworkKineticsChebyshev(
+                        network_kinetics_id=network_kinetics.id,
+                        n_temperature=cheb_in.n_temperature,
+                        n_pressure=cheb_in.n_pressure,
+                        coefficients={"coeffs": cheb_in.coefficients},
+                    )
+                )
 
         session.flush()
 
