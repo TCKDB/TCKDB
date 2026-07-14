@@ -183,14 +183,40 @@ class CalculationOptResultSummary(BaseModel):
 class CalculationFreqResultSummary(BaseModel):
     """Summary projection of a ``calc_freq_result`` row.
 
-    Per-mode arrays are intentionally omitted; they belong to a future
-    heavier include token.
+    Per-mode arrays are intentionally omitted here; the full per-mode
+    array is served under the dedicated ``include=freq_modes`` heavy
+    include (see :class:`CalculationFreqModeSummary`).
     """
 
     n_imag: int | None = None
     imag_freq_cm1: float | None = None
     zpe_hartree: float | None = None
     zpe_uncertainty_hartree: float | None = None
+
+
+class CalculationFreqModeSummary(BaseModel):
+    """One vibrational mode row (``calc_freq_mode``), projected for the
+    ``include=freq_modes`` heavy include of the calculation detail
+    endpoint.
+
+    The per-mode harmonic frequency array belongs to the frequency
+    *calculation* (not to the statmech record that consumes it), so it
+    is served here alongside the other per-calculation detail includes
+    (``scan`` coordinates, geometry links). Consumers that need to
+    regenerate a species' vibrational analysis read the raw modes from
+    this include and the applied scale factor from the statmech record.
+
+    Imaginary modes are stored as a negative ``frequency_cm1`` together
+    with ``is_imaginary = True`` (the DB enforces the sign matches the
+    flag). ``mode_index`` is scientific order metadata (1-based, part of
+    the row's natural key), not a DB surrogate id, so it stays visible.
+    """
+
+    mode_index: int
+    frequency_cm1: float
+    is_imaginary: bool
+    reduced_mass_amu: float | None = None
+    force_constant_mdyne_angstrom: float | None = None
 
 
 class CalculationScanResultSummary(BaseModel):
@@ -721,6 +747,7 @@ class AvailableCalculationSections(BaseModel):
     has_scf_stability: bool
     has_wavefunction_diagnostic: bool
     has_spin_diagnostic: bool
+    has_freq_modes: bool
     has_scan: bool
     has_irc: bool
     has_path_search: bool
@@ -765,6 +792,7 @@ class ScientificCalculationRecord(BaseModel):
     parameters: list[CalculationParameterSummary] | None = None
     constraints: list[CalculationConstraintSummary] | None = None
     review_history: list[CalculationReviewEntry] | None = None
+    freq_modes: list[CalculationFreqModeSummary] | None = None
     scan: CalculationScanSummary | None = None
     irc: CalculationIRCSummary | None = None
     path_search: CalculationPathSearchSummary | None = None
@@ -787,6 +815,7 @@ __all__ = [
     "CalculationDependencySummary",
     "CalculationDetailRequest",
     "CalculationEvidenceProvenanceSummary",
+    "CalculationFreqModeSummary",
     "CalculationFreqResultSummary",
     "CalculationGeometryLinkSummary",
     "CalculationGeometryValidationSummary",

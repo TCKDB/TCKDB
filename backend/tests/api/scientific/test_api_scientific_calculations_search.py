@@ -37,6 +37,7 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_dependency,
+    attach_freq_result,
     attach_geometry_validation,
     attach_opt_result,
     attach_output_geometry,
@@ -647,8 +648,52 @@ def test_get_search_default_omits_heavy_sections(client, db_session):
             "output_geometries",
             "geometry_validation",
             "scf_stability",
+            "freq_modes",
         ):
             assert heavy not in record
+
+
+def test_get_search_default_omits_freq_modes_even_when_present(
+    client, db_session
+):
+    """Search scope: the ``freq_modes`` key is absent from a default
+    search record even when the calc has parsed modes — omission is
+    driven by the include request, not by row absence (mirrors the
+    detail-scope contract)."""
+    _, _, calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.freq
+    )
+    attach_freq_result(
+        db_session, calculation=calc, frequencies_cm1=[800.0, 1600.0]
+    )
+    body = client.get(SEARCH_URL + "?calculation_type=freq").json()
+    record = next(
+        r for r in body["records"]
+        if r["calculation"]["calculation_ref"] == calc.public_ref
+    )
+    assert "freq_modes" not in record
+
+
+def test_get_search_include_freq_modes_populates_array(client, db_session):
+    """Search scope: ``include=freq_modes`` populates the per-mode array
+    on each matching record, matching the stored rows."""
+    _, _, calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.freq
+    )
+    attach_freq_result(
+        db_session, calculation=calc, frequencies_cm1=[-500.0, 900.0]
+    )
+    body = client.get(
+        SEARCH_URL + "?calculation_type=freq&include=freq_modes"
+    ).json()
+    record = next(
+        r for r in body["records"]
+        if r["calculation"]["calculation_ref"] == calc.public_ref
+    )
+    modes = record["freq_modes"]
+    assert [m["mode_index"] for m in modes] == [1, 2]
+    assert [m["frequency_cm1"] for m in modes] == [-500.0, 900.0]
+    assert [m["is_imaginary"] for m in modes] == [True, False]
 
 
 # ---------------------------------------------------------------------------
@@ -2592,6 +2637,7 @@ _ALL_EXPANSION_TOKENS = {
     "parameters",
     "constraints",
     "review",
+    "freq_modes",
     "scan",
     "irc",
     "path_search",
@@ -2623,6 +2669,7 @@ def test_search_include_all_returns_200(client, db_session):
         "parameters",
         "constraints",
         "review_history",
+        "freq_modes",
         "scan",
         "irc",
         "path_search",

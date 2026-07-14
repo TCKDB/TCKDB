@@ -19,6 +19,7 @@ from app.db.models.calculation import (
     CalculationArtifact,
     CalculationConstraint,
     CalculationDependency,
+    CalculationFreqMode,
     CalculationFreqResult,
     CalculationGeometryValidation,
     CalculationInputGeometry,
@@ -61,6 +62,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationDependencySummary,
     CalculationDetailRequest,
     CalculationEvidenceProvenanceSummary,
+    CalculationFreqModeSummary,
     CalculationFreqResultSummary,
     CalculationGeometryLinkSummary,
     CalculationGeometryValidationSummary,
@@ -130,6 +132,7 @@ _HEAVY_INCLUDE_TOKENS: frozenset[str] = frozenset(
         "parameters",
         "constraints",
         "review",
+        "freq_modes",
         "scan",
         "irc",
         "path_search",
@@ -348,6 +351,10 @@ def build_record(
     if "review" in includes:
         review_history_block = _build_review_history(session, calc.id)
 
+    freq_modes_block: list[CalculationFreqModeSummary] | None = None
+    if "freq_modes" in includes:
+        freq_modes_block = _build_freq_modes(session, calc.id)
+
     scan_block: CalculationScanSummary | None = None
     if "scan" in includes:
         scan_block = _build_scan_include_summary(session, calc.id)
@@ -397,6 +404,7 @@ def build_record(
         parameters=parameters_block,
         constraints=constraints_block,
         review_history=review_history_block,
+        freq_modes=freq_modes_block,
         scan=scan_block,
         irc=irc_block,
         path_search=path_search_block,
@@ -745,6 +753,10 @@ def _build_provenance_and_sections(
         session, CalculationSpinDiagnostic, calculation_id
     )
 
+    has_freq_modes = _exists_for_calc(
+        session, CalculationFreqMode, calculation_id
+    )
+
     converged = _load_converged_flag(session, calc, calculation_id)
 
     submission_id, submission_ref = _load_submission_link(
@@ -771,6 +783,7 @@ def _build_provenance_and_sections(
         has_scf_stability=has_scf_stability,
         has_wavefunction_diagnostic=has_wavefunction_diagnostic,
         has_spin_diagnostic=has_spin_diagnostic,
+        has_freq_modes=has_freq_modes,
         has_scan=has_scan,
         has_irc=has_irc,
         has_path_search=has_path_search,
@@ -1244,6 +1257,45 @@ def _build_constraints(
                 if idx is not None
             ],
             target_value=row.target_value,
+        )
+        for row in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# include=freq_modes loader
+# ---------------------------------------------------------------------------
+
+
+def _build_freq_modes(
+    session: Session, calculation_id: int
+) -> list[CalculationFreqModeSummary]:
+    """Return the per-mode harmonic frequency array for *calculation_id*.
+
+    Projects every ``calc_freq_mode`` row of the frequency calculation
+    into a public per-mode summary. Returns ``[]`` when the calc has no
+    parsed modes (the include is populated as an empty list, not
+    omitted, so callers can tell "asked but none" from "did not ask").
+
+    The array is bounded by the molecule's ``3N-6`` (or ``3N-5``) degrees
+    of freedom, so it is safe to inline without pagination. Imaginary
+    modes carry a negative ``frequency_cm1`` with ``is_imaginary = True``.
+
+    Ordering: ``mode_index ASC`` — the row's natural ordering key.
+    """
+    rows = session.execute(
+        select(CalculationFreqMode)
+        .where(CalculationFreqMode.calculation_id == calculation_id)
+        .order_by(CalculationFreqMode.mode_index.asc())
+    ).scalars().all()
+
+    return [
+        CalculationFreqModeSummary(
+            mode_index=row.mode_index,
+            frequency_cm1=row.frequency_cm1,
+            is_imaginary=row.is_imaginary,
+            reduced_mass_amu=row.reduced_mass_amu,
+            force_constant_mdyne_angstrom=row.force_constant_mdyne_angstrom,
         )
         for row in rows
     ]

@@ -289,6 +289,7 @@ def build_statmech_record(
         external_symmetry=sm.external_symmetry,
         is_linear=sm.is_linear,
         uses_projected_frequencies=sm.uses_projected_frequencies,
+        optical_isomers=sm.optical_isomers,
         frequency_scale_factor_value=fsf_value,
         note=sm.note,
         created_at=sm.created_at,
@@ -823,9 +824,9 @@ def _build_frequencies_summary(
         source_freq_calculation_ids=ids,
         frequency_scale_factor_value=fsf_value,
         note=(
-            "Per-mode frequency arrays live on calc_freq_result of the source "
-            "freq calculation(s); see "
-            "/api/v1/scientific/calculations/{calculation_ref}?include=results."
+            "Per-mode frequency arrays live on the source freq "
+            "calculation(s); fetch the full array via "
+            "/api/v1/scientific/calculations/{calculation_ref}?include=freq_modes."
         ),
     )
 

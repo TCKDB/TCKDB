@@ -1309,6 +1309,10 @@
             "title": "Has Dependencies",
             "type": "boolean"
           },
+          "has_freq_modes": {
+            "title": "Has Freq Modes",
+            "type": "boolean"
+          },
           "has_geometry_validation": {
             "title": "Has Geometry Validation",
             "type": "boolean"
@@ -1366,6 +1370,7 @@
           "has_scf_stability",
           "has_wavefunction_diagnostic",
           "has_spin_diagnostic",
+          "has_freq_modes",
           "has_scan",
           "has_irc",
           "has_path_search"
@@ -3471,6 +3476,52 @@
         "title": "CalculationFreqModeRead",
         "type": "object"
       },
+      "CalculationFreqModeSummary": {
+        "description": "One vibrational mode row (``calc_freq_mode``), projected for the\n``include=freq_modes`` heavy include of the calculation detail\nendpoint.\n\nThe per-mode harmonic frequency array belongs to the frequency\n*calculation* (not to the statmech record that consumes it), so it\nis served here alongside the other per-calculation detail includes\n(``scan`` coordinates, geometry links). Consumers that need to\nregenerate a species' vibrational analysis read the raw modes from\nthis include and the applied scale factor from the statmech record.\n\nImaginary modes are stored as a negative ``frequency_cm1`` together\nwith ``is_imaginary = True`` (the DB enforces the sign matches the\nflag). ``mode_index`` is scientific order metadata (1-based, part of\nthe row's natural key), not a DB surrogate id, so it stays visible.",
+        "properties": {
+          "force_constant_mdyne_angstrom": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Force Constant Mdyne Angstrom"
+          },
+          "frequency_cm1": {
+            "title": "Frequency Cm1",
+            "type": "number"
+          },
+          "is_imaginary": {
+            "title": "Is Imaginary",
+            "type": "boolean"
+          },
+          "mode_index": {
+            "title": "Mode Index",
+            "type": "integer"
+          },
+          "reduced_mass_amu": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reduced Mass Amu"
+          }
+        },
+        "required": [
+          "mode_index",
+          "frequency_cm1",
+          "is_imaginary"
+        ],
+        "title": "CalculationFreqModeSummary",
+        "type": "object"
+      },
       "CalculationFreqResultRead": {
         "properties": {
           "calculation_id": {
@@ -3537,7 +3588,7 @@
         "type": "object"
       },
       "CalculationFreqResultSummary": {
-        "description": "Summary projection of a ``calc_freq_result`` row.\n\nPer-mode arrays are intentionally omitted; they belong to a future\nheavier include token.",
+        "description": "Summary projection of a ``calc_freq_result`` row.\n\nPer-mode arrays are intentionally omitted here; the full per-mode\narray is served under the dedicated ``include=freq_modes`` heavy\ninclude (see :class:`CalculationFreqModeSummary`).",
         "properties": {
           "imag_freq_cm1": {
             "anyOf": [
@@ -25037,6 +25088,20 @@
             ],
             "title": "Dependencies"
           },
+          "freq_modes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationFreqModeSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freq Modes"
+          },
           "geometry_validation": {
             "anyOf": [
               {
@@ -29318,7 +29383,7 @@
         "type": "object"
       },
       "StatmechCoreBlock": {
-        "description": "Direct statmech-row metadata.\n\n``frequency_scale_factor_value`` is the resolved numeric scaling\nfactor pulled from the linked ``frequency_scale_factor`` row (or\n``None`` when the statmech row carries no scale factor). The\nfull FSF row is surfaced separately via\n:class:`StatmechFrequencyScaleFactorSummary` so callers can see\nthe LoT + software + literature provenance behind the scalar.\n\n``scientific_origin`` is the producer (computed / experimental /\nestimated). ``statmech_treatment`` / ``rigid_rotor_kind`` /\n``point_group`` / ``external_symmetry`` / ``is_linear`` /\n``uses_projected_frequencies`` are the statmech inputs the row\nactually carries.",
+        "description": "Direct statmech-row metadata.\n\n``frequency_scale_factor_value`` is the resolved numeric scaling\nfactor pulled from the linked ``frequency_scale_factor`` row (or\n``None`` when the statmech row carries no scale factor). The\nfull FSF row is surfaced separately via\n:class:`StatmechFrequencyScaleFactorSummary` so callers can see\nthe LoT + software + literature provenance behind the scalar.\n\n``scientific_origin`` is the producer (computed / experimental /\nestimated). ``statmech_treatment`` / ``rigid_rotor_kind`` /\n``point_group`` / ``external_symmetry`` / ``is_linear`` /\n``uses_projected_frequencies`` / ``optical_isomers`` are the\nstatmech inputs the row actually carries. ``optical_isomers`` is\nthe count of optical (mirror-image) isomers used to scale the\npartition function; a chiral species contributes ``2``.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -29368,6 +29433,17 @@
               }
             ],
             "title": "Note"
+          },
+          "optical_isomers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optical Isomers"
           },
           "point_group": {
             "anyOf": [
@@ -29492,7 +29568,7 @@
         "type": "object"
       },
       "StatmechFrequenciesSummary": {
-        "description": "Where to fetch the underlying frequency data for this statmech.\n\n``source_freq_calculation_refs`` lists the public refs of every\nfreq calculation linked through ``statmech_source_calculation``.\n``frequency_scale_factor_value`` is the scalar applied on top of\nthose raw frequencies (mirrors the core block's field for\ncallers consuming only this section). Per-mode arrays remain\navailable behind\n``GET /scientific/calculations/{calculation_ref}?include=results``.",
+        "description": "Where to fetch the underlying frequency data for this statmech.\n\n``source_freq_calculation_refs`` lists the public refs of every\nfreq calculation linked through ``statmech_source_calculation``.\n``frequency_scale_factor_value`` is the scalar applied on top of\nthose raw frequencies (mirrors the core block's field for\ncallers consuming only this section). Per-mode arrays remain\navailable behind\n``GET /scientific/calculations/{calculation_ref}?include=freq_modes``.",
         "properties": {
           "frequency_scale_factor_value": {
             "anyOf": [

@@ -160,6 +160,26 @@ def test_detail_default_response_shape(client, db_session):
     assert "trust" not in record
 
 
+def test_detail_core_block_surfaces_optical_isomers(client, db_session):
+    """``optical_isomers`` is a stored ``Statmech`` input required to
+    regenerate the partition function; it must appear on the always-present
+    core block. A chiral species contributes ``2``."""
+    _, _, sm = _make_statmech(db_session, optical_isomers=2)
+    body = client.get(_detail_url(sm.public_ref)).json()
+    assert body["record"]["statmech"]["optical_isomers"] == 2
+
+
+def test_detail_core_block_optical_isomers_null_when_unset(
+    client, db_session
+):
+    """When the statmech row carries no ``optical_isomers`` value the
+    field is present and ``null`` (never omitted) so callers can read the
+    core block shape unconditionally."""
+    _, _, sm = _make_statmech(db_session)
+    body = client.get(_detail_url(sm.public_ref)).json()
+    assert body["record"]["statmech"]["optical_isomers"] is None
+
+
 def test_detail_review_badge_present(client, db_session):
     _, _, sm = _make_statmech(db_session)
     body = client.get(_detail_url(sm.public_ref)).json()

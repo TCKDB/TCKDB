@@ -59,6 +59,7 @@ Heavy include tokens land one at a time. Current state:
 | `parameters` | implemented | Raw + canonical key/value pairs; vocab row not inlined. |
 | `constraints` | implemented | All four atom-index slots plus an `atom_indices` convenience list in arity order. |
 | `review` | implemented | Surfaced as `record.review_history` (zero-or-one list because the schema enforces `UNIQUE (record_type, record_id)`). Carries `note`, `submission_ref`, plus policy-gated `review_id`/`reviewer_id`/`submission_id`. The compact `RecordReviewBadge` on the calculation block is unaffected — it remains the always-present trust signal. |
+| `freq_modes` | implemented | The full ordered per-mode harmonic frequency array from `calc_freq_mode` (`mode_index`, `frequency_cm1`, `is_imaginary`, `reduced_mass_amu`, `force_constant_mdyne_angstrom`). Unlike `scan`/`irc`/`path_search`, the array **is** inlined in full (not deferred to a specialized endpoint) because it is bounded by the molecule's `3N-6`/`3N-5` degrees of freedom. Imaginary modes carry a negative `frequency_cm1` with `is_imaginary = True`. Empty list when no modes are parsed. This is the per-mode data a statmech consumer needs to regenerate a vibrational analysis; the statmech record's `include=frequencies` only points back at the source freq calc(s). No DB surrogate ids are exposed (`mode_index` is the row's scientific order key). |
 | `internal_ids` | implemented | Phase D policy-gated; explicit opt-in via the include token, only effective when `settings.allow_public_internal_ids = True`. |
 | `scan` | implemented (summary) | Bounded scan summary: result-row fields, ordered coordinate list, `coordinate_count`, `point_count`, energy MIN/MAX aggregates. **Per-point arrays and coordinate-value rows are intentionally NOT exposed by this include** — full scan trajectory data is available via the specialized endpoint `GET /api/v1/scientific/calculations/{calculation_ref_or_id}/scan` (paginated by point; see `scientific_calculation_path_includes.md` §8). The summary block returned by `include=scan` is byte-for-byte the same shape as `response.scan` from the specialized endpoint, so a caller can use the summary for cheap inventory and follow up with `/scan` only when they need the per-point trajectory. |
 | `irc` | implemented (summary) | Bounded IRC summary: result-row fields, directional point counts (`forward_point_count`, `reverse_point_count`, `ts_point_count`), energy and reaction-coordinate MIN/MAX aggregates. **Per-point arrays are intentionally NOT exposed by this include** — full IRC trajectory data is available via the specialized endpoint `GET /api/v1/scientific/calculations/{calculation_ref_or_id}/irc` (paginated by point; see `scientific_calculation_path_includes.md` §8). The summary block returned by `include=irc` is byte-for-byte the same shape as `response.irc` from the specialized endpoint. Direction-counting policy: `direction=both` and `direction IS NULL` rows (e.g. ORCA TS markers) do not count toward forward/reverse. |
@@ -310,6 +311,7 @@ _LEGAL_INCLUDE_TOKENS = {
     "output_geometries",
     "geometry_validation",
     "scf_stability",
+    "freq_modes",
     "scan",
     "irc",
     "path_search",
@@ -336,6 +338,7 @@ expands to every token **except** `internal_ids`. Unknown tokens → 422
 | `output_geometries` | `output_geometries: list[CalculationGeometryLinkSummary]` | `calculation_output_geometry` |
 | `geometry_validation` | `geometry_validation: list[CalculationGeometryValidationSummary]` | `calc_geometry_validation` |
 | `scf_stability` | `scf_stability: list[CalculationSCFStabilitySummary]` | `calc_scf_stability` |
+| `freq_modes` | `freq_modes: list[CalculationFreqModeSummary]` (full per-mode array; empty list when none) | `calc_freq_mode` |
 | `scan` | `scan: CalculationScanSummary \| None` | `calc_scan_result` (+ children) |
 | `irc` | `irc: CalculationIRCSummary \| None` | `calc_irc_result` (+ points) |
 | `path_search` | `path_search: CalculationPathSearchSummary \| None` | `calc_path_search_result` (+ points) |
@@ -676,6 +679,7 @@ class AvailableCalculationSections(BaseModel):
     has_output_geometries: bool
     has_geometry_validation: bool
     has_scf_stability: bool
+    has_freq_modes: bool
     has_scan: bool
     has_irc: bool
     has_path_search: bool
@@ -688,8 +692,9 @@ class CalculationResultSummary(BaseModel):
     CalculationSPResultRead/OptResultRead/FreqResultRead etc., reduced to
     only the fields that are publicly meaningful for evidence purposes
     (energy, converged, basis-of-truth flags). Heavy arrays (frequency
-    modes, scan/IRC point arrays) are NOT exposed here — they are
-    available via `include=scan|irc|path_search` instead."""
+    modes, scan/IRC point arrays) are NOT exposed here — the per-mode
+    frequency array is available via `include=freq_modes`; scan/IRC/
+    path-search summaries via `include=scan|irc|path_search`."""
     sp: CalculationResultSPSummary | None = None
     opt: CalculationResultOptSummary | None = None
     freq: CalculationResultFreqSummary | None = None

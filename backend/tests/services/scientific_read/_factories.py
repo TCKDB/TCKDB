@@ -671,12 +671,19 @@ def attach_freq_result(
     calculation: Calculation,
     frequencies_cm1: list[float],
     zpe_hartree: float | None = None,
+    reduced_masses_amu: list[float | None] | None = None,
+    force_constants_mdyne_angstrom: list[float | None] | None = None,
 ) -> CalculationFreqResult:
     """Attach a CalculationFreqResult plus its per-mode rows.
 
     Imaginary modes are supplied as negative wavenumbers; ``n_imag`` and
     ``imag_freq_cm1`` are derived from the sign, matching the schema's
     signed-frequency convention.
+
+    Optional ``reduced_masses_amu`` / ``force_constants_mdyne_angstrom``
+    are positional-aligned with ``frequencies_cm1`` (same length) so
+    tests can assert those per-mode columns surface through the read
+    API; when omitted the columns stay ``NULL``.
     """
     imag = [f for f in frequencies_cm1 if f < 0]
     result = CalculationFreqResult(
@@ -693,6 +700,16 @@ def attach_freq_result(
                 mode_index=i,
                 frequency_cm1=freq,
                 is_imaginary=freq < 0,
+                reduced_mass_amu=(
+                    reduced_masses_amu[i - 1]
+                    if reduced_masses_amu is not None
+                    else None
+                ),
+                force_constant_mdyne_angstrom=(
+                    force_constants_mdyne_angstrom[i - 1]
+                    if force_constants_mdyne_angstrom is not None
+                    else None
+                ),
             )
         )
     session.flush()
@@ -894,6 +911,7 @@ def make_statmech(
     point_group: str | None = "C2v",
     is_linear: bool | None = False,
     statmech_treatment: StatmechTreatmentKind | None = StatmechTreatmentKind.rrho,
+    optical_isomers: int | None = None,
     frequency_scale_factor_id: int | None = None,
     software_release_id: int | None = None,
     workflow_tool_release_id: int | None = None,
@@ -908,6 +926,7 @@ def make_statmech(
         point_group=point_group,
         is_linear=is_linear,
         statmech_treatment=statmech_treatment,
+        optical_isomers=optical_isomers,
         frequency_scale_factor_id=frequency_scale_factor_id,
         software_release_id=software_release_id,
         workflow_tool_release_id=workflow_tool_release_id,

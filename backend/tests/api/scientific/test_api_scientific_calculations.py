@@ -46,6 +46,7 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_dependency,
+    attach_freq_result,
     attach_geometry_validation,
     attach_opt_result,
     attach_output_geometry,
@@ -835,6 +836,7 @@ def test_available_sections_all_false_for_bare_calculation(
         "has_scf_stability": False,
         "has_wavefunction_diagnostic": False,
         "has_spin_diagnostic": False,
+        "has_freq_modes": False,
         "has_scan": False,
         "has_irc": False,
         "has_path_search": False,
@@ -1989,6 +1991,114 @@ def test_detail_spin_diagnostic_omitted_when_not_requested(client, db_session):
         f"/api/v1/scientific/calculations/{calc.public_ref}"
     ).json()
     assert "spin_diagnostic" not in body["record"]
+
+
+# ---------------------------------------------------------------------------
+# include=freq_modes
+# ---------------------------------------------------------------------------
+
+
+def test_detail_freq_modes_omitted_when_not_requested(client, db_session):
+    """The ``freq_modes`` key must be ABSENT (not ``null`` or ``[]``) from
+    a default read that did not request it. A calc with parsed modes is
+    used precisely to prove the omission is driven by the include request,
+    not by the rows' absence.
+    """
+    _, _, calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.freq
+    )
+    attach_freq_result(
+        db_session, calculation=calc, frequencies_cm1=[-1200.0, 800.0, 1600.0]
+    )
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+    ).json()
+    assert "freq_modes" not in body["record"]
+
+
+def test_detail_include_freq_modes_returns_per_mode_array(client, db_session):
+    """``include=freq_modes`` surfaces the full ordered per-mode array
+    matching the stored ``calc_freq_mode`` rows, including the imaginary
+    flag (negative wavenumber) and the reduced-mass / force-constant
+    columns."""
+    _, _, calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.freq
+    )
+    attach_freq_result(
+        db_session,
+        calculation=calc,
+        frequencies_cm1=[-1200.0, 800.0, 1600.0],
+        reduced_masses_amu=[1.05, 2.10, None],
+        force_constants_mdyne_angstrom=[0.5, None, 3.2],
+    )
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        "?include=freq_modes"
+    ).json()
+    assert body["request"]["include"] == ["freq_modes"]
+    modes = body["record"]["freq_modes"]
+    assert modes == [
+        {
+            "mode_index": 1,
+            "frequency_cm1": -1200.0,
+            "is_imaginary": True,
+            "reduced_mass_amu": 1.05,
+            "force_constant_mdyne_angstrom": 0.5,
+        },
+        {
+            "mode_index": 2,
+            "frequency_cm1": 800.0,
+            "is_imaginary": False,
+            "reduced_mass_amu": 2.10,
+            "force_constant_mdyne_angstrom": None,
+        },
+        {
+            "mode_index": 3,
+            "frequency_cm1": 1600.0,
+            "is_imaginary": False,
+            "reduced_mass_amu": None,
+            "force_constant_mdyne_angstrom": 3.2,
+        },
+    ]
+    # available_sections agrees that modes are present.
+    assert body["record"]["available_sections"]["has_freq_modes"] is True
+
+
+def test_detail_include_freq_modes_empty_list_when_no_modes(
+    client, db_session
+):
+    """``include=freq_modes`` on a calc without parsed modes returns an
+    empty list (present, not omitted) so callers can distinguish "asked
+    but none" from "did not ask"."""
+    _, _, calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.freq
+    )
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        "?include=freq_modes"
+    ).json()
+    assert body["record"]["freq_modes"] == []
+    assert body["record"]["available_sections"]["has_freq_modes"] is False
+
+
+def test_detail_include_freq_modes_does_not_expose_internal_ids(
+    client, db_session
+):
+    """The per-mode array carries no DB surrogate ids — only the
+    scientific ``mode_index`` order key and the physical columns."""
+    _, _, calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.freq
+    )
+    attach_freq_result(
+        db_session, calculation=calc, frequencies_cm1=[800.0, 1600.0]
+    )
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        "?include=freq_modes"
+    ).json()
+    for mode in body["record"]["freq_modes"]:
+        assert "calculation_id" not in mode
+        assert "id" not in mode
 
 
 def test_detail_include_scf_stability_returns_summary(client, db_session):
@@ -3919,6 +4029,7 @@ _ALL_EXPANSION_TOKENS = {
     "parameters",
     "constraints",
     "review",
+    "freq_modes",
     "scan",
     "irc",
     "path_search",
@@ -3957,6 +4068,7 @@ def test_detail_include_all_returns_200_with_summary_blocks(
         "parameters",
         "constraints",
         "review_history",
+        "freq_modes",
         "scan",
         "irc",
         "path_search",

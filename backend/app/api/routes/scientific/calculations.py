@@ -243,6 +243,7 @@ _OMITTABLE_RECORD_KEYS: dict[str, str] = {
     "parameters": "parameters",
     "constraints": "constraints",
     "review": "review_history",
+    "freq_modes": "freq_modes",
     "scan": "scan",
     "irc": "irc",
     "path_search": "path_search",

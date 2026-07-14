@@ -79,8 +79,10 @@ class StatmechCoreBlock(BaseModel):
     ``scientific_origin`` is the producer (computed / experimental /
     estimated). ``statmech_treatment`` / ``rigid_rotor_kind`` /
     ``point_group`` / ``external_symmetry`` / ``is_linear`` /
-    ``uses_projected_frequencies`` are the statmech inputs the row
-    actually carries.
+    ``uses_projected_frequencies`` / ``optical_isomers`` are the
+    statmech inputs the row actually carries. ``optical_isomers`` is
+    the count of optical (mirror-image) isomers used to scale the
+    partition function; a chiral species contributes ``2``.
     """
 
     statmech_id: int | None = None
@@ -92,6 +94,7 @@ class StatmechCoreBlock(BaseModel):
     external_symmetry: int | None = None
     is_linear: bool | None = None
     uses_projected_frequencies: bool | None = None
+    optical_isomers: int | None = None
     frequency_scale_factor_value: float | None = None
     note: str | None = None
     created_at: datetime
@@ -277,7 +280,7 @@ class StatmechFrequenciesSummary(BaseModel):
     those raw frequencies (mirrors the core block's field for
     callers consuming only this section). Per-mode arrays remain
     available behind
-    ``GET /scientific/calculations/{calculation_ref}?include=results``.
+    ``GET /scientific/calculations/{calculation_ref}?include=freq_modes``.
     """
 
     source_freq_calculation_refs: list[str] = Field(default_factory=list)
