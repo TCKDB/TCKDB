@@ -287,6 +287,13 @@ enum PathSearchMethod {
   other
 }
 
+enum PhaseKind {
+  gas
+  liquid
+  solid
+  aqueous
+}
+
 enum PressureContext {
   high_p_limit
   apparent_at_pressure
@@ -2364,8 +2371,13 @@ Table thermo {
   s298_j_mol_k double
   h298_uncertainty_kj_mol double
   s298_uncertainty_j_mol_k double
+  enthalpy_formation_0k_kj_mol double
+  enthalpy_formation_0k_uncertainty_kj_mol double
+  reference_pressure_bar double
+  phase PhaseKind
   tmin_k double
   tmax_k double
+  statmech_id bigint [ref: > statmech.id]
   note text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
@@ -2374,9 +2386,11 @@ Table thermo {
   indexes {
     literature_id [name: 'ix_thermo_literature_id']
     public_ref [unique, name: 'ix_thermo_public_ref']
+    statmech_id [name: 'ix_thermo_statmech_id']
   }
 
   checks {
+    `enthalpy_formation_0k_uncertainty_kj_mol IS NULL OR enthalpy_formation_0k_uncertainty_kj_mol >= 0` [name: 'ck_thermo_enthalpy_formation_0k_uncertainty_ge_0']
     `h298_uncertainty_kj_mol IS NULL OR h298_uncertainty_kj_mol >= 0` [name: 'ck_thermo_h298_uncertainty_ge_0']
     `s298_uncertainty_j_mol_k IS NULL OR s298_uncertainty_j_mol_k >= 0` [name: 'ck_thermo_s298_uncertainty_ge_0']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_thermo_tmax_k_gt_0']

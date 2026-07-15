@@ -11,6 +11,7 @@ from app.db.models.common import (
     SubmissionRecordType,
     ThermoCalculationRole,
 )
+from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.schemas.entities.thermo import ThermoSourceCalculationCreate
 from app.schemas.workflows.thermo_upload import (
@@ -130,6 +131,35 @@ def _resolve_source_calculation(
     return calc_row
 
 
+def _resolve_statmech_id(
+    session: Session,
+    existing_statmech_id: int | None,
+    *,
+    species_entry_id: int,
+) -> int | None:
+    """Resolve an optional ``existing_statmech_id`` to a statmech row id.
+
+    Mirrors the ``existing_calculation_id`` handling for source
+    calculations (DR-0028): a missing row produces 404, a row owned by a
+    different species entry produces 422 (ValueError). The error detail
+    names the field but does not leak internal identifiers.
+    """
+    if existing_statmech_id is None:
+        return None
+    statmech = session.get(Statmech, existing_statmech_id)
+    if statmech is None:
+        raise NotFoundError(
+            "existing_statmech_id refers to a statmech record that does "
+            "not exist."
+        )
+    if statmech.species_entry_id != species_entry_id:
+        raise ValueError(
+            "existing_statmech_id refers to a statmech record owned by a "
+            "different species entry."
+        )
+    return statmech.id
+
+
 def persist_thermo_upload(
     session: Session,
     request: ThermoUploadRequest,
@@ -197,15 +227,29 @@ def persist_thermo_upload(
             )
         )
 
+    # Resolve the optional statmech basis for this (computed) thermo. The
+    # upload carries it as an existing-row reference (programmatic path,
+    # like existing_calculation_id); the owner-consistency check keeps a
+    # thermo from citing another species' statmech record.
+    resolved_statmech_id = _resolve_statmech_id(
+        session,
+        request.existing_statmech_id,
+        species_entry_id=species_entry.id,
+    )
+
     thermo_create = resolve_thermo_upload(
         session,
         request,
         species_entry_id=species_entry.id,
     )
     # The upload service currently hardcodes an empty source_calculations
-    # list on ThermoCreate; splice the resolved ones in here.
+    # list and a null statmech_id on ThermoCreate; splice the resolved
+    # values in here.
     thermo_create = thermo_create.model_copy(
-        update={"source_calculations": resolved_source_calcs}
+        update={
+            "source_calculations": resolved_source_calcs,
+            "statmech_id": resolved_statmech_id,
+        }
     )
     thermo = persist_thermo(session, thermo_create, created_by=created_by)
 

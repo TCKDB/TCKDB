@@ -9,7 +9,11 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from app.db.models.common import ScientificOriginKind, ThermoCalculationRole
+from app.db.models.common import (
+    PhaseKind,
+    ScientificOriginKind,
+    ThermoCalculationRole,
+)
 from app.schemas.common import SchemaBase
 from app.schemas.entities.thermo import ThermoNASACreate, ThermoPointCreate
 from app.schemas.fragments.calculation import CalculationWithResultsPayload
@@ -104,11 +108,37 @@ class ThermoUploadRequest(SchemaBase):
     software_release: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
 
+    # Statmech linkage for computed thermo. This is an *advanced /
+    # programmatic* mechanism (mirroring ``existing_calculation_id`` on
+    # source-calculation entries, DR-0028): a client that has just
+    # uploaded a statmech record threads its returned id through here so
+    # the derived thermo cites its statmech basis. Contributor-facing
+    # bundle uploads that resolve statmech server-side by local key are a
+    # future enrichment; there is no raw contributor FK for statmech here.
+    existing_statmech_id: int | None = Field(default=None, gt=0)
+
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
 
     h298_uncertainty_kj_mol: float | None = Field(default=None, ge=0)
     s298_uncertainty_j_mol_k: float | None = Field(default=None, ge=0)
+
+    enthalpy_formation_0k_kj_mol: float | None = None
+    enthalpy_formation_0k_uncertainty_kj_mol: float | None = Field(
+        default=None, ge=0
+    )
+
+    # Standard-state reference pressure (bar) and physical phase. These are
+    # left unset (``None``) at the field level and are only *defaulted* for
+    # computed uploads (see ``apply_computed_origin_defaults`` below): a QC
+    # record is reasonably gas-phase @ 1 bar (IUPAC) unless stated
+    # otherwise. For experimental/literature/estimated origins the defaults
+    # are NOT applied — silently stamping a condensed-phase literature value
+    # as ``gas @ 1 bar`` would reintroduce the ambiguity this schema removes.
+    # Explicit values are always honored regardless of origin; for legacy
+    # 1 atm data set ``reference_pressure_bar=1.01325``.
+    reference_pressure_bar: float | None = Field(default=None, gt=0)
+    phase: PhaseKind | None = None
 
     tmin_k: float | None = Field(default=None, gt=0)
     tmax_k: float | None = Field(default=None, gt=0)
@@ -133,6 +163,27 @@ class ThermoUploadRequest(SchemaBase):
     @model_validator(mode="after")
     def normalize_text_fields(self) -> Self:
         self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def apply_computed_origin_defaults(self) -> Self:
+        """Fill reference-state defaults only for computed uploads.
+
+        A computed QC record is reasonably gas-phase @ 1 bar (IUPAC)
+        unless stated otherwise, so ``phase``/``reference_pressure_bar``
+        default to ``gas``/``1.0`` when the uploader omits them. For
+        experimental/literature/estimated origins the fields stay ``None``
+        unless explicitly provided — defaulting them would silently stamp
+        e.g. a condensed-phase literature value as ``gas @ 1 bar``.
+
+        Explicit values (including an explicit ``None``) are honored:
+        ``model_fields_set`` distinguishes "omitted" from "provided".
+        """
+        if self.scientific_origin == ScientificOriginKind.computed:
+            if "reference_pressure_bar" not in self.model_fields_set:
+                self.reference_pressure_bar = 1.0
+            if "phase" not in self.model_fields_set:
+                self.phase = PhaseKind.gas
         return self
 
     @model_validator(mode="after")

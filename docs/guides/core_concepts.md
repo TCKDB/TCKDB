@@ -33,9 +33,11 @@ scientific form of that thing.
 
 ### `chem_reaction` vs `reaction_entry`
 
-- **`chem_reaction`** is the bare reactants → products identity (a
-  multiset of species, plus reaction family). Atom mapping is part of
-  identity; stoichiometric coefficients live here.
+- **`chem_reaction`** is the bare reactants → products identity (the
+  participant species plus reaction family and direction);
+  stoichiometric coefficients live here. Atom mapping is *not* stored at
+  the reaction level — reaction identity is participant species +
+  stoichiometry + direction.
 - **`reaction_entry`** is a scientific instance of that reaction —
   reactants and products attached as specific `species_entry` rows
   (chirality, electronic state, …), with attached kinetics, transport,
@@ -119,8 +121,10 @@ thermo and kinetics generation.
 ### `thermo`
 
 Temperature-dependent thermodynamic quantities: Cp(T), H(T), S(T), and
-fitted NASA/Wilhoit polynomials. Each row carries provenance back to
-the underlying statmech (or the literature it was lifted from).
+fitted NASA polynomials (Wilhoit is planned, not yet in the schema).
+Each row carries provenance back to the underlying statmech (via the
+``statmech_id`` FK, for computed thermo) or the literature it was
+lifted from.
 
 ### `kinetics`
 

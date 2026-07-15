@@ -56,12 +56,21 @@ def resolve_thermo_upload(
         s298_j_mol_k=request.s298_j_mol_k,
         h298_uncertainty_kj_mol=request.h298_uncertainty_kj_mol,
         s298_uncertainty_j_mol_k=request.s298_uncertainty_j_mol_k,
+        enthalpy_formation_0k_kj_mol=request.enthalpy_formation_0k_kj_mol,
+        enthalpy_formation_0k_uncertainty_kj_mol=(
+            request.enthalpy_formation_0k_uncertainty_kj_mol
+        ),
+        reference_pressure_bar=request.reference_pressure_bar,
+        phase=request.phase,
         tmin_k=request.tmin_k,
         tmax_k=request.tmax_k,
         note=request.note,
         points=request.points,
         nasa=request.nasa,
         source_calculations=[],
+        # statmech_id is resolved in the workflow (owner-consistency check)
+        # and spliced onto the ThermoCreate there.
+        statmech_id=None,
     )
 
 
@@ -84,10 +93,17 @@ def persist_thermo(
         literature_id=thermo_create.literature_id,
         workflow_tool_release_id=thermo_create.workflow_tool_release_id,
         software_release_id=thermo_create.software_release_id,
+        statmech_id=thermo_create.statmech_id,
         h298_kj_mol=thermo_create.h298_kj_mol,
         s298_j_mol_k=thermo_create.s298_j_mol_k,
         h298_uncertainty_kj_mol=thermo_create.h298_uncertainty_kj_mol,
         s298_uncertainty_j_mol_k=thermo_create.s298_uncertainty_j_mol_k,
+        enthalpy_formation_0k_kj_mol=thermo_create.enthalpy_formation_0k_kj_mol,
+        enthalpy_formation_0k_uncertainty_kj_mol=(
+            thermo_create.enthalpy_formation_0k_uncertainty_kj_mol
+        ),
+        reference_pressure_bar=thermo_create.reference_pressure_bar,
+        phase=thermo_create.phase,
         tmin_k=thermo_create.tmin_k,
         tmax_k=thermo_create.tmax_k,
         note=thermo_create.note,

@@ -14,7 +14,11 @@ from tckdb_schemas.thermo import (
     ThermoPointCreate,
 )
 
-from app.db.models.common import ScientificOriginKind, ThermoCalculationRole
+from app.db.models.common import (
+    PhaseKind,
+    ScientificOriginKind,
+    ThermoCalculationRole,
+)
 from app.schemas.common import (
     ORMBaseSchema,
     SchemaBase,
@@ -99,6 +103,16 @@ class ThermoBase(BaseModel):
     :param s298_j_mol_k: Standard entropy at 298 K (J/(mol*K)).
     :param h298_uncertainty_kj_mol: Uncertainty in H298 (kJ/mol).
     :param s298_uncertainty_j_mol_k: Uncertainty in S298 (J/(mol*K)).
+    :param enthalpy_formation_0k_kj_mol: 0 K standard formation enthalpy
+        ΔfH°(0 K) (kJ/mol).
+    :param enthalpy_formation_0k_uncertainty_kj_mol: Uncertainty in
+        ΔfH°(0 K) (kJ/mol).
+    :param reference_pressure_bar: Standard-state reference pressure (bar);
+        None if unspecified. IUPAC standard is 1 bar (1 atm = 1.01325 bar).
+    :param phase: Physical phase the record is referenced to; None if
+        unspecified.
+    :param statmech_id: Statmech record this computed thermo was derived
+        from; None for experimental/literature/group-additivity thermo.
     :param tmin_k: Optional minimum valid temperature in K.
     :param tmax_k: Optional maximum valid temperature in K.
     :param note: Optional free-text note.
@@ -110,12 +124,21 @@ class ThermoBase(BaseModel):
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None
     software_release_id: int | None = None
+    statmech_id: int | None = None
 
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
 
     h298_uncertainty_kj_mol: float | None = Field(default=None, ge=0)
     s298_uncertainty_j_mol_k: float | None = Field(default=None, ge=0)
+
+    enthalpy_formation_0k_kj_mol: float | None = None
+    enthalpy_formation_0k_uncertainty_kj_mol: float | None = Field(
+        default=None, ge=0
+    )
+
+    reference_pressure_bar: float | None = None
+    phase: PhaseKind | None = None
 
     tmin_k: float | None = Field(default=None, gt=0)
     tmax_k: float | None = Field(default=None, gt=0)
@@ -175,12 +198,21 @@ class ThermoUpdate(SchemaBase):
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None
     software_release_id: int | None = None
+    statmech_id: int | None = None
 
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
 
     h298_uncertainty_kj_mol: float | None = Field(default=None, ge=0)
     s298_uncertainty_j_mol_k: float | None = Field(default=None, ge=0)
+
+    enthalpy_formation_0k_kj_mol: float | None = None
+    enthalpy_formation_0k_uncertainty_kj_mol: float | None = Field(
+        default=None, ge=0
+    )
+
+    reference_pressure_bar: float | None = None
+    phase: PhaseKind | None = None
 
     tmin_k: float | None = Field(default=None, gt=0)
     tmax_k: float | None = Field(default=None, gt=0)

@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from app.db.models.literature import Literature
     from app.db.models.software import SoftwareRelease
     from app.db.models.species import SpeciesEntry
+    from app.db.models.thermo import Thermo
     from app.db.models.workflow import WorkflowToolRelease
 
 
@@ -118,6 +119,10 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         back_populates="statmech",
         order_by="StatmechElectronicLevel.level_index",
         cascade="all, delete-orphan",
+    )
+    # Computed thermo records derived from this statmech interpretation.
+    thermo_records: Mapped[list["Thermo"]] = relationship(
+        back_populates="statmech"
     )
 
     __table_args__ = (

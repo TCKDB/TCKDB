@@ -14,18 +14,46 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
-from app.db.models.common import ScientificOriginKind, ThermoCalculationRole
+from app.db.models.common import PhaseKind, ScientificOriginKind, ThermoCalculationRole
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
     from app.db.models.literature import Literature
     from app.db.models.software import SoftwareRelease
     from app.db.models.species import SpeciesEntry
+    from app.db.models.statmech import Statmech
     from app.db.models.workflow import WorkflowToolRelease
 
 
 class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
-    """Thermochemistry records for a species entry."""
+    """Thermochemistry records for a species entry.
+
+    Reference-state semantics (added 2026-07-15). The scalar and fitted
+    values on this row are standard-state quantities:
+
+    * ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of
+      formation and standard entropy at 298.15 K.
+    * ``enthalpy_formation_0k_kj_mol`` is the 0 K standard formation
+      enthalpy (ΔfH°(0 K)), the quantity computational thermochemistry
+      derives directly from atomization/composite energies. It relates to
+      ``h298_kj_mol`` through the species and element thermal enthalpy
+      increments, ΔfH°(298) = ΔfH°(0) + [H°(298) − H°(0)]_species −
+      Σ [H°(298) − H°(0)]_elements; the two are stored side by side
+      rather than derived from one another because either may be the
+      primary reported value.
+    * ``reference_pressure_bar`` is the standard-state pressure the H/S
+      and NASA/tabulated values are referenced to (IUPAC 1 bar; legacy
+      data using the older 1 atm convention should record 1.01325).
+      ``NULL`` means the reference pressure was not specified.
+    * ``phase`` records the physical phase (gas by default for computed
+      species). ``NULL`` means unspecified.
+    * ``statmech_id`` links a *computed* thermo row to the ``statmech``
+      record it was derived from. ``NULL`` for experimental, literature,
+      or group-additivity thermo that has no statmech basis.
+
+    All of these are nullable and additive; legacy rows keep their
+    original (now explicitly under-specified) semantics.
+    """
 
     __tablename__ = "thermo"
 
@@ -67,12 +95,42 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     h298_uncertainty_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     s298_uncertainty_j_mol_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
+    # 0 K standard formation enthalpy (ΔfH°(0 K)) and its uncertainty.
+    enthalpy_formation_0k_kj_mol: Mapped[Optional[float]] = mapped_column(
+        Double, nullable=True
+    )
+    enthalpy_formation_0k_uncertainty_kj_mol: Mapped[Optional[float]] = mapped_column(
+        Double, nullable=True
+    )
+
+    # Standard-state reference pressure (fixed unit: bar). NULL = unspecified.
+    reference_pressure_bar: Mapped[Optional[float]] = mapped_column(
+        Double, nullable=True
+    )
+    # Physical phase the record is referenced to. NULL = unspecified.
+    phase: Mapped[Optional[PhaseKind]] = mapped_column(
+        SAEnum(PhaseKind, name="phase_kind"),
+        nullable=True,
+    )
+
     tmin_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
     tmax_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+
+    # Statmech record this computed thermo was derived from. NULL for
+    # experimental / literature / group-additivity thermo.
+    statmech_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("statmech.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+        index=True,
+    )
 
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     species_entry: Mapped["SpeciesEntry"] = relationship(
+        back_populates="thermo_records"
+    )
+    statmech: Mapped[Optional["Statmech"]] = relationship(
         back_populates="thermo_records"
     )
     literature: Mapped[Optional["Literature"]] = relationship()
@@ -112,6 +170,11 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         CheckConstraint(
             "s298_uncertainty_j_mol_k IS NULL OR s298_uncertainty_j_mol_k >= 0",
             name="s298_uncertainty_ge_0",
+        ),
+        CheckConstraint(
+            "enthalpy_formation_0k_uncertainty_kj_mol IS NULL "
+            "OR enthalpy_formation_0k_uncertainty_kj_mol >= 0",
+            name="enthalpy_formation_0k_uncertainty_ge_0",
         ),
     )
 
