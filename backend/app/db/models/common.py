@@ -23,6 +23,24 @@ class ConformerSelectionKind(str, Enum):
     representative_geometry = "representative_geometry"
 
 
+class TransitionStateSelectionKind(str, Enum):
+    """Curation-overlay roles for transition-state candidate selection.
+
+    Values are machine tokens (see feedback_enum_values memory), not display
+    labels. This is the transition-state analog of
+    :class:`ConformerSelectionKind`: ``lowest_barrier`` replaces the conformer
+    ``lowest_energy`` role, and there is deliberately no ``preferred_for_thermo``
+    (transition states feed kinetics, not thermochemistry).
+    """
+
+    display_default = "display_default"
+    curator_pick = "curator_pick"
+    lowest_barrier = "lowest_barrier"
+    benchmark_reference = "benchmark_reference"
+    preferred_for_kinetics = "preferred_for_kinetics"
+    representative_geometry = "representative_geometry"
+
+
 class ScientificOriginKind(str, Enum):
     computed = "computed"
     experimental = "experimental"

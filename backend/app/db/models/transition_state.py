@@ -8,12 +8,16 @@ from sqlalchemy import (
     ForeignKey,
     SmallInteger,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
-from app.db.models.common import TransitionStateEntryStatus
+from app.db.models.common import (
+    TransitionStateEntryStatus,
+    TransitionStateSelectionKind,
+)
 from app.db.types import RDKitMol
 
 if TYPE_CHECKING:
@@ -44,6 +48,10 @@ class TransitionState(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         back_populates="transition_states"
     )
     entries: Mapped[list["TransitionStateEntry"]] = relationship(
+        back_populates="transition_state",
+        cascade="all, delete-orphan",
+    )
+    selections: Mapped[list["TransitionStateSelection"]] = relationship(
         back_populates="transition_state",
         cascade="all, delete-orphan",
     )
@@ -84,4 +92,44 @@ class TransitionStateEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
 
     __table_args__ = (
         CheckConstraint("multiplicity >= 1", name="multiplicity_ge_1"),
+    )
+
+
+class TransitionStateSelection(Base, TimestampMixin, CreatedByMixin):
+    """Store explicit workflow, curation, or UI selections for transition states.
+
+    This is the curation overlay analog of
+    :class:`~app.db.models.species.ConformerSelection` for transition states.
+    Unlike conformer selection there is deliberately no assignment-scheme
+    dimension: a transition-state selection is a human/workflow choice, not the
+    output of an algorithmic assignment step.
+    """
+
+    __tablename__ = "transition_state_selection"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    transition_state_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("transition_state.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+
+    selection_kind: Mapped[TransitionStateSelectionKind] = mapped_column(
+        SAEnum(TransitionStateSelectionKind, name="transition_state_selection_kind"),
+        nullable=False,
+    )
+
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    transition_state: Mapped["TransitionState"] = relationship(
+        back_populates="selections"
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "transition_state_id",
+            "selection_kind",
+            name="uq_transition_state_selection_transition_state_id",
+        ),
     )

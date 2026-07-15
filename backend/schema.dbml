@@ -533,6 +533,15 @@ enum TransitionStateEntryStatus {
   rejected
 }
 
+enum TransitionStateSelectionKind {
+  display_default
+  curator_pick
+  lowest_barrier
+  benchmark_reference
+  preferred_for_kinetics
+  representative_geometry
+}
+
 enum TransportCalculationRole {
   full_transport
   dipole
@@ -2627,6 +2636,21 @@ Table transition_state_entry {
   }
 
   Note: 'One candidate transition-state geometry family member under a TS concept.'
+}
+
+Table transition_state_selection {
+  id bigint [pk, not null]
+  transition_state_id bigint [not null, ref: > transition_state.id]
+  selection_kind TransitionStateSelectionKind [not null]
+  note text
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+
+  indexes {
+    (transition_state_id, selection_kind) [unique, name: 'uq_transition_state_selection_transition_state_id']
+  }
+
+  Note: 'Store explicit workflow, curation, or UI selections for transition states.'
 }
 
 Table transport {
