@@ -735,3 +735,98 @@ def test_duplicate_electronic_level_index_rejected() -> None:
 def test_optical_isomers_zero_rejected() -> None:
     with pytest.raises(ValidationError):
         _basic_request(optical_isomers=0)
+
+
+# ---------------------------------------------------------------------------
+# Schema audit R11: rotational constants (A/B/C, cm^-1)
+# ---------------------------------------------------------------------------
+
+
+def _water_identity_payload():
+    from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
+
+    return SpeciesEntryIdentityPayload.model_validate(
+        {"smiles": "O", "charge": 0, "multiplicity": 1}
+    )
+
+
+def test_bundle_statmech_persists_rotational_constants(db_engine) -> None:
+    """StatmechInBundle -> _persist_statmech_block writes A/B/C (cm^-1)."""
+    from app.db.models.statmech import Statmech
+    from app.schemas.workflows.computed_species_upload import StatmechInBundle
+    from app.services.species_resolution import resolve_species_entry
+    from app.workflows.computed_species import _persist_statmech_block
+
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, expire_on_commit=False)
+    try:
+        se = resolve_species_entry(session, _water_identity_payload())
+        session.flush()
+
+        block = StatmechInBundle(
+            scientific_origin="computed",
+            rotational_constant_a_cm1=27.88,
+            rotational_constant_b_cm1=14.52,
+            rotational_constant_c_cm1=9.28,
+        )
+        stm = _persist_statmech_block(
+            session,
+            block,
+            species_entry_id=se.id,
+            calc_keys_to_id={},
+            created_by=None,
+        )
+        session.flush()
+
+        row = session.get(Statmech, stm.id)
+        assert row.rotational_constant_a_cm1 == pytest.approx(27.88)
+        assert row.rotational_constant_b_cm1 == pytest.approx(14.52)
+        assert row.rotational_constant_c_cm1 == pytest.approx(9.28)
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
+
+
+def test_rotational_constant_positive_check(db_engine) -> None:
+    """The columns exist and the per-column ``> 0`` CHECK rejects
+    zero/negative values while accepting positive ones."""
+    from sqlalchemy.exc import IntegrityError
+
+    from app.db.models.statmech import Statmech
+    from app.services.species_resolution import resolve_species_entry
+
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, expire_on_commit=False)
+    try:
+        se = resolve_species_entry(session, _water_identity_payload())
+        session.flush()
+
+        good = Statmech(
+            species_entry_id=se.id,
+            scientific_origin=ScientificOriginKind.computed,
+            rotational_constant_a_cm1=27.88,
+            rotational_constant_b_cm1=14.52,
+            rotational_constant_c_cm1=9.28,
+        )
+        session.add(good)
+        session.flush()
+        assert good.rotational_constant_c_cm1 == 9.28
+
+        for bad_value in (0.0, -1.0):
+            savepoint = session.begin_nested()
+            bad = Statmech(
+                species_entry_id=se.id,
+                scientific_origin=ScientificOriginKind.computed,
+                rotational_constant_a_cm1=bad_value,
+            )
+            session.add(bad)
+            with pytest.raises(IntegrityError):
+                session.flush()
+            savepoint.rollback()
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()

@@ -476,6 +476,13 @@ class StatmechInBundle(SchemaBase):
     :param is_linear: Whether the molecule is linear.
     :param rigid_rotor_kind: Rotational treatment classification.
     :param statmech_treatment: Overall statmech treatment classification.
+    :param rotational_constant_a_cm1: First reported principal rotational
+        constant (cm^-1), in source-provided order (conventionally
+        descending A >= B >= C). Optional.
+    :param rotational_constant_b_cm1: Second reported principal rotational
+        constant (cm^-1). Optional.
+    :param rotational_constant_c_cm1: Third reported principal rotational
+        constant (cm^-1). Optional.
     :param freq_scale_factor: Optional unified frequency scale factor
         ref. Resolved via the shared energy-correction-resolution
         service and linked through ``statmech.frequency_scale_factor_id``.
@@ -501,6 +508,10 @@ class StatmechInBundle(SchemaBase):
     is_linear: bool | None = None
     rigid_rotor_kind: RigidRotorKind | None = None
     statmech_treatment: StatmechTreatmentKind | None = None
+
+    rotational_constant_a_cm1: float | None = Field(default=None, gt=0)
+    rotational_constant_b_cm1: float | None = Field(default=None, gt=0)
+    rotational_constant_c_cm1: float | None = Field(default=None, gt=0)
 
     freq_scale_factor: FreqScaleFactorRef | None = None
     uses_projected_frequencies: bool | None = None

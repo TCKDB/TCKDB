@@ -36,7 +36,19 @@ if TYPE_CHECKING:
 
 
 class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
-    """Statistical mechanics interpretation layer for a species entry."""
+    """Statistical mechanics interpretation layer for a species entry.
+
+    Rotational constants convention: ``rotational_constant_{a,b,c}_cm1``
+    hold the reported principal rotational constants (unit cm⁻¹), stored in
+    the order provided by the source — conventionally descending A ≥ B ≥ C
+    for an asymmetric top. The count of non-null values corresponds to the
+    rotor's rotational degrees of freedom as classified by
+    ``rigid_rotor_kind`` / ``is_linear`` (e.g. a linear rotor reports a
+    single constant in ``_a``, a symmetric/spherical top may report two/one
+    distinct values). No ordering constraint is imposed at the DB level:
+    floats plus the linear/symmetric cases make an ``a >= b >= c`` check
+    inappropriate. Values are stored as parsed observations, as-is.
+    """
 
     __tablename__ = "statmech"
 
@@ -78,6 +90,18 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     rigid_rotor_kind: Mapped[Optional[RigidRotorKind]] = mapped_column(
         SAEnum(RigidRotorKind, name="rigid_rotor_kind"),
         nullable=True,
+    )
+
+    # Reported principal rotational constants (cm⁻¹), stored as-provided.
+    # See the class docstring for the storage convention.
+    rotational_constant_a_cm1: Mapped[Optional[float]] = mapped_column(
+        Double, nullable=True
+    )
+    rotational_constant_b_cm1: Mapped[Optional[float]] = mapped_column(
+        Double, nullable=True
+    )
+    rotational_constant_c_cm1: Mapped[Optional[float]] = mapped_column(
+        Double, nullable=True
     )
     statmech_treatment: Mapped[Optional[StatmechTreatmentKind]] = mapped_column(
         SAEnum(StatmechTreatmentKind, name="statmech_treatment_kind"),
@@ -133,6 +157,18 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         CheckConstraint(
             "optical_isomers IS NULL OR optical_isomers >= 1",
             name="optical_isomers_ge_1",
+        ),
+        CheckConstraint(
+            "rotational_constant_a_cm1 IS NULL OR rotational_constant_a_cm1 > 0",
+            name="rotational_constant_a_cm1_positive",
+        ),
+        CheckConstraint(
+            "rotational_constant_b_cm1 IS NULL OR rotational_constant_b_cm1 > 0",
+            name="rotational_constant_b_cm1_positive",
+        ),
+        CheckConstraint(
+            "rotational_constant_c_cm1 IS NULL OR rotational_constant_c_cm1 > 0",
+            name="rotational_constant_c_cm1_positive",
         ),
     )
 

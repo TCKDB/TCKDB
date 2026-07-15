@@ -244,6 +244,15 @@ def _build_statmech(
         statmech["optical_isomers"] = info.optical_isomers
     if info.point_group:
         statmech["point_group"] = info.point_group
+    # Principal rotational constants (cm^-1), stored in source-provided order
+    # (conventionally descending A >= B >= C). NULLs for absent entries.
+    rot = info.rotational_constants_cm_inv or []
+    if len(rot) >= 1:
+        statmech["rotational_constant_a_cm1"] = rot[0]
+    if len(rot) >= 2:
+        statmech["rotational_constant_b_cm1"] = rot[1]
+    if len(rot) >= 3:
+        statmech["rotational_constant_c_cm1"] = rot[2]
     if conf is not None:
         if conf.is_linear is not None:
             statmech["is_linear"] = conf.is_linear
@@ -301,6 +310,7 @@ def _build_statmech(
             "optical_isomers",
             "point_group",
             "rigid_rotor_kind",
+            "rotational_constant_a_cm1",
             "source_calculations",
             "torsions",
         )

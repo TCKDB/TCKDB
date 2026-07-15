@@ -377,6 +377,16 @@ def test_fixture_emits_statmech_and_closes_gap() -> None:
     assert stm["optical_isomers"] == 2
     assert stm["point_group"] == "C2"
     assert stm["freq_scale_factor"]["value"] == 0.986
+    # Principal rotational constants (cm^-1) mapped a/b/c in source order.
+    assert stm["rotational_constant_a_cm1"] == pytest.approx(4.89)
+    assert stm["rotational_constant_b_cm1"] == pytest.approx(0.82)
+    assert stm["rotational_constant_c_cm1"] == pytest.approx(0.82)
+    # H2 reports a single rotational constant (linear) -> only 'a' populated.
+    h2 = next(s for s in payload["species"] if s["key"] == "H2")
+    h2_stm = h2["statmech"]
+    assert h2_stm["rotational_constant_a_cm1"] == pytest.approx(61.08)
+    assert "rotational_constant_b_cm1" not in h2_stm
+    assert "rotational_constant_c_cm1" not in h2_stm
     # N2H4's hindered rotor -> a torsion referencing its own scan calc.
     assert gap.torsions_emitted == ["N2H4"]
     assert stm["torsions"][0]["source_scan_calculation_key"] == "N2H4_scan"
@@ -541,6 +551,9 @@ def test_fixture_full_pipeline_persist_and_read_back(db_engine) -> None:
         assert n2h4_stm.external_symmetry == 2
         assert n2h4_stm.optical_isomers == 2
         assert n2h4_stm.point_group == "C2"
+        assert n2h4_stm.rotational_constant_a_cm1 == pytest.approx(4.89)
+        assert n2h4_stm.rotational_constant_b_cm1 == pytest.approx(0.82)
+        assert n2h4_stm.rotational_constant_c_cm1 == pytest.approx(0.82)
 
         stm_sources = session.scalars(
             select(StatmechSourceCalculation).where(

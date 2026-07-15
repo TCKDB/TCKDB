@@ -95,6 +95,9 @@ class StatmechCoreBlock(BaseModel):
     is_linear: bool | None = None
     uses_projected_frequencies: bool | None = None
     optical_isomers: int | None = None
+    rotational_constant_a_cm1: float | None = None
+    rotational_constant_b_cm1: float | None = None
+    rotational_constant_c_cm1: float | None = None
     frequency_scale_factor_value: float | None = None
     note: str | None = None
     created_at: datetime

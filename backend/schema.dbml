@@ -2270,6 +2270,9 @@ Table statmech {
   point_group text
   is_linear boolean
   rigid_rotor_kind RigidRotorKind
+  rotational_constant_a_cm1 double
+  rotational_constant_b_cm1 double
+  rotational_constant_c_cm1 double
   statmech_treatment StatmechTreatmentKind
   frequency_scale_factor_id bigint [ref: > frequency_scale_factor.id]
   uses_projected_frequencies boolean
@@ -2287,6 +2290,9 @@ Table statmech {
   checks {
     `external_symmetry IS NULL OR external_symmetry >= 1` [name: 'ck_statmech_external_symmetry_ge_1']
     `optical_isomers IS NULL OR optical_isomers >= 1` [name: 'ck_statmech_optical_isomers_ge_1']
+    `rotational_constant_a_cm1 IS NULL OR rotational_constant_a_cm1 > 0` [name: 'ck_statmech_rotational_constant_a_cm1_positive']
+    `rotational_constant_b_cm1 IS NULL OR rotational_constant_b_cm1 > 0` [name: 'ck_statmech_rotational_constant_b_cm1_positive']
+    `rotational_constant_c_cm1 IS NULL OR rotational_constant_c_cm1 > 0` [name: 'ck_statmech_rotational_constant_c_cm1_positive']
   }
 
   Note: 'Statistical mechanics interpretation layer for a species entry.'
