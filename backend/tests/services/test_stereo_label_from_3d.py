@@ -172,31 +172,68 @@ class TestDeterministicOrdering:
 
 
 # ---------------------------------------------------------------------------
-# KNOWN LIMITATION (documenting, not endorsing): open-shell / radical species
+# Open-shell / radical species (formerly a KNOWN LIMITATION, now supported)
 # ---------------------------------------------------------------------------
 
 
-class TestRadicalLimitation:
-    """These assert the CURRENT (limited) behaviour, not the desired end state.
+class TestRadicalStereo:
+    """Configurational stereo is now labelled for open-shell/radical species.
 
-    ``AssignBondOrdersFromTemplate`` raises ``ValueError`` on a template that
-    carries radical electrons, so open-shell species fall into the expected
-    ``except (ValueError, RuntimeError)`` branch and return ``None``. That is
-    safe (never a *wrong* label) but means stereoisomeric radicals are not yet
-    distinguished. When the tracked follow-up adds radical stereo labelling,
-    these tests are expected to FLIP intentionally (None -> "E"/"R"/...).
+    Formerly a known limitation: ``AssignBondOrdersFromTemplate`` raised
+    ``ValueError`` on a template carrying radical electrons, so every radical
+    returned ``None`` and stereoisomeric radicals merged into one
+    ``SpeciesEntry``. The template's radical electrons are now neutralized on a
+    copy before bond-order mapping, so the geometry-derived CIP labels come
+    through exactly as for closed-shell species. These tests pin the fix.
     """
 
-    def test_ez_radical_currently_returns_none(self) -> None:
+    def test_e_crotyl_radical_is_E(self) -> None:
         # E-crotyl radical: a genuine stereogenic double bond on an open-shell
-        # species. Would be "E" if radicals were supported; currently None.
+        # species. Formerly None; now correctly "E".
         xyz = _xyz_from_smiles(r"C/C=C/[CH2]")
-        assert derive_stereo_label_from_3d("CC=C[CH2]", xyz) is None
+        assert derive_stereo_label_from_3d("CC=C[CH2]", xyz) == "E"
 
-    def test_chiral_radical_currently_returns_none(self) -> None:
-        # A radical bearing a tetrahedral stereocentre. Currently None.
-        xyz = _xyz_from_smiles("[C@H](F)(Cl)[CH2]")
-        assert derive_stereo_label_from_3d("[CH](F)(Cl)[CH2]", xyz) is None
+    def test_z_crotyl_radical_is_Z(self) -> None:
+        # Z-crotyl radical: opposite double-bond configuration. Formerly None.
+        xyz = _xyz_from_smiles(r"C/C=C\[CH2]")
+        assert derive_stereo_label_from_3d("CC=C[CH2]", xyz) == "Z"
+
+    def test_e_and_z_crotyl_radicals_are_distinct(self) -> None:
+        # The two stereoisomeric radicals must no longer merge: distinct labels.
+        e_label = derive_stereo_label_from_3d(
+            "CC=C[CH2]", _xyz_from_smiles(r"C/C=C/[CH2]")
+        )
+        z_label = derive_stereo_label_from_3d(
+            "CC=C[CH2]", _xyz_from_smiles(r"C/C=C\[CH2]")
+        )
+        assert {e_label, z_label} == {"E", "Z"}
+
+    def test_chiral_radical_enantiomers_get_opposite_labels(self) -> None:
+        # A radical bearing a tetrahedral stereocentre. The two hand
+        # configurations must yield opposite CIP labels from geometry alone.
+        r_like = derive_stereo_label_from_3d(
+            "[CH](F)(Cl)[CH2]", _xyz_from_smiles("[C@H](F)(Cl)[CH2]")
+        )
+        s_like = derive_stereo_label_from_3d(
+            "[CH](F)(Cl)[CH2]", _xyz_from_smiles("[C@@H](F)(Cl)[CH2]")
+        )
+        assert {r_like, s_like} == {"R", "S"}
+        assert r_like != s_like
+
+    def test_methyl_radical_has_no_configurational_stereo(self) -> None:
+        # [CH3] is an open-shell species with no stereocentre or E/Z bond:
+        # the radical path must still return None (no spurious label).
+        assert derive_stereo_label_from_3d("[CH3]", _xyz_from_smiles("[CH3]")) is None
+
+    def test_two_rotamers_of_a_radical_share_one_label(self) -> None:
+        # Conformer-vs-configuration safety holds for radicals too: different
+        # torsional conformers of the same E-crotyl configuration must all
+        # yield "E", never a torsional artefact.
+        labels = {
+            derive_stereo_label_from_3d("CC=C[CH2]", _xyz_from_smiles(r"C/C=C/[CH2]", seed=seed))
+            for seed in (1, 7, 42, 101)
+        }
+        assert labels == {"E"}
 
 
 # ---------------------------------------------------------------------------

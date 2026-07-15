@@ -132,6 +132,37 @@ def _xyz_text_to_xyz_block(xyz_text: str) -> str:
     return f"{n_atoms}\n\n{xyz_text.strip()}"
 
 
+def _neutralize_radicals_for_template(template: Chem.Mol) -> Chem.Mol:
+    """Return a copy of ``template`` with unpaired-electron bookkeeping removed.
+
+    ``AssignBondOrdersFromTemplate`` rejects a template that carries radical
+    electrons (``ValueError``), so open-shell species could never be mapped and
+    always fell back to ``None``. Zeroing the radical electrons produces a
+    template whose *connectivity* (heavy atoms + explicit Hs) is identical to
+    the radical's real geometry — only the unpaired-electron bookkeeping is
+    dropped — which is all ``AssignBondOrdersFromTemplate`` needs to map bond
+    orders. ``AssignStereochemistryFrom3D`` then reads CIP labels from the
+    coordinates exactly as it does for closed-shell species.
+
+    The copy is mutated, never the caller's molecule. Only atoms that actually
+    carry a radical electron are touched, so this is a strict no-op for
+    closed-shell templates (their labels are unchanged). ``SetNoImplicit(True)``
+    is set on the freed atoms so RDKit does not re-add a phantom implicit H to
+    fill the vacated valence — the template already has all Hs explicit (via
+    ``AddHs``), and the H count must stay matched to the geometry's atoms.
+
+    :param template: ``AddHs``-expanded template molecule (may be open-shell).
+    :returns: A copy safe to pass to ``AssignBondOrdersFromTemplate``.
+    """
+
+    neutralized = Chem.Mol(template)
+    for atom in neutralized.GetAtoms():
+        if atom.GetNumRadicalElectrons():
+            atom.SetNumRadicalElectrons(0)
+            atom.SetNoImplicit(True)
+    return neutralized
+
+
 def derive_stereo_label_from_3d(smiles: str, xyz_text: str) -> str | None:
     """Assign R/S and E/Z labels from 3D geometry.
 
@@ -148,13 +179,13 @@ def derive_stereo_label_from_3d(smiles: str, xyz_text: str) -> str | None:
     atom order), so the same configuration produces an identical label string
     regardless of how the SMILES/XYZ atoms happened to be ordered.
 
-    Known limitation (open-shell / radicals): configurational stereo is only
-    labelled for closed-shell species (neutral or charged). Open-shell/radical
-    species currently return ``None`` — ``AssignBondOrdersFromTemplate`` raises
-    ``ValueError`` on a template carrying radical electrons, which the expected
-    branch below turns into ``None``. This is safe (never a *wrong* label) but
-    means stereoisomeric radicals are not yet distinguished; fixing radical
-    stereo labelling is tracked as a follow-up.
+    Open-shell / radical species are supported: the SMILES template's radical
+    electrons are neutralized on a copy (see
+    ``_neutralize_radicals_for_template``) so ``AssignBondOrdersFromTemplate``
+    accepts it, while the geometry-derived stereo result is unchanged. Radical
+    stereoisomers (e.g. E/Z crotyl, a chiral radical R/S) are therefore now
+    distinguished. If a particular radical geometry still cannot be resolved,
+    the function falls back to ``None`` (safe) rather than a wrong label.
 
     :param smiles: SMILES string for bond-order template.
     :param xyz_text: XYZ coordinate text (with or without header lines).
@@ -172,6 +203,9 @@ def derive_stereo_label_from_3d(smiles: str, xyz_text: str) -> str | None:
         if template is None:
             return None
         template = Chem.AddHs(template)
+        # Drop unpaired-electron bookkeeping so open-shell templates map;
+        # strict no-op for closed-shell species (same labels as before).
+        template = _neutralize_radicals_for_template(template)
 
         # ``MolFromXYZBlock`` yields a bare atom cloud with zero bonds. Perceive
         # connectivity from the geometry first, otherwise
