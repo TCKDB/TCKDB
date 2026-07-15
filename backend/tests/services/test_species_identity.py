@@ -17,12 +17,12 @@ from contextlib import contextmanager
 
 import pytest
 from rdkit import Chem
-from rdkit.Chem import inchi
+from rdkit.Chem import AllChem, inchi
 from sqlalchemy.orm import Session
 
 from app.chemistry.species import canonical_species_identity
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
-from app.services.species_resolution import resolve_species
+from app.services.species_resolution import resolve_species, resolve_species_entry
 
 
 def _identity(smiles: str, *, charge: int = 0, multiplicity: int) -> SpeciesEntryIdentityPayload:
@@ -104,6 +104,47 @@ def test_same_molecule_different_notation_dedups(db_engine) -> None:
         b = resolve_species(session, _identity("OCC", multiplicity=1))
         session.flush()
         assert a.id == b.id
+
+
+def _xyz_from_smiles(smiles: str, *, seed: int = 0xC0FFEE) -> str:
+    """Embed a 3D conformer for ``smiles`` and return its XYZ block."""
+    mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    assert AllChem.EmbedMolecule(mol, randomSeed=seed) == 0, smiles
+    AllChem.MMFFOptimizeMolecule(mol)
+    return Chem.MolToXYZBlock(mol)
+
+
+def test_cis_and_trans_diazene_resolve_to_distinct_entries(db_engine) -> None:
+    """Geometry-derived stereo labels split stereoisomers at the entry level.
+
+    Same SMILES ``N=N`` (same Species), cis vs trans 3D geometry. Before the
+    ``derive_stereo_label_from_3d`` repair both got ``stereo_label=NULL`` and
+    merged into ONE ``SpeciesEntry`` (the constraint is NULLS NOT DISTINCT).
+    They must now be two distinct entries with labels Z and E.
+    """
+    cis_xyz = _xyz_from_smiles(r"[H]/N=N\[H]")
+    trans_xyz = _xyz_from_smiles(r"[H]/N=N/[H]")
+    with _rolled_back_session(db_engine) as session:
+        cis_entry = resolve_species_entry(
+            session, _identity("N=N", multiplicity=1), xyz_text=cis_xyz
+        )
+        trans_entry = resolve_species_entry(
+            session, _identity("N=N", multiplicity=1), xyz_text=trans_xyz
+        )
+        session.flush()
+
+        # Same underlying Species (identity is graph + charge + multiplicity)…
+        assert cis_entry.species_id == trans_entry.species_id
+        # …but two distinct entries carrying the geometry-derived labels.
+        assert cis_entry.id != trans_entry.id
+        assert cis_entry.stereo_label == "Z"
+        assert trans_entry.stereo_label == "E"
+
+        # Re-resolving the same geometry must dedup back onto the same entry.
+        cis_again = resolve_species_entry(
+            session, _identity("N=N", multiplicity=1), xyz_text=cis_xyz
+        )
+        assert cis_again.id == cis_entry.id
 
 
 def test_inchikey_can_map_to_multiple_species(db_engine) -> None:

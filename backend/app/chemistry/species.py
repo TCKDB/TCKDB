@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 from rdkit import Chem
-from rdkit.Chem import AllChem, inchi
+from rdkit.Chem import AllChem, inchi, rdDetermineBonds
 
 from app.db.models.common import MoleculeKind, StereoKind
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
+
+logger = logging.getLogger(__name__)
 
 
 def formal_charge(mol: Chem.Mol) -> int:
@@ -131,9 +135,26 @@ def _xyz_text_to_xyz_block(xyz_text: str) -> str:
 def derive_stereo_label_from_3d(smiles: str, xyz_text: str) -> str | None:
     """Assign R/S and E/Z labels from 3D geometry.
 
-    Builds an RDKit mol from the XYZ coordinates, maps bond orders from the
-    SMILES template, then uses ``AssignStereochemistryFrom3D`` to determine
-    CIP labels.
+    Builds an RDKit mol from the XYZ coordinates, perceives connectivity so the
+    bare atom cloud gains a bond graph, maps bond orders from the SMILES
+    template, then uses ``AssignStereochemistryFrom3D`` to determine CIP labels.
+
+    Only *configurational* stereochemistry is labelled — tetrahedral chiral
+    centres and stereogenic double bonds. Torsional conformers/rotamers of the
+    same configuration yield the same label, so the label is safe to use as
+    part of ``SpeciesEntry`` identity.
+
+    The emitted labels are ordered by canonical atom rank (not the uploaded
+    atom order), so the same configuration produces an identical label string
+    regardless of how the SMILES/XYZ atoms happened to be ordered.
+
+    Known limitation (open-shell / radicals): configurational stereo is only
+    labelled for closed-shell species (neutral or charged). Open-shell/radical
+    species currently return ``None`` — ``AssignBondOrdersFromTemplate`` raises
+    ``ValueError`` on a template carrying radical electrons, which the expected
+    branch below turns into ``None``. This is safe (never a *wrong* label) but
+    means stereoisomeric radicals are not yet distinguished; fixing radical
+    stereo labelling is tracked as a follow-up.
 
     :param smiles: SMILES string for bond-order template.
     :param xyz_text: XYZ coordinate text (with or without header lines).
@@ -152,26 +173,60 @@ def derive_stereo_label_from_3d(smiles: str, xyz_text: str) -> str | None:
             return None
         template = Chem.AddHs(template)
 
+        # ``MolFromXYZBlock`` yields a bare atom cloud with zero bonds. Perceive
+        # connectivity from the geometry first, otherwise
+        # ``AssignBondOrdersFromTemplate`` has no bonds to map orders onto and
+        # raises ``ValueError: No matching found``.
+        rdDetermineBonds.DetermineConnectivity(raw_mol)
+
         mol = AllChem.AssignBondOrdersFromTemplate(template, raw_mol)
         Chem.AssignStereochemistryFrom3D(mol)
 
-        labels: list[str] = []
+        # Canonical, input-order-independent ranking of atoms. Keying each label
+        # to the canonical rank of its stereo atom makes the joined label string
+        # deterministic regardless of the uploaded atom ordering (so a
+        # two-stereocentre species does not spuriously split into "R,S" vs
+        # "S,R" entries).
+        ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=True))
+        keyed_labels: list[tuple[int, str]] = []
 
-        # Chiral centres
-        for _, cip in Chem.FindMolChiralCenters(mol, includeUnassigned=False):
-            labels.append(cip)
+        # Chiral centres (tetrahedral configuration only).
+        for atom_idx, cip in Chem.FindMolChiralCenters(mol, includeUnassigned=False):
+            keyed_labels.append((ranks[atom_idx], cip))
 
-        # E/Z double bonds
+        # E/Z double bonds (stereogenic double-bond configuration only).
         for bond in mol.GetBonds():
             stereo = bond.GetStereo()
             if stereo in (Chem.BondStereo.STEREOZ, Chem.BondStereo.STEREOCIS):
-                labels.append("Z")
+                label = "Z"
             elif stereo in (Chem.BondStereo.STEREOE, Chem.BondStereo.STEREOTRANS):
-                labels.append("E")
+                label = "E"
+            else:
+                continue
+            bond_rank = min(ranks[bond.GetBeginAtomIdx()], ranks[bond.GetEndAtomIdx()])
+            keyed_labels.append((bond_rank, label))
 
-        return ",".join(labels) if labels else None
+        if not keyed_labels:
+            return None
 
-    except Exception:
+        keyed_labels.sort(key=lambda item: item[0])
+        return ",".join(label for _, label in keyed_labels)
+
+    except (ValueError, RuntimeError):
+        # Expected RDKit failures: unparseable geometry, template/atom-count
+        # mismatch, or bond perception giving a graph the template cannot map
+        # onto. These are legitimately "no label" outcomes.
+        return None
+    except Exception:  # pragma: no cover - defensive: surface the unexpected
+        # A genuinely unexpected failure must not be swallowed invisibly (that
+        # is exactly how this function stayed dead for months). Log it so a
+        # future breakage is visible, but keep the callers' "no label" contract.
+        logger.warning(
+            "Unexpected failure deriving stereo label from 3D geometry "
+            "(smiles=%r); returning None",
+            smiles,
+            exc_info=True,
+        )
         return None
 
 
