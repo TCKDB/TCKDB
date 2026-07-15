@@ -984,8 +984,8 @@ def test_pdep_channel_kinetics_rejects_non_finite_coefficient() -> None:
         NetworkPDepUploadRequest(**payload)
 
 
-def test_pdep_channel_kinetics_rejects_plog_model_kind() -> None:
-    """Phase A is Chebyshev-only: PLOG/tabulated uploads are rejected."""
+def test_pdep_channel_kinetics_rejects_plog_without_sub_block() -> None:
+    """``model_kind=plog`` with no ``plog`` sub-block is a clean 422."""
     payload = _full_payload(include_solve=True)
     payload["solve"]["channel_kinetics"] = [
         {
@@ -994,8 +994,319 @@ def test_pdep_channel_kinetics_rejects_plog_model_kind() -> None:
             "model_kind": "plog",
         }
     ]
+    with pytest.raises(ValueError, match="plog entries are required"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_channel_kinetics_rejects_tabulated_model_kind() -> None:
+    """Tabulated network kinetics upload is still not supported."""
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "tabulated",
+        }
+    ]
     with pytest.raises(ValueError, match="not yet supported"):
         NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_channel_kinetics_rejects_plog_with_chebyshev_block() -> None:
+    """``model_kind=plog`` may not also carry a ``chebyshev`` sub-block."""
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "plog",
+            "plog": {
+                "entries": [
+                    {"pressure_bar": 1.0, "a": 1.0e13, "n": 0.0, "ea_kj_mol": 50.0},
+                ]
+            },
+            "chebyshev": {
+                "n_temperature": 2,
+                "n_pressure": 2,
+                "coefficients": [[1.0, 2.0], [3.0, 4.0]],
+            },
+        }
+    ]
+    with pytest.raises(ValueError, match="chebyshev must be omitted"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_channel_kinetics_rejects_chebyshev_with_plog_block() -> None:
+    """``model_kind=chebyshev`` may not also carry a ``plog`` sub-block
+    (symmetric converse of the plog+chebyshev rejection)."""
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "chebyshev",
+            "chebyshev": {
+                "n_temperature": 2,
+                "n_pressure": 2,
+                "coefficients": [[1.0, 2.0], [3.0, 4.0]],
+            },
+            "plog": {
+                "entries": [
+                    {"pressure_bar": 1.0, "a": 1.0e13, "n": 0.0, "ea_kj_mol": 50.0},
+                ]
+            },
+        }
+    ]
+    with pytest.raises(ValueError, match="plog must be omitted"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_channel_kinetics_rejects_plog_with_stores_log10_k() -> None:
+    """``stores_log10_k`` is Chebyshev-only; setting it on a PLOG payload is a
+    clean 422 rather than a semantically meaningless flag on the parent row."""
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "plog",
+            "plog": {
+                "entries": [
+                    {"pressure_bar": 1.0, "a": 1.0e13, "n": 0.0, "ea_kj_mol": 50.0},
+                ]
+            },
+            "stores_log10_k": True,
+        }
+    ]
+    with pytest.raises(ValueError, match="stores_log10_k must be omitted"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_channel_kinetics_rejects_duplicate_plog_pressure_index() -> None:
+    """Two PLOG entries sharing ``(pressure_bar, entry_index)`` collide on the
+    child composite primary key; reject them at the schema layer as a 422."""
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "plog",
+            "plog": {
+                "entries": [
+                    {"pressure_bar": 1.0, "a": 1.0e13, "n": 0.0, "ea_kj_mol": 50.0},
+                    {"pressure_bar": 1.0, "a": 2.0e13, "n": 0.1, "ea_kj_mol": 60.0},
+                ]
+            },
+        }
+    ]
+    with pytest.raises(ValueError, match="unique by \\(pressure_bar, entry_index\\)"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_workflow_persists_and_reads_back_plog_channel_kinetics(
+    db_engine,
+) -> None:
+    """A ``model_kind=plog`` ``channel_kinetics`` entry produces a
+    ``NetworkKinetics`` (model_kind=plog) + one ``NetworkKineticsPlog`` row per
+    pressure-indexed Arrhenius entry, and round-trips through the existing
+    network-kinetics read path.
+    """
+    from app.db.models.network_pdep import (
+        NetworkKinetics,
+        NetworkKineticsPlog,
+    )
+    from app.services.scientific_read.network_kinetics import (
+        get_network_kinetics,
+    )
+
+    # Real Arkane-shape PLOG: 5 pressures, each a modified-Arrhenius term.
+    pressures = [0.01, 0.1, 1.0, 10.0, 100.0]
+    plog_entries = [
+        {
+            "pressure_bar": p,
+            "a": 1.0e12 * (i + 1),
+            "a_units": "cm3_mol_s",
+            "n": 0.5 + 0.1 * i,
+            "ea_kj_mol": 40.0 + 5.0 * i,
+        }
+        for i, p in enumerate(pressures)
+    ]
+
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "plog",
+            "plog": {"entries": plog_entries},
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "pmin_bar": 0.01,
+            "pmax_bar": 100.0,
+            "rate_units": "cm3_mol_s",
+            "pressure_units": "bar",
+            "temperature_units": "kelvin",
+            "note": "PLOG fit from ME solve",
+        }
+    ]
+
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**payload)
+        network = persist_network_pdep_upload(session, request)
+        session.flush()
+
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+        assoc_channel = session.scalars(
+            select(NetworkChannel).where(
+                NetworkChannel.network_id == network.id,
+                NetworkChannel.kind == "association",
+            )
+        ).one()
+
+        # -- NetworkKinetics parent row (scoped to this solve) --
+        nk = session.scalars(
+            select(NetworkKinetics).where(NetworkKinetics.solve_id == solve.id)
+        ).one()
+        assert nk.channel_id == assoc_channel.id
+        assert nk.solve_id == solve.id
+        assert nk.model_kind.value == "plog"
+        # PLOG stores a real Arrhenius A, not a log10 fit.
+        assert nk.stores_log10_k is None
+        assert nk.rate_units.value == "cm3_mol_s"
+
+        # -- One NetworkKineticsPlog row per entry, values intact --
+        rows = session.scalars(
+            select(NetworkKineticsPlog)
+            .where(NetworkKineticsPlog.network_kinetics_id == nk.id)
+            .order_by(NetworkKineticsPlog.pressure_bar.asc())
+        ).all()
+        assert len(rows) == 5
+        for row, expected in zip(rows, plog_entries):
+            assert row.pressure_bar == expected["pressure_bar"]
+            assert row.a == expected["a"]
+            assert row.a_units.value == "cm3_mol_s"
+            assert row.n == expected["n"]
+            assert row.ea_kj_mol == expected["ea_kj_mol"]
+            assert row.entry_index == 1
+
+        # -- Read back through the existing read service (round-trip) --
+        resp = get_network_kinetics(
+            session,
+            network_kinetics_handle=str(nk.id),
+            include=["plog"],
+        )
+        core = resp.record.network_kinetics
+        assert core.model_kind.value == "plog"
+        assert core.plog_entry_count == 5
+        assert core.rate_units.value == "cm3_mol_s"
+
+        plog_block = resp.record.plog
+        assert plog_block is not None
+        assert len(plog_block) == 5
+        read_back = {e.pressure_bar: e for e in plog_block}
+        for expected in plog_entries:
+            e = read_back[expected["pressure_bar"]]
+            assert e.a == expected["a"]
+            assert e.a_units.value == "cm3_mol_s"
+            assert e.n == expected["n"]
+            assert e.ea_kj_mol == expected["ea_kj_mol"]
+            assert e.entry_index == 1
+
+
+def test_pdep_workflow_persists_mixed_chebyshev_and_plog_channel_kinetics(
+    db_engine,
+) -> None:
+    """One payload may carry a Chebyshev fit on one channel and a PLOG fit on
+    another; both persist to their respective child tables."""
+    from app.db.models.network_pdep import (
+        NetworkKinetics,
+        NetworkKineticsChebyshev,
+        NetworkKineticsPlog,
+    )
+
+    n_t, n_p = 3, 2
+    grid = [[float(t * 10 + p) for p in range(n_p)] for t in range(n_t)]
+
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            # Association (entrance -> well_RO2): Chebyshev.
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "chebyshev",
+            "chebyshev": {
+                "n_temperature": n_t,
+                "n_pressure": n_p,
+                "coefficients": grid,
+            },
+            "stores_log10_k": True,
+        },
+        {
+            # Dissociation (well_RO2 -> entrance): PLOG (unimolecular).
+            "source_state_key": "well_RO2",
+            "sink_state_key": "entrance",
+            "model_kind": "plog",
+            "plog": {
+                "entries": [
+                    {
+                        "pressure_bar": 1.0,
+                        "a": 1.0e13,
+                        "a_units": "per_s",
+                        "n": 0.0,
+                        "ea_kj_mol": 120.0,
+                    },
+                    {
+                        "pressure_bar": 10.0,
+                        "a": 2.0e13,
+                        "a_units": "per_s",
+                        "n": 0.1,
+                        "ea_kj_mol": 125.0,
+                    },
+                ]
+            },
+        },
+    ]
+
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**payload)
+        network = persist_network_pdep_upload(session, request)
+        session.flush()
+
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+        nk_rows = session.scalars(
+            select(NetworkKinetics).where(NetworkKinetics.solve_id == solve.id)
+        ).all()
+        assert len(nk_rows) == 2
+        by_kind = {nk.model_kind.value: nk for nk in nk_rows}
+        assert set(by_kind) == {"chebyshev", "plog"}
+
+        cheb = session.scalars(
+            select(NetworkKineticsChebyshev).where(
+                NetworkKineticsChebyshev.network_kinetics_id
+                == by_kind["chebyshev"].id
+            )
+        ).one()
+        assert cheb.coefficients == {"coeffs": grid}
+
+        plog_rows = session.scalars(
+            select(NetworkKineticsPlog).where(
+                NetworkKineticsPlog.network_kinetics_id == by_kind["plog"].id
+            )
+        ).all()
+        assert len(plog_rows) == 2
+        assert {r.a_units.value for r in plog_rows} == {"per_s"}
+        # The Chebyshev record has no PLOG rows and vice versa.
+        cheb_plog = session.scalars(
+            select(NetworkKineticsPlog).where(
+                NetworkKineticsPlog.network_kinetics_id
+                == by_kind["chebyshev"].id
+            )
+        ).all()
+        assert cheb_plog == []
 
 
 def test_pdep_species_statmech_persists_via_shared_seam(db_engine) -> None:

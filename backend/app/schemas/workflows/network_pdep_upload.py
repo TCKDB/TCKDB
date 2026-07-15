@@ -427,18 +427,70 @@ class ChebyshevKineticsIn(SchemaBase):
         return self
 
 
+class PlogEntryIn(SchemaBase):
+    """One PLOG entry: modified-Arrhenius parameters at a discrete pressure.
+
+    Mirrors one ``network_kinetics_plog`` row. Multiple entries at the same
+    pressure are distinguished by ``entry_index`` (duplicate-Arrhenius PLOG,
+    as emitted by Arkane/Cantera when a single pressure carries two Arrhenius
+    terms whose rates sum).
+
+    :param pressure_bar: Discrete pressure of this entry in bar (> 0).
+    :param a: Arrhenius pre-exponential factor.
+    :param a_units: Units of ``a`` (dimensionality varies with molecularity;
+        e.g. ``per_s`` for unimolecular, ``cm3_mol_s`` for bimolecular).
+    :param n: Temperature exponent.
+    :param ea_kj_mol: Activation energy in kJ/mol.
+    :param entry_index: Discriminator for multiple Arrhenius terms sharing one
+        pressure (defaults to 1).
+    """
+
+    pressure_bar: float = Field(gt=0)
+    a: float
+    a_units: ArrheniusAUnits | None = None
+    n: float
+    ea_kj_mol: float
+    entry_index: int = Field(default=1, ge=1)
+
+
+class PlogKineticsIn(SchemaBase):
+    """Pressure-log (PLOG) interpolation of a phenomenological k(T,P).
+
+    A set of pressure-indexed modified-Arrhenius entries. Persisted as one
+    ``network_kinetics_plog`` row per entry under a shared ``network_kinetics``
+    parent.
+
+    :param entries: PLOG entries (at least one). No two entries may share the
+        same ``(pressure_bar, entry_index)`` pair — that maps to the child
+        table's composite primary key.
+    """
+
+    entries: list[PlogEntryIn] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_unique_pressure_index(self) -> Self:
+        pairs = [(e.pressure_bar, e.entry_index) for e in self.entries]
+        if len(set(pairs)) != len(pairs):
+            raise ValueError(
+                "PLOG entries must be unique by (pressure_bar, entry_index); "
+                "duplicate pairs would collide on the composite primary key."
+            )
+        return self
+
+
 class NetworkKineticsIn(SchemaBase):
     """Fitted phenomenological k(T,P) for one channel under this solve.
 
-    Phase A supports Chebyshev fits only. The channel is referenced by its
+    Supports Chebyshev and PLOG fits. The channel is referenced by its
     ``(source_state_key, sink_state_key)`` state-key pair (channels carry no
     local key of their own).
 
     :param source_state_key: Local key of the referenced channel's source state.
     :param sink_state_key: Local key of the referenced channel's sink state.
-    :param model_kind: Parameterization kind (``chebyshev`` only for now).
+    :param model_kind: Parameterization kind (``chebyshev`` or ``plog``).
     :param chebyshev: Chebyshev coefficients (required when
         ``model_kind == chebyshev``).
+    :param plog: PLOG entries (required when ``model_kind == plog``).
     :param tmin_k: Minimum temperature of validity in K.
     :param tmax_k: Maximum temperature of validity in K.
     :param pmin_bar: Minimum pressure of validity in bar.
@@ -456,6 +508,7 @@ class NetworkKineticsIn(SchemaBase):
     model_kind: NetworkKineticsModelKind
 
     chebyshev: ChebyshevKineticsIn | None = None
+    plog: PlogKineticsIn | None = None
 
     tmin_k: float | None = Field(default=None, gt=0)
     tmax_k: float | None = Field(default=None, gt=0)
@@ -480,11 +533,11 @@ class NetworkKineticsIn(SchemaBase):
 
     @model_validator(mode="after")
     def validate_model_payload(self) -> Self:
-        """Phase A supports Chebyshev only.
+        """Chebyshev and PLOG are supported; tabulated is not yet.
 
-        PLOG/tabulated fits have model rows (``network_kinetics_plog`` /
-        ``network_kinetics_point``) but no upload write path yet. Reject them
-        explicitly; the schema is structured so they can be added later.
+        Exactly one model sub-block must be present, matching ``model_kind``.
+        The tabulated (``network_kinetics_point``) write path is still
+        unimplemented; reject it explicitly.
         """
         if self.model_kind == NetworkKineticsModelKind.chebyshev:
             if self.chebyshev is None:
@@ -492,10 +545,31 @@ class NetworkKineticsIn(SchemaBase):
                     "chebyshev coefficients are required when "
                     "model_kind == 'chebyshev'."
                 )
+            if self.plog is not None:
+                raise ValueError(
+                    "plog must be omitted when model_kind == 'chebyshev'."
+                )
+        elif self.model_kind == NetworkKineticsModelKind.plog:
+            if self.plog is None:
+                raise ValueError(
+                    "plog entries are required when model_kind == 'plog'."
+                )
+            if self.chebyshev is not None:
+                raise ValueError(
+                    "chebyshev must be omitted when model_kind == 'plog'."
+                )
+            # stores_log10_k is a Chebyshev-only concept: PLOG stores a real
+            # Arrhenius A, not a log10 fit. Reject it rather than persist a
+            # semantically meaningless flag on the parent row.
+            if self.stores_log10_k is not None:
+                raise ValueError(
+                    "stores_log10_k must be omitted when model_kind == 'plog' "
+                    "(it is a Chebyshev-only concept)."
+                )
         else:
             raise ValueError(
-                "PLOG/tabulated network kinetics upload not yet supported "
-                "(Phase A is Chebyshev-only)."
+                "Tabulated network kinetics upload not yet supported "
+                "(supported: chebyshev, plog)."
             )
         return self
 

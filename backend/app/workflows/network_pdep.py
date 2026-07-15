@@ -35,6 +35,7 @@ from app.db.models.network_pdep import (
     NetworkChannel,
     NetworkKinetics,
     NetworkKineticsChebyshev,
+    NetworkKineticsPlog,
     NetworkSolve,
     NetworkSolveBathGas,
     NetworkSolveEnergyTransfer,
@@ -637,7 +638,9 @@ def persist_network_pdep_upload(
                 )
             )
 
-        # Fitted phenomenological k(T,P) per channel (Chebyshev only).
+        # Fitted phenomenological k(T,P) per channel. Schema validation
+        # guarantees exactly one model sub-block matching ``model_kind``
+        # (Chebyshev or PLOG); tabulated is rejected upstream.
         for nk_in in solve_in.channel_kinetics:
             channel_row = channel_pair_to_row[
                 (nk_in.source_state_key, nk_in.sink_state_key)
@@ -659,7 +662,6 @@ def persist_network_pdep_upload(
             session.add(network_kinetics)
             session.flush()
 
-            # Phase A: schema validation guarantees Chebyshev with coefficients.
             cheb_in = nk_in.chebyshev
             if cheb_in is not None:
                 session.add(
@@ -670,6 +672,24 @@ def persist_network_pdep_upload(
                         coefficients={"coeffs": cheb_in.coefficients},
                     )
                 )
+
+            # PLOG: one child row per pressure-indexed Arrhenius entry.
+            # ``stores_log10_k`` stays None on the parent — PLOG carries a
+            # real Arrhenius A, not a log10 fit.
+            plog_in = nk_in.plog
+            if plog_in is not None:
+                for entry in plog_in.entries:
+                    session.add(
+                        NetworkKineticsPlog(
+                            network_kinetics_id=network_kinetics.id,
+                            pressure_bar=entry.pressure_bar,
+                            entry_index=entry.entry_index,
+                            a=entry.a,
+                            a_units=entry.a_units,
+                            n=entry.n,
+                            ea_kj_mol=entry.ea_kj_mol,
+                        )
+                    )
 
         session.flush()
 
