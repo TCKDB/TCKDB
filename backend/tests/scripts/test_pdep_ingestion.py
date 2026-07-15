@@ -39,10 +39,12 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 from app.workflows.network_pdep import persist_network_pdep_upload
 from scripts.pdep_ingestion.arkane_pdep_parser import (
+    parse_input_file,
     parse_pdep_arrhenius_reactions,
     parse_pdep_reactions,
 )
 from scripts.pdep_ingestion.builder import (
+    _software_release,
     build_dual_form_payload,
     build_dual_form_request,
     build_network_pdep_payload,
@@ -538,3 +540,156 @@ def test_fixture_full_pipeline_with_artifacts(db_engine, monkeypatch) -> None:
         ).all()
         # At least the N2H4 sp/freq/scan and TS1 sp/freq trimmed logs.
         assert len(arts) >= 3
+
+
+# ---------------------------------------------------------------------------
+# Provenance is DERIVED from the run, not hardcoded (cross-LOT hardening)
+# ---------------------------------------------------------------------------
+
+
+def test_software_release_derives_from_token() -> None:
+    """Declared Arkane software tokens canonicalise to a software_release ref.
+
+    The Gaussian token reproduces the seeded release (name+version), known
+    tokens map to their canonical name, an unknown token passes through as the
+    name verbatim, and a missing token yields no ref (never an invented
+    program).
+    """
+    assert _software_release("orca") == {"name": "ORCA"}
+    assert _software_release("gaussian") == {"name": "Gaussian", "version": "09"}
+    assert _software_release("molpro") == {"name": "Molpro"}
+    # Case / surrounding whitespace insensitive.
+    assert _software_release("  ORCA ") == {"name": "ORCA"}
+    # Unknown token -> raw name, no invented program.
+    assert _software_release("newprog") == {"name": "newprog"}
+    # No declaration -> no ref emitted.
+    assert _software_release(None) is None
+    assert _software_release("") is None
+
+
+def test_lot_from_bare_model_chemistry() -> None:
+    """A single-LOT ``modelChemistry = LevelOfTheory(...)`` populates BOTH the
+    opt/freq and the energy slots (composite ``freq=``/``energy=`` not required)."""
+    text = (
+        'modelChemistry = LevelOfTheory(method="CCSD(T)-F12", '
+        'basis="cc-pVTZ-F12", software="orca")\n'
+    )
+    inp = parse_input_file(text)
+    assert (inp.opt_method, inp.opt_basis, inp.opt_software) == (
+        "CCSD(T)-F12",
+        "cc-pVTZ-F12",
+        "orca",
+    )
+    # Same LOT covers the single point.
+    assert (inp.energy_method, inp.energy_basis, inp.energy_software) == (
+        "CCSD(T)-F12",
+        "cc-pVTZ-F12",
+        "orca",
+    )
+
+
+def test_lot_ignores_commented_block() -> None:
+    """A commented-out LOT block above the live declaration is never read: the
+    parser must return the LIVE method/software, not the disabled one."""
+    text = (
+        "# modelChemistry = CompositeLevelOfTheory(\n"
+        '#     freq=LevelOfTheory(method="wb97xd", basis="def2tzvp", software="gaussian"),\n'
+        '#     energy=LevelOfTheory(method="MRCI+Davidson", basis="aug-cc-pV(T+d)Z", software="molpro"),\n'
+        "# )\n"
+        'modelChemistry = LevelOfTheory(method="CCSD(T)-F12", basis="cc-pVTZ-F12", software="orca")\n'
+    )
+    inp = parse_input_file(text)
+    # The commented wb97xd / MRCI / gaussian / molpro block must NOT win.
+    assert (inp.opt_method, inp.opt_software) == ("CCSD(T)-F12", "orca")
+    assert (inp.energy_method, inp.energy_software) == ("CCSD(T)-F12", "orca")
+
+
+def test_composite_lot_survives_comment_strip() -> None:
+    """Comment stripping must not break the live composite ``freq=``/``energy=``
+    form (the MRCI run): distinct freq and energy LOTs still parse."""
+    text = (
+        "#modelChemistry = 'MRCI/cc-pVTZ'\n"
+        "modelChemistry = CompositeLevelOfTheory(\n"
+        '    freq=LevelOfTheory(method="wb97xd", basis="def2tzvp", software="gaussian"),\n'
+        '    energy=LevelOfTheory(method="MRCI+Davidson", basis="aug-cc-pV(T+d)Z", software="molpro"),\n'
+        ")\n"
+    )
+    inp = parse_input_file(text)
+    assert (inp.opt_method, inp.opt_software) == ("wb97xd", "gaussian")
+    assert (inp.energy_method, inp.energy_software) == ("MRCI+Davidson", "molpro")
+
+
+def test_yml_species_recognized_by_parser() -> None:
+    """``species('X', '.../X.yml', ...)`` is recognised (not silently dropped);
+    the ``.yml`` data-file reference is preserved so downstream can name it."""
+    text = (
+        "species('AA', 'data/AA.py', structure=SMILES('[H][H]'))\n"
+        "species('BB', '/home/x/ymal_files/BB.yml', structure=SMILES('[NH2]'))\n"
+    )
+    inp = parse_input_file(text)
+    assert set(inp.species) == {"AA", "BB"}
+    assert inp.species["AA"].data_file == "data/AA.py"
+    assert inp.species["BB"].data_file is not None
+    assert inp.species["BB"].data_file.endswith("BB.yml")
+
+
+_MIN_CSV_HEADER = (
+    "Label,Symmetry Number,Number of optical isomers,Symmetry Group,"
+    "Rotational constant (cm-1),"
+    '"Calculated Frequencies (unscaled and prior to projection, cm^-1)",'
+    "Electronic energy (J/mol),"
+    '"E0 (electronic energy + ZPE, J/mol)",'
+    "E0 with atom and bond corrections (J/mol),"
+    "Atom XYZ coordinates (angstrom),T1 diagnostic,D1 diagnostic\n"
+)
+_H2_CSV_ROW = (
+    "H2,2,1,Dinfh,61.08,4462.3,-3078739.5575972195,-3052786.006271785,"
+    '-4637.212477654586,"H    0.0    0.0    0.370025, H    0.0    0.0    -0.370025",,\n'
+)
+
+
+def _write_minimal_run(tmp_path: Path, *, software: str, extra_species: str = "") -> Path:
+    """Write a minimal Arkane run dir (input.py / output.py / CSV) for H2."""
+    (tmp_path / "input.py").write_text(
+        f'modelChemistry = LevelOfTheory(method="CCSD(T)-F12", '
+        f'basis="cc-pVTZ-F12", software="{software}")\n'
+        "species('H2', 'data/H2.py', structure=SMILES('[H][H]'))\n"
+        f"{extra_species}"
+    )
+    (tmp_path / "output.py").write_text("")  # no conformers / pdep needed here
+    (tmp_path / "supporting_information.csv").write_text(
+        _MIN_CSV_HEADER + _H2_CSV_ROW
+    )
+    return tmp_path
+
+
+def test_calc_software_release_derived_from_declared_run(tmp_path) -> None:
+    """The per-calc ``software_release`` comes from the run's DECLARED software,
+    not a hardcoded Gaussian/Molpro — an ORCA run yields ORCA on opt/freq/sp."""
+    run_dir = _write_minimal_run(tmp_path, software="orca")
+    payload, gap = build_network_pdep_payload(run_dir)
+    assert "H2" in gap.species_built
+    h2 = next(s for s in payload["species"] if s["key"] == "H2")
+    opt = h2["conformers"][0]["calculation"]
+    assert opt["software_release"] == {"name": "ORCA"}
+    by_type = {c["type"]: c for c in h2["calculations"]}
+    assert by_type["freq"]["software_release"] == {"name": "ORCA"}
+    assert by_type["sp"]["software_release"] == {"name": "ORCA"}
+    # And the level of theory is the declared one (not the wb97xd/MRCI default).
+    assert opt["level_of_theory"]["method"] == "CCSD(T)-F12"
+    assert by_type["sp"]["level_of_theory"]["method"] == "CCSD(T)-F12"
+
+
+def test_yml_species_dropped_is_named_fail_loud(tmp_path) -> None:
+    """A reactive ``.yml`` species with no CSV geometry is recorded in the
+    GapReport by name and reason (fail-loud) rather than silently vanishing."""
+    run_dir = _write_minimal_run(
+        tmp_path,
+        software="molpro",
+        extra_species="species('BB', '/home/x/ymal_files/BB.yml', structure=SMILES('[NH2]'))\n",
+    )
+    _payload, gap = build_network_pdep_payload(run_dir)
+    assert "H2" in gap.species_built
+    skipped = dict(gap.species_skipped)
+    assert "BB" in skipped
+    assert ".yml" in skipped["BB"] or "yml" in skipped["BB"].lower()

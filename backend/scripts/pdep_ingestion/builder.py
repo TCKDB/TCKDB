@@ -51,10 +51,46 @@ from .arkane_pdep_parser import (
 )
 from .units import atm_to_bar, ea_to_kj_mol, j_mol_to_hartree, kcal_mol_to_cm_inv
 
-# Software / provenance constants for this run (per the run's input.py header).
-_GAUSSIAN = {"name": "Gaussian", "version": "09"}
-_MOLPRO = {"name": "Molpro"}
+# Arkane declares the ESS per level-of-theory as a lowercase token
+# (``software="gaussian"``). Canonicalise that token to a software_release ref
+# rather than hardcoding one program for the whole run: a cross-LOT run (e.g.
+# CCSD(T)-F12 on ORCA) must carry its own declared software, not Gaussian.
+#
+# Entries reproduce the canonical release each token denotes. The Gaussian
+# token carries version "09": absent an explicit version in the LOT
+# declaration, that is the release this project's Arkane runs use (and it is
+# what the ESS log headers report). Unknown tokens fall back to the raw token
+# as the name (still derived from the run, never a fixed program).
+_SOFTWARE_REGISTRY: dict[str, dict] = {
+    "gaussian": {"name": "Gaussian", "version": "09"},
+    "gaussian09": {"name": "Gaussian", "version": "09"},
+    "gaussian16": {"name": "Gaussian", "version": "16"},
+    "g09": {"name": "Gaussian", "version": "09"},
+    "g16": {"name": "Gaussian", "version": "16"},
+    "molpro": {"name": "Molpro"},
+    "orca": {"name": "ORCA"},
+    "qchem": {"name": "Q-Chem"},
+    "psi4": {"name": "Psi4"},
+    "terachem": {"name": "TeraChem"},
+    "cfour": {"name": "CFOUR"},
+}
 _ARKANE = {"name": "Arkane", "version": "3.2.0"}
+
+
+def _software_release(token: str | None) -> dict | None:
+    """Map an Arkane software token to a software_release ref dict.
+
+    Returns ``None`` when no software was declared (so the caller omits the
+    optional ``software_release`` rather than inventing a program). A token not
+    in the registry is passed through as the release ``name`` verbatim.
+    """
+    if not token:
+        return None
+    key = token.strip().lower()
+    entry = _SOFTWARE_REGISTRY.get(key)
+    if entry is not None:
+        return dict(entry)
+    return {"name": token.strip()}
 
 
 @dataclass
@@ -107,6 +143,30 @@ def _fit_bounds_bar_kelvin(fit: ChebyshevFit) -> tuple[float, float]:
     )
 
 
+def _resolve_data_file(run_dir: Path, data_file: str) -> Path | None:
+    """Resolve a declared species/TS ``Data/<x>.py`` data-file onto disk.
+
+    Mirrors :func:`resolve_log_path`'s re-rooting idea for the *data-file*
+    reference itself: many runs record an absolute author-home path
+    (``/home/.../PES.../data/NN.py``) that does not exist on this box. Tried in
+    order: the path as given relative to ``run_dir``; the path as an existing
+    absolute path; then the basename under ``<run_dir>/Data`` or
+    ``<run_dir>/data``. Returns ``None`` when nothing resolves.
+    """
+    as_given = run_dir / data_file
+    if as_given.exists():
+        return as_given
+    absolute = Path(data_file)
+    if absolute.is_absolute() and absolute.exists():
+        return absolute
+    base = Path(data_file).name
+    for sub in ("Data", "data"):
+        candidate = run_dir / sub / base
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def _load_run(run_dir: Path) -> _ParsedRun:
     run_dir = Path(run_dir)
     inp = parse_input_file((run_dir / "input.py").read_text())
@@ -116,16 +176,19 @@ def _load_run(run_dir: Path) -> _ParsedRun:
     csv_path = run_dir / "supporting_information.csv"
     csv = parse_supporting_information(csv_path) if csv_path.exists() else {}
 
+    # Only ``.py`` data-files carry the regex/Log statmech this parser reads;
+    # ``.yml`` (Arkane YAML statmech) references are recognised at the input
+    # level but not parsed here (recorded fail-loud in the builder instead).
     data_files: dict[str, DataFile] = {}
     for label, sp in inp.species.items():
-        if sp.data_file:
-            p = run_dir / sp.data_file
-            if p.exists():
+        if sp.data_file and sp.data_file.endswith(".py"):
+            p = _resolve_data_file(run_dir, sp.data_file)
+            if p is not None:
                 data_files[label] = parse_data_file(p.read_text())
     for label, ts in inp.transition_states.items():
-        if ts.data_file:
-            p = run_dir / ts.data_file
-            if p.exists():
+        if ts.data_file and ts.data_file.endswith(".py"):
+            p = _resolve_data_file(run_dir, ts.data_file)
+            if p is not None:
                 data_files[label] = parse_data_file(p.read_text())
     return _ParsedRun(run_dir, inp, conformers, fits, pdep_skips, csv, data_files)
 
@@ -193,12 +256,18 @@ def _build_statmech(
     statmech["uses_projected_frequencies"] = True
 
     if inp.freq_scale_factor is not None:
-        statmech["freq_scale_factor"] = {
+        fsf: dict = {
             "level_of_theory": _lot_opt(inp),
             "scale_kind": "fundamental",
             "value": inp.freq_scale_factor,
-            "software": {"name": _GAUSSIAN["name"]},
         }
+        # The scale factor is a property of the geometry/frequency LOT, so it is
+        # attributed to that LOT's software (opt/freq software), derived from the
+        # run rather than assumed to be Gaussian.
+        opt_sw = _software_release(inp.opt_software)
+        if opt_sw is not None:
+            fsf["software"] = {"name": opt_sw["name"]}
+        statmech["freq_scale_factor"] = fsf
 
     source_calcs: list[dict] = []
     if freq_key:
@@ -257,11 +326,28 @@ def build_network_pdep_request(run_dir: Path, *, include_artifacts: bool = False
         large files (e.g. the 3 MB hindered-rotor ``scan.out``) are not read.
     :returns: A ``NetworkPDepUploadRequest`` (schema-validated).
     """
-    request_dict, _ = build_network_pdep_payload(run_dir, include_artifacts=include_artifacts)
+    request_dict, gap = build_network_pdep_payload(
+        run_dir, include_artifacts=include_artifacts
+    )
     # Imported lazily so the parser modules stay importable without the app.
     from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 
-    return NetworkPDepUploadRequest.model_validate(request_dict)
+    try:
+        return NetworkPDepUploadRequest.model_validate(request_dict)
+    except ValueError as exc:
+        # Fail loud when the network is invalid *because* declared species were
+        # dropped (e.g. unresolved ``.yml`` statmech files): name them instead
+        # of surfacing the cryptic downstream "species never referenced" error.
+        dropped = [f"{label} ({reason})" for label, reason in gap.species_skipped]
+        if dropped:
+            raise ValueError(
+                "Network cannot be built: "
+                f"{len(dropped)} declared species were dropped and truncated "
+                f"the network -> {dropped}. Resolve or remove them (and any "
+                "channels/reactions that reference them). "
+                f"Underlying validation error: {exc}"
+            ) from exc
+        raise
 
 
 def build_network_pdep_payload(
@@ -275,6 +361,13 @@ def build_network_pdep_payload(
     run = _load_run(run_dir)
     inp = run.inp
     gap = GapReport()
+
+    # Per-calc software is derived from the run's declared level(s) of theory,
+    # not hardcoded: opt/freq/scan run at the geometry/frequency LOT's software,
+    # the single point at the energy LOT's software. For a bare single-LOT run
+    # both are the same declared program.
+    opt_software = _software_release(inp.opt_software)
+    energy_software = _software_release(inp.energy_software)
 
     # ------------------------------------------------------------------
     # Species (reactive: full evidence; bath gas: identity-only)
@@ -308,7 +401,17 @@ def build_network_pdep_payload(
         data = run.data_files.get(label)
         conf = run.conformers.get(label)
         if info is None or info.xyz_text is None:
-            gap.species_skipped.append((label, "no CSV geometry/scalars"))
+            if sp.data_file and sp.data_file.endswith(".yml"):
+                # Recognised but not parsed: name it loudly so the truncated
+                # network is diagnosable rather than surfacing as a confusing
+                # downstream orphan-species schema error.
+                reason = (
+                    f"YAML statmech data-file {sp.data_file!r} not parsed "
+                    "(.yml statmech unsupported); species dropped"
+                )
+            else:
+                reason = "no CSV geometry/scalars"
+            gap.species_skipped.append((label, reason))
             continue
 
         mult = (
@@ -322,7 +425,7 @@ def build_network_pdep_payload(
         opt_calc: dict = {
             "key": opt_key,
             "type": "opt",
-            "software_release": _GAUSSIAN,
+            "software_release": opt_software,
             "level_of_theory": _lot_opt(inp),
             "opt_converged": True,
         }
@@ -349,7 +452,7 @@ def build_network_pdep_payload(
                 "key": freq_key,
                 "type": "freq",
                 "geometry_key": geom_key,
-                "software_release": _GAUSSIAN,
+                "software_release": opt_software,
                 "level_of_theory": _lot_opt(inp),
                 "freq_n_imag": info.n_imag,
                 "freq_frequencies_cm1": info.frequencies_cm_inv,
@@ -370,7 +473,7 @@ def build_network_pdep_payload(
                 "key": sp_key,
                 "type": "sp",
                 "geometry_key": geom_key,
-                "software_release": _MOLPRO,
+                "software_release": energy_software,
                 "level_of_theory": _lot_energy(inp),
                 "sp_electronic_energy_hartree": j_mol_to_hartree(
                     info.electronic_energy_j_mol
@@ -390,7 +493,7 @@ def build_network_pdep_payload(
                 "key": scan_key,
                 "type": "scan",
                 "geometry_key": geom_key,
-                "software_release": _GAUSSIAN,
+                "software_release": opt_software,
                 "level_of_theory": _lot_opt(inp),
             }
             if include_artifacts:
@@ -477,7 +580,7 @@ def build_network_pdep_payload(
         primary = {
             "key": f"{ts_label}_opt",
             "type": "opt",
-            "software_release": _GAUSSIAN,
+            "software_release": opt_software,
             "level_of_theory": _lot_opt(inp),
             "opt_converged": True,
         }
@@ -494,7 +597,7 @@ def build_network_pdep_payload(
             "key": ts_freq_key,
             "type": "freq",
             "geometry_key": geom_key,
-            "software_release": _GAUSSIAN,
+            "software_release": opt_software,
             "level_of_theory": _lot_opt(inp),
             "freq_n_imag": info.n_imag,
             "freq_frequencies_cm1": info.frequencies_cm_inv,
@@ -515,7 +618,7 @@ def build_network_pdep_payload(
                 "key": ts_sp_key,
                 "type": "sp",
                 "geometry_key": geom_key,
-                "software_release": _MOLPRO,
+                "software_release": energy_software,
                 "level_of_theory": _lot_energy(inp),
                 "sp_electronic_energy_hartree": j_mol_to_hartree(
                     info.electronic_energy_j_mol
@@ -745,6 +848,15 @@ def _plog_channel_kinetics_entry(fit: PlogFit, src: str, snk: str) -> dict:
         )
     pressures_bar = [en["pressure_bar"] for en in entries]
     # All terms of one PLOG fit share molecularity, hence one rate-unit token.
+    # Assert that invariant rather than silently trusting the first entry: a
+    # fit whose per-pressure A-units disagree is malformed and must fail loud.
+    rate_unit_tokens = {map_a_units(e.a_units) for e in fit.entries}
+    if len(rate_unit_tokens) != 1:
+        raise ValueError(
+            f"PLOG fit {src}->{snk} has inconsistent A-unit tokens across its "
+            f"pressure entries: {sorted(rate_unit_tokens)}."
+        )
+    (rate_units,) = rate_unit_tokens
     entry: dict = {
         "source_state_key": src,
         "sink_state_key": snk,
@@ -752,7 +864,7 @@ def _plog_channel_kinetics_entry(fit: PlogFit, src: str, snk: str) -> dict:
         "plog": {"entries": entries},
         "pmin_bar": min(pressures_bar),
         "pmax_bar": max(pressures_bar),
-        "rate_units": map_a_units(fit.entries[0].a_units),
+        "rate_units": rate_units,
         "pressure_units": "bar",
     }
     if fit.tmin_value is not None and fit.tmax_value is not None:
@@ -822,6 +934,13 @@ def build_dual_form_payload(
         snk = state_lookup.get(_multiset_key(fit.products))
         if src is None or snk is None or src == snk:
             unmapped.append(("+".join(fit.reactants), "+".join(fit.products)))
+            continue
+        # Duplicate directed-pair guard (mirrors the Chebyshev channel build):
+        # two PLOG fits collapsing onto the same (source, sink) would otherwise
+        # emit two plog rows for one channel and slip past the set-based
+        # topology check below.
+        if (src, snk) in plog_pairs:
+            gap.channels_duplicate.append((src, snk))
             continue
         plog_pairs.add((src, snk))
         plog_kinetics.append(_plog_channel_kinetics_entry(fit, src, snk))

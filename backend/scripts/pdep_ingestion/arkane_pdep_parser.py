@@ -151,8 +151,13 @@ def _extract_str_list(block: str, name: str) -> list[str]:
 
 
 def _extract_value_units(block: str, name: str) -> tuple[float, str] | None:
-    """Extract ``name = (value, 'units')`` (single- or multi-line)."""
-    pattern = rf"{name}\s*=\s*\(\s*([-\d.eE+]+)\s*,\s*['\"]([^'\"]+)['\"]\s*,?\s*\)"
+    """Extract ``name = (value, 'units')`` (single- or multi-line).
+
+    The leading ``\\b`` word boundary keeps a short name (notably ``A``) from
+    matching the tail of a longer identifier (e.g. a hypothetical ``xA=(...)``);
+    all Arkane keys handled here start on a word boundary in the source.
+    """
+    pattern = rf"\b{name}\s*=\s*\(\s*([-\d.eE+]+)\s*,\s*['\"]([^'\"]+)['\"]\s*,?\s*\)"
     m = re.search(pattern, block, re.DOTALL)
     if not m:
         return None
@@ -457,9 +462,12 @@ def parse_input_file(text: str) -> ArkaneInput:
 
     # --- species(...) blocks ---
     for block in _iter_call_blocks(text, "species"):
-        # Positional form: species('LABEL', 'Data/x.py', ...)
+        # Positional form: species('LABEL', 'Data/x.py', ...). Both ``.py``
+        # (regex/Log statmech) and ``.yml`` (Arkane YAML statmech) data-file
+        # suffixes are recognised so a ``.yml``-declared species is not silently
+        # dropped (which would orphan the channels that reference it).
         pos = re.match(
-            r"species\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+\.py)['\"]",
+            r"species\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+\.(?:py|yml))['\"]",
             block,
         )
         label = None
@@ -593,22 +601,41 @@ def parse_input_file(text: str) -> ArkaneInput:
             t_exponent=float(n) if n else None,
         )
 
-    # --- level of theory (CompositeLevelOfTheory) ---
-    fsf = _first(r"frequencyScaleFactor\s*=\s*([-\d.eE+]+)", text)
+    # --- level of theory ---
+    # Match over comment-stripped text so a commented-out LOT block (e.g. a
+    # disabled ``CompositeLevelOfTheory`` left above the live declaration) is
+    # never read as the run's actual level of theory.
+    clean_lot = strip_commented_lines(text)
+    fsf = _first(r"frequencyScaleFactor\s*=\s*([-\d.eE+]+)", clean_lot)
 
-    def _lot_fields(prefix: str):
-        km = re.search(rf"{prefix}\s*=\s*LevelOfTheory\(", text)
-        if not km:
-            return None, None, None
-        b = extract_first_call(text[km.start():], "LevelOfTheory") or ""
+    def _lot_from_block(b: str):
         return (
             _first(r"method\s*=\s*['\"]([^'\"]+)['\"]", b),
             _first(r"basis\s*=\s*['\"]([^'\"]+)['\"]", b),
             _first(r"software\s*=\s*['\"]([^'\"]+)['\"]", b),
         )
 
+    def _lot_fields(prefix: str):
+        km = re.search(rf"{prefix}\s*=\s*LevelOfTheory\(", clean_lot)
+        if not km:
+            return None, None, None
+        b = extract_first_call(clean_lot[km.start():], "LevelOfTheory") or ""
+        return _lot_from_block(b)
+
+    # CompositeLevelOfTheory(freq=..., energy=...) — distinct freq and energy LOTs.
     om, ob, osw = _lot_fields("freq")
     em, eb, esw = _lot_fields("energy")
+
+    # Bare single-LOT declaration: ``modelChemistry = LevelOfTheory(...)``. Here
+    # one LOT covers both the geometry/frequency and the single-point energy, so
+    # both the opt and energy slots take the same method/basis/software.
+    if om is None and em is None:
+        mm = re.search(r"modelChemistry\s*=\s*LevelOfTheory\(", clean_lot)
+        if mm:
+            b = extract_first_call(clean_lot[mm.start():], "LevelOfTheory") or ""
+            sm, sb, ssw = _lot_from_block(b)
+            om, ob, osw = sm, sb, ssw
+            em, eb, esw = sm, sb, ssw
 
     return ArkaneInput(
         species=species,
@@ -657,7 +684,16 @@ class DataFile:
 
 
 def parse_data_file(text: str) -> DataFile:
-    """Parse a per-species ``Data/<x>.py`` file (regex, never exec)."""
+    """Parse a per-species ``Data/<x>.py`` file (regex, never exec).
+
+    NOTE: comments are intentionally *not* stripped here. Doing so would drop a
+    commented-out ``#rotors = [HinderedRotor(scanLog=Log(...))]`` line — which is
+    arguably correct — but that would change the already-seeded MRCI network
+    payload (its ``NH3NH`` carries a commented rotor whose ``scanLog`` is picked
+    up as a scan calculation). Preserving the existing behaviour keeps the
+    regression payload byte-identical; stripping is a follow-up that requires a
+    re-seed. See the PR notes.
+    """
     bonds: dict[str, int] = {}
     bm = re.search(r"bonds\s*=\s*(\{[^}]*\})", text)
     if bm:
@@ -691,18 +727,29 @@ def resolve_log_path(embedded_path: str, run_dir: Path) -> Path:
     """Resolve an embedded ``Log('/home/.../Data/<x>/<f>')`` path onto disk.
 
     Gotcha #3: the embedded paths point at the author's home directory. We
-    re-root them at ``<run_dir>/Data`` by keeping the tail after the last
-    ``/Data/`` segment.
+    re-root them at the run's data directory by keeping the tail after the last
+    ``/Data/`` (or ``/data/``) segment. Both the capitalised ``Data`` (older
+    runs) and lowercase ``data`` (newer runs) layouts are honoured: whichever
+    directory actually exists under ``run_dir`` is used as the root.
     """
-    marker = "/Data/"
-    idx = embedded_path.rfind(marker)
-    tail = embedded_path[idx + len(marker):] if idx != -1 else Path(embedded_path).name
+    lower = embedded_path.lower()
+    idx = lower.rfind("/data/")
+    if idx != -1:
+        tail = embedded_path[idx + len("/data/"):]
+    else:
+        tail = Path(embedded_path).name
+    # Prefer whichever data directory exists on disk (Data then data); default
+    # to capitalised ``Data`` so behaviour is unchanged for the common layout.
     data_root = (run_dir / "Data").resolve()
+    if not data_root.exists():
+        lowercase_root = (run_dir / "data").resolve()
+        if lowercase_root.exists():
+            data_root = lowercase_root
     resolved = (data_root / tail).resolve()
-    # Containment guard: a crafted ``..`` tail must not escape <run_dir>/Data.
+    # Containment guard: a crafted ``..`` tail must not escape the data root.
     if data_root not in resolved.parents and resolved != data_root:
         raise ValueError(
-            f"Resolved Log() path {resolved} escapes the run Data directory "
+            f"Resolved Log() path {resolved} escapes the run data directory "
             f"{data_root}; refusing to read."
         )
     return resolved
