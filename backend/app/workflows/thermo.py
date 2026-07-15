@@ -22,6 +22,7 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
 from app.services.energy_correction_resolution import create_applied_energy_correction
+from app.services.group_additivity_resolution import create_applied_group_additivity
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -286,6 +287,17 @@ def persist_thermo_upload(
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
             )
+        )
+
+    # Group-additivity estimation provenance (estimated thermo only; the
+    # upload schema enforces the origin match). Reifies which GA scheme +
+    # per-group contributions produced the estimated H298/S298 (DR-0035).
+    if request.group_additivity is not None:
+        create_applied_group_additivity(
+            session,
+            request.group_additivity,
+            thermo_id=thermo.id,
+            created_by=created_by,
         )
 
     session.flush()

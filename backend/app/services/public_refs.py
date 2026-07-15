@@ -64,6 +64,7 @@ PREFIXES: dict[str, str] = {
     "ConformerAssignmentScheme": "cas",
     "FrequencyScaleFactor": "fsf",
     "EnergyCorrectionScheme": "ecs",
+    "GroupAdditivityScheme": "gasch",
     # Events / provenance (opaque)
     "SpeciesEntry": "spe",
     "ReactionEntry": "rxe",

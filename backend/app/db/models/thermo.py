@@ -18,6 +18,7 @@ from app.db.models.common import PhaseKind, ScientificOriginKind, ThermoCalculat
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
+    from app.db.models.group_additivity import AppliedGroupAdditivity
     from app.db.models.literature import Literature
     from app.db.models.software import SoftwareRelease
     from app.db.models.species import SpeciesEntry
@@ -154,6 +155,14 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     source_calculations: Mapped[list["ThermoSourceCalculation"]] = relationship(
         back_populates="thermo",
         cascade="all, delete-orphan",
+    )
+    # Group-additivity estimation provenance for ``scientific_origin=estimated``
+    # thermo. NULL for computed / experimental / literature records. At most
+    # one breakdown per thermo (``applied_group_additivity.thermo_id`` UNIQUE).
+    applied_group_additivity: Mapped[Optional["AppliedGroupAdditivity"]] = relationship(
+        back_populates="thermo",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
 
     __table_args__ = (

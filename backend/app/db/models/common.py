@@ -529,6 +529,25 @@ class EnergyCorrectionApplicationRole(str, Enum):
     custom = "custom"
 
 
+class GroupAdditivityComponentKind(str, Enum):
+    """Broad category of one group-additivity contribution.
+
+    Benson-style group additivity estimates a property as the sum of
+    per-group contributions plus a set of corrections. ``group`` is a
+    Benson group-value contribution (e.g. ``C/C/H3``); the remaining
+    members are the standard correction families applied on top of the
+    bare group sum. ``other`` is an escape hatch for scheme-specific
+    corrections not covered here.
+    """
+
+    group = "group"
+    ring_correction = "ring_correction"
+    gauche_correction = "gauche_correction"
+    cis_correction = "cis_correction"
+    symmetry_correction = "symmetry_correction"
+    other = "other"
+
+
 class CoordinateUnit(str, Enum):
     angstrom = "angstrom"
     degree = "degree"

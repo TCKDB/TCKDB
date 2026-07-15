@@ -22,6 +22,10 @@ from app.db.models.common import (
     ThermoCalculationRole,
     ValidationStatus,
 )
+from app.db.models.group_additivity import (
+    AppliedGroupAdditivity,
+    GroupAdditivityScheme,
+)
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import SpeciesEntry
@@ -42,6 +46,8 @@ from app.schemas.reads.scientific_common import (
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_thermo import (
+    GroupAdditivityBlock,
+    GroupAdditivityComponentBlock,
     RequestEcho,
     ScientificSpeciesThermoResponse,
     ThermoModelKindQuery,
@@ -208,6 +214,7 @@ def get_species_thermo(
     sources_by_thermo = _load_sources(session, [t.id for t in thermo_rows])
     nasa_by_thermo = _load_nasa(session, [t.id for t in thermo_rows])
     points_by_thermo = _load_points(session, [t.id for t in thermo_rows])
+    ga_by_thermo = _load_group_additivity(session, [t.id for t in thermo_rows])
     statmech_ids_by_entry = _load_statmech_ids(session, species_entry_id)
     statmech_refs = _load_statmech_refs(session, statmech_ids_by_entry)
     # Phase 2 audit: load source-calc rows from the picked statmech so
@@ -367,6 +374,7 @@ def get_species_thermo(
             temperature_coverage=coverage,
             evidence_completeness=evidence,
             provenance=provenance,
+            group_additivity=_build_group_additivity_block(ga_by_thermo.get(t.id)),
             trust=(
                 build_thermo_trust_fragment(
                     t,
@@ -496,6 +504,58 @@ def _load_points(
         grouped[p.thermo_id].append(p)
     # Already ordered by temperature_k via the ORM relationship default.
     return grouped
+
+
+def _load_group_additivity(
+    session: Session, thermo_ids: list[int]
+) -> dict[int, AppliedGroupAdditivity]:
+    """Load the applied GA breakdown (scheme + components) per thermo id.
+
+    At most one ``applied_group_additivity`` row exists per thermo
+    (``thermo_id`` UNIQUE), so the result maps each thermo id to a single
+    row. Only estimated thermo records have one; others are absent from the
+    map and surface ``group_additivity=null`` in the read.
+    """
+    if not thermo_ids:
+        return {}
+    rows = session.scalars(
+        select(AppliedGroupAdditivity)
+        .where(AppliedGroupAdditivity.thermo_id.in_(thermo_ids))
+        .options(
+            selectinload(AppliedGroupAdditivity.scheme),
+            selectinload(AppliedGroupAdditivity.components),
+        )
+    ).all()
+    return {row.thermo_id: row for row in rows if row.thermo_id is not None}
+
+
+def _build_group_additivity_block(
+    applied: AppliedGroupAdditivity | None,
+) -> GroupAdditivityBlock | None:
+    """Build the read-layer GA block, or ``None`` when no breakdown exists."""
+    if applied is None:
+        return None
+    scheme: GroupAdditivityScheme = applied.scheme
+    components = sorted(applied.components, key=lambda c: c.id)
+    return GroupAdditivityBlock(
+        scheme_id=scheme.id,
+        scheme_ref=scheme.public_ref,
+        scheme_name=scheme.name,
+        scheme_version=scheme.version,
+        code_commit=scheme.code_commit,
+        note=applied.note,
+        components=[
+            GroupAdditivityComponentBlock(
+                component_kind=c.component_kind,
+                group_label=c.group_label,
+                count=c.count,
+                h298_contribution_kj_mol=c.h298_contribution_kj_mol,
+                s298_contribution_j_mol_k=c.s298_contribution_j_mol_k,
+                cp298_contribution_j_mol_k=c.cp298_contribution_j_mol_k,
+            )
+            for c in components
+        ],
+    )
 
 
 def _load_statmech_ids(session: Session, species_entry_id: int) -> set[int]:

@@ -23,6 +23,9 @@ from app.schemas.utils import normalize_optional_text
 from app.schemas.workflows.energy_correction_upload import (
     AppliedEnergyCorrectionUploadPayload,
 )
+from app.schemas.workflows.group_additivity_upload import (
+    AppliedGroupAdditivityUploadPayload,
+)
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 
 
@@ -160,6 +163,13 @@ class ThermoUploadRequest(SchemaBase):
         default_factory=list
     )
 
+    # Group-additivity (Benson) estimation provenance. Only meaningful for
+    # ``scientific_origin=estimated`` thermo — it reifies which GA scheme and
+    # which per-group contributions produced the estimated H298/S298. See
+    # DR-0035. Validated below to reject attaching a GA breakdown to a
+    # non-estimated record.
+    group_additivity: AppliedGroupAdditivityUploadPayload | None = None
+
     @model_validator(mode="after")
     def normalize_text_fields(self) -> Self:
         self.note = normalize_optional_text(self.note)
@@ -252,6 +262,24 @@ class ThermoUploadRequest(SchemaBase):
                     f"applied_energy_corrections[{i}].source_calculation_key "
                     f"'{key}' does not reference a declared calculation."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_group_additivity_origin(self) -> Self:
+        """A GA breakdown may only attach to an ``estimated`` thermo record.
+
+        Group additivity *is* the estimation method; attaching it to a
+        computed / experimental / literature record would misrepresent the
+        record's scientific origin.
+        """
+        if (
+            self.group_additivity is not None
+            and self.scientific_origin != ScientificOriginKind.estimated
+        ):
+            raise ValueError(
+                "group_additivity may only be attached to a thermo record "
+                "with scientific_origin='estimated'."
+            )
         return self
 
     @model_validator(mode="after")

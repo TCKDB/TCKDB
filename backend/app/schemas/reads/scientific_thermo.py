@@ -9,7 +9,11 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import RecordReviewStatus, ScientificOriginKind
+from app.db.models.common import (
+    GroupAdditivityComponentKind,
+    RecordReviewStatus,
+    ScientificOriginKind,
+)
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     CollapseMode,
@@ -113,6 +117,34 @@ class ThermoProvenance(BaseModel):
     sp_calculation_ref: str | None = None
 
 
+class GroupAdditivityComponentBlock(BaseModel):
+    """One Benson-group (or correction) contribution in a GA breakdown."""
+
+    component_kind: GroupAdditivityComponentKind
+    group_label: str
+    count: int
+    h298_contribution_kj_mol: float | None = None
+    s298_contribution_j_mol_k: float | None = None
+    cp298_contribution_j_mol_k: float | None = None
+
+
+class GroupAdditivityBlock(BaseModel):
+    """Group-additivity estimation provenance for an estimated thermo record.
+
+    Present only when the thermo record has an ``applied_group_additivity``
+    row (``scientific_origin=estimated``). Surfaces which GA scheme produced
+    the estimate and the per-group contribution breakdown.
+    """
+
+    scheme_id: int
+    scheme_ref: str
+    scheme_name: str
+    scheme_version: str | None = None
+    code_commit: str | None = None
+    note: str | None = None
+    components: list[GroupAdditivityComponentBlock] = Field(default_factory=list)
+
+
 class ThermoRecord(BaseModel):
     """One thermo record returned by the thermo endpoint.
 
@@ -139,6 +171,9 @@ class ThermoRecord(BaseModel):
     temperature_coverage: TemperatureCoverage | None = None
     evidence_completeness: EvidenceCompletenessBreakdown
     provenance: ThermoProvenance
+    # Group-additivity estimation breakdown; null unless the record is an
+    # estimated thermo with an attached GA breakdown (DR-0035).
+    group_additivity: GroupAdditivityBlock | None = None
     trust: TrustFragment | None = None
 
 

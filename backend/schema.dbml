@@ -136,6 +136,15 @@ enum FrequencyScaleKind {
   heat_capacity
 }
 
+enum GroupAdditivityComponentKind {
+  group
+  ring_correction
+  gauche_correction
+  cis_correction
+  symmetry_correction
+  other
+}
+
 enum HessianSource {
   parsed_fchk
   parsed_hess
@@ -633,6 +642,38 @@ Table applied_energy_correction_component {
   }
 
   Note: 'Per-component breakdown of an applied energy correction.'
+}
+
+Table applied_group_additivity {
+  id bigint [pk, not null]
+  thermo_id bigint [not null, ref: > thermo.id]
+  scheme_id bigint [not null, ref: > group_additivity_scheme.id]
+  note text
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+
+  indexes {
+    thermo_id [unique, name: 'uq_applied_group_additivity_thermo_id']
+  }
+
+  Note: 'One group-additivity estimation attached to a ``thermo`` record.'
+}
+
+Table applied_group_additivity_component {
+  id bigint [pk, not null]
+  applied_group_additivity_id bigint [not null, ref: > applied_group_additivity.id]
+  component_kind GroupAdditivityComponentKind [not null]
+  group_label text [not null]
+  count int [not null, default: '1']
+  h298_contribution_kj_mol double
+  s298_contribution_j_mol_k double
+  cp298_contribution_j_mol_k double
+
+  checks {
+    `count >= 1` [name: 'ck_applied_group_additivity_component_count_ge_1']
+  }
+
+  Note: 'Per-Benson-group contribution within one applied GA estimation.'
 }
 
 Table author {
@@ -1392,6 +1433,26 @@ Table geometry_atom {
   }
 
   Note: 'Stores per-atom coordinates for a geometry row.'
+}
+
+Table group_additivity_scheme {
+  id bigint [pk, not null]
+  name text [not null]
+  version text
+  description text
+  source_literature_id bigint [ref: > literature.id]
+  code_commit text
+  note text
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_group_additivity_scheme_public_ref']
+    (name, version) [unique, name: 'uq_group_additivity_scheme_name_version']
+  }
+
+  Note: 'Reusable description of a group-additivity library / estimator.'
 }
 
 Table idempotency_record {
