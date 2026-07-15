@@ -24,14 +24,20 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationType,
     KineticsCalculationRole,
+    KineticsModelKind,
     RecordReviewStatus,
     SCFStabilityStatus,
     SubmissionRecordType,
     ValidationStatus,
 )
-from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
+from app.db.models.kinetics import (
+    Kinetics,
+    KineticsArrheniusEntry,
+    KineticsSourceCalculation,
+)
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
+from app.db.models.network_pdep import NetworkKinetics
 from app.db.models.reaction import ReactionEntry
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
@@ -53,6 +59,7 @@ from app.schemas.reads.scientific_kinetics import (
     KineticsReadRequest,
     KineticsRecord,
     KineticsUncertainty,
+    MultiArrheniusTerm,
     RequestEcho,
     ScientificReactionKineticsResponse,
 )
@@ -302,6 +309,20 @@ def get_reaction_kinetics(
         },
     )
 
+    # DR-0036: sum-of-Arrhenius terms + network-bridge public refs.
+    arrhenius_terms = _arrhenius_terms(
+        session,
+        [
+            k.id
+            for k in kinetics_rows
+            if k.model_kind == KineticsModelKind.multi_arrhenius
+        ],
+    )
+    network_kinetics_refs = _network_kinetics_refs(
+        session,
+        {k.network_kinetics_id for k in kinetics_rows if k.network_kinetics_id},
+    )
+
     # Build per-record output.
     records: list[KineticsRecord] = []
     for k in kinetics_rows:
@@ -317,6 +338,7 @@ def get_reaction_kinetics(
             lit_summaries=lit_summaries,
             sw_summaries=sw_summaries,
             wt_summaries=wt_summaries,
+            network_kinetics_refs=network_kinetics_refs,
         )
 
         coverage = temperature_coverage(
@@ -349,10 +371,12 @@ def get_reaction_kinetics(
                 kinetics_ref=k.public_ref,
                 scientific_origin=k.scientific_origin,
                 model_kind=k.model_kind,
+                direction=k.direction,
                 review=badges[k.id],
                 parameters=ArrheniusParameters(
                     A=k.a, A_units=k.a_units, n=k.n, Ea_kj_mol=k.ea_kj_mol
                 ),
+                multi_arrhenius=arrhenius_terms.get(k.id),
                 tunneling_model=k.tunneling_model,
                 uncertainty=KineticsUncertainty(
                     A_uncertainty=k.a_uncertainty,
@@ -445,6 +469,7 @@ def _build_provenance(
     lit_summaries: dict[int, LiteratureSummary],
     sw_summaries: dict[int, SoftwareReleaseSummary],
     wt_summaries: dict[int, WorkflowToolReleaseSummary],
+    network_kinetics_refs: dict[int, str],
 ) -> KineticsProvenance:
     """Assemble a KineticsProvenance — every key always present, ``None`` if absent."""
     by_role: dict[KineticsCalculationRole, list[KineticsSourceCalculation]] = (
@@ -556,6 +581,12 @@ def _build_provenance(
         workflow_tool_release=(
             wt_summaries.get(kinetics.workflow_tool_release_id)
             if kinetics.workflow_tool_release_id
+            else None
+        ),
+        network_kinetics_id=kinetics.network_kinetics_id,
+        network_kinetics_ref=(
+            network_kinetics_refs.get(kinetics.network_kinetics_id)
+            if kinetics.network_kinetics_id
             else None
         ),
     )
@@ -905,6 +936,48 @@ def _workflow_tool_release_summaries(
         )
         for rid, ref, name, version in rows
     }
+
+
+def _arrhenius_terms(
+    session: Session, kinetics_ids: list[int]
+) -> dict[int, list[MultiArrheniusTerm]]:
+    """Load sum-of-Arrhenius terms for ``multi_arrhenius`` records (DR-0036)."""
+    if not kinetics_ids:
+        return {}
+    rows = session.scalars(
+        select(KineticsArrheniusEntry)
+        .where(KineticsArrheniusEntry.kinetics_id.in_(kinetics_ids))
+        .order_by(
+            KineticsArrheniusEntry.kinetics_id,
+            KineticsArrheniusEntry.entry_index,
+        )
+    ).all()
+    grouped: dict[int, list[MultiArrheniusTerm]] = defaultdict(list)
+    for row in rows:
+        grouped[row.kinetics_id].append(
+            MultiArrheniusTerm(
+                entry_index=row.entry_index,
+                A=row.a,
+                A_units=row.a_units,
+                n=row.n,
+                Ea_kj_mol=row.ea_kj_mol,
+            )
+        )
+    return dict(grouped)
+
+
+def _network_kinetics_refs(
+    session: Session, network_kinetics_ids: set[int]
+) -> dict[int, str]:
+    """Public refs for linked ``network_kinetics`` counterparts (DR-0036)."""
+    if not network_kinetics_ids:
+        return {}
+    rows = session.execute(
+        select(NetworkKinetics.id, NetworkKinetics.public_ref).where(
+            NetworkKinetics.id.in_(network_kinetics_ids)
+        )
+    ).all()
+    return dict(rows)
 
 
 def _software_id_by_release_id(

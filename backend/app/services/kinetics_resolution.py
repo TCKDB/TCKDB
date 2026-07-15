@@ -6,6 +6,7 @@ from app.chemistry.units import convert_ea_to_kj_mol
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType, KineticsCalculationRole
 from app.db.models.kinetics import Kinetics
+from app.db.models.network_pdep import NetworkKinetics
 from app.schemas.entities.kinetics import KineticsCreate
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
@@ -177,10 +178,23 @@ def resolve_kinetics_upload(
         request.workflow_tool_release,
     )
 
+    network_kinetics_id: int | None = None
+    if request.existing_network_kinetics_id is not None:
+        network_kinetics = session.get(
+            NetworkKinetics, request.existing_network_kinetics_id
+        )
+        if network_kinetics is None:
+            raise ValueError(
+                "existing_network_kinetics_id does not reference an existing "
+                "network_kinetics row."
+            )
+        network_kinetics_id = network_kinetics.id
+
     return KineticsCreate(
         reaction_entry_id=reaction_entry_id,
         scientific_origin=request.scientific_origin,
         model_kind=request.model_kind,
+        direction=request.direction,
         is_third_body=request.is_third_body,
         literature_id=literature.id if literature is not None else None,
         software_release_id=(
@@ -189,6 +203,7 @@ def resolve_kinetics_upload(
         workflow_tool_release_id=(
             workflow_tool_release.id if workflow_tool_release is not None else None
         ),
+        network_kinetics_id=network_kinetics_id,
         a=request.a,
         a_units=request.a_units,
         n=request.n,
@@ -234,10 +249,12 @@ def persist_kinetics(
         reaction_entry_id=kinetics_create.reaction_entry_id,
         scientific_origin=kinetics_create.scientific_origin,
         model_kind=kinetics_create.model_kind,
+        direction=kinetics_create.direction,
         is_third_body=kinetics_create.is_third_body,
         literature_id=kinetics_create.literature_id,
         workflow_tool_release_id=kinetics_create.workflow_tool_release_id,
         software_release_id=kinetics_create.software_release_id,
+        network_kinetics_id=kinetics_create.network_kinetics_id,
         a=kinetics_create.a,
         a_units=kinetics_create.a_units,
         n=kinetics_create.n,

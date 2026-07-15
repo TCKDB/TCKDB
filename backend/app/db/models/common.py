@@ -314,6 +314,12 @@ class ArrheniusAUnits(str, Enum):
 class KineticsModelKind(str, Enum):
     arrhenius = "arrhenius"
     modified_arrhenius = "modified_arrhenius"
+    # Sum-of-modified-Arrhenius form (DR-0036). Represents a Chemkin
+    # ``DUPLICATE`` channel whose rate coefficient is the *sum* of N
+    # modified-Arrhenius terms. The individual terms live in
+    # ``kinetics_arrhenius_entry``; the parent ``a``/``n``/``ea_kj_mol``
+    # columns stay null.
+    multi_arrhenius = "multi_arrhenius"
     # Pressure-dependent falloff forms (DR-0032 Part B). The k∞ Arrhenius
     # lives on the kinetics row; k0 and broadening params live in
     # ``kinetics_falloff``.
@@ -325,6 +331,28 @@ class KineticsModelKind(str, Enum):
     # solve required (for literature fits).
     plog = "plog"
     chebyshev = "chebyshev"
+
+
+class KineticsDirection(str, Enum):
+    """Direction a reaction-level kinetics fit describes (DR-0036).
+
+    Graph-level ``chem_reaction.reversible`` only says a reaction *can* run
+    both ways; it cannot tell apart a forward-rate fit from a reverse-rate
+    fit deposited against the same ``reaction_entry``. This per-record enum
+    disambiguates the two so both can coexist distinctly (needed for
+    Chemkin/Cantera round-trip, where forward and reverse rates are given
+    as separate expressions).
+
+    ``forward`` / ``reverse`` are relative to the reaction_entry's stored
+    reactant→product orientation. ``net`` marks a rate that already folds
+    both directions (e.g. an apparent/observed net rate). A ``NULL`` column
+    means the producer did not specify — the historical default, so existing
+    rows are unaffected.
+    """
+
+    forward = "forward"
+    reverse = "reverse"
+    net = "net"
 
 
 class TunnelingModel(str, Enum):

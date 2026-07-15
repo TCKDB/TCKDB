@@ -446,13 +446,15 @@ def make_kinetics(
     reaction_entry: ReactionEntry,
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed,
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius,
-    a: float = 1.2e-12,
+    a: float | None = 1.2e-12,
     a_units: ArrheniusAUnits = ArrheniusAUnits.cm3_molecule_s,
     n: float | None = 2.1,
     ea_kj_mol: float | None = 15.4,
     tmin_k: float | None = 300.0,
     tmax_k: float | None = 2000.0,
     tunneling_model: str | None = None,
+    direction=None,
+    network_kinetics_id: int | None = None,
 ) -> Kinetics:
     """Create a Kinetics row attached to a reaction entry."""
     k = Kinetics(
@@ -466,10 +468,38 @@ def make_kinetics(
         tmin_k=tmin_k,
         tmax_k=tmax_k,
         tunneling_model=tunneling_model,
+        direction=direction,
+        network_kinetics_id=network_kinetics_id,
     )
     session.add(k)
     session.flush()
     return k
+
+
+def attach_kinetics_arrhenius_entry(
+    session: Session,
+    *,
+    kinetics: Kinetics,
+    entry_index: int,
+    a: float,
+    a_units: ArrheniusAUnits = ArrheniusAUnits.cm3_molecule_s,
+    n: float | None = None,
+    ea_kj_mol: float | None = None,
+):
+    """Attach one sum-of-Arrhenius (DUPLICATE) term to a kinetics row."""
+    from app.db.models.kinetics import KineticsArrheniusEntry
+
+    row = KineticsArrheniusEntry(
+        kinetics_id=kinetics.id,
+        entry_index=entry_index,
+        a=a,
+        a_units=a_units,
+        n=n,
+        ea_kj_mol=ea_kj_mol,
+    )
+    session.add(row)
+    session.flush()
+    return row
 
 
 def make_thermo_scalar(

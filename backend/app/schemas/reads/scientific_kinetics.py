@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.db.models.common import (
     ArrheniusAUnits,
+    KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
     RecordReviewStatus,
@@ -85,6 +86,21 @@ class ArrheniusParameters(BaseModel):
     Ea_kj_mol: float | None = None
 
 
+class MultiArrheniusTerm(BaseModel):
+    """One modified-Arrhenius term of a sum-of-Arrhenius (DUPLICATE) rate.
+
+    DR-0036: for ``model_kind == 'multi_arrhenius'`` records, the rate
+    coefficient is the sum over these terms; the top-level ``parameters``
+    block is empty (scalar A/n/Ea are null on the parent).
+    """
+
+    entry_index: int
+    A: float
+    A_units: ArrheniusAUnits | None = None
+    n: float | None = None
+    Ea_kj_mol: float | None = None
+
+
 class KineticsUncertainty(BaseModel):
     """Uncertainty block — always returned, may have all-null entries."""
 
@@ -123,6 +139,10 @@ class KineticsProvenance(BaseModel):
     literature: LiteratureSummary | None = None
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None
+    # DR-0036 bridge: the pressure-dependent network counterpart of this
+    # reaction-level fit, if one has been linked. ``null`` otherwise.
+    network_kinetics_id: int | None = None
+    network_kinetics_ref: str | None = None
 
 
 class KineticsRecord(BaseModel):
@@ -136,8 +156,12 @@ class KineticsRecord(BaseModel):
     kinetics_ref: str
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind
+    direction: KineticsDirection | None = None
     review: RecordReviewBadge
     parameters: ArrheniusParameters
+    # DR-0036: populated only for ``multi_arrhenius`` records — the summed
+    # modified-Arrhenius terms. ``null`` for every other model kind.
+    multi_arrhenius: list[MultiArrheniusTerm] | None = None
     tunneling_model: str | None = None
     uncertainty: KineticsUncertainty
     temperature_coverage: TemperatureCoverage | None = None

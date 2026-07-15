@@ -379,3 +379,143 @@ def test_sort_is_deterministic(db_session):
         db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
     )
     assert r1.model_dump() == r2.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# DR-0036: direction, sum-of-Arrhenius (multi_arrhenius), network bridge
+# ---------------------------------------------------------------------------
+
+
+def test_forward_and_reverse_directions_returned_distinctly(db_session):
+    from app.db.models.common import ArrheniusAUnits, KineticsDirection
+    from tests.services.scientific_read._factories import make_kinetics as _mk
+
+    entry = _setup_entry(db_session)
+    _mk(
+        db_session,
+        reaction_entry=entry,
+        a=1.0e-11,
+        a_units=ArrheniusAUnits.cm3_molecule_s,
+        direction=KineticsDirection.forward,
+    )
+    _mk(
+        db_session,
+        reaction_entry=entry,
+        a=2.0e-13,
+        a_units=ArrheniusAUnits.cm3_molecule_s,
+        direction=KineticsDirection.reverse,
+    )
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    directions = {r.direction for r in response.records}
+    assert directions == {KineticsDirection.forward, KineticsDirection.reverse}
+    assert len(response.records) == 2
+
+
+def test_multi_arrhenius_terms_read_back(db_session):
+    from app.db.models.common import ArrheniusAUnits, KineticsModelKind
+    from tests.services.scientific_read._factories import (
+        attach_kinetics_arrhenius_entry,
+        make_kinetics as _mk,
+    )
+
+    entry = _setup_entry(db_session)
+    k = _mk(
+        db_session,
+        reaction_entry=entry,
+        model_kind=KineticsModelKind.multi_arrhenius,
+        a=None,  # scalar A stays unset — the terms live in child rows
+        n=None,
+        ea_kj_mol=None,
+    )
+    attach_kinetics_arrhenius_entry(
+        db_session, kinetics=k, entry_index=1, a=1.0e12, n=0.0, ea_kj_mol=50.0,
+        a_units=ArrheniusAUnits.cm3_mol_s,
+    )
+    attach_kinetics_arrhenius_entry(
+        db_session, kinetics=k, entry_index=2, a=3.0e11, n=0.5, ea_kj_mol=60.0,
+        a_units=ArrheniusAUnits.cm3_mol_s,
+    )
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    rec = response.records[0]
+    assert rec.model_kind == KineticsModelKind.multi_arrhenius
+    assert rec.parameters.A is None  # scalar block empty for a DUPLICATE sum
+    assert rec.multi_arrhenius is not None
+    assert [t.entry_index for t in rec.multi_arrhenius] == [1, 2]
+    assert [t.A for t in rec.multi_arrhenius] == [1.0e12, 3.0e11]
+    assert [t.Ea_kj_mol for t in rec.multi_arrhenius] == [50.0, 60.0]
+
+
+def test_single_arrhenius_has_no_multi_block(db_session):
+    entry = _setup_entry(db_session)
+    make_kinetics(db_session, reaction_entry=entry)
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    assert response.records[0].multi_arrhenius is None
+
+
+def _make_network_kinetics_row(db_session, entry):
+    """Build a minimal network_kinetics row to bridge to."""
+    from app.db.models.common import (
+        NetworkChannelKind,
+        NetworkKineticsModelKind,
+        NetworkStateKind,
+    )
+    from tests.services.scientific_read._factories import (
+        make_network,
+        make_network_channel,
+        make_network_kinetics,
+        make_network_solve,
+        make_network_state,
+    )
+
+    net = make_network(db_session)
+    src = make_network_state(
+        db_session, network=net, kind=NetworkStateKind.well,
+        composition_hash="a" * 64,
+    )
+    sink = make_network_state(
+        db_session, network=net, kind=NetworkStateKind.bimolecular,
+        composition_hash="b" * 64,
+    )
+    channel = make_network_channel(
+        db_session, network=net, source_state=src, sink_state=sink,
+        kind=NetworkChannelKind.dissociation,
+    )
+    solve = make_network_solve(db_session, network=net)
+    return make_network_kinetics(
+        db_session, channel=channel, solve=solve,
+        model_kind=NetworkKineticsModelKind.plog,
+    )
+
+
+def test_network_bridge_ref_resolves_in_read(db_session):
+    entry = _setup_entry(db_session)
+    nk = _make_network_kinetics_row(db_session, entry)
+    make_kinetics(
+        db_session, reaction_entry=entry, network_kinetics_id=nk.id
+    )
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    prov = response.records[0].provenance
+    assert prov.network_kinetics_id == nk.id
+    assert prov.network_kinetics_ref == nk.public_ref
+
+
+def test_no_network_bridge_is_null(db_session):
+    entry = _setup_entry(db_session)
+    make_kinetics(db_session, reaction_entry=entry)
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    prov = response.records[0].provenance
+    assert prov.network_kinetics_id is None
+    assert prov.network_kinetics_ref is None

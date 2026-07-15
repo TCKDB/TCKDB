@@ -169,9 +169,16 @@ enum KineticsCalculationRole {
   fit_source
 }
 
+enum KineticsDirection {
+  forward
+  reverse
+  net
+}
+
 enum KineticsModelKind {
   arrhenius
   modified_arrhenius
+  multi_arrhenius
   lindemann
   troe
   sri
@@ -1480,10 +1487,12 @@ Table kinetics {
   reaction_entry_id bigint [not null, ref: > reaction_entry.id]
   scientific_origin ScientificOriginKind [not null]
   model_kind KineticsModelKind [not null, default: 'modified_arrhenius']
+  direction KineticsDirection
   is_third_body boolean [not null, default: 'false']
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
+  network_kinetics_id bigint [ref: > network_kinetics.id]
   a double
   a_units ArrheniusAUnits
   n double
@@ -1505,6 +1514,7 @@ Table kinetics {
 
   indexes {
     literature_id [name: 'ix_kinetics_literature_id']
+    network_kinetics_id [name: 'ix_kinetics_network_kinetics_id']
     public_ref [unique, name: 'ix_kinetics_public_ref']
   }
 
@@ -1519,6 +1529,26 @@ Table kinetics {
   }
 
   Note: 'Kinetics records attached to a reaction entry.'
+}
+
+Table kinetics_arrhenius_entry {
+  id bigint [pk, not null]
+  kinetics_id bigint [not null, ref: > kinetics.id]
+  entry_index int [not null]
+  a double [not null]
+  a_units ArrheniusAUnits
+  n double
+  ea_kj_mol double
+
+  indexes {
+    (kinetics_id, entry_index) [unique, name: 'uq_kinetics_arrhenius_entry']
+  }
+
+  checks {
+    `entry_index >= 1` [name: 'ck_kinetics_arrhenius_entry_arrhenius_entry_index_ge_1']
+  }
+
+  Note: 'One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).'
 }
 
 Table kinetics_chebyshev {

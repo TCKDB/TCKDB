@@ -176,11 +176,20 @@ class ArrheniusAUnits(str, Enum):
 class KineticsModelKind(str, Enum):
     arrhenius = "arrhenius"
     modified_arrhenius = "modified_arrhenius"
+    multi_arrhenius = "multi_arrhenius"
     lindemann = "lindemann"
     troe = "troe"
     sri = "sri"
     plog = "plog"
     chebyshev = "chebyshev"
+
+
+class KineticsDirection(str, Enum):
+    """Direction a reaction-level kinetics fit describes (DR-0036)."""
+
+    forward = "forward"
+    reverse = "reverse"
+    net = "net"
 
 
 class TunnelingModel(str, Enum):
@@ -345,6 +354,7 @@ __all__ = (
     "FrequencyScaleKind",
     "IRCDirection",
     "KineticsCalculationRole",
+    "KineticsDirection",
     "KineticsModelKind",
     "KineticsUncertaintyKind",
     "LiteratureKind",

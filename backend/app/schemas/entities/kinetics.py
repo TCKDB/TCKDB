@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.db.models.common import (
     ArrheniusAUnits,
     KineticsCalculationRole,
+    KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
     PressureContext,
@@ -78,11 +79,13 @@ class KineticsBase(BaseModel):
     reaction_entry_id: int
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius
+    direction: KineticsDirection | None = None
     is_third_body: bool = False
 
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None
     software_release_id: int | None = None
+    network_kinetics_id: int | None = None
 
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
@@ -180,11 +183,13 @@ class KineticsUpdate(SchemaBase):
     reaction_entry_id: int | None = None
     scientific_origin: ScientificOriginKind | None = None
     model_kind: KineticsModelKind | None = None
+    direction: KineticsDirection | None = None
     is_third_body: bool | None = None
 
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None
     software_release_id: int | None = None
+    network_kinetics_id: int | None = None
 
     a: float | None = None
     a_units: ArrheniusAUnits | None = None

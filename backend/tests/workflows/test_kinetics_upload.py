@@ -423,3 +423,165 @@ def test_persist_simple_third_body_flag(db_engine, monkeypatch) -> None:
         session.flush()
         assert kinetics.is_third_body is True
         assert kinetics.a_units == ArrheniusAUnits.cm6_mol2_s
+
+
+# ---------------------------------------------------------------------------
+# DR-0036: direction, sum-of-Arrhenius (multi_arrhenius), network bridge
+# ---------------------------------------------------------------------------
+
+
+def test_forward_and_reverse_kinetics_persist_distinctly(db_engine, monkeypatch):
+    """Forward and reverse fits persist with distinct direction (previously
+    indistinguishable). The single-reaction_entry coexistence case is covered
+    at the read layer in test_get_reaction_kinetics."""
+    from app.db.models.common import KineticsDirection
+
+    _patch_doi(monkeypatch)
+    with Session(db_engine) as session, session.begin():
+        fwd = persist_kinetics_upload(
+            session, _kinetics_request(direction="forward")
+        )
+        rev = persist_kinetics_upload(
+            session, _kinetics_request(direction="reverse")
+        )
+        assert fwd.id != rev.id
+        assert fwd.direction == KineticsDirection.forward
+        assert rev.direction == KineticsDirection.reverse
+
+
+def test_direction_defaults_to_null(db_engine, monkeypatch):
+    _patch_doi(monkeypatch)
+    with Session(db_engine) as session, session.begin():
+        k = persist_kinetics_upload(session, _kinetics_request())
+        assert k.direction is None
+
+
+def test_multi_arrhenius_persists_summed_terms(db_engine, monkeypatch):
+    from app.db.models.kinetics import KineticsArrheniusEntry
+
+    _patch_doi(monkeypatch)
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "multi_arrhenius"
+    payload.pop("a")  # scalar A must be unset for a DUPLICATE sum
+    payload["arrhenius_entries"] = [
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm3_mol_s", "n": 0.0,
+         "reported_ea": 50.0, "reported_ea_units": "kj_mol"},
+        {"entry_index": 2, "a": 3.0e11, "a_units": "cm3_mol_s", "n": 0.5,
+         "reported_ea": 60.0, "reported_ea_units": "kj_mol"},
+    ]
+    request = KineticsUploadRequest.model_validate(payload)
+
+    with Session(db_engine) as session, session.begin():
+        k = persist_kinetics_upload(session, request)
+        session.flush()
+        assert k.a is None
+        entries = session.scalars(
+            select(KineticsArrheniusEntry)
+            .where(KineticsArrheniusEntry.kinetics_id == k.id)
+            .order_by(KineticsArrheniusEntry.entry_index)
+        ).all()
+        assert [e.entry_index for e in entries] == [1, 2]
+        assert [e.a for e in entries] == [1.0e12, 3.0e11]
+        assert [e.ea_kj_mol for e in entries] == [50.0, 60.0]
+
+
+def test_multi_arrhenius_requires_two_terms():
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "multi_arrhenius"
+    payload.pop("a")
+    payload["arrhenius_entries"] = [
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm3_mol_s"}
+    ]
+    with pytest.raises(ValidationError, match="at least two"):
+        KineticsUploadRequest.model_validate(payload)
+
+
+def test_multi_arrhenius_rejects_scalar_a():
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "multi_arrhenius"
+    payload["arrhenius_entries"] = [
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm3_mol_s"},
+        {"entry_index": 2, "a": 2.0e12, "a_units": "cm3_mol_s"},
+    ]
+    with pytest.raises(ValidationError, match="must not set the scalar"):
+        KineticsUploadRequest.model_validate(payload)
+
+
+def test_arrhenius_entries_require_multi_arrhenius_kind():
+    payload = _kinetics_request().model_dump()
+    payload["arrhenius_entries"] = [
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm3_mol_s"},
+        {"entry_index": 2, "a": 2.0e12, "a_units": "cm3_mol_s"},
+    ]
+    with pytest.raises(ValidationError, match="only valid when"):
+        KineticsUploadRequest.model_validate(payload)
+
+
+def _make_network_kinetics(session):
+    """Minimal network_kinetics row for the bridge tests."""
+    from app.db.models.common import (
+        NetworkChannelKind,
+        NetworkKineticsModelKind,
+        NetworkStateKind,
+    )
+    from app.db.models.network import Network
+    from app.db.models.network_pdep import (
+        NetworkChannel,
+        NetworkKinetics,
+        NetworkSolve,
+        NetworkState,
+    )
+
+    net = Network(name="bridge-net")
+    session.add(net)
+    session.flush()
+    src = NetworkState(
+        network_id=net.id, kind=NetworkStateKind.well, composition_hash="a" * 64
+    )
+    sink = NetworkState(
+        network_id=net.id, kind=NetworkStateKind.bimolecular,
+        composition_hash="b" * 64,
+    )
+    session.add_all([src, sink])
+    session.flush()
+    channel = NetworkChannel(
+        network_id=net.id, source_state_id=src.id, sink_state_id=sink.id,
+        kind=NetworkChannelKind.dissociation,
+    )
+    solve = NetworkSolve(network_id=net.id)
+    session.add_all([channel, solve])
+    session.flush()
+    nk = NetworkKinetics(
+        channel_id=channel.id, solve_id=solve.id,
+        model_kind=NetworkKineticsModelKind.plog,
+    )
+    session.add(nk)
+    session.flush()
+    return nk
+
+
+def test_network_bridge_resolves(db_engine, monkeypatch):
+    _patch_doi(monkeypatch)
+    # Roll back rather than commit: the shared session-scoped test DB is
+    # global, and other tests select NetworkKinetics without a network
+    # filter, so a committed bridge row here would pollute them.
+    with Session(db_engine) as session:
+        nk = _make_network_kinetics(session)
+        k = persist_kinetics_upload(
+            session,
+            _kinetics_request(existing_network_kinetics_id=nk.id),
+        )
+        assert k.network_kinetics_id == nk.id
+        assert k.network_kinetics is not None
+        assert k.network_kinetics.id == nk.id
+        session.rollback()
+
+
+def test_network_bridge_unknown_id_rejected(db_engine, monkeypatch):
+    _patch_doi(monkeypatch)
+    with Session(db_engine) as session, session.begin():
+        with pytest.raises(ValueError, match="does not reference an existing"):
+            persist_kinetics_upload(
+                session,
+                _kinetics_request(existing_network_kinetics_id=999_999),
+            )

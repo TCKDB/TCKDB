@@ -9,8 +9,10 @@ from app.db.models.common import (
     KineticsCalculationRole,
     SubmissionRecordType,
 )
+from app.chemistry.units import convert_ea_to_kj_mol
 from app.db.models.kinetics import (
     Kinetics,
+    KineticsArrheniusEntry,
     KineticsChebyshev,
     KineticsFalloff,
     KineticsPlog,
@@ -162,6 +164,22 @@ def persist_kinetics_upload(
                 ea_kj_mol=entry.ea_kj_mol,
             )
         )
+    # 2d. Sum-of-Arrhenius (Chemkin DUPLICATE) terms (DR-0036).
+    for term in request.arrhenius_entries:
+        session.add(
+            KineticsArrheniusEntry(
+                kinetics_id=kinetics.id,
+                entry_index=term.entry_index,
+                a=term.a,
+                a_units=term.a_units,
+                n=term.n,
+                ea_kj_mol=(
+                    convert_ea_to_kj_mol(term.reported_ea, term.reported_ea_units)
+                    if term.reported_ea is not None
+                    else None
+                ),
+            )
+        )
     if request.chebyshev is not None:
         c = request.chebyshev
         session.add(
@@ -180,6 +198,7 @@ def persist_kinetics_upload(
         request.falloff is not None
         or request.third_body_efficiencies
         or request.plog_entries
+        or request.arrhenius_entries
         or request.chebyshev is not None
     ):
         session.flush()

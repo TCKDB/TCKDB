@@ -22,6 +22,7 @@ from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     ArrheniusAUnits,
     KineticsCalculationRole,
+    KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
     PressureContext,
@@ -32,6 +33,7 @@ from app.db.models.common import (
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
     from app.db.models.literature import Literature
+    from app.db.models.network_pdep import NetworkKinetics
     from app.db.models.reaction import ReactionEntry
     from app.db.models.software import SoftwareRelease
     from app.db.models.species import Species
@@ -59,6 +61,14 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=False,
         default=KineticsModelKind.modified_arrhenius,
         server_default=KineticsModelKind.modified_arrhenius.value,
+    )
+    # Which direction of the reaction this fit describes (DR-0036). NULL =
+    # unspecified (historical default), so existing rows are unaffected. Lets
+    # a forward and a reverse Arrhenius fit for one ``reaction_entry`` coexist
+    # distinctly (Chemkin/Cantera round-trip).
+    direction: Mapped[Optional[KineticsDirection]] = mapped_column(
+        SAEnum(KineticsDirection, name="kinetics_direction"),
+        nullable=True,
     )
     # True for a *simple* third-body reaction (generic ``+M`` collider, no
     # falloff): the ``[M]`` term raises the effective concentration order of
@@ -88,6 +98,17 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         BigInteger,
         ForeignKey("software_release.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+    )
+    # Bridge to the pressure-dependent network counterpart (DR-0036). When set,
+    # this reaction-level HPL/apparent fit corresponds to the k(T,P) of a
+    # specific ``network_kinetics`` channel-under-solve, so "give me k(T,P) for
+    # reaction R" resolves in one join instead of a two-query split. Nullable /
+    # additive: most kinetics rows have no network counterpart.
+    network_kinetics_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("network_kinetics.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+        index=True,
     )
 
     a: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
@@ -131,8 +152,16 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     software_release: Mapped[Optional["SoftwareRelease"]] = relationship(
         back_populates="kinetics_records"
     )
+    network_kinetics: Mapped[Optional["NetworkKinetics"]] = relationship(
+        foreign_keys=[network_kinetics_id],
+    )
     source_calculations: Mapped[list["KineticsSourceCalculation"]] = relationship(
         back_populates="kinetics",
+        cascade="all, delete-orphan",
+    )
+    arrhenius_entries: Mapped[list["KineticsArrheniusEntry"]] = relationship(
+        back_populates="kinetics",
+        order_by="KineticsArrheniusEntry.entry_index",
         cascade="all, delete-orphan",
     )
     falloff: Mapped[Optional["KineticsFalloff"]] = relationship(
@@ -325,6 +354,45 @@ class KineticsPlog(Base):
         ),
         CheckConstraint("entry_index >= 1", name="plog_entry_index_ge_1"),
         CheckConstraint("pressure_bar > 0", name="plog_pressure_bar_gt_0"),
+    )
+
+
+class KineticsArrheniusEntry(Base):
+    """One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).
+
+    Represents a single term of a Chemkin ``DUPLICATE`` channel: the rate
+    coefficient is the *sum* over these entries,
+    ``k(T) = Σ_i A_i · T^{n_i} · exp(−Ea_i / RT)``. Stored reaction-level and
+    modelled exactly like ``kinetics_plog`` (a per-index Arrhenius child row)
+    but indexed by term rather than by pressure — a duplicate group is a sum,
+    not a pressure interpolation. The parent ``kinetics.model_kind`` must be
+    ``multi_arrhenius`` and its scalar ``a``/``n``/``ea_kj_mol`` stay null.
+    """
+
+    __tablename__ = "kinetics_arrhenius_entry"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    kinetics_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("kinetics.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    entry_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    a: Mapped[float] = mapped_column(Double, nullable=False)
+    a_units: Mapped[Optional[ArrheniusAUnits]] = mapped_column(
+        SAEnum(ArrheniusAUnits, name="arrhenius_a_units"),
+        nullable=True,
+    )
+    n: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    ea_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+
+    kinetics: Mapped["Kinetics"] = relationship(back_populates="arrhenius_entries")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "kinetics_id", "entry_index", name="uq_kinetics_arrhenius_entry"
+        ),
+        CheckConstraint("entry_index >= 1", name="arrhenius_entry_index_ge_1"),
     )
 
 

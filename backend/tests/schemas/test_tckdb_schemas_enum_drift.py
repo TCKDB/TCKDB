@@ -35,6 +35,7 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.FrequencyScaleKind, wire_enums.FrequencyScaleKind),
     (db_enums.IRCDirection, wire_enums.IRCDirection),
     (db_enums.KineticsCalculationRole, wire_enums.KineticsCalculationRole),
+    (db_enums.KineticsDirection, wire_enums.KineticsDirection),
     (db_enums.KineticsModelKind, wire_enums.KineticsModelKind),
     (db_enums.KineticsUncertaintyKind, wire_enums.KineticsUncertaintyKind),
     (db_enums.LiteratureKind, wire_enums.LiteratureKind),

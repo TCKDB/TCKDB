@@ -1020,6 +1020,38 @@
         "title": "AppliedEnergyCorrectionUploadPayload",
         "type": "object"
       },
+      "AppliedGroupAdditivityUploadPayload": {
+        "additionalProperties": false,
+        "description": "A group-additivity estimation attached to an estimated thermo record.",
+        "properties": {
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/GroupAdditivityComponentPayload"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "scheme": {
+            "$ref": "#/components/schemas/GroupAdditivitySchemeRef"
+          }
+        },
+        "required": [
+          "scheme"
+        ],
+        "title": "AppliedGroupAdditivityUploadPayload",
+        "type": "object"
+      },
       "ArrheniusAUnits": {
         "enum": [
           "per_s",
@@ -8238,6 +8270,40 @@
         "title": "CalculationsSearchRequest",
         "type": "object"
       },
+      "ChebyshevKineticsIn": {
+        "additionalProperties": false,
+        "description": "Chebyshev-polynomial fit of a phenomenological k(T,P).\n\n:param n_temperature: Number of temperature basis polynomials (rows).\n:param n_pressure: Number of pressure basis polynomials (columns).\n:param coefficients: 2D coefficient grid, ``n_temperature`` rows each of\n    length ``n_pressure``. Persisted as ``{\"coeffs\": [[...], ...]}`` JSONB\n    to match the network-kinetics read path.",
+        "properties": {
+          "coefficients": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "minItems": 1,
+            "title": "Coefficients",
+            "type": "array"
+          },
+          "n_pressure": {
+            "minimum": 1.0,
+            "title": "N Pressure",
+            "type": "integer"
+          },
+          "n_temperature": {
+            "minimum": 1.0,
+            "title": "N Temperature",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n_temperature",
+          "n_pressure",
+          "coefficients"
+        ],
+        "title": "ChebyshevKineticsIn",
+        "type": "object"
+      },
       "ChebyshevUpload": {
         "additionalProperties": false,
         "description": "A standalone Chebyshev k(T,P) surface (DR-0032 Part C).\n\n``coefficients`` is the n_temperature × n_pressure coefficient matrix\n(list of rows).",
@@ -13382,6 +13448,268 @@
         "title": "GeometryRef",
         "type": "object"
       },
+      "GroupAdditivityBlock": {
+        "description": "Group-additivity estimation provenance for an estimated thermo record.\n\nPresent only when the thermo record has an ``applied_group_additivity``\nrow (``scientific_origin=estimated``). Surfaces which GA scheme produced\nthe estimate and the per-group contribution breakdown.",
+        "properties": {
+          "code_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Commit"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/GroupAdditivityComponentBlock"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "scheme_id": {
+            "title": "Scheme Id",
+            "type": "integer"
+          },
+          "scheme_name": {
+            "title": "Scheme Name",
+            "type": "string"
+          },
+          "scheme_ref": {
+            "title": "Scheme Ref",
+            "type": "string"
+          },
+          "scheme_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheme Version"
+          }
+        },
+        "required": [
+          "scheme_id",
+          "scheme_ref",
+          "scheme_name"
+        ],
+        "title": "GroupAdditivityBlock",
+        "type": "object"
+      },
+      "GroupAdditivityComponentBlock": {
+        "description": "One Benson-group (or correction) contribution in a GA breakdown.",
+        "properties": {
+          "component_kind": {
+            "$ref": "#/components/schemas/GroupAdditivityComponentKind"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "cp298_contribution_j_mol_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cp298 Contribution J Mol K"
+          },
+          "group_label": {
+            "title": "Group Label",
+            "type": "string"
+          },
+          "h298_contribution_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H298 Contribution Kj Mol"
+          },
+          "s298_contribution_j_mol_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S298 Contribution J Mol K"
+          }
+        },
+        "required": [
+          "component_kind",
+          "group_label",
+          "count"
+        ],
+        "title": "GroupAdditivityComponentBlock",
+        "type": "object"
+      },
+      "GroupAdditivityComponentKind": {
+        "description": "Broad category of one group-additivity contribution.\n\nBenson-style group additivity estimates a property as the sum of\nper-group contributions plus a set of corrections. ``group`` is a\nBenson group-value contribution (e.g. ``C/C/H3``); the remaining\nmembers are the standard correction families applied on top of the\nbare group sum. ``other`` is an escape hatch for scheme-specific\ncorrections not covered here.",
+        "enum": [
+          "group",
+          "ring_correction",
+          "gauche_correction",
+          "cis_correction",
+          "symmetry_correction",
+          "other"
+        ],
+        "title": "GroupAdditivityComponentKind",
+        "type": "string"
+      },
+      "GroupAdditivityComponentPayload": {
+        "additionalProperties": false,
+        "description": "One Benson-group (or correction) contribution in a GA breakdown.\n\nContributions use fixed-unit columns per the unit policy: kJ/mol for the\nenthalpy contribution, J/(mol*K) for entropy and 298 K heat capacity.",
+        "properties": {
+          "component_kind": {
+            "$ref": "#/components/schemas/GroupAdditivityComponentKind",
+            "default": "group"
+          },
+          "count": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "cp298_contribution_j_mol_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cp298 Contribution J Mol K"
+          },
+          "group_label": {
+            "minLength": 1,
+            "title": "Group Label",
+            "type": "string"
+          },
+          "h298_contribution_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H298 Contribution Kj Mol"
+          },
+          "s298_contribution_j_mol_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S298 Contribution J Mol K"
+          }
+        },
+        "required": [
+          "group_label"
+        ],
+        "title": "GroupAdditivityComponentPayload",
+        "type": "object"
+      },
+      "GroupAdditivitySchemeRef": {
+        "additionalProperties": false,
+        "description": "Upload-facing reference to a group-additivity scheme / library.\n\nIf a matching scheme already exists (by ``name`` + ``version``) it is\nreused; otherwise a new scheme is created. ``code_commit`` records the\nestimator code / group-database revision the values came from and is\nprovenance only, never a trust signal.",
+        "properties": {
+          "code_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Commit"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source_literature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "GroupAdditivitySchemeRef",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -13936,10 +14264,21 @@
         "title": "KineticsCalculationRole",
         "type": "string"
       },
+      "KineticsDirection": {
+        "description": "Direction a reaction-level kinetics fit describes (DR-0036).\n\nGraph-level ``chem_reaction.reversible`` only says a reaction *can* run\nboth ways; it cannot tell apart a forward-rate fit from a reverse-rate\nfit deposited against the same ``reaction_entry``. This per-record enum\ndisambiguates the two so both can coexist distinctly (needed for\nChemkin/Cantera round-trip, where forward and reverse rates are given\nas separate expressions).\n\n``forward`` / ``reverse`` are relative to the reaction_entry's stored\nreactant→product orientation. ``net`` marks a rate that already folds\nboth directions (e.g. an apparent/observed net rate). A ``NULL`` column\nmeans the producer did not specify — the historical default, so existing\nrows are unaffected.",
+        "enum": [
+          "forward",
+          "reverse",
+          "net"
+        ],
+        "title": "KineticsDirection",
+        "type": "string"
+      },
       "KineticsModelKind": {
         "enum": [
           "arrhenius",
           "modified_arrhenius",
+          "multi_arrhenius",
           "lindemann",
           "troe",
           "sri",
@@ -13983,6 +14322,28 @@
                 "type": "null"
               }
             ]
+          },
+          "network_kinetics_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Kinetics Id"
+          },
+          "network_kinetics_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Kinetics Ref"
           },
           "path_search": {
             "anyOf": [
@@ -14288,6 +14649,16 @@
             ],
             "title": "Degeneracy"
           },
+          "direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsDirection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "ea_kj_mol": {
             "anyOf": [
               {
@@ -14355,6 +14726,17 @@
               }
             ],
             "title": "N Uncertainty"
+          },
+          "network_kinetics_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Kinetics Id"
           },
           "note": {
             "anyOf": [
@@ -14472,6 +14854,16 @@
       "KineticsRecord": {
         "description": "One kinetics record returned by the kinetics endpoint.\n\nPhase B: ``kinetics_ref`` is the public stable handle alongside\n``kinetics_id``.",
         "properties": {
+          "direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsDirection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "evidence_completeness": {
             "$ref": "#/components/schemas/EvidenceCompletenessBreakdown"
           },
@@ -14485,6 +14877,20 @@
           },
           "model_kind": {
             "$ref": "#/components/schemas/KineticsModelKind"
+          },
+          "multi_arrhenius": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MultiArrheniusTerm"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multi Arrhenius"
           },
           "parameters": {
             "$ref": "#/components/schemas/ArrheniusParameters"
@@ -14979,6 +15385,13 @@
               }
             ]
           },
+          "arrhenius_entries": {
+            "items": {
+              "$ref": "#/components/schemas/MultiArrheniusEntryUpload"
+            },
+            "title": "Arrhenius Entries",
+            "type": "array"
+          },
           "chebyshev": {
             "anyOf": [
               {
@@ -15011,6 +15424,16 @@
             ],
             "title": "Degeneracy"
           },
+          "direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsDirection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "energy_level_of_theory": {
             "anyOf": [
               {
@@ -15020,6 +15443,18 @@
                 "type": "null"
               }
             ]
+          },
+          "existing_network_kinetics_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Network Kinetics Id"
           },
           "falloff": {
             "anyOf": [
@@ -16840,6 +17275,120 @@
         "title": "MoleculeKind",
         "type": "string"
       },
+      "MultiArrheniusEntryUpload": {
+        "additionalProperties": false,
+        "description": "One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).\n\nA Chemkin ``DUPLICATE`` channel's rate coefficient is the sum of these\nterms. Unlike a PLOG entry there is no pressure — the terms are summed,\nnot interpolated. ``reported_ea``/``reported_ea_units`` are converted to\n``ea_kj_mol`` by the workflow, mirroring the top-level Arrhenius fields.",
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "a_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrheniusAUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entry_index": {
+            "minimum": 1.0,
+            "title": "Entry Index",
+            "type": "integer"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "reported_ea": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Ea"
+          },
+          "reported_ea_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActivationEnergyUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "entry_index",
+          "a"
+        ],
+        "title": "MultiArrheniusEntryUpload",
+        "type": "object"
+      },
+      "MultiArrheniusTerm": {
+        "description": "One modified-Arrhenius term of a sum-of-Arrhenius (DUPLICATE) rate.\n\nDR-0036: for ``model_kind == 'multi_arrhenius'`` records, the rate\ncoefficient is the sum over these terms; the top-level ``parameters``\nblock is empty (scalar A/n/Ea are null on the parent).",
+        "properties": {
+          "A": {
+            "title": "A",
+            "type": "number"
+          },
+          "A_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrheniusAUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "Ea_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ea Kj Mol"
+          },
+          "entry_index": {
+            "title": "Entry Index",
+            "type": "integer"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          }
+        },
+        "required": [
+          "entry_index",
+          "A"
+        ],
+        "title": "MultiArrheniusTerm",
+        "type": "object"
+      },
       "NetworkChannelIn": {
         "additionalProperties": false,
         "description": "A directed phenomenological channel between two network states.\n\n:param source_state_key: Local key of the source state.\n:param sink_state_key: Local key of the sink state.\n:param kind: Channel classification.",
@@ -17674,6 +18223,152 @@
           "source_calculation_count"
         ],
         "title": "NetworkKineticsEvidenceSummary",
+        "type": "object"
+      },
+      "NetworkKineticsIn": {
+        "additionalProperties": false,
+        "description": "Fitted phenomenological k(T,P) for one channel under this solve.\n\nSupports Chebyshev and PLOG fits. The channel is referenced by its\n``(source_state_key, sink_state_key)`` state-key pair (channels carry no\nlocal key of their own).\n\n:param source_state_key: Local key of the referenced channel's source state.\n:param sink_state_key: Local key of the referenced channel's sink state.\n:param model_kind: Parameterization kind (``chebyshev`` or ``plog``).\n:param chebyshev: Chebyshev coefficients (required when\n    ``model_kind == chebyshev``).\n:param plog: PLOG entries (required when ``model_kind == plog``).\n:param tmin_k: Minimum temperature of validity in K.\n:param tmax_k: Maximum temperature of validity in K.\n:param pmin_bar: Minimum pressure of validity in bar.\n:param pmax_bar: Maximum pressure of validity in bar.\n:param rate_units: Units of the fitted rate coefficient.\n:param pressure_units: Units the fit's pressure axis is expressed in.\n:param temperature_units: Units the fit's temperature axis is expressed in.\n:param stores_log10_k: Whether the coefficients fit ``log10(k)`` (Chebyshev\n    convention) rather than ``k`` directly.\n:param note: Optional free-text note.",
+        "properties": {
+          "chebyshev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChebyshevKineticsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model_kind": {
+            "$ref": "#/components/schemas/NetworkKineticsModelKind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "plog": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlogKineticsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pmax_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmax Bar"
+          },
+          "pmin_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmin Bar"
+          },
+          "pressure_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PressureUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rate_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrheniusAUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sink_state_key": {
+            "minLength": 1,
+            "title": "Sink State Key",
+            "type": "string"
+          },
+          "source_state_key": {
+            "minLength": 1,
+            "title": "Source State Key",
+            "type": "string"
+          },
+          "stores_log10_k": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stores Log10 K"
+          },
+          "temperature_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemperatureUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tmax_k": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmax K"
+          },
+          "tmin_k": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmin K"
+          }
+        },
+        "required": [
+          "source_state_key",
+          "sink_state_key",
+          "model_kind"
+        ],
+        "title": "NetworkKineticsIn",
         "type": "object"
       },
       "NetworkKineticsModelKind": {
@@ -19962,13 +20657,20 @@
       },
       "NetworkSolveIn": {
         "additionalProperties": false,
-        "description": "Master-equation solve configuration and provenance.\n\n:param me_method: ME solution method.\n:param interpolation_model: Interpolation model for the ME solution.\n:param tmin_k: Minimum temperature in K for the ME solve.\n:param tmax_k: Maximum temperature in K for the ME solve.\n:param pmin_bar: Minimum pressure in bar for the ME solve.\n:param pmax_bar: Maximum pressure in bar for the ME solve.\n:param grain_size_cm_inv: Energy grain size in cm⁻¹.\n:param grain_count: Number of energy grains.\n:param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param bath_gas: Bath gas composition.\n:param energy_transfer: Energy transfer model parameters.\n:param source_calculations: Calculations used in this solve, by local key and role.\n:param note: Optional free-text note.",
+        "description": "Master-equation solve configuration and provenance.\n\n:param me_method: ME solution method.\n:param interpolation_model: Interpolation model for the ME solution.\n:param tmin_k: Minimum temperature in K for the ME solve.\n:param tmax_k: Maximum temperature in K for the ME solve.\n:param pmin_bar: Minimum pressure in bar for the ME solve.\n:param pmax_bar: Maximum pressure in bar for the ME solve.\n:param grain_size_cm_inv: Energy grain size in cm⁻¹.\n:param grain_count: Number of energy grains.\n:param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param bath_gas: Bath gas composition.\n:param energy_transfer: Energy transfer model parameters.\n:param source_calculations: Calculations used in this solve, by local key and role.\n:param channel_kinetics: Fitted phenomenological k(T,P) for channels, each\n    referencing its channel by ``(source_state_key, sink_state_key)``.\n:param note: Optional free-text note.",
         "properties": {
           "bath_gas": {
             "items": {
               "$ref": "#/components/schemas/BathGasIn"
             },
             "title": "Bath Gas",
+            "type": "array"
+          },
+          "channel_kinetics": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkKineticsIn"
+            },
+            "title": "Channel Kinetics",
             "type": "array"
           },
           "emax_kj_mol": {
@@ -20904,7 +21606,7 @@
       },
       "NetworkSpeciesIn": {
         "additionalProperties": false,
-        "description": "A species defined within this network upload.\n\n:param key: Local key used to reference this species elsewhere in the payload.\n:param species_entry: Species-entry identity payload to resolve or create.\n:param label: Optional human-readable display label.\n:param conformers: Optional conformer uploads (geometry + opt calculation).\n:param calculations: Additional calculations on this species (sp, freq, etc.).\n    Their ``geometry_key`` must point to one of this species's conformer\n    geometries so the backend can anchor each calculation to the correct\n    conformer observation.",
+        "description": "A species defined within this network upload.\n\n:param key: Local key used to reference this species elsewhere in the payload.\n:param species_entry: Species-entry identity payload to resolve or create.\n:param label: Optional human-readable display label.\n:param conformers: Optional conformer uploads (geometry + opt calculation).\n:param calculations: Additional calculations on this species (sp, freq, etc.).\n    Their ``geometry_key`` must point to one of this species's conformer\n    geometries so the backend can anchor each calculation to the correct\n    conformer observation.\n:param statmech: Optional statistical-mechanics interpretation for this\n    species (external symmetry, optical isomers, hindered rotors, etc.).\n    Reuses the bundle's statmech payload; ``source_calculations`` reference\n    calculation keys defined anywhere in this request.",
         "properties": {
           "calculations": {
             "items": {
@@ -20938,6 +21640,16 @@
           },
           "species_entry": {
             "$ref": "#/components/schemas/SpeciesEntryIdentityPayload"
+          },
+          "statmech": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatmechInBundle"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "transport": {
             "anyOf": [
@@ -22664,6 +23376,64 @@
         "title": "PathSearchSummary",
         "type": "object"
       },
+      "PhaseKind": {
+        "description": "Physical phase a thermochemistry record is referenced to.\n\nValues are machine tokens (see feedback_enum_values memory), not\ndisplay labels. ``gas`` is the standard state for computed gas-phase\nthermochemistry; ``aqueous`` denotes a solvated standard state.",
+        "enum": [
+          "gas",
+          "liquid",
+          "solid",
+          "aqueous"
+        ],
+        "title": "PhaseKind",
+        "type": "string"
+      },
+      "PlogEntryIn": {
+        "additionalProperties": false,
+        "description": "One PLOG entry: modified-Arrhenius parameters at a discrete pressure.\n\nMirrors one ``network_kinetics_plog`` row. Multiple entries at the same\npressure are distinguished by ``entry_index`` (duplicate-Arrhenius PLOG,\nas emitted by Arkane/Cantera when a single pressure carries two Arrhenius\nterms whose rates sum).\n\n:param pressure_bar: Discrete pressure of this entry in bar (> 0).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units of ``a`` (dimensionality varies with molecularity;\n    e.g. ``per_s`` for unimolecular, ``cm3_mol_s`` for bimolecular).\n:param n: Temperature exponent.\n:param ea_kj_mol: Activation energy in kJ/mol.\n:param entry_index: Discriminator for multiple Arrhenius terms sharing one\n    pressure (defaults to 1).",
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "a_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrheniusAUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ea_kj_mol": {
+            "title": "Ea Kj Mol",
+            "type": "number"
+          },
+          "entry_index": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Entry Index",
+            "type": "integer"
+          },
+          "n": {
+            "title": "N",
+            "type": "number"
+          },
+          "pressure_bar": {
+            "exclusiveMinimum": 0.0,
+            "title": "Pressure Bar",
+            "type": "number"
+          }
+        },
+        "required": [
+          "pressure_bar",
+          "a",
+          "n",
+          "ea_kj_mol"
+        ],
+        "title": "PlogEntryIn",
+        "type": "object"
+      },
       "PlogEntryUpload": {
         "additionalProperties": false,
         "description": "One pressure entry of a standalone PLOG rate (DR-0032 Part C).",
@@ -22721,6 +23491,25 @@
           "a"
         ],
         "title": "PlogEntryUpload",
+        "type": "object"
+      },
+      "PlogKineticsIn": {
+        "additionalProperties": false,
+        "description": "Pressure-log (PLOG) interpolation of a phenomenological k(T,P).\n\nA set of pressure-indexed modified-Arrhenius entries. Persisted as one\n``network_kinetics_plog`` row per entry under a shared ``network_kinetics``\nparent.\n\n:param entries: PLOG entries (at least one). No two entries may share the\n    same ``(pressure_bar, entry_index)`` pair — that maps to the child\n    table's composite primary key.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/PlogEntryIn"
+            },
+            "minItems": 1,
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "title": "PlogKineticsIn",
         "type": "object"
       },
       "PointGeometryLink": {
@@ -33322,6 +34111,29 @@
             ],
             "title": "Created By"
           },
+          "enthalpy_formation_0k_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Kj Mol"
+          },
+          "enthalpy_formation_0k_uncertainty_kj_mol": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -33381,12 +34193,33 @@
             ],
             "title": "Note"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "points": {
             "items": {
               "$ref": "#/components/schemas/ThermoPointRead"
             },
             "title": "Points",
             "type": "array"
+          },
+          "reference_pressure_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Pressure Bar"
           },
           "s298_j_mol_k": {
             "anyOf": [
@@ -33435,6 +34268,17 @@
           "species_entry_id": {
             "title": "Species Entry Id",
             "type": "integer"
+          },
+          "statmech_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statmech Id"
           },
           "tmax_k": {
             "anyOf": [
@@ -33486,6 +34330,16 @@
         "properties": {
           "evidence_completeness": {
             "$ref": "#/components/schemas/EvidenceCompletenessBreakdown"
+          },
+          "group_additivity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupAdditivityBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "h298_kj_mol": {
             "anyOf": [
@@ -34039,6 +34893,51 @@
             "title": "Calculations",
             "type": "array"
           },
+          "enthalpy_formation_0k_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Kj Mol"
+          },
+          "enthalpy_formation_0k_uncertainty_kj_mol": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
+          },
+          "existing_statmech_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Statmech Id"
+          },
+          "group_additivity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppliedGroupAdditivityUploadPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -34093,12 +34992,34 @@
             ],
             "title": "Note"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "points": {
             "items": {
               "$ref": "#/components/schemas/ThermoPointCreate"
             },
             "title": "Points",
             "type": "array"
+          },
+          "reference_pressure_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Pressure Bar"
           },
           "s298_j_mol_k": {
             "anyOf": [

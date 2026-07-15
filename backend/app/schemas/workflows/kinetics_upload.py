@@ -6,6 +6,7 @@ from app.chemistry.units import validate_a_units_for_molecularity
 from app.db.models.common import (
     ActivationEnergyUnits,
     ArrheniusAUnits,
+    KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
     PressureContext,
@@ -127,6 +128,34 @@ class PlogEntryUpload(SchemaBase):
     ea_kj_mol: float | None = None
 
 
+class MultiArrheniusEntryUpload(SchemaBase):
+    """One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).
+
+    A Chemkin ``DUPLICATE`` channel's rate coefficient is the sum of these
+    terms. Unlike a PLOG entry there is no pressure — the terms are summed,
+    not interpolated. ``reported_ea``/``reported_ea_units`` are converted to
+    ``ea_kj_mol`` by the workflow, mirroring the top-level Arrhenius fields.
+    """
+
+    entry_index: int = Field(ge=1)
+    a: float
+    a_units: ArrheniusAUnits | None = None
+    n: float | None = None
+    reported_ea: float | None = None
+    reported_ea_units: ActivationEnergyUnits | None = None
+
+    @model_validator(mode="after")
+    def validate_reported_ea_pair(self) -> Self:
+        has_value = self.reported_ea is not None
+        has_units = self.reported_ea_units is not None
+        if has_value != has_units:
+            raise ValueError(
+                "reported_ea and reported_ea_units must both be provided "
+                "or both omitted."
+            )
+        return self
+
+
 class ChebyshevUpload(SchemaBase):
     """A standalone Chebyshev k(T,P) surface (DR-0032 Part C).
 
@@ -181,6 +210,7 @@ class KineticsUploadRequest(SchemaBase):
     reaction: KineticsReactionUpload
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius
+    direction: KineticsDirection | None = None
     is_third_body: bool = False
 
     energy_level_of_theory: LevelOfTheoryRef | None = None
@@ -188,6 +218,13 @@ class KineticsUploadRequest(SchemaBase):
     literature: LiteratureUploadRequest | None = None
     software_release: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
+
+    # Programmatic bridge to a pressure-dependent network counterpart
+    # (DR-0036). A raw database id, mirroring the ``existing_*_id`` convention
+    # (advanced / machine-to-machine): contributor-facing UX links by local
+    # keys through the bundle endpoints, not by raw FK. The workflow verifies
+    # the referenced ``network_kinetics`` row exists.
+    existing_network_kinetics_id: int | None = Field(default=None, gt=0)
 
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
@@ -213,6 +250,7 @@ class KineticsUploadRequest(SchemaBase):
         default_factory=list
     )
     plog_entries: list[PlogEntryUpload] = Field(default_factory=list)
+    arrhenius_entries: list[MultiArrheniusEntryUpload] = Field(default_factory=list)
     chebyshev: ChebyshevUpload | None = None
     note: str | None = None
 
@@ -255,6 +293,36 @@ class KineticsUploadRequest(SchemaBase):
             and self.tmin_k > self.tmax_k
         ):
             raise ValueError("tmin_k must be less than or equal to tmax_k.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_multi_arrhenius(self) -> Self:
+        """Bind ``multi_arrhenius`` to its sum-of-terms child rows (DR-0036).
+
+        A DUPLICATE channel is a sum of at least two modified-Arrhenius
+        terms; the scalar ``a`` must stay unset because the coefficient lives
+        in the child entries, and the entry indices must be unique.
+        """
+        is_multi = self.model_kind == KineticsModelKind.multi_arrhenius
+        if is_multi:
+            if len(self.arrhenius_entries) < 2:
+                raise ValueError(
+                    "model_kind='multi_arrhenius' requires at least two "
+                    "arrhenius_entries (a sum of modified-Arrhenius terms)."
+                )
+            if self.a is not None:
+                raise ValueError(
+                    "model_kind='multi_arrhenius' must not set the scalar 'a'; "
+                    "the terms live in arrhenius_entries."
+                )
+        elif self.arrhenius_entries:
+            raise ValueError(
+                "arrhenius_entries are only valid when "
+                "model_kind='multi_arrhenius'."
+            )
+        indices = [e.entry_index for e in self.arrhenius_entries]
+        if len(set(indices)) != len(indices):
+            raise ValueError("arrhenius_entries entry_index values must be unique.")
         return self
 
     @model_validator(mode="after")
