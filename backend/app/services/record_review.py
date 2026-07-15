@@ -44,10 +44,11 @@ from app.db.models.app_user import AppUser
 from app.db.models.calculation import CalculationArtifact
 from app.db.models.common import (
     AppUserRole,
+    RecordReviewEventKind,
     RecordReviewStatus,
     SubmissionRecordType,
 )
-from app.db.models.record_review import RecordReview
+from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.submission import SubmissionRecordLink
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
@@ -137,6 +138,34 @@ def _check_transition_allowed(
         )
 
 
+def _emit_review_event(
+    session: Session,
+    *,
+    review: RecordReview,
+    event_kind: RecordReviewEventKind,
+    from_status: Optional[RecordReviewStatus],
+    to_status: Optional[RecordReviewStatus],
+    actor_user_id: Optional[int] = None,
+    reason: Optional[str] = None,
+) -> RecordReviewEvent:
+    """Append one immutable history event to a review row.
+
+    Events are append-only: this is the *only* place that writes
+    ``record_review_event`` rows, and nothing ever updates or deletes them.
+    """
+    event = RecordReviewEvent(
+        record_review_id=review.id,
+        event_kind=event_kind,
+        from_status=from_status,
+        to_status=to_status,
+        actor_user_id=actor_user_id,
+        reason=reason,
+    )
+    session.add(event)
+    session.flush()
+    return event
+
+
 # ---------------------------------------------------------------------------
 # Reads
 # ---------------------------------------------------------------------------
@@ -182,6 +211,32 @@ def list_record_reviews(
         stmt.order_by(RecordReview.created_at.desc(), RecordReview.id.desc())
         .offset(offset)
         .limit(limit)
+    )
+    return list(session.scalars(stmt).all())
+
+
+def list_record_review_events(
+    session: Session,
+    *,
+    record_type: SubmissionRecordType,
+    record_id: int,
+) -> list[RecordReviewEvent]:
+    """Return the append-only history for ``(record_type, record_id)``.
+
+    Events are ordered chronologically (by ``id`` ascending). Returns an
+    empty list when no ``record_review`` row exists for the record.
+    """
+    stmt = (
+        select(RecordReviewEvent)
+        .join(
+            RecordReview,
+            RecordReviewEvent.record_review_id == RecordReview.id,
+        )
+        .where(
+            RecordReview.record_type == record_type,
+            RecordReview.record_id == record_id,
+        )
+        .order_by(RecordReviewEvent.id.asc())
     )
     return list(session.scalars(stmt).all())
 
@@ -238,6 +293,15 @@ def ensure_record_review(
     )
     session.add(review)
     session.flush()
+    _emit_review_event(
+        session,
+        review=review,
+        event_kind=RecordReviewEventKind.created,
+        from_status=None,
+        to_status=status,
+        actor_user_id=created_by,
+        reason=note,
+    )
     return review
 
 
@@ -282,6 +346,17 @@ def set_record_review_status(
         )
         session.add(existing)
         session.flush()
+        _emit_review_event(
+            session,
+            review=existing,
+            event_kind=RecordReviewEventKind.created,
+            from_status=None,
+            to_status=RecordReviewStatus.not_reviewed,
+            actor_user_id=None,
+        )
+
+    previous_status = existing.status
+    previous_reviewed_by = existing.reviewed_by
 
     _check_transition_allowed(
         from_status=existing.status,
@@ -310,6 +385,25 @@ def set_record_review_status(
         existing.reviewed_at = None
 
     session.flush()
+
+    # Emit on a real status change, and also on a same-status terminal
+    # re-stamp that reassigns the reviewer (e.g. curator B re-approving a
+    # record approved by curator A): reviewed_by changed with no status
+    # change, and that reassignment is exactly the who/when this history
+    # exists to capture. A true idempotent no-op (nothing changed) emits
+    # nothing.
+    reviewer_reassigned = existing.reviewed_by != previous_reviewed_by
+    if previous_status != status or reviewer_reassigned:
+        _emit_review_event(
+            session,
+            review=existing,
+            event_kind=RecordReviewEventKind.status_change,
+            from_status=previous_status,
+            to_status=status,
+            actor_user_id=actor.id,
+            reason=note,
+        )
+
     return existing
 
 
@@ -549,6 +643,7 @@ __all__ = [
     "ensure_record_review",
     "get_record_review",
     "get_reviews_for_records",
+    "list_record_review_events",
     "list_record_reviews",
     "set_record_review_status",
 ]

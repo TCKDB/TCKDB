@@ -326,6 +326,11 @@ enum ReactionRole {
   product
 }
 
+enum RecordReviewEventKind {
+  created
+  status_change
+}
+
 enum RecordReviewStatus {
   not_reviewed
   under_review
@@ -2158,6 +2163,24 @@ Table record_review {
   }
 
   Note: 'Current review/trust state for one scientific record.'
+}
+
+Table record_review_event {
+  id bigint [pk, not null]
+  record_review_id bigint [not null, ref: > record_review.id]
+  event_kind RecordReviewEventKind [not null]
+  from_status RecordReviewStatus
+  to_status RecordReviewStatus
+  actor_user_id bigint [ref: > app_user.id]
+  reason text
+  details_json jsonb
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    record_review_id [name: 'ix_record_review_event_record_review_id']
+  }
+
+  Note: 'Append-only history event for one :class:`RecordReview` row.'
 }
 
 Table software {

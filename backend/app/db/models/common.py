@@ -762,6 +762,18 @@ class RecordReviewStatus(str, Enum):
     deprecated = "deprecated"
 
 
+class RecordReviewEventKind(str, Enum):
+    """Kind of append-only event recorded on a ``record_review`` row.
+
+    ``created`` marks the first appearance of a review row (its initial
+    status); ``status_change`` records a subsequent transition between two
+    :class:`RecordReviewStatus` values.
+    """
+
+    created = "created"
+    status_change = "status_change"
+
+
 class MachineReviewStatus(str, Enum):
     """DB-layer mirror of the advisory machine-review status vocabulary.
 
