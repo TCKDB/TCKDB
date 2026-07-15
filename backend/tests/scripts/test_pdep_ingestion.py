@@ -39,6 +39,7 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 from app.workflows.network_pdep import persist_network_pdep_upload
 from scripts.pdep_ingestion.arkane_pdep_parser import (
+    parse_data_file,
     parse_input_file,
     parse_pdep_arrhenius_reactions,
     parse_pdep_reactions,
@@ -128,6 +129,58 @@ def test_parser_skips_commented_pdepreaction() -> None:
     assert fit.pressure_units == "bar"
     assert fit.pmin_value == 0.01
     assert fit.pmax_value == 100.0
+
+
+# ---------------------------------------------------------------------------
+# Parser: Data/<x>.py commented fields are ignored
+# ---------------------------------------------------------------------------
+
+
+_DATA_FILE_TEMPLATE = (
+    "#!/usr/bin/env python3\n"
+    "# encoding: utf-8\n"
+    "\n"
+    "bonds = {{'H-N': 2, 'N-N': 1}}\n"
+    "externalSymmetry = 3\n"
+    "spinMultiplicity = 2\n"
+    "opticalIsomers = 1\n"
+    "energy = Log('data/X/sp.out')\n"
+    "geometry = Log('data/X/freq.out')\n"
+    "frequencies = Log('data/X/freq.out')\n"
+    "{rotors_line}\n"
+)
+
+
+def test_data_file_commented_rotor_yields_no_scan_log() -> None:
+    """A commented-out ``#rotors = [HinderedRotor(scanLog=Log(...))]`` line must
+    NOT be parsed: no ``scanLog`` is picked up, so no spurious scan calc is
+    later emitted. Live (non-commented) fields still parse normally."""
+    text = _DATA_FILE_TEMPLATE.format(
+        rotors_line="#rotors = [HinderedRotor(scanLog=Log('data/X/scan.out'), "
+        "pivots=[1, 2], top=[1, 3], symmetry=3, fit='fourier')]"
+    )
+    data = parse_data_file(text)
+    assert data.scan_logs == []
+    # The disabled rotor line does not suppress the live scalar/Log fields.
+    assert data.external_symmetry == 3
+    assert data.spin_multiplicity == 2
+    assert data.optical_isomers == 1
+    assert data.bonds == {"H-N": 2, "N-N": 1}
+    assert data.energy_log == "data/X/sp.out"
+    assert data.geometry_log == "data/X/freq.out"
+    assert data.frequencies_log == "data/X/freq.out"
+
+
+def test_data_file_live_rotor_yields_scan_log() -> None:
+    """A LIVE (non-commented) ``rotors = [HinderedRotor(scanLog=Log(...))]`` line
+    still produces its ``scanLog`` — the fix only drops commented rotors."""
+    text = _DATA_FILE_TEMPLATE.format(
+        rotors_line="rotors = [HinderedRotor(scanLog=Log('data/X/scan.out'), "
+        "pivots=[1, 2], top=[1, 3], symmetry=3, fit='fourier')]"
+    )
+    data = parse_data_file(text)
+    assert data.scan_logs == ["data/X/scan.out"]
+    assert data.external_symmetry == 3
 
 
 # ---------------------------------------------------------------------------

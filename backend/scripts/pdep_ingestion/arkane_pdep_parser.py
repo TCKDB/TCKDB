@@ -686,14 +686,15 @@ class DataFile:
 def parse_data_file(text: str) -> DataFile:
     """Parse a per-species ``Data/<x>.py`` file (regex, never exec).
 
-    NOTE: comments are intentionally *not* stripped here. Doing so would drop a
-    commented-out ``#rotors = [HinderedRotor(scanLog=Log(...))]`` line — which is
-    arguably correct — but that would change the already-seeded MRCI network
-    payload (its ``NH3NH`` carries a commented rotor whose ``scanLog`` is picked
-    up as a scan calculation). Preserving the existing behaviour keeps the
-    regression payload byte-identical; stripping is a follow-up that requires a
-    re-seed. See the PR notes.
+    Whole-line comments are stripped first (reusing
+    :func:`strip_commented_lines`, the same helper applied to ``output.py`` /
+    ``input.py``) so a commented-out field is never parsed. This matters for a
+    disabled hindered rotor: a line like
+    ``#rotors = [HinderedRotor(scanLog=Log(...))]`` must NOT yield a ``scanLog``
+    (and hence a spurious ``<species>_scan`` calculation) for a rotor the author
+    deliberately turned off. Live (non-commented) fields are unaffected.
     """
+    text = strip_commented_lines(text)
     bonds: dict[str, int] = {}
     bm = re.search(r"bonds\s*=\s*(\{[^}]*\})", text)
     if bm:
