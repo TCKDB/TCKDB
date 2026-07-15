@@ -3246,6 +3246,33 @@ def test_bundle_kinetics_rejects_non_positive_degeneracy(bad_value) -> None:
         BundleKineticsIn(**_bundle_kinetics_kwargs(degeneracy=bad_value))
 
 
+@pytest.mark.parametrize(
+    "scalar_kind", ["arrhenius", "modified_arrhenius"]
+)
+def test_bundle_kinetics_accepts_scalar_model_kinds(scalar_kind) -> None:
+    """The scalar Arrhenius forms the bundle can carry are accepted."""
+    kin = BundleKineticsIn(**_bundle_kinetics_kwargs(model_kind=scalar_kind))
+    assert kin.model_kind.value == scalar_kind
+
+
+@pytest.mark.parametrize(
+    "unrepresentable_kind",
+    ["multi_arrhenius", "plog", "troe", "sri", "lindemann", "chebyshev"],
+)
+def test_bundle_kinetics_rejects_unrepresentable_model_kinds(
+    unrepresentable_kind,
+) -> None:
+    """Forms needing child data the bundle can't carry are rejected.
+
+    Guards the gap where a bundle tagged e.g. ``plog`` would persist a
+    self-contradictory ``kinetics`` row with zero PLOG entries. These
+    belong on the single-reaction kinetics endpoint, which has the child
+    fields. Mutation check: dropping the validator makes this pass-through.
+    """
+    with pytest.raises(ValidationError, match="single-reaction kinetics"):
+        BundleKineticsIn(**_bundle_kinetics_kwargs(model_kind=unrepresentable_kind))
+
+
 def test_computed_reaction_payload_accepts_degeneracy_regression() -> None:
     """Regression: the previously-failing ARC payload now validates.
 

@@ -3,13 +3,13 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.chemistry.units import convert_ea_to_kj_mol
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     CalculationType,
     KineticsCalculationRole,
     SubmissionRecordType,
 )
-from app.chemistry.units import convert_ea_to_kj_mol
 from app.db.models.kinetics import (
     Kinetics,
     KineticsArrheniusEntry,

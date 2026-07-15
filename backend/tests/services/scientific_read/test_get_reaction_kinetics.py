@@ -418,6 +418,8 @@ def test_multi_arrhenius_terms_read_back(db_session):
     from app.db.models.common import ArrheniusAUnits, KineticsModelKind
     from tests.services.scientific_read._factories import (
         attach_kinetics_arrhenius_entry,
+    )
+    from tests.services.scientific_read._factories import (
         make_kinetics as _mk,
     )
 

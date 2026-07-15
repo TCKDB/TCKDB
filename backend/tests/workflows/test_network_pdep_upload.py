@@ -1247,7 +1247,7 @@ def test_pdep_workflow_persists_and_reads_back_plog_channel_kinetics(
             .order_by(NetworkKineticsPlog.pressure_bar.asc())
         ).all()
         assert len(rows) == 5
-        for row, expected in zip(rows, plog_entries):
+        for row, expected in zip(rows, plog_entries, strict=True):
             assert row.pressure_bar == expected["pressure_bar"]
             assert row.a == expected["a"]
             assert row.a_units.value == "cm3_mol_s"

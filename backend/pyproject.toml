@@ -122,6 +122,12 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
+# Arkane input decks committed as PDep test fixtures (input.py, Data/*.py)
+# are not real Python modules — Arkane exec()s them with an injected
+# namespace (Log, SMILES, HinderedRotor, species, LevelOfTheory, ...), so
+# every reference is an "undefined name" to a static linter (F821). They
+# are data, not code; exclude the tree from linting.
+extend-exclude = ["tests/fixtures/pdep/**"]
 
 [tool.ruff.lint]
 # E/F/W/I: pycodestyle, pyflakes, import sorting.

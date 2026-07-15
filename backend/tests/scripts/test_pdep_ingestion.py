@@ -22,7 +22,6 @@ from app.db.models.calculation import (
     CalculationArtifact,
     CalculationFreqMode,
     CalculationFreqResult,
-    CalculationOptResult,
     CalculationSPResult,
 )
 from app.db.models.common import CalculationType
@@ -35,7 +34,7 @@ from app.db.models.network_pdep import (
     NetworkSolveEnergyTransfer,
     NetworkState,
 )
-from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 from app.workflows.network_pdep import persist_network_pdep_upload
 from scripts.pdep_ingestion.arkane_pdep_parser import (
@@ -436,7 +435,6 @@ def test_fixture_full_pipeline_persist_and_read_back(db_engine) -> None:
         calcs = session.scalars(
             select(Calculation).where(Calculation.species_entry_id.in_(net_se_ids))
         ).all()
-        calc_by_id = {c.id: c for c in calcs}
 
         # N2H4 is the species carrying a scan (hindered-rotor) calculation.
         scan_calcs = [c for c in calcs if c.type == CalculationType.scan]
@@ -584,7 +582,7 @@ def test_fixture_full_pipeline_with_artifacts(db_engine, monkeypatch) -> None:
 
     request = build_network_pdep_request(FIXTURE_DIR, include_artifacts=True)
     with _rolled_back_session(db_engine) as session:
-        network = persist_network_pdep_upload(session, request, created_by=None)
+        persist_network_pdep_upload(session, request, created_by=None)
         session.flush()
         arts = session.scalars(
             select(CalculationArtifact).where(

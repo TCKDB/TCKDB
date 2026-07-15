@@ -707,6 +707,38 @@ class BundleKineticsIn(SchemaBase):
             raise ValueError("tmin_k must be <= tmax_k.")
         return self
 
+    @model_validator(mode="after")
+    def validate_model_kind_is_representable(self) -> Self:
+        """Reject functional forms the bundle payload cannot carry.
+
+        ``BundleKineticsIn`` only holds the *scalar* Arrhenius fields
+        (``a``/``n``/``reported_ea``). The pressure-dependent and
+        multi-term forms (``multi_arrhenius``, ``plog``, ``troe``,
+        ``sri``, ``lindemann``, ``chebyshev``) each require child data
+        (sum-of-Arrhenius terms, PLOG entries, falloff broadening,
+        Chebyshev coefficients) for which this schema has no fields.
+        Accepting them here would persist a self-contradictory
+        ``kinetics`` row — tagged e.g. ``plog`` but carrying zero PLOG
+        entries. Direct those uploads to the dedicated single-reaction
+        kinetics endpoint, whose schema carries the child rows.
+        """
+        representable = {
+            KineticsModelKind.arrhenius,
+            KineticsModelKind.modified_arrhenius,
+        }
+        if self.model_kind not in representable:
+            unsupported = ", ".join(
+                k.value for k in KineticsModelKind if k not in representable
+            )
+            raise ValueError(
+                f"model_kind='{self.model_kind.value}' is not supported on the "
+                f"bundle kinetics payload, which carries only scalar Arrhenius "
+                f"parameters. Pressure-dependent and multi-term forms "
+                f"({unsupported}) require child data; upload them via the "
+                f"single-reaction kinetics endpoint instead."
+            )
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Top-level bundle request
