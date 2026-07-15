@@ -945,9 +945,10 @@ def test_pdep_channel_kinetics_rejects_undefined_channel() -> None:
         NetworkPDepUploadRequest(**payload)
 
 
-def test_pdep_channel_kinetics_rejects_duplicate_within_payload() -> None:
-    """Two channel_kinetics entries for the same (source, sink) pair within one
-    payload are rejected (would silently write two rows for one channel/solve)."""
+def test_pdep_channel_kinetics_rejects_duplicate_chebyshev_within_payload() -> None:
+    """Two *chebyshev* channel_kinetics entries for the same (source, sink) pair
+    within one payload are rejected (would write two redundant chebyshev rows
+    for one channel/solve/kind)."""
     payload = _full_payload(include_solve=True)
     entry = {
         "source_state_key": "entrance",
@@ -962,6 +963,69 @@ def test_pdep_channel_kinetics_rejects_duplicate_within_payload() -> None:
     payload["solve"]["channel_kinetics"] = [entry, {**entry}]
     with pytest.raises(ValueError, match="unique"):
         NetworkPDepUploadRequest(**payload)
+
+
+def _plog_entry_dict(source: str, sink: str) -> dict:
+    """A minimal valid ``model_kind=plog`` channel_kinetics dict."""
+    return {
+        "source_state_key": source,
+        "sink_state_key": sink,
+        "model_kind": "plog",
+        "plog": {
+            "entries": [
+                {
+                    "pressure_bar": 1.0,
+                    "a": 1.0e13,
+                    "a_units": "cm3_mol_s",
+                    "n": 0.0,
+                    "ea_kj_mol": 40.0,
+                },
+                {
+                    "pressure_bar": 10.0,
+                    "a": 2.0e13,
+                    "a_units": "cm3_mol_s",
+                    "n": 0.1,
+                    "ea_kj_mol": 42.0,
+                },
+            ]
+        },
+    }
+
+
+def test_pdep_channel_kinetics_rejects_duplicate_plog_within_payload() -> None:
+    """Two *plog* channel_kinetics entries for the same (source, sink) pair are
+    rejected (double-plog on one channel is still user error)."""
+    payload = _full_payload(include_solve=True)
+    entry = _plog_entry_dict("entrance", "well_RO2")
+    payload["solve"]["channel_kinetics"] = [entry, {**entry}]
+    with pytest.raises(ValueError, match="unique"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_channel_kinetics_accepts_chebyshev_and_plog_on_one_channel() -> None:
+    """One channel may carry BOTH a chebyshev and a plog parameterization: the
+    uniqueness key is (source, sink, model_kind), so cheb+plog coexist."""
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "chebyshev",
+            "chebyshev": {
+                "n_temperature": 2,
+                "n_pressure": 2,
+                "coefficients": [[1.0, 2.0], [3.0, 4.0]],
+            },
+        },
+        _plog_entry_dict("entrance", "well_RO2"),
+    ]
+    request = NetworkPDepUploadRequest(**payload)
+    assert request.solve is not None
+    assert len(request.solve.channel_kinetics) == 2
+    assert {nk.model_kind.value for nk in request.solve.channel_kinetics} == {
+        "chebyshev",
+        "plog",
+    }
 
 
 def test_pdep_channel_kinetics_rejects_non_finite_coefficient() -> None:

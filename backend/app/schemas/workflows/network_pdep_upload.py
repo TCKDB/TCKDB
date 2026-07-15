@@ -927,23 +927,29 @@ class NetworkPDepUploadRequest(SchemaBase):
     def validate_unique_channel_kinetics(self) -> Self:
         """Ensure no duplicate channel_kinetics within one payload.
 
-        Two entries sharing the same ``(source_state_key, sink_state_key)``
-        would silently write two ``NetworkKinetics`` rows for one
-        (channel, solve) pair — user error within a single upload. Multiple
-        rows per (channel, solve) across separate uploads remain legitimate
-        under append-only semantics; only the within-payload duplicate is
-        rejected here.
+        Uniqueness is keyed by ``(source_state_key, sink_state_key,
+        model_kind)``: one channel may legitimately carry *both* a Chebyshev
+        and a PLOG parameterization of the same k(T,P) (multiple
+        parameterizations of one network coexisting on the same channel — the
+        model imposes no ``(channel, solve)`` uniqueness). What remains user
+        error, and is rejected here, is two entries of the *same* model_kind on
+        one channel (two Chebyshevs or two PLOGs), which would silently write
+        two redundant ``NetworkKinetics`` rows for one (channel, solve, kind).
+        Multiple rows per (channel, solve) across separate uploads remain
+        legitimate under append-only semantics.
         """
         if self.solve is None:
             return self
-        pairs = [
-            (nk.source_state_key, nk.sink_state_key)
+        triples = [
+            (nk.source_state_key, nk.sink_state_key, nk.model_kind)
             for nk in self.solve.channel_kinetics
         ]
-        if len(set(pairs)) != len(pairs):
+        if len(set(triples)) != len(triples):
             raise ValueError(
                 "channel_kinetics entries must be unique by "
-                "(source_state_key, sink_state_key) within one payload."
+                "(source_state_key, sink_state_key, model_kind) within one "
+                "payload; a channel may carry at most one entry per model_kind "
+                "(one chebyshev and/or one plog)."
             )
         return self
 

@@ -38,8 +38,13 @@ from app.db.models.network_pdep import (
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 from app.workflows.network_pdep import persist_network_pdep_upload
-from scripts.pdep_ingestion.arkane_pdep_parser import parse_pdep_reactions
+from scripts.pdep_ingestion.arkane_pdep_parser import (
+    parse_pdep_arrhenius_reactions,
+    parse_pdep_reactions,
+)
 from scripts.pdep_ingestion.builder import (
+    build_dual_form_payload,
+    build_dual_form_request,
     build_network_pdep_payload,
     build_network_pdep_request,
 )
@@ -51,6 +56,9 @@ from scripts.pdep_ingestion.units import (
 )
 
 FIXTURE_DIR = Path(__file__).parents[1] / "fixtures" / "pdep" / "hydrazine_mrci"
+PLOG_FIXTURE_DIR = (
+    Path(__file__).parents[1] / "fixtures" / "pdep" / "hydrazine_mrci_plog"
+)
 
 # The 6x4 Chebyshev grid for H2 + H2NN <=> N2H4 (from the fixture output.py).
 _EXPECTED_CHEB = [
@@ -118,6 +126,155 @@ def test_parser_skips_commented_pdepreaction() -> None:
     assert fit.pressure_units == "bar"
     assert fit.pmin_value == 0.01
     assert fit.pmax_value == 100.0
+
+
+# ---------------------------------------------------------------------------
+# Parser: PDepArrhenius (PLOG) blocks
+# ---------------------------------------------------------------------------
+
+
+def test_parse_pdep_arrhenius_reactions_per_pressure_values() -> None:
+    """The PLOG parser extracts the ordered per-pressure A / n / Ea and units
+    from a ``PDepArrhenius`` block, skipping the commented-out one."""
+    text = (PLOG_FIXTURE_DIR / "output.py").read_text()
+    fits = parse_pdep_arrhenius_reactions(text)
+    assert len(fits) == 1  # one active block; commented one ignored
+    fit = fits[0]
+    assert fit.reactants == ["H2", "H2NN"]
+    assert fit.products == ["N2H4"]
+    assert fit.pressure_units == "bar"
+    assert fit.temperature_units == "K"
+    assert fit.tmin_value == 300.0
+    assert fit.tmax_value == 2000.0
+
+    # One Arrhenius term per pressure, in file order.
+    assert [e.pressure_value for e in fit.entries] == [0.01, 0.1, 1.0, 10.0, 100.0]
+    first = fit.entries[0]
+    assert first.a_value == pytest.approx(1.23456e12)
+    assert first.a_units == "cm^3/(mol*s)"
+    assert first.n == pytest.approx(0.42)
+    assert first.ea_value == pytest.approx(35.1)
+    assert first.ea_units == "kJ/mol"
+    last = fit.entries[-1]
+    assert last.a_value == pytest.approx(5.67891e12)
+    assert last.n == pytest.approx(0.78)
+    assert last.ea_value == pytest.approx(39.5)
+
+
+# ---------------------------------------------------------------------------
+# Dual-form build: one network carrying BOTH Chebyshev and PLOG kinetics
+# ---------------------------------------------------------------------------
+
+
+def test_dual_form_build_attaches_both_parameterizations() -> None:
+    """``build_dual_form_request`` yields a channel carrying BOTH a chebyshev
+    and a plog ``channel_kinetics`` entry, on the same (source, sink) pair."""
+    request = build_dual_form_request(FIXTURE_DIR, PLOG_FIXTURE_DIR)
+    solve = request.solve
+    assert solve is not None
+    # 1 channel -> 1 chebyshev + 1 plog = 2 channel_kinetics.
+    assert len(solve.channel_kinetics) == 2
+    by_kind = {nk.model_kind.value: nk for nk in solve.channel_kinetics}
+    assert set(by_kind) == {"chebyshev", "plog"}
+
+    cheb = by_kind["chebyshev"]
+    plog = by_kind["plog"]
+    # Both attach to the same channel.
+    assert (cheb.source_state_key, cheb.sink_state_key) == (
+        plog.source_state_key,
+        plog.sink_state_key,
+    )
+    # Chebyshev grid intact.
+    assert cheb.chebyshev is not None
+    assert cheb.chebyshev.coefficients == _EXPECTED_CHEB
+    # PLOG entries intact (5 pressures, kJ/mol Ea passthrough, bimolecular units).
+    assert plog.plog is not None
+    assert len(plog.plog.entries) == 5
+    assert [e.pressure_bar for e in plog.plog.entries] == [0.01, 0.1, 1.0, 10.0, 100.0]
+    assert plog.plog.entries[0].a == pytest.approx(1.23456e12)
+    assert plog.plog.entries[0].a_units.value == "cm3_mol_s"
+    assert plog.plog.entries[0].ea_kj_mol == pytest.approx(35.1)
+    assert plog.rate_units.value == "cm3_mol_s"
+    assert plog.pmin_bar == 0.01
+    assert plog.pmax_bar == 100.0
+
+
+def test_dual_form_build_rejects_topology_mismatch(tmp_path) -> None:
+    """A PLOG run whose channels do not match the Chebyshev run's is rejected
+    (STOP, never silently drop/misalign)."""
+    # Reverse-direction channel: (N2H4 -> H2+H2NN) is NOT a Chebyshev channel
+    # (the Chebyshev fixture has H2+H2NN -> N2H4).
+    (tmp_path / "output.py").write_text(
+        "pdepreaction(\n"
+        "    reactants = ['N2H4'],\n"
+        "    products = ['H2', 'H2NN'],\n"
+        "    kinetics = PDepArrhenius(\n"
+        "        pressures = ([0.01, 100], 'bar'),\n"
+        "        arrhenius = [\n"
+        "            Arrhenius(A=(1.0, 's^-1'), n=0.0, Ea=(0.0, 'kJ/mol'), T0=(1,'K')),\n"
+        "            Arrhenius(A=(2.0, 's^-1'), n=0.0, Ea=(0.0, 'kJ/mol'), T0=(1,'K')),\n"
+        "        ],\n"
+        "    ),\n"
+        ")\n"
+    )
+    with pytest.raises(ValueError, match="topology does not match"):
+        build_dual_form_payload(FIXTURE_DIR, tmp_path)
+
+
+def test_dual_form_persist_two_kinetics_rows_per_channel(db_engine) -> None:
+    """Persist the dual-form request and read back: the one channel carries two
+    ``NetworkKinetics`` rows — one chebyshev (with coeffs) and one plog (with
+    the pressure-indexed entries), values intact."""
+    from app.db.models.network_pdep import NetworkKineticsPlog
+
+    request = build_dual_form_request(FIXTURE_DIR, PLOG_FIXTURE_DIR)
+
+    with _rolled_back_session(db_engine) as session:
+        network = persist_network_pdep_upload(session, request, created_by=None)
+        session.flush()
+
+        channels = session.scalars(
+            select(NetworkChannel).where(NetworkChannel.network_id == network.id)
+        ).all()
+        assert len(channels) == 1
+        channel = channels[0]
+
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+
+        nk_rows = session.scalars(
+            select(NetworkKinetics).where(NetworkKinetics.solve_id == solve.id)
+        ).all()
+        # Both parameterizations coexist on the SAME channel/solve.
+        assert len(nk_rows) == 2
+        assert {nk.channel_id for nk in nk_rows} == {channel.id}
+        by_kind = {nk.model_kind.value: nk for nk in nk_rows}
+        assert set(by_kind) == {"chebyshev", "plog"}
+
+        # Chebyshev row -> coefficients intact.
+        cheb = session.scalars(
+            select(NetworkKineticsChebyshev).where(
+                NetworkKineticsChebyshev.network_kinetics_id == by_kind["chebyshev"].id
+            )
+        ).one()
+        assert cheb.n_temperature == 6
+        assert cheb.n_pressure == 4
+        assert cheb.coefficients == {"coeffs": _EXPECTED_CHEB}
+        assert by_kind["chebyshev"].stores_log10_k is True
+
+        # PLOG row -> one child per pressure entry, values intact.
+        plog_rows = session.scalars(
+            select(NetworkKineticsPlog)
+            .where(NetworkKineticsPlog.network_kinetics_id == by_kind["plog"].id)
+            .order_by(NetworkKineticsPlog.pressure_bar.asc())
+        ).all()
+        assert [r.pressure_bar for r in plog_rows] == [0.01, 0.1, 1.0, 10.0, 100.0]
+        assert plog_rows[0].a == pytest.approx(1.23456e12)
+        assert {r.a_units.value for r in plog_rows} == {"cm3_mol_s"}
+        assert plog_rows[0].ea_kj_mol == pytest.approx(35.1)
+        assert plog_rows[-1].ea_kj_mol == pytest.approx(39.5)
+        assert by_kind["plog"].stores_log10_k is None
 
 
 # ---------------------------------------------------------------------------

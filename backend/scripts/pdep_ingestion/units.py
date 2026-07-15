@@ -38,3 +38,26 @@ def j_mol_to_hartree(value_j_mol: float) -> float:
 def atm_to_bar(value_atm: float) -> float:
     """Convert a pressure from atm to bar."""
     return value_atm * BAR_PER_ATM
+
+
+# 1 kcal = 4.184 kJ (thermochemical calorie).
+KJ_PER_KCAL: float = 4.184
+
+
+def ea_to_kj_mol(value: float, units: str) -> float:
+    """Convert an activation energy to kJ/mol.
+
+    Arkane PLOG (``PDepArrhenius``) ``Ea`` is emitted in kJ/mol in this data,
+    so the common path is a pass-through; the other Arkane energy labels are
+    converted for completeness. Unknown units fail loud rather than silently
+    mis-scaling a barrier.
+    """
+    if units == "kJ/mol":
+        return value
+    if units == "J/mol":
+        return value / 1000.0
+    if units == "kcal/mol":
+        return value * KJ_PER_KCAL
+    if units == "cal/mol":
+        return value * KJ_PER_KCAL / 1000.0
+    raise ValueError(f"Unexpected Ea units {units!r} (expected kJ/mol, J/mol, kcal/mol, cal/mol).")

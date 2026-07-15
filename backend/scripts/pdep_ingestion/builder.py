@@ -39,15 +39,17 @@ from .arkane_pdep_parser import (
     ArkaneConformer,
     ChebyshevFit,
     DataFile,
+    PlogFit,
     SupportingInfo,
     parse_all_conformers,
     parse_data_file,
     parse_input_file,
+    parse_pdep_arrhenius_reactions,
     parse_pdep_reactions_with_skips,
     parse_supporting_information,
     resolve_log_path,
 )
-from .units import atm_to_bar, j_mol_to_hartree, kcal_mol_to_cm_inv
+from .units import atm_to_bar, ea_to_kj_mol, j_mol_to_hartree, kcal_mol_to_cm_inv
 
 # Software / provenance constants for this run (per the run's input.py header).
 _GAUSSIAN = {"name": "Gaussian", "version": "09"}
@@ -707,3 +709,157 @@ def build_network_pdep_payload(
         "solve": solve,
     }
     return request_dict, gap
+
+
+# ---------------------------------------------------------------------------
+# Dual-form build: one network carrying BOTH Chebyshev and PLOG kinetics
+# ---------------------------------------------------------------------------
+
+
+def _plog_pressure_to_bar(value: float, units: str) -> float:
+    """Convert a PLOG pressure to bar.
+
+    Unlike Chebyshev, PLOG pressures are physical values (the fit's rate is
+    evaluated at these pressures), so an atm label must be converted, not
+    relabelled. This run labels them 'bar' -> pass-through.
+    """
+    if units == "bar":
+        return value
+    if units == "atm":
+        return atm_to_bar(value)
+    raise ValueError(f"Unexpected PLOG pressure units {units!r} (expected bar or atm).")
+
+
+def _plog_channel_kinetics_entry(fit: PlogFit, src: str, snk: str) -> dict:
+    """Build one ``model_kind=plog`` channel_kinetics dict from a parsed fit."""
+    entries: list[dict] = []
+    for e in fit.entries:
+        entries.append(
+            {
+                "pressure_bar": _plog_pressure_to_bar(e.pressure_value, fit.pressure_units),
+                "a": e.a_value,
+                "a_units": map_a_units(e.a_units),
+                "n": e.n,
+                "ea_kj_mol": ea_to_kj_mol(e.ea_value, e.ea_units),
+            }
+        )
+    pressures_bar = [en["pressure_bar"] for en in entries]
+    # All terms of one PLOG fit share molecularity, hence one rate-unit token.
+    entry: dict = {
+        "source_state_key": src,
+        "sink_state_key": snk,
+        "model_kind": "plog",
+        "plog": {"entries": entries},
+        "pmin_bar": min(pressures_bar),
+        "pmax_bar": max(pressures_bar),
+        "rate_units": map_a_units(fit.entries[0].a_units),
+        "pressure_units": "bar",
+    }
+    if fit.tmin_value is not None and fit.tmax_value is not None:
+        if fit.temperature_units not in ("K", "kelvin", None):
+            raise ValueError(
+                f"PLOG temperature units must be K, got {fit.temperature_units!r}."
+            )
+        entry["tmin_k"] = fit.tmin_value
+        entry["tmax_k"] = fit.tmax_value
+        entry["temperature_units"] = "kelvin"
+    return entry
+
+
+def build_dual_form_payload(
+    cheb_run_dir: Path,
+    plog_run_dir: Path,
+    *,
+    include_artifacts: bool = False,
+) -> tuple[dict, GapReport]:
+    """Build a dual-form request dict (Chebyshev + PLOG) from two Arkane runs.
+
+    The Chebyshev run is the base: it defines topology (species, states,
+    channels), the solve, and the 21 Chebyshev ``channel_kinetics`` entries
+    exactly as :func:`build_network_pdep_payload`. The PLOG run is a SECOND
+    Arkane fit of the SAME network (only ``interpolationModel`` differs); its
+    ``pdepreaction`` / ``PDepArrhenius`` blocks are parsed into PLOG
+    ``channel_kinetics`` entries attached to the same channels by
+    ``(source_state_key, sink_state_key)``.
+
+    A topology-match check enforces that the two runs are the same network:
+    every PLOG fit must map (via the same multiset-of-species -> state-key
+    mapping the Chebyshev build uses) to a channel that the Chebyshev build
+    produced, and the two channel sets must be identical. Any mismatch raises
+    ``ValueError`` rather than silently dropping or misaligning a channel.
+    """
+    request_dict, gap = build_network_pdep_payload(
+        cheb_run_dir, include_artifacts=include_artifacts
+    )
+    solve = request_dict.get("solve")
+    if not solve or not solve.get("channel_kinetics"):
+        raise ValueError(
+            "Chebyshev run produced no solve/channel_kinetics; cannot attach PLOG."
+        )
+    cheb_kinetics: list[dict] = solve["channel_kinetics"]
+    cheb_pairs = {
+        (ck["source_state_key"], ck["sink_state_key"]) for ck in cheb_kinetics
+    }
+
+    # State lookup keyed by the multiset of participant species labels, rebuilt
+    # from the Chebyshev payload's states so PLOG fits attach to the same keys.
+    state_lookup: dict[tuple, str] = {}
+    for st in request_dict["states"]:
+        labels: list[str] = []
+        for p in st["participants"]:
+            labels.extend([p["species_key"]] * int(p.get("stoichiometry", 1)))
+        state_lookup[_multiset_key(labels)] = st["key"]
+
+    plog_fits = parse_pdep_arrhenius_reactions(
+        (Path(plog_run_dir) / "output.py").read_text()
+    )
+
+    plog_kinetics: list[dict] = []
+    plog_pairs: set[tuple[str, str]] = set()
+    unmapped: list[tuple[str, str]] = []
+    for fit in plog_fits:
+        src = state_lookup.get(_multiset_key(fit.reactants))
+        snk = state_lookup.get(_multiset_key(fit.products))
+        if src is None or snk is None or src == snk:
+            unmapped.append(("+".join(fit.reactants), "+".join(fit.products)))
+            continue
+        plog_pairs.add((src, snk))
+        plog_kinetics.append(_plog_channel_kinetics_entry(fit, src, snk))
+
+    # --- Topology-match check: same network or STOP ---
+    if unmapped or plog_pairs != cheb_pairs:
+        missing_in_plog = cheb_pairs - plog_pairs
+        extra_in_plog = plog_pairs - cheb_pairs
+        raise ValueError(
+            "PLOG run topology does not match the Chebyshev run "
+            f"(cheb channels={len(cheb_pairs)}, plog channels={len(plog_pairs)}). "
+            f"PLOG fits that did not map to a Chebyshev channel: {unmapped}. "
+            f"Chebyshev channels with no PLOG fit: {sorted(missing_in_plog)}. "
+            f"PLOG channels absent from Chebyshev: {sorted(extra_in_plog)}. "
+            "The two runs must be the same network (same set of "
+            "(source, sink) channel pairs)."
+        )
+
+    solve["channel_kinetics"] = cheb_kinetics + plog_kinetics
+    return request_dict, gap
+
+
+def build_dual_form_request(
+    cheb_run_dir: Path,
+    plog_run_dir: Path,
+    *,
+    include_artifacts: bool = False,
+):
+    """Build a validated dual-form ``NetworkPDepUploadRequest`` from two runs.
+
+    See :func:`build_dual_form_payload`. The result carries both a Chebyshev
+    and a PLOG ``channel_kinetics`` entry per channel (2N total for N channels)
+    and validates against the relaxed
+    ``(source_state_key, sink_state_key, model_kind)`` uniqueness rule.
+    """
+    request_dict, _ = build_dual_form_payload(
+        cheb_run_dir, plog_run_dir, include_artifacts=include_artifacts
+    )
+    from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
+
+    return NetworkPDepUploadRequest.model_validate(request_dict)

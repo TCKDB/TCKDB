@@ -252,6 +252,124 @@ def parse_pdep_reactions(text: str) -> list[ChebyshevFit]:
 
 
 # ---------------------------------------------------------------------------
+# output.py pdepreaction / PDepArrhenius (PLOG) blocks  (NEW)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PlogArrhenius:
+    """One pressure-indexed modified-Arrhenius term of a PLOG fit.
+
+    Units are kept as the raw Arkane labels; conversion to enum tokens / kJ/mol
+    happens in the builder (mirroring how :class:`ChebyshevFit` keeps ``kunits``
+    raw).
+    """
+
+    pressure_value: float
+    a_value: float
+    a_units: str          # raw Arkane token, e.g. 's^-1', 'cm^3/(mol*s)'
+    n: float
+    ea_value: float
+    ea_units: str         # raw Arkane token, e.g. 'kJ/mol'
+
+
+@dataclass
+class PlogFit:
+    """A parsed PLOG (``PDepArrhenius``) k(T,P) fit from a ``pdepreaction`` block.
+
+    The ``arrhenius`` list is parallel to ``pressures``: one modified-Arrhenius
+    term per discrete pressure, in file order.
+    """
+
+    reactants: list[str]
+    products: list[str]
+    pressure_units: str               # 'bar' or 'atm', as labelled in the file
+    entries: list[PlogArrhenius]      # one per pressure, ordered
+    tmin_value: float | None = None
+    tmax_value: float | None = None
+    temperature_units: str | None = None
+
+
+def parse_pdep_arrhenius_reactions(text: str) -> list[PlogFit]:
+    """Parse every *active* ``pdepreaction(...)`` ``PDepArrhenius`` (PLOG) block.
+
+    Commented-out blocks (leading ``#``) are dropped first. Non-PLOG blocks
+    (e.g. Chebyshev) are simply not matched here — this is the PLOG-only
+    counterpart of :func:`parse_pdep_reactions` and is used when merging a
+    second (PLOG-fit) Arkane run onto a Chebyshev-fit network.
+    """
+    clean = strip_commented_lines(text)
+    fits: list[PlogFit] = []
+    for block in _iter_call_blocks(clean, "pdepreaction"):
+        if "PDepArrhenius(" not in block:
+            continue
+        reactants = _extract_str_list(block, "reactants")
+        products = _extract_str_list(block, "products")
+
+        pm = re.search(
+            r"pressures\s*=\s*\(\s*(\[[^\]]*\])\s*,\s*['\"]([^'\"]+)['\"]",
+            block,
+            re.DOTALL,
+        )
+        if not pm:
+            raise ValueError(
+                f"PDepArrhenius {reactants}->{products} missing pressures=([...],'unit')."
+            )
+        pressures = [float(x) for x in ast.literal_eval(pm.group(1))]
+        pressure_units = pm.group(2)
+
+        arr_blocks = list(_iter_call_blocks(block, "Arrhenius"))
+        if len(arr_blocks) != len(pressures):
+            raise ValueError(
+                f"PDepArrhenius {reactants}->{products} has {len(pressures)} "
+                f"pressures but {len(arr_blocks)} Arrhenius terms."
+            )
+
+        entries: list[PlogArrhenius] = []
+        tmin_value = tmax_value = None
+        temperature_units: str | None = None
+        for pressure, ab in zip(pressures, arr_blocks):
+            a = _extract_value_units(ab, "A")
+            ea = _extract_value_units(ab, "Ea")
+            n_m = re.search(r"\bn\s*=\s*([-\d.eE+]+)", ab)
+            if not (a and ea and n_m):
+                raise ValueError(
+                    f"PDepArrhenius {reactants}->{products} Arrhenius term "
+                    f"missing A/n/Ea."
+                )
+            entries.append(
+                PlogArrhenius(
+                    pressure_value=pressure,
+                    a_value=a[0],
+                    a_units=a[1],
+                    n=float(n_m.group(1)),
+                    ea_value=ea[0],
+                    ea_units=ea[1],
+                )
+            )
+            # Temperature bounds are identical across terms; capture the first.
+            if tmin_value is None:
+                tmin = _extract_value_units(ab, "Tmin")
+                tmax = _extract_value_units(ab, "Tmax")
+                if tmin and tmax:
+                    tmin_value, temperature_units = tmin
+                    tmax_value = tmax[0]
+
+        fits.append(
+            PlogFit(
+                reactants=reactants,
+                products=products,
+                pressure_units=pressure_units,
+                entries=entries,
+                tmin_value=tmin_value,
+                tmax_value=tmax_value,
+                temperature_units=temperature_units,
+            )
+        )
+    return fits
+
+
+# ---------------------------------------------------------------------------
 # input.py DSL  (NEW)
 # ---------------------------------------------------------------------------
 
