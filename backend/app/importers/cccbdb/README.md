@@ -109,6 +109,7 @@ result = build_experimental_species_payload(record)
 | `thermo.h_298_minus_h_0`  | `ThermoPointCreate.h_kj_mol` (at T=298.15 K)       |
 | `statmech.point_group`    | `StatmechUploadRequest.point_group`                |
 | `statmech.symmetry_number`| `StatmechUploadRequest.external_symmetry`          |
+| `statmech.rotational_constants` | `StatmechUploadRequest.rotational_constant_{a,b,c}_cm1` (converted GHz→cm⁻¹) |
 | `geometry.atoms`          | `GeometryPayload.xyz_text` (formatted)             |
 
 Every product payload is stamped with `scientific_origin = "experimental"`.
@@ -126,9 +127,10 @@ upload schemas. The builder preserves each in
   `calc_freq_mode`: that table is calculation-scoped, and creating a
   placeholder `Calculation` row just to host experimental data would
   violate the spec's "no fake calculations" rule.
-- `statmech.rotational_constants` — no first-class A/B/C fields on
-  `statmech` (see Schema Gap 3 in
-  `backend/docs/specs/cccbdb_importer.md`).
+- `statmech.rotational_constants` — the A/B/C values now map to the
+  first-class `statmech.rotational_constant_{a,b,c}_cm1` columns
+  (converted GHz→cm⁻¹); only the raw GHz values, units, and per-value
+  reference remain in the side-channel (no columns for those).
 - `statmech.zpe_kj_mol` — no experimental ZPE field.
 
 Per-value reference labels (`Gurvich`, `TRC`, `Pedley`, …) also have

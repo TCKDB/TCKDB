@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.importers.cccbdb.builders.species_payload import (
     build_species_entry_identity_payload,
 )
 from app.importers.cccbdb.builders.statmech_payload import (
+    _GHZ_PER_CM1,
     build_statmech_payload,
 )
 
@@ -57,6 +60,27 @@ class TestH2OStatmech:
             for w in warnings
         )
 
+    def test_rotational_constants_mapped_to_first_class_cm1(self, h2o_record):
+        payload, _, _, unparsed = _build(h2o_record)
+        # Asymmetric top: all three axes convert GHz→cm⁻¹.
+        assert payload["rotational_constant_a_cm1"] == pytest.approx(
+            835.840 / _GHZ_PER_CM1
+        )
+        assert payload["rotational_constant_b_cm1"] == pytest.approx(
+            435.351 / _GHZ_PER_CM1
+        )
+        assert payload["rotational_constant_c_cm1"] == pytest.approx(
+            278.140 / _GHZ_PER_CM1
+        )
+        # Independent literal pin (not derived from _GHZ_PER_CM1): a wrong
+        # constant *value*, not just a wrong direction, must fail. 835.840
+        # GHz / 29.9792458 = 27.8807 cm⁻¹ (matches H₂O's known A₀ ≈ 27.88).
+        assert payload["rotational_constant_a_cm1"] == pytest.approx(
+            27.8807, abs=1e-3
+        )
+        # Raw GHz values remain in the unparsed side-channel.
+        assert unparsed["statmech_rotational_constants"]["a_ghz"] == 835.840
+
 
 class TestH2Statmech:
     def test_d_star_h_point_group_preserved(self, h2_record):
@@ -85,6 +109,54 @@ class TestBenzeneStatmech:
         # Benzene fixture has no freqs/RC — should produce no
         # side-channel warnings from statmech.
         assert not any("statmech" in w for w in warnings)
+
+
+def _synthetic_record(rotational_constants):
+    from app.importers.cccbdb.models import (
+        CCCBDBExperimentalSpeciesRecord,
+        CCCBDBSourceMetadata,
+        CCCBDBSpeciesIdentity,
+        CCCBDBStatmechRecord,
+    )
+
+    return CCCBDBExperimentalSpeciesRecord(
+        identity=CCCBDBSpeciesIdentity(),
+        source_metadata=CCCBDBSourceMetadata(
+            source="CCCBDB",
+            source_release="22",
+            source_database_doi="10.18434/T47C7Z",
+            source_url="https://example.invalid/synthetic",
+            source_record_key="synthetic",
+            content_sha256="0" * 64,
+            parser_version="test",
+        ),
+        statmech=CCCBDBStatmechRecord(
+            rotational_constants=rotational_constants,
+        ),
+    )
+
+
+class TestStatmechRotationalLinear:
+    def test_linear_only_b_maps_single_axis(self):
+        from app.importers.cccbdb.models import CCCBDBRotationalConstants
+
+        record = _synthetic_record(
+            CCCBDBRotationalConstants(
+                b_ghz=57.635,
+                raw_units="GHz",
+                raw_values=["57.635"],
+            )
+        )
+        payload, _warnings, _refs, unparsed = _build(record)
+        # Linear molecule: only the B axis is present → only _b_cm1 set.
+        assert payload["rotational_constant_b_cm1"] == pytest.approx(
+            57.635 / _GHZ_PER_CM1
+        )
+        assert "rotational_constant_a_cm1" not in payload
+        assert "rotational_constant_c_cm1" not in payload
+        # Raw GHz still carried in the unparsed side-channel.
+        assert unparsed["statmech_rotational_constants"]["b_ghz"] == 57.635
+        assert unparsed["statmech_rotational_constants"]["a_ghz"] is None
 
 
 class TestStatmechEdgeCases:

@@ -4,12 +4,15 @@ Mapped to first-class fields:
 
 * ``statmech.point_group``        → ``StatmechUploadRequest.point_group``
 * ``statmech.symmetry_number``    → ``StatmechUploadRequest.external_symmetry``
+* ``statmech.rotational_constants`` (A/B/C in GHz) →
+  ``StatmechUploadRequest.rotational_constant_{a,b,c}_cm1`` (converted
+  GHz→cm⁻¹). The raw GHz values, raw_values, and reference are also
+  preserved in ``external_source.unparsed.statmech_rotational_constants``.
 
 Preserved as ``external_source.unparsed`` + a warning (no first-class
 home on the existing schema):
 
 * ``statmech.frequencies`` (experimental mode list)
-* ``statmech.rotational_constants`` (A/B/C in GHz)
 * ``statmech.zpe_kj_mol``
 
 We deliberately do **not** route experimental vibrational frequencies
@@ -28,6 +31,10 @@ from app.importers.cccbdb.models import (
     CCCBDBFrequencyMode,
     CCCBDBRotationalConstants,
 )
+
+# GHz → cm⁻¹ conversion. ṽ[cm⁻¹] = ν[Hz] / c with c = 2.99792458e10 cm/s;
+# 1 GHz = 1e9 Hz, so cm⁻¹ = GHz * 1e9 / 2.99792458e10 = GHz / 29.9792458.
+_GHZ_PER_CM1 = 29.9792458
 
 
 def build_statmech_payload(
@@ -78,12 +85,22 @@ def build_statmech_payload(
         )
 
     if statmech.rotational_constants is not None:
-        unparsed["statmech_rotational_constants"] = _rot_to_dict(
-            statmech.rotational_constants
-        )
+        rc = statmech.rotational_constants
+        # Map each present constant to its first-class cm⁻¹ column. Linear
+        # molecules report only ``b_ghz``; guard each axis independently.
+        if rc.a_ghz is not None:
+            payload["rotational_constant_a_cm1"] = rc.a_ghz / _GHZ_PER_CM1
+        if rc.b_ghz is not None:
+            payload["rotational_constant_b_cm1"] = rc.b_ghz / _GHZ_PER_CM1
+        if rc.c_ghz is not None:
+            payload["rotational_constant_c_cm1"] = rc.c_ghz / _GHZ_PER_CM1
+        # Keep the raw GHz values + raw_values + reference (no first-class
+        # home) in the unparsed side-channel for full-fidelity provenance.
+        unparsed["statmech_rotational_constants"] = _rot_to_dict(rc)
         warnings.append(
-            "statmech: rotational constants have no first-class "
-            "TCKDB field; preserved in "
+            "statmech: rotational constants mapped to "
+            "statmech.rotational_constant_{a,b,c}_cm1 (converted "
+            "GHz→cm⁻¹); raw GHz values and reference preserved in "
             "external_source.unparsed.statmech_rotational_constants"
         )
 

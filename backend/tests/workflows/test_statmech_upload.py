@@ -118,6 +118,25 @@ def test_persist_statmech_upload_creates_row_linked_to_species_entry(db_engine) 
         assert statmech.torsions == []
 
 
+def test_persist_statmech_upload_persists_rotational_constants(db_engine) -> None:
+    """First-class rotational constants (cm⁻¹) on the request are applied
+    to the created ``Statmech`` row."""
+    with Session(db_engine) as session, session.begin():
+        session.add(AppUser(id=2209, username="statmech_tester_rot"))
+        session.flush()
+
+        request = _basic_request(
+            rotational_constant_a_cm1=27.8807,
+            rotational_constant_b_cm1=14.5217,
+            rotational_constant_c_cm1=9.2778,
+        )
+        statmech = persist_statmech_upload(session, request, created_by=2209)
+
+        assert statmech.rotational_constant_a_cm1 == 27.8807
+        assert statmech.rotational_constant_b_cm1 == 14.5217
+        assert statmech.rotational_constant_c_cm1 == 9.2778
+
+
 # ---------------------------------------------------------------------------
 # Test 2 — provenance resolution
 # ---------------------------------------------------------------------------

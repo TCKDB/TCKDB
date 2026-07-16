@@ -175,6 +175,13 @@ def persist_statmech_upload(
         created_by=created_by,
     )
 
+    # First-class rotational constants (cm⁻¹). These live only on the
+    # standalone upload request (the shared ConformerUploadStatmechPayload
+    # does not carry them), so they are applied directly to the created row.
+    statmech.rotational_constant_a_cm1 = request.rotational_constant_a_cm1
+    statmech.rotational_constant_b_cm1 = request.rotational_constant_b_cm1
+    statmech.rotational_constant_c_cm1 = request.rotational_constant_c_cm1
+
     session.flush()
 
     targets = [

@@ -131,6 +131,9 @@ class StatmechUploadRequest(SchemaBase):
     :param workflow_tool_release: Optional workflow-tool provenance.
     :param software_release: Optional software provenance.
     :param external_symmetry: Optional external symmetry number.
+    :param rotational_constant_a_cm1: Optional A rotational constant (cm⁻¹).
+    :param rotational_constant_b_cm1: Optional B rotational constant (cm⁻¹).
+    :param rotational_constant_c_cm1: Optional C rotational constant (cm⁻¹).
     :param point_group: Optional point-group label.
     :param is_linear: Optional linearity flag.
     :param rigid_rotor_kind: Optional rigid-rotor classification.
@@ -152,6 +155,9 @@ class StatmechUploadRequest(SchemaBase):
     software_release: SoftwareReleaseRef | None = None
 
     external_symmetry: int | None = Field(default=None, ge=1)
+    rotational_constant_a_cm1: float | None = Field(default=None, gt=0)
+    rotational_constant_b_cm1: float | None = Field(default=None, gt=0)
+    rotational_constant_c_cm1: float | None = Field(default=None, gt=0)
     point_group: str | None = None
 
     is_linear: bool | None = None

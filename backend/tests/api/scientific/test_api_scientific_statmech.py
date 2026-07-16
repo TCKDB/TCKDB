@@ -180,6 +180,32 @@ def test_detail_core_block_optical_isomers_null_when_unset(
     assert body["record"]["statmech"]["optical_isomers"] is None
 
 
+def test_detail_core_block_surfaces_rotational_constants(client, db_session):
+    """Rotational constants are stored ``Statmech`` inputs (cm⁻¹); once set
+    they must survive to the always-present core block on the read output."""
+    _, _, sm = _make_statmech(db_session)
+    sm.rotational_constant_a_cm1 = 27.8807
+    sm.rotational_constant_b_cm1 = 14.5217
+    sm.rotational_constant_c_cm1 = 9.2778
+    db_session.flush()
+    core = client.get(_detail_url(sm.public_ref)).json()["record"]["statmech"]
+    assert core["rotational_constant_a_cm1"] == 27.8807
+    assert core["rotational_constant_b_cm1"] == 14.5217
+    assert core["rotational_constant_c_cm1"] == 9.2778
+
+
+def test_detail_core_block_rotational_constants_null_when_unset(
+    client, db_session
+):
+    """When unset the rotational-constant fields are present and ``null``
+    (never omitted) so callers can read the core block shape uniformly."""
+    _, _, sm = _make_statmech(db_session)
+    core = client.get(_detail_url(sm.public_ref)).json()["record"]["statmech"]
+    assert core["rotational_constant_a_cm1"] is None
+    assert core["rotational_constant_b_cm1"] is None
+    assert core["rotational_constant_c_cm1"] is None
+
+
 def test_detail_review_badge_present(client, db_session):
     _, _, sm = _make_statmech(db_session)
     body = client.get(_detail_url(sm.public_ref)).json()
