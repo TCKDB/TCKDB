@@ -35,7 +35,13 @@ from app.db.models.reaction import (
     ReactionEntryStructureParticipant,
 )
 from app.db.models.species import SpeciesEntry
-from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
+from app.db.models.thermo import (
+    Thermo,
+    ThermoNASA,
+    ThermoNASA9Interval,
+    ThermoPoint,
+    ThermoWilhoit,
+)
 from app.schemas.workflows.contribution_bundle import (
     BUNDLE_FORMAT,
     BUNDLE_VERSION,
@@ -252,11 +258,19 @@ def _thermo_to_upload(thermo: Thermo) -> dict[str, Any]:
         "tmax_k": thermo.tmax_k,
         "note": thermo.note,
     }
+    if thermo.model_kind is not None:
+        payload["model_kind"] = thermo.model_kind.value
 
     if thermo.points:
         payload["points"] = [_thermo_point_payload(p) for p in thermo.points]
     if thermo.nasa is not None:
         payload["nasa"] = _thermo_nasa_payload(thermo.nasa)
+    if thermo.nasa9_intervals:
+        payload["nasa9_intervals"] = [
+            _thermo_nasa9_interval_payload(iv) for iv in thermo.nasa9_intervals
+        ]
+    if thermo.wilhoit is not None:
+        payload["wilhoit"] = _thermo_wilhoit_payload(thermo.wilhoit)
 
     literature = _literature_payload(thermo.literature)
     if literature is not None:
@@ -290,6 +304,27 @@ def _thermo_nasa_payload(nasa: ThermoNASA) -> dict[str, Any]:
         "a5": nasa.a5, "a6": nasa.a6, "a7": nasa.a7,
         "b1": nasa.b1, "b2": nasa.b2, "b3": nasa.b3, "b4": nasa.b4,
         "b5": nasa.b5, "b6": nasa.b6, "b7": nasa.b7,
+    }
+
+
+def _thermo_nasa9_interval_payload(iv: ThermoNASA9Interval) -> dict[str, Any]:
+    return {
+        "interval_index": iv.interval_index,
+        "t_min_k": iv.t_min_k,
+        "t_max_k": iv.t_max_k,
+        "a1": iv.a1, "a2": iv.a2, "a3": iv.a3, "a4": iv.a4, "a5": iv.a5,
+        "a6": iv.a6, "a7": iv.a7, "a8": iv.a8, "a9": iv.a9,
+    }
+
+
+def _thermo_wilhoit_payload(w: ThermoWilhoit) -> dict[str, Any]:
+    return {
+        "cp0_j_mol_k": w.cp0_j_mol_k,
+        "cp_inf_j_mol_k": w.cp_inf_j_mol_k,
+        "b_k": w.b_k,
+        "a0": w.a0, "a1": w.a1, "a2": w.a2, "a3": w.a3,
+        "h0_kj_mol": w.h0_kj_mol,
+        "s0_j_mol_k": w.s0_j_mol_k,
     }
 
 

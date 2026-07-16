@@ -312,6 +312,21 @@ class ThermoCalculationRole(str, Enum):
     imported = "imported"
 
 
+class ThermoModelKind(str, Enum):
+    """Explicit representation kind for a thermo record.
+
+    Previously the representation was implied by which child rows existed;
+    this enum makes it explicit so NASA-9 (arbitrary interval count) and
+    Wilhoit forms can be distinguished from NASA-7 / tabulated / scalar.
+    """
+
+    nasa7 = "nasa7"
+    nasa9 = "nasa9"
+    wilhoit = "wilhoit"
+    tabulated = "tabulated"
+    scalar = "scalar"
+
+
 class ActivationEnergyUnits(str, Enum):
     j_mol = "j_mol"
     kj_mol = "kj_mol"

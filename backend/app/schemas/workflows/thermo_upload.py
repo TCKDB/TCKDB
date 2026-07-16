@@ -13,9 +13,15 @@ from app.db.models.common import (
     PhaseKind,
     ScientificOriginKind,
     ThermoCalculationRole,
+    ThermoModelKind,
 )
 from app.schemas.common import SchemaBase
-from app.schemas.entities.thermo import ThermoNASACreate, ThermoPointCreate
+from app.schemas.entities.thermo import (
+    ThermoNASA9IntervalCreate,
+    ThermoNASACreate,
+    ThermoPointCreate,
+    ThermoWilhoitCreate,
+)
 from app.schemas.fragments.calculation import CalculationWithResultsPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
@@ -148,9 +154,17 @@ class ThermoUploadRequest(SchemaBase):
 
     note: str | None = None
 
+    # Explicit representation kind. When provided it must agree with the
+    # primary representation (the fit, or points-only=tabulated, or
+    # none=scalar; validated below — tabulated points may accompany a fit).
+    # When omitted the backend infers it (a fit wins over points).
+    model_kind: ThermoModelKind | None = None
+
     # Nested child data
     points: list[ThermoPointCreate] = Field(default_factory=list)
     nasa: ThermoNASACreate | None = None
+    nasa9_intervals: list[ThermoNASA9IntervalCreate] = Field(default_factory=list)
+    wilhoit: ThermoWilhoitCreate | None = None
 
     # Supporting calculations declared inline, addressed by local string keys
     calculations: list[ThermoCalculationIn] = Field(default_factory=list)
@@ -287,18 +301,93 @@ class ThermoUploadRequest(SchemaBase):
         """Reject uploads that carry only identity/provenance and no thermo data.
 
         At least one of: a scalar thermo value (``h298_kj_mol`` or
-        ``s298_j_mol_k``), a NASA polynomial block, or one or more
-        tabulated thermo points must be present. Provenance-only fields
-        such as ``literature``, ``software_release``,
-        ``workflow_tool_release``, and ``note`` do not count.
+        ``s298_j_mol_k``), a NASA-7 polynomial block, a NASA-9 interval set,
+        a Wilhoit block, or one or more tabulated thermo points must be
+        present. Provenance-only fields such as ``literature``,
+        ``software_release``, ``workflow_tool_release``, and ``note`` do not
+        count.
         """
         has_scalar = self.h298_kj_mol is not None or self.s298_j_mol_k is not None
         has_nasa = self.nasa is not None
+        has_nasa9 = bool(self.nasa9_intervals)
+        has_wilhoit = self.wilhoit is not None
         has_points = bool(self.points)
-        if not (has_scalar or has_nasa or has_points):
+        if not (has_scalar or has_nasa or has_nasa9 or has_wilhoit or has_points):
             raise ValueError(
                 "Thermo upload must include at least one of: a scalar "
-                "thermo value (h298_kj_mol or s298_j_mol_k), a NASA block, "
-                "or one or more thermo points."
+                "thermo value (h298_kj_mol or s298_j_mol_k), a NASA-7 block, "
+                "a NASA-9 interval set, a Wilhoit block, or one or more "
+                "thermo points."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_representation_consistency(self) -> Self:
+        """Enforce a single temperature-dependent *fit* representation.
+
+        At most one fit form {nasa (NASA-7), nasa9_intervals, wilhoit} may be
+        populated — mixing e.g. a NASA-9 fit and a Wilhoit fit on one thermo
+        record is ambiguous. Tabulated ``points`` are NOT a fit: they may
+        accompany a fit as auxiliary evidence, or stand alone (tabulated).
+        When ``model_kind`` is supplied it must match the primary
+        representation (nasa7↔nasa, nasa9↔nasa9_intervals, wilhoit↔wilhoit,
+        tabulated↔points-only, scalar↔none). When ``model_kind`` is None the
+        backend infers it (a fit wins over points). NASA-9 interval indices
+        must be unique and contiguous from 1.
+        """
+        fits = {
+            "nasa": self.nasa is not None,
+            "nasa9_intervals": bool(self.nasa9_intervals),
+            "wilhoit": self.wilhoit is not None,
+        }
+        active_fits = [name for name, present in fits.items() if present]
+        if len(active_fits) > 1:
+            raise ValueError(
+                "Thermo upload may populate at most one fit representation "
+                f"(NASA-7 / NASA-9 / Wilhoit); got multiple: "
+                f"{', '.join(sorted(active_fits))}. Tabulated points may "
+                "accompany a fit, but two fits on one record are ambiguous."
+            )
+
+        # NASA-9 interval indices must be unique and contiguous from 1.
+        if self.nasa9_intervals:
+            indices = [iv.interval_index for iv in self.nasa9_intervals]
+            if len(set(indices)) != len(indices):
+                raise ValueError(
+                    "nasa9_intervals interval_index values must be unique."
+                )
+            if sorted(indices) != list(range(1, len(indices) + 1)):
+                raise ValueError(
+                    "nasa9_intervals interval_index values must be contiguous "
+                    "starting from 1."
+                )
+
+        # If model_kind is supplied, it must agree with the primary
+        # representation (points may coexist with any fit).
+        if self.model_kind is not None:
+            fit_for_kind = {
+                ThermoModelKind.nasa7: "nasa",
+                ThermoModelKind.nasa9: "nasa9_intervals",
+                ThermoModelKind.wilhoit: "wilhoit",
+            }
+            has_points = bool(self.points)
+            if self.model_kind == ThermoModelKind.scalar:
+                if active_fits or has_points:
+                    raise ValueError(
+                        "model_kind='scalar' is incompatible with a populated "
+                        "representation block (fit or tabulated points)."
+                    )
+            elif self.model_kind == ThermoModelKind.tabulated:
+                if active_fits or not has_points:
+                    raise ValueError(
+                        "model_kind='tabulated' requires tabulated points and "
+                        "no fit block."
+                    )
+            else:
+                expected_fit = fit_for_kind[self.model_kind]
+                if active_fits != [expected_fit]:
+                    raise ValueError(
+                        f"model_kind='{self.model_kind.value}' requires the "
+                        f"'{expected_fit}' fit block to be populated."
+                    )
         return self

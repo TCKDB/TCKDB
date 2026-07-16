@@ -4,17 +4,53 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.db.models.common import ThermoModelKind
 from app.db.models.thermo import (
     Thermo,
     ThermoNASA,
+    ThermoNASA9Interval,
     ThermoPoint,
     ThermoSourceCalculation,
+    ThermoWilhoit,
 )
 from app.schemas.entities.thermo import ThermoCreate
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_resolution import resolve_software_release_ref
+
+
+def infer_thermo_model_kind(
+    *,
+    model_kind: ThermoModelKind | None,
+    has_nasa: bool,
+    has_nasa9: bool,
+    has_wilhoit: bool,
+    has_points: bool,
+) -> ThermoModelKind | None:
+    """Resolve the effective thermo ``model_kind``.
+
+    An explicit ``model_kind`` always wins. Otherwise infer from the
+    populated representation: a fit takes precedence over tabulated points
+    (nasa→nasa7, nasa9→nasa9, wilhoit→wilhoit), then points→tabulated; when
+    nothing is populated the record is ``scalar``.
+
+    The upload schema guarantees at most one *fit* block is populated (points
+    may accompany a fit as auxiliary evidence) and that an explicit
+    ``model_kind`` agrees with the primary representation, so the inference
+    here is unambiguous.
+    """
+    if model_kind is not None:
+        return model_kind
+    if has_nasa:
+        return ThermoModelKind.nasa7
+    if has_nasa9:
+        return ThermoModelKind.nasa9
+    if has_wilhoit:
+        return ThermoModelKind.wilhoit
+    if has_points:
+        return ThermoModelKind.tabulated
+    return ThermoModelKind.scalar
 
 
 def resolve_thermo_upload(
@@ -44,9 +80,18 @@ def resolve_thermo_upload(
         session, request.workflow_tool_release
     )
 
+    model_kind = infer_thermo_model_kind(
+        model_kind=request.model_kind,
+        has_nasa=request.nasa is not None,
+        has_nasa9=bool(request.nasa9_intervals),
+        has_wilhoit=request.wilhoit is not None,
+        has_points=bool(request.points),
+    )
+
     return ThermoCreate(
         species_entry_id=species_entry_id,
         scientific_origin=request.scientific_origin,
+        model_kind=model_kind,
         literature_id=literature.id if literature else None,
         software_release_id=software_release.id if software_release else None,
         workflow_tool_release_id=(
@@ -67,6 +112,8 @@ def resolve_thermo_upload(
         note=request.note,
         points=request.points,
         nasa=request.nasa,
+        nasa9_intervals=request.nasa9_intervals,
+        wilhoit=request.wilhoit,
         source_calculations=[],
         # statmech_id is resolved in the workflow (owner-consistency check)
         # and spliced onto the ThermoCreate there.
@@ -90,6 +137,7 @@ def persist_thermo(
     thermo = Thermo(
         species_entry_id=thermo_create.species_entry_id,
         scientific_origin=thermo_create.scientific_origin,
+        model_kind=thermo_create.model_kind,
         literature_id=thermo_create.literature_id,
         workflow_tool_release_id=thermo_create.workflow_tool_release_id,
         software_release_id=thermo_create.software_release_id,
@@ -149,6 +197,42 @@ def persist_thermo(
             )
         )
 
+    for interval in thermo_create.nasa9_intervals:
+        session.add(
+            ThermoNASA9Interval(
+                thermo_id=thermo.id,
+                interval_index=interval.interval_index,
+                t_min_k=interval.t_min_k,
+                t_max_k=interval.t_max_k,
+                a1=interval.a1,
+                a2=interval.a2,
+                a3=interval.a3,
+                a4=interval.a4,
+                a5=interval.a5,
+                a6=interval.a6,
+                a7=interval.a7,
+                a8=interval.a8,
+                a9=interval.a9,
+            )
+        )
+
+    if thermo_create.wilhoit is not None:
+        w = thermo_create.wilhoit
+        session.add(
+            ThermoWilhoit(
+                thermo_id=thermo.id,
+                cp0_j_mol_k=w.cp0_j_mol_k,
+                cp_inf_j_mol_k=w.cp_inf_j_mol_k,
+                b_k=w.b_k,
+                a0=w.a0,
+                a1=w.a1,
+                a2=w.a2,
+                a3=w.a3,
+                h0_kj_mol=w.h0_kj_mol,
+                s0_j_mol_k=w.s0_j_mol_k,
+            )
+        )
+
     for sc in thermo_create.source_calculations:
         session.add(
             ThermoSourceCalculation(
@@ -158,7 +242,13 @@ def persist_thermo(
             )
         )
 
-    if thermo_create.points or thermo_create.nasa or thermo_create.source_calculations:
+    if (
+        thermo_create.points
+        or thermo_create.nasa
+        or thermo_create.nasa9_intervals
+        or thermo_create.wilhoit
+        or thermo_create.source_calculations
+    ):
         session.flush()
 
     return thermo

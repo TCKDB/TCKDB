@@ -33432,15 +33432,253 @@
         "title": "ThermoInBundle",
         "type": "object"
       },
+      "ThermoModelKind": {
+        "description": "Explicit representation kind for a thermo record.\n\nPreviously the representation was implied by which child rows existed;\nthis enum makes it explicit so NASA-9 (arbitrary interval count) and\nWilhoit forms can be distinguished from NASA-7 / tabulated / scalar.",
+        "enum": [
+          "nasa7",
+          "nasa9",
+          "wilhoit",
+          "tabulated",
+          "scalar"
+        ],
+        "title": "ThermoModelKind",
+        "type": "string"
+      },
       "ThermoModelKindQuery": {
-        "description": "v0 thermo model kinds, mapped from the underlying schema layout.\n\n``nasa``    record has a ThermoNASA row.\n``points``  record has ThermoPoint rows.\n``scalar``  record has neither — only h298/s298 scalar columns.\n\nWilhoit is not represented in v0 schema and is out of scope.",
+        "description": "Thermo model kinds surfaced by the read API.\n\n``nasa``     record is a NASA-7 fit (has a ThermoNASA row).\n``nasa9``    record is a NASA-9 fit (has ThermoNASA9Interval rows).\n``wilhoit``  record is a Wilhoit fit (has a ThermoWilhoit row).\n``points``   record has ThermoPoint rows.\n``scalar``   record has none of those — only h298/s298 scalar columns.\n\n``nasa``/``points``/``scalar`` are retained unchanged for backward\ncompatibility; ``nasa9`` and ``wilhoit`` were added alongside the\nNASA-9 / Wilhoit representations.",
         "enum": [
           "nasa",
+          "nasa9",
+          "wilhoit",
           "points",
           "scalar"
         ],
         "title": "ThermoModelKindQuery",
         "type": "string"
+      },
+      "ThermoNASA9IntervalBlock": {
+        "description": "One NASA-9 polynomial interval matching ThermoNASA9Interval columns.",
+        "properties": {
+          "a1": {
+            "title": "A1",
+            "type": "number"
+          },
+          "a2": {
+            "title": "A2",
+            "type": "number"
+          },
+          "a3": {
+            "title": "A3",
+            "type": "number"
+          },
+          "a4": {
+            "title": "A4",
+            "type": "number"
+          },
+          "a5": {
+            "title": "A5",
+            "type": "number"
+          },
+          "a6": {
+            "title": "A6",
+            "type": "number"
+          },
+          "a7": {
+            "title": "A7",
+            "type": "number"
+          },
+          "a8": {
+            "title": "A8",
+            "type": "number"
+          },
+          "a9": {
+            "title": "A9",
+            "type": "number"
+          },
+          "interval_index": {
+            "title": "Interval Index",
+            "type": "integer"
+          },
+          "t_max_k": {
+            "title": "T Max K",
+            "type": "number"
+          },
+          "t_min_k": {
+            "title": "T Min K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "interval_index",
+          "t_min_k",
+          "t_max_k",
+          "a1",
+          "a2",
+          "a3",
+          "a4",
+          "a5",
+          "a6",
+          "a7",
+          "a8",
+          "a9"
+        ],
+        "title": "ThermoNASA9IntervalBlock",
+        "type": "object"
+      },
+      "ThermoNASA9IntervalCreate": {
+        "additionalProperties": false,
+        "description": "Nested create payload for one NASA-9 polynomial interval.",
+        "properties": {
+          "a1": {
+            "title": "A1",
+            "type": "number"
+          },
+          "a2": {
+            "title": "A2",
+            "type": "number"
+          },
+          "a3": {
+            "title": "A3",
+            "type": "number"
+          },
+          "a4": {
+            "title": "A4",
+            "type": "number"
+          },
+          "a5": {
+            "title": "A5",
+            "type": "number"
+          },
+          "a6": {
+            "title": "A6",
+            "type": "number"
+          },
+          "a7": {
+            "title": "A7",
+            "type": "number"
+          },
+          "a8": {
+            "title": "A8",
+            "type": "number"
+          },
+          "a9": {
+            "title": "A9",
+            "type": "number"
+          },
+          "interval_index": {
+            "minimum": 1.0,
+            "title": "Interval Index",
+            "type": "integer"
+          },
+          "t_max_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "T Max K",
+            "type": "number"
+          },
+          "t_min_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "T Min K",
+            "type": "number"
+          }
+        },
+        "required": [
+          "interval_index",
+          "t_min_k",
+          "t_max_k",
+          "a1",
+          "a2",
+          "a3",
+          "a4",
+          "a5",
+          "a6",
+          "a7",
+          "a8",
+          "a9"
+        ],
+        "title": "ThermoNASA9IntervalCreate",
+        "type": "object"
+      },
+      "ThermoNASA9IntervalRead": {
+        "description": "Read schema for a NASA-9 polynomial interval.",
+        "properties": {
+          "a1": {
+            "title": "A1",
+            "type": "number"
+          },
+          "a2": {
+            "title": "A2",
+            "type": "number"
+          },
+          "a3": {
+            "title": "A3",
+            "type": "number"
+          },
+          "a4": {
+            "title": "A4",
+            "type": "number"
+          },
+          "a5": {
+            "title": "A5",
+            "type": "number"
+          },
+          "a6": {
+            "title": "A6",
+            "type": "number"
+          },
+          "a7": {
+            "title": "A7",
+            "type": "number"
+          },
+          "a8": {
+            "title": "A8",
+            "type": "number"
+          },
+          "a9": {
+            "title": "A9",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "interval_index": {
+            "minimum": 1.0,
+            "title": "Interval Index",
+            "type": "integer"
+          },
+          "t_max_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "T Max K",
+            "type": "number"
+          },
+          "t_min_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "T Min K",
+            "type": "number"
+          },
+          "thermo_id": {
+            "title": "Thermo Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "interval_index",
+          "t_min_k",
+          "t_max_k",
+          "a1",
+          "a2",
+          "a3",
+          "a4",
+          "a5",
+          "a6",
+          "a7",
+          "a8",
+          "a9",
+          "id",
+          "thermo_id"
+        ],
+        "title": "ThermoNASA9IntervalRead",
+        "type": "object"
       },
       "ThermoNASABlock": {
         "description": "Two-segment NASA polynomial block matching ThermoNASA columns.",
@@ -34277,6 +34515,16 @@
             ],
             "title": "Literature Id"
           },
+          "model_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoModelKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "nasa": {
             "anyOf": [
               {
@@ -34286,6 +34534,13 @@
                 "type": "null"
               }
             ]
+          },
+          "nasa9_intervals": {
+            "items": {
+              "$ref": "#/components/schemas/ThermoNASA9IntervalRead"
+            },
+            "title": "Nasa9 Intervals",
+            "type": "array"
           },
           "note": {
             "anyOf": [
@@ -34409,6 +34664,16 @@
             ],
             "title": "Tmin K"
           },
+          "wilhoit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoWilhoitRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "workflow_tool_release_id": {
             "anyOf": [
               {
@@ -34481,6 +34746,20 @@
               }
             ]
           },
+          "nasa9": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ThermoNASA9IntervalBlock"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nasa9"
+          },
           "points": {
             "anyOf": [
               {
@@ -34548,6 +34827,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "wilhoit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoWilhoitBlock"
               },
               {
                 "type": "null"
@@ -35076,6 +35365,16 @@
               }
             ]
           },
+          "model_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoModelKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "nasa": {
             "anyOf": [
               {
@@ -35085,6 +35384,13 @@
                 "type": "null"
               }
             ]
+          },
+          "nasa9_intervals": {
+            "items": {
+              "$ref": "#/components/schemas/ThermoNASA9IntervalCreate"
+            },
+            "title": "Nasa9 Intervals",
+            "type": "array"
           },
           "note": {
             "anyOf": [
@@ -35197,6 +35503,16 @@
             ],
             "title": "Tmin K"
           },
+          "wilhoit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoWilhoitCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "workflow_tool_release": {
             "anyOf": [
               {
@@ -35254,6 +35570,216 @@
           "species_entry_id"
         ],
         "title": "ThermoUploadResult",
+        "type": "object"
+      },
+      "ThermoWilhoitBlock": {
+        "description": "Wilhoit heat-capacity form matching ThermoWilhoit columns.",
+        "properties": {
+          "a0": {
+            "title": "A0",
+            "type": "number"
+          },
+          "a1": {
+            "title": "A1",
+            "type": "number"
+          },
+          "a2": {
+            "title": "A2",
+            "type": "number"
+          },
+          "a3": {
+            "title": "A3",
+            "type": "number"
+          },
+          "b_k": {
+            "title": "B K",
+            "type": "number"
+          },
+          "cp0_j_mol_k": {
+            "title": "Cp0 J Mol K",
+            "type": "number"
+          },
+          "cp_inf_j_mol_k": {
+            "title": "Cp Inf J Mol K",
+            "type": "number"
+          },
+          "h0_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H0 Kj Mol"
+          },
+          "s0_j_mol_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S0 J Mol K"
+          }
+        },
+        "required": [
+          "cp0_j_mol_k",
+          "cp_inf_j_mol_k",
+          "b_k",
+          "a0",
+          "a1",
+          "a2",
+          "a3"
+        ],
+        "title": "ThermoWilhoitBlock",
+        "type": "object"
+      },
+      "ThermoWilhoitCreate": {
+        "additionalProperties": false,
+        "description": "Nested create payload for the Wilhoit heat-capacity form.",
+        "properties": {
+          "a0": {
+            "title": "A0",
+            "type": "number"
+          },
+          "a1": {
+            "title": "A1",
+            "type": "number"
+          },
+          "a2": {
+            "title": "A2",
+            "type": "number"
+          },
+          "a3": {
+            "title": "A3",
+            "type": "number"
+          },
+          "b_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "B K",
+            "type": "number"
+          },
+          "cp0_j_mol_k": {
+            "minimum": 0.0,
+            "title": "Cp0 J Mol K",
+            "type": "number"
+          },
+          "cp_inf_j_mol_k": {
+            "minimum": 0.0,
+            "title": "Cp Inf J Mol K",
+            "type": "number"
+          },
+          "h0_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H0 Kj Mol"
+          },
+          "s0_j_mol_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S0 J Mol K"
+          }
+        },
+        "required": [
+          "cp0_j_mol_k",
+          "cp_inf_j_mol_k",
+          "b_k",
+          "a0",
+          "a1",
+          "a2",
+          "a3"
+        ],
+        "title": "ThermoWilhoitCreate",
+        "type": "object"
+      },
+      "ThermoWilhoitRead": {
+        "description": "Read schema for the Wilhoit heat-capacity form.",
+        "properties": {
+          "a0": {
+            "title": "A0",
+            "type": "number"
+          },
+          "a1": {
+            "title": "A1",
+            "type": "number"
+          },
+          "a2": {
+            "title": "A2",
+            "type": "number"
+          },
+          "a3": {
+            "title": "A3",
+            "type": "number"
+          },
+          "b_k": {
+            "exclusiveMinimum": 0.0,
+            "title": "B K",
+            "type": "number"
+          },
+          "cp0_j_mol_k": {
+            "minimum": 0.0,
+            "title": "Cp0 J Mol K",
+            "type": "number"
+          },
+          "cp_inf_j_mol_k": {
+            "minimum": 0.0,
+            "title": "Cp Inf J Mol K",
+            "type": "number"
+          },
+          "h0_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H0 Kj Mol"
+          },
+          "s0_j_mol_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S0 J Mol K"
+          },
+          "thermo_id": {
+            "title": "Thermo Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cp0_j_mol_k",
+          "cp_inf_j_mol_k",
+          "b_k",
+          "a0",
+          "a1",
+          "a2",
+          "a3",
+          "thermo_id"
+        ],
+        "title": "ThermoWilhoitRead",
         "type": "object"
       },
       "ThirdBodyEfficiencyUpload": {

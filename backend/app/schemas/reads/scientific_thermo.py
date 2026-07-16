@@ -30,16 +30,22 @@ from app.services.trust.models import TrustFragment
 
 
 class ThermoModelKindQuery(str, Enum):
-    """v0 thermo model kinds, mapped from the underlying schema layout.
+    """Thermo model kinds surfaced by the read API.
 
-    ``nasa``    record has a ThermoNASA row.
-    ``points``  record has ThermoPoint rows.
-    ``scalar``  record has neither — only h298/s298 scalar columns.
+    ``nasa``     record is a NASA-7 fit (has a ThermoNASA row).
+    ``nasa9``    record is a NASA-9 fit (has ThermoNASA9Interval rows).
+    ``wilhoit``  record is a Wilhoit fit (has a ThermoWilhoit row).
+    ``points``   record has ThermoPoint rows.
+    ``scalar``   record has none of those — only h298/s298 scalar columns.
 
-    Wilhoit is not represented in v0 schema and is out of scope.
+    ``nasa``/``points``/``scalar`` are retained unchanged for backward
+    compatibility; ``nasa9`` and ``wilhoit`` were added alongside the
+    NASA-9 / Wilhoit representations.
     """
 
     nasa = "nasa"
+    nasa9 = "nasa9"
+    wilhoit = "wilhoit"
     points = "points"
     scalar = "scalar"
 
@@ -87,6 +93,37 @@ class ThermoNASABlock(BaseModel):
     t_high: float | None = None
     low_temperature_coefficients: list[float | None] = Field(default_factory=list)
     high_temperature_coefficients: list[float | None] = Field(default_factory=list)
+
+
+class ThermoNASA9IntervalBlock(BaseModel):
+    """One NASA-9 polynomial interval matching ThermoNASA9Interval columns."""
+
+    interval_index: int
+    t_min_k: float
+    t_max_k: float
+    a1: float
+    a2: float
+    a3: float
+    a4: float
+    a5: float
+    a6: float
+    a7: float
+    a8: float
+    a9: float
+
+
+class ThermoWilhoitBlock(BaseModel):
+    """Wilhoit heat-capacity form matching ThermoWilhoit columns."""
+
+    cp0_j_mol_k: float
+    cp_inf_j_mol_k: float
+    b_k: float
+    a0: float
+    a1: float
+    a2: float
+    a3: float
+    h0_kj_mol: float | None = None
+    s0_j_mol_k: float | None = None
 
 
 class ThermoPointBlock(BaseModel):
@@ -167,6 +204,8 @@ class ThermoRecord(BaseModel):
     h298_uncertainty_kj_mol: float | None = None
     s298_uncertainty_j_mol_k: float | None = None
     nasa: ThermoNASABlock | None = None
+    nasa9: list[ThermoNASA9IntervalBlock] | None = None
+    wilhoit: ThermoWilhoitBlock | None = None
     points: list[ThermoPointBlock] | None = None
     temperature_coverage: TemperatureCoverage | None = None
     evidence_completeness: EvidenceCompletenessBreakdown

@@ -519,6 +519,14 @@ enum ThermoCalculationRole {
   imported
 }
 
+enum ThermoModelKind {
+  nasa7
+  nasa9
+  wilhoit
+  tabulated
+  scalar
+}
+
 enum TorsionTreatmentKind {
   hindered_rotor
   free_rotor
@@ -2493,6 +2501,7 @@ Table thermo {
   id bigint [pk, not null]
   species_entry_id bigint [not null, ref: > species_entry.id]
   scientific_origin ScientificOriginKind [not null]
+  model_kind ThermoModelKind
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
@@ -2572,6 +2581,36 @@ Table thermo_nasa {
   Note: 'NASA polynomial coefficients for a thermo record.'
 }
 
+Table thermo_nasa9_interval {
+  id bigint [pk, not null]
+  thermo_id bigint [not null, ref: > thermo.id]
+  interval_index int [not null]
+  t_min_k double [not null]
+  t_max_k double [not null]
+  a1 double [not null]
+  a2 double [not null]
+  a3 double [not null]
+  a4 double [not null]
+  a5 double [not null]
+  a6 double [not null]
+  a7 double [not null]
+  a8 double [not null]
+  a9 double [not null]
+
+  indexes {
+    thermo_id [name: 'ix_thermo_nasa9_interval_thermo_id']
+    (thermo_id, interval_index) [unique, name: 'uq_thermo_nasa9_interval_index']
+  }
+
+  checks {
+    `interval_index >= 1` [name: 'ck_thermo_nasa9_interval_interval_index_ge_1']
+    `t_max_k > t_min_k` [name: 'ck_thermo_nasa9_interval_t_max_k_gt_t_min_k']
+    `t_min_k > 0` [name: 'ck_thermo_nasa9_interval_t_min_k_gt_0']
+  }
+
+  Note: 'One temperature interval of a NASA-9 (Glenn/NASA-9) polynomial.'
+}
+
 Table thermo_point {
   thermo_id bigint [not null, ref: > thermo.id]
   temperature_k double [not null]
@@ -2597,6 +2636,27 @@ Table thermo_source_calculation {
   }
 
   Note: 'Links thermo records to supporting calculations by role.'
+}
+
+Table thermo_wilhoit {
+  thermo_id bigint [pk, not null, ref: > thermo.id]
+  cp0_j_mol_k double [not null]
+  cp_inf_j_mol_k double [not null]
+  b_k double [not null]
+  a0 double [not null]
+  a1 double [not null]
+  a2 double [not null]
+  a3 double [not null]
+  h0_kj_mol double
+  s0_j_mol_k double
+
+  checks {
+    `b_k > 0` [name: 'ck_thermo_wilhoit_b_k_gt_0']
+    `cp0_j_mol_k >= 0` [name: 'ck_thermo_wilhoit_cp0_ge_0']
+    `cp_inf_j_mol_k >= 0` [name: 'ck_thermo_wilhoit_cp_inf_ge_0']
+  }
+
+  Note: 'Wilhoit heat-capacity form for a thermo record (1:1).'
 }
 
 Table transition_state {

@@ -82,6 +82,32 @@ def _seed_thermo(session: Session, *, smiles: str, note: str) -> int:
     return thermo.id
 
 
+def _seed_nasa9_thermo(session: Session, *, smiles: str, note: str) -> int:
+    """Persist a NASA-9 (2-interval) thermo and return its id."""
+    request = ThermoUploadRequest(
+        species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
+        scientific_origin="computed",
+        nasa9_intervals=[
+            {
+                "interval_index": 1,
+                "t_min_k": 200.0, "t_max_k": 1000.0,
+                "a1": 1.0, "a2": 2.0, "a3": 3.0, "a4": 4.0, "a5": 5.0,
+                "a6": 6.0, "a7": 7.0, "a8": 8.0, "a9": 9.0,
+            },
+            {
+                "interval_index": 2,
+                "t_min_k": 1000.0, "t_max_k": 6000.0,
+                "a1": 11.0, "a2": 12.0, "a3": 13.0, "a4": 14.0, "a5": 15.0,
+                "a6": 16.0, "a7": 17.0, "a8": 18.0, "a9": 19.0,
+            },
+        ],
+        note=note,
+    )
+    thermo = persist_thermo_upload(session, request)
+    session.flush()
+    return thermo.id
+
+
 def _seed_kinetics(session: Session, *, note: str) -> int:
     request = KineticsUploadRequest(
         reaction={
@@ -168,6 +194,34 @@ def test_export_thermo_bundle_validates_and_carries_thermo_only(db_engine) -> No
     assert revalidated.source_instance.schema_version
     assert revalidated.exporter.local_user_label == "tester"
     assert revalidated.submission.title == "Thermo bundle test"
+
+
+def test_export_thermo_bundle_round_trips_nasa9(db_engine) -> None:
+    """A NASA-9 thermo (no scalar H/S) round-trips through bundle export.
+
+    Guards the fix for the export blocker: before it, a nasa9/wilhoit-only
+    thermo reconstructed to an empty payload and was rejected on re-validation.
+    """
+    with _isolated_session(db_engine) as session:
+        thermo_id = _seed_nasa9_thermo(session, smiles="O", note="export-nasa9")
+        bundle = export_thermo_bundle(
+            session,
+            thermo_ids=[thermo_id],
+            title="NASA-9 export",
+            summary="NASA-9 thermo exported for tests.",
+            exporter_label="tester",
+        )
+
+    # Re-validates as a full ContributionBundleV0 (the same validators a real
+    # upload hits) — proves the reconstructed payload is well-formed.
+    revalidated = ContributionBundleV0.model_validate(bundle.model_dump(mode="json"))
+    assert len(revalidated.records.thermo_uploads) == 1
+    upload = revalidated.records.thermo_uploads[0]
+    assert upload.model_kind is not None and upload.model_kind.value == "nasa9"
+    assert len(upload.nasa9_intervals) == 2
+    assert [iv.interval_index for iv in upload.nasa9_intervals] == [1, 2]
+    assert upload.nasa9_intervals[0].a1 == 1.0
+    assert upload.nasa9_intervals[1].a9 == 19.0
 
 
 def test_export_thermo_bundle_carries_provenance_when_present(db_engine) -> None:

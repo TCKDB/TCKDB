@@ -8,16 +8,21 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 from tckdb_schemas.thermo import (
+    ThermoNASA9IntervalBase,
+    ThermoNASA9IntervalCreate,
     ThermoNASABase,
     ThermoNASACreate,
     ThermoPointBase,
     ThermoPointCreate,
+    ThermoWilhoitBase,
+    ThermoWilhoitCreate,
 )
 
 from app.db.models.common import (
     PhaseKind,
     ScientificOriginKind,
     ThermoCalculationRole,
+    ThermoModelKind,
 )
 from app.schemas.common import (
     ORMBaseSchema,
@@ -50,6 +55,50 @@ class ThermoNASAUpdate(ThermoNASABase, SchemaBase):
 
 class ThermoNASARead(ThermoNASABase, ORMBaseSchema):
     """Read schema for NASA polynomial coefficients."""
+
+    thermo_id: int
+
+
+class ThermoNASA9IntervalUpdate(SchemaBase):
+    """Patch schema for a NASA-9 polynomial interval."""
+
+    interval_index: int | None = Field(default=None, ge=1)
+    t_min_k: float | None = Field(default=None, gt=0)
+    t_max_k: float | None = Field(default=None, gt=0)
+    a1: float | None = None
+    a2: float | None = None
+    a3: float | None = None
+    a4: float | None = None
+    a5: float | None = None
+    a6: float | None = None
+    a7: float | None = None
+    a8: float | None = None
+    a9: float | None = None
+
+
+class ThermoNASA9IntervalRead(ThermoNASA9IntervalBase, ORMBaseSchema):
+    """Read schema for a NASA-9 polynomial interval."""
+
+    id: int
+    thermo_id: int
+
+
+class ThermoWilhoitUpdate(SchemaBase):
+    """Patch schema for the Wilhoit heat-capacity form."""
+
+    cp0_j_mol_k: float | None = Field(default=None, ge=0)
+    cp_inf_j_mol_k: float | None = Field(default=None, ge=0)
+    b_k: float | None = Field(default=None, gt=0)
+    a0: float | None = None
+    a1: float | None = None
+    a2: float | None = None
+    a3: float | None = None
+    h0_kj_mol: float | None = None
+    s0_j_mol_k: float | None = None
+
+
+class ThermoWilhoitRead(ThermoWilhoitBase, ORMBaseSchema):
+    """Read schema for the Wilhoit heat-capacity form."""
 
     thermo_id: int
 
@@ -120,6 +169,7 @@ class ThermoBase(BaseModel):
 
     species_entry_id: int
     scientific_origin: ScientificOriginKind
+    model_kind: ThermoModelKind | None = None
 
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None
@@ -165,6 +215,8 @@ class ThermoCreate(ThermoBase, SchemaBase):
 
     points: list[ThermoPointCreate] = Field(default_factory=list)
     nasa: ThermoNASACreate | None = None
+    nasa9_intervals: list[ThermoNASA9IntervalCreate] = Field(default_factory=list)
+    wilhoit: ThermoWilhoitCreate | None = None
     source_calculations: list[ThermoSourceCalculationCreate] = Field(
         default_factory=list
     )
@@ -194,6 +246,7 @@ class ThermoUpdate(SchemaBase):
     """Patch schema for a thermo record."""
 
     scientific_origin: ScientificOriginKind | None = None
+    model_kind: ThermoModelKind | None = None
 
     literature_id: int | None = None
     workflow_tool_release_id: int | None = None
@@ -235,6 +288,8 @@ class ThermoRead(ThermoBase, TimestampedCreatedByReadSchema):
 
     points: list[ThermoPointRead] = Field(default_factory=list)
     nasa: ThermoNASARead | None = None
+    nasa9_intervals: list[ThermoNASA9IntervalRead] = Field(default_factory=list)
+    wilhoit: ThermoWilhoitRead | None = None
     source_calculations: list[ThermoSourceCalculationRead] = Field(
         default_factory=list
     )

@@ -20,6 +20,7 @@ from app.db.models.common import (
     StatmechCalculationRole,
     SubmissionRecordType,
     ThermoCalculationRole,
+    ThermoModelKind,
     ValidationStatus,
 )
 from app.db.models.group_additivity import (
@@ -33,8 +34,10 @@ from app.db.models.statmech import Statmech, StatmechSourceCalculation
 from app.db.models.thermo import (
     Thermo,
     ThermoNASA,
+    ThermoNASA9Interval,
     ThermoPoint,
     ThermoSourceCalculation,
+    ThermoWilhoit,
 )
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
@@ -51,11 +54,13 @@ from app.schemas.reads.scientific_thermo import (
     RequestEcho,
     ScientificSpeciesThermoResponse,
     ThermoModelKindQuery,
+    ThermoNASA9IntervalBlock,
     ThermoNASABlock,
     ThermoPointBlock,
     ThermoProvenance,
     ThermoReadRequest,
     ThermoRecord,
+    ThermoWilhoitBlock,
 )
 from app.services.scientific_read.common import (
     build_pagination,
@@ -213,6 +218,8 @@ def get_species_thermo(
 
     sources_by_thermo = _load_sources(session, [t.id for t in thermo_rows])
     nasa_by_thermo = _load_nasa(session, [t.id for t in thermo_rows])
+    nasa9_by_thermo = _load_nasa9(session, [t.id for t in thermo_rows])
+    wilhoit_by_thermo = _load_wilhoit(session, [t.id for t in thermo_rows])
     points_by_thermo = _load_points(session, [t.id for t in thermo_rows])
     ga_by_thermo = _load_group_additivity(session, [t.id for t in thermo_rows])
     statmech_ids_by_entry = _load_statmech_ids(session, species_entry_id)
@@ -232,15 +239,17 @@ def get_species_thermo(
     picked_statmech_id = min(statmech_ids_by_entry) if statmech_ids_by_entry else None
     statmech_sources = _load_statmech_sources(session, picked_statmech_id)
 
-    # Determine model_kind per record (nasa | points | scalar) and apply filter.
+    # Determine model_kind per record from the stored thermo.model_kind
+    # (falling back to child-row inference for legacy NULL rows) and filter.
     classified: list[tuple[Thermo, ThermoModelKindQuery]] = []
     for t in thermo_rows:
-        if t.id in nasa_by_thermo:
-            kind = ThermoModelKindQuery.nasa
-        elif points_by_thermo.get(t.id):
-            kind = ThermoModelKindQuery.points
-        else:
-            kind = ThermoModelKindQuery.scalar
+        kind = _classify_model_kind(
+            t,
+            has_nasa=t.id in nasa_by_thermo,
+            has_nasa9=bool(nasa9_by_thermo.get(t.id)),
+            has_wilhoit=t.id in wilhoit_by_thermo,
+            has_points=bool(points_by_thermo.get(t.id)),
+        )
         if request.model_kind is not None and kind != request.model_kind:
             continue
         classified.append((t, kind))
@@ -332,6 +341,8 @@ def get_species_thermo(
             statmech_sources=statmech_sources,
             nasa_present=nasa_block is not None,
             points_count=len(points_by_thermo.get(t.id, [])),
+            has_nasa9=bool(nasa9_by_thermo.get(t.id)),
+            has_wilhoit=t.id in wilhoit_by_thermo,
             geom_vals=geom_vals,
             scf_vals=scf_vals,
         )
@@ -357,6 +368,18 @@ def get_species_thermo(
             h298_uncertainty_kj_mol=t.h298_uncertainty_kj_mol,
             s298_uncertainty_j_mol_k=t.s298_uncertainty_j_mol_k,
             nasa=_build_nasa_block(nasa_block) if nasa_block is not None else None,
+            nasa9=(
+                _build_nasa9_blocks(nasa9_by_thermo[t.id])
+                if model_kind == ThermoModelKindQuery.nasa9
+                and nasa9_by_thermo.get(t.id)
+                else None
+            ),
+            wilhoit=(
+                _build_wilhoit_block(wilhoit_by_thermo[t.id])
+                if model_kind == ThermoModelKindQuery.wilhoit
+                and t.id in wilhoit_by_thermo
+                else None
+            ),
             points=(
                 [
                     ThermoPointBlock(
@@ -504,6 +527,33 @@ def _load_points(
         grouped[p.thermo_id].append(p)
     # Already ordered by temperature_k via the ORM relationship default.
     return grouped
+
+
+def _load_nasa9(
+    session: Session, thermo_ids: list[int]
+) -> dict[int, list[ThermoNASA9Interval]]:
+    if not thermo_ids:
+        return {}
+    rows = session.scalars(
+        select(ThermoNASA9Interval)
+        .where(ThermoNASA9Interval.thermo_id.in_(thermo_ids))
+        .order_by(ThermoNASA9Interval.interval_index)
+    ).all()
+    grouped: dict[int, list[ThermoNASA9Interval]] = {tid: [] for tid in thermo_ids}
+    for iv in rows:
+        grouped[iv.thermo_id].append(iv)
+    return grouped
+
+
+def _load_wilhoit(
+    session: Session, thermo_ids: list[int]
+) -> dict[int, ThermoWilhoit]:
+    if not thermo_ids:
+        return {}
+    rows = session.scalars(
+        select(ThermoWilhoit).where(ThermoWilhoit.thermo_id.in_(thermo_ids))
+    ).all()
+    return {w.thermo_id: w for w in rows}
 
 
 def _load_group_additivity(
@@ -888,6 +938,8 @@ def _evidence_breakdown(
     statmech_sources: list[StatmechSourceCalculation],
     nasa_present: bool,
     points_count: int,
+    has_nasa9: bool = False,
+    has_wilhoit: bool = False,
     geom_vals: dict[int, ValidationStatus],
     scf_vals: dict[int, SCFStabilityStatus],
 ) -> EvidenceCompletenessBreakdown:
@@ -915,7 +967,9 @@ def _evidence_breakdown(
         or StatmechCalculationRole.sp in statmech_roles
         or StatmechCalculationRole.composite in statmech_roles
     )
-    has_temperature_dependent_model = nasa_present or points_count >= 2
+    has_temperature_dependent_model = (
+        nasa_present or has_nasa9 or has_wilhoit or points_count >= 2
+    )
 
     has_uncertainty = any(
         v is not None
@@ -959,6 +1013,79 @@ def _evidence_breakdown(
         score=sum(checklist.values()),
         max=len(checklist),
         checklist=checklist,
+    )
+
+
+_STORED_KIND_TO_QUERY: dict[ThermoModelKind, ThermoModelKindQuery] = {
+    ThermoModelKind.nasa7: ThermoModelKindQuery.nasa,
+    ThermoModelKind.nasa9: ThermoModelKindQuery.nasa9,
+    ThermoModelKind.wilhoit: ThermoModelKindQuery.wilhoit,
+    ThermoModelKind.tabulated: ThermoModelKindQuery.points,
+    ThermoModelKind.scalar: ThermoModelKindQuery.scalar,
+}
+
+
+def _classify_model_kind(
+    thermo: Thermo,
+    *,
+    has_nasa: bool,
+    has_nasa9: bool,
+    has_wilhoit: bool,
+    has_points: bool,
+) -> ThermoModelKindQuery:
+    """Map the stored ``thermo.model_kind`` to the read query enum.
+
+    When ``thermo.model_kind`` is set it wins (nasa7→nasa, nasa9→nasa9,
+    wilhoit→wilhoit, tabulated→points, scalar→scalar). When it is NULL —
+    legacy rows the backfill could not classify — fall back to deriving the
+    kind from which child rows exist.
+    """
+    if thermo.model_kind is not None:
+        return _STORED_KIND_TO_QUERY[thermo.model_kind]
+    if has_nasa:
+        return ThermoModelKindQuery.nasa
+    if has_nasa9:
+        return ThermoModelKindQuery.nasa9
+    if has_wilhoit:
+        return ThermoModelKindQuery.wilhoit
+    if has_points:
+        return ThermoModelKindQuery.points
+    return ThermoModelKindQuery.scalar
+
+
+def _build_nasa9_blocks(
+    intervals: list[ThermoNASA9Interval],
+) -> list[ThermoNASA9IntervalBlock]:
+    return [
+        ThermoNASA9IntervalBlock(
+            interval_index=iv.interval_index,
+            t_min_k=iv.t_min_k,
+            t_max_k=iv.t_max_k,
+            a1=iv.a1,
+            a2=iv.a2,
+            a3=iv.a3,
+            a4=iv.a4,
+            a5=iv.a5,
+            a6=iv.a6,
+            a7=iv.a7,
+            a8=iv.a8,
+            a9=iv.a9,
+        )
+        for iv in intervals
+    ]
+
+
+def _build_wilhoit_block(wilhoit: ThermoWilhoit) -> ThermoWilhoitBlock:
+    return ThermoWilhoitBlock(
+        cp0_j_mol_k=wilhoit.cp0_j_mol_k,
+        cp_inf_j_mol_k=wilhoit.cp_inf_j_mol_k,
+        b_k=wilhoit.b_k,
+        a0=wilhoit.a0,
+        a1=wilhoit.a1,
+        a2=wilhoit.a2,
+        a3=wilhoit.a3,
+        h0_kj_mol=wilhoit.h0_kj_mol,
+        s0_j_mol_k=wilhoit.s0_j_mol_k,
     )
 
 

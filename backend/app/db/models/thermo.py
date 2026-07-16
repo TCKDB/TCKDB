@@ -7,14 +7,21 @@ from sqlalchemy import (
     CheckConstraint,
     Double,
     ForeignKey,
+    Integer,
     PrimaryKeyConstraint,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
-from app.db.models.common import PhaseKind, ScientificOriginKind, ThermoCalculationRole
+from app.db.models.common import (
+    PhaseKind,
+    ScientificOriginKind,
+    ThermoCalculationRole,
+    ThermoModelKind,
+)
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
@@ -69,6 +76,15 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     scientific_origin: Mapped[ScientificOriginKind] = mapped_column(
         SAEnum(ScientificOriginKind, name="scientific_origin_kind"),
         nullable=False,
+    )
+
+    # Explicit representation kind. Nullable/additive: legacy rows are
+    # backfilled by the introducing migration, but the column may still be
+    # NULL when representation could not be inferred (read layer falls back
+    # to deriving it from which child rows exist).
+    model_kind: Mapped[Optional[ThermoModelKind]] = mapped_column(
+        SAEnum(ThermoModelKind, name="thermo_model_kind"),
+        nullable=True,
     )
 
     literature_id: Mapped[Optional[int]] = mapped_column(
@@ -148,6 +164,16 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         order_by="ThermoPoint.temperature_k",
     )
     nasa: Mapped[Optional["ThermoNASA"]] = relationship(
+        back_populates="thermo",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    nasa9_intervals: Mapped[list["ThermoNASA9Interval"]] = relationship(
+        back_populates="thermo",
+        cascade="all, delete-orphan",
+        order_by="ThermoNASA9Interval.interval_index",
+    )
+    wilhoit: Mapped[Optional["ThermoWilhoit"]] = relationship(
         back_populates="thermo",
         cascade="all, delete-orphan",
         uselist=False,
@@ -269,6 +295,101 @@ class ThermoNASA(Base):
             "t_mid IS NULL OR t_high IS NULL OR t_high > t_mid",
             name="t_high_gt_t_mid",
         ),
+    )
+
+
+class ThermoNASA9Interval(Base):
+    """One temperature interval of a NASA-9 (Glenn/NASA-9) polynomial.
+
+    Unlike ``ThermoNASA`` (a fixed two-range NASA-7 in a single 1:1 row), a
+    NASA-9 fit has an arbitrary number of temperature intervals, each with
+    its own nine coefficients. One row is stored per interval, ordered by
+    ``interval_index`` (1-based).
+
+    The nine coefficients follow the standard NASA-9 form: ``a1..a7`` are the
+    Cp°/R polynomial ``a1·T⁻² + a2·T⁻¹ + a3 + a4·T + a5·T² + a6·T³ + a7·T⁴``,
+    ``a8`` is the enthalpy integration constant, and ``a9`` is the entropy
+    integration constant.
+    """
+
+    __tablename__ = "thermo_nasa9_interval"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    thermo_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("thermo.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+        index=True,
+    )
+
+    interval_index: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    t_min_k: Mapped[float] = mapped_column(Double, nullable=False)
+    t_max_k: Mapped[float] = mapped_column(Double, nullable=False)
+
+    a1: Mapped[float] = mapped_column(Double, nullable=False)
+    a2: Mapped[float] = mapped_column(Double, nullable=False)
+    a3: Mapped[float] = mapped_column(Double, nullable=False)
+    a4: Mapped[float] = mapped_column(Double, nullable=False)
+    a5: Mapped[float] = mapped_column(Double, nullable=False)
+    a6: Mapped[float] = mapped_column(Double, nullable=False)
+    a7: Mapped[float] = mapped_column(Double, nullable=False)
+    a8: Mapped[float] = mapped_column(Double, nullable=False)
+    a9: Mapped[float] = mapped_column(Double, nullable=False)
+
+    thermo: Mapped["Thermo"] = relationship(back_populates="nasa9_intervals")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "thermo_id", "interval_index", name="uq_thermo_nasa9_interval_index"
+        ),
+        CheckConstraint("interval_index >= 1", name="interval_index_ge_1"),
+        CheckConstraint("t_min_k > 0", name="t_min_k_gt_0"),
+        CheckConstraint("t_max_k > t_min_k", name="t_max_k_gt_t_min_k"),
+    )
+
+
+class ThermoWilhoit(Base):
+    """Wilhoit heat-capacity form for a thermo record (1:1).
+
+    The Wilhoit form gives a continuous ``Cp(T)`` that is well-behaved over
+    the full temperature range:
+
+        ``Cp = Cp0 + (CpInf − Cp0)·y²·[1 + (y − 1)(a0 + a1·y + a2·y² + a3·y³)]``
+
+    with ``y = T / (T + B)``. ``cp0``/``cp_inf`` are the low- and
+    high-temperature heat-capacity limits (fixed unit J/(mol·K)); ``b_k`` is
+    the B scaling parameter (K); ``a0..a3`` are dimensionless shape
+    parameters; ``h0``/``s0`` are the enthalpy/entropy integration constants.
+    """
+
+    __tablename__ = "thermo_wilhoit"
+
+    thermo_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("thermo.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+
+    cp0_j_mol_k: Mapped[float] = mapped_column(Double, nullable=False)
+    cp_inf_j_mol_k: Mapped[float] = mapped_column(Double, nullable=False)
+    b_k: Mapped[float] = mapped_column(Double, nullable=False)
+
+    a0: Mapped[float] = mapped_column(Double, nullable=False)
+    a1: Mapped[float] = mapped_column(Double, nullable=False)
+    a2: Mapped[float] = mapped_column(Double, nullable=False)
+    a3: Mapped[float] = mapped_column(Double, nullable=False)
+
+    h0_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    s0_j_mol_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+
+    thermo: Mapped["Thermo"] = relationship(back_populates="wilhoit")
+
+    __table_args__ = (
+        CheckConstraint("cp0_j_mol_k >= 0", name="cp0_ge_0"),
+        CheckConstraint("cp_inf_j_mol_k >= 0", name="cp_inf_ge_0"),
+        CheckConstraint("b_k > 0", name="b_k_gt_0"),
     )
 
 
