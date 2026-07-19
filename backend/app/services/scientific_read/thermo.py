@@ -226,20 +226,22 @@ def get_species_thermo(
     ga_by_thermo = _load_group_additivity(session, [t.id for t in thermo_rows])
     statmech_ids_by_entry = _load_statmech_ids(session, species_entry_id)
     statmech_refs = _load_statmech_refs(session, statmech_ids_by_entry)
-    # Phase 2 audit: load source-calc rows from the picked statmech so
-    # thermo provenance and evidence completeness can fall back to them
-    # when the thermo's own ThermoSourceCalculation rows are empty.
-    #
-    # Deterministic fallback pick: the lowest statmech id. Coexisting
-    # statmech records are equal candidates; selecting via ``next(iter(set))``
-    # made the borrowed provenance depend on set-iteration order — both
-    # non-deterministic and a silent canonical choice among candidates. ``min``
-    # is reproducible and is kept in sync with the statmech_ref chosen in
-    # ``_build_provenance`` so the surfaced statmech and the borrowed source
-    # calcs always come from the same candidate. It does not imply the picked
-    # statmech is "the" statmech for the entry.
+    # Phase 2 audit (read half, #3b): load source-calc rows for EVERY
+    # statmech of the entry so thermo provenance / evidence completeness can
+    # borrow the freq / SP / opt calcs from the statmech a record actually
+    # derives from. Each thermo record resolves its basis PER RECORD from its
+    # own ``thermo.statmech_id`` FK (populated by the write fix); the borrowed
+    # source calcs then come from that exact statmech, not an entry-wide pick.
+    statmech_sources_by_id: dict[int, list[StatmechSourceCalculation]] = {
+        sid: _load_statmech_sources(session, sid) for sid in statmech_ids_by_entry
+    }
+    # Fallback basis for records whose ``thermo.statmech_id`` is NULL
+    # (experimental thermo, or legacy computed rows written before the FK was
+    # populated): the lowest statmech id. ``min`` is deterministic and keeps
+    # the fallback reproducible. It does not imply the picked statmech is "the"
+    # statmech for the entry — it is only consulted when a record has no
+    # linked statmech of its own.
     picked_statmech_id = min(statmech_ids_by_entry) if statmech_ids_by_entry else None
-    statmech_sources = _load_statmech_sources(session, picked_statmech_id)
 
     # Determine model_kind per record from the stored thermo.model_kind
     # (falling back to child-row inference for legacy NULL rows) and filter.
@@ -305,7 +307,11 @@ def get_species_thermo(
         sc.calculation_id
         for srcs in sources_by_thermo.values()
         for sc in srcs
-    } | {sc.calculation_id for sc in statmech_sources}
+    } | {
+        sc.calculation_id
+        for srcs in statmech_sources_by_id.values()
+        for sc in srcs
+    }
     geom_vals = _geometry_validations(session, all_source_calc_ids)
     scf_vals = _scf_stabilities(session, all_source_calc_ids)
     calc_meta = _calc_lot_meta(session, all_source_calc_ids)
@@ -314,6 +320,17 @@ def get_species_thermo(
     records: list[ThermoRecord] = []
     for t, model_kind in classified:
         sources = sources_by_thermo.get(t.id, [])
+
+        # Per-record statmech resolution: prefer the record's own FK, falling
+        # back to the entry-min only when the thermo has no linked statmech.
+        record_statmech_id = (
+            t.statmech_id if t.statmech_id is not None else picked_statmech_id
+        )
+        record_statmech_sources = (
+            statmech_sources_by_id.get(record_statmech_id, [])
+            if record_statmech_id is not None
+            else []
+        )
 
         # Determine the "effective" temperature range for coverage:
         # - If the record has a NASA block, use its t_low / t_high.
@@ -340,7 +357,7 @@ def get_species_thermo(
             thermo=t,
             sources=sources,
             statmech_ids_for_entry=statmech_ids_by_entry,
-            statmech_sources=statmech_sources,
+            statmech_sources=record_statmech_sources,
             nasa_present=nasa_block is not None,
             points_count=len(points_by_thermo.get(t.id, [])),
             has_nasa9=bool(nasa9_by_thermo.get(t.id)),
@@ -354,9 +371,9 @@ def get_species_thermo(
             sources=sources,
             calc_meta=calc_meta,
             calc_refs=calc_refs,
-            statmech_ids=statmech_ids_by_entry,
+            statmech_id=record_statmech_id,
             statmech_refs=statmech_refs,
-            statmech_sources=statmech_sources,
+            statmech_sources=record_statmech_sources,
         )
 
         record = ThermoRecord(
@@ -824,7 +841,7 @@ def _build_provenance(
     sources: list[ThermoSourceCalculation],
     calc_meta: dict[int, dict],
     calc_refs: dict[int, str],
-    statmech_ids: set[int],
+    statmech_id: int | None,
     statmech_refs: dict[int, str],
     statmech_sources: list[StatmechSourceCalculation],
 ) -> ThermoProvenance:
@@ -832,11 +849,17 @@ def _build_provenance(
 
     Phase 2 audit (thermo provenance / geometry): when the thermo's own
     ``ThermoSourceCalculation`` rows are empty or do not cover a role,
-    fall back to the picked statmech's ``StatmechSourceCalculation``
+    fall back to the record's resolved statmech ``StatmechSourceCalculation``
     rows for that role. Explicit thermo sources always win. This makes
     computed-thermo provenance reflect the freq / SP / LoT / software
     that live on the statmech the thermo derives from, instead of
     coming back uniformly ``null``.
+
+    ``statmech_id`` is the record's already-resolved basis (its own
+    ``thermo.statmech_id`` FK, or the entry-min fallback for records with no
+    linked statmech). ``statmech_sources`` are that same statmech's source
+    calcs — so the surfaced ``statmech_ref`` and the borrowed source calcs
+    always come from the one statmech the record actually derives from.
     """
     primary_calc_id_v = _primary_calc_id(sources)
     # Fall back to a statmech-derived primary when thermo declared none.
@@ -875,11 +898,10 @@ def _build_provenance(
             statmech_sources, StatmechCalculationRole.sp
         )
 
-    # Deterministic: lowest statmech id, matching ``picked_statmech_id`` in
-    # ``get_species_thermo`` so the surfaced statmech_ref and the borrowed
-    # fallback source calcs come from the same candidate (not an arbitrary one).
-    statmech_id = min(statmech_ids) if statmech_ids else None
-
+    # ``statmech_id`` is resolved per record by the caller: the thermo's own
+    # ``statmech_id`` FK when set, else the entry-min fallback. The surfaced
+    # ref and the borrowed source calcs above therefore come from the exact
+    # statmech this record derives from.
     return ThermoProvenance(
         primary_calculation=primary_calc_summary,
         level_of_theory=primary_lot,

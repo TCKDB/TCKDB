@@ -548,3 +548,155 @@ def test_statmech_fallback_pick_is_deterministic_with_multiple_statmech(db_sessi
         # Lowest-id statmech is surfaced AND supplies the borrowed freq calc.
         assert prov.statmech_ref == first_stat.public_ref
         assert prov.freq_calculation_ref == first_freq.public_ref
+
+
+# ---------------------------------------------------------------------------
+# Audit finding #3b (read half): per-record statmech attribution.
+#
+# The read path must attribute a computed thermo's statmech basis from the
+# record's OWN ``thermo.statmech_id`` FK (populated by the write fix), not a
+# per-entry ``min(statmech_ids)`` fallback. The min is retained only as the
+# fallback for records whose ``statmech_id`` is NULL.
+# ---------------------------------------------------------------------------
+
+
+def _add_statmech_with_freq_sp(db_session, entry, lot):
+    """Persist one Statmech on ``entry`` with a distinct freq + SP source
+    calc, and return ``(statmech, freq_calc, sp_calc)``.
+    """
+    from app.db.models.common import (
+        CalculationType,
+        ScientificOriginKind,
+        StatmechCalculationRole,
+    )
+    from app.db.models.statmech import Statmech, StatmechSourceCalculation
+    from tests.services.scientific_read._factories import make_calculation
+
+    freq_calc = make_calculation(
+        db_session,
+        type=CalculationType.freq,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+    )
+    sp_calc = make_calculation(
+        db_session,
+        type=CalculationType.sp,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+    )
+    statmech = Statmech(
+        species_entry_id=entry.id,
+        scientific_origin=ScientificOriginKind.computed,
+    )
+    db_session.add(statmech)
+    db_session.flush()
+    db_session.add(
+        StatmechSourceCalculation(
+            statmech_id=statmech.id,
+            calculation_id=freq_calc.id,
+            role=StatmechCalculationRole.freq,
+        )
+    )
+    db_session.add(
+        StatmechSourceCalculation(
+            statmech_id=statmech.id,
+            calculation_id=sp_calc.id,
+            role=StatmechCalculationRole.sp,
+        )
+    )
+    db_session.flush()
+    return statmech, freq_calc, sp_calc
+
+
+def test_provenance_uses_record_statmech_id_not_entry_min(db_session):
+    """A computed thermo linked to the HIGHER-id statmech B (via its own
+    ``statmech_id`` FK) must surface B's ref and borrow B's freq/SP calcs —
+    not statmech A (=min). This is the mis-attribution fix.
+    """
+    from tests.services.scientific_read._factories import make_lot
+
+    entry = _entry_with_smiles(db_session, smiles="C#CCNCNCC")
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+
+    stat_a, freq_a, sp_a = _add_statmech_with_freq_sp(db_session, entry, lot)
+    stat_b, freq_b, sp_b = _add_statmech_with_freq_sp(db_session, entry, lot)
+    assert stat_a.id < stat_b.id  # A is the min
+
+    # Thermo derives from B (the higher id), with no thermo-source rows.
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    thermo.statmech_id = stat_b.id
+    db_session.flush()
+
+    prov = (
+        get_species_thermo(
+            db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+        )
+        .records[0]
+        .provenance
+    )
+
+    # Surfaces B's ref, NOT A/min.
+    assert prov.statmech_ref == stat_b.public_ref
+    assert prov.statmech_ref != stat_a.public_ref
+    # Borrows B's source calcs, NOT A's.
+    assert prov.freq_calculation_ref == freq_b.public_ref
+    assert prov.sp_calculation_ref == sp_b.public_ref
+    assert prov.freq_calculation_ref != freq_a.public_ref
+    assert prov.sp_calculation_ref != sp_a.public_ref
+
+
+def test_provenance_null_statmech_id_falls_back_to_entry_min(db_session):
+    """A thermo with ``statmech_id`` NULL on an entry with statmech A + B
+    still falls back to the entry-min (A) — unchanged legacy behavior.
+    """
+    from tests.services.scientific_read._factories import make_lot
+
+    entry = _entry_with_smiles(db_session, smiles="C#CCNCNCCC")
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+
+    stat_a, freq_a, _sp_a = _add_statmech_with_freq_sp(db_session, entry, lot)
+    stat_b, _freq_b, _sp_b = _add_statmech_with_freq_sp(db_session, entry, lot)
+    assert stat_a.id < stat_b.id
+
+    # No statmech_id on the thermo → NULL → fall back to min (A).
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    assert thermo.statmech_id is None
+
+    prov = (
+        get_species_thermo(
+            db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+        )
+        .records[0]
+        .provenance
+    )
+
+    assert prov.statmech_ref == stat_a.public_ref
+    assert prov.freq_calculation_ref == freq_a.public_ref
+
+
+def test_provenance_single_statmech_linked_surfaces_it(db_session):
+    """An entry with a single statmech and a thermo linked to it surfaces
+    that statmech and borrows its source calcs (behavior unchanged).
+    """
+    from tests.services.scientific_read._factories import make_lot
+
+    entry = _entry_with_smiles(db_session, smiles="C#CCNCNCCCC")
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+
+    stat, freq_calc, sp_calc = _add_statmech_with_freq_sp(db_session, entry, lot)
+
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    thermo.statmech_id = stat.id
+    db_session.flush()
+
+    prov = (
+        get_species_thermo(
+            db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+        )
+        .records[0]
+        .provenance
+    )
+
+    assert prov.statmech_ref == stat.public_ref
+    assert prov.freq_calculation_ref == freq_calc.public_ref
+    assert prov.sp_calculation_ref == sp_calc.public_ref
