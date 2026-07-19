@@ -616,18 +616,36 @@ def _thermo_has_point_representation(thermo: Thermo) -> bool:
     )
 
 
+def _thermo_has_nasa9_representation(thermo: Thermo) -> bool:
+    """Return True when at least one NASA-9 polynomial interval is attached."""
+    return bool(thermo.nasa9_intervals)
+
+
+def _thermo_has_wilhoit_representation(thermo: Thermo) -> bool:
+    """Return True when a Wilhoit heat-capacity form is attached."""
+    return thermo.wilhoit is not None
+
+
 def _thermo_has_any_representation(thermo: Thermo) -> bool:
-    """Return True when scalar, NASA, or point evidence is populated."""
+    """Return True when scalar, NASA-7, point, NASA-9, or Wilhoit evidence exists."""
     return (
         _thermo_has_scalar_representation(thermo)
         or _thermo_has_nasa_representation(thermo)
         or _thermo_has_point_representation(thermo)
+        or _thermo_has_nasa9_representation(thermo)
+        or _thermo_has_wilhoit_representation(thermo)
     )
 
 
 def _thermo_range_is_present(thermo: Thermo) -> bool:
-    """Return True when a top-level or NASA temperature range is populated."""
+    """Return True when a top-level, NASA-7, or NASA-9 temperature range exists.
+
+    Wilhoit is a continuous form with no intrinsic piecewise range, so it only
+    contributes a range via the top-level ``tmin_k``/``tmax_k`` bounds.
+    """
     if thermo.tmin_k is not None or thermo.tmax_k is not None:
+        return True
+    if _thermo_has_nasa9_representation(thermo):
         return True
     nasa = thermo.nasa
     if nasa is None:
@@ -635,12 +653,25 @@ def _thermo_range_is_present(thermo: Thermo) -> bool:
     return nasa.t_low is not None or nasa.t_mid is not None or nasa.t_high is not None
 
 
+# Upper sanity bound for thermochemical temperature ranges. Set at the NASA
+# Glenn (Gordon & McBride) maximum of 20,000 K: canonical NASA-9 fits use a
+# 6,000-20,000 K high-temperature interval, and NASA-7 / top-level ranges never
+# legitimately exceed this. A tighter cap would hard-fail valid high-T data.
+_MAX_THERMO_TEMPERATURE_K = 20_000
+
+
 def _thermo_range_is_valid(thermo: Thermo) -> bool:
     """Return True when all populated thermo temperature ranges are plausible."""
     if thermo.tmin_k is not None or thermo.tmax_k is not None:
         if thermo.tmin_k is None or thermo.tmax_k is None:
             return False
-        if not (0 < thermo.tmin_k < thermo.tmax_k <= 10_000):
+        if not (0 < thermo.tmin_k < thermo.tmax_k <= _MAX_THERMO_TEMPERATURE_K):
+            return False
+
+    for interval in thermo.nasa9_intervals:
+        if not (
+            0 < interval.t_min_k < interval.t_max_k <= _MAX_THERMO_TEMPERATURE_K
+        ):
             return False
 
     nasa = thermo.nasa
@@ -650,7 +681,7 @@ def _thermo_range_is_valid(thermo: Thermo) -> bool:
         return True
     if nasa.t_low is None or nasa.t_mid is None or nasa.t_high is None:
         return False
-    return 0 < nasa.t_low < nasa.t_mid < nasa.t_high <= 10_000
+    return 0 < nasa.t_low < nasa.t_mid < nasa.t_high <= _MAX_THERMO_TEMPERATURE_K
 
 
 def _check_thermo_species_entry_present(thermo: Thermo) -> EvidenceOutcome:
@@ -704,13 +735,23 @@ def _check_thermo_points_present(thermo: Thermo) -> EvidenceOutcome:
 def _check_at_least_one_thermo_representation_present(
     thermo: Thermo,
 ) -> EvidenceOutcome:
-    """Return passed when scalar, NASA, or tabulated point evidence exists."""
+    """Return passed when scalar, NASA-7, point, NASA-9, or Wilhoit evidence exists."""
     return _bool_outcome(_thermo_has_any_representation(thermo))
 
 
 def _check_temperature_range_present_if_applicable(thermo: Thermo) -> EvidenceOutcome:
-    """Return passed for range-bearing thermo representations when bounds exist."""
-    if thermo.nasa is None and thermo.tmin_k is None and thermo.tmax_k is None:
+    """Return passed for range-bearing thermo representations when bounds exist.
+
+    NASA-7, NASA-9, and top-level bounds carry an intrinsic temperature range;
+    Wilhoit and pure-scalar/point records without top-level bounds do not, so the
+    check is not applicable for them.
+    """
+    if (
+        thermo.nasa is None
+        and not _thermo_has_nasa9_representation(thermo)
+        and thermo.tmin_k is None
+        and thermo.tmax_k is None
+    ):
         return EvidenceOutcome.not_applicable
     return _bool_outcome(_thermo_range_is_present(thermo))
 
@@ -1812,7 +1853,7 @@ COMPUTED_THERMO_V1: EvidenceRubric = EvidenceRubric(
         EvidenceCheckSpec(
             name="thermo_model_present",
             kind=EvidenceCheckKind.required,
-            explain="Thermo should expose scalar, NASA, or tabulated-point model evidence.",
+            explain="Thermo should expose scalar, NASA-7, NASA-9, Wilhoit, or tabulated-point model evidence.",
             runner=_check_thermo_model_present,
         ),
         EvidenceCheckSpec(
@@ -1836,7 +1877,7 @@ COMPUTED_THERMO_V1: EvidenceRubric = EvidenceRubric(
         EvidenceCheckSpec(
             name="at_least_one_thermo_representation_present",
             kind=EvidenceCheckKind.required,
-            explain="Thermo must have scalar, NASA, or tabulated-point evidence.",
+            explain="Thermo must have scalar, NASA-7, NASA-9, Wilhoit, or tabulated-point evidence.",
             runner=_check_at_least_one_thermo_representation_present,
         ),
         EvidenceCheckSpec(

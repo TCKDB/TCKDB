@@ -94,7 +94,13 @@ from app.db.models.statmech import (
     StatmechTorsion,
     StatmechTorsionDefinition,
 )
-from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
+from app.db.models.thermo import (
+    Thermo,
+    ThermoNASA,
+    ThermoNASA9Interval,
+    ThermoPoint,
+    ThermoWilhoit,
+)
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport, TransportSourceCalculation
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
@@ -558,6 +564,76 @@ def attach_thermo_nasa(
     session.add(nasa)
     session.flush()
     return nasa
+
+
+def attach_thermo_nasa9(
+    session: Session,
+    *,
+    thermo: Thermo,
+) -> list[ThermoNASA9Interval]:
+    """Attach two NASA-9 polynomial intervals to an existing Thermo row.
+
+    NASA-9 interval bounds are NOT NULL, so their presence alone constitutes a
+    valid, range-bearing thermo representation.
+    """
+    rows = [
+        ThermoNASA9Interval(
+            thermo_id=thermo.id,
+            interval_index=1,
+            t_min_k=200.0,
+            t_max_k=1000.0,
+            a1=1.0,
+            a2=2.0,
+            a3=3.0,
+            a4=4.0,
+            a5=5.0,
+            a6=6.0,
+            a7=7.0,
+            a8=8.0,
+            a9=9.0,
+        ),
+        ThermoNASA9Interval(
+            thermo_id=thermo.id,
+            interval_index=2,
+            t_min_k=1000.0,
+            t_max_k=6000.0,
+            a1=1.1,
+            a2=2.1,
+            a3=3.1,
+            a4=4.1,
+            a5=5.1,
+            a6=6.1,
+            a7=7.1,
+            a8=8.1,
+            a9=9.1,
+        ),
+    ]
+    session.add_all(rows)
+    session.flush()
+    return rows
+
+
+def attach_thermo_wilhoit(
+    session: Session,
+    *,
+    thermo: Thermo,
+) -> ThermoWilhoit:
+    """Attach a Wilhoit heat-capacity form to an existing Thermo row."""
+    row = ThermoWilhoit(
+        thermo_id=thermo.id,
+        cp0_j_mol_k=33.0,
+        cp_inf_j_mol_k=120.0,
+        b_k=500.0,
+        a0=1.0,
+        a1=0.5,
+        a2=0.25,
+        a3=0.125,
+        h0_kj_mol=-45.0,
+        s0_j_mol_k=210.0,
+    )
+    session.add(row)
+    session.flush()
+    return row
 
 
 def attach_thermo_points(

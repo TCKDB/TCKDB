@@ -77,8 +77,10 @@ from app.db.models.statmech import (
 from app.db.models.thermo import (
     Thermo,
     ThermoNASA,
+    ThermoNASA9Interval,
     ThermoPoint,
     ThermoSourceCalculation,
+    ThermoWilhoit,
 )
 from app.db.models.transport import Transport, TransportSourceCalculation
 from app.services.trust import (
@@ -399,6 +401,9 @@ def _make_thermo(
     species_entry: SpeciesEntry | None = None,
     scalar: bool = True,
     nasa: bool = False,
+    nasa9: bool = False,
+    nasa9_high_t_max_k: float = 6000.0,
+    wilhoit: bool = False,
     points: bool = False,
     temperature_range: bool = True,
     uncertainty: bool = False,
@@ -440,6 +445,56 @@ def _make_thermo(
                 b5=5.5,
                 b6=6.5,
                 b7=7.5,
+            )
+        )
+    if nasa9:
+        db_session.add_all(
+            [
+                ThermoNASA9Interval(
+                    thermo_id=thermo.id,
+                    interval_index=1,
+                    t_min_k=200.0,
+                    t_max_k=1000.0,
+                    a1=1.0,
+                    a2=2.0,
+                    a3=3.0,
+                    a4=4.0,
+                    a5=5.0,
+                    a6=6.0,
+                    a7=7.0,
+                    a8=8.0,
+                    a9=9.0,
+                ),
+                ThermoNASA9Interval(
+                    thermo_id=thermo.id,
+                    interval_index=2,
+                    t_min_k=1000.0,
+                    t_max_k=nasa9_high_t_max_k,
+                    a1=1.1,
+                    a2=2.1,
+                    a3=3.1,
+                    a4=4.1,
+                    a5=5.1,
+                    a6=6.1,
+                    a7=7.1,
+                    a8=8.1,
+                    a9=9.1,
+                ),
+            ]
+        )
+    if wilhoit:
+        db_session.add(
+            ThermoWilhoit(
+                thermo_id=thermo.id,
+                cp0_j_mol_k=33.0,
+                cp_inf_j_mol_k=120.0,
+                b_k=500.0,
+                a0=1.0,
+                a1=0.5,
+                a2=0.25,
+                a3=0.125,
+                h0_kj_mol=-45.0,
+                s0_j_mol_k=210.0,
             )
         )
     if points:
@@ -1285,6 +1340,85 @@ class TestComputedThermoEvaluator:
         assert "thermo_points_present" in result.passed_checks
         assert "at_least_one_thermo_representation_present" in result.passed_checks
         assert "scalar_thermo_present" in result.not_applicable_checks
+
+    def test_nasa9_only_representation_checks_pass(self, db_session):
+        thermo = _make_thermo(
+            db_session,
+            scalar=False,
+            nasa=False,
+            nasa9=True,
+            points=False,
+            temperature_range=False,
+        )
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        # A NASA-9-only record has a valid model and representation.
+        assert "thermo_model_present" in result.passed_checks
+        assert "at_least_one_thermo_representation_present" in result.passed_checks
+        # Its intrinsic interval bounds count as a present, valid range.
+        assert "temperature_range_present_if_applicable" in result.passed_checks
+        assert "temperature_range_valid" in result.passed_checks
+        # The other representation forms are legitimately absent -> N/A, not missing.
+        assert "scalar_thermo_present" in result.not_applicable_checks
+        assert "nasa_coefficients_present" in result.not_applicable_checks
+        assert "thermo_points_present" in result.not_applicable_checks
+        assert result.hard_fail_reason is None
+
+    def test_nasa9_glenn_high_temperature_interval_not_hard_failed(self, db_session):
+        # Canonical NASA-9 (Gordon & McBride / NASA Glenn) fits extend to
+        # 20,000 K via the standard 6,000-20,000 K high-temperature interval.
+        # Such a valid record must NOT hard-fail the temperature-range check
+        # (regression guard for the too-tight 10,000 K envelope).
+        thermo = _make_thermo(
+            db_session,
+            scalar=False,
+            nasa9=True,
+            nasa9_high_t_max_k=20_000.0,
+            points=False,
+            temperature_range=False,
+        )
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert result.hard_fail_reason is None
+        assert "temperature_range_valid" in result.passed_checks
+
+    def test_wilhoit_only_representation_checks_pass(self, db_session):
+        # Wilhoit has no intrinsic piecewise range; drive range via top-level bounds.
+        thermo = _make_thermo(
+            db_session,
+            scalar=False,
+            nasa=False,
+            wilhoit=True,
+            points=False,
+            temperature_range=True,
+        )
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert "thermo_model_present" in result.passed_checks
+        assert "at_least_one_thermo_representation_present" in result.passed_checks
+        # Range comes from the top-level tmin_k/tmax_k, not from wilhoit itself.
+        assert "temperature_range_present_if_applicable" in result.passed_checks
+        assert "temperature_range_valid" in result.passed_checks
+        assert "scalar_thermo_present" in result.not_applicable_checks
+        assert "nasa_coefficients_present" in result.not_applicable_checks
+        assert "thermo_points_present" in result.not_applicable_checks
+        assert result.hard_fail_reason is None
+
+    def test_wilhoit_only_without_top_level_range_is_not_applicable(self, db_session):
+        # No intrinsic range for wilhoit and no top-level bounds -> range check N/A.
+        thermo = _make_thermo(
+            db_session,
+            scalar=False,
+            nasa=False,
+            wilhoit=True,
+            points=False,
+            temperature_range=False,
+        )
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert "at_least_one_thermo_representation_present" in result.passed_checks
+        assert (
+            "temperature_range_present_if_applicable"
+            in result.not_applicable_checks
+        )
+        assert "temperature_range_valid" in result.not_applicable_checks
+        assert result.hard_fail_reason is None
 
     def test_missing_all_representations_hard_fails(self, db_session):
         thermo = _make_thermo(

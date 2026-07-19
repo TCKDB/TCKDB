@@ -10,6 +10,7 @@ from app.db.models.common import (
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
 from tests.services.scientific_read._factories import (
     attach_thermo_nasa,
+    attach_thermo_nasa9,
     make_calculation,
     make_lot,
     make_species,
@@ -173,6 +174,35 @@ def test_include_trust_nasa_representation_passes(client, db_session):
     evidence = body["records"][0]["trust"]["evidence"]
     assert "nasa_coefficients_present" in evidence["passed_checks"]
     assert "at_least_one_thermo_representation_present" in evidence["passed_checks"]
+
+
+def test_include_trust_nasa9_only_not_penalized(client, db_session):
+    # A NASA-9-only computed thermo (no scalar/nasa7/points) must not be scored
+    # as lacking a thermo model. Exercises the read-path eager-load of
+    # nasa9_intervals so the pure evaluator sees the representation.
+    entry = _entry(db_session)
+    thermo = Thermo(
+        species_entry_id=entry.id,
+        scientific_origin=ScientificOriginKind.computed,
+    )
+    db_session.add(thermo)
+    db_session.flush()
+    attach_thermo_nasa9(db_session, thermo=thermo)
+
+    body = client.get(
+        f"/api/v1/scientific/species-entries/{entry.id}/thermo?include=trust"
+    ).json()
+
+    evidence = body["records"][0]["trust"]["evidence"]
+    assert evidence["label"] != "hard_failed"
+    assert evidence["hard_fail_reason"] is None
+    assert "thermo_model_present" in evidence["passed_checks"]
+    assert "at_least_one_thermo_representation_present" in evidence["passed_checks"]
+    assert "temperature_range_present_if_applicable" in evidence["passed_checks"]
+    # Other representation forms are legitimately absent -> N/A, not missing.
+    assert "scalar_thermo_present" in evidence["not_applicable_checks"]
+    assert "nasa_coefficients_present" in evidence["not_applicable_checks"]
+    assert "thermo_points_present" in evidence["not_applicable_checks"]
 
 
 def test_include_trust_source_calculation_raises_completeness(client, db_session):

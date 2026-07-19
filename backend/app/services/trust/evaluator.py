@@ -153,7 +153,7 @@ _STATMECH_REQUIRED_SOURCE_ROLES: frozenset[StatmechCalculationRole] = frozenset(
 )
 
 def _thermo_has_representation(thermo: Thermo) -> bool:
-    """Return True when scalar, NASA coefficients, or populated points exist."""
+    """Return True when scalar, NASA-7, point, NASA-9, or Wilhoit evidence exists."""
     if thermo.h298_kj_mol is not None or thermo.s298_j_mol_k is not None:
         return True
     if thermo.nasa is not None:
@@ -175,6 +175,10 @@ def _thermo_has_representation(thermo: Thermo) -> bool:
         )
         if all(getattr(thermo.nasa, field) is not None for field in coefficient_fields):
             return True
+    if thermo.nasa9_intervals:
+        return True
+    if thermo.wilhoit is not None:
+        return True
     return any(
         point.cp_j_mol_k is not None
         or point.h_kj_mol is not None
@@ -184,12 +188,30 @@ def _thermo_has_representation(thermo: Thermo) -> bool:
     )
 
 
+# Upper sanity bound for thermochemical temperature ranges (NASA Glenn maximum,
+# 20,000 K). Canonical NASA-9 fits use a 6,000-20,000 K high-temperature
+# interval; a tighter cap would hard-fail valid high-T data. Mirrors the same
+# constant in ``rubrics.py``.
+_MAX_THERMO_TEMPERATURE_K = 20_000
+
+
 def _thermo_temperature_range_invalid(thermo: Thermo) -> bool:
-    """Return True when any populated thermo temperature range is invalid."""
+    """Return True when any populated thermo temperature range is invalid.
+
+    NASA-9 interval bounds (NOT NULL) are validated alongside the top-level and
+    NASA-7 ranges. Wilhoit has no intrinsic piecewise range, so it only
+    contributes via the top-level ``tmin_k``/``tmax_k`` bounds.
+    """
     if thermo.tmin_k is not None or thermo.tmax_k is not None:
         if thermo.tmin_k is None or thermo.tmax_k is None:
             return True
-        if not (0 < thermo.tmin_k < thermo.tmax_k <= 10_000):
+        if not (0 < thermo.tmin_k < thermo.tmax_k <= _MAX_THERMO_TEMPERATURE_K):
+            return True
+
+    for interval in thermo.nasa9_intervals:
+        if not (
+            0 < interval.t_min_k < interval.t_max_k <= _MAX_THERMO_TEMPERATURE_K
+        ):
             return True
 
     nasa = thermo.nasa
@@ -199,7 +221,9 @@ def _thermo_temperature_range_invalid(thermo: Thermo) -> bool:
         return False
     if nasa.t_low is None or nasa.t_mid is None or nasa.t_high is None:
         return True
-    return not (0 < nasa.t_low < nasa.t_mid < nasa.t_high <= 10_000)
+    return not (
+        0 < nasa.t_low < nasa.t_mid < nasa.t_high <= _MAX_THERMO_TEMPERATURE_K
+    )
 
 
 def _detect_thermo_hard_fail(thermo: Thermo) -> Optional[HardFailReason]:
@@ -1125,6 +1149,8 @@ def evaluate_computed_thermo(
             selectinload(Thermo.species_entry),
             selectinload(Thermo.nasa),
             selectinload(Thermo.points),
+            selectinload(Thermo.nasa9_intervals),
+            selectinload(Thermo.wilhoit),
             selectinload(Thermo.source_calculations)
             .selectinload(ThermoSourceCalculation.calculation)
             .selectinload(Calculation.artifacts),

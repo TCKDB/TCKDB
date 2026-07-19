@@ -101,6 +101,8 @@ _TRUST_EAGER_LOADS = (
     selectinload(Thermo.species_entry),
     selectinload(Thermo.nasa),
     selectinload(Thermo.points),
+    selectinload(Thermo.nasa9_intervals),
+    selectinload(Thermo.wilhoit),
     selectinload(Thermo.source_calculations)
     .selectinload(ThermoSourceCalculation.calculation)
     .selectinload(Calculation.lot),
