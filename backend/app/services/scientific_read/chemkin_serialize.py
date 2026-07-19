@@ -278,8 +278,17 @@ def _build_therm_dat(
                 )
             )
             continue
+        # Require the NASA-7 child, not just the "nasa" model_kind: with
+        # stored-column classification a (data-inconsistent) nasa7 row could
+        # lack its ThermoNASA child, and _nasa_card would crash on it. Such a
+        # record degrades to the gap message below, as it did pre-fix.
         nasa_thermo = next(
-            (t for t in sr.thermos if t.model_kind == "nasa"), None
+            (
+                t
+                for t in sr.thermos
+                if t.model_kind == "nasa" and t.nasa is not None
+            ),
+            None,
         )
         if nasa_thermo is None:
             detail = (

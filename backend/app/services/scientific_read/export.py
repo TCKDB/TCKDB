@@ -43,6 +43,7 @@ from app.db.models.common import (
     ReactionRole,
     RecordReviewStatus,
     SubmissionRecordType,
+    ThermoModelKind,
 )
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import (
@@ -53,7 +54,13 @@ from app.db.models.reaction import (
 )
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.statmech import Statmech
-from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
+from app.db.models.thermo import (
+    Thermo,
+    ThermoNASA,
+    ThermoNASA9Interval,
+    ThermoPoint,
+    ThermoWilhoit,
+)
 from app.db.models.transport import Transport
 from app.schemas.reads.scientific_common import (
     CollapseMode,
@@ -134,8 +141,10 @@ class SelectedThermo:
     thermo: Thermo
     nasa: ThermoNASA | None
     points: list[ThermoPoint]
-    model_kind: str  # nasa | points | scalar
+    model_kind: str  # nasa | nasa9 | wilhoit | points | scalar
     review_status: RecordReviewStatus
+    nasa9_intervals: list[ThermoNASA9Interval] = field(default_factory=list)
+    wilhoit: ThermoWilhoit | None = None
 
     def to_dict(self) -> dict:
         d: dict = {
@@ -146,6 +155,8 @@ class SelectedThermo:
             "h298_kj_mol": self.thermo.h298_kj_mol,
             "s298_j_mol_k": self.thermo.s298_j_mol_k,
             "nasa": None,
+            "nasa9": None,
+            "wilhoit": None,
             "points": None,
         }
         if self.nasa is not None:
@@ -163,6 +174,31 @@ class SelectedThermo:
                     self.nasa.a1, self.nasa.a2, self.nasa.a3, self.nasa.a4,
                     self.nasa.a5, self.nasa.a6, self.nasa.a7,
                 ],
+            }
+        if self.nasa9_intervals:
+            d["nasa9"] = [
+                {
+                    "interval_index": iv.interval_index,
+                    "t_min_k": iv.t_min_k,
+                    "t_max_k": iv.t_max_k,
+                    "a1": iv.a1, "a2": iv.a2, "a3": iv.a3,
+                    "a4": iv.a4, "a5": iv.a5, "a6": iv.a6,
+                    "a7": iv.a7, "a8": iv.a8, "a9": iv.a9,
+                }
+                for iv in self.nasa9_intervals
+            ]
+        if self.wilhoit is not None:
+            w = self.wilhoit
+            d["wilhoit"] = {
+                "cp0_j_mol_k": w.cp0_j_mol_k,
+                "cp_inf_j_mol_k": w.cp_inf_j_mol_k,
+                "b_k": w.b_k,
+                "a0": w.a0,
+                "a1": w.a1,
+                "a2": w.a2,
+                "a3": w.a3,
+                "h0_kj_mol": w.h0_kj_mol,
+                "s0_j_mol_k": w.s0_j_mol_k,
             }
         if self.points:
             d["points"] = [
@@ -477,6 +513,49 @@ def select_candidate_ids(
     return chosen, {i: badges[i].status for i in chosen}
 
 
+#: Stored ``thermo.model_kind`` → export ``model_kind`` vocab. Like the read
+#: service (``scientific_read/thermo.py``) the stored column wins when present;
+#: the legacy-NULL fallback in ``_classify_export_kind`` is a local fit-first
+#: order that differs cosmetically from the read service's derivation but is
+#: equivalent under the one-fit-per-record upload invariant. The export vocab
+#: keeps the legacy "nasa"/"points"/"scalar" tokens and adds "nasa9"/"wilhoit".
+_STORED_KIND_TO_EXPORT: dict[ThermoModelKind, str] = {
+    ThermoModelKind.nasa7: "nasa",
+    ThermoModelKind.nasa9: "nasa9",
+    ThermoModelKind.wilhoit: "wilhoit",
+    ThermoModelKind.tabulated: "points",
+    ThermoModelKind.scalar: "scalar",
+}
+
+
+def _classify_export_kind(
+    thermo: Thermo,
+    *,
+    has_nasa: bool,
+    has_nasa9: bool,
+    has_wilhoit: bool,
+    has_points: bool,
+) -> str:
+    """Classify the export ``model_kind`` for one thermo record.
+
+    Prefer the stored ``thermo.model_kind`` column when non-NULL (mapped to
+    the export vocab). When it is NULL (legacy rows the backfill could not
+    classify), derive with fit-precedence so a real fit is never lost:
+    nasa9 → wilhoit → nasa → points → scalar.
+    """
+    if thermo.model_kind is not None:
+        return _STORED_KIND_TO_EXPORT[thermo.model_kind]
+    if has_nasa9:
+        return "nasa9"
+    if has_wilhoit:
+        return "wilhoit"
+    if has_nasa:
+        return "nasa"
+    if has_points:
+        return "points"
+    return "scalar"
+
+
 def _load_selected_thermos(
     session: Session,
     chosen: list[int],
@@ -488,22 +567,33 @@ def _load_selected_thermos(
         if thermo is None:  # pragma: no cover - race with delete
             continue
         nasa = session.get(ThermoNASA, tid)
+        nasa9_intervals = list(
+            session.scalars(
+                select(ThermoNASA9Interval)
+                .where(ThermoNASA9Interval.thermo_id == tid)
+                .order_by(ThermoNASA9Interval.interval_index)
+            ).all()
+        )
+        wilhoit = session.get(ThermoWilhoit, tid)
         points = list(
             session.scalars(
                 select(ThermoPoint).where(ThermoPoint.thermo_id == tid)
             ).all()
         )
-        if nasa is not None:
-            kind = "nasa"
-        elif points:
-            kind = "points"
-        else:
-            kind = "scalar"
+        kind = _classify_export_kind(
+            thermo,
+            has_nasa=nasa is not None,
+            has_nasa9=bool(nasa9_intervals),
+            has_wilhoit=wilhoit is not None,
+            has_points=bool(points),
+        )
         out.append(
             SelectedThermo(
                 thermo=thermo,
                 nasa=nasa,
                 points=points,
+                nasa9_intervals=nasa9_intervals,
+                wilhoit=wilhoit,
                 model_kind=kind,
                 review_status=status_by_id[tid],
             )

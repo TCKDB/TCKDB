@@ -12,6 +12,7 @@ from app.db.models.common import (
     KineticsModelKind,
     RecordReviewStatus,
     SubmissionRecordType,
+    ThermoModelKind,
 )
 from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.services.scientific_read.chemkin_serialize import (
@@ -25,7 +26,9 @@ from app.services.scientific_read.export import (
 )
 from tests.services.scientific_read._factories import (
     attach_thermo_nasa,
+    attach_thermo_nasa9,
     attach_thermo_points,
+    attach_thermo_wilhoit,
     make_chem_reaction,
     make_kinetics,
     make_reaction_entry,
@@ -240,6 +243,139 @@ def test_ndjson_seed_resolved_eagerly_but_records_streamed(db_session):
     assert isinstance(it, collections.abc.Iterator)
     first = json.loads(next(it))
     assert first["record_type"] == "manifest"
+
+
+# ---------------------------------------------------------------------------
+# Thermo representation kinds in the NDJSON export (regression: the loader
+# must not be blind to NASA-9 / Wilhoit fits, dropping them as "scalar").
+# ---------------------------------------------------------------------------
+
+
+def _select_thermo(session, entry):
+    rs = build_export_record_set(
+        session, seed=SeedSelection(species_refs=[entry.public_ref])
+    )
+    (sr,) = rs.species_records
+    assert len(sr.thermos) == 1
+    return sr.thermos[0]
+
+
+def test_nasa9_only_thermo_exports_nasa9_block_not_scalar(db_session):
+    sp = make_species(db_session, smiles="C", inchi_key=next_inchi_key("N9"))
+    entry = make_species_entry(db_session, sp)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    thermo.model_kind = ThermoModelKind.nasa9
+    intervals = attach_thermo_nasa9(db_session, thermo=thermo)
+    db_session.flush()
+    _approve(db_session, SubmissionRecordType.thermo, thermo.id)
+
+    sel = _select_thermo(db_session, entry)
+    assert sel.model_kind == "nasa9"
+
+    d = sel.to_dict()
+    assert d["model_kind"] == "nasa9"
+    # The fit is present, not dropped.
+    assert d["nasa9"] is not None
+    assert len(d["nasa9"]) == len(intervals) == 2
+    assert [blk["interval_index"] for blk in d["nasa9"]] == [1, 2]
+    first = d["nasa9"][0]
+    assert first["t_min_k"] == 200.0
+    assert first["t_max_k"] == 1000.0
+    assert first["a1"] == 1.0 and first["a9"] == 9.0
+    # Other representation blocks stay absent.
+    assert d["nasa"] is None
+    assert d["wilhoit"] is None
+    assert d["points"] is None
+
+
+def test_wilhoit_only_thermo_exports_wilhoit_block_not_scalar(db_session):
+    sp = make_species(db_session, smiles="C", inchi_key=next_inchi_key("WH"))
+    entry = make_species_entry(db_session, sp)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    thermo.model_kind = ThermoModelKind.wilhoit
+    attach_thermo_wilhoit(db_session, thermo=thermo)
+    db_session.flush()
+    _approve(db_session, SubmissionRecordType.thermo, thermo.id)
+
+    sel = _select_thermo(db_session, entry)
+    assert sel.model_kind == "wilhoit"
+
+    d = sel.to_dict()
+    assert d["model_kind"] == "wilhoit"
+    assert d["wilhoit"] is not None
+    assert d["wilhoit"]["cp0_j_mol_k"] == 33.0
+    assert d["wilhoit"]["cp_inf_j_mol_k"] == 120.0
+    assert d["wilhoit"]["b_k"] == 500.0
+    assert d["wilhoit"]["a0"] == 1.0
+    assert d["wilhoit"]["a3"] == 0.125
+    assert d["wilhoit"]["h0_kj_mol"] == -45.0
+    assert d["wilhoit"]["s0_j_mol_k"] == 210.0
+    assert d["nasa"] is None
+    assert d["nasa9"] is None
+    assert d["points"] is None
+
+
+def test_nasa9_only_derived_when_model_kind_null(db_session):
+    # Legacy row with NULL model_kind but NASA-9 children still classifies as
+    # nasa9 via fit-precedence, not scalar.
+    sp = make_species(db_session, smiles="C", inchi_key=next_inchi_key("N9L"))
+    entry = make_species_entry(db_session, sp)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    assert thermo.model_kind is None
+    attach_thermo_nasa9(db_session, thermo=thermo)
+    _approve(db_session, SubmissionRecordType.thermo, thermo.id)
+
+    sel = _select_thermo(db_session, entry)
+    assert sel.model_kind == "nasa9"
+    assert sel.to_dict()["nasa9"] is not None
+
+
+def test_nasa7_record_still_exports_nasa_block(db_session):
+    sp = make_species(db_session, smiles="C", inchi_key=next_inchi_key("N7"))
+    entry = make_species_entry(db_session, sp)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _approve(db_session, SubmissionRecordType.thermo, thermo.id)
+
+    sel = _select_thermo(db_session, entry)
+    assert sel.model_kind == "nasa"
+    d = sel.to_dict()
+    assert d["nasa"] is not None
+    assert d["nasa"]["t_low"] == 200.0
+    assert d["nasa9"] is None
+    assert d["wilhoit"] is None
+    assert d["points"] is None
+
+
+def test_points_only_record_still_exports_points_block(db_session):
+    sp = make_species(db_session, smiles="C", inchi_key=next_inchi_key("PO"))
+    entry = make_species_entry(db_session, sp)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    attach_thermo_points(db_session, thermo=thermo, temperatures_k=[300.0, 1000.0])
+    _approve(db_session, SubmissionRecordType.thermo, thermo.id)
+
+    sel = _select_thermo(db_session, entry)
+    assert sel.model_kind == "points"
+    d = sel.to_dict()
+    assert d["points"] is not None and len(d["points"]) == 2
+    assert d["nasa"] is None
+    assert d["nasa9"] is None
+    assert d["wilhoit"] is None
+
+
+def test_scalar_only_record_still_exports_scalar(db_session):
+    sp = make_species(db_session, smiles="C", inchi_key=next_inchi_key("SC"))
+    entry = make_species_entry(db_session, sp)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    _approve(db_session, SubmissionRecordType.thermo, thermo.id)
+
+    sel = _select_thermo(db_session, entry)
+    assert sel.model_kind == "scalar"
+    d = sel.to_dict()
+    assert d["nasa"] is None
+    assert d["nasa9"] is None
+    assert d["wilhoit"] is None
+    assert d["points"] is None
 
 
 # ---------------------------------------------------------------------------
