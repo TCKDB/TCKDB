@@ -16,6 +16,7 @@ from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     CalculationType,
+    ScientificOriginKind,
     SubmissionRecordType,
     ThermoCalculationRole,
 )
@@ -279,8 +280,6 @@ def persist_computed_species_upload(
             smiles=request.species_entry.smiles,
             xyz_atoms=parsed.atoms,
         )
-        from app.db.models.common import ScientificOriginKind
-
         observation = ConformerObservation(
             conformer_group_id=conformer_group.id,
             scientific_origin=ScientificOriginKind.computed,
@@ -564,6 +563,20 @@ def persist_computed_species_upload(
             calc_keys_to_id=calc_keys_to_id,
             created_by=created_by,
         )
+
+        # Link a bundle-created COMPUTED thermo to the statmech it was
+        # derived from (same species entry). Without this, the read layer
+        # falls back to min(statmech_id) when a species entry has multiple
+        # statmech rows. Only computed thermo is linked; experimental,
+        # literature, or group-additivity thermo keeps statmech_id NULL.
+        if (
+            thermo_row is not None
+            and statmech_row is not None
+            and thermo_row.statmech_id is None
+            and thermo_row.scientific_origin == ScientificOriginKind.computed
+        ):
+            thermo_row.statmech_id = statmech_row.id
+            session.flush()
 
         top_level_aec_ids = _persist_top_level_applied_corrections(
             session,

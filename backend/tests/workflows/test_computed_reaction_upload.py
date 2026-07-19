@@ -994,6 +994,55 @@ def test_statmech_optical_isomers_defaults_null_when_omitted(db_engine) -> None:
         assert statmech.optical_isomers is None
 
 
+def test_reaction_participant_thermo_links_to_own_statmech(db_engine) -> None:
+    """Each participant's COMPUTED thermo must link to that same participant's
+    statmech (audit finding #3) — never a sibling's. Two participants (ch3,
+    ch4) each carry thermo + statmech; the third (h) carries thermo only and
+    must keep ``statmech_id`` NULL.
+    """
+    payload = _minimal_payload()
+    # ch3 (index 0) and ch4 (index 2) each get their own statmech.
+    for idx in (0, 2):
+        payload["species"][idx]["statmech"] = {
+            "is_linear": False,
+            "external_symmetry": 3,
+            "point_group": "C1",
+            "statmech_treatment": "rrho",
+        }
+
+    with _isolated_session(db_engine) as session:
+        request = ComputedReactionUploadRequest(**payload)
+        summary = persist_computed_reaction_upload(session, request)
+
+        thermos = session.scalars(
+            select(Thermo).where(Thermo.id.in_(summary["thermo_ids"]))
+        ).all()
+        statmechs = session.scalars(
+            select(Statmech).where(Statmech.id.in_(summary["statmech_ids"]))
+        ).all()
+        assert len(thermos) == 3
+        assert len(statmechs) == 2
+
+        statmech_id_by_entry = {s.species_entry_id: s.id for s in statmechs}
+        # Every participant that has a statmech links its thermo to ITS OWN
+        # statmech — the correlation-by-key guard.
+        linked = {
+            t.species_entry_id: t.statmech_id
+            for t in thermos
+            if t.statmech_id is not None
+        }
+        assert set(linked) == set(statmech_id_by_entry)
+        for entry_id, statmech_id in statmech_id_by_entry.items():
+            assert linked[entry_id] == statmech_id
+
+        # The lone participant without a statmech keeps statmech_id NULL.
+        unlinked = [
+            t for t in thermos if t.species_entry_id not in statmech_id_by_entry
+        ]
+        assert len(unlinked) == 1
+        assert unlinked[0].statmech_id is None
+
+
 def test_statmech_optical_isomers_zero_rejected(db_engine) -> None:
     """``optical_isomers`` below 1 is rejected at the schema layer (422)."""
     payload = _minimal_payload()

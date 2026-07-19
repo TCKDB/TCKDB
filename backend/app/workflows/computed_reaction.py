@@ -17,6 +17,7 @@ from app.db.models.common import (
     CalculationType,
     KineticsCalculationRole,
     ReactionRole,
+    ScientificOriginKind,
     SubmissionRecordType,
 )
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
@@ -584,6 +585,11 @@ def persist_computed_reaction_upload(
     )
 
     thermo_ids = []
+    # Correlate each species' thermo with its statmech (persisted in a
+    # separate loop below) so a bundle-created COMPUTED thermo can be
+    # linked to the statmech it was derived from. Keyed by species
+    # participant local key, which is used consistently in both loops.
+    thermo_by_species_key: dict[str, Thermo] = {}
     for sp in request.species:
         if sp.thermo is not None:
             species_entry = species_key_to_entry[sp.key]
@@ -612,6 +618,7 @@ def persist_computed_reaction_upload(
             session.add(thermo)
             session.flush()
             thermo_ids.append(thermo.id)
+            thermo_by_species_key[sp.key] = thermo
 
             if t.nasa is not None:
                 session.add(ThermoNASA(thermo_id=thermo.id, **t.nasa.model_dump()))
@@ -664,6 +671,18 @@ def persist_computed_reaction_upload(
             session.add(statmech)
             session.flush()
             statmech_ids.append(statmech.id)
+
+            # Link this species' COMPUTED thermo (persisted above) to the
+            # statmech it was derived from. Correlated by species key so
+            # each participant links to its own statmech. Experimental,
+            # literature, or group-additivity thermo keeps statmech_id NULL.
+            linked = thermo_by_species_key.get(sp.key)
+            if (
+                linked is not None
+                and linked.statmech_id is None
+                and linked.scientific_origin == ScientificOriginKind.computed
+            ):
+                linked.statmech_id = statmech.id
 
             # Statmech → calculation links. Producer-declared by local
             # key; resolved against the bundle's global calc namespace.

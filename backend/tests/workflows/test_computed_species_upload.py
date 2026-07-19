@@ -31,6 +31,7 @@ from app.db.models.common import (
     AppUserRole,
     CalculationDependencyRole,
     CalculationType,
+    ScientificOriginKind,
 )
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
@@ -1023,6 +1024,57 @@ def test_bundle_thermo_statmech_sources_trace_to_conformer_observations(
                 ConformerObservation, calc.conformer_observation_id
             )
             assert obs is not None
+
+
+# ---------------------------------------------------------------------------
+# Thermo → statmech basis link (audit finding #3)
+# ---------------------------------------------------------------------------
+
+
+def test_bundle_computed_thermo_links_to_statmech(db_engine) -> None:
+    """A bundle carrying a COMPUTED thermo alongside a statmech must set
+    ``thermo.statmech_id`` to the statmech it was derived from — so the read
+    layer never has to fall back to ``min(statmech_id)`` when a species entry
+    accumulates multiple statmech rows.
+    """
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_computed_species_upload(
+            session, _bundle_multi_conformer_thermo_statmech()
+        )
+        assert outcome.thermo is not None
+        assert outcome.statmech is not None
+        assert outcome.thermo.scientific_origin == ScientificOriginKind.computed
+        assert outcome.thermo.statmech_id == outcome.statmech.id
+
+
+def test_bundle_thermo_without_statmech_leaves_statmech_id_null(db_engine) -> None:
+    """A computed thermo with no statmech in the bundle has nothing to link to;
+    ``statmech_id`` must remain NULL."""
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_computed_species_upload(
+            session, _bundle_with_thermo()
+        )
+        assert outcome.thermo is not None
+        assert outcome.statmech is None
+        assert outcome.thermo.statmech_id is None
+
+
+def test_bundle_experimental_thermo_not_linked_to_statmech(db_engine) -> None:
+    """An experimental (non-computed) thermo that happens to coexist with a
+    statmech must NOT be linked — only computed thermo is derived from a
+    statmech basis."""
+    bundle = _bundle_multi_conformer_thermo_statmech()
+    bundle.thermo.scientific_origin = ScientificOriginKind.experimental
+    # Experimental thermo is not derived from bundle calcs; drop source links.
+    bundle.thermo.source_calculations = []
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_computed_species_upload(session, bundle)
+        assert outcome.thermo is not None
+        assert outcome.statmech is not None
+        assert (
+            outcome.thermo.scientific_origin == ScientificOriginKind.experimental
+        )
+        assert outcome.thermo.statmech_id is None
 
 
 def test_thermo_role_type_mismatch_raises(db_engine) -> None:
