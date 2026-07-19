@@ -202,6 +202,23 @@ class StatmechTorsionSummary(BaseModel):
     )
 
 
+class StatmechElectronicLevelSummary(BaseModel):
+    """One ``statmech_electronic_level`` row for ``include=electronic_levels``.
+
+    Low-lying electronic states drive the electronic partition function
+    ``q_elec = Σ gᵢ·exp(−εᵢ/kT)`` (DR-0033). Each row is an ordered
+    ``(energy, degeneracy)`` pair: the ground state is ``level_index=1`` at
+    ``energy_cm1=0`` with its degeneracy; excited states follow. Needed for
+    open-shell atoms/radicals with low-lying states (OH ²Π spin-orbit
+    splitting, O(³P), halogen atoms) where a bare term symbol is
+    insufficient. Rows arrive ordered by ``level_index``.
+    """
+
+    level_index: int
+    energy_cm1: float
+    degeneracy: int
+
+
 class StatmechConformerContextItem(BaseModel):
     """One conformer group reachable via the statmech's species_entry.
 
@@ -247,6 +264,7 @@ class AvailableStatmechSections(BaseModel):
 
     has_source_calculations: bool
     has_torsions: bool
+    has_electronic_levels: bool
     has_frequencies: bool
     has_conformers: bool
     has_review: bool
@@ -330,6 +348,7 @@ class ScientificStatmechRecord(BaseModel):
     # Optional include blocks
     source_calculations: list[StatmechSourceCalculationSummary] | None = None
     torsions: list[StatmechTorsionSummary] | None = None
+    electronic_levels: list[StatmechElectronicLevelSummary] | None = None
     frequencies: StatmechFrequenciesSummary | None = None
     conformers: list[StatmechConformerContextItem] | None = None
     review_history: list[StatmechReviewEntry] | None = None
@@ -352,6 +371,7 @@ __all__ = [
     "StatmechConformerContextItem",
     "StatmechCoreBlock",
     "StatmechDetailRequest",
+    "StatmechElectronicLevelSummary",
     "StatmechEvidenceSummary",
     "StatmechFrequenciesSummary",
     "StatmechFrequencyScaleFactorSummary",

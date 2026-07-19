@@ -204,6 +204,30 @@ class StatmechTorsionUpdate(SchemaBase):
     source_scan_calculation_id: int | None = None
 
 
+class StatmechElectronicLevelBase(BaseModel):
+    """Shared fields for one electronic energy level.
+
+    Low-lying electronic states drive the electronic partition function
+    ``q_elec = Σ gᵢ·exp(−εᵢ/kT)`` (DR-0033). Each row is an ordered
+    ``(energy, degeneracy)`` pair.
+
+    :param level_index: One-based ordinal (ground state is ``1`` at
+        ``energy_cm1=0``); excited states follow in ascending order.
+    :param energy_cm1: Level energy above the ground state in cm⁻¹.
+    :param degeneracy: Electronic degeneracy of the level.
+    """
+
+    level_index: int = Field(ge=1)
+    energy_cm1: float = Field(ge=0)
+    degeneracy: int = Field(ge=1)
+
+
+class StatmechElectronicLevelRead(StatmechElectronicLevelBase, ORMBaseSchema):
+    """Read schema for one statmech electronic level."""
+
+    statmech_id: int
+
+
 class StatmechBase(BaseModel):
     """Shared fields for the statmech resource.
 
@@ -303,3 +327,6 @@ class StatmechRead(StatmechBase, TimestampedCreatedByReadSchema):
         default_factory=list
     )
     torsions: list[StatmechTorsionRead] = Field(default_factory=list)
+    electronic_levels: list[StatmechElectronicLevelRead] = Field(
+        default_factory=list
+    )

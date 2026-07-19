@@ -83,7 +83,8 @@ species_entry as a *context hint*, not a hard membership pointer.
 ## 4. Include behavior
 
 Legal include tokens: `source_calculations`, `torsions`,
-`frequencies`, `conformers`, `review`, `internal_ids`, `all`.
+`electronic_levels`, `frequencies`, `conformers`, `review`,
+`internal_ids`, `all`.
 
 ```text
 include=source_calculations  — list of compact source-calc summaries
@@ -92,6 +93,9 @@ include=source_calculations  — list of compact source-calc summaries
 include=torsions             — statmech_torsion rows + their
                                coordinate atom indices + the
                                source scan calc ref when present
+include=electronic_levels    — statmech_electronic_level rows (ordered
+                               low-lying (energy_cm1, degeneracy) pairs
+                               driving q_elec; DR-0033)
 include=frequencies          — pointer block listing source freq
                                calc refs + resolved scale factor
 include=conformers           — list of conformer_group refs reachable
@@ -99,7 +103,7 @@ include=conformers           — list of conformer_group refs reachable
                                (context hint — see §3)
 include=review               — record_review history for the statmech
                                row
-include=all                  — expands to all five public tokens;
+include=all                  — expands to all six public tokens;
                                never expands to internal_ids
 include=internal_ids         — Phase D policy gate; restores integer
                                IDs when the deployment permits

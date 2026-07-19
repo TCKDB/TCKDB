@@ -1324,6 +1324,36 @@ class TestStatmechReads:
         resp = client.get("/api/v1/statmech/999999")
         assert resp.status_code == 404
 
+    def test_get_returns_electronic_levels_ordered(self, client, db_session):
+        """The primitive entity read surface (``GET /statmech/{id}``) must
+        expose electronic levels, ordered by ``level_index``. Insert the
+        excited state first so the ordering is load-bearing (DR-0033)."""
+        from tests.services.scientific_read._factories import (
+            attach_statmech_electronic_level,
+            make_species,
+            make_species_entry,
+            make_statmech,
+            next_inchi_key,
+        )
+
+        species = make_species(db_session, inchi_key=next_inchi_key("SMEL"))
+        entry = make_species_entry(db_session, species)
+        sm = make_statmech(db_session, species_entry=entry)
+        attach_statmech_electronic_level(
+            db_session, statmech=sm, level_index=2, energy_cm1=126.0, degeneracy=2
+        )
+        attach_statmech_electronic_level(
+            db_session, statmech=sm, level_index=1, energy_cm1=0.0, degeneracy=2
+        )
+
+        resp = client.get(f"/api/v1/statmech/{sm.id}")
+        assert resp.status_code == 200
+        levels = resp.json()["electronic_levels"]
+        assert [lvl["level_index"] for lvl in levels] == [1, 2]
+        assert levels[0]["energy_cm1"] == 0.0
+        assert levels[0]["degeneracy"] == 2
+        assert levels[1]["energy_cm1"] == 126.0
+
 
 # ---------------------------------------------------------------------------
 # Transport reads

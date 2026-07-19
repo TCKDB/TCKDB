@@ -90,6 +90,7 @@ from app.db.models.species import (
 )
 from app.db.models.statmech import (
     Statmech,
+    StatmechElectronicLevel,
     StatmechSourceCalculation,
     StatmechTorsion,
     StatmechTorsionDefinition,
@@ -1101,6 +1102,26 @@ def attach_statmech_torsion(
             )
         )
         session.flush()
+    return row
+
+
+def attach_statmech_electronic_level(
+    session: Session,
+    *,
+    statmech: Statmech,
+    level_index: int,
+    energy_cm1: float,
+    degeneracy: int,
+) -> StatmechElectronicLevel:
+    """Create a StatmechElectronicLevel row on a Statmech."""
+    row = StatmechElectronicLevel(
+        statmech_id=statmech.id,
+        level_index=level_index,
+        energy_cm1=energy_cm1,
+        degeneracy=degeneracy,
+    )
+    session.add(row)
+    session.flush()
     return row
 
 

@@ -1635,6 +1635,10 @@
             "title": "Has Conformers",
             "type": "boolean"
           },
+          "has_electronic_levels": {
+            "title": "Has Electronic Levels",
+            "type": "boolean"
+          },
           "has_frequencies": {
             "title": "Has Frequencies",
             "type": "boolean"
@@ -1655,6 +1659,7 @@
         "required": [
           "has_source_calculations",
           "has_torsions",
+          "has_electronic_levels",
           "has_frequencies",
           "has_conformers",
           "has_review"
@@ -28095,6 +28100,20 @@
             ],
             "title": "Conformers"
           },
+          "electronic_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StatmechElectronicLevelSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic Levels"
+          },
           "evidence_summary": {
             "$ref": "#/components/schemas/StatmechEvidenceSummary"
           },
@@ -30352,6 +30371,62 @@
         "title": "StatmechCoreBlock",
         "type": "object"
       },
+      "StatmechElectronicLevelRead": {
+        "description": "Read schema for one statmech electronic level.",
+        "properties": {
+          "degeneracy": {
+            "minimum": 1.0,
+            "title": "Degeneracy",
+            "type": "integer"
+          },
+          "energy_cm1": {
+            "minimum": 0.0,
+            "title": "Energy Cm1",
+            "type": "number"
+          },
+          "level_index": {
+            "minimum": 1.0,
+            "title": "Level Index",
+            "type": "integer"
+          },
+          "statmech_id": {
+            "title": "Statmech Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "level_index",
+          "energy_cm1",
+          "degeneracy",
+          "statmech_id"
+        ],
+        "title": "StatmechElectronicLevelRead",
+        "type": "object"
+      },
+      "StatmechElectronicLevelSummary": {
+        "description": "One ``statmech_electronic_level`` row for ``include=electronic_levels``.\n\nLow-lying electronic states drive the electronic partition function\n``q_elec = Σ gᵢ·exp(−εᵢ/kT)`` (DR-0033). Each row is an ordered\n``(energy, degeneracy)`` pair: the ground state is ``level_index=1`` at\n``energy_cm1=0`` with its degeneracy; excited states follow. Needed for\nopen-shell atoms/radicals with low-lying states (OH ²Π spin-orbit\nsplitting, O(³P), halogen atoms) where a bare term symbol is\ninsufficient. Rows arrive ordered by ``level_index``.",
+        "properties": {
+          "degeneracy": {
+            "title": "Degeneracy",
+            "type": "integer"
+          },
+          "energy_cm1": {
+            "title": "Energy Cm1",
+            "type": "number"
+          },
+          "level_index": {
+            "title": "Level Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "level_index",
+          "energy_cm1",
+          "degeneracy"
+        ],
+        "title": "StatmechElectronicLevelSummary",
+        "type": "object"
+      },
       "StatmechEvidenceSummary": {
         "description": "Compact statmech-evidence projection.\n\nCounts come from cheap aggregates over\n``statmech_source_calculation`` and ``statmech_torsion``.\n``has_rotor_scans`` is true iff at least one torsion row carries\na ``source_scan_calculation_id``.",
         "properties": {
@@ -30724,6 +30799,13 @@
               }
             ],
             "title": "Created By"
+          },
+          "electronic_levels": {
+            "items": {
+              "$ref": "#/components/schemas/StatmechElectronicLevelRead"
+            },
+            "title": "Electronic Levels",
+            "type": "array"
           },
           "external_symmetry": {
             "anyOf": [

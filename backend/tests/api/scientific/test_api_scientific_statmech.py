@@ -20,6 +20,7 @@ from app.db.models.common import (
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from tests.services.scientific_read._factories import (
+    attach_statmech_electronic_level,
     attach_statmech_source_calculation,
     attach_statmech_torsion,
     make_calculation,
@@ -154,6 +155,7 @@ def test_detail_default_response_shape(client, db_session):
     # Heavy include blocks omitted by default.
     assert record["source_calculations"] is None
     assert record["torsions"] is None
+    assert record["electronic_levels"] is None
     assert record["frequencies"] is None
     assert record["conformers"] is None
     assert record["review_history"] is None
@@ -258,6 +260,7 @@ def test_detail_available_sections_present(client, db_session):
     for key in (
         "has_source_calculations",
         "has_torsions",
+        "has_electronic_levels",
         "has_frequencies",
         "has_conformers",
         "has_review",
@@ -302,6 +305,84 @@ def test_detail_include_torsions(client, db_session):
     assert tor[0]["source_scan_calculation_ref"] == scan.public_ref
     assert len(tor[0]["coordinates"]) == 1
     assert tor[0]["coordinates"][0]["atom1_index"] == 1
+
+
+def test_detail_include_electronic_levels(client, db_session):
+    """``include=electronic_levels`` surfaces the ordered low-lying
+    electronic states (DR-0033 q_elec) that are otherwise written but
+    unreadable. OH-like: ground ²Π + spin-orbit-split excited state."""
+    _, _, sm = _make_statmech(db_session)
+    # Insert the excited state FIRST (out of level_index order) so the
+    # ordering assertion below actually guards ``ORDER BY level_index``.
+    attach_statmech_electronic_level(
+        db_session, statmech=sm, level_index=2, energy_cm1=126.0, degeneracy=2
+    )
+    attach_statmech_electronic_level(
+        db_session, statmech=sm, level_index=1, energy_cm1=0.0, degeneracy=2
+    )
+    body = client.get(
+        _detail_url(sm.public_ref, include="electronic_levels")
+    ).json()
+    levels = body["record"]["electronic_levels"]
+    assert levels is not None
+    assert len(levels) == 2
+    assert [lvl["level_index"] for lvl in levels] == [1, 2]
+    assert levels[0]["energy_cm1"] == 0.0
+    assert levels[0]["degeneracy"] == 2
+    assert levels[1]["energy_cm1"] == 126.0
+    assert levels[1]["degeneracy"] == 2
+
+
+def test_detail_include_all_surfaces_electronic_levels(client, db_session):
+    """``include=all`` expands to ``electronic_levels`` (a base token,
+    not trust-only), so the levels appear without an explicit token."""
+    _, _, sm = _make_statmech(db_session)
+    attach_statmech_electronic_level(
+        db_session, statmech=sm, level_index=1, energy_cm1=0.0, degeneracy=2
+    )
+    attach_statmech_electronic_level(
+        db_session, statmech=sm, level_index=2, energy_cm1=126.0, degeneracy=2
+    )
+    body = client.get(_detail_url(sm.public_ref, include="all")).json()
+    assert "electronic_levels" in body["request"]["include"]
+    levels = body["record"]["electronic_levels"]
+    assert levels is not None
+    assert len(levels) == 2
+
+
+def test_detail_electronic_levels_none_when_not_included(client, db_session):
+    """Without the token the block is ``None`` even when levels exist."""
+    _, _, sm = _make_statmech(db_session)
+    attach_statmech_electronic_level(
+        db_session, statmech=sm, level_index=1, energy_cm1=0.0, degeneracy=2
+    )
+    body = client.get(_detail_url(sm.public_ref)).json()
+    assert body["record"]["electronic_levels"] is None
+
+
+def test_detail_include_electronic_levels_empty_when_none_present(
+    client, db_session
+):
+    """A statmech with no electronic levels returns an empty list under
+    the token (mirrors torsions: present-but-empty, never null)."""
+    _, _, sm = _make_statmech(db_session)
+    body = client.get(
+        _detail_url(sm.public_ref, include="electronic_levels")
+    ).json()
+    assert body["record"]["electronic_levels"] == []
+
+
+def test_detail_available_sections_flags_electronic_levels(client, db_session):
+    """``has_electronic_levels`` is False without levels and True once the
+    statmech carries them — section discovery independent of the include."""
+    _, _, sm = _make_statmech(db_session)
+    before = client.get(_detail_url(sm.public_ref)).json()
+    assert before["record"]["available_sections"]["has_electronic_levels"] is False
+    attach_statmech_electronic_level(
+        db_session, statmech=sm, level_index=1, energy_cm1=0.0, degeneracy=2
+    )
+    after = client.get(_detail_url(sm.public_ref)).json()
+    assert after["record"]["available_sections"]["has_electronic_levels"] is True
 
 
 def test_detail_include_frequencies_points_at_source_freq_calcs(
@@ -351,6 +432,7 @@ def test_detail_include_all_expands_all_public_tokens(client, db_session):
     for token in (
         "source_calculations",
         "torsions",
+        "electronic_levels",
         "frequencies",
         "conformers",
         "review",
@@ -975,6 +1057,7 @@ def test_search_include_all_on_records(client, db_session):
     for token in (
         "source_calculations",
         "torsions",
+        "electronic_levels",
         "frequencies",
         "conformers",
         "review",

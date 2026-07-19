@@ -61,6 +61,7 @@ def list_statmech(
             selectinload(Statmech.torsions).selectinload(
                 StatmechTorsion.coordinates
             ),
+            selectinload(Statmech.electronic_levels),
         )
         .order_by(Statmech.id)
         .offset(pagination.skip)
@@ -84,6 +85,7 @@ def get_statmech(statmech_id: int, session: Session = Depends(get_db)):
             selectinload(Statmech.torsions).selectinload(
                 StatmechTorsion.coordinates
             ),
+            selectinload(Statmech.electronic_levels),
         )
     )
     if row is None:
