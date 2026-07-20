@@ -121,7 +121,8 @@ thermo and kinetics generation.
 ### `thermo`
 
 Temperature-dependent thermodynamic quantities: Cp(T), H(T), S(T), and
-fitted NASA polynomials (Wilhoit is planned, not yet in the schema).
+fitted NASA polynomials (NASA-7 and NASA-9) or a Wilhoit form; the
+representation is tagged explicitly by ``thermo.model_kind``.
 Each row carries provenance back to the underlying statmech (via the
 ``statmech_id`` FK, for computed thermo) or the literature it was
 lifted from.

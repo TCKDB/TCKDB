@@ -13,7 +13,9 @@ from app.schemas.reads.scientific_thermo import (
 from app.services.scientific_read.thermo import get_species_thermo
 from tests.services.scientific_read._factories import (
     attach_thermo_nasa,
+    attach_thermo_nasa9,
     attach_thermo_points,
+    attach_thermo_wilhoit,
     make_species,
     make_species_entry,
     make_thermo_scalar,
@@ -700,3 +702,71 @@ def test_provenance_single_statmech_linked_surfaces_it(db_session):
     assert prov.statmech_ref == stat.public_ref
     assert prov.freq_calculation_ref == freq_calc.public_ref
     assert prov.sp_calculation_ref == sp_calc.public_ref
+
+
+# ---------------------------------------------------------------------------
+# Temperature coverage for nasa9 / wilhoit records (child-derived range)
+# ---------------------------------------------------------------------------
+
+
+def test_nasa9_coverage_uses_interval_span_when_row_bounds_null(db_session):
+    """A nasa9-only record with NULL row-level tmin/tmax derives its coverage
+    range from the NASA-9 interval span, not the NULL row bounds.
+
+    The factory intervals span 200-6000 K. So the record COVERS a requested
+    1000 K (inside the span) and does NOT cover 8000 K (above the 6000 K max).
+    Under the old row-level-only logic the NULL bounds would make coverage
+    False for every requested temperature.
+    """
+    entry = _entry_with_smiles(db_session)
+    thermo = make_thermo_scalar(
+        db_session, species_entry=entry, tmin_k=None, tmax_k=None
+    )
+    attach_thermo_nasa9(db_session, thermo=thermo)
+
+    covered = get_species_thermo(
+        db_session,
+        species_entry_id=entry.id,
+        request=ThermoReadRequest(temperature_min=1000.0, temperature_max=1000.0),
+    )
+    assert covered.records[0].model_kind == ThermoModelKindQuery.nasa9
+    assert covered.records[0].temperature_coverage is not None
+    assert covered.records[0].temperature_coverage.covers_requested_range is True
+
+    uncovered = get_species_thermo(
+        db_session,
+        species_entry_id=entry.id,
+        request=ThermoReadRequest(temperature_min=8000.0, temperature_max=8000.0),
+    )
+    assert uncovered.records[0].temperature_coverage is not None
+    assert uncovered.records[0].temperature_coverage.covers_requested_range is False
+
+
+def test_wilhoit_coverage_falls_through_to_row_level_bounds(db_session):
+    """ThermoWilhoit carries no temperature-bound columns of its own, so a
+    wilhoit record's coverage range comes from the row-level thermo.tmin_k /
+    tmax_k fall-through branch. Here the 300-2500 K row bounds cover 1000 K
+    and do not cover 4000 K.
+    """
+    entry = _entry_with_smiles(db_session)
+    thermo = make_thermo_scalar(
+        db_session, species_entry=entry, tmin_k=300.0, tmax_k=2500.0
+    )
+    attach_thermo_wilhoit(db_session, thermo=thermo)
+
+    covered = get_species_thermo(
+        db_session,
+        species_entry_id=entry.id,
+        request=ThermoReadRequest(temperature_min=1000.0, temperature_max=1000.0),
+    )
+    assert covered.records[0].model_kind == ThermoModelKindQuery.wilhoit
+    assert covered.records[0].temperature_coverage is not None
+    assert covered.records[0].temperature_coverage.covers_requested_range is True
+
+    uncovered = get_species_thermo(
+        db_session,
+        species_entry_id=entry.id,
+        request=ThermoReadRequest(temperature_min=4000.0, temperature_max=4000.0),
+    )
+    assert uncovered.records[0].temperature_coverage is not None
+    assert uncovered.records[0].temperature_coverage.covers_requested_range is False

@@ -330,18 +330,27 @@ def get_species_thermo(
             else []
         )
 
-        # Determine the "effective" temperature range for coverage:
-        # - If the record has a NASA block, use its t_low / t_high.
-        # - Else use Thermo.tmin_k / Thermo.tmax_k (which may be null too).
-        # - Scalar records with no range produce covers=False whenever a
-        #   bound was requested (handled by temperature_coverage helper).
+        # Determine the "effective" temperature range for coverage. Precedence
+        # (mirroring how a NASA-7 block already wins over row-level bounds):
+        #   NASA-7 block t_low/t_high
+        #     -> NASA-9 per-interval span (min t_min_k .. max t_max_k)
+        #     -> Wilhoit bounds (none exist -> falls through)
+        #     -> row-level Thermo.tmin_k / Thermo.tmax_k (may be NULL).
+        # A nasa9-only / wilhoit record often has NULL row-level bounds because
+        # a NASA-9 fit's real span lives in its per-interval bounds; deriving
+        # from the child rows keeps coverage ranking honest for those records.
+        # Scalar records with no range produce covers=False whenever a bound
+        # was requested (handled by the temperature_coverage helper).
         nasa_block = nasa_by_thermo.get(t.id)
         if nasa_block is not None:
             record_min = nasa_block.t_low
             record_max = nasa_block.t_high
         else:
-            record_min = t.tmin_k
-            record_max = t.tmax_k
+            record_min, record_max = _fallback_temperature_range(
+                row_min=t.tmin_k,
+                row_max=t.tmax_k,
+                nasa9_intervals=nasa9_by_thermo.get(t.id),
+            )
 
         coverage = temperature_coverage(
             requested_min=request.temperature_min,
@@ -812,6 +821,31 @@ def _load_statmech_refs(
 # ---------------------------------------------------------------------------
 # Inference helpers
 # ---------------------------------------------------------------------------
+
+
+def _fallback_temperature_range(
+    *,
+    row_min: float | None,
+    row_max: float | None,
+    nasa9_intervals: list[ThermoNASA9Interval] | None,
+) -> tuple[float | None, float | None]:
+    """Effective temperature range for a record with no NASA-7 block.
+
+    Used only for the non-NASA-7 branch of the coverage computation; the
+    NASA-7 branch is unchanged. A NASA-9 fit's real temperature span lives in
+    its per-interval ``t_min_k`` / ``t_max_k`` bounds (both NOT NULL), so when
+    interval rows exist their combined min/max span is used in preference to
+    the row-level ``thermo.tmin_k`` / ``tmax_k``, which the uploader may leave
+    NULL. ``ThermoWilhoit`` carries no temperature bounds, so wilhoit records
+    (and scalar / tabulated records) fall through to the row-level bounds,
+    which may themselves be NULL.
+    """
+    if nasa9_intervals:
+        return (
+            min(iv.t_min_k for iv in nasa9_intervals),
+            max(iv.t_max_k for iv in nasa9_intervals),
+        )
+    return row_min, row_max
 
 
 def _primary_calc_id(sources: list[ThermoSourceCalculation]) -> int | None:
