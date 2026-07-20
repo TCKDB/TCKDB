@@ -96,9 +96,9 @@ shared scientific resource.
 - Submission, moderation, and review workflows are exercised in
   earnest — anonymous uploads are not permitted, and contributed
   records pass through the documented review queue (see
-  [submission-moderation-schema.md](../submission-moderation-schema.md)
+  `submission-moderation-schema.md`
   and
-  [species-entry-review.md](../species-entry-review.md)).
+  `species-entry-review.md`).
 - May receive contribution bundles from offline/local instances — the
   cross-instance data-movement path is the export/import flow
   documented in

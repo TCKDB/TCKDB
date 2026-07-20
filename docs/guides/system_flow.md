@@ -209,23 +209,23 @@ explicitly opt into drafts.
 
 | Subsystem | Code | Start-here doc |
 |---|---|---|
-| Identity (species/reactions/TS) | `db/models/species*.py`, `services/species_resolution.py`, `reaction_resolution.py` | [`species_design.md`](../species_design.md) |
+| Identity (species/reactions/TS) | `db/models/species*.py`, `services/species_resolution.py`, `reaction_resolution.py` | `species_design.md` |
 | Conformers | `services/conformer_resolution.py`, `workflows/conformer.py` | DR-0005 |
 | Calculations | `services/calculation_resolution.py`, `db/models/calculation*.py` | [`scientific_calculation_reads.md`](../../backend/docs/specs/scientific_calculation_reads.md) |
 | Scientific products | `services/{statmech,thermo,kinetics,transport}_resolution.py` | [`scientific_product_candidacy.md`](../../backend/docs/specs/scientific_product_candidacy.md) |
 | Pressure-dependent networks | `workflows/network*.py`, `services/network_resolution.py` | DR-0001 |
 | Provenance (software/LOT) | `services/software_resolution.py`, `db/models/level_of_theory.py` | DR-0008 |
-| Literature | `services/literature_resolution.py`, `literature_metadata.py` | [`literature_policy.md`](../literature_policy.md) |
+| Literature | `services/literature_resolution.py`, `literature_metadata.py` | `literature_policy.md` |
 | Submissions & ingestion | `services/upload_submission.py`, `workflows/` | [`ingestion_submission_model.md`](../../backend/docs/specs/ingestion_submission_model.md) |
 | Trust & review | `services/{record_review,trust,machine_review,llm_precheck}/` | [`automated_trust_layer.md`](../../backend/docs/specs/automated_trust_layer.md) |
 | Uploads & idempotency | `api/routes/uploads.py`, `services/upload_reconciliation.py` | DR-0024 |
 | Bundles / offline | `api/routes/bundles*.py` | [`contribution-bundles/v0-format.md`](../contribution-bundles/v0-format.md) |
 | Read/query API | `services/scientific_read/`, `api/routes/` | `read_api_mvp.md` |
-| Async jobs | `workers/upload_worker.py`, `db/models/upload_job.py` | [`upload_worker_tests_spec.md`](../upload_worker_tests_spec.md) |
-| Auth & roles | `api/` dependencies | [`auth-and-roles-v1-spec.md`](../auth-and-roles-v1-spec.md) |
+| Async jobs | `workers/upload_worker.py`, `db/models/upload_job.py` | `upload_worker_tests_spec.md` |
+| Auth & roles | `api/` dependencies | `auth-and-roles-v1-spec.md` |
 
 For a *task → doc* router covering the full ~160-file doc set, see the
-"Where to look" table in [`CLAUDE.md`](../../CLAUDE.md).
+"Where to look" table in `CLAUDE.md`.
 
 ---
 

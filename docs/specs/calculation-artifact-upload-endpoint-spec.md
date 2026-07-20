@@ -50,7 +50,7 @@ TCKDB has a complete artifact pipeline already in production for two workflows. 
 
 ### Change 1 — Promote `ArtifactIn` to fragments
 
-`ArtifactIn` is consumed by multiple workflows and (after this spec) the new route. Per the project layout convention in [CLAUDE.md](../../CLAUDE.md) ("Schemas — `entities/` for read/write, `workflows/` for upload payloads, `fragments/` for reusable pieces"), `ArtifactIn` belongs in `fragments/`.
+`ArtifactIn` is consumed by multiple workflows and (after this spec) the new route. Per the project layout convention in `CLAUDE.md` ("Schemas — `entities/` for read/write, `workflows/` for upload payloads, `fragments/` for reusable pieces"), `ArtifactIn` belongs in `fragments/`.
 
 **Files:**
 
@@ -311,7 +311,7 @@ The spec does **not** mandate the broader change. The implementer reads `idempot
 
 #### Artifact row uniqueness
 
-**Decision:** no row-level dedup. The `calculation_artifact` table is treated as append-only event provenance, matching the [feedback_identity_vs_result_tables.md](../../../home/calvin/.claude/projects/-home-calvin-code-TCKDB-v2/memory/feedback_identity_vs_result_tables.md) rule. Same bytes uploaded twice → two `calculation_artifact` rows pointing at the same content-addressed URI.
+**Decision:** no row-level dedup. The `calculation_artifact` table is treated as append-only event provenance, matching the project's identity-vs-result principle: identity tables dedupe, while result and provenance tables are append-only. Same bytes uploaded twice → two `calculation_artifact` rows pointing at the same content-addressed URI.
 
 Rationale:
 

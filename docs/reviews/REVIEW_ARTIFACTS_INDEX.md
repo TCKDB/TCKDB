@@ -25,7 +25,7 @@
 
 ## Memory pointers (session-only agent reports — no file)
 
-The following three review outputs were produced as in-session agent reports during the same 2026-07-13 review and were never written to a file. Their durable conclusions are captured in the project memory **`project_publication_review_2026_07`** (see `~/.claude/projects/-home-calvin-code-TCKDB-v2/memory/project_publication_review_2026_07.md`):
+The following three review outputs were produced as in-session agent reports during the same 2026-07-13 review and were never written to a file. Their durable conclusions are captured in the local project memory **`project_publication_review_2026_07`**:
 
 - **Codebase capability inventory** — what's actually built vs. designed (model/schema/service counts, test coverage, which integrations are real vs. stubbed).
 - **Design-novelty referee report** — ranked list of headline-worthy claims vs. claims to avoid headlining, checked against prior art.

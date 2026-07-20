@@ -12,7 +12,7 @@ to mutate the database.
 > capability is a named tool with an explicit schema; there is no
 > generic endpoint-passthrough escape hatch.
 
-See [`docs/specs/mcp_readonly_integration.md`](../../docs/specs/mcp_readonly_integration.md)
+See `docs/specs/mcp_readonly_integration.md`
 for the full design.
 
 ## Status

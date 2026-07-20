@@ -1,6 +1,6 @@
 # Deployed-DB migration playbook
 
-This is the operator playbook for applying TCKDB schema migrations to a real database — local dev, lab-shared, self-hosted, or hosted. It is the runbook side of the contributor-facing policy in [`.claude/rules/migration-rules.md`](../../../.claude/rules/migration-rules.md). Read both before touching a deployed DB.
+This is the operator playbook for applying TCKDB schema migrations to a real database — local dev, lab-shared, self-hosted, or hosted. It is the runbook side of the contributor-facing policy in `.claude/rules/migration-rules.md`. Read both before touching a deployed DB.
 
 This document supersedes any older guidance that said schema changes must be folded into the single initial migration. That rule applied while the schema was pre-deployment; it no longer does. The current policy is summarized at the top of `migration-rules.md` and assumed below.
 
@@ -206,7 +206,7 @@ Operator notes:
 
 ## Network / PDep exception
 
-While no real production network or PDep data exists, schema work on the `network*` and PDep tables is allowed to be more flexible than the default rule. See the dedicated section in [`.claude/rules/migration-rules.md`](../../../.claude/rules/migration-rules.md) for what that means; the operator-side implications are:
+While no real production network or PDep data exists, schema work on the `network*` and PDep tables is allowed to be more flexible than the default rule. See the dedicated section in `.claude/rules/migration-rules.md` for what that means; the operator-side implications are:
 
 - A `network*` revision is still a normal Alembic revision and is applied through the steps above.
 - It may include changes that would be unacceptable for an already-deployed table (e.g., tightening a nullable column to NOT NULL without a backfill, renaming a column without a column-copy step).
@@ -251,7 +251,7 @@ A backup you have never restored is a hypothesis. Test a restore at least once a
 
 ## See also
 
-- [`.claude/rules/migration-rules.md`](../../../.claude/rules/migration-rules.md) — contributor rules for writing revisions.
+- `.claude/rules/migration-rules.md` — contributor rules for writing revisions.
 - [`docs/deployment/README.md`](../../../docs/deployment/README.md) — overall deployment guide entry point.
 - [`docs/deployment/shared-private-deployment.md`](../../../docs/deployment/shared-private-deployment.md) — lab/group deployment, including backup and restore.
 - [`docs/deployment/self_hosted_single_node.md`](../../../docs/deployment/self_hosted_single_node.md) — single-node operator guide with concrete commands.

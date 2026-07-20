@@ -187,7 +187,7 @@ parameters, call the backend, and return parsed JSON. They contain no
 ARC- or RMG-specific selection or reuse policy, no client-side ranking,
 and no notion of a "best" record. Trust posture, sort order, evidence
 completeness, and provenance shape are all decided by the backend per
-[`docs/specs/read_api_mvp.md`](../../docs/specs/read_api_mvp.md).
+`docs/specs/read_api_mvp.md`.
 
 **Recommended — chemistry-first search** (use these for hosted workflow
 tools that know identifiers, not entry ids):

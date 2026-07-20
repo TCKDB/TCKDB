@@ -1,7 +1,7 @@
 # Remediation Plan — Backend Assessment Follow-up
 
 **Started:** 2026-07-02
-**Source:** [`docs/audits/backend_assessment_2026-07-02.md`](docs/audits/backend_assessment_2026-07-02.md)
+**Source:** `docs/audits/backend_assessment_2026-07-02.md`
 **Companion narrative:** [`docs/guides/the_story_of_a_datapoint.md`](docs/guides/the_story_of_a_datapoint.md)
 
 This is a living tracking document. Each phase is executed one at a time:
@@ -124,7 +124,7 @@ benefits from the fresh CI net; 4–6 are further schema work; 7 is API-only.
 
 ### Phase 2 — Hessian & raw-QC data storage (user-flagged)
 
-**Design:** [DR-0030](docs/decisions/0030-hessian-and-raw-qc-data-storage.md)
+**Design:** `DR-0030`
 — `calc_hessian` as a geometry-bound side table; the `HessianPayload`
 carries its own `GeometryPayload` (dedup-safe, ordering-independent,
 scientifically explicit binding) rather than inferring the geometry.
@@ -169,7 +169,7 @@ Part B (deferred follow-ons, tracked here):
 
 ### Phase 3 — Species identity redesign
 
-**Design:** [DR-0031](docs/decisions/0031-species-identity-canonical-smiles-charge-multiplicity.md).
+**Design:** `DR-0031`.
 
 Done:
 - [x] DR-0031 written.
@@ -277,7 +277,7 @@ phases.
 
 ### Phase 4 — Kinetics representability
 
-**Design:** [DR-0032](docs/decisions/0032-kinetics-representability.md).
+**Design:** `DR-0032`.
 
 Part A — **done, pending full-suite confirmation** (gaps G5.3, G5.4):
 - [x] Enums `TunnelingModel` (none/wigner/eckart/sct/other) and

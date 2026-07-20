@@ -444,7 +444,7 @@ a documented period (suggest one minor version of `tckdb-client`).
 1. **Schema migration scope.** Adding a unique non-null `*_ref` column
    to every public-facing table is a multi-table Alembic migration.
    Backfill must populate every existing row before the NOT NULL
-   constraint flips. Per the project's [migration-rules.md](../../.claude/rules/migration-rules.md),
+   constraint flips. Per the project's `migration-rules.md`,
    while the schema is not yet finalized this should be folded into the
    single initial migration `d861dfd60891`, with all dev DBs rebuilt.
 2. **Backfill cost.** Content-derived refs require recomputing the

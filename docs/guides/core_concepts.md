@@ -181,7 +181,7 @@ and [`docs/specs/internal_ids_visibility_policy.md`](../specs/internal_ids_visib
 Records may cite one or more `literature` entries (with `author`
 links) when their values were lifted from a paper. DOI/ISBN metadata
 is fetched and cached; see
-[`docs/literature_policy.md`](../../backend/docs/literature_policy.md)
+`docs/literature_policy.md`
 if present.
 
 ### Submissions and reviews
