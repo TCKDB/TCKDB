@@ -22,6 +22,7 @@ from .forms import (
     MODEL_CHEBYSHEV,
     MODEL_LINDEMANN,
     MODEL_MODIFIED_ARRHENIUS,
+    MODEL_MULTI_ARRHENIUS,
     MODEL_PLOG,
     MODEL_SRI,
     MODEL_TROE,
@@ -62,6 +63,22 @@ class NormalizedPlogEntry:
 
 
 @dataclass
+class NormalizedMultiArrheniusEntry:
+    """One modified-Arrhenius term of a Chemkin ``DUPLICATE`` (multi_arrhenius)
+    channel. The channel rate is the *sum* of these terms; there is no pressure
+    (unlike a PLOG entry). ``a_units`` shares the reaction's main-line
+    molecularity, and ``reported_ea``/``reported_ea_units`` carry the native
+    (lossless) Ea unit exactly like the top-level Arrhenius fields."""
+
+    entry_index: int
+    a: float
+    a_units: str
+    n: float
+    reported_ea: float
+    reported_ea_units: str
+
+
+@dataclass
 class NormalizedChebyshev:
     n_temperature: int
     n_pressure: int
@@ -96,6 +113,9 @@ class NormalizedReaction:
     falloff: NormalizedFalloff | None = None
     efficiencies: dict[str, float] = field(default_factory=dict)
     plog: list[NormalizedPlogEntry] = field(default_factory=list)
+    arrhenius_entries: list[NormalizedMultiArrheniusEntry] = field(
+        default_factory=list
+    )
     chebyshev: NormalizedChebyshev | None = None
 
     duplicate: bool = False
@@ -262,10 +282,168 @@ def normalize_reaction(
     return out
 
 
+def _is_collapsible_duplicate(rxn: NormalizedReaction) -> bool:
+    """A DUPLICATE reaction that is a plain / simple-third-body (modified-)
+    Arrhenius rate — i.e. exactly a modified-Arrhenius term that can be summed
+    into a ``multi_arrhenius`` channel (DR-0036). Falloff / PLOG / Chebyshev
+    duplicates are *not* collapsed (they are not a sum-of-Arrhenius form) and
+    keep their existing one-payload-per-line handling.
+    """
+    return (
+        rxn.duplicate
+        and rxn.model_kind in (MODEL_ARRHENIUS, MODEL_MODIFIED_ARRHENIUS)
+        and rxn.falloff is None
+        and not rxn.plog
+        and rxn.chebyshev is None
+    )
+
+
+def _duplicate_key(rxn: NormalizedReaction) -> tuple:
+    """Identity of a DUPLICATE group at the CHEMKIN-name level. Repeated
+    DUPLICATE lines carry the *same* equation text, so the reactant/product
+    name lists plus reversibility identify the group without needing resolved
+    structures."""
+    return (
+        tuple(rxn.reactant_names),
+        tuple(rxn.product_names),
+        rxn.reversible,
+    )
+
+
+def _members_agree_third_body(members: list[NormalizedReaction]) -> bool:
+    """Whether every member of a DUPLICATE group shares the SAME third-body
+    context — i.e. the same ``is_third_body`` flag, the same ``falloff_collider``
+    label, and an *identical* collider-efficiency mapping.
+
+    Summing the members into one ``multi_arrhenius`` rate is only correct when
+    they describe the same reaction under the same bath-gas conditions. CHEMKIN
+    permits duplicate ``+M`` lines to carry *different* per-line efficiency
+    lists (a genuinely different effective [M]); those must NOT be fused, or the
+    non-first lines' efficiencies would be silently discarded and the stored
+    rate would be scientifically wrong.
+    """
+    first = members[0]
+    for m in members[1:]:
+        if m.is_third_body != first.is_third_body:
+            return False
+        if m.falloff_collider != first.falloff_collider:
+            return False
+        if m.efficiencies != first.efficiencies:
+            return False
+    return True
+
+
+def _merge_multi_arrhenius(
+    members: list[NormalizedReaction],
+) -> NormalizedReaction:
+    """Collapse a DUPLICATE group of (modified-)Arrhenius rates into a single
+    ``multi_arrhenius`` reaction carrying one term per member (DR-0036).
+
+    The scalar main-line ``a``/``n``/``reported_ea`` are left unset — the
+    coefficients live in ``arrhenius_entries`` — matching the backend
+    ``multi_arrhenius`` upload contract.
+    """
+    first = members[0]
+    entries = [
+        NormalizedMultiArrheniusEntry(
+            entry_index=i,
+            a=m.a,
+            a_units=m.a_units,
+            n=m.n,
+            reported_ea=m.reported_ea,
+            reported_ea_units=m.reported_ea_units,
+        )
+        for i, m in enumerate(members, start=1)
+    ]
+    merged = NormalizedReaction(
+        reactant_names=list(first.reactant_names),
+        product_names=list(first.product_names),
+        reversible=first.reversible,
+        model_kind=MODEL_MULTI_ARRHENIUS,
+        # Scalar main-line rate intentionally unset for multi_arrhenius.
+        a=None,
+        a_units=None,
+        n=None,
+        reported_ea=None,
+        reported_ea_units=None,
+        is_third_body=first.is_third_body,
+        is_falloff=False,
+        falloff_collider=first.falloff_collider,
+        efficiencies=dict(first.efficiencies),
+        arrhenius_entries=entries,
+        duplicate=True,
+        line_no=first.line_no,
+    )
+    for m in members:
+        merged.warnings.extend(m.warnings)
+    return merged
+
+
+def _collapse_duplicates(
+    reactions: list[NormalizedReaction],
+) -> list[NormalizedReaction]:
+    """Collapse each DUPLICATE group of summable Arrhenius rates into one
+    ``multi_arrhenius`` reaction, preserving first-occurrence order. Groups of
+    a single line (an unmatched ``DUP``) and non-collapsible duplicates pass
+    through unchanged."""
+    groups: dict[tuple, list[NormalizedReaction]] = {}
+    order: list[tuple[str, object]] = []
+    for rxn in reactions:
+        if _is_collapsible_duplicate(rxn):
+            key = _duplicate_key(rxn)
+            if key not in groups:
+                groups[key] = []
+                order.append(("group", key))
+            groups[key].append(rxn)
+        else:
+            order.append(("single", rxn))
+
+    out: list[NormalizedReaction] = []
+    for kind, val in order:
+        if kind == "single":
+            out.append(val)  # type: ignore[arg-type]
+            continue
+        members = groups[val]  # type: ignore[index]
+        if len(members) < 2:
+            # A lone DUP with no matching partner is not a valid sum; keep the
+            # single line as its own (modified-)Arrhenius payload.
+            out.extend(members)
+            continue
+        if not _members_agree_third_body(members):
+            # Same reactants/products/reversibility but a MISMATCHED third-body
+            # context (different is_third_body / collider / efficiency mapping).
+            # Summing would silently drop the differing bath-gas information, so
+            # pass the members through unchanged (separate scalar DUP rows, as
+            # before the multi_arrhenius collapse existed) and flag why.
+            lines = ", ".join(
+                str(m.line_no) for m in members if m.line_no is not None
+            )
+            for m in members:
+                m.warnings.append(
+                    "CHEMKIN DUPLICATE group NOT collapsed to multi_arrhenius: "
+                    "members disagree on third-body context (is_third_body / "
+                    "collider / efficiencies differ across the duplicate lines"
+                    + (f" {lines}" if lines else "")
+                    + "); kept as separate rates to avoid discarding per-line "
+                    "efficiencies."
+                )
+            out.extend(members)
+            continue
+        out.append(_merge_multi_arrhenius(members))
+    return out
+
+
 def normalize_mechanism(mech: Mechanism) -> NormalizedMechanism:
-    """Normalize every reaction in the mechanism against its header units."""
+    """Normalize every reaction in the mechanism against its header units.
+
+    A Chemkin ``DUPLICATE`` group of summable (modified-)Arrhenius rates is
+    collapsed into a single ``multi_arrhenius`` reaction (DR-0036); every other
+    reaction passes through one-to-one.
+    """
     normalized = [
         normalize_reaction(rxn, mech.a_conc_basis, mech.ea_units)
         for rxn in mech.reactions
     ]
-    return NormalizedMechanism(reactions=normalized, mechanism=mech)
+    return NormalizedMechanism(
+        reactions=_collapse_duplicates(normalized), mechanism=mech
+    )

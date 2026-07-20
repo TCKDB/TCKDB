@@ -19,8 +19,8 @@ test cannot catch a convention that is flipped consistently in only one of
 the two adapters; only a full round trip can.
 
 Covered forms: modified Arrhenius, Troe falloff + collider efficiencies,
-PLOG, Chebyshev, NASA-7 thermo, transport. The simple third-body (A+B+M)
-case is deliberately excluded (see the skipped placeholder at the bottom).
+PLOG, Chebyshev, simple third-body (bare ``+M``), multi_arrhenius (a
+CHEMKIN ``DUPLICATE`` group), NASA-7 thermo, transport.
 """
 
 from __future__ import annotations
@@ -477,22 +477,81 @@ def test_ndjson_thermo_high_low_labels_match_chemkin_convention(round_trip):
 
 
 # ---------------------------------------------------------------------------
-# Deliberately-excluded case: simple third body (A + B + M).
+# Simple third body (A + B + M): bare ``+ M`` collider, no falloff.
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(
-    reason=(
-        "Simple third-body (A+B+M) round trip is intentionally out of scope: a "
-        "backend fix for its Arrhenius A-units validation is landing separately. "
-        "Enable this once that fix merges: import a bare-(+M) third-body "
-        "reaction (e.g. 'O + O + M => O2 + M', order+1 A-units => cm6_mol2_s), "
-        "persist it, export it, and assert the cm6_mol2_s A-factor and the (+M) "
-        "third-body marker round-trip."
+def test_simple_third_body_round_trips(round_trip):
+    """A bare-``+M`` third-body reaction (``O + O + M <=> O2 + M``) round-trips
+    with its order+1 A-units (``cm6_mol2_s``) and its *simple* third-body marker
+    intact — distinct from the parenthesised ``(+M)`` falloff form."""
+    in_by = _rxn_by_key(round_trip["normalized_in"], round_trip["resolved_in"])
+    out_by = _rxn_by_key(round_trip["normalized_out"], round_trip["resolved_out"])
+
+    key = ((_canon("[O]"), _canon("[O]")), (_canon("[O][O]"),), True)
+    m_in, m_out = in_by[key], out_by[key]
+
+    # Simple third body, NOT falloff — the parsed-back marker proves the export
+    # wrote a bare ``+ M`` (the ``(+M)`` falloff form would re-parse as falloff).
+    assert m_in.is_third_body and not m_in.is_falloff
+    assert m_out.is_third_body and not m_out.is_falloff
+
+    # The [M] term raises the concentration order to 3 -> cm6_mol2_s, and that
+    # A-factor survives the mol/cm/s <-> stored round trip.
+    assert m_in.a_units == m_out.a_units == "cm6_mol2_s"
+    assert m_out.a == pytest.approx(m_in.a, rel=1e-4)
+    assert m_out.n == pytest.approx(m_in.n)
+
+    # Belt-and-suspenders on the exported text: a BARE ``+ M`` third-body line,
+    # not the ``(+M)`` falloff paren form, must appear for this reaction.
+    chem = round_trip["export"].files["chem.inp"]
+    assert any(
+        "+ M" in line and "(+M)" not in line and "<=>" in line
+        for line in chem.splitlines()
     )
-)
-def test_simple_third_body_round_trips():  # pragma: no cover - placeholder
-    raise NotImplementedError
+
+
+# ---------------------------------------------------------------------------
+# multi_arrhenius: a CHEMKIN DUPLICATE group summed into one rate.
+# ---------------------------------------------------------------------------
+
+
+def test_multi_arrhenius_duplicate_round_trips(round_trip):
+    """A DUPLICATE pair (``OH + OH <=> O + H2O`` twice) is imported as ONE
+    ``multi_arrhenius`` upload with two ``arrhenius_entries``, persisted,
+    exported back as two DUPLICATE Arrhenius lines, and re-imported — with both
+    summed terms surviving import->persist->export->re-import."""
+    in_by = _rxn_by_key(round_trip["normalized_in"], round_trip["resolved_in"])
+    out_by = _rxn_by_key(round_trip["normalized_out"], round_trip["resolved_out"])
+
+    key = (
+        (_canon("[OH]"), _canon("[OH]")),
+        tuple(sorted((_canon("[O]"), _canon("O")))),
+        True,
+    )
+    m_in, m_out = in_by[key], out_by[key]
+
+    # Both directions collapse the DUPLICATE pair into a single multi_arrhenius
+    # reaction whose scalar main-line rate is unset (terms carry it).
+    assert m_in.model_kind == m_out.model_kind == "multi_arrhenius"
+    assert m_in.a is None and m_out.a is None
+
+    e_in = m_in.arrhenius_entries
+    e_out = m_out.arrhenius_entries
+    assert len(e_in) == len(e_out) == 2
+
+    # Compare terms by their (A, n) content — export orders by entry_index but
+    # the round trip need only preserve the *set* of summed terms.
+    # OH + OH is bimolecular -> every term keeps cm3_mol_s.
+    assert all(e.a_units == "cm3_mol_s" for e in e_in)
+    assert all(e.a_units == "cm3_mol_s" for e in e_out)
+
+    for t_in, t_out in zip(sorted(e_in, key=lambda e: e.a),
+                           sorted(e_out, key=lambda e: e.a), strict=True):
+        assert t_out.a == pytest.approx(t_in.a, rel=1e-4)
+        assert t_out.n == pytest.approx(t_in.n)
+        assert t_out.reported_ea == pytest.approx(t_in.reported_ea, rel=1e-4)
+        assert t_out.reported_ea_units == t_in.reported_ea_units
 
 
 # ---------------------------------------------------------------------------

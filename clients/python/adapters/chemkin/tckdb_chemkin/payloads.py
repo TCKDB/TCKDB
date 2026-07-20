@@ -154,9 +154,10 @@ def build_kinetics_payload(
     resolved: dict[str, ResolvedSpecies],
     config: ImportConfig,
 ) -> dict:
-    """Build a ``KineticsUploadRequest`` dict for one (possibly duplicate) rate.
+    """Build a ``KineticsUploadRequest`` dict for one normalized reaction.
 
-    Covers every §6 form: modified/plain Arrhenius, Lindemann/Troe/SRI falloff,
+    Covers every §6 form: modified/plain Arrhenius, a ``multi_arrhenius`` sum
+    (a collapsed CHEMKIN ``DUPLICATE`` group), Lindemann/Troe/SRI falloff,
     third-body efficiencies, PLOG, and Chebyshev.
     """
     reaction = {
@@ -223,6 +224,23 @@ def build_kinetics_payload(
             for p in rxn.plog
         ]
 
+    # A collapsed CHEMKIN ``DUPLICATE`` group -> one ``multi_arrhenius`` rate
+    # whose N summed modified-Arrhenius terms live here (scalar a/n/Ea stay
+    # unset, per the backend upload contract). Each term's ``a_units`` shares
+    # the reaction's main-line molecularity (validated backend-side, PR #43).
+    if rxn.arrhenius_entries:
+        payload["arrhenius_entries"] = [
+            {
+                "entry_index": e.entry_index,
+                "a": e.a,
+                "a_units": e.a_units,
+                "n": e.n,
+                "reported_ea": e.reported_ea,
+                "reported_ea_units": e.reported_ea_units,
+            }
+            for e in rxn.arrhenius_entries
+        ]
+
     if rxn.chebyshev is not None:
         c = rxn.chebyshev
         payload["chebyshev"] = {
@@ -242,7 +260,12 @@ def build_kinetics_payload(
         payload["workflow_tool_release"] = wtr
 
     notes: list[str] = []
-    if rxn.duplicate:
+    if rxn.arrhenius_entries:
+        notes.append(
+            "CHEMKIN DUPLICATE group collapsed to a multi_arrhenius "
+            f"sum of {len(rxn.arrhenius_entries)} modified-Arrhenius terms."
+        )
+    elif rxn.duplicate:
         notes.append("CHEMKIN DUPLICATE rate (append-only result row).")
     if rxn.is_third_body and not rxn.is_falloff:
         notes.append("Third-body (+M) reaction imported from CHEMKIN.")
@@ -286,8 +309,10 @@ def build_all_payloads(
 ) -> BuiltPayloads:
     """Build thermo + transport + kinetics payloads for a whole mechanism.
 
-    Identity is resolved up front (fail-loud, all-or-nothing). A ``DUP``
-    reaction yields two independent kinetics payloads (append-only result rows).
+    Identity is resolved up front (fail-loud, all-or-nothing). A CHEMKIN
+    ``DUPLICATE`` group of summable Arrhenius rates is collapsed (in the
+    normalizer) into a single ``multi_arrhenius`` kinetics payload carrying one
+    term per line.
     """
     resolved = resolver.resolve_mechanism(mech)
     if normalized is None:
@@ -314,11 +339,10 @@ def build_all_payloads(
     kinetics_payloads: list[dict] = []
     for rxn in normalized.reactions:
         warnings.extend(rxn.warnings)
-        # A DUP-marked reaction is one result row per *file line*; CHEMKIN
-        # spells the two rates as two identical-equation lines, so the parser
-        # already produced two Reaction objects. We emit one payload each and
-        # let the append-only result model + idempotency ordinals keep them
-        # distinct (spec §6, DR-0032).
+        # ``normalized.reactions`` has already collapsed each CHEMKIN
+        # ``DUPLICATE`` group of summable (modified-)Arrhenius rates into one
+        # ``multi_arrhenius`` reaction (spec §6, DR-0036), so this is one
+        # payload per logical reaction.
         kinetics_payloads.append(build_kinetics_payload(rxn, resolved, config))
 
     return BuiltPayloads(

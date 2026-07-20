@@ -7,8 +7,8 @@ free of RDKit and of TCKDB imports — it is pure data + tiny helpers.
 TCKDB target enum *values* (mirrored as plain strings so this stays
 dependency-light):
 
-* ``KineticsModelKind``:      arrhenius, modified_arrhenius, lindemann, troe,
-                              sri, plog, chebyshev
+* ``KineticsModelKind``:      arrhenius, modified_arrhenius, multi_arrhenius,
+                              lindemann, troe, sri, plog, chebyshev
 * ``ArrheniusAUnits``:        per_s, cm3_mol_s, cm3_molecule_s, cm6_mol2_s,
                               cm6_molecule2_s, m3_mol_s, m6_mol2_s
 * ``ActivationEnergyUnits``:  j_mol, kj_mol, cal_mol, kcal_mol
@@ -23,6 +23,7 @@ from __future__ import annotations
 
 MODEL_ARRHENIUS = "arrhenius"
 MODEL_MODIFIED_ARRHENIUS = "modified_arrhenius"
+MODEL_MULTI_ARRHENIUS = "multi_arrhenius"
 MODEL_LINDEMANN = "lindemann"
 MODEL_TROE = "troe"
 MODEL_SRI = "sri"

@@ -10,7 +10,6 @@ from tckdb_chemkin.identity import (
     parse_species_dictionary,
     parse_species_map_csv,
 )
-from tckdb_chemkin.normalizer import normalize_mechanism
 from tckdb_chemkin.parser import parse_mechanism
 from tckdb_chemkin.payloads import ImportConfig, build_all_payloads
 from tckdb_chemkin.transport import parse_transport_file
@@ -110,15 +109,27 @@ def test_simple_third_body_payload(built):
     assert "third-body" in p.get("note", "").lower()
 
 
-def test_duplicate_produces_two_payloads(built):
+def test_duplicate_collapses_to_multi_arrhenius(built):
+    # The R6 DUPLICATE pair collapses into ONE multi_arrhenius payload whose
+    # two summed modified-Arrhenius terms live in ``arrhenius_entries`` (the
+    # scalar ``a`` must stay unset, per the backend upload contract).
     dups = [
         p for p in built.kinetics
         if sorted(x["species_entry"]["smiles"] for x in p["reaction"]["reactants"])
         == sorted([canon("[O]"), canon("[OH]")])
     ]
-    assert len(dups) == 2
-    assert sorted(p["a"] for p in dups) == pytest.approx([3.0e12, 1.0e13])
-    assert all("DUPLICATE" in p.get("note", "") for p in dups)
+    assert len(dups) == 1
+    p = dups[0]
+    assert p["model_kind"] == "multi_arrhenius"
+    assert "a" not in p
+    entries = p["arrhenius_entries"]
+    assert [e["entry_index"] for e in entries] == [1, 2]
+    assert sorted(e["a"] for e in entries) == pytest.approx([3.0e12, 1.0e13])
+    # O + OH is bimolecular -> each term shares cm3_mol_s.
+    assert all(e["a_units"] == "cm3_mol_s" for e in entries)
+    assert sorted(e["reported_ea"] for e in entries) == pytest.approx([500.0, 700.0])
+    assert all(e["reported_ea_units"] == "cal_mol" for e in entries)
+    assert "DUPLICATE" in p.get("note", "")
 
 
 # --- thermo / transport ---------------------------------------------------
@@ -150,8 +161,9 @@ def test_counts(built):
     counts = built.counts()
     assert counts["thermo"] == 9
     assert counts["transport"] == 9
-    # 8 reaction lines total (R1..R7 with the DUP pair being two lines)
-    assert counts["kinetics"] == 8
+    # 7 logical reactions: R1..R7, with the R6 DUPLICATE pair collapsed into a
+    # single multi_arrhenius record.
+    assert counts["kinetics"] == 7
 
 
 def test_warnings_include_lt_skip(built):

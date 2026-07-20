@@ -1,13 +1,10 @@
 ! Hand-authored CHEMKIN mechanism for the end-to-end round-trip test
 ! (license-clean fixture, owned by the backend integration suite).
 !
-! Exercises the four kinetics forms whose CHEMKIN<->TCKDB fidelity the
+! Exercises the six kinetics forms whose CHEMKIN<->TCKDB fidelity the
 ! round trip guards: modified Arrhenius, Troe falloff + a collider list,
-! PLOG, and Chebyshev. Plus NASA-7 thermo and transport for every species.
-!
-! Deliberately EXCLUDES the simple third-body (A+B+M) case -- a backend
-! A-units validation fix is landing separately; the round-trip test carries
-! a skipped placeholder for it.
+! PLOG, Chebyshev, simple third-body (bare +M), and a multi_arrhenius sum
+! (a DUPLICATE pair). Plus NASA-7 thermo and transport for every species.
 ELEMENTS
 H O C AR
 END
@@ -37,4 +34,14 @@ H2 + O2 <=> OH + OH                      1.000E+00   0.000       0.0
     CHEB  /  1.0E+01   2.0E-01   3.0E-02 /
     CHEB  /  4.0E-01   5.0E-02   6.0E-03 /
     CHEB  /  7.0E-02   8.0E-03   9.0E-04 /
+! R5 -- simple third body (bare +M, no falloff): the [M] term raises the
+! main-line concentration order by one, so O+O+M is order 3 -> cm6_mol2_s.
+O + O + M <=> O2 + M                     1.000E+17   0.000       0.0
+! R6 -- multi_arrhenius: a DUPLICATE pair summed into one k = Sigma_i A_i
+! T^n_i exp(-Ea_i/RT). Each line is a modified-Arrhenius term; bimolecular
+! (OH + OH) so every term keeps cm3_mol_s.
+OH + OH <=> O + H2O                      3.570E+04   2.400   -2110.0
+    DUP
+OH + OH <=> O + H2O                      1.400E+13   0.000    5000.0
+    DUP
 END
