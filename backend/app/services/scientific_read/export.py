@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.models.common import (
     ReactionRole,
@@ -45,7 +45,7 @@ from app.db.models.common import (
     SubmissionRecordType,
     ThermoModelKind,
 )
-from app.db.models.kinetics import Kinetics
+from app.db.models.kinetics import Kinetics, KineticsThirdBodyEfficiency
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
@@ -233,26 +233,152 @@ class SelectedTransport:
         }
 
 
+def _enum_value(x):
+    """Return ``x.value`` for an enum, or ``None`` (several columns are nullable)."""
+    return x.value if x is not None else None
+
+
 @dataclass
 class SelectedKinetics:
     kinetics: Kinetics
     review_status: RecordReviewStatus
 
     def to_dict(self) -> dict:
+        # Field names and block shapes mirror the reaction-kinetics read
+        # surface EXACTLY (PR #41): ``KineticsRecord`` +
+        # ``PlogEntryBlock``/``ChebyshevBlock``/``FalloffBlock``/
+        # ``ThirdBodyEfficiencyBlock`` in app/schemas/reads/scientific_kinetics.py
+        # and the block builders in scientific_read/kinetics.py
+        # (``_plog_blocks`` / ``_chebyshev_block`` / ``_falloff_block`` /
+        # ``_third_body_blocks``). Keep the two surfaces in sync when either
+        # changes so the export never silently drops a kinetics form.
+        #
+        # The relationships read below (``arrhenius_entries``, ``plog_entries``,
+        # ``chebyshev``, ``falloff``, ``third_body_efficiencies`` +
+        # ``collider_species``) are eager-loaded in ``_build_reaction_record``;
+        # this method is session-less, so it must never trigger a lazy load.
         k = self.kinetics
         return {
             "kinetics_ref": k.public_ref,
             "review_status": self.review_status.value,
             "scientific_origin": k.scientific_origin.value,
             "model_kind": k.model_kind.value,
+            "direction": _enum_value(k.direction),
+            # Scalar modified-Arrhenius params. Null for multi_arrhenius /
+            # chebyshev rows (their rate lives entirely in the children).
             "a": k.a,
-            "a_units": k.a_units.value if k.a_units is not None else None,
+            "a_units": _enum_value(k.a_units),
             "n": k.n,
             "ea_kj_mol": k.ea_kj_mol,
             "tmin_k": k.tmin_k,
             "tmax_k": k.tmax_k,
             "degeneracy": k.degeneracy,
+            "tunneling_model": _enum_value(k.tunneling_model),
+            "a_uncertainty": k.a_uncertainty,
+            "a_uncertainty_kind": _enum_value(k.a_uncertainty_kind),
+            "n_uncertainty": k.n_uncertainty,
+            "ea_uncertainty_kj_mol": k.ea_uncertainty_kj_mol,
+            # Third-body / pressure-dependent scalars + child blocks. Each is
+            # empty/None for a plain scalar-Arrhenius record.
+            "is_third_body": k.is_third_body,
+            "pressure_context": _enum_value(k.pressure_context),
+            "pressure_bar": k.pressure_bar,
+            "multi_arrhenius": self._multi_arrhenius(),
+            "plog_entries": self._plog_entries(),
+            "chebyshev": self._chebyshev(),
+            "falloff": self._falloff(),
+            "third_body_efficiencies": self._third_body_efficiencies(),
         }
+
+    def _multi_arrhenius(self) -> list[dict] | None:
+        """Sum-of-Arrhenius terms (mirrors read ``MultiArrheniusTerm``)."""
+        entries = self.kinetics.arrhenius_entries  # ORM order_by entry_index
+        if not entries:
+            return None
+        return [
+            {
+                "entry_index": e.entry_index,
+                "A": e.a,
+                "A_units": _enum_value(e.a_units),
+                "n": e.n,
+                "Ea_kj_mol": e.ea_kj_mol,
+            }
+            for e in entries
+        ]
+
+    def _plog_entries(self) -> list[dict] | None:
+        """PLOG pressure entries (mirrors read ``PlogEntryBlock``)."""
+        entries = self.kinetics.plog_entries  # ORM order_by entry_index
+        if not entries:
+            return None
+        return [
+            {
+                "entry_index": pe.entry_index,
+                "pressure_bar": pe.pressure_bar,
+                "A": pe.a,
+                "A_units": _enum_value(pe.a_units),
+                "n": pe.n,
+                "Ea_kj_mol": pe.ea_kj_mol,
+            }
+            for pe in entries
+        ]
+
+    def _chebyshev(self) -> dict | None:
+        """Chebyshev k(T,P) surface (mirrors read ``ChebyshevBlock``)."""
+        cb = self.kinetics.chebyshev
+        if cb is None:
+            return None
+        return {
+            "n_temperature": cb.n_temperature,
+            "n_pressure": cb.n_pressure,
+            "tmin_k": cb.tmin_k,
+            "tmax_k": cb.tmax_k,
+            "pmin_bar": cb.pmin_bar,
+            "pmax_bar": cb.pmax_bar,
+            "coefficients": cb.coefficients,
+        }
+
+    def _falloff(self) -> dict | None:
+        """Falloff low-P Arrhenius + broadening (mirrors read ``FalloffBlock``)."""
+        fo = self.kinetics.falloff
+        if fo is None:
+            return None
+        return {
+            "kind": self.kinetics.model_kind.value,
+            "low_A": fo.low_a,
+            "low_A_units": _enum_value(fo.low_a_units),
+            "low_n": fo.low_n,
+            "low_Ea_kj_mol": fo.low_ea_kj_mol,
+            "troe_alpha": fo.troe_alpha,
+            "troe_t3": fo.troe_t3,
+            "troe_t1": fo.troe_t1,
+            "troe_t2": fo.troe_t2,
+            "sri_a": fo.sri_a,
+            "sri_b": fo.sri_b,
+            "sri_c": fo.sri_c,
+            "sri_d": fo.sri_d,
+            "sri_e": fo.sri_e,
+        }
+
+    def _third_body_efficiencies(self) -> list[dict] | None:
+        """Per-collider efficiencies (mirrors read ``ThirdBodyEfficiencyBlock``).
+
+        The collider is exposed as its species ``public_ref``, never the raw
+        PK. Sorted by ``collider_ref`` for a deterministic order, matching the
+        read builder ``_third_body_blocks``.
+        """
+        tbes = self.kinetics.third_body_efficiencies
+        if not tbes:
+            return None
+        blocks = [
+            {
+                "collider_ref": tb.collider_species.public_ref,
+                "efficiency": tb.efficiency,
+            }
+            for tb in tbes
+        ]
+        blocks.sort(key=lambda b: b["collider_ref"])
+        return blocks
 
 
 @dataclass
@@ -729,12 +855,34 @@ def _build_reaction_record(
         collapse=collapse,
         selection_policy=selection_policy,
     )
+    # Batch-load the chosen kinetics rows WITH their pressure-dependent /
+    # third-body children (and collider species) eager-loaded, so the
+    # session-less ``SelectedKinetics.to_dict`` never triggers a lazy load
+    # (DetachedInstanceError) or an N+1. Re-map by id into the ``kin_ids``
+    # sequence to preserve collapse/selection ordering.
     kinetics: list[SelectedKinetics] = []
-    for kid in kin_ids:
-        k = session.get(Kinetics, kid)
-        if k is None:  # pragma: no cover - race with delete
-            continue
-        kinetics.append(SelectedKinetics(kinetics=k, review_status=kin_status[kid]))
+    if kin_ids:
+        loaded = session.scalars(
+            select(Kinetics)
+            .where(Kinetics.id.in_(kin_ids))
+            .options(
+                selectinload(Kinetics.arrhenius_entries),
+                selectinload(Kinetics.plog_entries),
+                selectinload(Kinetics.chebyshev),
+                selectinload(Kinetics.falloff),
+                selectinload(Kinetics.third_body_efficiencies).selectinload(
+                    KineticsThirdBodyEfficiency.collider_species
+                ),
+            )
+        ).all()
+        by_id = {k.id: k for k in loaded}
+        for kid in kin_ids:
+            k = by_id.get(kid)
+            if k is None:  # pragma: no cover - race with delete
+                continue
+            kinetics.append(
+                SelectedKinetics(kinetics=k, review_status=kin_status[kid])
+            )
     if not kinetics:
         gaps.append(
             ExportGap(

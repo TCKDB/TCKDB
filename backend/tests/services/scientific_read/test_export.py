@@ -10,9 +10,12 @@ import pytest
 from app.db.models.common import (
     ArrheniusAUnits,
     KineticsModelKind,
+    KineticsUncertaintyKind,
+    PressureContext,
     RecordReviewStatus,
     SubmissionRecordType,
     ThermoModelKind,
+    TunnelingModel,
 )
 from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.services.scientific_read.chemkin_serialize import (
@@ -25,6 +28,11 @@ from app.services.scientific_read.export import (
     iter_export_ndjson,
 )
 from tests.services.scientific_read._factories import (
+    attach_kinetics_arrhenius_entry,
+    attach_kinetics_chebyshev,
+    attach_kinetics_falloff,
+    attach_kinetics_plog_entry,
+    attach_kinetics_third_body_efficiency,
     attach_thermo_nasa,
     attach_thermo_nasa9,
     attach_thermo_points,
@@ -470,3 +478,216 @@ def test_chemkin_falloff_emits_low_and_troe(db_session):
     assert "(+M)" in chem_inp
     assert "LOW /" in chem_inp
     assert "TROE /" in chem_inp
+
+
+# ---------------------------------------------------------------------------
+# NDJSON export: pressure-dependent / third-body kinetics forms.
+#
+# Regression: SelectedKinetics.to_dict used to emit only scalar
+# modified-Arrhenius fields, silently dropping every non-Arrhenius form
+# (multi_arrhenius / plog / chebyshev / falloff / third-body). These assert
+# the export dict mirrors the PR #41 reaction-kinetics read surface.
+# ---------------------------------------------------------------------------
+
+
+def _reaction_with_kinetics(session, **kin_kwargs):
+    """A -> C reaction with a single approved kinetics record."""
+    sp_a = make_species(session, inchi_key=next_inchi_key("KRA"))
+    e_a = make_species_entry(session, sp_a)
+    sp_c = make_species(session, inchi_key=next_inchi_key("KRC"))
+    e_c = make_species_entry(session, sp_c)
+    chem = make_chem_reaction(session, reactants=[sp_a], products=[sp_c])
+    entry = make_reaction_entry(
+        session, reaction=chem, reactant_entries=[e_a], product_entries=[e_c]
+    )
+    kin = make_kinetics(session, reaction_entry=entry, **kin_kwargs)
+    _approve(session, SubmissionRecordType.kinetics, kin.id)
+    return entry, kin
+
+
+def _export_kinetics_dict(session, entry):
+    rs = build_export_record_set(
+        session, seed=SeedSelection(reaction_refs=[entry.public_ref])
+    )
+    (rr,) = rs.reaction_records
+    assert len(rr.kinetics) == 1
+    return rr.kinetics[0].to_dict()
+
+
+def test_scalar_arrhenius_export_keeps_legacy_keys(db_session):
+    # Regression guard: a plain modified-Arrhenius record still emits the
+    # original scalar keys unchanged, with the new child blocks all null.
+    entry, kin = _reaction_with_kinetics(db_session)
+    d = _export_kinetics_dict(db_session, entry)
+
+    assert d["kinetics_ref"] == kin.public_ref
+    assert d["model_kind"] == "modified_arrhenius"
+    assert d["a"] == kin.a
+    assert d["a_units"] == ArrheniusAUnits.cm3_molecule_s.value
+    assert d["n"] == kin.n
+    assert d["ea_kj_mol"] == kin.ea_kj_mol
+    assert d["tmin_k"] == kin.tmin_k
+    assert d["tmax_k"] == kin.tmax_k
+    assert d["degeneracy"] == kin.degeneracy
+    # New scalars default cleanly.
+    assert d["direction"] is None
+    assert d["is_third_body"] is False
+    assert d["pressure_context"] is None
+    assert d["tunneling_model"] is None
+    # No child forms present.
+    assert d["multi_arrhenius"] is None
+    assert d["plog_entries"] is None
+    assert d["chebyshev"] is None
+    assert d["falloff"] is None
+    assert d["third_body_efficiencies"] is None
+
+
+def test_multi_arrhenius_export_emits_terms_and_null_scalars(db_session):
+    entry, kin = _reaction_with_kinetics(
+        db_session,
+        model_kind=KineticsModelKind.multi_arrhenius,
+        a=None,
+        a_units=None,
+        n=None,
+        ea_kj_mol=None,
+    )
+    # Insert terms out of order to prove ORM entry_index ordering is honored.
+    attach_kinetics_arrhenius_entry(
+        db_session, kinetics=kin, entry_index=2, a=2.0e13, n=0.5, ea_kj_mol=42.0
+    )
+    attach_kinetics_arrhenius_entry(
+        db_session, kinetics=kin, entry_index=1, a=1.0e12, n=0.0, ea_kj_mol=10.0
+    )
+
+    d = _export_kinetics_dict(db_session, entry)
+    assert d["model_kind"] == "multi_arrhenius"
+    # Scalar Arrhenius columns are null for a sum-of-Arrhenius record.
+    assert d["a"] is None and d["n"] is None and d["ea_kj_mol"] is None
+    terms = d["multi_arrhenius"]
+    assert [t["entry_index"] for t in terms] == [1, 2]
+    assert terms[0]["A"] == 1.0e12
+    assert terms[0]["A_units"] == ArrheniusAUnits.cm3_molecule_s.value
+    assert terms[0]["Ea_kj_mol"] == 10.0
+    assert terms[1]["A"] == 2.0e13
+    assert terms[1]["n"] == 0.5
+    # Other child forms stay absent.
+    assert d["plog_entries"] is None
+    assert d["chebyshev"] is None
+    assert d["falloff"] is None
+
+
+def test_plog_export_emits_ordered_pressure_entries(db_session):
+    entry, kin = _reaction_with_kinetics(
+        db_session, model_kind=KineticsModelKind.plog
+    )
+    attach_kinetics_plog_entry(
+        db_session, kinetics=kin, entry_index=2, pressure_bar=10.0, a=2.0e13,
+        a_units=ArrheniusAUnits.cm3_mol_s, n=0.0, ea_kj_mol=20.0,
+    )
+    attach_kinetics_plog_entry(
+        db_session, kinetics=kin, entry_index=1, pressure_bar=1.0, a=1.0e12,
+        a_units=ArrheniusAUnits.cm3_mol_s, n=0.0, ea_kj_mol=10.0,
+    )
+
+    d = _export_kinetics_dict(db_session, entry)
+    assert d["model_kind"] == "plog"
+    plog = d["plog_entries"]
+    assert [e["entry_index"] for e in plog] == [1, 2]
+    assert [e["pressure_bar"] for e in plog] == [1.0, 10.0]
+    assert plog[0]["A"] == 1.0e12
+    assert plog[0]["A_units"] == ArrheniusAUnits.cm3_mol_s.value
+    assert plog[1]["Ea_kj_mol"] == 20.0
+    assert d["chebyshev"] is None
+    assert d["falloff"] is None
+
+
+def test_chebyshev_export_emits_matrix_and_domain(db_session):
+    entry, kin = _reaction_with_kinetics(
+        db_session,
+        model_kind=KineticsModelKind.chebyshev,
+        a=None,
+        a_units=None,
+        n=None,
+        ea_kj_mol=None,
+    )
+    matrix = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+    attach_kinetics_chebyshev(
+        db_session, kinetics=kin, n_temperature=2, n_pressure=3,
+        coefficients=matrix, tmin_k=300.0, tmax_k=2000.0,
+        pmin_bar=0.01, pmax_bar=100.0,
+    )
+
+    d = _export_kinetics_dict(db_session, entry)
+    assert d["model_kind"] == "chebyshev"
+    assert d["a"] is None
+    cheb = d["chebyshev"]
+    assert cheb["n_temperature"] == 2
+    assert cheb["n_pressure"] == 3
+    assert cheb["coefficients"] == matrix
+    assert cheb["tmin_k"] == 300.0 and cheb["tmax_k"] == 2000.0
+    assert cheb["pmin_bar"] == 0.01 and cheb["pmax_bar"] == 100.0
+    assert d["plog_entries"] is None
+    assert d["falloff"] is None
+
+
+def test_falloff_export_emits_block_and_sorted_third_body(db_session):
+    entry, kin = _reaction_with_kinetics(
+        db_session,
+        model_kind=KineticsModelKind.troe,
+        a=1.0e13,
+        a_units=ArrheniusAUnits.cm3_mol_s,
+        pressure_context=PressureContext.pressure_dependent,
+        tunneling_model=TunnelingModel.eckart,
+        a_uncertainty=2.0,
+        a_uncertainty_kind=KineticsUncertaintyKind.multiplicative,
+        n_uncertainty=0.1,
+        ea_uncertainty_kj_mol=1.5,
+    )
+    attach_kinetics_falloff(
+        db_session, kinetics=kin, low_a=1.0e18,
+        low_a_units=ArrheniusAUnits.cm6_mol2_s, low_n=-1.0, low_ea_kj_mol=0.0,
+        troe_alpha=0.5, troe_t3=100.0, troe_t1=1000.0,
+    )
+    # Two distinct collider species; assert they surface as public refs,
+    # sorted deterministically by collider_ref.
+    col_a = make_species(db_session, smiles="O", inchi_key=next_inchi_key("COLA"))
+    col_b = make_species(db_session, smiles="N#N", inchi_key=next_inchi_key("COLB"))
+    attach_kinetics_third_body_efficiency(
+        db_session, kinetics=kin, collider_species=col_a, efficiency=6.0
+    )
+    attach_kinetics_third_body_efficiency(
+        db_session, kinetics=kin, collider_species=col_b, efficiency=0.7
+    )
+
+    d = _export_kinetics_dict(db_session, entry)
+    assert d["model_kind"] == "troe"
+    # Falloff block mirrors the read FalloffBlock.
+    fo = d["falloff"]
+    assert fo["kind"] == "troe"
+    assert fo["low_A"] == 1.0e18
+    assert fo["low_A_units"] == ArrheniusAUnits.cm6_mol2_s.value
+    assert fo["low_n"] == -1.0
+    assert fo["troe_alpha"] == 0.5
+    assert fo["troe_t3"] == 100.0
+    assert fo["sri_a"] is None
+    # Third-body efficiencies: public refs only, deterministic sorted order.
+    tbes = d["third_body_efficiencies"]
+    refs = [b["collider_ref"] for b in tbes]
+    assert refs == sorted(refs)
+    assert set(refs) == {col_a.public_ref, col_b.public_ref}
+    # Never the raw PK.
+    assert col_a.id not in refs and col_b.id not in refs
+    eff_by_ref = {b["collider_ref"]: b["efficiency"] for b in tbes}
+    assert eff_by_ref[col_a.public_ref] == 6.0
+    assert eff_by_ref[col_b.public_ref] == 0.7
+    # Pressure-dependent / third-body / uncertainty scalars surface.
+    assert d["is_third_body"] is False  # falloff k∞ is not a simple +M rate
+    assert d["pressure_context"] == PressureContext.pressure_dependent.value
+    assert d["tunneling_model"] == TunnelingModel.eckart.value
+    assert d["a_uncertainty"] == 2.0
+    assert d["a_uncertainty_kind"] == KineticsUncertaintyKind.multiplicative.value
+    assert d["n_uncertainty"] == 0.1
+    assert d["ea_uncertainty_kj_mol"] == 1.5
+    # No PLOG/Chebyshev on a falloff record.
+    assert d["plog_entries"] is None
+    assert d["chebyshev"] is None

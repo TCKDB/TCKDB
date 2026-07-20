@@ -454,7 +454,7 @@ def make_kinetics(
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed,
     model_kind: KineticsModelKind = KineticsModelKind.modified_arrhenius,
     a: float | None = 1.2e-12,
-    a_units: ArrheniusAUnits = ArrheniusAUnits.cm3_molecule_s,
+    a_units: ArrheniusAUnits | None = ArrheniusAUnits.cm3_molecule_s,
     n: float | None = 2.1,
     ea_kj_mol: float | None = 15.4,
     tmin_k: float | None = 300.0,
@@ -462,6 +462,13 @@ def make_kinetics(
     tunneling_model: str | None = None,
     direction=None,
     network_kinetics_id: int | None = None,
+    is_third_body: bool = False,
+    pressure_context=None,
+    pressure_bar: float | None = None,
+    a_uncertainty: float | None = None,
+    a_uncertainty_kind=None,
+    n_uncertainty: float | None = None,
+    ea_uncertainty_kj_mol: float | None = None,
 ) -> Kinetics:
     """Create a Kinetics row attached to a reaction entry."""
     k = Kinetics(
@@ -477,6 +484,13 @@ def make_kinetics(
         tunneling_model=tunneling_model,
         direction=direction,
         network_kinetics_id=network_kinetics_id,
+        is_third_body=is_third_body,
+        pressure_context=pressure_context,
+        pressure_bar=pressure_bar,
+        a_uncertainty=a_uncertainty,
+        a_uncertainty_kind=a_uncertainty_kind,
+        n_uncertainty=n_uncertainty,
+        ea_uncertainty_kj_mol=ea_uncertainty_kj_mol,
     )
     session.add(k)
     session.flush()
