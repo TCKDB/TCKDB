@@ -16,6 +16,7 @@ from app.db.models.common import (
     KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
+    PressureContext,
     RecordReviewStatus,
     ScientificOriginKind,
 )
@@ -110,6 +111,85 @@ class KineticsUncertainty(BaseModel):
     Ea_uncertainty_kj_mol: float | None = None
 
 
+class PlogEntryBlock(BaseModel):
+    """One pressure entry of a standalone PLOG rate (DR-0032 Part C).
+
+    k(T,P) is interpolated in log P between bracketing entries; each entry is
+    a modified-Arrhenius set at a fixed pressure. Mirrors the ``kinetics_plog``
+    ORM child. Entries are returned ordered by ``entry_index``.
+    """
+
+    entry_index: int
+    pressure_bar: float
+    A: float
+    A_units: ArrheniusAUnits | None = None
+    n: float | None = None
+    Ea_kj_mol: float | None = None
+
+
+class ChebyshevBlock(BaseModel):
+    """Chebyshev-polynomial k(T,P) surface (DR-0032 Part C).
+
+    Mirrors the ``kinetics_chebyshev`` ORM child: the T/P validity domain and
+    the ``n_temperature`` x ``n_pressure`` coefficient matrix (list of rows).
+
+    Log basis: the coefficients follow the CHEMKIN base-10 convention — the
+    surface expands ``log10 k`` in the Chebyshev basis over reduced T/P. This
+    matches how they are stored and how ``chemkin_serialize.py`` re-emits them
+    into the ``CHEB`` card, so a consumer reconstructing k must exponentiate
+    base-10 (``k = 10 ** value``).
+    """
+
+    n_temperature: int
+    n_pressure: int
+    tmin_k: float | None = None
+    tmax_k: float | None = None
+    pmin_bar: float | None = None
+    pmax_bar: float | None = None
+    coefficients: list[list[float]]
+
+
+class FalloffBlock(BaseModel):
+    """Pressure-dependent falloff parameters (DR-0032 Part B).
+
+    The high-pressure-limit (k∞) Arrhenius lives in the parent record's
+    ``parameters`` block; this block carries the low-pressure-limit (k0)
+    Arrhenius and the broadening coefficients. ``kind`` echoes the parent
+    ``model_kind`` (``lindemann`` / ``troe`` / ``sri``), which selects the
+    meaningful broadening columns: Lindemann uses none, Troe uses ``troe_*``,
+    SRI uses ``sri_*``.
+    """
+
+    kind: KineticsModelKind
+    low_A: float
+    low_A_units: ArrheniusAUnits | None = None
+    low_n: float | None = None
+    low_Ea_kj_mol: float | None = None
+
+    troe_alpha: float | None = None
+    troe_t3: float | None = None
+    troe_t1: float | None = None
+    troe_t2: float | None = None
+
+    sri_a: float | None = None
+    sri_b: float | None = None
+    sri_c: float | None = None
+    sri_d: float | None = None
+    sri_e: float | None = None
+
+
+class ThirdBodyEfficiencyBlock(BaseModel):
+    """One per-collider third-body efficiency (falloff / third-body rate).
+
+    The collider is exposed as its graph-level species public ref
+    (``collider_ref``), never the raw ``collider_species_id`` PK.
+    ``efficiency`` scales the effective bath-gas concentration [M].
+    """
+
+    collider_ref: str
+    efficiency: float
+
+
 class KineticsProvenance(BaseModel):
     """Provenance block per Phase 2.2 — every key always present, ``null`` if absent.
 
@@ -163,6 +243,16 @@ class KineticsRecord(BaseModel):
     # modified-Arrhenius terms. ``null`` for every other model kind.
     multi_arrhenius: list[MultiArrheniusTerm] | None = None
     tunneling_model: str | None = None
+    # Pressure-dependent / third-body forms (DR-0032). All ``None`` for a
+    # plain Arrhenius record; each block is populated only when its data is
+    # present on the underlying ``kinetics`` row.
+    is_third_body: bool = False
+    pressure_context: PressureContext | None = None
+    pressure_bar: float | None = None
+    plog_entries: list[PlogEntryBlock] | None = None
+    chebyshev: ChebyshevBlock | None = None
+    falloff: FalloffBlock | None = None
+    third_body_efficiencies: list[ThirdBodyEfficiencyBlock] | None = None
     uncertainty: KineticsUncertainty
     temperature_coverage: TemperatureCoverage | None = None
     evidence_completeness: EvidenceCompletenessBreakdown

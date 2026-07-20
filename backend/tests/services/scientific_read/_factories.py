@@ -509,6 +509,126 @@ def attach_kinetics_arrhenius_entry(
     return row
 
 
+def attach_kinetics_plog_entry(
+    session: Session,
+    *,
+    kinetics: Kinetics,
+    entry_index: int,
+    pressure_bar: float,
+    a: float,
+    a_units: ArrheniusAUnits = ArrheniusAUnits.cm3_mol_s,
+    n: float | None = None,
+    ea_kj_mol: float | None = None,
+):
+    """Attach one PLOG pressure entry to a kinetics row (DR-0032 Part C)."""
+    from app.db.models.kinetics import KineticsPlog
+
+    row = KineticsPlog(
+        kinetics_id=kinetics.id,
+        entry_index=entry_index,
+        pressure_bar=pressure_bar,
+        a=a,
+        a_units=a_units,
+        n=n,
+        ea_kj_mol=ea_kj_mol,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_kinetics_chebyshev(
+    session: Session,
+    *,
+    kinetics: Kinetics,
+    n_temperature: int,
+    n_pressure: int,
+    coefficients: list[list[float]],
+    tmin_k: float | None = None,
+    tmax_k: float | None = None,
+    pmin_bar: float | None = None,
+    pmax_bar: float | None = None,
+):
+    """Attach a Chebyshev k(T,P) surface to a kinetics row (DR-0032 Part C)."""
+    from app.db.models.kinetics import KineticsChebyshev
+
+    row = KineticsChebyshev(
+        kinetics_id=kinetics.id,
+        n_temperature=n_temperature,
+        n_pressure=n_pressure,
+        tmin_k=tmin_k,
+        tmax_k=tmax_k,
+        pmin_bar=pmin_bar,
+        pmax_bar=pmax_bar,
+        coefficients=coefficients,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_kinetics_falloff(
+    session: Session,
+    *,
+    kinetics: Kinetics,
+    low_a: float,
+    low_a_units: ArrheniusAUnits = ArrheniusAUnits.cm6_mol2_s,
+    low_n: float | None = None,
+    low_ea_kj_mol: float | None = None,
+    troe_alpha: float | None = None,
+    troe_t3: float | None = None,
+    troe_t1: float | None = None,
+    troe_t2: float | None = None,
+    sri_a: float | None = None,
+    sri_b: float | None = None,
+    sri_c: float | None = None,
+    sri_d: float | None = None,
+    sri_e: float | None = None,
+):
+    """Attach falloff (low-P Arrhenius + broadening) to a kinetics row."""
+    from app.db.models.kinetics import KineticsFalloff
+
+    row = KineticsFalloff(
+        kinetics_id=kinetics.id,
+        low_a=low_a,
+        low_a_units=low_a_units,
+        low_n=low_n,
+        low_ea_kj_mol=low_ea_kj_mol,
+        troe_alpha=troe_alpha,
+        troe_t3=troe_t3,
+        troe_t1=troe_t1,
+        troe_t2=troe_t2,
+        sri_a=sri_a,
+        sri_b=sri_b,
+        sri_c=sri_c,
+        sri_d=sri_d,
+        sri_e=sri_e,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def attach_kinetics_third_body_efficiency(
+    session: Session,
+    *,
+    kinetics: Kinetics,
+    collider_species: Species,
+    efficiency: float,
+):
+    """Attach one per-collider third-body efficiency to a kinetics row."""
+    from app.db.models.kinetics import KineticsThirdBodyEfficiency
+
+    row = KineticsThirdBodyEfficiency(
+        kinetics_id=kinetics.id,
+        collider_species_id=collider_species.id,
+        efficiency=efficiency,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
 def make_thermo_scalar(
     session: Session,
     *,

@@ -40,6 +40,7 @@ from app.db.models.literature import Literature
 from app.db.models.network_pdep import NetworkKinetics
 from app.db.models.reaction import ReactionEntry
 from app.db.models.software import Software, SoftwareRelease
+from app.db.models.species import Species
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
@@ -55,13 +56,17 @@ from app.schemas.reads.scientific_common import (
 )
 from app.schemas.reads.scientific_kinetics import (
     ArrheniusParameters,
+    ChebyshevBlock,
+    FalloffBlock,
     KineticsProvenance,
     KineticsReadRequest,
     KineticsRecord,
     KineticsUncertainty,
     MultiArrheniusTerm,
+    PlogEntryBlock,
     RequestEcho,
     ScientificReactionKineticsResponse,
+    ThirdBodyEfficiencyBlock,
 )
 from app.services.scientific_read.common import (
     build_pagination,
@@ -145,6 +150,16 @@ _TRUST_EAGER_LOADS = (
     .selectinload(Calculation.child_dependencies),
 )
 
+# Pressure-dependent / third-body child collections are part of every
+# kinetics record now (DR-0032 read exposure); eager-load them on the base
+# query to avoid an N+1 over plog/chebyshev/falloff/third-body children.
+_PDEP_EAGER_LOADS = (
+    selectinload(Kinetics.plog_entries),
+    selectinload(Kinetics.chebyshev),
+    selectinload(Kinetics.falloff),
+    selectinload(Kinetics.third_body_efficiencies),
+)
+
 _DEFAULT_SORT_ECHO = (
     "covers_requested_range,extrapolation_distance_k,review_rank,"
     "evidence_completeness,created_at,id"
@@ -211,6 +226,7 @@ def get_reaction_kinetics(
 
     # Load kinetics rows for this entry, applying simple column filters.
     stmt = select(Kinetics).where(Kinetics.reaction_entry_id == reaction_entry_id)
+    stmt = stmt.options(*_PDEP_EAGER_LOADS)
     if "trust" in includes:
         stmt = stmt.options(*_TRUST_EAGER_LOADS)
     if request.model_kind is not None:
@@ -323,6 +339,17 @@ def get_reaction_kinetics(
         {k.network_kinetics_id for k in kinetics_rows if k.network_kinetics_id},
     )
 
+    # DR-0032: resolve third-body collider species → public refs (batched to
+    # avoid an N+1 over the eager-loaded third_body_efficiencies children).
+    collider_refs = _species_refs(
+        session,
+        {
+            tb.collider_species_id
+            for k in kinetics_rows
+            for tb in k.third_body_efficiencies
+        },
+    )
+
     # Build per-record output.
     records: list[KineticsRecord] = []
     for k in kinetics_rows:
@@ -378,6 +405,13 @@ def get_reaction_kinetics(
                 ),
                 multi_arrhenius=arrhenius_terms.get(k.id),
                 tunneling_model=k.tunneling_model,
+                is_third_body=k.is_third_body,
+                pressure_context=k.pressure_context,
+                pressure_bar=k.pressure_bar,
+                plog_entries=_plog_blocks(k),
+                chebyshev=_chebyshev_block(k),
+                falloff=_falloff_block(k),
+                third_body_efficiencies=_third_body_blocks(k, collider_refs),
                 uncertainty=KineticsUncertainty(
                     A_uncertainty=k.a_uncertainty,
                     A_uncertainty_kind=k.a_uncertainty_kind,
@@ -978,6 +1012,98 @@ def _network_kinetics_refs(
         )
     ).all()
     return dict(rows)
+
+
+def _species_refs(session: Session, species_ids: set[int]) -> dict[int, str]:
+    """Public refs for third-body collider species (DR-0032)."""
+    if not species_ids:
+        return {}
+    rows = session.execute(
+        select(Species.id, Species.public_ref).where(Species.id.in_(species_ids))
+    ).all()
+    return dict(rows)
+
+
+# ---------------------------------------------------------------------------
+# Pressure-dependent / third-body read blocks (DR-0032)
+# ---------------------------------------------------------------------------
+
+
+def _plog_blocks(kinetics: Kinetics) -> list[PlogEntryBlock] | None:
+    """PLOG pressure entries, ordered by ``entry_index`` (ORM order_by)."""
+    if not kinetics.plog_entries:
+        return None
+    return [
+        PlogEntryBlock(
+            entry_index=pe.entry_index,
+            pressure_bar=pe.pressure_bar,
+            A=pe.a,
+            A_units=pe.a_units,
+            n=pe.n,
+            Ea_kj_mol=pe.ea_kj_mol,
+        )
+        for pe in kinetics.plog_entries
+    ]
+
+
+def _chebyshev_block(kinetics: Kinetics) -> ChebyshevBlock | None:
+    """Chebyshev k(T,P) surface, or ``None`` when absent."""
+    cb = kinetics.chebyshev
+    if cb is None:
+        return None
+    return ChebyshevBlock(
+        n_temperature=cb.n_temperature,
+        n_pressure=cb.n_pressure,
+        tmin_k=cb.tmin_k,
+        tmax_k=cb.tmax_k,
+        pmin_bar=cb.pmin_bar,
+        pmax_bar=cb.pmax_bar,
+        coefficients=cb.coefficients,
+    )
+
+
+def _falloff_block(kinetics: Kinetics) -> FalloffBlock | None:
+    """Falloff (low-P Arrhenius + broadening), or ``None`` when absent."""
+    fo = kinetics.falloff
+    if fo is None:
+        return None
+    return FalloffBlock(
+        kind=kinetics.model_kind,
+        low_A=fo.low_a,
+        low_A_units=fo.low_a_units,
+        low_n=fo.low_n,
+        low_Ea_kj_mol=fo.low_ea_kj_mol,
+        troe_alpha=fo.troe_alpha,
+        troe_t3=fo.troe_t3,
+        troe_t1=fo.troe_t1,
+        troe_t2=fo.troe_t2,
+        sri_a=fo.sri_a,
+        sri_b=fo.sri_b,
+        sri_c=fo.sri_c,
+        sri_d=fo.sri_d,
+        sri_e=fo.sri_e,
+    )
+
+
+def _third_body_blocks(
+    kinetics: Kinetics, collider_refs: dict[int, str]
+) -> list[ThirdBodyEfficiencyBlock] | None:
+    """Third-body efficiencies with the collider as a species public ref.
+
+    The ORM relationship has no ``order_by``, so the emitted blocks are sorted
+    by ``collider_ref`` for a deterministic read order across requests.
+    """
+    if not kinetics.third_body_efficiencies:
+        return None
+    blocks = [
+        ThirdBodyEfficiencyBlock(
+            collider_ref=collider_refs[tb.collider_species_id],
+            efficiency=tb.efficiency,
+        )
+        for tb in kinetics.third_body_efficiencies
+    ]
+    blocks.sort(key=lambda b: b.collider_ref)
+    return blocks
 
 
 def _software_id_by_release_id(

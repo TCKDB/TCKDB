@@ -521,3 +521,243 @@ def test_no_network_bridge_is_null(db_session):
     prov = response.records[0].provenance
     assert prov.network_kinetics_id is None
     assert prov.network_kinetics_ref is None
+
+
+# ---------------------------------------------------------------------------
+# DR-0032: PLOG / Chebyshev / falloff / third-body read exposure
+# ---------------------------------------------------------------------------
+
+
+def test_plog_kinetics_surfaces_pressure_entries(db_session):
+    from app.db.models.common import ArrheniusAUnits
+    from tests.services.scientific_read._factories import (
+        attach_kinetics_plog_entry,
+    )
+
+    entry = _setup_entry(db_session)
+    # A standalone PLOG rate: scalar Arrhenius stays unset; k(T,P) lives in
+    # the per-pressure entries.
+    k = make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        model_kind=KineticsModelKind.plog,
+        a=None,
+        n=None,
+        ea_kj_mol=None,
+    )
+    attach_kinetics_plog_entry(
+        db_session, kinetics=k, entry_index=1, pressure_bar=0.1,
+        a=1.0e11, n=0.0, ea_kj_mol=30.0, a_units=ArrheniusAUnits.cm3_mol_s,
+    )
+    attach_kinetics_plog_entry(
+        db_session, kinetics=k, entry_index=2, pressure_bar=1.0,
+        a=2.5e12, n=0.4, ea_kj_mol=42.0, a_units=ArrheniusAUnits.cm3_mol_s,
+    )
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    rec = response.records[0]
+    assert rec.model_kind == KineticsModelKind.plog
+    assert rec.plog_entries is not None
+    assert [e.entry_index for e in rec.plog_entries] == [1, 2]
+    assert [e.pressure_bar for e in rec.plog_entries] == [0.1, 1.0]
+    assert [e.A for e in rec.plog_entries] == [1.0e11, 2.5e12]
+    assert [e.n for e in rec.plog_entries] == [0.0, 0.4]
+    assert [e.Ea_kj_mol for e in rec.plog_entries] == [30.0, 42.0]
+    # Other pdep blocks stay None.
+    assert rec.chebyshev is None
+    assert rec.falloff is None
+    assert rec.third_body_efficiencies is None
+
+
+def test_chebyshev_kinetics_surfaces_matrix_and_bounds(db_session):
+    from tests.services.scientific_read._factories import (
+        attach_kinetics_chebyshev,
+    )
+
+    entry = _setup_entry(db_session)
+    coeffs = [[8.2, 0.5, -0.1], [0.3, 0.02, 0.001]]
+    k = make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        model_kind=KineticsModelKind.chebyshev,
+        a=None,
+        n=None,
+        ea_kj_mol=None,
+    )
+    attach_kinetics_chebyshev(
+        db_session, kinetics=k, n_temperature=2, n_pressure=3,
+        coefficients=coeffs, tmin_k=300.0, tmax_k=2000.0,
+        pmin_bar=0.01, pmax_bar=100.0,
+    )
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    rec = response.records[0]
+    assert rec.model_kind == KineticsModelKind.chebyshev
+    cb = rec.chebyshev
+    assert cb is not None
+    assert cb.n_temperature == 2
+    assert cb.n_pressure == 3
+    assert cb.tmin_k == 300.0
+    assert cb.tmax_k == 2000.0
+    assert cb.pmin_bar == 0.01
+    assert cb.pmax_bar == 100.0
+    assert cb.coefficients == coeffs
+    assert not hasattr(cb, "stores_log10_k")
+    assert rec.plog_entries is None
+    assert rec.falloff is None
+
+
+def test_troe_falloff_kinetics_surfaces_low_p_and_efficiencies(db_session):
+    from app.db.models.common import ArrheniusAUnits
+    from tests.services.scientific_read._factories import (
+        attach_kinetics_falloff,
+        attach_kinetics_third_body_efficiency,
+        make_species,
+    )
+
+    entry = _setup_entry(db_session)
+    # High-pressure limit lives on the scalar Arrhenius; falloff carries k0.
+    k = make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        model_kind=KineticsModelKind.troe,
+        a=1.0e13,
+        a_units=ArrheniusAUnits.cm3_mol_s,
+        n=0.0,
+        ea_kj_mol=0.0,
+    )
+    attach_kinetics_falloff(
+        db_session, kinetics=k, low_a=1.0e18,
+        low_a_units=ArrheniusAUnits.cm6_mol2_s, low_n=-1.0, low_ea_kj_mol=0.0,
+        troe_alpha=0.5, troe_t3=100.0, troe_t1=1000.0, troe_t2=2000.0,
+    )
+    collider = make_species(db_session, smiles="O", inchi_key=next_inchi_key("KW"))
+    attach_kinetics_third_body_efficiency(
+        db_session, kinetics=k, collider_species=collider, efficiency=6.0
+    )
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    rec = response.records[0]
+    fo = rec.falloff
+    assert fo is not None
+    assert fo.kind == KineticsModelKind.troe
+    assert fo.low_A == 1.0e18
+    assert fo.low_A_units == ArrheniusAUnits.cm6_mol2_s
+    assert fo.low_n == -1.0
+    assert fo.low_Ea_kj_mol == 0.0
+    assert fo.troe_alpha == 0.5
+    assert fo.troe_t3 == 100.0
+    assert fo.troe_t1 == 1000.0
+    assert fo.troe_t2 == 2000.0
+    assert fo.sri_a is None
+    # High-pressure Arrhenius still on the top-level parameters block.
+    assert rec.parameters.A == 1.0e13
+    tbe = rec.third_body_efficiencies
+    assert tbe is not None
+    assert len(tbe) == 1
+    assert tbe[0].collider_ref == collider.public_ref
+    assert tbe[0].efficiency == 6.0
+
+
+def test_simple_third_body_flag_and_efficiencies(db_session):
+    from app.db.models.common import ArrheniusAUnits
+    from tests.services.scientific_read._factories import (
+        attach_kinetics_third_body_efficiency,
+        make_species,
+    )
+
+    entry = _setup_entry(db_session)
+    k = make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        model_kind=KineticsModelKind.modified_arrhenius,
+        a=1.0e15,
+        a_units=ArrheniusAUnits.cm6_mol2_s,
+    )
+    k.is_third_body = True
+    db_session.flush()
+    ar = make_species(db_session, smiles="[Ar]", inchi_key=next_inchi_key("KAr"))
+    attach_kinetics_third_body_efficiency(
+        db_session, kinetics=k, collider_species=ar, efficiency=0.7
+    )
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    rec = response.records[0]
+    assert rec.is_third_body is True
+    assert rec.third_body_efficiencies is not None
+    assert rec.third_body_efficiencies[0].collider_ref == ar.public_ref
+    assert rec.third_body_efficiencies[0].efficiency == 0.7
+    assert rec.falloff is None
+    assert rec.plog_entries is None
+
+
+def test_third_body_efficiencies_order_is_deterministic_by_collider_ref(db_session):
+    from app.db.models.common import ArrheniusAUnits
+    from tests.services.scientific_read._factories import (
+        attach_kinetics_third_body_efficiency,
+        make_species,
+    )
+
+    entry = _setup_entry(db_session)
+    k = make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        model_kind=KineticsModelKind.modified_arrhenius,
+        a=1.0e15,
+        a_units=ArrheniusAUnits.cm6_mol2_s,
+    )
+    k.is_third_body = True
+    db_session.flush()
+
+    # Attach several colliders; insertion order is intentionally not sorted.
+    c_water = make_species(db_session, smiles="O", inchi_key=next_inchi_key("KTW"))
+    c_ar = make_species(db_session, smiles="[Ar]", inchi_key=next_inchi_key("KTA"))
+    c_co2 = make_species(db_session, smiles="O=C=O", inchi_key=next_inchi_key("KTC"))
+    attach_kinetics_third_body_efficiency(
+        db_session, kinetics=k, collider_species=c_water, efficiency=6.0
+    )
+    attach_kinetics_third_body_efficiency(
+        db_session, kinetics=k, collider_species=c_ar, efficiency=0.7
+    )
+    attach_kinetics_third_body_efficiency(
+        db_session, kinetics=k, collider_species=c_co2, efficiency=2.0
+    )
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    tbe = response.records[0].third_body_efficiencies
+    assert tbe is not None
+    refs = [b.collider_ref for b in tbe]
+    # Order is stable and sorted by collider_ref regardless of insertion order.
+    assert refs == sorted(refs)
+    assert set(refs) == {c_water.public_ref, c_ar.public_ref, c_co2.public_ref}
+
+
+def test_plain_modified_arrhenius_has_null_pdep_blocks(db_session):
+    entry = _setup_entry(db_session)
+    make_kinetics(db_session, reaction_entry=entry)
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    rec = response.records[0]
+    # Regression: scalar Arrhenius still populated.
+    assert rec.parameters.A == 1.2e-12
+    assert rec.parameters.n == 2.1
+    assert rec.parameters.Ea_kj_mol == 15.4
+    # New pdep blocks all absent for a plain rate.
+    assert rec.is_third_body is False
+    assert rec.pressure_context is None
+    assert rec.pressure_bar is None
+    assert rec.plog_entries is None
+    assert rec.chebyshev is None
+    assert rec.falloff is None
+    assert rec.third_body_efficiencies is None
