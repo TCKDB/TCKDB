@@ -232,9 +232,7 @@ def get_species_thermo(
     # derives from. Each thermo record resolves its basis PER RECORD from its
     # own ``thermo.statmech_id`` FK (populated by the write fix); the borrowed
     # source calcs then come from that exact statmech, not an entry-wide pick.
-    statmech_sources_by_id: dict[int, list[StatmechSourceCalculation]] = {
-        sid: _load_statmech_sources(session, sid) for sid in statmech_ids_by_entry
-    }
+    statmech_sources_by_id = _load_statmech_sources_grouped(session, statmech_ids_by_entry)
     # Fallback basis for records whose ``thermo.statmech_id`` is NULL
     # (experimental thermo, or legacy computed rows written before the FK was
     # populated): the lowest statmech id. ``min`` is deterministic and keeps
@@ -634,25 +632,38 @@ def _load_statmech_ids(session: Session, species_entry_id: int) -> set[int]:
     return set(rows)
 
 
-def _load_statmech_sources(
-    session: Session, statmech_id: int | None
-) -> list[StatmechSourceCalculation]:
-    """Load source-calculation links for the picked statmech.
+def _load_statmech_sources_grouped(
+    session: Session, statmech_ids: set[int]
+) -> dict[int, list[StatmechSourceCalculation]]:
+    """Load source-calculation links for many statmech ids in one query.
 
-    Used by ``_build_provenance`` / ``_evidence_breakdown`` as a fallback
-    when a thermo record's own ``ThermoSourceCalculation`` rows do not
-    cover the freq / SP / composite roles. Returns ``[]`` when no
-    statmech was picked.
+    Each thermo record resolves its statmech basis PER RECORD from its own
+    ``thermo.statmech_id``; the caller borrows the freq / SP / opt source
+    calcs from that exact statmech (falling back to an entry-wide statmech
+    only when the record has none of its own). This helper fetches the
+    ``StatmechSourceCalculation`` rows for *every* statmech id of the entry
+    in a single grouped ``SELECT`` and buckets them by ``statmech_id``.
+
+    Every requested id is present in the returned mapping, keyed to a list
+    that is empty when that statmech has no source-calc links, so callers can
+    index without a missing-key check (preserving the prior per-id behavior).
+    Rows within each id's list are ordered by ``(role, calculation_id)`` so
+    downstream role-priority / evidence resolution is reproducible.
     """
-    if statmech_id is None:
-        return []
-    return list(
-        session.scalars(
-            select(StatmechSourceCalculation).where(
-                StatmechSourceCalculation.statmech_id == statmech_id
-            )
-        ).all()
-    )
+    grouped: dict[int, list[StatmechSourceCalculation]] = {sid: [] for sid in statmech_ids}
+    if not statmech_ids:
+        return grouped
+    rows = session.scalars(
+        select(StatmechSourceCalculation)
+        .where(StatmechSourceCalculation.statmech_id.in_(statmech_ids))
+        .order_by(
+            StatmechSourceCalculation.role,
+            StatmechSourceCalculation.calculation_id,
+        )
+    ).all()
+    for row in rows:
+        grouped[row.statmech_id].append(row)
+    return grouped
 
 
 def _statmech_calc_id_for_role(

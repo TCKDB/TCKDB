@@ -53,6 +53,7 @@ from app.db.models.common import (
     IRCDirection,
     KineticsCalculationRole,
     ReactionRole,
+    ScientificOriginKind,
 )
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
@@ -1041,6 +1042,66 @@ def test_reaction_participant_thermo_links_to_own_statmech(db_engine) -> None:
         ]
         assert len(unlinked) == 1
         assert unlinked[0].statmech_id is None
+
+
+def test_reaction_non_computed_thermo_not_linked_to_statmech(db_engine) -> None:
+    """Origin-guard, reaction side (mirror of the species-path test).
+
+    The write path only attaches ``thermo.statmech_id`` when the thermo's
+    ``scientific_origin == computed`` (computed_reaction.py ~682-685). A
+    participant whose thermo is EXPERIMENTAL must keep ``statmech_id`` NULL
+    even though it carries a statmech in the same bundle, while a sibling
+    participant's COMPUTED thermo still links to its own statmech.
+
+    ``BundleThermoIn`` allows a single thermo per participant, so the guard's
+    negative case is exercised here rather than a two-thermo participant.
+    """
+    payload = _minimal_payload()
+    # ch3 (index 0): experimental thermo + a statmech → must NOT link.
+    payload["species"][0]["thermo"]["scientific_origin"] = (
+        ScientificOriginKind.experimental.value
+    )
+    payload["species"][0]["statmech"] = {
+        "is_linear": False,
+        "external_symmetry": 3,
+        "point_group": "C1",
+        "statmech_treatment": "rrho",
+    }
+    # ch4 (index 2): computed thermo (default) + a statmech → control, links.
+    payload["species"][2]["statmech"] = {
+        "is_linear": False,
+        "external_symmetry": 12,
+        "point_group": "Td",
+        "statmech_treatment": "rrho",
+    }
+
+    with _isolated_session(db_engine) as session:
+        request = ComputedReactionUploadRequest(**payload)
+        summary = persist_computed_reaction_upload(session, request)
+
+        thermos = session.scalars(
+            select(Thermo).where(Thermo.id.in_(summary["thermo_ids"]))
+        ).all()
+        statmechs = session.scalars(
+            select(Statmech).where(Statmech.id.in_(summary["statmech_ids"]))
+        ).all()
+        assert len(statmechs) == 2
+        statmech_entry_ids = {s.species_entry_id: s.id for s in statmechs}
+
+        ch3_entry_id = summary["species_entry_ids"][0]
+        ch4_entry_id = summary["species_entry_ids"][2]
+        by_entry = {t.species_entry_id: t for t in thermos}
+
+        # Experimental thermo: guard suppresses the link despite a statmech.
+        ch3_thermo = by_entry[ch3_entry_id]
+        assert ch3_thermo.scientific_origin == ScientificOriginKind.experimental
+        assert ch3_entry_id in statmech_entry_ids  # a statmech WAS created
+        assert ch3_thermo.statmech_id is None
+
+        # Computed thermo control: still links to its own statmech.
+        ch4_thermo = by_entry[ch4_entry_id]
+        assert ch4_thermo.scientific_origin == ScientificOriginKind.computed
+        assert ch4_thermo.statmech_id == statmech_entry_ids[ch4_entry_id]
 
 
 def test_statmech_optical_isomers_zero_rejected(db_engine) -> None:

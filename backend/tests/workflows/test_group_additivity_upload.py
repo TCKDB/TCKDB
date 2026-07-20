@@ -8,6 +8,8 @@ persists to ``group_additivity_scheme`` / ``applied_group_additivity`` /
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -21,11 +23,15 @@ from app.db.models.group_additivity import (
 from app.schemas.reads.scientific_thermo import ThermoReadRequest
 from app.schemas.workflows.group_additivity_upload import (
     AppliedGroupAdditivityUploadPayload,
+    GroupAdditivitySchemeRef,
 )
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.group_additivity_resolution import (
     create_applied_group_additivity,
+    resolve_or_create_ga_scheme,
 )
+
+_GA_LOGGER = "app.services.group_additivity_resolution"
 from app.services.scientific_read.thermo import get_species_thermo
 from app.workflows.thermo import persist_thermo_upload
 
@@ -156,6 +162,49 @@ def test_ga_scheme_deduped_by_name_and_version(db_session):
         )
     ).all()
     assert len(schemes) == 1
+
+
+def test_ga_scheme_code_commit_mismatch_warns_and_keeps_existing(db_session, caplog):
+    """A reused (name, version) with a DIFFERENT code_commit warns but does not
+    mutate the stored row (dedup semantics unchanged); an equal or None commit
+    is silent."""
+    ref_a = GroupAdditivitySchemeRef(name="GAV-warn", version="9.9.9", code_commit="abc123")
+    first = resolve_or_create_ga_scheme(db_session, ref_a)
+    db_session.flush()
+
+    # Second resolve, same (name, version), DIFFERENT commit → exactly one WARNING.
+    with caplog.at_level(logging.WARNING, logger=_GA_LOGGER):
+        second = resolve_or_create_ga_scheme(
+            db_session,
+            GroupAdditivitySchemeRef(name="GAV-warn", version="9.9.9", code_commit="def456"),
+        )
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    msg = warnings[0].getMessage()
+    assert "GAV-warn" in msg and "9.9.9" in msg
+    assert "abc123" in msg  # existing (retained) commit
+    assert "def456" in msg  # uploaded (ignored) commit
+    # Same existing row, original commit retained — dedup semantics unchanged.
+    assert second.id == first.id
+    assert second.code_commit == "abc123"
+
+    # EQUAL commit → no warning.
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger=_GA_LOGGER):
+        resolve_or_create_ga_scheme(
+            db_session,
+            GroupAdditivitySchemeRef(name="GAV-warn", version="9.9.9", code_commit="abc123"),
+        )
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+    # None commit → no warning.
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger=_GA_LOGGER):
+        resolve_or_create_ga_scheme(
+            db_session,
+            GroupAdditivitySchemeRef(name="GAV-warn", version="9.9.9", code_commit=None),
+        )
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
 
 # ---------------------------------------------------------------------------
