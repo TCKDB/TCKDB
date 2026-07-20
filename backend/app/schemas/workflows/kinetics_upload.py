@@ -21,6 +21,19 @@ from app.schemas.utils import normalize_optional_text, normalize_tunneling_model
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 
 
+def _validate_a_units_named(field: str, a_units: ArrheniusAUnits, molecularity: int) -> None:
+    """Validate A-units against molecularity, naming the offending field on failure.
+
+    Wraps :func:`validate_a_units_for_molecularity` so a rejected sibling
+    A-factor (a ``multi_arrhenius`` term, PLOG entry, or falloff k0) reports
+    which term failed without leaking database ids.
+    """
+    try:
+        validate_a_units_for_molecularity(a_units, molecularity)
+    except ValueError as exc:
+        raise ValueError(f"{field}: {exc}") from exc
+
+
 class KineticsReactionParticipantUpload(SchemaBase):
     """Workflow-facing ordered participant slot for a kinetics upload.
 
@@ -345,18 +358,69 @@ class KineticsUploadRequest(SchemaBase):
             )
         return self
 
+    def _main_line_molecularity(self) -> int:
+        """Effective concentration order of the main-line Arrhenius rate.
+
+        A *simple* third-body reaction (generic ``+M`` collider, no falloff)
+        carries a ``[M]`` term on the main line, raising the order by one.
+        Falloff reactions keep ``len(reactants)``: their main line is the
+        high-pressure limit k∞ (M excluded); the low-pressure limit k0 is
+        one order higher and validated via ``falloff.low_a_units``.
+        """
+        molecularity = len(self.reaction.reactants)
+        if self.is_third_body and self.falloff is None:
+            molecularity += 1
+        return molecularity
+
     @model_validator(mode="after")
     def validate_a_units_vs_molecularity(self) -> Self:
         if self.a_units is None:
             return self
-        # A *simple* third-body reaction (generic ``+M`` collider, no
-        # falloff) carries a ``[M]`` term on the main line, raising the
-        # effective concentration order of the main-line Arrhenius rate by
-        # one. Falloff reactions keep ``len(reactants)``: their main line is
-        # the high-pressure limit k∞ (M excluded); the low-pressure k0
-        # (order + 1) is validated separately via falloff.low_a_units.
-        molecularity = len(self.reaction.reactants)
-        if self.is_third_body and self.falloff is None:
-            molecularity += 1
-        validate_a_units_for_molecularity(self.a_units, molecularity)
+        validate_a_units_for_molecularity(self.a_units, self._main_line_molecularity())
+        return self
+
+    @model_validator(mode="after")
+    def validate_arrhenius_entries_a_units(self) -> Self:
+        """Every summed ``multi_arrhenius`` term is the SAME reaction rate, so
+        each term's ``a_units`` must match the main-line molecularity (DR-0036).
+        """
+        molecularity = self._main_line_molecularity()
+        for entry in self.arrhenius_entries:
+            if entry.a_units is None:
+                continue
+            _validate_a_units_named(
+                f"arrhenius_entries[{entry.entry_index}].a_units",
+                entry.a_units,
+                molecularity,
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_plog_entries_a_units(self) -> Self:
+        """Each PLOG pressure entry's A is the reaction's rate at that pressure,
+        so its ``a_units`` shares the main-line molecularity (DR-0032 Part C).
+        """
+        molecularity = self._main_line_molecularity()
+        for entry in self.plog_entries:
+            if entry.a_units is None:
+                continue
+            _validate_a_units_named(
+                f"plog_entries[{entry.entry_index}].a_units",
+                entry.a_units,
+                molecularity,
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_falloff_low_a_units(self) -> Self:
+        """The low-pressure-limit k0 Arrhenius is by definition one order higher
+        than k∞, so ``falloff.low_a_units`` validates at ``len(reactants) + 1``
+        regardless of ``is_third_body`` (DR-0032 Part B).
+        """
+        if self.falloff is None or self.falloff.low_a_units is None:
+            return self
+        molecularity = len(self.reaction.reactants) + 1
+        _validate_a_units_named(
+            "falloff.low_a_units", self.falloff.low_a_units, molecularity
+        )
         return self

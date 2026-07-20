@@ -585,3 +585,191 @@ def test_network_bridge_unknown_id_rejected(db_engine, monkeypatch):
                 session,
                 _kinetics_request(existing_network_kinetics_id=999_999),
             )
+
+
+# ---------------------------------------------------------------------------
+# Sibling A-factor units vs molecularity (multi_arrhenius / PLOG / falloff k0)
+# ---------------------------------------------------------------------------
+
+
+def _multi_arrhenius_payload(entries: list[dict]) -> dict:
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "multi_arrhenius"
+    payload.pop("a")  # scalar A must be unset for a DUPLICATE sum
+    payload["arrhenius_entries"] = entries
+    return payload
+
+
+def test_multi_arrhenius_term_wrong_order_units_rejected():
+    """A bimolecular reaction's summed terms are the same rate, so a term with
+    unimolecular (per_s) units is rejected and the offending term is named."""
+    payload = _multi_arrhenius_payload([
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm3_mol_s"},
+        {"entry_index": 2, "a": 3.0e11, "a_units": "per_s"},
+    ])
+    with pytest.raises(ValidationError, match=r"arrhenius_entries\[2\].a_units"):
+        KineticsUploadRequest.model_validate(payload)
+
+
+def test_multi_arrhenius_valid_term_units_pass():
+    """Every term carrying the correct bimolecular units validates."""
+    payload = _multi_arrhenius_payload([
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm3_mol_s"},
+        {"entry_index": 2, "a": 3.0e11, "a_units": "cm3_mol_s"},
+    ])
+    request = KineticsUploadRequest.model_validate(payload)
+    assert [e.a_units for e in request.arrhenius_entries] == [
+        ArrheniusAUnits.cm3_mol_s,
+        ArrheniusAUnits.cm3_mol_s,
+    ]
+
+
+def test_multi_arrhenius_term_none_units_allowed():
+    """A term omitting a_units is skipped (units are optional)."""
+    payload = _multi_arrhenius_payload([
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm3_mol_s"},
+        {"entry_index": 2, "a": 3.0e11},  # no a_units
+    ])
+    request = KineticsUploadRequest.model_validate(payload)
+    assert request.arrhenius_entries[1].a_units is None
+
+
+def test_plog_entry_wrong_order_units_rejected():
+    """A PLOG entry's A is the reaction rate at that pressure, so a
+    termolecular (order-3) unit on a bimolecular reaction is rejected and the
+    entry is named."""
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "plog"
+    payload["plog_entries"] = [
+        {"entry_index": 1, "pressure_bar": 0.1, "a": 1.0e10, "a_units": "cm3_mol_s"},
+        {"entry_index": 2, "pressure_bar": 1.0, "a": 2.0e10, "a_units": "cm6_mol2_s"},
+    ]
+    with pytest.raises(ValidationError, match=r"plog_entries\[2\].a_units"):
+        KineticsUploadRequest.model_validate(payload)
+
+
+def test_falloff_low_a_units_wrong_order_rejected():
+    """k0 is one order higher than k∞; a bimolecular reaction's low-pressure
+    limit must be order-3, so order-2 low_a_units is rejected and named."""
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "troe"
+    payload["a_units"] = "cm3_mol_s"
+    payload["falloff"] = {
+        "low_a": 1.0e30,
+        "low_a_units": "cm3_mol_s",  # order-2, but k0 must be order-3
+        "low_n": -3.0,
+        "low_ea_kj_mol": 0.0,
+        "troe_alpha": 0.5,
+        "troe_t3": 100.0,
+        "troe_t1": 1000.0,
+        "troe_t2": 5000.0,
+    }
+    with pytest.raises(ValidationError, match=r"falloff.low_a_units"):
+        KineticsUploadRequest.model_validate(payload)
+
+
+def test_falloff_low_a_units_order_plus_one_passes():
+    """A bimolecular falloff reaction's k0 at order-3 (cm6_mol2_s) validates."""
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "troe"
+    payload["a_units"] = "cm3_mol_s"
+    payload["falloff"] = {
+        "low_a": 1.0e30,
+        "low_a_units": "cm6_mol2_s",
+        "low_n": -3.0,
+        "low_ea_kj_mol": 0.0,
+        "troe_alpha": 0.5,
+        "troe_t3": 100.0,
+        "troe_t1": 1000.0,
+        "troe_t2": 5000.0,
+    }
+    request = KineticsUploadRequest.model_validate(payload)
+    assert request.falloff.low_a_units == ArrheniusAUnits.cm6_mol2_s
+
+
+def test_falloff_low_a_units_none_allowed():
+    """Omitting low_a_units skips the k0 order check (units are optional)."""
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "troe"
+    payload["a_units"] = "cm3_mol_s"
+    payload["falloff"] = {
+        "low_a": 1.0e30,
+        "low_n": -3.0,
+        "low_ea_kj_mol": 0.0,
+        "troe_alpha": 0.5,
+        "troe_t3": 100.0,
+        "troe_t1": 1000.0,
+        "troe_t2": 5000.0,
+    }
+    request = KineticsUploadRequest.model_validate(payload)
+    assert request.falloff.low_a_units is None
+
+
+def test_falloff_with_third_body_flag_no_double_count():
+    """Regression: a falloff reaction flagged is_third_body must NOT add the
+    simple-third-body +1 on top of the k0 +1. Main line stays k∞ at order 2
+    (cm3_mol_s) and k0 is exactly order 3 (cm6_mol2_s) -- both must PASS."""
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "troe"
+    payload["is_third_body"] = True
+    payload["a_units"] = "cm3_mol_s"
+    payload["falloff"] = {
+        "low_a": 1.0e30,
+        "low_a_units": "cm6_mol2_s",
+        "low_n": -3.0,
+        "low_ea_kj_mol": 0.0,
+        "troe_alpha": 0.5,
+        "troe_t3": 100.0,
+        "troe_t1": 1000.0,
+        "troe_t2": 5000.0,
+    }
+    request = KineticsUploadRequest.model_validate(payload)
+    assert request.is_third_body is True
+    assert request.a_units == ArrheniusAUnits.cm3_mol_s
+    assert request.falloff.low_a_units == ArrheniusAUnits.cm6_mol2_s
+
+
+def test_plog_entry_correct_order_units_pass():
+    """A bimolecular PLOG whose entries carry the matching order-2 units
+    validates (accept counterpart to the wrong-order reject test)."""
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "plog"
+    payload["plog_entries"] = [
+        {"entry_index": 1, "pressure_bar": 0.1, "a": 1.0e10, "a_units": "cm3_mol_s"},
+        {"entry_index": 2, "pressure_bar": 1.0, "a": 2.0e10, "a_units": "cm3_mol_s"},
+    ]
+    request = KineticsUploadRequest.model_validate(payload)
+    assert [e.a_units for e in request.plog_entries] == [
+        ArrheniusAUnits.cm3_mol_s,
+        ArrheniusAUnits.cm3_mol_s,
+    ]
+
+
+def test_multi_arrhenius_third_body_terms_use_order_plus_one():
+    """A simple third-body (+M) bimolecular multi_arrhenius raises the
+    main-line order to 3, so each summed term's a_units must be order 3
+    (cm6_mol2_s) -- correct units PASS."""
+    payload = _multi_arrhenius_payload([
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm6_mol2_s"},
+        {"entry_index": 2, "a": 3.0e11, "a_units": "cm6_mol2_s"},
+    ])
+    payload["is_third_body"] = True
+    payload["a_units"] = None  # scalar rate lives in the summed terms
+    request = KineticsUploadRequest.model_validate(payload)
+    assert [e.a_units for e in request.arrhenius_entries] == [
+        ArrheniusAUnits.cm6_mol2_s,
+        ArrheniusAUnits.cm6_mol2_s,
+    ]
+
+
+def test_multi_arrhenius_third_body_rejects_order2_term():
+    """With is_third_body the effective order is 3, so an order-2 term
+    (cm3_mol_s) is rejected and the offending term is named."""
+    payload = _multi_arrhenius_payload([
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm6_mol2_s"},
+        {"entry_index": 2, "a": 3.0e11, "a_units": "cm3_mol_s"},
+    ])
+    payload["is_third_body"] = True
+    payload["a_units"] = None  # scalar rate lives in the summed terms
+    with pytest.raises(ValidationError, match=r"arrhenius_entries\[2\].a_units"):
+        KineticsUploadRequest.model_validate(payload)
