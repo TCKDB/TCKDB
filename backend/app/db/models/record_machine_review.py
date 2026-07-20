@@ -104,7 +104,10 @@ class RecordMachineReviewRow(Base, TimestampMixin):
     source_audit_event_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
-            "submission_audit_event.id", deferrable=True, initially="IMMEDIATE"
+            "submission_audit_event.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_record_machine_review_source_audit_event_id",
         ),
         nullable=True,
     )

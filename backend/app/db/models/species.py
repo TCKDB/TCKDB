@@ -260,6 +260,7 @@ class ConformerObservation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
             "conformer_assignment_scheme.id",
             deferrable=True,
             initially="IMMEDIATE",
+            name="fk_conformer_observation_assignment_scheme_id",
         ),
         nullable=True,
     )
@@ -314,6 +315,7 @@ class ConformerSelection(Base, TimestampMixin, CreatedByMixin):
             "conformer_assignment_scheme.id",
             deferrable=True,
             initially="IMMEDIATE",
+            name="fk_conformer_selection_assignment_scheme_id",
         ),
         nullable=True,
     )

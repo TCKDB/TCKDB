@@ -796,6 +796,7 @@ class CalculationScanPointCoordinateValue(Base):
             ["calc_scan_point.calculation_id", "calc_scan_point.point_index"],
             deferrable=True,
             initially="IMMEDIATE",
+            name="fk_cspcv_calc_id_point_index",
         ),
         ForeignKeyConstraint(
             ["calculation_id", "coordinate_index"],
@@ -805,6 +806,7 @@ class CalculationScanPointCoordinateValue(Base):
             ],
             deferrable=True,
             initially="IMMEDIATE",
+            name="fk_cspcv_calc_id_coordinate_index",
         ),
         CheckConstraint(
             "point_index >= 1",
@@ -1127,6 +1129,7 @@ class CalculationParameter(Base, TimestampMixin):
             "calculation_parameter_vocab.canonical_key",
             deferrable=True,
             initially="IMMEDIATE",
+            name="fk_calculation_parameter_canonical_key",
         ),
         nullable=True,
     )

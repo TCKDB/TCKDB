@@ -155,7 +155,10 @@ class AppliedGroupAdditivityComponent(Base):
     applied_group_additivity_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
-            "applied_group_additivity.id", deferrable=True, initially="IMMEDIATE"
+            "applied_group_additivity.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_applied_ga_component_applied_ga_id",
         ),
         nullable=False,
     )

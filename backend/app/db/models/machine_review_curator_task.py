@@ -132,7 +132,10 @@ class MachineReviewCuratorTask(Base, TimestampMixin):
     source_audit_event_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
-            "submission_audit_event.id", deferrable=True, initially="IMMEDIATE"
+            "submission_audit_event.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_machine_review_curator_task_source_audit_event_id",
         ),
         nullable=True,
     )

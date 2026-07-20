@@ -1,7 +1,7 @@
 """Guard: no schema identifier silently overflows PostgreSQL's 63-char limit.
 
-PostgreSQL truncates any identifier (table / constraint / index name) longer
-than ``NAMEDATALEN - 1`` = 63 characters. SQLAlchemy hides this by
+PostgreSQL truncates any identifier (table / constraint / index / enum-type
+name) longer than ``NAMEDATALEN - 1`` = 63 characters. SQLAlchemy hides this by
 deterministically truncating over-long *generated* names (from
 ``NAMING_CONVENTION``) to a 63-char name with a short hash suffix before it
 emits DDL. That means a name we *think* we declared can differ from the name
@@ -10,27 +10,31 @@ ORM and every migration truncate identically. It is fragile and opaque:
 
 * an autogenerate diff can churn if the truncation ever shifts,
 * ``ALTER … RENAME CONSTRAINT`` / ``DROP CONSTRAINT`` in a migration must
-  spell the *truncated* name exactly (see revision ``d9c4a1e7f2b6``, which
-  renamed ``transition_state_selection``'s FK to the explicit short name
-  ``fk_ts_selection_transition_state``).
+  spell the *truncated* name exactly.
 
-This test locks in two things:
+Two migrations removed all reliance on that truncation by giving every
+over-long foreign key an explicit short ``name=``:
 
-1. **Every** identifier PostgreSQL will actually store (i.e. the
-   post-truncation name) is <= 63 chars. This can't regress in practice, but
-   it documents the hard limit and fails loudly if a future SQLAlchemy changes
-   the contract.
-2. **No new reliance on truncation.** The raw, convention-generated name must
-   be <= 63 chars, *except* for a frozen allow-list of identifiers that
-   already existed on deployed databases when this guard was added. That
-   allow-list is technical debt, not a license to add more: a brand-new
-   over-long identifier fails the test and must be given an explicit short
-   ``name=`` rather than being appended to the allow-list.
+* revision ``d9c4a1e7f2b6`` — ``transition_state_selection``'s FK
+  (``fk_ts_selection_transition_state``);
+* revision ``f4a7c2e9b1d3`` — the remaining 25 over-63 foreign keys.
+
+With those in place there are **no** legitimately-truncated identifiers left,
+so this guard now enforces a hard rule with **no exceptions**: every raw name
+declared by the ORM metadata must already be <= 63 chars. A new over-long
+identifier means the schema is silently depending on truncation again — fix it
+by giving the object an explicit short ``name=`` rather than relaxing this test.
+
+Scope: this guard checks identifiers reachable from ``Base.metadata`` — table,
+constraint, index, and enum-type names. Identifiers created only in raw SQL
+inside a migration (e.g. expression / GIST indexes emitted with
+``op.execute``) are out of ORM-metadata scope and are not checked here; keep
+those <= 63 chars by hand when writing the migration.
 """
 
 from __future__ import annotations
 
-from sqlalchemy.dialects import postgresql
+from sqlalchemy import Enum as SAEnum
 
 import app.db.models  # noqa: F401  (populates Base.metadata)
 from app.db.base import Base
@@ -38,108 +42,87 @@ from app.db.base import Base
 # PostgreSQL NAMEDATALEN - 1.
 _MAX_IDENTIFIER_LENGTH = 63
 
-# Convention-generated names that already exceeded 63 chars on deployed
-# databases before this guard existed. They currently work only because
-# SQLAlchemy truncates them deterministically to <= 63 chars.
+# Convention-generated names that historically exceeded 63 chars on deployed
+# databases and relied on SQLAlchemy's deterministic truncation.
 #
-# This set is FROZEN legacy debt. Do NOT add entries to silence a failure:
-# give the offending constraint an explicit short ``name=`` (<= 63 chars) on
-# its ``ForeignKey`` / ``UniqueConstraint`` / etc. instead — exactly as
-# ``transition_state_selection.transition_state_id`` was fixed with
-# ``name="fk_ts_selection_transition_state"``. Shrinking this set (by giving
-# these FKs explicit short names in a new migration) is always welcome.
-_KNOWN_TRUNCATED_IDENTIFIERS = frozenset({
-    "fk_applied_energy_correction_component_applied_correction_id_applied_energy_correction",
-    "fk_applied_energy_correction_frequency_scale_factor_id_frequency_scale_factor",
-    "fk_applied_energy_correction_source_conformer_observation_id_conformer_observation",
-    "fk_applied_energy_correction_target_reaction_entry_id_reaction_entry",
-    "fk_applied_energy_correction_target_species_entry_id_species_entry",
-    "fk_applied_energy_correction_target_transition_state_entry_id_transition_state_entry",
-    "fk_applied_group_additivity_component_applied_group_additivity_id_applied_group_additivity",
-    "fk_calc_scan_point_coordinate_value_calculation_id_calc_scan_coordinate",
-    "fk_calc_scan_point_coordinate_value_calculation_id_calc_scan_point",
-    "fk_calculation_parameter_canonical_key_calculation_parameter_vocab",
-    "fk_conformer_observation_assignment_scheme_id_conformer_assignment_scheme",
-    "fk_conformer_selection_assignment_scheme_id_conformer_assignment_scheme",
-    "fk_energy_correction_scheme_atom_param_scheme_id_energy_correction_scheme",
-    "fk_energy_correction_scheme_bond_param_scheme_id_energy_correction_scheme",
-    "fk_energy_correction_scheme_component_param_scheme_id_energy_correction_scheme",
-    "fk_frequency_scale_factor_workflow_tool_release_id_workflow_tool_release",
-    "fk_machine_review_curator_task_source_audit_event_id_submission_audit_event",
-    "fk_molecular_property_observation_software_release_id_software_release",
-    "fk_molecular_property_observation_source_calculation_id_calculation",
-    "fk_molecular_property_observation_species_entry_id_species_entry",
-    "fk_molecular_property_observation_workflow_tool_release_id_workflow_tool_release",
-    "fk_network_kinetics_chebyshev_network_kinetics_id_network_kinetics",
-    "fk_reaction_entry_structure_participant_reaction_entry_id_reaction_entry",
-    "fk_reaction_entry_structure_participant_species_entry_id_species_entry",
-    "fk_record_machine_review_source_audit_event_id_submission_audit_event",
-})
-
-_PREPARER = postgresql.dialect().identifier_preparer
+# This set is now INTENTIONALLY EMPTY: every such foreign key was given an
+# explicit short ``name=`` (migrations ``d9c4a1e7f2b6`` and ``f4a7c2e9b1d3``).
+# Do NOT add entries to silence a failure — give the offending object an
+# explicit short ``name=`` (<= 63 chars, unique within its table) instead, e.g.
+# ``ForeignKey(..., name="fk_<short_table>_<columns>")``. Keeping this set empty
+# is the whole point of the guard.
+_KNOWN_TRUNCATED_IDENTIFIERS: frozenset[str] = frozenset()
 
 
 def _iter_named_objects():
-    """Yield ``(table_name, kind, raw_name, stored_name)`` for every named
-    table, constraint, and index in ``Base.metadata``.
+    """Yield ``(table_name, kind, raw_name)`` for every named table,
+    constraint, index, and enum type reachable from ``Base.metadata``.
 
-    ``raw_name`` is the name as declared / generated by the naming convention.
-    ``stored_name`` is what PostgreSQL will actually persist — i.e. the name
-    after SQLAlchemy's deterministic truncation.
+    ``raw_name`` is the name exactly as declared / generated by the naming
+    convention — before any truncation SQLAlchemy would apply at DDL-compile
+    time. We deliberately never call ``IdentifierPreparer.format_constraint`` /
+    ``format_index`` here: for an *explicit* name longer than 63 chars those
+    raise ``sqlalchemy.exc.IdentifierError`` during iteration, which would mask
+    the curated assertion failure below. Checking the raw string length is both
+    sufficient and lets the length test report the offender cleanly.
     """
+    seen_enum_names: set[str] = set()
     for table in Base.metadata.tables.values():
-        yield table.name, "table", table.name, table.name
+        yield table.name, "table", table.name
         for constraint in table.constraints:
             if constraint.name is None:
                 continue
-            raw = str(constraint.name)
-            stored = _PREPARER.format_constraint(constraint)
-            yield table.name, type(constraint).__name__, raw, stored
+            yield table.name, type(constraint).__name__, str(constraint.name)
         for index in table.indexes:
             if index.name is None:
                 continue
-            raw = str(index.name)
-            stored = _PREPARER.format_index(index)
-            yield table.name, "Index", raw, stored
+            yield table.name, "Index", str(index.name)
+        # Enum type names are real PostgreSQL identifiers (CREATE TYPE ... AS
+        # ENUM). A shared enum can appear on many columns/tables; report each
+        # distinct type name once, attributed to the first table it is seen on.
+        for column in table.columns:
+            col_type = column.type
+            if isinstance(col_type, SAEnum) and col_type.name:
+                name = str(col_type.name)
+                if name in seen_enum_names:
+                    continue
+                seen_enum_names.add(name)
+                yield table.name, "EnumType", name
 
 
-def test_stored_identifiers_within_postgres_limit() -> None:
-    """The name PostgreSQL actually stores must never exceed 63 chars."""
-    too_long = [
-        (table, kind, stored, len(stored))
-        for table, kind, _raw, stored in _iter_named_objects()
-        if len(stored) > _MAX_IDENTIFIER_LENGTH
-    ]
-    assert not too_long, (
-        "SQLAlchemy emitted an identifier PostgreSQL cannot store "
-        f"(> {_MAX_IDENTIFIER_LENGTH} chars) even after truncation: {too_long}"
-    )
+def test_no_reliance_on_identifier_truncation() -> None:
+    """Every raw ORM identifier must be <= 63 chars, with no exceptions.
 
-
-def test_no_new_reliance_on_identifier_truncation() -> None:
-    """Raw, convention-generated names must be <= 63 chars.
-
-    The only permitted exceptions are the frozen legacy set in
-    ``_KNOWN_TRUNCATED_IDENTIFIERS``. A new over-long identifier means the
-    schema is silently depending on truncation again — fix it by giving the
-    constraint an explicit short ``name=`` rather than adding it here.
+    ``_KNOWN_TRUNCATED_IDENTIFIERS`` is intentionally empty; an over-long name
+    means the schema is silently depending on truncation again. Fix it by
+    giving the object an explicit short ``name=``.
     """
     offenders = [
         (table, kind, raw, len(raw))
-        for table, kind, raw, _stored in _iter_named_objects()
+        for table, kind, raw in _iter_named_objects()
         if len(raw) > _MAX_IDENTIFIER_LENGTH
         and raw not in _KNOWN_TRUNCATED_IDENTIFIERS
     ]
     assert not offenders, (
-        "New schema identifier(s) exceed PostgreSQL's "
+        "Schema identifier(s) exceed PostgreSQL's "
         f"{_MAX_IDENTIFIER_LENGTH}-char limit and would rely on silent "
         "SQLAlchemy truncation:\n"
         + "\n".join(f"  {t}.{k}: {n!r} ({ln} chars)" for t, k, n, ln in offenders)
-        + "\n\nGive the constraint an explicit short name=, e.g. "
-        'ForeignKey(..., name=\"fk_<short_table>_<referred>\"), keeping it '
+        + "\n\nGive the object an explicit short name=, e.g. "
+        'ForeignKey(..., name="fk_<short_table>_<columns>") (or SAEnum(..., '
+        'name="<short_enum>")), keeping it '
         f"<= {_MAX_IDENTIFIER_LENGTH} chars and unique within its table. "
         "Do NOT append to _KNOWN_TRUNCATED_IDENTIFIERS to silence this."
     )
+
+
+def test_known_truncated_allow_list_is_empty() -> None:
+    """The legacy allow-list must stay empty.
+
+    A non-empty allow-list would re-introduce reliance on silent truncation.
+    Every historically-truncated FK now has an explicit short name.
+    """
+    assert _KNOWN_TRUNCATED_IDENTIFIERS == frozenset()
 
 
 def test_transition_state_selection_fk_has_explicit_short_name() -> None:

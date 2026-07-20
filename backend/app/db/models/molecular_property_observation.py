@@ -77,7 +77,12 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin):
     # ---- Identity (nullable: see module docstring) -------------------
     species_entry_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
-        ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "species_entry.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_molecular_property_observation_species_entry_id",
+        ),
         nullable=True,
     )
 
@@ -116,17 +121,30 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin):
         nullable=True,
     )
     software_release_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("software_release.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "software_release.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_molecular_property_observation_software_release_id",
+        ),
         nullable=True,
     )
     workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey(
-            "workflow_tool_release.id", deferrable=True, initially="IMMEDIATE"
+            "workflow_tool_release.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_molecular_property_observation_workflow_tool_release_id",
         ),
         nullable=True,
     )
     source_calculation_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "calculation.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_molecular_property_observation_source_calculation_id",
+        ),
         nullable=True,
     )
 

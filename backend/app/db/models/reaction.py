@@ -141,12 +141,22 @@ class ReactionEntryStructureParticipant(Base, TimestampMixin, CreatedByMixin):
 
     reaction_entry_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("reaction_entry.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "reaction_entry.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_reaction_entry_structure_participant_reaction_entry_id",
+        ),
         nullable=False,
     )
     species_entry_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "species_entry.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_reaction_entry_structure_participant_species_entry_id",
+        ),
         nullable=False,
     )
     role: Mapped[ReactionRole] = mapped_column(

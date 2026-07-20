@@ -428,7 +428,12 @@ class NetworkKineticsChebyshev(Base):
 
     network_kinetics_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("network_kinetics.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "network_kinetics.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_network_kinetics_chebyshev_network_kinetics_id",
+        ),
         primary_key=True,
     )
 

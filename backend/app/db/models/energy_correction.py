@@ -116,7 +116,12 @@ class EnergyCorrectionSchemeAtomParam(Base):
 
     scheme_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("energy_correction_scheme.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "energy_correction_scheme.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_energy_correction_scheme_atom_param_scheme_id",
+        ),
         nullable=False,
     )
     element: Mapped[str] = mapped_column(Text, nullable=False)
@@ -139,7 +144,12 @@ class EnergyCorrectionSchemeBondParam(Base):
 
     scheme_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("energy_correction_scheme.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "energy_correction_scheme.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_energy_correction_scheme_bond_param_scheme_id",
+        ),
         nullable=False,
     )
     bond_key: Mapped[str] = mapped_column(Text, nullable=False)
@@ -163,7 +173,12 @@ class EnergyCorrectionSchemeComponentParam(Base):
 
     scheme_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("energy_correction_scheme.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "energy_correction_scheme.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_energy_correction_scheme_component_param_scheme_id",
+        ),
         nullable=False,
     )
     component_kind: Mapped[MeliusBacComponentKind] = mapped_column(
@@ -224,7 +239,12 @@ class FrequencyScaleFactor(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
     # freq_scale_factors.yml) rather than directly from a literature paper.
     workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
-        ForeignKey("workflow_tool_release.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "workflow_tool_release.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_frequency_scale_factor_workflow_tool_release_id",
+        ),
         nullable=True,
     )
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -271,18 +291,31 @@ class AppliedEnergyCorrection(Base, TimestampMixin, CreatedByMixin):
     # Target FKs — exactly one must be populated
     target_species_entry_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
-        ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "species_entry.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_applied_energy_correction_target_species_entry_id",
+        ),
         nullable=True,
     )
     target_reaction_entry_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
-        ForeignKey("reaction_entry.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "reaction_entry.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_applied_energy_correction_target_reaction_entry_id",
+        ),
         nullable=True,
     )
     target_transition_state_entry_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
-            "transition_state_entry.id", deferrable=True, initially="IMMEDIATE"
+            "transition_state_entry.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_applied_energy_correction_target_transition_state_entry_id",
         ),
         nullable=True,
     )
@@ -291,7 +324,10 @@ class AppliedEnergyCorrection(Base, TimestampMixin, CreatedByMixin):
     source_conformer_observation_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
-            "conformer_observation.id", deferrable=True, initially="IMMEDIATE"
+            "conformer_observation.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_applied_energy_correction_source_conformer_observation_id",
         ),
         nullable=True,
     )
@@ -309,7 +345,12 @@ class AppliedEnergyCorrection(Base, TimestampMixin, CreatedByMixin):
     )
     frequency_scale_factor_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
-        ForeignKey("frequency_scale_factor.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "frequency_scale_factor.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_applied_energy_correction_frequency_scale_factor_id",
+        ),
         nullable=True,
     )
 
@@ -400,7 +441,10 @@ class AppliedEnergyCorrectionComponent(Base):
     applied_correction_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
-            "applied_energy_correction.id", deferrable=True, initially="IMMEDIATE"
+            "applied_energy_correction.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_applied_energy_correction_component_applied_correction_id",
         ),
         nullable=False,
     )
