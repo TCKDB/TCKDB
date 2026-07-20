@@ -111,7 +111,12 @@ class TransitionStateSelection(Base, TimestampMixin, CreatedByMixin):
 
     transition_state_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("transition_state.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "transition_state.id",
+            name="fk_ts_selection_transition_state",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
         nullable=False,
     )
 
