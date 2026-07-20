@@ -6,7 +6,6 @@
 changes, no frontend work. Importer code does not yet exist.
 **Companion to:**
 - [../../schema_spec.md](../../schema_spec.md)
-- [../schema_analysis.md](../schema_analysis.md)
 - [../unit_policy.md](../unit_policy.md)
 - [../literature_policy.md](../literature_policy.md)
 

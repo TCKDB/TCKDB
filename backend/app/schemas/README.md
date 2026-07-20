@@ -19,4 +19,4 @@ Conventions:
 
 See [`docs/guides/system_flow.md`](../../../docs/guides/system_flow.md)
 for how a payload flows schema → workflow → service → DB, and
-`docs/schema_analysis.md` for field semantics.
+[`schema_spec.md`](../../schema_spec.md) for field semantics.

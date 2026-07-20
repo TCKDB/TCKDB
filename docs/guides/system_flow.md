@@ -41,7 +41,7 @@ the whole design falls out of keeping them separate:
 > molecule isn't stored twice; result/provenance tables are append-only
 > so re-running a calculation never overwrites history; curation is a
 > separate overlay so review state never edits the science. See
-> [`schema_analysis.md`](../schema_analysis.md) for the table-by-table
+> [`schema_spec.md`](../../backend/schema_spec.md) for the table-by-table
 > categorization.
 
 ---
