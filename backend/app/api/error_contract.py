@@ -57,17 +57,27 @@ def validation_detail_code(detail: object, *, fallback: str) -> str:
 
     candidates: set[str] = set()
 
+    def collect_message(value: object) -> None:
+        if isinstance(value, BaseException):
+            value = str(value)
+        if isinstance(value, str):
+            candidates.update(_NESTED_CODE_PATTERN.findall(value))
+
     def collect(value: object) -> None:
         if isinstance(value, dict):
-            for nested in value.values():
-                collect(nested)
+            # Only inspect framework-generated validation messages and their
+            # structured exception context. In particular, never inspect the
+            # caller-controlled ``input`` value included by Pydantic.
+            collect_message(value.get("msg"))
+            context = value.get("ctx")
+            if isinstance(context, dict):
+                collect_message(context.get("error"))
+                collect_message(context.get("code"))
         elif isinstance(value, (list, tuple)):
             for nested in value:
                 collect(nested)
-        elif isinstance(value, BaseException):
-            collect(str(value))
-        elif isinstance(value, str):
-            candidates.update(_NESTED_CODE_PATTERN.findall(value))
+        else:
+            collect_message(value)
 
     collect(detail)
     if len(candidates) == 1:

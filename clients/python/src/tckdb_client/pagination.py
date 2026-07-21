@@ -114,15 +114,15 @@ def iter_paginated_records(
         next_offset = page_offset + returned
         if next_offset >= total:
             return
+        # The collapsed result set has at most one row. A valid empty page at
+        # offset > 0 is therefore complete, even though ``total`` reports the
+        # larger pre-collapse candidate count.
+        if collapse_first:
+            return
         if returned == 0 or next_offset <= requested_offset:
             raise TCKDBPaginationError(
                 "Pagination did not advance before reaching the reported total."
             )
-        # Hosted responses intentionally report the pre-collapse candidate
-        # count. A collapsed query is therefore complete after its one
-        # returned record even when pagination.total is larger than one.
-        if collapse_first:
-            return
         requested_offset = next_offset
 
 

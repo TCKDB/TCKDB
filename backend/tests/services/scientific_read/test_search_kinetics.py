@@ -144,6 +144,29 @@ def test_collapse_first_preserves_plural_records_with_pre_collapse_total(db_sess
     assert response.pagination.returned == 1
 
 
+def test_collapse_first_applies_offset_after_collapse(db_session):
+    _, entry, _ = _setup_reaction_with_kinetics(
+        db_session,
+        reactant_smiles="[SiH3]",
+        product_smiles="[SiH2]",
+    )
+    make_kinetics(db_session, reaction_entry=entry)
+
+    response = search_kinetics(
+        db_session,
+        KineticsSearchRequest(
+            reactants=["[SiH3]"],
+            products=["[SiH2]"],
+            collapse=CollapseMode.first,
+            offset=1,
+        ),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 2
+    assert response.pagination.returned == 0
+
+
 # ---------------------------------------------------------------------------
 # Review (shallow on the kinetics record)
 # ---------------------------------------------------------------------------

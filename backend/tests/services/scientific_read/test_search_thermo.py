@@ -110,6 +110,30 @@ def test_collapse_first_preserves_plural_records_with_pre_collapse_total(db_sess
     assert response.pagination.returned == 1
 
 
+def test_collapse_first_applies_offset_after_collapse(db_session):
+    species = make_species(
+        db_session,
+        smiles="[SiH4]",
+        inchi_key=next_inchi_key("CTO"),
+    )
+    entry = make_species_entry(db_session, species)
+    make_thermo_scalar(db_session, species_entry=entry)
+    make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-99.0)
+
+    response = search_thermo(
+        db_session,
+        ThermoSearchRequest(
+            smiles="[SiH4]",
+            collapse=CollapseMode.first,
+            offset=1,
+        ),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 2
+    assert response.pagination.returned == 0
+
+
 # ---------------------------------------------------------------------------
 # Review behavior (shallow on the thermo record)
 # ---------------------------------------------------------------------------

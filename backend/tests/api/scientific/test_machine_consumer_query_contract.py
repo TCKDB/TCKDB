@@ -52,6 +52,16 @@ def test_native_request_validation_uses_structured_envelope(client):
     assert body["context"] == {}
 
 
+def test_request_validation_code_cannot_come_from_caller_input(client):
+    response = client.post(
+        "/api/v1/scientific/kinetics/search",
+        json={"limit": "attacker_code: stuff"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "request_validation_error"
+
+
 def test_multiple_coded_validation_failures_keep_the_generic_code():
     details = [
         {"msg": "Value error, first_conflict: one"},
@@ -78,6 +88,15 @@ def test_composed_species_searches_inherit_inchi_fail_closed(client):
 
     for url in urls:
         _assert_unsupported_filter(client.get(url), "inchi")
+
+
+def test_species_calculation_scientific_origin_fails_closed(client):
+    response = client.get(
+        "/api/v1/scientific/species-calculations/search"
+        "?smiles=C&scientific_origin=computed"
+    )
+
+    _assert_unsupported_filter(response, "scientific_origin")
 
 
 def test_frequency_scale_factor_deferred_filters_fail_closed(client):

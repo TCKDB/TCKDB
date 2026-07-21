@@ -43,6 +43,7 @@ from app.services.scientific_read.common import (
     collect_bounded_pages,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     validate_includes,
     validate_pagination,
     validate_temperature_range,
@@ -226,10 +227,12 @@ def search_kinetics(
     # 4) Collapse + pagination.
     pre_collapse_total = len(flat)
     collapse_first = request.collapse.value == "first"
-    if collapse_first:
-        returned = flat[:1]
-    else:
-        returned = flat[offset : offset + limit]
+    returned = slice_for_pagination(
+        flat,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
 
     summary = review_summary(rec.kinetics.review for rec in flat)
 

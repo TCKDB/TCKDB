@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import reject_unsupported_filters
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
     Calculation,
@@ -99,6 +100,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -187,6 +189,10 @@ def search_species_calculations(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
+    reject_unsupported_filters(
+        {"scientific_origin": request.scientific_origin},
+        endpoint="/scientific/species-calculations/search",
+    )
     _validate_ranking(request)
 
     # Phase C: reconcile species_id+species_ref, species_entry_id+
@@ -313,10 +319,12 @@ def search_species_calculations(
 
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
-    if collapse_first:
-        returned = records[:1]
-    else:
-        returned = records[offset : offset + limit]
+    returned = slice_for_pagination(
+        records,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
 
     return ScientificSpeciesCalculationsSearchResponse(
         request=RequestEcho(
@@ -582,12 +590,6 @@ def _query_candidate_calculations(
         stmt = stmt.where(Software.name == request.software)
     if request.workflow_tool is not None:
         stmt = stmt.where(WorkflowTool.name == request.workflow_tool)
-    # scientific_origin: Calculation rows are computed by definition; the
-    # filter is provided for parity with other endpoints but will only match
-    # if a populated equivalent column exists. Calculation has no
-    # scientific_origin column, so this filter is a no-op in v0 (parity
-    # only). Future schema work could add it.
-
     # CalculationQuality filter (separate from review's "rejected").
     if request.calculation_quality is not None:
         stmt = stmt.where(Calculation.quality == request.calculation_quality)

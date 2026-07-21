@@ -138,7 +138,11 @@ def apply_channel_chemistry_filters(
                 .where(
                     participant.c.state_id == state_column,
                     identity == value,
-                    participant.c.stoichiometry >= required_stoichiometry,
+                )
+                .group_by(participant.c.state_id)
+                .having(
+                    func.sum(participant.c.stoichiometry)
+                    >= required_stoichiometry
                 )
             )
             stmt = stmt.where(match.exists())

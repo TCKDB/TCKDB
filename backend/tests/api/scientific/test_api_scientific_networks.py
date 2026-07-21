@@ -2905,6 +2905,37 @@ def test_nkin_search_channel_filter_repetition_encodes_stoichiometry(
     assert misses_three.json()["records"] == []
 
 
+def test_nkin_smiles_multiplicity_aggregates_rows_per_side(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    source_a = make_species(db_session, smiles="[SiH3]", multiplicity=1)
+    source_b = make_species(db_session, smiles="[SiH3]", multiplicity=2)
+    sink = make_species(db_session, smiles="[SiH3]", multiplicity=3)
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_a"],
+        species_entry=make_species_entry(db_session, source_a),
+    )
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_b"],
+        species_entry=make_species_entry(db_session, sink),
+    )
+
+    source_two = {"source_smiles": ["[SiH3]", "[SiH3]"]}
+    scoped = client.post(_nkin_search_url(), json=source_two)
+    assert scoped.status_code == 200, scoped.text
+    assert scoped.json()["records"] == []
+
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_a"],
+        species_entry=make_species_entry(db_session, source_b),
+    )
+    aggregated = client.post(_nkin_search_url(), json=source_two)
+    assert aggregated.status_code == 200, aggregated.text
+    assert _nkin_search_refs(aggregated.json()) == {fx["kinetics"].public_ref}
+
+
 def test_nkin_search_by_model_kind(client, db_session):
     fx_cheb = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
     fx_plog = _make_kinetics(db_session, NetworkKineticsModelKind.plog)

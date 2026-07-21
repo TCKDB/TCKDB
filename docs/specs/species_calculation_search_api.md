@@ -143,7 +143,7 @@ fetching follow-up calculations after a `search_thermo` call. They are
 | `basis` | string | Filters via `LevelOfTheory.basis` join. |
 | `software` | string | Filters via `Software.name` (joined through `SoftwareRelease`). |
 | `workflow_tool` | string | Filters via `WorkflowTool.name` (joined through `WorkflowToolRelease`). |
-| `scientific_origin` | enum | `ScientificOriginKind`: `computed | experimental | estimated`. (Calculation rows are computed by definition; this filter is provided for parity but typically returns the full set.) |
+| `scientific_origin` | enum | Reserved for parity. Non-null values fail closed with 422 `unsupported_filter` because calculation rows have no equivalent persisted field. |
 | `calculation_quality` | enum | `CalculationQuality`: `raw | curated | rejected`. **Defaults to excluding `rejected`** (mirrors review-trust posture). |
 
 ### Trust filters (shallow per D7)

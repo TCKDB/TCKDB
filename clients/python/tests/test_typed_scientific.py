@@ -284,3 +284,30 @@ def test_collapsed_iterator_stops_after_the_single_collapsed_record() -> None:
 
     assert records == [{"ordinal": 0}]
     assert calls == 1
+
+
+def test_collapsed_iterator_accepts_empty_page_after_offset() -> None:
+    calls = 0
+
+    def fetch(**parameters: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return {
+            "records": [],
+            "pagination": {
+                "offset": parameters["offset"],
+                "limit": parameters["limit"],
+                "returned": 0,
+                "total": 8,
+            },
+        }
+
+    records = list(
+        iter_paginated_records(
+            fetch,
+            {"collapse": "first", "offset": 1, "limit": 1},
+        )
+    )
+
+    assert records == []
+    assert calls == 1

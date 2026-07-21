@@ -392,12 +392,11 @@ def slice_for_pagination(
 ) -> list:
     """Apply pagination after sort/collapse.
 
-    With ``collapse_first=True``, returns at most one item (the first after
-    sort), regardless of ``limit``. Otherwise, applies offset+limit.
+    Collapse is applied first, then ``offset`` and ``limit`` are applied to
+    the collapsed or complete list.
     """
-    if collapse_first:
-        return items[:1]
-    return items[offset : offset + limit]
+    collapsed = items[:1] if collapse_first else items
+    return collapsed[offset : offset + limit]
 
 
 # ---------------------------------------------------------------------------

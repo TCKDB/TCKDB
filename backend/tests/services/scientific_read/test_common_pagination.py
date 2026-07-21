@@ -6,7 +6,19 @@ import pytest
 
 from app.api.config import settings
 from app.schemas.reads.scientific_common import Pagination
-from app.services.scientific_read.common import collect_bounded_pages
+from app.services.scientific_read.common import (
+    collect_bounded_pages,
+    slice_for_pagination,
+)
+
+
+def test_slice_for_pagination_applies_offset_after_collapse():
+    assert slice_for_pagination(
+        ["first", "second"],
+        offset=1,
+        limit=1,
+        collapse_first=True,
+    ) == []
 
 
 def test_collect_bounded_pages_walks_past_first_page(monkeypatch):
