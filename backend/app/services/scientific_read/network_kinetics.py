@@ -56,6 +56,7 @@ from app.schemas.reads.scientific_network_kinetics import (
     NetworkKineticsPLOGEntry,
     NetworkKineticsPointEntry,
     NetworkKineticsSolveContext,
+    NetworkStateComposition,
     ScientificNetworkKineticsDetailResponse,
     ScientificNetworkKineticsRecord,
 )
@@ -69,6 +70,9 @@ from app.services.scientific_read.handles import (
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
+)
+from app.services.scientific_read.network_channel_chemistry import (
+    build_network_state_composition,
 )
 from app.services.scientific_read.networks import (
     _build_solve_review_history,
@@ -233,6 +237,9 @@ def _build_network_kinetics_record(
 
     # ---- channel context (composition hashes from child state rows) -------
     src_hash = sink_hash = ""
+    cap = max(1, int(settings.public_max_limit))
+    source_state = NetworkStateComposition()
+    sink_state = NetworkStateComposition()
     if channel is not None:
         state_hashes = dict(
             session.execute(
@@ -245,6 +252,12 @@ def _build_network_kinetics_record(
         )
         src_hash = state_hashes.get(channel.source_state_id, "")
         sink_hash = state_hashes.get(channel.sink_state_id, "")
+        source_state = build_network_state_composition(
+            session, state_id=channel.source_state_id, cap=cap
+        )
+        sink_state = build_network_state_composition(
+            session, state_id=channel.sink_state_id, cap=cap
+        )
 
     # ---- evidence summary --------------------------------------------------
     cheb_coeff_count = _chebyshev_coefficient_count(cheb_row)
@@ -308,6 +321,8 @@ def _build_network_kinetics_record(
         channel_kind=channel.kind if channel is not None else None,
         source_state_composition_hash=src_hash,
         sink_state_composition_hash=sink_hash,
+        source_state=source_state,
+        sink_state=sink_state,
     )
 
     # ---- conditional include blocks ---------------------------------------
@@ -315,8 +330,6 @@ def _build_network_kinetics_record(
     # per-kinetics payloads (coefficients / plog / points). Keeping
     # one knob makes the safety story uniform; individual cap settings
     # are not warranted until a real consumer needs different bounds.
-    cap = max(1, int(settings.public_max_limit))
-
     coefficients_block: NetworkKineticsChebyshevPayload | None = None
     if "coefficients" in includes:
         coefficients_block = _build_chebyshev_payload(cheb_row, cap=cap)

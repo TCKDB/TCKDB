@@ -99,6 +99,25 @@ class NetworkKineticsSolveContext(BaseModel):
     me_method: str | None = None
 
 
+class NetworkStateCompositionParticipant(BaseModel):
+    """One public species participant in a network state."""
+
+    species_entry_ref: str
+    species_ref: str
+    canonical_smiles: str
+    stoichiometry: int = Field(ge=1)
+
+
+class NetworkStateComposition(BaseModel):
+    """Bounded, deterministically ordered composition of a network state."""
+
+    participants: list[NetworkStateCompositionParticipant] = Field(
+        default_factory=list
+    )
+    participant_count_total: int = 0
+    participants_truncated: bool = False
+
+
 class NetworkKineticsChannelContext(BaseModel):
     """Lightweight parent-channel pointer for a network-kinetics record.
 
@@ -112,6 +131,8 @@ class NetworkKineticsChannelContext(BaseModel):
     channel_kind: NetworkChannelKind
     source_state_composition_hash: str
     sink_state_composition_hash: str
+    source_state: NetworkStateComposition
+    sink_state: NetworkStateComposition
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +289,8 @@ __all__ = [
     "NetworkKineticsPLOGEntry",
     "NetworkKineticsPointEntry",
     "NetworkKineticsSolveContext",
+    "NetworkStateComposition",
+    "NetworkStateCompositionParticipant",
     "ScientificNetworkKineticsDetailResponse",
     "ScientificNetworkKineticsRecord",
 ]

@@ -19,7 +19,8 @@ initial migration per CLAUDE.md.
 **Deferred for follow-up (not v0 blockers):**
 
 - `network_channel_ref` filter — `NetworkChannel` carries no public
-  ref today; channel-grain query surface ships when that lands.
+  ref today. Network-kinetics search instead supports source/sink
+  chemistry filters using public species-entry refs or canonical SMILES.
 - Paginated coefficient / PLOG / point full-data endpoints —
   `include=coefficients` / `include=plog` / `include=points` are
   each capped at `settings.public_max_limit` with their respective
@@ -303,9 +304,11 @@ Default response:
   (`chebyshev_shape`, `plog_entry_count`, `point_count`) + review
   badge (inherited from the parent solve — `NetworkKinetics` itself
   is not in `SubmissionRecordType`).
-- `network` / `network_solve` / `network_channel` context blocks
-  (composition-hash pair for the channel; `NetworkChannel` has no
-  public_ref so `network_channel_ref` is always `None`).
+- `network` / `network_solve` / `network_channel` context blocks. The
+  channel includes the composition-hash pair plus bounded source/sink
+  participant lists (`species_entry_ref`, `species_ref`, canonical SMILES,
+  stoichiometry, total count, and truncation flag). `NetworkChannel` has no
+  public_ref, so `network_channel_ref` is always `None`.
 - `evidence_summary` + `available_sections` boolean maps.
 
 Include tokens:
@@ -352,6 +355,10 @@ Network-kinetics search ships at the kinetics grain
 network_kinetics_ref
 network_ref
 network_solve_ref
+source_species_entry_refs — repeated values encode required stoichiometry
+sink_species_entry_refs   — repeated values encode required stoichiometry
+source_smiles             — canonical SMILES; repeated values encode stoichiometry
+sink_smiles               — canonical SMILES; repeated values encode stoichiometry
 model_kind                — chebyshev | plog | tabulated
 temperature_min           — overlap semantics (records whose tmax_k ≥ X)
 temperature_max           — overlap semantics (records whose tmin_k ≤ X)
@@ -375,11 +382,11 @@ offset / limit
 sort                      — non-None → 422 client_sort_not_supported
 ```
 
-`network_channel_ref` is deferred — `NetworkChannel` has no public
-ref today (composite-PK row addressed by source/sink
-composition_hash inside the parent network). When (if) `NetworkChannel`
-gains a public ref the filter plugs in directly. Channel-id filters
-are not exposed at the public surface.
+All source/sink chemistry filters AND-combine, including across ref and
+SMILES fields. Each requested participant must be present at at least the
+requested stoichiometry; additional unmentioned state participants are
+allowed. `network_channel_ref` remains deferred because `NetworkChannel` has
+no public ref. Channel ids are not exposed as public filters.
 
 Default deterministic ordering:
 
