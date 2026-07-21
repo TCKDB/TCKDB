@@ -3,9 +3,29 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+
+from app.services.scientific_read.internal_ids import apply_internal_ids_visibility
+
+AssessmentAttacher = Callable[[Session, Any], Any]
+
+
+def prepare_assessment_response(
+    session: Session,
+    payload: Any,
+    *,
+    attach_assessments: AssessmentAttacher,
+) -> Any:
+    """Attach requested assessments, then apply public-field visibility."""
+
+    if "assessments" in set(payload.request.include):
+        attach_assessments(session, payload)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_assessments_unless_requested(visibility, payload)
 
 
 def omit_trust_unless_requested(

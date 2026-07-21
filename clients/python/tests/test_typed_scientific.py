@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import Any, get_type_hints
+from typing import Any, get_args, get_type_hints
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -147,6 +147,53 @@ def test_network_kinetics_get_preserves_repeated_multiset_filters() -> None:
     assert recorder.last.method == "GET"
     assert query["source_species_entry_refs"] == ["spe_a", "spe_a", "spe_b"]
     assert query["include"] == ["coefficients", "points"]
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "search_networks",
+        "search_network_kinetics",
+        "search_statmech",
+        "search_transport",
+        "search_artifacts",
+    ],
+)
+def test_new_search_http_methods_publish_a_closed_literal(method_name: str) -> None:
+    hints = get_type_hints(getattr(TCKDBClient, method_name))
+
+    assert get_args(hints["method_http"]) == ("GET", "POST")
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "search_networks",
+        "search_network_kinetics",
+        "search_statmech",
+        "search_transport",
+        "search_artifacts",
+    ],
+)
+def test_new_search_methods_reject_an_invalid_http_method(method_name: str) -> None:
+    client, recorder = make_client(
+        lambda _request: httpx.Response(200, json=_page(total=0))
+    )
+
+    with pytest.raises(ValueError, match="method_http must be 'GET' or 'POST'"):
+        getattr(client, method_name)(method_http="PATCH")
+
+    assert recorder.requests == []
+
+
+def test_new_search_methods_keep_case_insensitive_runtime_compatibility() -> None:
+    client, recorder = make_client(
+        lambda _request: httpx.Response(200, json=_page(total=0))
+    )
+
+    client.search_networks(method_http="get")  # type: ignore[arg-type]
+
+    assert recorder.last.method == "GET"
 
 
 @pytest.mark.parametrize(

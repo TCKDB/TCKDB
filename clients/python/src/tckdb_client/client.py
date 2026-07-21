@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
 import httpx
 
@@ -73,6 +73,8 @@ _UNSET: Any = object()
 CLIENT_NAME_HEADER = "X-TCKDB-Client-Name"
 CLIENT_VERSION_HEADER = "X-TCKDB-Client-Version"
 CLIENT_NAME = "tckdb-client"
+
+_ScientificSearchMethod = Literal["GET", "POST"]
 
 
 def _legacy_detail_code(detail: object) -> str | None:
@@ -1263,6 +1265,38 @@ class TCKDBClient:
             authenticated=False,
         ).data
 
+    def _request_scientific_search(
+        self,
+        path: str,
+        parameters: Mapping[str, Any],
+        *,
+        method_http: _ScientificSearchMethod,
+    ) -> Any:
+        """Dispatch one scientific search through its GET or POST form."""
+
+        if not isinstance(method_http, str):
+            raise ValueError("method_http must be 'GET' or 'POST'.")
+        normalized_method = method_http.upper()
+        if normalized_method not in {"GET", "POST"}:
+            raise ValueError("method_http must be 'GET' or 'POST'.")
+        if normalized_method == "GET":
+            return self.request_json(
+                "GET",
+                path,
+                params=parameters,
+                authenticated=False,
+            ).data
+        return self.request_json(
+            "POST",
+            path,
+            json={
+                key: value
+                for key, value in parameters.items()
+                if value is not None
+            },
+            authenticated=False,
+        ).data
+
     def search_networks(
         self,
         *,
@@ -1296,7 +1330,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
-        method_http: str = "POST",
+        method_http: _ScientificSearchMethod = "POST",
     ) -> NetworkSearchResponse:
         """Search pressure-dependence networks by chemistry and provenance."""
 
@@ -1332,19 +1366,11 @@ class TCKDBClient:
             "offset": offset,
             "limit": limit,
         }
-        if method_http.upper() == "GET":
-            return self.request_json(
-                "GET",
-                "/scientific/networks/search",
-                params=body,
-                authenticated=False,
-            ).data
-        return self.request_json(
-            "POST",
+        return self._request_scientific_search(
             "/scientific/networks/search",
-            json={key: value for key, value in body.items() if value is not None},
-            authenticated=False,
-        ).data
+            body,
+            method_http=method_http,
+        )
 
     def search_network_kinetics(
         self,
@@ -1377,7 +1403,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
-        method_http: str = "POST",
+        method_http: _ScientificSearchMethod = "POST",
     ) -> NetworkKineticsSearchResponse:
         """Search PDep kinetics with stoichiometric source/sink filters."""
 
@@ -1411,19 +1437,11 @@ class TCKDBClient:
             "offset": offset,
             "limit": limit,
         }
-        if method_http.upper() == "GET":
-            return self.request_json(
-                "GET",
-                "/scientific/network-kinetics/search",
-                params=body,
-                authenticated=False,
-            ).data
-        return self.request_json(
-            "POST",
+        return self._request_scientific_search(
             "/scientific/network-kinetics/search",
-            json={key: value for key, value in body.items() if value is not None},
-            authenticated=False,
-        ).data
+            body,
+            method_http=method_http,
+        )
 
     def search_statmech(
         self,
@@ -1450,7 +1468,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
-        method_http: str = "POST",
+        method_http: _ScientificSearchMethod = "POST",
     ) -> StatmechSearchResponse:
         """Search statmech records by species, model, evidence, or provenance."""
 
@@ -1478,19 +1496,11 @@ class TCKDBClient:
             "offset": offset,
             "limit": limit,
         }
-        if method_http.upper() == "GET":
-            return self.request_json(
-                "GET",
-                "/scientific/statmech/search",
-                params=body,
-                authenticated=False,
-            ).data
-        return self.request_json(
-            "POST",
+        return self._request_scientific_search(
             "/scientific/statmech/search",
-            json={key: value for key, value in body.items() if value is not None},
-            authenticated=False,
-        ).data
+            body,
+            method_http=method_http,
+        )
 
     def search_transport(
         self,
@@ -1516,7 +1526,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
-        method_http: str = "POST",
+        method_http: _ScientificSearchMethod = "POST",
     ) -> TransportSearchResponse:
         """Search transport records by species, parameters, or provenance."""
 
@@ -1543,19 +1553,11 @@ class TCKDBClient:
             "offset": offset,
             "limit": limit,
         }
-        if method_http.upper() == "GET":
-            return self.request_json(
-                "GET",
-                "/scientific/transport/search",
-                params=body,
-                authenticated=False,
-            ).data
-        return self.request_json(
-            "POST",
+        return self._request_scientific_search(
             "/scientific/transport/search",
-            json={key: value for key, value in body.items() if value is not None},
-            authenticated=False,
-        ).data
+            body,
+            method_http=method_http,
+        )
 
     def search_artifacts(
         self,
@@ -1588,7 +1590,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
-        method_http: str = "POST",
+        method_http: _ScientificSearchMethod = "POST",
     ) -> ArtifactSearchResponse:
         """Search artifact metadata; raw artifact bodies are never returned."""
 
@@ -1622,19 +1624,11 @@ class TCKDBClient:
             "offset": offset,
             "limit": limit,
         }
-        if method_http.upper() == "GET":
-            return self.request_json(
-                "GET",
-                "/scientific/artifacts/search",
-                params=body,
-                authenticated=False,
-            ).data
-        return self.request_json(
-            "POST",
+        return self._request_scientific_search(
             "/scientific/artifacts/search",
-            json={key: value for key, value in body.items() if value is not None},
-            authenticated=False,
-        ).data
+            body,
+            method_http=method_http,
+        )
 
     def iter_species(self, **parameters: Any) -> Iterator[SpeciesRecord]:
         """Lazily yield every species record matching ``search_species``."""

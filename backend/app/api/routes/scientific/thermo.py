@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._response import (
-    omit_assessments_unless_requested,
     omit_trust_unless_requested,
+    prepare_assessment_response,
 )
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
@@ -26,9 +26,6 @@ from app.schemas.reads.scientific_thermo import (
     ThermoReadRequest,
 )
 from app.services.scientific_read.handles import resolve_species_entry_handle
-from app.services.scientific_read.internal_ids import (
-    apply_internal_ids_visibility,
-)
 from app.services.scientific_read.public_assessments import (
     attach_thermo_assessments,
 )
@@ -91,8 +88,9 @@ def species_thermo(
         species_entry_id=resolved_species_entry_id,
         request=request,
     )
-    if "assessments" in set(payload.request.include):
-        attach_thermo_assessments(session, payload)
-    visibility = apply_internal_ids_visibility(payload)
-    visibility = omit_assessments_unless_requested(visibility, payload)
+    visibility = prepare_assessment_response(
+        session,
+        payload,
+        attach_assessments=attach_thermo_assessments,
+    )
     return omit_trust_unless_requested(visibility, payload, scope="search")

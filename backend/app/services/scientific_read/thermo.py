@@ -151,6 +151,10 @@ _TRUST_EAGER_LOADS = (
     .selectinload(Calculation.child_dependencies),
 )
 
+# Public seam for consumers that must load the same evidence graph before
+# calling ``evaluate_loaded_thermo``.
+THERMO_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
+
 _DEFAULT_SORT_ECHO = (
     "covers_requested_temperature_range,extrapolation_distance_k,review_rank,"
     "evidence_completeness,created_at,id"

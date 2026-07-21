@@ -155,6 +155,10 @@ _TRUST_EAGER_LOADS = (
     .selectinload(Calculation.child_dependencies),
 )
 
+# Public seam for consumers that must load the same evidence graph before
+# calling ``evaluate_loaded_kinetics``.
+KINETICS_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
+
 # Pressure-dependent / third-body child collections are part of every
 # kinetics record now (DR-0032 read exposure); eager-load them on the base
 # query to avoid an N+1 over plog/chebyshev/falloff/third-body children.

@@ -32,8 +32,8 @@ from app.services.reproducibility_rubric import (
     RUBRIC_VERSION,
     evaluate_reproducibility_v1,
 )
-from app.services.scientific_read.kinetics import _TRUST_EAGER_LOADS as _KINETICS_LOADS
-from app.services.scientific_read.thermo import _TRUST_EAGER_LOADS as _THERMO_LOADS
+from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
+from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS
 from app.services.trust import evaluate_loaded_kinetics, evaluate_loaded_thermo
 from app.services.trust.models import EvidenceEvaluation
 
@@ -46,7 +46,7 @@ def attach_kinetics_assessments(session: Session, payload: Any) -> Any:
         records=records,
         record_type=SubmissionRecordType.kinetics,
         model=Kinetics,
-        eager_loads=_KINETICS_LOADS,
+        eager_loads=KINETICS_TRUST_EAGER_LOADS,
         evaluator=evaluate_loaded_kinetics,
     )
     return payload
@@ -60,7 +60,7 @@ def attach_thermo_assessments(session: Session, payload: Any) -> Any:
         records=records,
         record_type=SubmissionRecordType.thermo,
         model=Thermo,
-        eager_loads=_THERMO_LOADS,
+        eager_loads=THERMO_TRUST_EAGER_LOADS,
         evaluator=evaluate_loaded_thermo,
     )
     return payload

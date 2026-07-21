@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
-from app.api.routes.scientific._response import omit_assessments_unless_requested
+from app.api.routes.scientific._response import prepare_assessment_response
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics_search import (
@@ -15,9 +15,6 @@ from app.schemas.reads.scientific_kinetics_search import (
     ScientificKineticsSearchResponse,
 )
 from app.schemas.reads.scientific_reactions import ReactionDirectionQuery
-from app.services.scientific_read.internal_ids import (
-    apply_internal_ids_visibility,
-)
 from app.services.scientific_read.kinetics_search import search_kinetics
 from app.services.scientific_read.public_assessments import (
     attach_kinetics_assessments,
@@ -93,10 +90,11 @@ def kinetics_search_get(
         limit=limit,
     )
     payload = search_kinetics(session, request)
-    if "assessments" in set(payload.request.include):
-        attach_kinetics_assessments(session, payload)
-    visibility = apply_internal_ids_visibility(payload)
-    return omit_assessments_unless_requested(visibility, payload)
+    return prepare_assessment_response(
+        session,
+        payload,
+        attach_assessments=attach_kinetics_assessments,
+    )
 
 
 @router.post("/search", response_model=ScientificKineticsSearchResponse)
@@ -122,7 +120,8 @@ def kinetics_search_post(
             ),
         )
     payload = search_kinetics(session, body)
-    if "assessments" in set(payload.request.include):
-        attach_kinetics_assessments(session, payload)
-    visibility = apply_internal_ids_visibility(payload)
-    return omit_assessments_unless_requested(visibility, payload)
+    return prepare_assessment_response(
+        session,
+        payload,
+        attach_assessments=attach_kinetics_assessments,
+    )
