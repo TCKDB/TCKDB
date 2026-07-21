@@ -235,6 +235,44 @@ def test_mrci_f12_variant_is_not_misreported() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Divergence guards vs ARC (wrong-but-plausible energies)
+# ---------------------------------------------------------------------------
+
+
+def test_spurious_vqz_in_body_does_not_flip_ansatz_to_f12b() -> None:
+    """A stray ``vqz`` token in the output body must not select F12b.
+
+    F12a/F12b is chosen from the deck's ``basis=`` directive only (as ARC
+    does).  A cc-pVTZ-F12 job whose body mentions ``vqz`` anywhere (e.g. a
+    ``gprint,basis`` library echo) must still return the F12a energy.
+    """
+    text = _read("ch4_closed_shell")
+    poisoned = text.replace(
+        "Checking input...",
+        "Checking input...\n Library entry C  aug-cc-pVQZ echo (vqz) ignored",
+        1,
+    )
+    assert "vqz" in poisoned.lower()
+    r = parse_molpro_log(text=poisoned)
+    # Still F12a — not the later F12b value (-40.454357142403).
+    assert r["sp_electronic_energy_hartree"] == pytest.approx(-40.457885930635)
+
+
+def test_mrci_in_title_does_not_poison_ccsd_family() -> None:
+    """A title containing ``mrci`` must not misclassify a CCSD(T)-F12 job.
+
+    Comment/title lines (``***,...``) are excluded from family detection,
+    so a genuine CCSD(T)-F12 job titled ``... vs mrci benchmark`` stays
+    ``ccsd_f12`` and keeps its F12a energy (rather than silently → None).
+    """
+    text = _read("ch4_closed_shell")
+    poisoned = text.replace("***,CH4[23]", "***,CH4 vs mrci benchmark", 1)
+    r = parse_molpro_log(text=poisoned)
+    assert r["method_family"] == "ccsd_f12"
+    assert r["sp_electronic_energy_hartree"] == pytest.approx(-40.457885930635)
+
+
+# ---------------------------------------------------------------------------
 # ESSSPResult wrapper (ess_result.parse_molpro_sp)
 # ---------------------------------------------------------------------------
 

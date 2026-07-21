@@ -108,14 +108,26 @@ _MRCI_F12_LINE = re.compile(r"\bmrci-f12\b", re.IGNORECASE)
 _MRCI_LINE = re.compile(r"\{?\s*mrci\b", re.IGNORECASE)
 
 
+def _non_comment_deck_lines(deck_lines: list[str]) -> list[str]:
+    """Drop Molpro comment/title lines from a deck.
+
+    Molpro comment and title lines start with ``*`` (the deck title is
+    ``***,<name>``).  These must never feed method/basis classification —
+    a title like ``***,CH4 vs mrci benchmark`` would otherwise poison the
+    family detection and silently drop a genuine CCSD(T)-F12 energy.
+    """
+    return [ln for ln in deck_lines if not ln.lstrip().startswith("*")]
+
+
 def _detect_method_family(deck_lines: list[str]) -> str:
     """Classify the deck's top correlation method.
 
     Returns one of ``"mrci_f12"``, ``"mrci"``, ``"ccsd_f12"`` or
     ``"unknown"``.  ``mrci-f12`` is checked first so it is never confused
-    with plain ``mrci``.
+    with plain ``mrci``.  Comment/title lines are excluded so a title
+    string can never poison the classification.
     """
-    joined = "\n".join(deck_lines)
+    joined = "\n".join(_non_comment_deck_lines(deck_lines))
     if _MRCI_F12_LINE.search(joined):
         return "mrci_f12"
     if _MRCI_LINE.search(joined):
@@ -367,10 +379,22 @@ def _detect_f12_ansatz_choice(text: str) -> str:
     """Return ``"a"`` or ``"b"`` for the F12a/F12b energy selection.
 
     Mirrors ARC: ``vtz``/``vdz`` basis → F12a; ``vqz``/``v5z``/… → F12b.
-    Defaults to F12a when the basis is ambiguous (the cc-pVTZ-F12 case).
+    Defaults to F12a when the basis is absent/ambiguous (the cc-pVTZ-F12
+    case).
+
+    The scan is scoped to the deck's ``basis=`` directive only — never the
+    whole log — so a stray ``vqz`` token elsewhere in the output body (a
+    ``gprint,basis`` library echo, an auxiliary-basis line, etc.) cannot
+    silently flip a genuine cc-pVTZ-F12 job to F12b and return the wrong
+    energy.  This matches ARC's line-scoped ``basis=`` handling.
     """
-    low = text.lower()
-    if any(hb in low for hb in ("vqz", "v5z", "v6z", "v7z", "v8z")):
+    basis = ""
+    for line in _extract_deck_lines(text):
+        m = _BASIS_RE.match(line)
+        if m:
+            basis = m.group(1).lower()
+            break
+    if any(hb in basis for hb in ("vqz", "v5z", "v6z", "v7z", "v8z")):
         return "b"
     return "a"
 
