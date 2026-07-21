@@ -139,7 +139,9 @@ Lowest single-point energy for a species:
 client.search_species_calculations(
     smiles="O",
     calculation_type="sp",
-    sort="electronic_energy_hartree",
+    level_of_theory_ref="lot_...",
+    ranking="lowest_energy",
+    collapse="first",
     limit=1,
     include=["provenance"],
 )
@@ -153,7 +155,7 @@ calcs = client.search_species_calculations(
     calculation_type="opt",
     include=["geometry", "provenance"],
 )
-geom_ref = calcs["records"][0]["primary_output_geometry_ref"]
+geom_ref = calcs["records"][0]["geometry"]["primary_output_geometry_ref"]
 ```
 
 Geometry coordinates by `geom_ref`:

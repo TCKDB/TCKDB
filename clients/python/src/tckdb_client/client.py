@@ -48,6 +48,19 @@ CLIENT_VERSION_HEADER = "X-TCKDB-Client-Version"
 CLIENT_NAME = "tckdb-client"
 
 
+def _legacy_detail_code(detail: object) -> str | None:
+    """Recover the stable prefix used by pre-structured-error servers."""
+
+    if not isinstance(detail, str):
+        return None
+    prefix, separator, _tail = detail.partition(": ")
+    if not separator or not prefix:
+        return None
+    if not all(ch.islower() or ch.isdigit() or ch == "_" for ch in prefix):
+        return None
+    return prefix
+
+
 def _resolve_client_version() -> str:
     """Return the installed ``tckdb-client`` package version.
 
@@ -326,6 +339,8 @@ class TCKDBClient:
             raw_code = parsed.get("code")
             code = raw_code if isinstance(raw_code, str) else None
             detail = parsed.get("detail", parsed)
+            if code is None:
+                code = _legacy_detail_code(detail)
         elif parsed is not None:
             detail = parsed
 

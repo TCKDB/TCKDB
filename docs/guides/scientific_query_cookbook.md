@@ -96,7 +96,7 @@ What you get back:
 Common gotchas:
 
 - Multiple `entries` per species is the normal case (e.g. ground-state vs excited-state variants of the same molecule).
-- `inchi` and `formula` filter terms are accepted for shape consistency but currently don't have stored columns to match against; supplying them alongside `smiles` is harmless (it AND-combines to the SMILES match).
+- `inchi` currently has no enforced search path, so supplying it returns 422 `unsupported_filter`; use `smiles`, `inchi_key`, `formula` (derived through RDKit), or a public ref.
 
 ---
 

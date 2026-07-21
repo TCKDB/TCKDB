@@ -1,10 +1,10 @@
 """Structured exception hierarchy for the TCKDB client.
 
 Mirrors the server's error envelope. Every HTTP error carries the raw
-status code, parsed JSON (if any), the error ``code`` field when the
-server provided one, and the original response headers — enough state
-for callers to make policy decisions (retry, surface to user, abort)
-without re-parsing the response.
+status code, parsed JSON (if any), the error ``code`` field provided by
+the server or recovered from a legacy detail prefix, and the original
+response headers — enough state for callers to make policy decisions
+(retry, surface to user, abort) without re-parsing the response.
 """
 
 from __future__ import annotations

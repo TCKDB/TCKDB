@@ -110,10 +110,10 @@ ScientificFrequencyScaleFactorRecord
 | `method` | implemented (joins LoT) |
 | `basis` | implemented (joins LoT) |
 | `software` | implemented (joins Software by name) |
-| `software_version` | **deferred** — FSF row only carries `software_id`, not a software release |
+| `software_version` | **unsupported** — FSF row only carries `software_id`, not a software release; non-null input returns 422 `unsupported_filter` |
 | `literature_ref` | implemented |
 | `used_by_statmech` | implemented (exists/non-exists subquery) |
-| `model_kind` | **deferred** — no backing column on `frequency_scale_factor`; spec lists for forward compatibility |
+| `model_kind` | **unsupported** — no backing column on `frequency_scale_factor`; non-null input returns 422 `unsupported_filter` |
 | `include_rejected` / `include_deprecated` / `min_review_status` | accepted but no-ops — FSF is non-reviewable |
 
 Default sort: `scale_kind,value,id` ascending. Client-supplied `sort=` is
@@ -178,8 +178,8 @@ ScientificEnergyCorrectionSchemeRecord
 | `literature_ref` | implemented |
 | `has_corrections` | implemented (OR-exists across atom/bond/component child tables) |
 | `used_by_calculation` | implemented (exists `applied_energy_correction` with `source_calculation_id is not null`) |
-| `software` / `software_version` | **deferred** — ECS row has no software dimension |
-| `used_by_thermo` | **deferred** — no direct or indirect relationship from ECS to `thermo`; the application-layer link runs through `applied_energy_correction` against species/reaction/TS entries, not thermo records |
+| `software` / `software_version` | **unsupported** — ECS row has no software dimension; non-null input returns 422 `unsupported_filter` |
+| `used_by_thermo` | **unsupported** — no enforceable relationship from ECS to `thermo`; non-null input returns 422 `unsupported_filter` |
 | `include_rejected` / `include_deprecated` / `min_review_status` | accepted but no-ops — ECS is non-reviewable |
 
 Default sort: `scheme_kind,name,version,id` ascending. Client-supplied
@@ -282,6 +282,6 @@ Coverage matrix (each tested for both FSF and ECS):
   axis; per-release granularity would require a schema change.
 - Should `used_by_thermo` become a real filter by joining
   `applied_energy_correction` to species-entry → thermo? Held as
-  deferred until a real consumer asks for it.
+  unsupported until a real consumer asks for it and the join is enforced.
 - If FSF/ECS become reviewable, do they participate in the existing
   submission flow or get a curator-only path? Out of scope here.

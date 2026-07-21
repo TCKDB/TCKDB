@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.config import settings
 from app.api.errors import register_exception_handlers
 from app.api.logging_config import configure_logging
+from app.api.public_openapi import install_hosted_openapi
 from app.api.rate_limit import RateLimitMiddleware
 from app.api.request_id import RequestIDMiddleware
 from app.api.router import api_router
@@ -74,4 +75,5 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIDMiddleware)
     app.include_router(api_router, prefix="/api/v1")
     register_exception_handlers(app)
+    install_hosted_openapi(app)
     return app

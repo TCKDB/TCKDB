@@ -43,9 +43,9 @@ class FrequencyScaleFactorSearchRequest(BaseModel):
     ``None``; explicit ``False`` is meaningful — only ``None`` skips
     the filter gate.
 
-    The FSF row has no ``model_kind`` column; the request field is
-    accepted for forward compatibility but currently unsupported and
-    documented as deferred (see the spec).
+    Declared fields without an enforceable backing path remain accepted
+    by request validation for compatibility, then fail closed with 422
+    ``unsupported_filter`` (see the spec).
     """
 
     # --- identity filters -------------------------------------------------
@@ -59,7 +59,7 @@ class FrequencyScaleFactorSearchRequest(BaseModel):
     value_max: float | None = None
     scale_kind: FrequencyScaleKind | None = None
 
-    # --- deferred (not yet wired to a column) ----------------------------
+    # --- declared but fail-closed until wired to a column ----------------
     model_kind: str | None = Field(default=None, max_length=64)
 
     # --- provenance filters ----------------------------------------------

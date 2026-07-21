@@ -226,11 +226,12 @@ class TestValidationErrorUnchanged:
         # FastAPI default for request-body validation errors is 422.
         assert resp.status_code == 422
         body = resp.json()
-        # Default FastAPI validation-error shape: {"detail": [ {...}, ... ]}
+        # The detail list remains FastAPI-compatible inside the additive
+        # machine-consumer envelope.
         assert "detail" in body
         assert isinstance(body["detail"], list)
-        # Must not have been tagged with our integrity-error code.
-        assert "code" not in body
+        assert body["code"] == "request_validation_error"
+        assert body["context"] == {}
 
 
 # ---------------------------------------------------------------------------

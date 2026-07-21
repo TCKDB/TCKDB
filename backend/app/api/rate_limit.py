@@ -383,6 +383,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "code": "rate_limit_exceeded",
                     "bucket": bucket,
                     "retry_after_seconds": retry_after,
+                    "context": {
+                        "bucket": bucket,
+                        "retry_after_seconds": retry_after,
+                    },
                 },
                 headers={"Retry-After": str(retry_after)},
             )

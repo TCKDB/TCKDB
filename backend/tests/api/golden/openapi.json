@@ -1127,7 +1127,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -2820,7 +2821,8 @@
                 "type": "null"
               }
             ],
-            "title": "Artifact Id"
+            "title": "Artifact Id",
+            "x-tckdb-policy-hidden": true
           },
           "artifact_ref": {
             "anyOf": [
@@ -3087,7 +3089,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "constraint_index": {
             "title": "Constraint Index",
@@ -3194,7 +3197,8 @@
                 "type": "null"
               }
             ],
-            "title": "Child Calculation Id"
+            "title": "Child Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "child_calculation_ref": {
             "title": "Child Calculation Ref",
@@ -3217,7 +3221,8 @@
                 "type": "null"
               }
             ],
-            "title": "Parent Calculation Id"
+            "title": "Parent Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "parent_calculation_ref": {
             "title": "Parent Calculation Ref",
@@ -3309,7 +3314,8 @@
                 "type": "null"
               }
             ],
-            "title": "Submission Id"
+            "title": "Submission Id",
+            "x-tckdb-policy-hidden": true
           },
           "submission_ref": {
             "anyOf": [
@@ -3336,7 +3342,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -3407,7 +3414,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_type",
           "geometry_validation_status",
           "scf_stability_status"
@@ -3689,7 +3695,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_ref": {
             "title": "Geometry Ref",
@@ -3893,7 +3900,8 @@
                 "type": "null"
               }
             ],
-            "title": "Input Geometry Id"
+            "title": "Input Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "input_geometry_ref": {
             "anyOf": [
@@ -3930,7 +3938,8 @@
                 "type": "null"
               }
             ],
-            "title": "Output Geometry Id"
+            "title": "Output Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "output_geometry_ref": {
             "anyOf": [
@@ -5291,7 +5300,8 @@
                 "type": "null"
               }
             ],
-            "title": "Parameter Id"
+            "title": "Parameter Id",
+            "x-tckdb-policy-hidden": true
           },
           "parameter_index": {
             "anyOf": [
@@ -5893,7 +5903,8 @@
                 "type": "null"
               }
             ],
-            "title": "Submission Id"
+            "title": "Submission Id",
+            "x-tckdb-policy-hidden": true
           },
           "submission_ref": {
             "anyOf": [
@@ -5911,7 +5922,8 @@
               "type": "integer"
             },
             "title": "Supporting Calculation Ids",
-            "type": "array"
+            "type": "array",
+            "x-tckdb-policy-hidden": true
           },
           "supporting_calculations": {
             "items": {
@@ -6154,7 +6166,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review Id"
+            "title": "Review Id",
+            "x-tckdb-policy-hidden": true
           },
           "reviewed_at": {
             "anyOf": [
@@ -6177,7 +6190,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewer Id"
+            "title": "Reviewer Id",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "$ref": "#/components/schemas/RecordReviewStatus"
@@ -6191,7 +6205,8 @@
                 "type": "null"
               }
             ],
-            "title": "Submission Id"
+            "title": "Submission Id",
+            "x-tckdb-policy-hidden": true
           },
           "submission_ref": {
             "anyOf": [
@@ -6405,7 +6420,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Artifact Id"
+            "title": "Source Artifact Id",
+            "x-tckdb-policy-hidden": true
           },
           "source_artifact_ref": {
             "anyOf": [
@@ -6427,7 +6443,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Calculation Id"
+            "title": "Source Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "source_calculation_ref": {
             "anyOf": [
@@ -9228,7 +9245,8 @@
                 "type": "null"
               }
             ],
-            "title": "Assignment Scheme Id"
+            "title": "Assignment Scheme Id",
+            "x-tckdb-policy-hidden": true
           },
           "assignment_scheme_ref": {
             "anyOf": [
@@ -9361,7 +9379,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -9436,7 +9455,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Assignment Scheme Id"
+            "title": "Conformer Assignment Scheme Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_assignment_scheme_ref": {
             "anyOf": [
@@ -9451,7 +9471,8 @@
           },
           "conformer_group_id": {
             "title": "Conformer Group Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_group_label": {
             "anyOf": [
@@ -9470,7 +9491,8 @@
           },
           "conformer_observation_id": {
             "title": "Conformer Observation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_observation_ref": {
             "title": "Conformer Observation Ref",
@@ -9497,9 +9519,7 @@
           }
         },
         "required": [
-          "conformer_observation_id",
           "conformer_observation_ref",
-          "conformer_group_id",
           "conformer_group_ref"
         ],
         "title": "ConformerContextBlock",
@@ -9517,7 +9537,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -9546,7 +9567,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Group Id"
+            "title": "Conformer Group Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_group_ref": {
             "title": "Conformer Group Ref",
@@ -9944,7 +9966,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Observation Id"
+            "title": "Conformer Observation Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_observation_ref": {
             "title": "Conformer Observation Ref",
@@ -10119,7 +10142,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -10264,7 +10288,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Selection Id"
+            "title": "Conformer Selection Id",
+            "x-tckdb-policy-hidden": true
           },
           "created_at": {
             "anyOf": [
@@ -10355,7 +10380,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -10370,7 +10396,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -11716,7 +11743,8 @@
                 "type": "null"
               }
             ],
-            "title": "Energy Correction Scheme Id"
+            "title": "Energy Correction Scheme Id",
+            "x-tckdb-policy-hidden": true
           },
           "energy_correction_scheme_ref": {
             "title": "Energy Correction Scheme Ref",
@@ -12037,7 +12065,7 @@
         "type": "object"
       },
       "EnergyCorrectionSchemeSearchRequest": {
-        "description": "Service-layer request for /scientific/energy-correction-schemes/search.\n\nFilters AND-combine; at least one meaningful filter is required\n(422 ``missing_filter`` otherwise). Bool filters default to\n``None``; explicit ``False`` is meaningful — only ``None`` skips\nthe filter gate.\n\nFilters that are accepted but not yet wired to a backing column\nare documented as deferred in the spec.",
+        "description": "Service-layer request for /scientific/energy-correction-schemes/search.\n\nFilters AND-combine; at least one meaningful filter is required\n(422 ``missing_filter`` otherwise). Bool filters default to\n``None``; explicit ``False`` is meaningful — only ``None`` skips\nthe filter gate.\n\nDeclared fields without an enforceable backing path remain accepted\nby request validation for compatibility, then fail closed with 422\n``unsupported_filter`` (see the spec).",
         "properties": {
           "basis": {
             "anyOf": [
@@ -12247,7 +12275,8 @@
                 "type": "null"
               }
             ],
-            "title": "Record Id"
+            "title": "Record Id",
+            "x-tckdb-policy-hidden": true
           },
           "record_ref": {
             "title": "Record Ref",
@@ -12940,7 +12969,8 @@
                 "type": "null"
               }
             ],
-            "title": "Frequency Scale Factor Id"
+            "title": "Frequency Scale Factor Id",
+            "x-tckdb-policy-hidden": true
           },
           "frequency_scale_factor_ref": {
             "title": "Frequency Scale Factor Ref",
@@ -13098,7 +13128,7 @@
         "type": "object"
       },
       "FrequencyScaleFactorSearchRequest": {
-        "description": "Service-layer request for /scientific/frequency-scale-factors/search.\n\nFilters AND-combine; at least one meaningful filter is required\n(422 ``missing_filter`` otherwise). Bool filters default to\n``None``; explicit ``False`` is meaningful — only ``None`` skips\nthe filter gate.\n\nThe FSF row has no ``model_kind`` column; the request field is\naccepted for forward compatibility but currently unsupported and\ndocumented as deferred (see the spec).",
+        "description": "Service-layer request for /scientific/frequency-scale-factors/search.\n\nFilters AND-combine; at least one meaningful filter is required\n(422 ``missing_filter`` otherwise). Bool filters default to\n``None``; explicit ``False`` is meaningful — only ``None`` skips\nthe filter gate.\n\nDeclared fields without an enforceable backing path remain accepted\nby request validation for compatibility, then fail closed with 422\n``unsupported_filter`` (see the spec).",
         "properties": {
           "basis": {
             "anyOf": [
@@ -13307,7 +13337,8 @@
                 "type": "null"
               }
             ],
-            "title": "Record Id"
+            "title": "Record Id",
+            "x-tckdb-policy-hidden": true
           },
           "record_ref": {
             "title": "Record Ref",
@@ -13428,7 +13459,8 @@
               "type": "integer"
             },
             "title": "Input Geometry Ids",
-            "type": "array"
+            "type": "array",
+            "x-tckdb-policy-hidden": true
           },
           "output_geometries": {
             "items": {
@@ -13442,7 +13474,8 @@
               "type": "integer"
             },
             "title": "Output Geometry Ids",
-            "type": "array"
+            "type": "array",
+            "x-tckdb-policy-hidden": true
           },
           "primary_output_geometry_id": {
             "anyOf": [
@@ -13453,7 +13486,8 @@
                 "type": "null"
               }
             ],
-            "title": "Primary Output Geometry Id"
+            "title": "Primary Output Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "primary_output_geometry_ref": {
             "anyOf": [
@@ -13544,7 +13578,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -13567,7 +13602,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "calculation_type"
         ],
@@ -13631,7 +13665,8 @@
         "properties": {
           "geometry_id": {
             "title": "Geometry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_ref": {
             "title": "Geometry Ref",
@@ -13649,7 +13684,6 @@
           }
         },
         "required": [
-          "geometry_id",
           "geometry_ref"
         ],
         "title": "GeometryRef",
@@ -13689,7 +13723,8 @@
           },
           "scheme_id": {
             "title": "Scheme Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "scheme_name": {
             "title": "Scheme Name",
@@ -13712,7 +13747,6 @@
           }
         },
         "required": [
-          "scheme_id",
           "scheme_ref",
           "scheme_name"
         ],
@@ -13919,15 +13953,35 @@
       },
       "HTTPValidationError": {
         "properties": {
+          "code": {
+            "type": "string"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object"
+          },
           "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "title": "Detail",
-            "type": "array"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ]
           }
         },
-        "title": "HTTPValidationError",
+        "required": [
+          "code",
+          "detail",
+          "context"
+        ],
+        "title": "MachineErrorEnvelope",
         "type": "object"
       },
       "HessianPayload": {
@@ -14033,7 +14087,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_link": {
             "anyOf": [
@@ -14539,7 +14594,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Kinetics Id"
+            "title": "Network Kinetics Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_kinetics_ref": {
             "anyOf": [
@@ -14611,7 +14667,8 @@
                 "type": "null"
               }
             ],
-            "title": "Transition State Entry Id"
+            "title": "Transition State Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_entry_ref": {
             "anyOf": [
@@ -14633,7 +14690,8 @@
                 "type": "null"
               }
             ],
-            "title": "Ts Freq Calculation Id"
+            "title": "Ts Freq Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "ts_freq_calculation_ref": {
             "anyOf": [
@@ -14655,7 +14713,8 @@
                 "type": "null"
               }
             ],
-            "title": "Ts Opt Calculation Id"
+            "title": "Ts Opt Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "ts_opt_calculation_ref": {
             "anyOf": [
@@ -14677,7 +14736,8 @@
                 "type": "null"
               }
             ],
-            "title": "Ts Sp Calculation Id"
+            "title": "Ts Sp Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "ts_sp_calculation_ref": {
             "anyOf": [
@@ -15101,7 +15161,8 @@
           },
           "kinetics_id": {
             "title": "Kinetics Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "kinetics_ref": {
             "title": "Kinetics Ref",
@@ -15221,7 +15282,6 @@
           }
         },
         "required": [
-          "kinetics_id",
           "kinetics_ref",
           "scientific_origin",
           "model_kind",
@@ -15271,7 +15331,8 @@
           },
           "reaction_entry_id": {
             "title": "Reaction Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -15282,7 +15343,8 @@
           },
           "reaction_id": {
             "title": "Reaction Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "title": "Reaction Ref",
@@ -15294,9 +15356,7 @@
           }
         },
         "required": [
-          "reaction_id",
           "reaction_ref",
-          "reaction_entry_id",
           "reaction_entry_ref",
           "equation",
           "reversible",
@@ -16215,7 +16275,8 @@
           },
           "level_of_theory_id": {
             "title": "Level Of Theory Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "level_of_theory_ref": {
             "title": "Level Of Theory Ref",
@@ -16238,7 +16299,6 @@
           }
         },
         "required": [
-          "level_of_theory_id",
           "level_of_theory_ref",
           "method"
         ],
@@ -16282,7 +16342,8 @@
                 "type": "null"
               }
             ],
-            "title": "Author Id"
+            "title": "Author Id",
+            "x-tckdb-policy-hidden": true
           },
           "author_ref": {
             "anyOf": [
@@ -16410,7 +16471,8 @@
                 "type": "null"
               }
             ],
-            "title": "Literature Id"
+            "title": "Literature Id",
+            "x-tckdb-policy-hidden": true
           },
           "literature_ref": {
             "title": "Literature Ref",
@@ -16619,7 +16681,8 @@
                 "type": "null"
               }
             ],
-            "title": "Record Id"
+            "title": "Record Id",
+            "x-tckdb-policy-hidden": true
           },
           "record_ref": {
             "title": "Record Ref",
@@ -16921,7 +16984,8 @@
           },
           "id": {
             "title": "Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "literature_ref": {
             "title": "Literature Ref",
@@ -16951,7 +17015,6 @@
           }
         },
         "required": [
-          "id",
           "literature_ref"
         ],
         "title": "LiteratureSummary",
@@ -17759,7 +17822,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Channel Id"
+            "title": "Network Channel Id",
+            "x-tckdb-policy-hidden": true
           },
           "sink_state_composition_hash": {
             "title": "Sink State Composition Hash",
@@ -17774,7 +17838,8 @@
                 "type": "null"
               }
             ],
-            "title": "Sink State Id"
+            "title": "Sink State Id",
+            "x-tckdb-policy-hidden": true
           },
           "source_state_composition_hash": {
             "title": "Source State Composition Hash",
@@ -17789,7 +17854,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source State Id"
+            "title": "Source State Id",
+            "x-tckdb-policy-hidden": true
           }
         },
         "required": [
@@ -17835,7 +17901,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Id"
+            "title": "Network Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_ref": {
             "title": "Network Ref",
@@ -17887,7 +17954,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Id"
+            "title": "Network Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_ref": {
             "title": "Network Ref",
@@ -18172,7 +18240,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Channel Id"
+            "title": "Network Channel Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_channel_ref": {
             "anyOf": [
@@ -18325,7 +18394,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Kinetics Id"
+            "title": "Network Kinetics Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_kinetics_ref": {
             "title": "Network Kinetics Ref",
@@ -18695,7 +18765,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Id"
+            "title": "Network Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_ref": {
             "title": "Network Ref",
@@ -19296,7 +19367,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "title": "Network Solve Ref",
@@ -19343,7 +19415,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Channel Id"
+            "title": "Network Channel Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_kinetics_id": {
             "anyOf": [
@@ -19354,7 +19427,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Kinetics Id"
+            "title": "Network Kinetics Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_id": {
             "anyOf": [
@@ -19365,7 +19439,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "anyOf": [
@@ -19866,7 +19941,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Entry Id"
+            "title": "Reaction Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -19881,7 +19957,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Id"
+            "title": "Reaction Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "title": "Reaction Ref",
@@ -19941,7 +20018,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -20334,7 +20412,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -20432,7 +20511,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "title": "Network Solve Ref",
@@ -20842,7 +20922,8 @@
                 "type": "null"
               }
             ],
-            "title": "Energy Transfer Id"
+            "title": "Energy Transfer Id",
+            "x-tckdb-policy-hidden": true
           },
           "model": {
             "anyOf": [
@@ -21726,7 +21807,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "title": "Network Solve Ref",
@@ -21818,7 +21900,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -21846,7 +21929,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "title": "Network Solve Ref",
@@ -22030,7 +22114,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -22236,7 +22321,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network State Id"
+            "title": "Network State Id",
+            "x-tckdb-policy-hidden": true
           },
           "participant_count": {
             "title": "Participant Count",
@@ -23216,7 +23302,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_link": {
             "anyOf": [
@@ -23615,7 +23702,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -23651,9 +23739,6 @@
             "title": "Method"
           }
         },
-        "required": [
-          "calculation_id"
-        ],
         "title": "PathSearchSummary",
         "type": "object"
       },
@@ -23872,7 +23957,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_ref": {
             "title": "Geometry Ref",
@@ -24008,7 +24094,8 @@
           },
           "id": {
             "title": "Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -24016,7 +24103,8 @@
           },
           "reaction_id": {
             "title": "Reaction Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "title": "Reaction Ref",
@@ -24031,9 +24119,7 @@
           }
         },
         "required": [
-          "id",
           "reaction_entry_ref",
-          "reaction_id",
           "reaction_ref",
           "equation",
           "reversible",
@@ -24061,7 +24147,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -24089,7 +24176,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -24170,7 +24258,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_type",
           "geometry_validation_status",
           "scf_stability_status"
@@ -24196,7 +24283,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Group Id"
+            "title": "Conformer Group Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_group_ref": {
             "title": "Conformer Group Ref",
@@ -24243,7 +24331,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -24283,7 +24372,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -24323,7 +24413,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -24402,7 +24493,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -24417,7 +24509,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -24449,7 +24542,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -24457,7 +24551,6 @@
           }
         },
         "required": [
-          "species_entry_id",
           "species_entry_ref",
           "smiles",
           "participant_index",
@@ -24479,7 +24572,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -24487,7 +24581,6 @@
           }
         },
         "required": [
-          "species_entry_id",
           "species_entry_ref",
           "smiles",
           "participant_index"
@@ -24583,7 +24676,8 @@
           },
           "reaction_entry_id": {
             "title": "Reaction Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -24591,7 +24685,8 @@
           },
           "reaction_id": {
             "title": "Reaction Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "title": "Reaction Ref",
@@ -24606,9 +24701,7 @@
           }
         },
         "required": [
-          "reaction_id",
           "reaction_ref",
-          "reaction_entry_id",
           "reaction_entry_ref",
           "equation",
           "matched_direction",
@@ -25230,7 +25323,8 @@
         "properties": {
           "record_id": {
             "title": "Record Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "record_type": {
             "title": "Record Type",
@@ -25254,7 +25348,6 @@
         },
         "required": [
           "record_type",
-          "record_id",
           "status"
         ],
         "title": "ReviewRecordEntry",
@@ -25438,7 +25531,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -25464,8 +25558,7 @@
           }
         },
         "required": [
-          "status",
-          "calculation_id"
+          "status"
         ],
         "title": "SCFStabilitySummary",
         "type": "object"
@@ -25692,7 +25785,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_link": {
             "anyOf": [
@@ -27229,7 +27323,8 @@
           },
           "geometry_id": {
             "title": "Geometry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_ref": {
             "title": "Geometry Ref",
@@ -27266,7 +27361,6 @@
         },
         "required": [
           "request",
-          "geometry_id",
           "geometry_ref",
           "natoms",
           "geom_hash",
@@ -28138,7 +28232,8 @@
           },
           "reaction_entry_id": {
             "title": "Reaction Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -28160,7 +28255,6 @@
         },
         "required": [
           "request",
-          "reaction_entry_id",
           "reaction_entry_ref",
           "review_summary",
           "records",
@@ -28374,7 +28468,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -28392,7 +28487,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -28588,7 +28684,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -28597,7 +28694,6 @@
         },
         "required": [
           "request",
-          "species_entry_id",
           "species_entry_ref",
           "review_summary",
           "records",
@@ -29457,7 +29553,8 @@
           },
           "software_release_id": {
             "title": "Software Release Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "software_release_ref": {
             "title": "Software Release Ref",
@@ -29476,7 +29573,6 @@
           }
         },
         "required": [
-          "software_release_id",
           "software_release_ref",
           "software"
         ],
@@ -29911,7 +30007,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -29922,7 +30019,8 @@
           },
           "species_id": {
             "title": "Species Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -29930,9 +30028,7 @@
           }
         },
         "required": [
-          "species_id",
           "species_ref",
-          "species_entry_id",
           "species_entry_ref",
           "canonical_smiles",
           "inchi_key",
@@ -30166,7 +30262,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -30177,7 +30274,8 @@
           },
           "species_id": {
             "title": "Species Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -30185,9 +30283,7 @@
           }
         },
         "required": [
-          "species_id",
           "species_ref",
-          "species_entry_id",
           "species_entry_ref",
           "canonical_smiles",
           "inchi_key",
@@ -30427,7 +30523,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -30468,7 +30565,6 @@
           }
         },
         "required": [
-          "species_entry_id",
           "species_entry_ref",
           "species_entry_kind",
           "electronic_state_kind",
@@ -30593,7 +30689,8 @@
           },
           "species_id": {
             "title": "Species Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -30601,7 +30698,6 @@
           }
         },
         "required": [
-          "species_id",
           "species_ref",
           "canonical_smiles",
           "inchi_key",
@@ -30725,7 +30821,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Group Id"
+            "title": "Conformer Group Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_group_ref": {
             "title": "Conformer Group Ref",
@@ -30881,7 +30978,8 @@
                 "type": "null"
               }
             ],
-            "title": "Statmech Id"
+            "title": "Statmech Id",
+            "x-tckdb-policy-hidden": true
           },
           "statmech_ref": {
             "title": "Statmech Ref",
@@ -31060,7 +31158,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Freq Calculation Ids"
+            "title": "Source Freq Calculation Ids",
+            "x-tckdb-policy-hidden": true
           },
           "source_freq_calculation_refs": {
             "items": {
@@ -31085,7 +31184,8 @@
                 "type": "null"
               }
             ],
-            "title": "Frequency Scale Factor Id"
+            "title": "Frequency Scale Factor Id",
+            "x-tckdb-policy-hidden": true
           },
           "frequency_scale_factor_ref": {
             "title": "Frequency Scale Factor Ref",
@@ -31555,7 +31655,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -31903,7 +32004,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -32025,7 +32127,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -32040,7 +32143,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -32641,7 +32745,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Scan Calculation Id"
+            "title": "Source Scan Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "source_scan_calculation_ref": {
             "anyOf": [
@@ -33701,7 +33806,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -33709,7 +33815,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref"
         ],
         "title": "SupportingCalculationRef",
@@ -34973,7 +35078,8 @@
                 "type": "null"
               }
             ],
-            "title": "Freq Calculation Id"
+            "title": "Freq Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "freq_calculation_ref": {
             "anyOf": [
@@ -35025,7 +35131,8 @@
                 "type": "null"
               }
             ],
-            "title": "Sp Calculation Id"
+            "title": "Sp Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "sp_calculation_ref": {
             "anyOf": [
@@ -35047,7 +35154,8 @@
                 "type": "null"
               }
             ],
-            "title": "Statmech Id"
+            "title": "Statmech Id",
+            "x-tckdb-policy-hidden": true
           },
           "statmech_ref": {
             "anyOf": [
@@ -35446,7 +35554,8 @@
           },
           "thermo_id": {
             "title": "Thermo Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "thermo_ref": {
             "title": "Thermo Ref",
@@ -35474,7 +35583,6 @@
           }
         },
         "required": [
-          "thermo_id",
           "thermo_ref",
           "scientific_origin",
           "model_kind",
@@ -35766,7 +35874,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -35780,7 +35889,8 @@
           },
           "species_id": {
             "title": "Species Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -35788,13 +35898,11 @@
           }
         },
         "required": [
-          "species_id",
           "species_ref",
           "canonical_smiles",
           "inchi_key",
           "charge",
           "multiplicity",
-          "species_entry_id",
           "species_entry_ref",
           "species_entry_kind",
           "electronic_state_kind",
@@ -36514,7 +36622,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -36537,7 +36646,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "type"
         ],
@@ -36549,7 +36657,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -36601,7 +36710,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "type",
           "quality",
@@ -36646,7 +36754,8 @@
           },
           "transition_state_id": {
             "title": "Transition State Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_ref": {
             "title": "Transition State Ref",
@@ -36654,7 +36763,6 @@
           }
         },
         "required": [
-          "transition_state_id",
           "transition_state_ref",
           "created_at",
           "review"
@@ -36667,7 +36775,8 @@
         "properties": {
           "child_calculation_id": {
             "title": "Child Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "child_calculation_ref": {
             "title": "Child Calculation Ref",
@@ -36675,7 +36784,8 @@
           },
           "parent_calculation_id": {
             "title": "Parent Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "parent_calculation_ref": {
             "title": "Parent Calculation Ref",
@@ -36687,9 +36797,7 @@
           }
         },
         "required": [
-          "parent_calculation_id",
           "parent_calculation_ref",
-          "child_calculation_id",
           "child_calculation_ref",
           "role"
         ],
@@ -36741,7 +36849,8 @@
           },
           "transition_state_entry_id": {
             "title": "Transition State Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_entry_ref": {
             "title": "Transition State Entry Ref",
@@ -36760,7 +36869,6 @@
           }
         },
         "required": [
-          "transition_state_entry_id",
           "transition_state_entry_ref",
           "charge",
           "multiplicity",
@@ -36802,7 +36910,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Entry Id"
+            "title": "Reaction Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "anyOf": [
@@ -36820,7 +36929,8 @@
           },
           "transition_state_entry_id": {
             "title": "Transition State Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_entry_ref": {
             "title": "Transition State Entry Ref",
@@ -36828,7 +36938,8 @@
           },
           "transition_state_id": {
             "title": "Transition State Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_ref": {
             "title": "Transition State Ref",
@@ -36836,9 +36947,7 @@
           }
         },
         "required": [
-          "transition_state_id",
           "transition_state_ref",
-          "transition_state_entry_id",
           "transition_state_entry_ref",
           "charge",
           "multiplicity",
@@ -37024,7 +37133,8 @@
           },
           "transition_state_entry_id": {
             "title": "Transition State Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_entry_ref": {
             "title": "Transition State Entry Ref",
@@ -37039,7 +37149,8 @@
                 "type": "null"
               }
             ],
-            "title": "Transition State Id"
+            "title": "Transition State Id",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_ref": {
             "title": "Transition State Ref",
@@ -37058,7 +37169,6 @@
         },
         "required": [
           "transition_state_ref",
-          "transition_state_entry_id",
           "transition_state_entry_ref",
           "review",
           "evidence_summary"
@@ -37100,7 +37210,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Entry Id"
+            "title": "Reaction Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "anyOf": [
@@ -37122,7 +37233,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Id"
+            "title": "Reaction Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "anyOf": [
@@ -37250,7 +37362,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -37798,7 +37911,8 @@
                 "type": "null"
               }
             ],
-            "title": "Transport Id"
+            "title": "Transport Id",
+            "x-tckdb-policy-hidden": true
           },
           "transport_ref": {
             "title": "Transport Ref",
@@ -38042,7 +38156,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -38338,7 +38453,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -38460,7 +38576,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -38475,7 +38592,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -38998,7 +39116,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -39023,8 +39142,7 @@
           }
         },
         "required": [
-          "status",
-          "calculation_id"
+          "status"
         ],
         "title": "ValidationSummary",
         "type": "object"
@@ -39643,7 +39761,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -39665,7 +39784,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "type",
           "quality",
@@ -39736,7 +39854,8 @@
           },
           "workflow_tool_release_id": {
             "title": "Workflow Tool Release Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "workflow_tool_release_ref": {
             "title": "Workflow Tool Release Ref",
@@ -39744,7 +39863,6 @@
           }
         },
         "required": [
-          "workflow_tool_release_id",
           "workflow_tool_release_ref",
           "workflow_tool"
         ],
@@ -40189,7 +40307,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_quality": {
             "$ref": "#/components/schemas/CalculationQuality"
@@ -40211,7 +40330,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "calculation_type",
           "calculation_quality",
@@ -52602,7 +52720,7 @@
     },
     "/api/v1/scientific/energy-correction-schemes/search": {
       "get": {
-        "description": "Energy-correction-scheme search.\n\nAND-combines the supplied filters; at least one meaningful filter\nis required. ``software`` / ``software_version`` / ``used_by_thermo``\nare accepted but currently deferred (no backing column on this row\nor no available relationship) — see the spec for details.",
+        "description": "Energy-correction-scheme search.\n\nAND-combines the supplied filters; at least one meaningful filter\nis required. Declared filters without an enforceable backing path\nfail closed with 422 ``unsupported_filter``.",
         "operationId": "scientific_energy_correction_scheme_search_get_api_v1_scientific_energy_correction_schemes_search_get",
         "parameters": [
           {
