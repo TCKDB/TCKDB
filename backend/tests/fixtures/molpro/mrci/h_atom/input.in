@@ -1,0 +1,21 @@
+***,H
+memory,752,m;
+
+geometry={angstrom;
+H       0.00000000    0.00000000    0.00000000}
+
+basis=cc-pvtz
+
+{rhf;
+maxit,1000;
+wf,1,1,1}
+
+{casscf;
+wf,1,1,1;
+}
+
+{mrci;
+wf,1,1,1;
+}
+
+---;
