@@ -629,5 +629,5 @@ def test_insufficient_grade_migration_layers_on_current_head() -> None:
         / "e9a3c5f7b1d2_add_insufficient_reproducibility_grade.py"
     ).read_text()
 
-    assert 'down_revision: Union[str, Sequence[str], None] = "c6f2a9d4e7b1"' in migration
+    assert 'down_revision: Union[str, Sequence[str], None] = "b8e3f1a9c2d4"' in migration
     assert "ADD VALUE IF NOT EXISTS 'insufficient' BEFORE 'described'" in migration

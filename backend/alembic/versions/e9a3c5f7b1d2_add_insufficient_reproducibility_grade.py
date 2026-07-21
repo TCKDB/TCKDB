@@ -4,7 +4,7 @@ Adds an explicit level-zero outcome so a completed, fail-closed assessment can
 be persisted without falsely claiming that the record is described.
 
 Revision ID: e9a3c5f7b1d2
-Revises: c6f2a9d4e7b1
+Revises: b8e3f1a9c2d4
 Create Date: 2026-07-21
 """
 
@@ -14,7 +14,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e9a3c5f7b1d2"
-down_revision: Union[str, Sequence[str], None] = "c6f2a9d4e7b1"
+down_revision: Union[str, Sequence[str], None] = "b8e3f1a9c2d4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
