@@ -579,6 +579,6 @@ stable public service yet.
 
 ## License
 
-License: TBD. Until a `LICENSE` file is added at the repo root, treat
-the code as "source-available, all rights reserved" and contact the
-maintainers before redistribution.
+TCKDB is released under the [MIT License](LICENSE). Copyright (c) 2026
+Calvin Pieters, Alon Grinberg Dana, and Technion -- Israel Institute of
+Technology.
