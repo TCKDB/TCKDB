@@ -11,13 +11,12 @@ tool reported against the value re-derived from the log by
   (the tool's reported value is kept, never overwritten)
 * they agree, or the log cannot be re-parsed -> no action
 
-**Scope (v1):** reconciliation runs on the dedicated artifacts route
-(``POST /calculations/{id}/artifacts``), the canonical second-phase path for
-uploading logs. Output logs attached *inline* through the contribution-bundle
-workflows (``computed_species`` / ``computed_reaction``) are not yet
-reconciled — those call sites have no channel to surface a warning, so wiring
-fill-without-warning there would diverge from the route's behaviour. Extending
-reconciliation to inline-bundle logs is tracked follow-up.
+**Where it runs:** every path that persists an output-log artifact — the
+dedicated artifacts route (``POST /calculations/{id}/artifacts``) and output
+logs attached *inline* through the contribution-bundle workflows
+(``computed_species`` / ``computed_reaction``, which ARC uses in bundle mode).
+The bundle workflows accumulate the returned warnings and their routes merge
+them into the upload response, so coverage matches the standalone route.
 
 Best-effort and never raises: artifact upload is canonical and must not be
 aborted by a reconciliation failure. Scoped to single-point calculations —

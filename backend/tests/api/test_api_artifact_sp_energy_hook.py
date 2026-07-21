@@ -282,3 +282,77 @@ class TestSpEnergyHook:
         # The row is already filled with the same value -> confirmed, no warning.
         assert _warning_codes(r2) == []
         assert _stored_energy(db_session, calc_id) == CH4_ENERGY
+
+
+def _computed_species_bundle(*, sp_energy: float | None) -> dict:
+    """A bundle whose SP calc carries its output log INLINE (ARC bundle mode)."""
+    sp_calc: dict = {
+        "key": "sp0",
+        "type": "sp",
+        "software_release": {"name": "Molpro", "version": "2022.1"},
+        "level_of_theory": {"method": "CCSD(T)-F12", "basis": "cc-pVTZ-F12"},
+        "artifacts": [_molpro_output_log("sp0.out")],
+    }
+    if sp_energy is not None:
+        sp_calc["sp_result"] = {"electronic_energy_hartree": sp_energy}
+    return {
+        "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
+        "conformers": [
+            {
+                "key": "c0",
+                "geometry": {"xyz_text": "1\nC atom\nC 0.0 0.0 0.0"},
+                "primary_calculation": {
+                    "key": "opt0",
+                    "type": "opt",
+                    "software_release": {"name": "Molpro", "version": "2022.1"},
+                    "level_of_theory": {
+                        "method": "CCSD(T)-F12",
+                        "basis": "cc-pVTZ-F12",
+                    },
+                    "opt_result": {"converged": True},
+                },
+                "additional_calculations": [sp_calc],
+            }
+        ],
+    }
+
+
+class TestSpEnergyBundleHook:
+    """The reconciliation must also fire on logs uploaded INLINE in a
+    contribution bundle (ARC bundle mode), not only via the artifacts route."""
+
+    def _sp_calc_id(self, body: dict) -> int:
+        return body["conformers"][0]["additional_calculations"][0][
+            "calculation_id"
+        ]
+
+    def test_bundle_inline_log_fills_energy(
+        self, client, db_session, stub_store_artifact
+    ):
+        resp = client.post(
+            "/api/v1/uploads/computed-species",
+            json=_computed_species_bundle(sp_energy=None),
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        sp_calc_id = self._sp_calc_id(body)
+        assert _stored_energy(db_session, sp_calc_id) == CH4_ENERGY
+        assert "sp_energy_filled_from_log" in [
+            w["code"] for w in body.get("warnings", [])
+        ]
+
+    def test_bundle_inline_log_mismatch_warns_and_keeps_value(
+        self, client, db_session, stub_store_artifact
+    ):
+        wrong = CH4_ENERGY + 0.01
+        resp = client.post(
+            "/api/v1/uploads/computed-species",
+            json=_computed_species_bundle(sp_energy=wrong),
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        sp_calc_id = self._sp_calc_id(body)
+        assert "sp_energy_payload_log_mismatch" in [
+            w["code"] for w in body.get("warnings", [])
+        ]
+        assert _stored_energy(db_session, sp_calc_id) == wrong

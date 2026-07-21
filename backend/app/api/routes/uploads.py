@@ -545,6 +545,8 @@ def upload_computed_species(
     outcome = persist_computed_species_upload(
         session, request, created_by=current_user.id, review_policy=sub.policy
     )
+    # Single-point energy reconciliation on inline output-log artifacts.
+    warnings = warnings + outcome.warnings
     conformer_refs = [
         ConformerUploadRefInBundle(
             key=co.conformer_in_bundle.key,

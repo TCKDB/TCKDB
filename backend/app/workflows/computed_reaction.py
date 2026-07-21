@@ -9,6 +9,7 @@ Follows the same key-resolution pattern as the network PDep workflow.
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.geometry import parse_xyz
 from app.chemistry.units import convert_ea_to_kj_mol
@@ -71,6 +72,9 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.sp_energy_extraction import (
+    try_reconcile_sp_energy_from_output_upload,
+)
 from app.services.species_resolution import resolve_species_entry
 
 
@@ -83,6 +87,7 @@ def _persist_calculation(
     geometry_id: int | None = None,
     geometry_key_map: dict[str, int],
     created_by: int | None = None,
+    sp_energy_warnings: list[UploadWarning] | None = None,
 ) -> Calculation:
     """Persist one bundle-local calculation through the shared calculation seam.
 
@@ -124,9 +129,16 @@ def _persist_calculation(
             artifact_in=artifact_in,
             created_by=created_by,
         )
-        # Opportunistic calculation_parameter extraction. Best-effort —
-        # never aborts the bundle.
+        # Opportunistic per-artifact extraction, both best-effort — never
+        # abort the bundle. Input artifacts yield parameter rows; output
+        # logs reconcile the single-point energy against the tool's
+        # reported value (fill/mismatch), the same as the artifacts route.
         try_extract_parameters_from_input_upload(session, calculation, artifact_in)
+        sp_warning = try_reconcile_sp_energy_from_output_upload(
+            session, calculation, artifact_in
+        )
+        if sp_warning is not None and sp_energy_warnings is not None:
+            sp_energy_warnings.append(sp_warning)
 
     resolved_geom_id = geometry_id
     if calc_in.geometry_key is not None:
@@ -225,6 +237,8 @@ def persist_computed_reaction_upload(
     # caller's ReviewPolicy can be applied at end-of-workflow.
     review_targets: list[RecordRef] = []
     applied_correction_ids: list[int] = []
+    # Single-point energy reconciliation warnings from inline output logs.
+    sp_energy_warnings: list[UploadWarning] = []
 
     # ------------------------------------------------------------------
     # 1. Resolve species + conformers + calculations
@@ -254,6 +268,7 @@ def persist_computed_reaction_upload(
                 geometry_id=geometry.id,
                 geometry_key_map=geometry_key_to_id,
                 created_by=created_by,
+                sp_energy_warnings=sp_energy_warnings,
             )
             calculation_key_to_id[conf.calculation.key] = calculation.id
             review_targets.append(
@@ -298,6 +313,7 @@ def persist_computed_reaction_upload(
                 species_entry_id=species_entry.id,
                 geometry_key_map=geometry_key_to_id,
                 created_by=created_by,
+                sp_energy_warnings=sp_energy_warnings,
             )
             calculation_key_to_id[calc_in.key] = calculation.id
             review_targets.append(
@@ -437,6 +453,7 @@ def persist_computed_reaction_upload(
             geometry_id=ts_geom.id,
             geometry_key_map=geometry_key_to_id,
             created_by=created_by,
+            sp_energy_warnings=sp_energy_warnings,
         )
         calculation_key_to_id[ts_in.calculation.key] = ts_calc.id
         review_targets.append(
@@ -450,6 +467,7 @@ def persist_computed_reaction_upload(
                 transition_state_entry_id=ts_entry.id,
                 geometry_key_map=geometry_key_to_id,
                 created_by=created_by,
+                sp_energy_warnings=sp_energy_warnings,
             )
             calculation_key_to_id[calc_in.key] = calc.id
             review_targets.append(
@@ -960,4 +978,5 @@ def persist_computed_reaction_upload(
         # without re-walking the bundle. Response-only; unchanged
         # request payload.
         "calculation_keys": dict(calculation_key_to_id),
+        "warnings": sp_energy_warnings,
     }
