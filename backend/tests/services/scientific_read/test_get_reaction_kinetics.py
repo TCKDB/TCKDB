@@ -12,6 +12,7 @@ from app.db.models.common import (
     ScientificOriginKind,
     SubmissionRecordType,
 )
+from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from tests.services.scientific_read._factories import (
@@ -62,6 +63,21 @@ def test_empty_kinetics_returns_200_empty_records(db_session):
     assert response.records == []
     assert response.pagination.total == 0
     assert response.reaction_entry_id == entry.id
+
+
+def test_collapse_first_applies_before_offset(db_session):
+    entry = _setup_entry(db_session)
+    make_kinetics(db_session, reaction_entry=entry)
+
+    response = get_reaction_kinetics(
+        db_session,
+        reaction_entry_id=entry.id,
+        request=KineticsReadRequest(collapse=CollapseMode.first, offset=1),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 1
+    assert response.pagination.returned == 0
 
 
 # ---------------------------------------------------------------------------

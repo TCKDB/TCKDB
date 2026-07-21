@@ -99,6 +99,25 @@ def test_species_calculation_scientific_origin_fails_closed(client):
     _assert_unsupported_filter(response, "scientific_origin")
 
 
+def test_species_calculation_entry_ref_does_not_bypass_inchi_rejection(
+    client,
+    db_session,
+):
+    species = make_species(
+        db_session,
+        smiles="C_ENTRY_REF",
+        inchi_key=next_inchi_key("ENTRYREF"),
+    )
+    entry = make_species_entry(db_session, species)
+
+    response = client.get(
+        "/api/v1/scientific/species-calculations/search",
+        params={"species_entry_ref": entry.public_ref, "inchi": "ignored"},
+    )
+
+    _assert_unsupported_filter(response, "inchi")
+
+
 def test_frequency_scale_factor_deferred_filters_fail_closed(client):
     response = client.get(
         "/api/v1/scientific/frequency-scale-factors/search?method=b3lyp&model_kind=harmonic&software_version=16"

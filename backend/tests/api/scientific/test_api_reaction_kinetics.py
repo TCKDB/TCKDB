@@ -56,6 +56,20 @@ def test_returns_200_for_valid_reaction_entry_id(client, db_session):
     assert len(body["records"]) == 1
 
 
+def test_collapse_first_offset_one_returns_empty(client, db_session):
+    entry = _entry(db_session)
+    make_kinetics(db_session, reaction_entry=entry)
+
+    response = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/kinetics",
+        params={"collapse": "first", "offset": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["records"] == []
+    assert response.json()["pagination"]["total"] == 1
+
+
 def test_returns_404_for_missing_reaction_entry_id(client, db_session):
     resp = client.get("/api/v1/scientific/reaction-entries/999999/kinetics")
     assert resp.status_code == 404

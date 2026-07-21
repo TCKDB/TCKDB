@@ -190,7 +190,10 @@ def search_species_calculations(
     )
     includes = filter_internal_ids_from_resolved(includes)
     reject_unsupported_filters(
-        {"scientific_origin": request.scientific_origin},
+        {
+            "inchi": request.inchi,
+            "scientific_origin": request.scientific_origin,
+        },
         endpoint="/scientific/species-calculations/search",
     )
     _validate_ranking(request)

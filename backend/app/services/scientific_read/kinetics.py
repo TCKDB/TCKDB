@@ -77,6 +77,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     temperature_coverage,
     validate_includes,
     validate_pagination,
@@ -564,10 +565,12 @@ def get_reaction_kinetics(
 
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
-    if collapse_first:
-        returned = records[:1]
-    else:
-        returned = records[offset : offset + limit]
+    returned = slice_for_pagination(
+        records,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
 
     return ScientificReactionKineticsResponse(
         request=RequestEcho(

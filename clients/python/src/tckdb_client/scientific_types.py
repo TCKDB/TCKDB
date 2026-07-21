@@ -78,14 +78,60 @@ class ReactionRecord(TypedDict, total=False):
     reaction_entry_id: int
 
 
-class ThermoRecord(TypedDict):
+class ThermoSearchRecord(TypedDict):
+    """One composed thermo-search row with resolved species context."""
+
     species: JSONDict
     thermo: JSONDict
 
 
-class KineticsRecord(TypedDict):
+class ThermoDetailRecord(TypedDict, total=False):
+    """One flat record from the species-entry thermo subresource."""
+
+    thermo_ref: Required[str]
+    scientific_origin: Required[str]
+    model_kind: Required[str]
+    review: Required[JSONDict]
+    evidence_completeness: Required[JSONDict]
+    provenance: Required[JSONDict]
+    thermo_id: int
+    h298_kj_mol: float | None
+    s298_j_mol_k: float | None
+    temperature_coverage: JSONDict | None
+    trust: JSONDict | None
+    assessments: JSONDict | None
+
+
+class KineticsSearchRecord(TypedDict):
+    """One composed kinetics-search row with resolved reaction context."""
+
     reaction: JSONDict
     kinetics: JSONDict
+
+
+class KineticsDetailRecord(TypedDict, total=False):
+    """One flat record from the reaction-entry kinetics subresource."""
+
+    kinetics_ref: Required[str]
+    scientific_origin: Required[str]
+    model_kind: Required[str]
+    review: Required[JSONDict]
+    parameters: Required[JSONDict]
+    uncertainty: Required[JSONDict]
+    evidence_completeness: Required[JSONDict]
+    provenance: Required[JSONDict]
+    kinetics_id: int
+    direction: str | None
+    pressure_bar: float | None
+    temperature_coverage: JSONDict | None
+    trust: JSONDict | None
+    assessments: JSONDict | None
+
+
+# Backward-compatible names for the composed search-row shapes published in
+# tckdb-client 0.27.x. Detail methods now use explicit flat-record types.
+ThermoRecord: TypeAlias = ThermoSearchRecord
+KineticsRecord: TypeAlias = KineticsSearchRecord
 
 
 class SpeciesCalculationRecord(TypedDict, total=False):
@@ -176,18 +222,18 @@ class ArtifactRecord(TypedDict, total=False):
 
 SpeciesSearchResponse: TypeAlias = ScientificSearchResponse[SpeciesRecord]
 ReactionSearchResponse: TypeAlias = ScientificSearchResponse[ReactionRecord]
-ThermoSearchResponse: TypeAlias = ScientificSearchResponse[ThermoRecord]
+ThermoSearchResponse: TypeAlias = ScientificSearchResponse[ThermoSearchRecord]
 
 
-class SpeciesThermoResponse(ScientificSearchResponse[ThermoRecord]):
+class SpeciesThermoResponse(ScientificSearchResponse[ThermoDetailRecord]):
     species_entry_ref: str
     species_entry_id: NotRequired[int]
 
 
-KineticsSearchResponse: TypeAlias = ScientificSearchResponse[KineticsRecord]
+KineticsSearchResponse: TypeAlias = ScientificSearchResponse[KineticsSearchRecord]
 
 
-class ReactionKineticsResponse(ScientificSearchResponse[KineticsRecord]):
+class ReactionKineticsResponse(ScientificSearchResponse[KineticsDetailRecord]):
     reaction_entry_ref: str
     reaction_entry_id: NotRequired[int]
 
@@ -209,7 +255,9 @@ __all__ = [
     "ArtifactSearchResponse",
     "ErrorEnvelope",
     "JSONDict",
+    "KineticsDetailRecord",
     "KineticsRecord",
+    "KineticsSearchRecord",
     "KineticsSearchResponse",
     "NetworkKineticsRecord",
     "NetworkKineticsSearchResponse",
@@ -230,6 +278,8 @@ __all__ = [
     "StatmechRecord",
     "StatmechSearchResponse",
     "ThermoRecord",
+    "ThermoDetailRecord",
+    "ThermoSearchRecord",
     "ThermoSearchResponse",
     "TransportRecord",
     "TransportSearchResponse",

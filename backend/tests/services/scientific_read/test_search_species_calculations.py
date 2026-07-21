@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError
 from app.db.models.common import (
     ArtifactKind,
@@ -89,6 +90,25 @@ def test_search_by_species_entry_id_handle(db_session):
 
     assert len(response.records) == 1
     assert response.records[0].species.species_entry_id == entry.id
+
+
+def test_explicit_entry_ref_does_not_bypass_unsupported_inchi(db_session):
+    _, entry = _entry(db_session, smiles="EH_INCHI")
+
+    with pytest.raises(CodedValueError) as exc_info:
+        search_species_calculations(
+            db_session,
+            SpeciesCalculationsSearchRequest(
+                species_entry_ref=entry.public_ref,
+                inchi="InChI=1S/CH4/h1H4",
+            ),
+        )
+
+    assert exc_info.value.code == "unsupported_filter"
+    assert exc_info.value.context == {
+        "endpoint": "/scientific/species-calculations/search",
+        "filters": ["inchi"],
+    }
 
 
 def test_unknown_species_entry_id_handle_raises_404(db_session):

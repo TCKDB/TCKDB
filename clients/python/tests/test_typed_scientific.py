@@ -14,16 +14,24 @@ import tckdb_client
 from conftest import make_client
 from tckdb_client import (
     ArtifactSearchResponse,
+    KineticsDetailRecord,
+    KineticsRecord,
+    KineticsSearchRecord,
     KineticsSearchResponse,
     NetworkKineticsSearchResponse,
     NetworkSearchResponse,
     ReactionSearchResponse,
+    ReactionKineticsResponse,
     SpeciesCalculationsSearchResponse,
     SpeciesSearchResponse,
+    SpeciesThermoResponse,
     StatmechSearchResponse,
     TCKDBClient,
     TCKDBPaginationError,
     ThermoSearchResponse,
+    ThermoDetailRecord,
+    ThermoRecord,
+    ThermoSearchRecord,
     TransportSearchResponse,
 )
 from tckdb_client.pagination import iter_paginated_records
@@ -42,6 +50,66 @@ def _page(*, offset: int = 0, limit: int = 50, total: int = 0) -> dict[str, Any]
             "total": total,
         },
     }
+
+
+def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
+    assert ThermoRecord is ThermoSearchRecord
+    assert KineticsRecord is KineticsSearchRecord
+    assert set(ThermoSearchRecord.__required_keys__) == {"species", "thermo"}
+    assert set(KineticsSearchRecord.__required_keys__) == {"reaction", "kinetics"}
+    assert "thermo_ref" in ThermoDetailRecord.__annotations__
+    assert "species" not in ThermoDetailRecord.__annotations__
+    assert "kinetics_ref" in KineticsDetailRecord.__annotations__
+    assert "reaction" not in KineticsDetailRecord.__annotations__
+    for name in (
+        "ThermoDetailRecord",
+        "ThermoSearchRecord",
+        "KineticsDetailRecord",
+        "KineticsSearchRecord",
+    ):
+        assert name in tckdb_client.__all__
+
+
+def test_detail_methods_publish_flat_record_response_annotations() -> None:
+    assert get_type_hints(TCKDBClient.get_species_thermo)["return"] == SpeciesThermoResponse
+    assert (
+        get_type_hints(TCKDBClient.get_reaction_kinetics)["return"]
+        == ReactionKineticsResponse
+    )
+
+
+def test_detail_methods_and_composed_searches_keep_their_wire_shapes() -> None:
+    pages = {
+        "/scientific/species-entries/spe_a/thermo": {
+            "species_entry_ref": "spe_a",
+            "records": [{"thermo_ref": "thr_a", "model_kind": "scalar"}],
+        },
+        "/scientific/thermo/search": {
+            "records": [{"species": {"species_entry_ref": "spe_a"}, "thermo": {"thermo_ref": "thr_a"}}],
+        },
+        "/scientific/reaction-entries/rxe_a/kinetics": {
+            "reaction_entry_ref": "rxe_a",
+            "records": [{"kinetics_ref": "kin_a", "model_kind": "arrhenius"}],
+        },
+        "/scientific/kinetics/search": {
+            "records": [{"reaction": {"reaction_entry_ref": "rxe_a"}, "kinetics": {"kinetics_ref": "kin_a"}}],
+        },
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=pages[urlsplit(str(request.url)).path.removeprefix("/api/v1")])
+
+    client, _recorder = make_client(handler)
+
+    thermo_detail: SpeciesThermoResponse = client.get_species_thermo("spe_a")
+    thermo_search: ThermoSearchResponse = client.search_thermo(smiles="C")
+    kinetics_detail: ReactionKineticsResponse = client.get_reaction_kinetics("rxe_a")
+    kinetics_search: KineticsSearchResponse = client.search_kinetics(reactants=["C"])
+
+    assert thermo_detail["records"][0]["thermo_ref"] == "thr_a"
+    assert thermo_search["records"][0]["thermo"]["thermo_ref"] == "thr_a"
+    assert kinetics_detail["records"][0]["kinetics_ref"] == "kin_a"
+    assert kinetics_search["records"][0]["kinetics"]["kinetics_ref"] == "kin_a"
 
 
 @pytest.mark.parametrize(

@@ -51,6 +51,20 @@ def test_returns_200_for_valid_species_entry_id(client, db_session):
     assert body["records"][0]["model_kind"] == "scalar"
 
 
+def test_collapse_first_offset_one_returns_empty(client, db_session):
+    entry = _entry(db_session)
+    make_thermo_scalar(db_session, species_entry=entry)
+
+    response = client.get(
+        f"/api/v1/scientific/species-entries/{entry.id}/thermo",
+        params={"collapse": "first", "offset": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["records"] == []
+    assert response.json()["pagination"]["total"] == 1
+
+
 def test_returns_404_for_missing_species_entry_id(client, db_session):
     resp = client.get("/api/v1/scientific/species-entries/999999/thermo")
     assert resp.status_code == 404

@@ -364,3 +364,23 @@ def test_collapse_first_returns_at_most_one_with_pre_collapse_total(db_session):
     # Pre-collapse total should reflect both candidates.
     assert response.pagination.total == 2
     assert response.pagination.returned == 1
+
+
+def test_collapse_first_applies_before_offset(db_session):
+    species = make_species(
+        db_session, smiles="C_OFFSET", inchi_key=next_inchi_key("COFF")
+    )
+    make_species_entry(db_session, species)
+
+    response = search_species(
+        db_session,
+        SpeciesSearchRequest(
+            smiles="C_OFFSET",
+            collapse=CollapseMode.first,
+            offset=1,
+        ),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 1
+    assert response.pagination.returned == 0

@@ -9,7 +9,6 @@ for TS-backed computational kinetics and ``null`` for non-TS-backed records
 
 from __future__ import annotations
 
-import math
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -58,11 +57,13 @@ class KineticsReadRequest(BaseModel):
     pressure_bar: float | None = Field(
         default=None,
         gt=0,
+        allow_inf_nan=False,
         description="Requested pressure in bar.",
     )
     pressure: float | None = Field(
         default=None,
         gt=0,
+        allow_inf_nan=False,
         deprecated=True,
         description="Deprecated alias for pressure_bar; retained for one release.",
     )
@@ -86,12 +87,7 @@ class KineticsReadRequest(BaseModel):
     def _resolve_pressure_alias(self) -> Self:
         pressure_alias = self.__dict__.get("pressure")
         if self.pressure_bar is not None and pressure_alias is not None:
-            if not math.isclose(
-                self.pressure_bar,
-                pressure_alias,
-                rel_tol=1.0e-12,
-                abs_tol=1.0e-12,
-            ):
+            if self.pressure_bar != pressure_alias:
                 raise ValueError(
                     "pressure_alias_conflict: pressure_bar and deprecated "
                     "pressure must agree."

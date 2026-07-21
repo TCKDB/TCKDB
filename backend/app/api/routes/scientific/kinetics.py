@@ -42,11 +42,15 @@ def reaction_kinetics(
     temperature_min: float | None = Query(None),
     temperature_max: float | None = Query(None),
     pressure_bar: float | None = Query(
-        None, gt=0, description="Requested pressure in bar."
+        None,
+        gt=0,
+        allow_inf_nan=False,
+        description="Requested pressure in bar.",
     ),
     pressure: float | None = Query(
         None,
         gt=0,
+        allow_inf_nan=False,
         deprecated=True,
         description="Deprecated alias for pressure_bar; retained for one release.",
     ),
