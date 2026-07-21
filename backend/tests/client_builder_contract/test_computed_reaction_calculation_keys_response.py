@@ -9,18 +9,31 @@ contract that the builder's ``artifact_plan(result)`` reads.
 
 from __future__ import annotations
 
+import base64
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 
 from sqlalchemy.orm import Session
 
 from app.api.routes.uploads import ComputedReactionUploadResult
 from app.db.models.app_user import AppUser
+from app.db.models.calculation import CalculationSPResult
 from app.db.models.common import AppUserRole
 from app.schemas.workflows.computed_reaction_upload import (
     ComputedReactionUploadRequest,
 )
 from app.workflows.computed_reaction import persist_computed_reaction_upload
+
+# A real Molpro CCSD(T)-F12 single-point log and its energy (Hartree).
+_MOLPRO_CH4_LOG = (
+    Path(__file__).resolve().parent.parent
+    / "fixtures"
+    / "molpro"
+    / "ch4_closed_shell"
+    / "input.out"
+).read_bytes()
+_MOLPRO_CH4_ENERGY = -40.457885930635
 
 _XYZ_H = "1\nH\nH 0.0 0.0 0.0"
 _XYZ_CH3 = (
@@ -174,6 +187,55 @@ def test_response_includes_calculation_keys_mapping(db_engine) -> None:
         validated = ComputedReactionUploadResult(**result_dict)
         dumped = validated.model_dump(mode="json")
         assert dumped["calculation_keys"] == ck
+
+
+def test_bundle_inline_sp_log_fills_energy_and_warns(db_engine) -> None:
+    """SP-energy reconciliation fires on logs attached INLINE in a
+    computed-reaction bundle (ARC bundle mode): it fills calc_sp_result and
+    surfaces the warning through the workflow result's ``warnings``."""
+    import sqlalchemy
+
+    payload = _bundle_payload()
+    # Attach a real Molpro SP log inline to ch4's sp calc and drop its
+    # reported energy so the reconciliation must FILL it from the log.
+    ch4_sp = payload["species"][2]["calculations"][0]
+    assert ch4_sp["key"] == "ch4-sp"
+    del ch4_sp["sp_electronic_energy_hartree"]
+    ch4_sp["artifacts"] = [
+        {
+            "kind": "output_log",
+            "filename": "ch4-sp.out",
+            "content_base64": base64.b64encode(_MOLPRO_CH4_LOG).decode("ascii"),
+        }
+    ]
+
+    with _isolated_session(db_engine) as session:
+        session.add(AppUser(username="sp_reaction_tester", role=AppUserRole.user))
+        session.flush()
+        user_id = session.scalar(
+            sqlalchemy.select(AppUser.id).where(
+                AppUser.username == "sp_reaction_tester"
+            )
+        )
+        result_dict = persist_computed_reaction_upload(
+            session,
+            ComputedReactionUploadRequest(**payload),
+            created_by=user_id,
+        )
+
+        codes = [w.code for w in result_dict["warnings"]]
+        assert "sp_energy_filled_from_log" in codes
+
+        ch4_sp_id = result_dict["calculation_keys"]["ch4-sp"]
+        row = session.get(CalculationSPResult, ch4_sp_id)
+        assert row is not None
+        assert row.electronic_energy_hartree == _MOLPRO_CH4_ENERGY
+
+        # And it round-trips through the response model's warnings field.
+        validated = ComputedReactionUploadResult(**result_dict)
+        assert any(
+            w.code == "sp_energy_filled_from_log" for w in validated.warnings
+        )
 
 
 def test_response_calculation_keys_field_is_optional() -> None:

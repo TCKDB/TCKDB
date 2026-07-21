@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import Calculation
@@ -72,6 +73,9 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.sp_energy_extraction import (
+    try_reconcile_sp_energy_from_output_upload,
+)
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 
@@ -126,6 +130,10 @@ class ComputedSpeciesUploadOutcome:
     conformers: list[ConformerUploadOutcomeInBundle]
     thermo: Thermo | None
     statmech: Statmech | None = None
+    #: Non-blocking warnings raised while persisting inline artifacts —
+    #: currently single-point energy reconciliation (fill/mismatch). The
+    #: route merges these into the upload response.
+    warnings: list[UploadWarning] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -518,6 +526,7 @@ def persist_computed_species_upload(
     # shas across all calcs in the bundle so a post-step-6 failure can
     # delete them.
     bundle_stored_shas: list[str] = []
+    sp_energy_warnings: list[UploadWarning] = []
     try:
         for outcome in conformer_outcomes:
             for calc_in, calc_row in (
@@ -540,13 +549,20 @@ def persist_computed_species_upload(
                     created_by=created_by,
                 )
                 bundle_stored_shas.extend(r.sha256 for r in rows if r.sha256)
-                # Opportunistic calculation_parameter extraction. The
-                # helper filters to ArtifactKind.input and is best-effort
-                # — never aborts the bundle.
+                # Opportunistic per-artifact extraction, both best-effort —
+                # never abort the bundle. Input artifacts yield parameter
+                # rows; output logs reconcile the single-point energy
+                # against the tool's reported value (fill/mismatch), the
+                # same as the standalone artifacts route.
                 for art_in in calc_in.artifacts:
                     try_extract_parameters_from_input_upload(
                         session, calc_row, art_in
                     )
+                    sp_warning = try_reconcile_sp_energy_from_output_upload(
+                        session, calc_row, art_in
+                    )
+                    if sp_warning is not None:
+                        sp_energy_warnings.append(sp_warning)
 
         thermo_row, thermo_aec_ids = _persist_thermo_block(
             session,
@@ -641,6 +657,7 @@ def persist_computed_species_upload(
         conformers=conformer_outcomes,
         thermo=thermo_row,
         statmech=statmech_row,
+        warnings=sp_energy_warnings,
     )
 
 
