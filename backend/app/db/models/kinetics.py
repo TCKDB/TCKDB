@@ -209,6 +209,11 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
             "a_uncertainty_kind <> 'multiplicative' OR a_uncertainty >= 1.0",
             name="a_uncertainty_multiplicative_ge_1",
         ),
+        CheckConstraint(
+            "degeneracy IS NULL OR "
+            "(degeneracy > 0 AND degeneracy < 'Infinity'::double precision)",
+            name="degeneracy_finite_positive",
+        ),
         CheckConstraint("pressure_bar IS NULL OR pressure_bar > 0", name="pressure_bar_gt_0"),
         # An apparent-at-pressure rate must state the pressure it applies at.
         CheckConstraint(
