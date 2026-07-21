@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._response import omit_assessments_unless_requested
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
@@ -20,6 +21,9 @@ from app.schemas.reads.scientific_thermo_search import (
 )
 from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
+)
+from app.services.scientific_read.public_assessments import (
+    attach_thermo_assessments,
 )
 from app.services.scientific_read.thermo_search import search_thermo
 
@@ -89,7 +93,11 @@ def thermo_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(search_thermo(session, request))
+    payload = search_thermo(session, request)
+    if "assessments" in set(payload.request.include):
+        attach_thermo_assessments(session, payload)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_assessments_unless_requested(visibility, payload)
 
 
 @router.post("/search", response_model=ScientificThermoSearchResponse)
@@ -114,4 +122,8 @@ def thermo_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(search_thermo(session, body))
+    payload = search_thermo(session, body)
+    if "assessments" in set(payload.request.include):
+        attach_thermo_assessments(session, payload)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_assessments_unless_requested(visibility, payload)

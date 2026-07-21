@@ -49,3 +49,26 @@ def omit_trust_unless_requested(
                 record.pop("trust", None)
 
     return JSONResponse(data)
+
+
+def omit_assessments_unless_requested(visibility: Any, payload: Any):
+    """Remove opt-in assessment summaries from every nested record by default."""
+    if "assessments" in set(payload.request.include):
+        return visibility
+
+    if isinstance(visibility, JSONResponse):
+        data = json.loads(visibility.body)
+    else:
+        data = visibility.model_dump(mode="json")
+
+    def strip(node: Any) -> None:
+        if isinstance(node, dict):
+            node.pop("assessments", None)
+            for value in node.values():
+                strip(value)
+        elif isinstance(node, list):
+            for value in node:
+                strip(value)
+
+    strip(data)
+    return JSONResponse(data)

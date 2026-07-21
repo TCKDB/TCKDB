@@ -84,6 +84,34 @@ def test_pressure_bar_is_canonical_and_deprecated_alias_conflicts(client, db_ses
     assert "pressure_alias_conflict" in conflict.text
 
 
+def test_assessment_summary_is_opt_in_for_get_and_post(client, db_session):
+    _setup(db_session, r="Q1", p="Q2")
+    base = "/api/v1/scientific/kinetics/search"
+
+    default_record = client.get(
+        f"{base}?reactants=Q1&products=Q2"
+    ).json()["records"][0]["kinetics"]
+    assert "assessments" not in default_record
+
+    get_body = client.get(
+        f"{base}?reactants=Q1&products=Q2&include=assessments"
+    ).json()
+    summary = get_body["records"][0]["kinetics"]["assessments"]
+    assert summary["deterministic_trust"]["rubric"] == "computed_kinetics"
+    assert summary["reproducibility"]["state"] == "unassessed"
+
+    post = client.post(
+        base,
+        json={
+            "reactants": ["Q1"],
+            "products": ["Q2"],
+            "include": ["assessments"],
+        },
+    )
+    assert post.status_code == 200, post.text
+    assert post.json()["records"][0]["kinetics"]["assessments"] == summary
+
+
 def test_post_rejects_query_string_filters(client, db_session):
     _setup(db_session, r="X3", p="Y3")
 

@@ -107,8 +107,9 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "internal_ids",
     "all",
     "trust",
+    "assessments",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 _TRUST_EAGER_LOADS = (
     selectinload(Kinetics.reaction_entry).selectinload(
         ReactionEntry.structure_participants

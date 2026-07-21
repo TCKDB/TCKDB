@@ -62,8 +62,9 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
     "internal_ids",
     "all",
+    "assessments",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 
 # Tokens forwarded to the inner thermo retrieval. The set matches the
 # public legal tokens minus ``internal_ids`` / ``all`` — there are no

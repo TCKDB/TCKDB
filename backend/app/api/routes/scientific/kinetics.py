@@ -13,7 +13,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
-from app.api.routes.scientific._response import omit_trust_unless_requested
+from app.api.routes.scientific._response import (
+    omit_assessments_unless_requested,
+    omit_trust_unless_requested,
+)
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics import (
@@ -25,6 +28,9 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 from app.services.scientific_read.kinetics import get_reaction_kinetics
+from app.services.scientific_read.public_assessments import (
+    attach_kinetics_assessments,
+)
 
 router = APIRouter(prefix="/reaction-entries")
 
@@ -70,9 +76,7 @@ def reaction_kinetics(
     D9 chain. ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``
     §Endpoint 3 and ``docs/specs/public_identifier_policy.md``.
     """
-    resolved_reaction_entry_id = resolve_reaction_entry_handle(
-        session, reaction_entry_id
-    )
+    resolved_reaction_entry_id = resolve_reaction_entry_handle(session, reaction_entry_id)
     request = KineticsReadRequest(
         temperature_min=temperature_min,
         temperature_max=temperature_max,
@@ -96,5 +100,8 @@ def reaction_kinetics(
         reaction_entry_id=resolved_reaction_entry_id,
         request=request,
     )
+    if "assessments" in set(payload.request.include):
+        attach_kinetics_assessments(session, payload)
     visibility = apply_internal_ids_visibility(payload)
+    visibility = omit_assessments_unless_requested(visibility, payload)
     return omit_trust_unless_requested(visibility, payload, scope="search")

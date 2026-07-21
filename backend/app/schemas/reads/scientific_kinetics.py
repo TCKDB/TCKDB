@@ -23,6 +23,7 @@ from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
 )
+from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
     CollapseMode,
     EvidenceCompletenessBreakdown,
@@ -326,6 +327,7 @@ class KineticsRecord(BaseModel):
     evidence_completeness: EvidenceCompletenessBreakdown
     provenance: KineticsProvenance
     trust: TrustFragment | None = None
+    assessments: PublicAssessmentSummary | None = None
 
 
 class RequestEcho(BaseModel):

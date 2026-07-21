@@ -64,8 +64,9 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "irc",
     "internal_ids",
     "all",
+    "assessments",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 
 # Tokens passed through to the kinetics detail endpoint (it has its own
 # legal set; intersection prevents 422 noise from cross-endpoint tokens).

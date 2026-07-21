@@ -62,13 +62,13 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.network_channel_chemistry import (
+    apply_channel_chemistry_filters,
+)
 from app.services.scientific_read.network_kinetics import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
     build_network_kinetics_record,
-)
-from app.services.scientific_read.network_channel_chemistry import (
-    apply_channel_chemistry_filters,
 )
 
 # Filters that satisfy the at-least-one-filter guard. Trust knobs
