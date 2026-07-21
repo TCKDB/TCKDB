@@ -1,4 +1,12 @@
-"""add explicit kinetics degeneracy convention
+"""Add an explicit kinetics degeneracy convention.
+
+Adds a non-null enum column and backfills existing kinetics rows as
+``unknown`` through the constant server default. The schema change is
+reversible, but downgrade permanently discards any convention values stored in
+the column. On large databases, adding or dropping the column requires an
+``ACCESS EXCLUSIVE`` table lock; the constant-default add is catalog-fast on
+supported PostgreSQL versions, but lock acquisition and older-server behavior
+can increase deployment runtime.
 
 Revision ID: f2a4c6e8b0d1
 Revises: e9a3c5f7b1d2

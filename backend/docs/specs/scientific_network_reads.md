@@ -258,9 +258,9 @@ Network reads never inline:
   geometries, scan/IRC/path-search arrays) — those remain on
   `/scientific/calculations/{ref}`.
 
-A future `/scientific/network-kinetics/{ref}` endpoint will surface
-coefficient payloads under their own include tokens with explicit
-size policies.
+The live `/scientific/network-kinetics/{ref}` endpoint surfaces coefficient,
+PLOG, and point payloads under their own include tokens with explicit size
+policies. The network-grain response intentionally retains summaries only.
 
 ## 10. Relationship to other surfaces
 

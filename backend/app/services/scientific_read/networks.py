@@ -8,17 +8,16 @@ The Network surface is record-grained at the ``network`` row. Child
 tables (``network_species`` / ``network_reaction`` / ``network_state`` /
 ``network_channel`` / ``network_solve`` / ``network_kinetics``) are
 exposed only as bounded embedded summaries under include tokens.
-``NetworkSolve`` carries a public_ref (``nsolve_…``) but the standalone
-``/scientific/network-solves/{ref}`` detail endpoint is deferred —
-the embedded summary covers the read use case.
+``NetworkSolve`` and ``NetworkKinetics`` also have public refs and live
+standalone detail endpoints; this service builds their compact projections
+only when they are embedded in a network response.
 
 Network kinetics coefficient payloads (Chebyshev coefficient matrix,
 PLOG rows, point triples) are deliberately not inlined under
 ``include=kinetics``; the summary projection surfaces shape metadata
 (``chebyshev_shape``, ``plog_entry_count``, ``point_count``). A
-future ``/scientific/network-kinetics/{ref}`` endpoint can surface
-the coefficient payloads once ``network_kinetics`` grows a
-``public_ref`` column.
+live ``/scientific/network-kinetics/{ref}`` endpoint surfaces the full
+payloads under explicit, bounded include tokens.
 
 See ``backend/docs/specs/scientific_network_reads.md``.
 """
