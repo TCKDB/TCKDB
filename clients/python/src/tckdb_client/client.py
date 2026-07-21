@@ -14,7 +14,9 @@ chemistry semantics — those belong in producer-specific adapters.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping
 
 import httpx
@@ -29,6 +31,31 @@ from tckdb_client.errors import (
     TCKDBValidationError,
 )
 from tckdb_client.idempotency import validate_idempotency_key
+from tckdb_client.pagination import iter_paginated_records
+from tckdb_client.scientific_types import (
+    ArtifactRecord,
+    ArtifactSearchResponse,
+    KineticsRecord,
+    KineticsSearchResponse,
+    NetworkKineticsRecord,
+    NetworkKineticsSearchResponse,
+    NetworkRecord,
+    NetworkSearchResponse,
+    ReactionKineticsResponse,
+    ReactionRecord,
+    ReactionSearchResponse,
+    SpeciesCalculationRecord,
+    SpeciesCalculationsSearchResponse,
+    SpeciesRecord,
+    SpeciesSearchResponse,
+    SpeciesThermoResponse,
+    StatmechRecord,
+    StatmechSearchResponse,
+    ThermoRecord,
+    ThermoSearchResponse,
+    TransportRecord,
+    TransportSearchResponse,
+)
 
 API_KEY_HEADER = "X-API-Key"
 IDEMPOTENCY_HEADER = "Idempotency-Key"
@@ -804,7 +831,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
-    ) -> Any:
+    ) -> SpeciesSearchResponse:
         """``GET /scientific/species/search`` — discover species by identity.
 
         At least one identifier (``smiles``, ``inchi``, ``inchi_key``,
@@ -855,7 +882,7 @@ class TCKDBClient:
         offset: int | None = None,
         limit: int | None = None,
         method: str = "POST",
-    ) -> Any:
+    ) -> ReactionSearchResponse:
         """``GET|POST /scientific/reactions/search`` — discover reaction entries.
 
         Defaults to ``POST`` because reactant/product SMILES often contain
@@ -915,7 +942,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
-    ) -> Any:
+    ) -> ReactionKineticsResponse:
         """``GET /scientific/reaction-entries/{reaction_entry_id}/kinetics``.
 
         Phase C: ``reaction_entry_id`` accepts the integer
@@ -965,7 +992,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
-    ) -> Any:
+    ) -> SpeciesThermoResponse:
         """``GET /scientific/species-entries/{species_entry_id}/thermo``.
 
         Phase C: ``species_entry_id`` accepts the integer
@@ -1021,7 +1048,7 @@ class TCKDBClient:
         offset: int | None = None,
         limit: int | None = None,
         method: str = "POST",
-    ) -> Any:
+    ) -> ThermoSearchResponse:
         """``GET|POST /scientific/thermo/search`` — chemistry-first thermo search.
 
         Returns thermo records along with the resolved species/species_entry
@@ -1095,7 +1122,7 @@ class TCKDBClient:
         offset: int | None = None,
         limit: int | None = None,
         method: str = "POST",
-    ) -> Any:
+    ) -> KineticsSearchResponse:
         """``GET|POST /scientific/kinetics/search`` — chemistry-first kinetics search.
 
         Returns kinetics records along with the resolved reaction/reaction_entry
@@ -1176,7 +1203,7 @@ class TCKDBClient:
         offset: int | None = None,
         limit: int | None = None,
         method_http: str = "POST",
-    ) -> Any:
+    ) -> SpeciesCalculationsSearchResponse:
         """``GET|POST /scientific/species-calculations/search`` — chemistry-first
         species calculation/conformer search.
 
@@ -1235,6 +1262,433 @@ class TCKDBClient:
             json={k: v for k, v in body.items() if v is not None},
             authenticated=False,
         ).data
+
+    def search_networks(
+        self,
+        *,
+        network_ref: str | None = None,
+        species_ref: str | None = None,
+        species_entry_ref: str | None = None,
+        reaction_ref: str | None = None,
+        reaction_entry_ref: str | None = None,
+        has_species: bool | None = None,
+        has_reactions: bool | None = None,
+        has_states: bool | None = None,
+        has_channels: bool | None = None,
+        has_solves: bool | None = None,
+        has_kinetics: bool | None = None,
+        has_chebyshev: bool | None = None,
+        has_plog: bool | None = None,
+        has_point_kinetics: bool | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        temperature_min: float | None = None,
+        temperature_max: float | None = None,
+        pressure_min: float | None = None,
+        pressure_max: float | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method_http: str = "POST",
+    ) -> NetworkSearchResponse:
+        """Search pressure-dependence networks by chemistry and provenance."""
+
+        body = {
+            "network_ref": network_ref,
+            "species_ref": species_ref,
+            "species_entry_ref": species_entry_ref,
+            "reaction_ref": reaction_ref,
+            "reaction_entry_ref": reaction_entry_ref,
+            "has_species": has_species,
+            "has_reactions": has_reactions,
+            "has_states": has_states,
+            "has_channels": has_channels,
+            "has_solves": has_solves,
+            "has_kinetics": has_kinetics,
+            "has_chebyshev": has_chebyshev,
+            "has_plog": has_plog,
+            "has_point_kinetics": has_point_kinetics,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "temperature_min": temperature_min,
+            "temperature_max": temperature_max,
+            "pressure_min": pressure_min,
+            "pressure_max": pressure_max,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        if method_http.upper() == "GET":
+            return self.request_json(
+                "GET",
+                "/scientific/networks/search",
+                params=body,
+                authenticated=False,
+            ).data
+        return self.request_json(
+            "POST",
+            "/scientific/networks/search",
+            json={key: value for key, value in body.items() if value is not None},
+            authenticated=False,
+        ).data
+
+    def search_network_kinetics(
+        self,
+        *,
+        network_kinetics_ref: str | None = None,
+        network_ref: str | None = None,
+        network_solve_ref: str | None = None,
+        source_species_entry_refs: list[str] | None = None,
+        sink_species_entry_refs: list[str] | None = None,
+        source_smiles: list[str] | None = None,
+        sink_smiles: list[str] | None = None,
+        model_kind: str | None = None,
+        temperature_min: float | None = None,
+        temperature_max: float | None = None,
+        pressure_min: float | None = None,
+        pressure_max: float | None = None,
+        has_chebyshev: bool | None = None,
+        has_plog: bool | None = None,
+        has_points: bool | None = None,
+        has_source_calculations: bool | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method_http: str = "POST",
+    ) -> NetworkKineticsSearchResponse:
+        """Search PDep kinetics with stoichiometric source/sink filters."""
+
+        body = {
+            "network_kinetics_ref": network_kinetics_ref,
+            "network_ref": network_ref,
+            "network_solve_ref": network_solve_ref,
+            "source_species_entry_refs": source_species_entry_refs,
+            "sink_species_entry_refs": sink_species_entry_refs,
+            "source_smiles": source_smiles,
+            "sink_smiles": sink_smiles,
+            "model_kind": model_kind,
+            "temperature_min": temperature_min,
+            "temperature_max": temperature_max,
+            "pressure_min": pressure_min,
+            "pressure_max": pressure_max,
+            "has_chebyshev": has_chebyshev,
+            "has_plog": has_plog,
+            "has_points": has_points,
+            "has_source_calculations": has_source_calculations,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        if method_http.upper() == "GET":
+            return self.request_json(
+                "GET",
+                "/scientific/network-kinetics/search",
+                params=body,
+                authenticated=False,
+            ).data
+        return self.request_json(
+            "POST",
+            "/scientific/network-kinetics/search",
+            json={key: value for key, value in body.items() if value is not None},
+            authenticated=False,
+        ).data
+
+    def search_statmech(
+        self,
+        *,
+        species_ref: str | None = None,
+        species_entry_ref: str | None = None,
+        statmech_ref: str | None = None,
+        conformer_group_ref: str | None = None,
+        conformer_observation_ref: str | None = None,
+        model_kind: str | None = None,
+        has_source_calculations: bool | None = None,
+        has_freq_calculation: bool | None = None,
+        has_rotor_scans: bool | None = None,
+        has_torsions: bool | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method_http: str = "POST",
+    ) -> StatmechSearchResponse:
+        """Search statmech records by species, model, evidence, or provenance."""
+
+        body = {
+            "species_ref": species_ref,
+            "species_entry_ref": species_entry_ref,
+            "statmech_ref": statmech_ref,
+            "conformer_group_ref": conformer_group_ref,
+            "conformer_observation_ref": conformer_observation_ref,
+            "model_kind": model_kind,
+            "has_source_calculations": has_source_calculations,
+            "has_freq_calculation": has_freq_calculation,
+            "has_rotor_scans": has_rotor_scans,
+            "has_torsions": has_torsions,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        if method_http.upper() == "GET":
+            return self.request_json(
+                "GET",
+                "/scientific/statmech/search",
+                params=body,
+                authenticated=False,
+            ).data
+        return self.request_json(
+            "POST",
+            "/scientific/statmech/search",
+            json={key: value for key, value in body.items() if value is not None},
+            authenticated=False,
+        ).data
+
+    def search_transport(
+        self,
+        *,
+        species_ref: str | None = None,
+        species_entry_ref: str | None = None,
+        transport_ref: str | None = None,
+        model_kind: str | None = None,
+        has_source_calculations: bool | None = None,
+        has_lj_parameters: bool | None = None,
+        has_dipole_moment: bool | None = None,
+        has_polarizability: bool | None = None,
+        has_rotational_relaxation: bool | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method_http: str = "POST",
+    ) -> TransportSearchResponse:
+        """Search transport records by species, parameters, or provenance."""
+
+        body = {
+            "species_ref": species_ref,
+            "species_entry_ref": species_entry_ref,
+            "transport_ref": transport_ref,
+            "model_kind": model_kind,
+            "has_source_calculations": has_source_calculations,
+            "has_lj_parameters": has_lj_parameters,
+            "has_dipole_moment": has_dipole_moment,
+            "has_polarizability": has_polarizability,
+            "has_rotational_relaxation": has_rotational_relaxation,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        if method_http.upper() == "GET":
+            return self.request_json(
+                "GET",
+                "/scientific/transport/search",
+                params=body,
+                authenticated=False,
+            ).data
+        return self.request_json(
+            "POST",
+            "/scientific/transport/search",
+            json={key: value for key, value in body.items() if value is not None},
+            authenticated=False,
+        ).data
+
+    def search_artifacts(
+        self,
+        *,
+        artifact_kind: str | None = None,
+        filename: str | None = None,
+        filename_contains: str | None = None,
+        sha256: str | None = None,
+        has_sha256: bool | None = None,
+        has_bytes: bool | None = None,
+        bytes_min: int | None = None,
+        bytes_max: int | None = None,
+        calculation_ref: str | None = None,
+        calculation_type: str | None = None,
+        quality: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        species_entry_ref: str | None = None,
+        transition_state_entry_ref: str | None = None,
+        conformer_observation_ref: str | None = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method_http: str = "POST",
+    ) -> ArtifactSearchResponse:
+        """Search artifact metadata; raw artifact bodies are never returned."""
+
+        body = {
+            "artifact_kind": artifact_kind,
+            "filename": filename,
+            "filename_contains": filename_contains,
+            "sha256": sha256,
+            "has_sha256": has_sha256,
+            "has_bytes": has_bytes,
+            "bytes_min": bytes_min,
+            "bytes_max": bytes_max,
+            "calculation_ref": calculation_ref,
+            "calculation_type": calculation_type,
+            "quality": quality,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "species_entry_ref": species_entry_ref,
+            "transition_state_entry_ref": transition_state_entry_ref,
+            "conformer_observation_ref": conformer_observation_ref,
+            "created_after": created_after,
+            "created_before": created_before,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        if method_http.upper() == "GET":
+            return self.request_json(
+                "GET",
+                "/scientific/artifacts/search",
+                params=body,
+                authenticated=False,
+            ).data
+        return self.request_json(
+            "POST",
+            "/scientific/artifacts/search",
+            json={key: value for key, value in body.items() if value is not None},
+            authenticated=False,
+        ).data
+
+    def iter_species(self, **parameters: Any) -> Iterator[SpeciesRecord]:
+        """Lazily yield every species record matching ``search_species``."""
+
+        return iter_paginated_records(self.search_species, parameters)
+
+    def iter_reactions(self, **parameters: Any) -> Iterator[ReactionRecord]:
+        """Lazily yield every reaction record matching ``search_reactions``."""
+
+        return iter_paginated_records(self.search_reactions, parameters)
+
+    def iter_thermo(self, **parameters: Any) -> Iterator[ThermoRecord]:
+        """Lazily yield every thermo record matching ``search_thermo``."""
+
+        return iter_paginated_records(self.search_thermo, parameters)
+
+    def iter_kinetics(self, **parameters: Any) -> Iterator[KineticsRecord]:
+        """Lazily yield every kinetics record matching ``search_kinetics``."""
+
+        return iter_paginated_records(self.search_kinetics, parameters)
+
+    def iter_species_calculations(
+        self, **parameters: Any
+    ) -> Iterator[SpeciesCalculationRecord]:
+        """Lazily yield matching species-calculation records."""
+
+        return iter_paginated_records(self.search_species_calculations, parameters)
+
+    def iter_networks(self, **parameters: Any) -> Iterator[NetworkRecord]:
+        """Lazily yield every network matching ``search_networks``."""
+
+        return iter_paginated_records(self.search_networks, parameters)
+
+    def iter_network_kinetics(
+        self, **parameters: Any
+    ) -> Iterator[NetworkKineticsRecord]:
+        """Lazily yield PDep kinetics records matching the supplied filters."""
+
+        return iter_paginated_records(self.search_network_kinetics, parameters)
+
+    def iter_statmech(self, **parameters: Any) -> Iterator[StatmechRecord]:
+        """Lazily yield statmech records matching the supplied filters."""
+
+        return iter_paginated_records(self.search_statmech, parameters)
+
+    def iter_transport(self, **parameters: Any) -> Iterator[TransportRecord]:
+        """Lazily yield transport records matching the supplied filters."""
+
+        return iter_paginated_records(self.search_transport, parameters)
+
+    def iter_artifacts(self, **parameters: Any) -> Iterator[ArtifactRecord]:
+        """Lazily yield artifact metadata records matching the filters."""
+
+        return iter_paginated_records(self.search_artifacts, parameters)
 
     def get_reaction_full(
         self,

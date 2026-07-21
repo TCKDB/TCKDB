@@ -214,6 +214,34 @@ kinetics = client.search_kinetics(
 )
 ```
 
+Searches still return ordinary JSON dictionaries. Exported ``TypedDict``
+aliases add editor/type-checker guidance without adding runtime validation:
+
+```python
+from tckdb_client import NetworkKineticsSearchResponse
+
+page: NetworkKineticsSearchResponse = client.search_network_kinetics(
+    source_species_entry_refs=["spe_reactant", "spe_reactant"],
+    sink_species_entry_refs=["spe_product"],
+    include=["coefficients"],
+)
+```
+
+Each supported paginated search also has a lazy ``iter_*`` form. It keeps
+filters and include tokens unchanged, follows returned pagination metadata,
+and raises ``TCKDBPaginationError`` on malformed, changing, or non-advancing
+pages. ``collapse="first"`` yields the one collapsed record and stops because
+hosted ``pagination.total`` intentionally remains the pre-collapse count.
+
+```python
+for record in client.iter_network_kinetics(
+    source_smiles=["[CH3]", "[CH3]"],
+    sink_smiles=["CC"],
+    include=["coefficients", "source_calculations"],
+):
+    print(record["network_kinetics"]["network_kinetics_ref"])
+```
+
 **Discovery-only** (use only when you want the identity layer without
 records — e.g. listing matched candidates in a UI):
 
@@ -394,8 +422,8 @@ Notes:
 - ``include`` accepts a Python list and is serialized as repeated query
   parameters (``?include=a&include=b``).
 - Returned values are parsed JSON ``dict`` envelopes matching the
-  response models in ``backend/app/schemas/reads/scientific_*.py``. The
-  client does not impose typed models.
+  response models in ``backend/app/schemas/reads/scientific_*.py``. Public
+  ``TypedDict`` aliases describe that wire shape but do not wrap or coerce it.
 
 ## Examples
 

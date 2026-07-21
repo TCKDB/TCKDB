@@ -12,7 +12,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError, NoResultFound, OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.error_contract import CodedValueError, error_envelope
+from app.api.error_contract import (
+    CodedValueError,
+    error_envelope,
+    validation_detail_code,
+)
 from app.services.artifact_storage import ArtifactStorageUnavailable
 from app.services.idempotency import (
     IDEMPOTENCY_UNIQUE_CONSTRAINT,
@@ -59,8 +63,15 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
             fallback_code="validation_error",
         )
     else:
+        validation_detail = (
+            exc.errors() if callable(getattr(exc, "errors", None)) else str(exc)
+        )
         content = error_envelope(
-            str(exc), fallback_code="validation_error"
+            str(exc),
+            code=validation_detail_code(
+                validation_detail, fallback="validation_error"
+            ),
+            fallback_code="validation_error",
         )
     return JSONResponse(status_code=422, content=content)
 
@@ -68,11 +79,16 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
 def _request_validation_error_handler(
     _request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    details = exc.errors()
     return JSONResponse(
         status_code=422,
         content=jsonable_encoder(
             error_envelope(
-                exc.errors(), fallback_code="request_validation_error"
+                details,
+                code=validation_detail_code(
+                    details, fallback="request_validation_error"
+                ),
+                fallback_code="request_validation_error",
             )
         ),
     )

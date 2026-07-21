@@ -20,6 +20,10 @@ class TCKDBConnectionError(TCKDBError):
     """Network failure or timeout — request never produced an HTTP status."""
 
 
+class TCKDBPaginationError(TCKDBError):
+    """A paginated response was malformed or could not advance safely."""
+
+
 class TCKDBHTTPError(TCKDBError):
     """Server responded with a non-success status."""
 
@@ -66,6 +70,7 @@ class TCKDBIdempotencyConflictError(TCKDBConflictError):
 __all__ = [
     "TCKDBError",
     "TCKDBConnectionError",
+    "TCKDBPaginationError",
     "TCKDBHTTPError",
     "TCKDBAuthenticationError",
     "TCKDBForbiddenError",

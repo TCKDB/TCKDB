@@ -9,7 +9,10 @@ top-level ``code`` field.
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
+_NESTED_CODE_PATTERN = re.compile(r"(?<![a-z0-9_])([a-z][a-z0-9_]*_[a-z0-9_]+): ")
 
 
 class CodedValueError(ValueError):
@@ -39,6 +42,36 @@ def detail_code(detail: object, *, fallback: str) -> str:
         prefix, separator, _tail = detail.partition(": ")
         if separator and prefix and all(ch.islower() or ch.isdigit() or ch == "_" for ch in prefix):
             return prefix
+    return fallback
+
+
+def validation_detail_code(detail: object, *, fallback: str) -> str:
+    """Promote one unambiguous nested ``snake_case:`` validation code."""
+
+    # Pydantic/FastAPI expose the independent validation failures as the
+    # outer list. Even if two failures happen to carry the same embedded
+    # code, promoting that code would hide the fact that the request failed
+    # in more than one place.
+    if isinstance(detail, (list, tuple)) and len(detail) != 1:
+        return fallback
+
+    candidates: set[str] = set()
+
+    def collect(value: object) -> None:
+        if isinstance(value, dict):
+            for nested in value.values():
+                collect(nested)
+        elif isinstance(value, (list, tuple)):
+            for nested in value:
+                collect(nested)
+        elif isinstance(value, BaseException):
+            collect(str(value))
+        elif isinstance(value, str):
+            candidates.update(_NESTED_CODE_PATTERN.findall(value))
+
+    collect(detail)
+    if len(candidates) == 1:
+        return candidates.pop()
     return fallback
 
 
@@ -80,4 +113,5 @@ __all__ = [
     "detail_code",
     "error_envelope",
     "reject_unsupported_filters",
+    "validation_detail_code",
 ]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jsonschema import Draft202012Validator
 
+from app.api.error_contract import validation_detail_code
 from app.api.public_openapi import project_hosted_openapi
 from tests.services.scientific_read._factories import (
     make_species,
@@ -49,6 +50,18 @@ def test_native_request_validation_uses_structured_envelope(client):
     assert body["code"] == "request_validation_error"
     assert isinstance(body["detail"], list)
     assert body["context"] == {}
+
+
+def test_multiple_coded_validation_failures_keep_the_generic_code():
+    details = [
+        {"msg": "Value error, first_conflict: one"},
+        {"msg": "Value error, first_conflict: two"},
+    ]
+
+    assert (
+        validation_detail_code(details, fallback="request_validation_error")
+        == "request_validation_error"
+    )
 
 
 def test_species_inchi_fails_closed_even_when_smiles_is_supplied(client):

@@ -71,7 +71,7 @@ def test_pressure_bar_is_canonical_and_deprecated_alias_conflicts(client, db_ses
     assert canonical.status_code == 200
     assert canonical.json()["request"]["filter"]["pressure_bar"] == 1.0
 
-    conflict = client.post(
+    post_conflict = client.post(
         "/api/v1/scientific/kinetics/search",
         json={
             "reactants": ["XP1"],
@@ -80,8 +80,32 @@ def test_pressure_bar_is_canonical_and_deprecated_alias_conflicts(client, db_ses
             "pressure": 10.0,
         },
     )
-    assert conflict.status_code == 422
-    assert "pressure_alias_conflict" in conflict.text
+    get_conflict = client.get(
+        "/api/v1/scientific/kinetics/search",
+        params={
+            "reactants": "XP1",
+            "products": "YP1",
+            "pressure_bar": 1.0,
+            "pressure": 10.0,
+        },
+    )
+    for conflict in (post_conflict, get_conflict):
+        assert conflict.status_code == 422
+        assert conflict.json()["code"] == "pressure_alias_conflict"
+        assert conflict.json()["context"] == {}
+
+
+def test_ordinary_validation_errors_keep_generic_codes(client):
+    post_error = client.post(
+        "/api/v1/scientific/kinetics/search",
+        json={"reactants": "not-a-list", "products": 4},
+    )
+    get_error = client.get(
+        "/api/v1/scientific/kinetics/search?reactants=XP1&limit=999",
+    )
+
+    assert post_error.json()["code"] == "request_validation_error"
+    assert get_error.json()["code"] == "request_validation_error"
 
 
 def test_assessment_summary_is_opt_in_for_get_and_post(client, db_session):
