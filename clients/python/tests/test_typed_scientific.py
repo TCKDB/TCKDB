@@ -317,6 +317,80 @@ def test_iterator_rejects_a_server_offset_that_does_not_advance() -> None:
         list(iter_paginated_records(lambda **_kwargs: next(pages), {"limit": 1}))
 
 
+@pytest.mark.parametrize("offset", [3, 5])
+def test_iterator_accepts_empty_page_at_or_beyond_total(offset: int) -> None:
+    calls = 0
+
+    def fetch(**parameters: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return {
+            "records": [],
+            "pagination": {
+                "offset": parameters["offset"],
+                "limit": parameters["limit"],
+                "returned": 0,
+                "total": 3,
+            },
+        }
+
+    assert list(
+        iter_paginated_records(fetch, {"offset": offset, "limit": 2})
+    ) == []
+    assert calls == 1
+
+
+@pytest.mark.parametrize(
+    ("iterator_name", "parameters", "expected_method"),
+    [
+        ("iter_species", {"smiles": "C", "offset": 3}, "GET"),
+        ("iter_networks", {"network_ref": "net_a", "offset": 5}, "POST"),
+    ],
+)
+def test_representative_iterators_accept_offsets_at_or_beyond_total(
+    iterator_name: str,
+    parameters: dict[str, Any],
+    expected_method: str,
+) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "GET":
+            request_offset = int(parse_qs(urlsplit(str(request.url)).query)["offset"][0])
+        else:
+            request_offset = json.loads(request.content)["offset"]
+        return httpx.Response(
+            200,
+            json={
+                "records": [],
+                "pagination": {
+                    "offset": request_offset,
+                    "limit": 2,
+                    "returned": 0,
+                    "total": 3,
+                },
+            },
+        )
+
+    client, _recorder = make_client(handler)
+
+    assert list(
+        getattr(client, iterator_name)(**parameters, limit=2)
+    ) == []
+    assert [request.method for request in requests] == [expected_method]
+
+
+def test_iterator_rejects_nonempty_page_past_total() -> None:
+    page = {
+        "records": [{"ordinal": 0}],
+        "pagination": {"offset": 0, "limit": 1, "returned": 1, "total": 0},
+    }
+
+    with pytest.raises(TCKDBPaginationError, match="extends beyond"):
+        list(iter_paginated_records(lambda **_kwargs: page, {"limit": 1}))
+
+
 def test_collapsed_iterator_stops_after_the_single_collapsed_record() -> None:
     calls = 0
 

@@ -98,15 +98,17 @@ def iter_paginated_records(
             raise TCKDBPaginationError(
                 "Malformed pagination: returned exceeds the server page limit."
             )
-        if page_offset + returned > total:
-            raise TCKDBPaginationError(
-                "Malformed pagination: page extends beyond the reported total."
-            )
         if expected_total is None:
             expected_total = total
         elif total != expected_total:
             raise TCKDBPaginationError(
                 "Pagination total changed while iterating; restart the query."
+            )
+        if returned == 0 and page_offset >= total:
+            return
+        if page_offset + returned > total:
+            raise TCKDBPaginationError(
+                "Malformed pagination: page extends beyond the reported total."
             )
 
         yield from cast(list[RecordT], records)
