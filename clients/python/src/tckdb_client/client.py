@@ -902,6 +902,7 @@ class TCKDBClient:
         *,
         temperature_min: float | None = None,
         temperature_max: float | None = None,
+        pressure_bar: float | None = None,
         pressure: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
@@ -923,11 +924,13 @@ class TCKDBClient:
         422 / 404. Returns the parsed ``ScientificReactionKineticsResponse``
         JSON envelope. Provenance keys are always present in each record;
         TS-chain fields are ``null`` for non-TS-backed kinetics.
+        ``pressure_bar`` is canonical; ``pressure`` is a deprecated alias.
         """
         path = f"/scientific/reaction-entries/{reaction_entry_id}/kinetics"
         params = {
             "temperature_min": temperature_min,
             "temperature_max": temperature_max,
+            "pressure_bar": pressure_bar,
             "pressure": pressure,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
@@ -1078,6 +1081,7 @@ class TCKDBClient:
         reaction_entry_ref: str | None = None,
         temperature_min: float | None = None,
         temperature_max: float | None = None,
+        pressure_bar: float | None = None,
         pressure: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
@@ -1099,6 +1103,7 @@ class TCKDBClient:
         encode awkwardly in URL query strings; pass ``method="GET"`` for the
         repeated-query-param form. Non-TS-backed kinetics surface with null
         TS-chain provenance fields, exactly like the entry-id detail endpoint.
+        ``pressure_bar`` is canonical; ``pressure`` is a deprecated alias.
         """
         body = {
             "reactants": reactants,
@@ -1109,6 +1114,7 @@ class TCKDBClient:
             "reaction_entry_ref": reaction_entry_ref,
             "temperature_min": temperature_min,
             "temperature_max": temperature_max,
+            "pressure_bar": pressure_bar,
             "pressure": pressure,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,

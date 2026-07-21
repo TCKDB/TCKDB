@@ -61,6 +61,29 @@ def test_post_accepts_json_body(client, db_session):
     assert len(resp.json()["records"]) == 1
 
 
+def test_pressure_bar_is_canonical_and_deprecated_alias_conflicts(client, db_session):
+    _setup(db_session, r="XP1", p="YP1")
+
+    canonical = client.post(
+        "/api/v1/scientific/kinetics/search",
+        json={"reactants": ["XP1"], "products": ["YP1"], "pressure_bar": 1.0},
+    )
+    assert canonical.status_code == 200
+    assert canonical.json()["request"]["filter"]["pressure_bar"] == 1.0
+
+    conflict = client.post(
+        "/api/v1/scientific/kinetics/search",
+        json={
+            "reactants": ["XP1"],
+            "products": ["YP1"],
+            "pressure_bar": 1.0,
+            "pressure": 10.0,
+        },
+    )
+    assert conflict.status_code == 422
+    assert "pressure_alias_conflict" in conflict.text
+
+
 def test_post_rejects_query_string_filters(client, db_session):
     _setup(db_session, r="X3", p="Y3")
 

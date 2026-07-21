@@ -35,7 +35,15 @@ def kinetics_search_get(
     reaction_entry_ref: str | None = Query(None),
     temperature_min: float | None = Query(None),
     temperature_max: float | None = Query(None),
-    pressure: float | None = Query(None),
+    pressure_bar: float | None = Query(
+        None, gt=0, description="Requested pressure in bar."
+    ),
+    pressure: float | None = Query(
+        None,
+        gt=0,
+        deprecated=True,
+        description="Deprecated alias for pressure_bar; retained for one release.",
+    ),
     model_kind: KineticsModelKind | None = Query(None),
     level_of_theory_id: int | None = Query(None),
     level_of_theory_ref: str | None = Query(None),
@@ -65,6 +73,7 @@ def kinetics_search_get(
         reaction_entry_ref=reaction_entry_ref,
         temperature_min=temperature_min,
         temperature_max=temperature_max,
+        pressure_bar=pressure_bar,
         pressure=pressure,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,

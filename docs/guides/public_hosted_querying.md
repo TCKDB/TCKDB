@@ -129,23 +129,40 @@ client.search_kinetics(
     products=["[CH3]", "O"],
     temperature_min=500,
     temperature_max=2000,
+    pressure_bar=1.0,
     include=["provenance", "review"],
 )
 ```
 
-Lowest single-point energy for a species:
+`pressure_bar` is an applicability filter, not an annotation: finite-pressure
+queries exclude high-pressure-limit records, require an exact match for an
+apparent-at-pressure fit, and require the requested pressure to lie inside a
+PLOG or Chebyshev domain. Returned records explain the match in
+`pressure_coverage`. The deprecated `pressure` alias is accepted for one
+release and conflicts with `pressure_bar` are rejected.
+
+Lowest single-point energy for one species entry at one level of theory:
 
 ```python
 client.search_species_calculations(
-    smiles="O",
-    calculation_type="sp",
+    species_entry_ref="spe_...",
     level_of_theory_ref="lot_...",
+    calculation_type="sp",
     ranking="lowest_energy",
     collapse="first",
     limit=1,
     include=["provenance"],
 )
 ```
+
+Both refs are required because raw electronic energies are only rankable
+within an explicitly comparable species-entry/level-of-theory set.
+
+When `reaction_path_degeneracy` is present on a kinetics record, its
+machine-readable flags state that the returned reported/fitted rate already
+includes that degeneracy. Consumers must not multiply the rate again. TCKDB
+does not transform stored Arrhenius, PLOG, falloff, or Chebyshev coefficients
+when serving them.
 
 Optimized geometry for a species:
 

@@ -15223,8 +15223,28 @@
               }
             ]
           },
+          "pressure_coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PressureCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "provenance": {
             "$ref": "#/components/schemas/KineticsProvenance"
+          },
+          "reaction_path_degeneracy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReactionPathDegeneracy"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"
@@ -15481,13 +15501,29 @@
           "pressure": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "number"
               },
               {
                 "type": "null"
               }
             ],
+            "deprecated": true,
+            "description": "Deprecated alias for pressure_bar; retained for one release.",
             "title": "Pressure"
+          },
+          "pressure_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Requested pressure in bar.",
+            "title": "Pressure Bar"
           },
           "products": {
             "items": {
@@ -23992,6 +24028,70 @@
         "title": "PressureContext",
         "type": "string"
       },
+      "PressureCoverage": {
+        "description": "Why a returned rate is applicable at the requested pressure.\n\nRecords with indeterminate or incompatible pressure semantics are filtered\nout, so ``applies_at_requested_pressure`` is always true when this block is\npresent. ``basis`` distinguishes exact-pressure, bounded-surface,\nfunctional pressure-dependence, and pressure-independent records.",
+        "properties": {
+          "applies_at_requested_pressure": {
+            "const": true,
+            "default": true,
+            "title": "Applies At Requested Pressure",
+            "type": "boolean"
+          },
+          "basis": {
+            "enum": [
+              "pressure_independent",
+              "exact_pressure",
+              "bounded_pressure_surface",
+              "pressure_dependent_model"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "record_pressure_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Pressure Bar"
+          },
+          "record_pressure_max_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Pressure Max Bar"
+          },
+          "record_pressure_min_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Pressure Min Bar"
+          },
+          "requested_pressure_bar": {
+            "title": "Requested Pressure Bar",
+            "type": "number"
+          }
+        },
+        "required": [
+          "requested_pressure_bar",
+          "basis"
+        ],
+        "title": "PressureCoverage",
+        "type": "object"
+      },
       "PressureUnit": {
         "enum": [
           "bar",
@@ -24626,6 +24726,32 @@
           }
         },
         "title": "ReactionParticipantUpload",
+        "type": "object"
+      },
+      "ReactionPathDegeneracy": {
+        "description": "Stored path degeneracy plus the rate-coefficient convention.\n\nTCKDB returns the reported/fitted rate coefficient unchanged. A stored\ndegeneracy is metadata already incorporated in that rate; consumers must\nnot multiply the rate a second time.",
+        "properties": {
+          "apply_to_rate_coefficient": {
+            "const": false,
+            "default": false,
+            "title": "Apply To Rate Coefficient",
+            "type": "boolean"
+          },
+          "reported_rate_coefficient_includes_degeneracy": {
+            "const": true,
+            "default": true,
+            "title": "Reported Rate Coefficient Includes Degeneracy",
+            "type": "boolean"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "ReactionPathDegeneracy",
         "type": "object"
       },
       "ReactionRole": {
@@ -54361,18 +54487,42 @@
             }
           },
           {
+            "description": "Requested pressure in bar.",
             "in": "query",
-            "name": "pressure",
+            "name": "pressure_bar",
             "required": false,
             "schema": {
               "anyOf": [
                 {
+                  "exclusiveMinimum": 0,
                   "type": "number"
                 },
                 {
                   "type": "null"
                 }
               ],
+              "description": "Requested pressure in bar.",
+              "title": "Pressure Bar"
+            }
+          },
+          {
+            "deprecated": true,
+            "description": "Deprecated alias for pressure_bar; retained for one release.",
+            "in": "query",
+            "name": "pressure",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "deprecated": true,
+              "description": "Deprecated alias for pressure_bar; retained for one release.",
               "title": "Pressure"
             }
           },
@@ -56773,18 +56923,42 @@
             }
           },
           {
+            "description": "Requested pressure in bar.",
             "in": "query",
-            "name": "pressure",
+            "name": "pressure_bar",
             "required": false,
             "schema": {
               "anyOf": [
                 {
+                  "exclusiveMinimum": 0,
                   "type": "number"
                 },
                 {
                   "type": "null"
                 }
               ],
+              "description": "Requested pressure in bar.",
+              "title": "Pressure Bar"
+            }
+          },
+          {
+            "deprecated": true,
+            "description": "Deprecated alias for pressure_bar; retained for one release.",
+            "in": "query",
+            "name": "pressure",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "deprecated": true,
+              "description": "Deprecated alias for pressure_bar; retained for one release.",
               "title": "Pressure"
             }
           },

@@ -187,8 +187,10 @@ lowest_energy  — energy_hartree ASC NULLS LAST, review_rank ASC, created_at DE
 ```
 
 `lowest_energy` is **only legal when `calculation_type` is `sp` or
-`opt`**, because those are the calculation types where the energy
-field is unambiguous and a row-level scalar:
+`opt` and both an exact `species_entry_ref` and exact
+`level_of_theory_ref` are supplied**. Those constraints make the energy
+candidate set physically comparable, while the calculation-type restriction
+selects an unambiguous row-level scalar:
 
 - `calculation_type=sp` → ranks by `calc_sp_result.electronic_energy_hartree ASC`
 - `calculation_type=opt` → ranks by `calc_opt_result.final_energy_hartree ASC`
@@ -196,6 +198,14 @@ field is unambiguous and a row-level scalar:
 For any other `calculation_type` (or for an unfiltered `calculation_type`),
 `ranking=lowest_energy` returns:
 
+```
+
+If either exact comparability ref is absent, the endpoint returns:
+
+```
+422 Unprocessable Entity
+{ "code": "unsafe_lowest_energy_comparison",
+  "detail": "ranking=lowest_energy requires exact species_entry_ref and level_of_theory_ref filters." }
 ```
 422 Unprocessable Entity
 { "code": "unsupported_ranking_for_calculation_type",
@@ -538,6 +548,7 @@ that has freq/sp children.
 | Unknown `calculation_type` | 422 | (FastAPI enum validation) |
 | Unknown `ranking` value | 422 | `unknown_ranking` |
 | `ranking=lowest_energy` with non-{sp,opt} `calculation_type` (or no calculation_type) | 422 | `unsupported_ranking_for_calculation_type` |
+| `ranking=lowest_energy` without exact `species_entry_ref` and `level_of_theory_ref` | 422 | `unsafe_lowest_energy_comparison` |
 | Unknown `include` token | 422 | `unknown_include_token` |
 | `sort=` supplied | 422 | `client_sort_not_supported` |
 | `temperature_min > temperature_max` | n/a — endpoint has no temperature filters in v0 |
@@ -560,10 +571,11 @@ species_entry_id not found → NotFoundError
 search returns 200 empty for unmatched chemistry
 calculation_type=sp returns only SP calculations
 calculation_type=opt returns only opt calculations
-ranking=lowest_energy with calculation_type=sp orders by calc_sp_result.electronic_energy_hartree ASC
-ranking=lowest_energy with calculation_type=opt orders by calc_opt_result.final_energy_hartree ASC
+ranking=lowest_energy with exact species_entry_ref + level_of_theory_ref + calculation_type=sp orders by calc_sp_result.electronic_energy_hartree ASC
+ranking=lowest_energy with exact species_entry_ref + level_of_theory_ref + calculation_type=opt orders by calc_opt_result.final_energy_hartree ASC
 ranking=lowest_energy with calculation_type=freq → 422 unsupported_ranking_for_calculation_type
 ranking=lowest_energy without calculation_type → 422 unsupported_ranking_for_calculation_type
+ranking=lowest_energy without both exact comparability refs → 422 unsafe_lowest_energy_comparison
 ranking=latest orders by created_at DESC
 ranking=earliest orders by created_at ASC
 NULLS LAST: a calc with null energy ranks below a calc with populated energy under lowest_energy

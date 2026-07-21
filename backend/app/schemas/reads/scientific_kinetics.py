@@ -9,7 +9,10 @@ for TS-backed computational kinetics and ``null`` for non-TS-backed records
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import math
+from typing import Literal, Self
+
+from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     ArrheniusAUnits,
@@ -51,7 +54,17 @@ class KineticsReadRequest(BaseModel):
 
     temperature_min: float | None = None
     temperature_max: float | None = None
-    pressure: float | None = None
+    pressure_bar: float | None = Field(
+        default=None,
+        gt=0,
+        description="Requested pressure in bar.",
+    )
+    pressure: float | None = Field(
+        default=None,
+        gt=0,
+        deprecated=True,
+        description="Deprecated alias for pressure_bar; retained for one release.",
+    )
     model_kind: KineticsModelKind | None = None
     level_of_theory_id: int | None = None
     # Phase C: LoT may be supplied by ref instead of (or alongside) id.
@@ -67,6 +80,24 @@ class KineticsReadRequest(BaseModel):
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
+
+    @model_validator(mode="after")
+    def _resolve_pressure_alias(self) -> Self:
+        pressure_alias = self.__dict__.get("pressure")
+        if self.pressure_bar is not None and pressure_alias is not None:
+            if not math.isclose(
+                self.pressure_bar,
+                pressure_alias,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-12,
+            ):
+                raise ValueError(
+                    "pressure_alias_conflict: pressure_bar and deprecated "
+                    "pressure must agree."
+                )
+        elif self.pressure_bar is None:
+            self.pressure_bar = pressure_alias
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +221,41 @@ class ThirdBodyEfficiencyBlock(BaseModel):
     efficiency: float
 
 
+class PressureCoverage(BaseModel):
+    """Why a returned rate is applicable at the requested pressure.
+
+    Records with indeterminate or incompatible pressure semantics are filtered
+    out, so ``applies_at_requested_pressure`` is always true when this block is
+    present. ``basis`` distinguishes exact-pressure, bounded-surface,
+    functional pressure-dependence, and pressure-independent records.
+    """
+
+    requested_pressure_bar: float
+    applies_at_requested_pressure: Literal[True] = True
+    basis: Literal[
+        "pressure_independent",
+        "exact_pressure",
+        "bounded_pressure_surface",
+        "pressure_dependent_model",
+    ]
+    record_pressure_bar: float | None = None
+    record_pressure_min_bar: float | None = None
+    record_pressure_max_bar: float | None = None
+
+
+class ReactionPathDegeneracy(BaseModel):
+    """Stored path degeneracy plus the rate-coefficient convention.
+
+    TCKDB returns the reported/fitted rate coefficient unchanged. A stored
+    degeneracy is metadata already incorporated in that rate; consumers must
+    not multiply the rate a second time.
+    """
+
+    value: float
+    reported_rate_coefficient_includes_degeneracy: Literal[True] = True
+    apply_to_rate_coefficient: Literal[False] = False
+
+
 class KineticsProvenance(BaseModel):
     """Provenance block per Phase 2.2 — every key always present, ``null`` if absent.
 
@@ -249,6 +315,8 @@ class KineticsRecord(BaseModel):
     is_third_body: bool = False
     pressure_context: PressureContext | None = None
     pressure_bar: float | None = None
+    pressure_coverage: PressureCoverage | None = None
+    reaction_path_degeneracy: ReactionPathDegeneracy | None = None
     plog_entries: list[PlogEntryBlock] | None = None
     chebyshev: ChebyshevBlock | None = None
     falloff: FalloffBlock | None = None

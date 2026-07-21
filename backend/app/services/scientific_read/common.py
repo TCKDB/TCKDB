@@ -13,8 +13,8 @@ Each service module imports from here so the rules are defined once.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, Any, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,6 +35,13 @@ from app.schemas.reads.scientific_common import (
 
 if TYPE_CHECKING:
     pass
+
+
+class PaginatedResponse(Protocol):
+    """Minimal response surface consumed by composed-search pagination."""
+
+    records: list[Any]
+    pagination: Pagination
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +86,67 @@ def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
             f"<= {settings.public_max_offset} (got {offset})"
         )
     return offset, limit
+
+
+def collect_bounded_pages(
+    fetch_page: Callable[[int, int], PaginatedResponse],
+    *,
+    resource_name: str,
+) -> list[Any]:
+    """Collect every reachable page for an internal composed search.
+
+    Composed endpoints must not silently treat the first 200 rows as the
+    complete set. Walk all pages within the hosted offset bound and fail
+    explicitly when the complete result is not reachable.
+    """
+    page_size = min(MAX_LIMIT, settings.public_max_limit)
+    max_reachable = settings.public_max_offset + page_size
+    offset = 0
+    expected_total: int | None = None
+    records: list[Any] = []
+
+    while True:
+        response = fetch_page(offset, page_size)
+        page_total = response.pagination.total
+        page_records = list(response.records)
+
+        if expected_total is None:
+            expected_total = page_total
+            if expected_total > max_reachable:
+                raise ValueError(
+                    "composed_search_candidate_limit_exceeded: "
+                    f"{resource_name} matched {expected_total} records, but at most "
+                    f"{max_reachable} can be traversed; narrow the query."
+                )
+        elif page_total != expected_total:
+            raise ValueError(
+                "composed_search_pagination_changed: "
+                f"{resource_name} total changed from {expected_total} to "
+                f"{page_total} while traversing pages."
+            )
+
+        if response.pagination.returned != len(page_records):
+            raise ValueError(
+                "composed_search_invalid_page: "
+                f"{resource_name} pagination.returned did not match records."
+            )
+
+        records.extend(page_records)
+        if len(records) >= expected_total:
+            return records[:expected_total]
+        if not page_records:
+            raise ValueError(
+                "composed_search_pagination_stalled: "
+                f"{resource_name} returned an empty page before its reported total."
+            )
+
+        offset += len(page_records)
+        if offset > settings.public_max_offset:
+            raise ValueError(
+                "composed_search_candidate_limit_exceeded: "
+                f"{resource_name} requires an offset beyond "
+                f"{settings.public_max_offset}; narrow the query."
+            )
 
 
 def validate_includes(

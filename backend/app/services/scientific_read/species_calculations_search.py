@@ -67,6 +67,7 @@ from app.db.models.species import (
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
+    CollapseMode,
     LevelOfTheorySummary,
     Pagination,
     ReviewStatusSummary,
@@ -94,6 +95,7 @@ from app.schemas.reads.scientific_species_calculations import (
 )
 from app.services.scientific_read.common import (
     build_pagination,
+    collect_bounded_pages,
     fetch_review_badges,
     reject_client_sort,
     review_summary,
@@ -341,13 +343,18 @@ def search_species_calculations(
 
 
 def _validate_ranking(request: SpeciesCalculationsSearchRequest) -> None:
-    """``ranking=lowest_energy`` requires ``calculation_type`` in {sp, opt}."""
+    """Validate that lowest-energy candidates are physically comparable."""
     if request.ranking != CalculationRanking.lowest_energy:
         return
     if request.calculation_type not in _LOWEST_ENERGY_LEGAL_TYPES:
         raise ValueError(
             "unsupported_ranking_for_calculation_type: ranking=lowest_energy "
             "requires calculation_type=sp or calculation_type=opt."
+        )
+    if request.species_entry_ref is None or request.level_of_theory_ref is None:
+        raise ValueError(
+            "unsafe_lowest_energy_comparison: ranking=lowest_energy requires "
+            "exact species_entry_ref and level_of_theory_ref filters."
         )
 
 
@@ -421,28 +428,35 @@ def _resolve_species_entry_context(
             "species_entry_ref} is required."
         )
 
-    species_request = SpeciesSearchRequest(
-        smiles=request.smiles,
-        inchi=request.inchi,
-        inchi_key=request.inchi_key,
-        formula=request.formula,
-        charge=request.charge,
-        multiplicity=request.multiplicity,
-        electronic_state_kind=request.electronic_state_kind,
-        species_entry_kind=request.species_entry_kind,
-        # Don't push min_review_status here — calc-level review is shallow per D7.
-        min_review_status=None,
-        include_rejected=request.include_rejected,
-        include_deprecated=request.include_deprecated,
-        offset=0,
-        limit=200,
-        collapse=request.collapse,
-        include=[],
+    def fetch_species_page(page_offset: int, page_limit: int):
+        return search_species(
+            session,
+            SpeciesSearchRequest(
+                smiles=request.smiles,
+                inchi=request.inchi,
+                inchi_key=request.inchi_key,
+                formula=request.formula,
+                charge=request.charge,
+                multiplicity=request.multiplicity,
+                electronic_state_kind=request.electronic_state_kind,
+                species_entry_kind=request.species_entry_kind,
+                min_review_status=None,
+                include_rejected=request.include_rejected,
+                include_deprecated=request.include_deprecated,
+                offset=page_offset,
+                limit=page_limit,
+                collapse=CollapseMode.all,
+                include=[],
+            ),
+        )
+
+    species_records = collect_bounded_pages(
+        fetch_species_page,
+        resource_name="species-calculation discovery candidates",
     )
-    species_resp = search_species(session, species_request)
 
     out: dict[int, SpeciesCalculationsSpeciesContext] = {}
-    for sp_record in species_resp.records:
+    for sp_record in species_records:
         for entry in sp_record.entries:
             out[entry.species_entry_id] = SpeciesCalculationsSpeciesContext(
                 species_id=sp_record.species_id,

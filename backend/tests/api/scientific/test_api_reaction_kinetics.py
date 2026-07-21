@@ -125,6 +125,19 @@ def test_temperature_coverage_metadata_present(client, db_session):
     assert cov["extrapolation_distance_k"] == 500.0
 
 
+def test_deprecated_pressure_alias_echoes_canonical_pressure_bar(client, db_session):
+    entry = _entry(db_session)
+    make_kinetics(db_session, reaction_entry=entry)
+
+    resp = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/kinetics?pressure=1"
+    )
+    assert resp.status_code == 200
+    query_filter = resp.json()["request"]["filter"]
+    assert query_filter["pressure_bar"] == 1.0
+    assert "pressure" not in query_filter
+
+
 def test_unknown_include_token_rejected(client, db_session):
     entry = _entry(db_session)
     resp = client.get(
