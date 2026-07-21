@@ -14,8 +14,9 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.api.routes.scientific._common import parse_include
+from app.db.models.app_user import AppUser
 from app.db.models.common import (
     ArtifactKind,
     CalculationQuality,
@@ -160,6 +161,7 @@ def artifacts_search_post(
     response_class=Response,
     responses={
         200: {"content": {"application/octet-stream": {}}},
+        401: {"description": "Authentication required."},
         404: {"description": "No approved artifact has this digest."},
         502: {"description": "Stored bytes failed integrity verification."},
         503: {"description": "Artifact storage is unavailable."},
@@ -167,9 +169,20 @@ def artifacts_search_post(
 )
 def download_approved_artifact(
     sha256: str = Path(pattern=r"^[0-9a-f]{64}$"),
+    _user: AppUser = Depends(get_current_user),
     session: Session = Depends(get_db),
 ) -> Response:
-    """Download curator-approved bytes by their content-addressed digest."""
+    """Download curator-approved bytes by their content-addressed digest.
+
+    Unlike the metadata search endpoints, which are part of the public
+    read surface, raw-artifact bytes are served only to authenticated
+    callers (any valid API key or session): unredacted logs may embed
+    producer-side scratch paths, usernames, and cluster hostnames that
+    must never reach anonymous clients. This gate is unconditional (no
+    opt-out flag) so no deployment can accidentally re-expose the bytes;
+    see ``docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md``.
+    The digest is still re-verified against the stored bytes below.
+    """
 
     artifact = resolve_approved_artifact_by_sha256(session, sha256)
     if artifact is None:
@@ -199,7 +212,11 @@ def download_approved_artifact(
         content=content,
         media_type=media_type,
         headers={
-            "Cache-Control": "public, max-age=0, must-revalidate",
+            # Authenticated, potentially PII-bearing bytes: forbid shared
+            # caches from retaining them. ``public`` would let a CDN serve
+            # one user's raw log to a later anonymous request for the same
+            # URL, defeating the auth gate (ADR 0004).
+            "Cache-Control": "private, no-store",
             "Content-Disposition": (
                 f"attachment; filename*=UTF-8''{encoded_filename}"
             ),
