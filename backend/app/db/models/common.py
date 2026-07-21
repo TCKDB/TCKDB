@@ -816,6 +816,7 @@ class ReproducibilityGrade(str, Enum):
     so consumers do not have to infer evidence from the grade alone.
     """
 
+    insufficient = "insufficient"
     described = "described"
     auditable = "auditable"
     rerunnable = "rerunnable"

@@ -25065,6 +25065,132 @@
         "title": "RegisterRequest",
         "type": "object"
       },
+      "ReproducibilityAssessmentRead": {
+        "description": "Read projection for one immutable assessment row.",
+        "properties": {
+          "assessed_at": {
+            "format": "date-time",
+            "title": "Assessed At",
+            "type": "string"
+          },
+          "assessor_kind": {
+            "$ref": "#/components/schemas/ReproducibilityAssessorKind"
+          },
+          "assessor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessor User Id"
+          },
+          "context_hash": {
+            "title": "Context Hash",
+            "type": "string"
+          },
+          "context_json": {
+            "additionalProperties": true,
+            "title": "Context Json",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/ReproducibilityGrade"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "missing": {
+            "items": {},
+            "title": "Missing",
+            "type": "array"
+          },
+          "passed": {
+            "items": {},
+            "title": "Passed",
+            "type": "array"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "integer"
+          },
+          "record_type": {
+            "$ref": "#/components/schemas/SubmissionRecordType"
+          },
+          "rubric_name": {
+            "title": "Rubric Name",
+            "type": "string"
+          },
+          "rubric_version": {
+            "title": "Rubric Version",
+            "type": "string"
+          },
+          "source_submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Submission Id"
+          },
+          "warnings": {
+            "items": {},
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "record_type",
+          "record_id",
+          "grade",
+          "rubric_name",
+          "rubric_version",
+          "context_hash",
+          "context_json",
+          "passed",
+          "missing",
+          "warnings",
+          "assessor_kind",
+          "assessor_user_id",
+          "source_submission_id",
+          "assessed_at",
+          "created_at"
+        ],
+        "title": "ReproducibilityAssessmentRead",
+        "type": "object"
+      },
+      "ReproducibilityAssessorKind": {
+        "description": "Who produced a reproducibility assessment snapshot.",
+        "enum": [
+          "system",
+          "curator"
+        ],
+        "title": "ReproducibilityAssessorKind",
+        "type": "string"
+      },
+      "ReproducibilityGrade": {
+        "description": "Highest reproducibility claim supported by one assessment snapshot.\n\nThis vocabulary is independent of record-review state and deterministic\ntrust badges.  The values form an increasing evidence ladder, but the\npersisted assessment also records its passed, missing, and warning checks\nso consumers do not have to infer evidence from the grade alone.",
+        "enum": [
+          "insufficient",
+          "described",
+          "auditable",
+          "rerunnable"
+        ],
+        "title": "ReproducibilityGrade",
+        "type": "string"
+      },
       "ResourceLink": {
         "description": "Links to canonical REST resources.",
         "properties": {
@@ -28070,6 +28196,83 @@
           "pagination"
         ],
         "title": "ScientificReactionSearchResponse",
+        "type": "object"
+      },
+      "ScientificRecordSupersessionRead": {
+        "description": "One immutable scientific-record replacement edge.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "record_type": {
+            "$ref": "#/components/schemas/SubmissionRecordType"
+          },
+          "superseded_record_id": {
+            "title": "Superseded Record Id",
+            "type": "integer"
+          },
+          "superseding_record_id": {
+            "title": "Superseding Record Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "record_type",
+          "superseded_record_id",
+          "superseding_record_id",
+          "reason",
+          "created_by",
+          "created_at"
+        ],
+        "title": "ScientificRecordSupersessionRead",
+        "type": "object"
+      },
+      "ScientificRecordSupersessionRequest": {
+        "additionalProperties": false,
+        "description": "Curator request to replace one accepted record with another.",
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "record_type": {
+            "$ref": "#/components/schemas/SubmissionRecordType"
+          },
+          "superseded_record_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Superseded Record Id",
+            "type": "integer"
+          },
+          "superseding_record_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Superseding Record Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_type",
+          "superseded_record_id",
+          "superseding_record_id",
+          "reason"
+        ],
+        "title": "ScientificRecordSupersessionRequest",
         "type": "object"
       },
       "ScientificSpeciesCalculationsSearchResponse": {
@@ -45103,6 +45306,312 @@
         "summary": "Get Conformer Observation",
         "tags": [
           "conformer-observations"
+        ]
+      }
+    },
+    "/api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/evaluate": {
+      "post": {
+        "description": "Derive and append a system-owned v1 assessment for one target.",
+        "operationId": "evaluate_reproducibility_api_v1_curation_reproducibility_assessments__record_type___record_id__evaluate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SubmissionRecordType"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReproducibilityAssessmentRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Evaluate Reproducibility",
+        "tags": [
+          "curation"
+        ]
+      }
+    },
+    "/api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/latest": {
+      "get": {
+        "description": "Return the latest immutable assessment for one record.",
+        "operationId": "read_latest_reproducibility_assessment_api_v1_curation_reproducibility_assessments__record_type___record_id__latest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SubmissionRecordType"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReproducibilityAssessmentRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Latest Reproducibility Assessment",
+        "tags": [
+          "curation"
+        ]
+      }
+    },
+    "/api/v1/curation/scientific-record-supersessions": {
+      "post": {
+        "description": "Append a same-subject replacement edge and deprecate the older record.",
+        "operationId": "create_scientific_record_supersession_api_v1_curation_scientific_record_supersessions_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScientificRecordSupersessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificRecordSupersessionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Scientific Record Supersession",
+        "tags": [
+          "curation"
         ]
       }
     },

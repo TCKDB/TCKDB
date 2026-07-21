@@ -17,8 +17,12 @@ An explicit directed statement that a new scientific record corrects or replaces
 _Avoid_: Overwrite, edit, replacement in place
 
 **Reproducibility assessment**:
-An append-only, rubric-versioned evaluation of whether a scientific record is described, auditable, or rerunnable from preserved evidence.
+An append-only, rubric-versioned evaluation of whether a scientific record has insufficient evidence or is described, auditable, or rerunnable from preserved evidence.
 _Avoid_: Trust score, review status
+
+**Insufficient**:
+An assessed record that does not meet every minimum requirement for the described grade.
+_Avoid_: Described, unassessed
 
 **Described**:
 A record whose scientific meaning, conditions, and source attribution are sufficient to understand the assertion.

@@ -67,7 +67,17 @@ _RECORD_MODELS: dict[SubmissionRecordType, type[Any]] = {
     SubmissionRecordType.artifact: CalculationArtifact,
 }
 
+SUPPORTED_REPRODUCIBILITY_RECORD_TYPES = frozenset(_RECORD_MODELS)
+
 _MAX_FUTURE_ASSESSMENT_SKEW = timedelta(minutes=5)
+
+
+def resolve_reproducibility_record_model(
+    record_type: str | SubmissionRecordType,
+) -> tuple[SubmissionRecordType, type[Any]]:
+    """Return the normalized record type and its assessment target model."""
+    resolved_type = record_type if isinstance(record_type, SubmissionRecordType) else SubmissionRecordType(record_type)
+    return resolved_type, _RECORD_MODELS[resolved_type]
 
 
 def _naive_utc(value: datetime | None) -> datetime:
@@ -114,7 +124,7 @@ def _require_record_exists(
     record_id: int,
 ) -> None:
     """Reject an assessment whose polymorphic target row does not exist."""
-    model = _RECORD_MODELS[record_type]
+    _, model = resolve_reproducibility_record_model(record_type)
     if session.get(model, record_id) is None:
         raise ValueError(f"{record_type.value} record {record_id} does not exist")
 
