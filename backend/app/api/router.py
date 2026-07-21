@@ -18,6 +18,7 @@ from app.api.routes import (
     bundles,
     calculations,
     conformers,
+    curation,
     energy_corrections,
     geometries,
     health,
@@ -90,6 +91,9 @@ api_router.include_router(
 )
 api_router.include_router(
     record_reviews.router, prefix="/record-reviews", tags=["record-reviews"]
+)
+api_router.include_router(
+    curation.router, prefix="/curation", tags=["curation"]
 )
 
 # Legacy entity-read routers. Wrapped with the auth gate so a hosted
