@@ -388,6 +388,14 @@ class KineticsDirection(str, Enum):
     net = "net"
 
 
+class KineticsDegeneracyConvention(str, Enum):
+    """Whether a stored reaction-path degeneracy is already in the rate."""
+
+    already_applied = "already_applied"
+    not_applied = "not_applied"
+    unknown = "unknown"
+
+
 class TunnelingModel(str, Enum):
     """Tunneling correction applied to a rate coefficient (DR-0032).
 

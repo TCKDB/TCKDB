@@ -1810,7 +1810,7 @@
       },
       "BundleKineticsIn": {
         "additionalProperties": false,
-        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional multiplicative reaction-path degeneracy\n    associated with the reported kinetics expression. ``None`` means\n    no claim is made; do not interpret it as ``1.0``.\n:param note: Optional note.",
+        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional multiplicative reaction-path degeneracy\n    associated with the reported kinetics expression. ``None`` means\n    no claim is made; do not interpret it as ``1.0``.\n:param degeneracy_convention: Whether degeneracy is already included in\n    the reported rate. Defaults to ``unknown`` for legacy producers.\n:param note: Optional note.",
         "properties": {
           "a": {
             "anyOf": [
@@ -1876,6 +1876,10 @@
               }
             ],
             "title": "Degeneracy"
+          },
+          "degeneracy_convention": {
+            "$ref": "#/components/schemas/KineticsDegeneracyConvention",
+            "default": "unknown"
           },
           "is_third_body": {
             "default": false,
@@ -14561,6 +14565,16 @@
         "title": "KineticsCalculationRole",
         "type": "string"
       },
+      "KineticsDegeneracyConvention": {
+        "description": "Whether a stored reaction-path degeneracy is already in the rate.",
+        "enum": [
+          "already_applied",
+          "not_applied",
+          "unknown"
+        ],
+        "title": "KineticsDegeneracyConvention",
+        "type": "string"
+      },
       "KineticsDirection": {
         "description": "Direction a reaction-level kinetics fit describes (DR-0036).\n\nGraph-level ``chem_reaction.reversible`` only says a reaction *can* run\nboth ways; it cannot tell apart a forward-rate fit from a reverse-rate\nfit deposited against the same ``reaction_entry``. This per-record enum\ndisambiguates the two so both can coexist distinctly (needed for\nChemkin/Cantera round-trip, where forward and reverse rates are given\nas separate expressions).\n\n``forward`` / ``reverse`` are relative to the reaction_entry's stored\nreactant→product orientation. ``net`` marks a rate that already folds\nboth directions (e.g. an apparent/observed net rate). A ``NULL`` column\nmeans the producer did not specify — the historical default, so existing\nrows are unaffected.",
         "enum": [
@@ -14950,6 +14964,10 @@
               }
             ],
             "title": "Degeneracy"
+          },
+          "degeneracy_convention": {
+            "$ref": "#/components/schemas/KineticsDegeneracyConvention",
+            "default": "unknown"
           },
           "direction": {
             "anyOf": [
@@ -15763,7 +15781,7 @@
       },
       "KineticsUploadRequest": {
         "additionalProperties": false,
-        "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional reaction-path degeneracy.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
+        "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
         "properties": {
           "a": {
             "anyOf": [
@@ -15845,6 +15863,10 @@
               }
             ],
             "title": "Degeneracy"
+          },
+          "degeneracy_convention": {
+            "$ref": "#/components/schemas/KineticsDegeneracyConvention",
+            "default": "unknown"
           },
           "direction": {
             "anyOf": [
@@ -24885,19 +24907,32 @@
         "type": "object"
       },
       "ReactionPathDegeneracy": {
-        "description": "Stored path degeneracy plus the rate-coefficient convention.\n\nTCKDB returns the reported/fitted rate coefficient unchanged. A stored\ndegeneracy is metadata already incorporated in that rate; consumers must\nnot multiply the rate a second time.",
+        "description": "Stored path degeneracy plus the rate-coefficient convention.\n\nTCKDB returns the reported/fitted rate coefficient unchanged. The explicit\nconvention tells consumers whether they must apply the stored degeneracy;\nlegacy records remain unknown rather than being inferred.",
         "properties": {
           "apply_to_rate_coefficient": {
-            "const": false,
-            "default": false,
-            "title": "Apply To Rate Coefficient",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply To Rate Coefficient"
+          },
+          "convention": {
+            "$ref": "#/components/schemas/KineticsDegeneracyConvention"
           },
           "reported_rate_coefficient_includes_degeneracy": {
-            "const": true,
-            "default": true,
-            "title": "Reported Rate Coefficient Includes Degeneracy",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Rate Coefficient Includes Degeneracy"
           },
           "value": {
             "title": "Value",
@@ -24905,7 +24940,8 @@
           }
         },
         "required": [
-          "value"
+          "value",
+          "convention"
         ],
         "title": "ReactionPathDegeneracy",
         "type": "object"

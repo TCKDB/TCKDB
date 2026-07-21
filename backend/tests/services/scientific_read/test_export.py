@@ -9,6 +9,7 @@ import pytest
 
 from app.db.models.common import (
     ArrheniusAUnits,
+    KineticsDegeneracyConvention,
     KineticsModelKind,
     KineticsUncertaintyKind,
     PressureContext,
@@ -545,6 +546,20 @@ def test_scalar_arrhenius_export_keeps_legacy_keys(db_session):
     assert d["chebyshev"] is None
     assert d["falloff"] is None
     assert d["third_body_efficiencies"] is None
+
+
+def test_ndjson_projection_preserves_degeneracy_convention(db_session):
+    entry, kinetics = _reaction_with_kinetics(
+        db_session, degeneracy=2.0, approve=False
+    )
+    kinetics.degeneracy_convention = KineticsDegeneracyConvention.already_applied
+    db_session.flush()
+    _approve(db_session, SubmissionRecordType.kinetics, kinetics.id)
+
+    payload = _export_kinetics_dict(db_session, entry)
+
+    assert payload["degeneracy"] == 2.0
+    assert payload["degeneracy_convention"] == "already_applied"
 
 
 def test_multi_arrhenius_export_emits_terms_and_null_scalars(db_session):

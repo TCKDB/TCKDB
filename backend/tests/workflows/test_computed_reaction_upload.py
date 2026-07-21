@@ -52,6 +52,7 @@ from app.db.models.common import (
     CalculationType,
     IRCDirection,
     KineticsCalculationRole,
+    KineticsDegeneracyConvention,
     ReactionRole,
     ScientificOriginKind,
 )
@@ -3435,3 +3436,30 @@ def test_computed_reaction_persists_null_degeneracy_when_omitted(db_engine) -> N
             select(Kinetics).where(Kinetics.id.in_(summary["kinetics_ids"]))
         ).one()
         assert kin.degeneracy is None
+
+
+def test_computed_reaction_persists_explicit_degeneracy_convention(db_engine) -> None:
+    payload = _minimal_payload()
+    payload["kinetics"][0]["degeneracy"] = 3.0
+    payload["kinetics"][0]["degeneracy_convention"] = "not_applied"
+
+    with _isolated_session(db_engine) as session:
+        session.add(AppUser(id=603, username="degeneracy_convention_tester"))
+        session.flush()
+        summary = persist_computed_reaction_upload(
+            session,
+            ComputedReactionUploadRequest(**payload),
+            created_by=603,
+        )
+        kinetics = session.scalars(
+            select(Kinetics).where(Kinetics.id.in_(summary["kinetics_ids"]))
+        ).one()
+        assert (
+            kinetics.degeneracy_convention
+            is KineticsDegeneracyConvention.not_applied
+        )
+
+
+def test_bundle_kinetics_defaults_degeneracy_convention_to_unknown() -> None:
+    kinetics = BundleKineticsIn(**_bundle_kinetics_kwargs(degeneracy=2.0))
+    assert kinetics.degeneracy_convention.value == "unknown"

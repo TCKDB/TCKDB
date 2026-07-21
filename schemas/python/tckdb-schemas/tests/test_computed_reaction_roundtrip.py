@@ -111,6 +111,33 @@ def test_reaction_with_ts_and_kinetics_roundtrips() -> None:
         payload.model_dump(mode="json", exclude_none=True)
     )
     assert revalidated.kinetics[0].a_units.value == "cm3_mol_s"
+    assert revalidated.kinetics[0].degeneracy_convention.value == "unknown"
+
+
+def test_kinetics_degeneracy_convention_roundtrips() -> None:
+    data = _minimal_reaction_data()
+    data["kinetics"] = [
+        {
+            "reactant_keys": ["ch3", "h"],
+            "product_keys": ["ch4"],
+            "a": 1.2e13,
+            "a_units": "cm3_mol_s",
+            "n": 0.5,
+            "reported_ea": 10.0,
+            "reported_ea_units": "kj_mol",
+            "degeneracy": 3.0,
+            "degeneracy_convention": "not_applied",
+        }
+    ]
+    payload = ComputedReactionUploadRequest.model_validate(data)
+    dumped = payload.model_dump(mode="json", exclude_none=True)
+    assert dumped["kinetics"][0]["degeneracy_convention"] == "not_applied"
+    assert (
+        ComputedReactionUploadRequest.model_validate(dumped)
+        .kinetics[0]
+        .degeneracy_convention.value
+        == "not_applied"
+    )
 
 
 def test_non_canonical_family_without_source_note_rejected() -> None:

@@ -6,6 +6,7 @@ import pytest
 
 from app.api.errors import NotFoundError
 from app.db.models.common import (
+    KineticsDegeneracyConvention,
     KineticsModelKind,
     PressureContext,
     RecordReviewStatus,
@@ -859,9 +860,21 @@ def test_deprecated_pressure_alias_is_canonicalized_and_conflicts_rejected():
         KineticsReadRequest(pressure_bar=1.0, pressure=10.0)
 
 
-def test_reaction_path_degeneracy_prevents_double_application(db_session):
+@pytest.mark.parametrize(
+    ("stored_convention", "includes", "apply"),
+    [
+        (KineticsDegeneracyConvention.already_applied, True, False),
+        (KineticsDegeneracyConvention.not_applied, False, True),
+        (KineticsDegeneracyConvention.unknown, None, None),
+    ],
+)
+def test_reaction_path_degeneracy_reports_explicit_convention(
+    db_session, stored_convention, includes, apply
+):
     entry = _setup_entry(db_session)
-    make_kinetics(db_session, reaction_entry=entry, degeneracy=2.0)
+    kinetics = make_kinetics(db_session, reaction_entry=entry, degeneracy=2.0)
+    kinetics.degeneracy_convention = stored_convention
+    db_session.flush()
 
     response = get_reaction_kinetics(
         db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
@@ -869,5 +882,6 @@ def test_reaction_path_degeneracy_prevents_double_application(db_session):
     convention = response.records[0].reaction_path_degeneracy
     assert convention is not None
     assert convention.value == 2.0
-    assert convention.reported_rate_coefficient_includes_degeneracy is True
-    assert convention.apply_to_rate_coefficient is False
+    assert convention.convention is stored_convention
+    assert convention.reported_rate_coefficient_includes_degeneracy is includes
+    assert convention.apply_to_rate_coefficient is apply

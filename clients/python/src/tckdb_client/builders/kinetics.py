@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, Iterator
 
 from tckdb_client.builders.validation import (
     TCKDBBuilderValidationError,
-    ensure_non_empty_str,
     ensure_optional_non_empty_str,
 )
 
@@ -70,6 +69,8 @@ _SOURCE_ROLE_ALIASES: dict[str, str] = {
     "irc": "irc",
     "fit_source": "fit_source",
 }
+
+_DEGENERACY_CONVENTIONS = {"already_applied", "not_applied", "unknown"}
 
 
 def _resolve_a_units(value: str) -> str:
@@ -234,6 +235,7 @@ class Kinetics:
     tmin_k: float | None = None
     tmax_k: float | None = None
     degeneracy: float | None = None
+    degeneracy_convention: str = "unknown"
     tunneling_model: str | None = None
     note: str | None = None
     label: str | None = None
@@ -260,6 +262,7 @@ class Kinetics:
         Tmin: float | None = None,
         Tmax: float | None = None,
         degeneracy: float | None = None,
+        degeneracy_convention: str = "unknown",
         tunneling_model: str | None = None,
         source_calculations: (
             "dict[str, Calculation]"
@@ -344,6 +347,12 @@ class Kinetics:
                 raise TCKDBBuilderValidationError(
                     f"Kinetics.degeneracy must be > 0, got {degeneracy!r}."
                 )
+        if degeneracy_convention not in _DEGENERACY_CONVENTIONS:
+            raise TCKDBBuilderValidationError(
+                "Kinetics.degeneracy_convention must be one of "
+                f"{sorted(_DEGENERACY_CONVENTIONS)!r}, got "
+                f"{degeneracy_convention!r}."
+            )
 
         tunneling_model_clean = ensure_optional_non_empty_str(
             tunneling_model, field="tunneling_model"
@@ -363,6 +372,7 @@ class Kinetics:
             tmin_k=float(Tmin) if Tmin is not None else None,
             tmax_k=float(Tmax) if Tmax is not None else None,
             degeneracy=float(degeneracy) if degeneracy is not None else None,
+            degeneracy_convention=degeneracy_convention,
             tunneling_model=tunneling_model_clean,
             note=note_clean,
             label=label_clean,
@@ -405,6 +415,7 @@ class Kinetics:
             out["tmax_k"] = self.tmax_k
         if self.degeneracy is not None:
             out["degeneracy"] = self.degeneracy
+        out["degeneracy_convention"] = self.degeneracy_convention
         if self.tunneling_model is not None:
             out["tunneling_model"] = self.tunneling_model
         if self.note is not None:

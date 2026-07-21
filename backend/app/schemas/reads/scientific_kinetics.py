@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     ArrheniusAUnits,
+    KineticsDegeneracyConvention,
     KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
@@ -243,14 +244,15 @@ class PressureCoverage(BaseModel):
 class ReactionPathDegeneracy(BaseModel):
     """Stored path degeneracy plus the rate-coefficient convention.
 
-    TCKDB returns the reported/fitted rate coefficient unchanged. A stored
-    degeneracy is metadata already incorporated in that rate; consumers must
-    not multiply the rate a second time.
+    TCKDB returns the reported/fitted rate coefficient unchanged. The explicit
+    convention tells consumers whether they must apply the stored degeneracy;
+    legacy records remain unknown rather than being inferred.
     """
 
     value: float
-    reported_rate_coefficient_includes_degeneracy: Literal[True] = True
-    apply_to_rate_coefficient: Literal[False] = False
+    convention: KineticsDegeneracyConvention
+    reported_rate_coefficient_includes_degeneracy: bool | None = None
+    apply_to_rate_coefficient: bool | None = None
 
 
 class KineticsProvenance(BaseModel):

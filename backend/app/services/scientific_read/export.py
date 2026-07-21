@@ -292,6 +292,7 @@ class SelectedKinetics:
             "tmin_k": k.tmin_k,
             "tmax_k": k.tmax_k,
             "degeneracy": k.degeneracy,
+            "degeneracy_convention": k.degeneracy_convention.value,
             "tunneling_model": _enum_value(k.tunneling_model),
             "a_uncertainty": k.a_uncertainty,
             "a_uncertainty_kind": _enum_value(k.a_uncertainty_kind),

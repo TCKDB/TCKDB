@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.db.models.common import (
     ArrheniusAUnits,
     KineticsCalculationRole,
+    KineticsDegeneracyConvention,
     KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
@@ -72,6 +73,7 @@ class KineticsBase(BaseModel):
     :param tmin_k: Optional minimum valid temperature in K.
     :param tmax_k: Optional maximum valid temperature in K.
     :param degeneracy: Optional reaction-path degeneracy.
+    :param degeneracy_convention: Whether degeneracy is already included in the rate.
     :param tunneling_model: Optional tunneling model label.
     :param note: Optional free-text note.
     """
@@ -101,6 +103,9 @@ class KineticsBase(BaseModel):
     tmax_k: float | None = Field(default=None, gt=0)
 
     degeneracy: float | None = None
+    degeneracy_convention: KineticsDegeneracyConvention = (
+        KineticsDegeneracyConvention.unknown
+    )
     tunneling_model: TunnelingModel | None = None
     pressure_context: PressureContext | None = None
     pressure_bar: float | None = Field(default=None, gt=0)
@@ -205,6 +210,7 @@ class KineticsUpdate(SchemaBase):
     tmax_k: float | None = Field(default=None, gt=0)
 
     degeneracy: float | None = None
+    degeneracy_convention: KineticsDegeneracyConvention | None = None
     tunneling_model: TunnelingModel | None = None
     pressure_context: PressureContext | None = None
     pressure_bar: float | None = Field(default=None, gt=0)

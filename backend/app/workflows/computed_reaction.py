@@ -17,6 +17,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import (
     CalculationType,
     KineticsCalculationRole,
+    KineticsDegeneracyConvention,
     ReactionRole,
     ScientificOriginKind,
     SubmissionRecordType,
@@ -881,6 +882,9 @@ def persist_computed_reaction_upload(
             tmin_k=kin.tmin_k,
             tmax_k=kin.tmax_k,
             degeneracy=kin.degeneracy,
+            degeneracy_convention=KineticsDegeneracyConvention(
+                kin.degeneracy_convention.value
+            ),
             tunneling_model=kin.tunneling_model,
             pressure_context=kin.pressure_context,
             pressure_bar=kin.pressure_bar,

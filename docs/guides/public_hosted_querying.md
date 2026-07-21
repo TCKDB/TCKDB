@@ -158,11 +158,11 @@ client.search_species_calculations(
 Both refs are required because raw electronic energies are only rankable
 within an explicitly comparable species-entry/level-of-theory set.
 
-When `reaction_path_degeneracy` is present on a kinetics record, its
-machine-readable flags state that the returned reported/fitted rate already
-includes that degeneracy. Consumers must not multiply the rate again. TCKDB
-does not transform stored Arrhenius, PLOG, falloff, or Chebyshev coefficients
-when serving them.
+When `reaction_path_degeneracy` is present, inspect its explicit `convention`.
+`already_applied` gives include/apply flags `true/false`; `not_applied` gives
+`false/true`; `unknown` gives `null/null`, so a consumer must not guess. Legacy
+rows are `unknown`. TCKDB does not transform stored Arrhenius, PLOG, falloff,
+or Chebyshev coefficients when serving them.
 
 Optimized geometry for a species:
 

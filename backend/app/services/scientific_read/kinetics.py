@@ -25,6 +25,7 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationType,
     KineticsCalculationRole,
+    KineticsDegeneracyConvention,
     KineticsModelKind,
     PressureContext,
     RecordReviewStatus,
@@ -111,6 +112,26 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "assessments",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
+
+
+def _reaction_path_degeneracy(kinetics: Kinetics) -> ReactionPathDegeneracy | None:
+    """Return explicit rate/degeneracy semantics without inferring legacy data."""
+    if kinetics.degeneracy is None:
+        return None
+    includes: bool | None = None
+    apply: bool | None = None
+    if kinetics.degeneracy_convention is KineticsDegeneracyConvention.already_applied:
+        includes, apply = True, False
+    elif kinetics.degeneracy_convention is KineticsDegeneracyConvention.not_applied:
+        includes, apply = False, True
+    return ReactionPathDegeneracy(
+        value=kinetics.degeneracy,
+        convention=kinetics.degeneracy_convention,
+        reported_rate_coefficient_includes_degeneracy=includes,
+        apply_to_rate_coefficient=apply,
+    )
+
+
 _TRUST_EAGER_LOADS = (
     selectinload(Kinetics.reaction_entry).selectinload(
         ReactionEntry.structure_participants
@@ -516,11 +537,7 @@ def get_reaction_kinetics(
                 pressure_context=k.pressure_context,
                 pressure_bar=k.pressure_bar,
                 pressure_coverage=pressure_coverages.get(k.id),
-                reaction_path_degeneracy=(
-                    ReactionPathDegeneracy(value=k.degeneracy)
-                    if k.degeneracy is not None
-                    else None
-                ),
+                reaction_path_degeneracy=_reaction_path_degeneracy(k),
                 plog_entries=_plog_blocks(k),
                 chebyshev=_chebyshev_block(k),
                 falloff=_falloff_block(k),

@@ -22,6 +22,7 @@ from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     ArrheniusAUnits,
     KineticsCalculationRole,
+    KineticsDegeneracyConvention,
     KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
@@ -131,6 +132,15 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     tmax_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
     degeneracy: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    degeneracy_convention: Mapped[KineticsDegeneracyConvention] = mapped_column(
+        SAEnum(
+            KineticsDegeneracyConvention,
+            name="kinetics_degeneracy_convention",
+        ),
+        nullable=False,
+        default=KineticsDegeneracyConvention.unknown,
+        server_default=KineticsDegeneracyConvention.unknown.value,
+    )
     tunneling_model: Mapped[Optional[TunnelingModel]] = mapped_column(
         SAEnum(TunnelingModel, name="tunneling_model"),
         nullable=True,

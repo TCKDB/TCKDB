@@ -207,6 +207,31 @@ class TestKinetics:
                 A=1.0, A_units="per_s", n=0, Ea=0, degeneracy=0,
             )
 
+    def test_degeneracy_convention_is_validated_and_emitted(self):
+        kinetics = Kinetics.modified_arrhenius(
+            A=1.0,
+            A_units="per_s",
+            n=0,
+            Ea=0,
+            degeneracy=2.0,
+            degeneracy_convention="not_applied",
+        )
+        payload = kinetics.to_payload(
+            reactant_keys=["a"],
+            product_keys=["b"],
+            calc_key_lookup=lambda calculation: "unused",
+        )
+        assert payload["degeneracy_convention"] == "not_applied"
+
+        with pytest.raises(TCKDBBuilderValidationError):
+            Kinetics.modified_arrhenius(
+                A=1.0,
+                A_units="per_s",
+                n=0,
+                Ea=0,
+                degeneracy_convention="assumed",
+            )
+
     def test_source_calculations_role_aliasing(self):
         opt = Calculation.opt(_gaussian(), _b3lyp(), output_geometry=_xyz())
         k = Kinetics.modified_arrhenius(

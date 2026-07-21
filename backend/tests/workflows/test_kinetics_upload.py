@@ -6,7 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
-from app.db.models.common import ArrheniusAUnits, KineticsUncertaintyKind
+from app.db.models.common import (
+    ArrheniusAUnits,
+    KineticsDegeneracyConvention,
+    KineticsUncertaintyKind,
+)
 from app.db.models.kinetics import Kinetics
 from app.db.models.literature import Literature
 from app.db.models.reaction import ReactionEntryStructureParticipant
@@ -166,6 +170,32 @@ def test_additive_a_uncertainty_accepts_small_values() -> None:
     payload["a_uncertainty_kind"] = "additive"
     request = KineticsUploadRequest.model_validate(payload)
     assert request.a_uncertainty_kind == KineticsUncertaintyKind.additive
+
+
+@pytest.mark.parametrize(
+    "convention",
+    ["already_applied", "not_applied", "unknown"],
+)
+def test_persist_kinetics_upload_preserves_degeneracy_convention(
+    db_engine, convention
+) -> None:
+    request = _kinetics_request(
+        degeneracy_convention=convention,
+        literature=None,
+        software_release=None,
+        workflow_tool_release=None,
+    )
+    with Session(db_engine) as session, session.begin():
+        kinetics = persist_kinetics_upload(session, request)
+        assert kinetics.degeneracy_convention.value == convention
+
+
+def test_kinetics_upload_defaults_degeneracy_convention_to_unknown() -> None:
+    request = _kinetics_request()
+    assert (
+        request.degeneracy_convention
+        is KineticsDegeneracyConvention.unknown
+    )
 
 
 def test_persist_kinetics_upload_carries_multiplicative_uncertainty(
