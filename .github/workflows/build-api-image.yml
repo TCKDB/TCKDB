@@ -21,6 +21,7 @@ on:
 
 jobs:
   build-and-push:
+    if: github.repository == 'TCKDB/TCKDB'
     runs-on: ubuntu-latest
     permissions:
       contents: read
