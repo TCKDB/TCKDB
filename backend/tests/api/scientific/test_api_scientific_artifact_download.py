@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import hashlib
 
+from fastapi.testclient import TestClient
+
+from app.api.app import create_app
+from app.api.deps import get_db, get_write_db
 from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
@@ -55,7 +59,8 @@ def test_approved_artifact_download_returns_verified_bytes(
     assert response.content == content
     assert response.headers["x-content-sha256"] == artifact.sha256
     assert response.headers["etag"] == f'"{artifact.sha256}"'
-    assert response.headers["cache-control"] == "public, max-age=0, must-revalidate"
+    # Authenticated PII-bearing bytes must not be retained by shared caches.
+    assert response.headers["cache-control"] == "private, no-store"
 
 
 def test_nonapproved_artifact_download_is_indistinguishable_from_missing(
@@ -108,3 +113,56 @@ def test_artifact_download_maps_integrity_failure_to_502(
 def test_artifact_download_rejects_malformed_digest(client, db_session) -> None:
     response = client.get("/api/v1/scientific/artifacts/not-a-digest/download")
     assert response.status_code == 422
+
+
+def test_anonymous_artifact_download_returns_401(db_session, monkeypatch) -> None:
+    """Raw approved bytes must never reach an unauthenticated caller.
+
+    The default ``client`` fixture overrides ``get_current_user`` to a
+    seeded test user, so it cannot exercise the anonymous path. Here we
+    build an app WITHOUT that override: the request carries no API key or
+    session cookie and must be rejected by the auth gate (401) before any
+    byte load. FastAPI resolves the auth sub-dependency before the
+    endpoint's own path-param validation, so an anonymous caller gets a
+    uniform 401 for every input (even a malformed digest) — no 401-vs-404
+    existence oracle. We use a well-formed but non-existent digest: the
+    point is that we get 401, not 404, and never touch storage.
+    """
+    called = False
+
+    def fake_load(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return b"must not be returned"
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_write_db] = lambda: db_session
+    with TestClient(app) as anon:
+        response = anon.get(f"/api/v1/scientific/artifacts/{'0' * 64}/download")
+
+    assert response.status_code == 401
+    assert called is False
+
+
+def test_authenticated_user_can_download_approved_artifact(
+    client, db_session, monkeypatch
+) -> None:
+    """A regular authenticated user (the default client actor) may pull
+    approved bytes — the gate requires authentication, not a curator role."""
+    artifact, content = _downloadable_artifact(
+        db_session, status=RecordReviewStatus.approved
+    )
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes",
+        lambda *_a, **_k: content,
+    )
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+    assert response.status_code == 200
+    assert response.content == content

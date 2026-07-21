@@ -50778,7 +50778,7 @@
     },
     "/api/v1/scientific/artifacts/{sha256}/download": {
       "get": {
-        "description": "Download curator-approved bytes by their content-addressed digest.",
+        "description": "Download curator-approved bytes by their content-addressed digest.\n\nUnlike the metadata search endpoints, which are part of the public\nread surface, raw-artifact bytes are served only to authenticated\ncallers (any valid API key or session): unredacted logs may embed\nproducer-side scratch paths, usernames, and cluster hostnames that\nmust never reach anonymous clients. This gate is unconditional (no\nopt-out flag) so no deployment can accidentally re-expose the bytes;\nsee ``docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md``.\nThe digest is still re-verified against the stored bytes below.",
         "operationId": "download_approved_artifact_api_v1_scientific_artifacts__sha256__download_get",
         "parameters": [
           {
@@ -50790,6 +50790,38 @@
               "title": "Sha256",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -50798,6 +50830,9 @@
               "application/octet-stream": {}
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "description": "Authentication required."
           },
           "404": {
             "description": "No approved artifact has this digest."
