@@ -80,6 +80,9 @@ from app.services.artifact_persistence import persist_artifact_batch
 from app.services.calculation_parameter_extraction import (
     try_extract_parameters_from_input_upload,
 )
+from app.services.sp_energy_extraction import (
+    try_reconcile_sp_energy_from_output_upload,
+)
 
 router = APIRouter()
 
@@ -657,15 +660,23 @@ def upload_calculation_artifacts(
         created_by=current_user.id,
     )
 
-    # Opportunistic calculation_parameter extraction for input artifacts.
-    # The helper filters by ArtifactKind.input and is best-effort —
-    # never aborts the upload.
+    # Opportunistic per-artifact extraction, both best-effort (never abort
+    # the upload): input artifacts yield calculation_parameter rows; output
+    # logs reconcile the single-point energy against what the tool reported,
+    # filling it when absent and flagging a mismatch for review.
+    warnings: list[UploadWarning] = []
     for art_in in request.artifacts:
         try_extract_parameters_from_input_upload(session, calculation, art_in)
+        sp_warning = try_reconcile_sp_energy_from_output_upload(
+            session, calculation, art_in
+        )
+        if sp_warning is not None:
+            warnings.append(sp_warning)
 
     result = ArtifactsUploadResult(
         calculation_id=calculation_id,
         artifacts=[CalculationArtifactRead.model_validate(r) for r in rows],
+        warnings=warnings,
     )
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
