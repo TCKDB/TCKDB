@@ -8,6 +8,7 @@ disturbing the wire shape of existing uploads.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterator
 
@@ -279,7 +280,8 @@ class Kinetics:
         normalised via the SDK's unit alias map (see module docstring).
         ``Ea`` is converted to kJ/mol up front so the on-wire value is
         always in the backend's ``kj_mol`` enum; ``Ea_units`` controls
-        only the *input* units.
+        only the *input* units. ``degeneracy`` is optional; when supplied,
+        it must be finite and strictly positive.
 
         ``source_calculations`` accepts three shapes so producers don't
         have to pre-flatten their data:
@@ -343,9 +345,10 @@ class Kinetics:
                     f"Kinetics.degeneracy must be numeric, got "
                     f"{type(degeneracy).__name__}."
                 )
-            if degeneracy <= 0:
+            if not math.isfinite(degeneracy) or degeneracy <= 0:
                 raise TCKDBBuilderValidationError(
-                    f"Kinetics.degeneracy must be > 0, got {degeneracy!r}."
+                    "Kinetics.degeneracy must be finite and > 0, got "
+                    f"{degeneracy!r}."
                 )
         if degeneracy_convention not in _DEGENERACY_CONVENTIONS:
             raise TCKDBBuilderValidationError(

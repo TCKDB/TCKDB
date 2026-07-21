@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from tckdb_schemas.workflows.computed_reaction_upload import (
+    BundleKineticsIn,
     ComputedReactionUploadRequest,
 )
 
@@ -138,6 +139,42 @@ def test_kinetics_degeneracy_convention_roundtrips() -> None:
         .degeneracy_convention.value
         == "not_applied"
     )
+
+
+@pytest.mark.parametrize("value", [None, 1.0e-12, 1, 2.5])
+def test_bundle_kinetics_accepts_optional_finite_positive_degeneracy(value) -> None:
+    kinetics = BundleKineticsIn(
+        reactant_keys=["ch3", "h"],
+        product_keys=["ch4"],
+        degeneracy=value,
+    )
+    assert kinetics.degeneracy == value
+
+
+@pytest.mark.parametrize(
+    ("value", "error_type"),
+    [
+        (0, "greater_than"),
+        (-1.0, "greater_than"),
+        (float("nan"), "finite_number"),
+        (float("inf"), "finite_number"),
+        (float("-inf"), "finite_number"),
+    ],
+)
+def test_bundle_kinetics_rejects_non_positive_or_nonfinite_degeneracy(
+    value,
+    error_type,
+) -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        BundleKineticsIn(
+            reactant_keys=["ch3", "h"],
+            product_keys=["ch4"],
+            degeneracy=value,
+        )
+
+    assert [(error["loc"], error["type"]) for error in exc_info.value.errors()] == [
+        (("degeneracy",), error_type)
+    ]
 
 
 def test_non_canonical_family_without_source_note_rejected() -> None:
