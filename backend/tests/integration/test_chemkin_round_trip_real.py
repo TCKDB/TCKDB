@@ -2,8 +2,9 @@
 
 Companion to ``test_chemkin_round_trip.py`` (hand-authored fixture). This one
 drives the same importer -> persist -> export -> re-parse pipeline against an
-unmodified RMG output (``fixtures/rmg_ammonia_methane/``): 21 species, 64
-reactions exercising modified Arrhenius, Troe falloff + collider efficiencies,
+unmodified RMG output (``fixtures/rmg_ammonia_methane/``): 21 species and 64
+rate rows representing 61 reaction identities, exercising modified Arrhenius,
+Troe falloff + collider efficiencies,
 Chebyshev pressure-dependence (written by RMG as ``R(+M)<=>P(+M)`` with a dummy
 ``1.0 0 0`` main line + ``TCHEB/PCHEB/CHEB``), duplicate reactions, KCAL/MOLE
 units, and transport.
@@ -446,19 +447,28 @@ def test_transport_round_trips(round_trip):
 
 def test_duplicate_reactions_round_trip(round_trip):
     """RMG marks 3 reaction identities as DUPLICATE (2 rate rows each = 6
-    lines). Each rate persists as its own append-only reaction entry, so all
-    64 reaction lines round-trip; the exporter re-emits the ``DUPLICATE``
-    keyword on the repeated equations (a CHEMKIN-validity requirement) so they
-    come back marked, not silently merged.
+    lines). The normalizer represents each pair as one ``multi_arrhenius``
+    record, so 64 rate rows become 61 normalized reaction records without
+    losing a rate term. The exporter expands the pairs and re-emits the
+    ``DUPLICATE`` keyword; re-parsing collapses them back to the same model.
     """
     n_in = round_trip["normalized_in"].reactions
     n_out = round_trip["normalized_out"].reactions
-    assert len(n_in) == 64
-    assert len(n_out) == 64
+    assert len(n_in) == 61
+    assert len(n_out) == 61
 
-    # 3 duplicate pairs -> 6 DUPLICATE-marked lines, preserved both ways.
-    assert sum(1 for r in n_in if r.duplicate) == 6
-    assert sum(1 for r in n_out if r.duplicate) == 6
+    def rate_term_count(reactions):
+        return sum(len(r.arrhenius_entries) or 1 for r in reactions)
+
+    assert rate_term_count(n_in) == 64
+    assert rate_term_count(n_out) == 64
+
+    multi_in = [r for r in n_in if r.model_kind == "multi_arrhenius"]
+    multi_out = [r for r in n_out if r.model_kind == "multi_arrhenius"]
+    assert len(multi_in) == 3
+    assert len(multi_out) == 3
+    assert all(r.duplicate and len(r.arrhenius_entries) == 2 for r in multi_in)
+    assert all(r.duplicate and len(r.arrhenius_entries) == 2 for r in multi_out)
 
     # 61 distinct reaction identities (3 pairs share a key); the full set of
     # identities survives the trip.
@@ -466,6 +476,20 @@ def test_duplicate_reactions_round_trip(round_trip):
     out_keys = _rxn_by_key(round_trip["normalized_out"], round_trip["resolved_out"])
     assert len(in_keys) == 61
     assert set(out_keys) == set(in_keys)
+
+    for key, r_in in in_keys.items():
+        if r_in.model_kind != "multi_arrhenius":
+            continue
+        r_out = out_keys[key]
+        assert r_out.model_kind == "multi_arrhenius"
+        assert len(r_out.arrhenius_entries) == len(r_in.arrhenius_entries)
+        for term_in, term_out in zip(
+            r_in.arrhenius_entries, r_out.arrhenius_entries, strict=True
+        ):
+            assert term_out.a == pytest.approx(term_in.a)
+            assert term_out.a_units == term_in.a_units
+            assert term_out.n == pytest.approx(term_in.n)
+            assert _ea_kj(term_out) == pytest.approx(_ea_kj(term_in))
 
 
 # ---------------------------------------------------------------------------
@@ -499,4 +523,3 @@ def test_cantera_rejects_undeclared_duplicate(round_trip):
     files["chem.inp"] = stripped
     with pytest.raises(ValueError, match="Cantera validation"):
         validate_chemkin_mechanism(files)
-

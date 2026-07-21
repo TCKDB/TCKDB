@@ -299,32 +299,38 @@ def derive_term_symbol(
     *,
     point_group: str | None = None,
     is_linear: bool | None = None,
+    is_closed_shell: bool | None = None,
 ) -> str | None:
-    """Derive a ground-state term symbol from multiplicity and symmetry info.
+    """Derive a closed-shell ground-state term symbol when symmetry is known.
 
-    Uses the totally symmetric irreducible representation, which is correct for
-    all closed-shell (singlet) ground states and a reasonable default for
-    open-shell species.
+    A spin multiplicity and molecular point group do not determine the spatial
+    electronic state of an open-shell species.  In particular, substituting the
+    totally symmetric irreducible representation can turn distinct states into
+    the same species-entry identity.  We therefore derive a symbol only for a
+    closed-shell singlet with a recognized point group.
+
+    ``is_linear`` is retained for API compatibility, but linearity alone is not
+    sufficient: it cannot determine reflection parity or, for homonuclear
+    species, gerade/ungerade symmetry.  ``None`` also means "not reported" to
+    existing callers and must not be interpreted as "monoatomic". Multiplicity
+    one does not prove a closed shell, so callers must state that separately.
 
     :param multiplicity: Spin multiplicity (2S+1).
     :param point_group: Point group label (e.g. ``"C2v"``, ``"Cinfv"``).
-    :param is_linear: Molecular linearity; ``None`` implies monoatomic.
-    :returns: Term symbol string (e.g. ``"1A1"``, ``"2Sigma"``), or ``None``.
+    :param is_linear: Molecular linearity, retained for caller compatibility.
+    :param is_closed_shell: Whether a trusted source establishes a closed shell.
+    :returns: A defensible closed-shell term symbol, or ``None``.
     """
+
+    del is_linear
+
+    if multiplicity != 1 or is_closed_shell is not True:
+        return None
 
     if point_group is not None:
         irrep = _TOTALLY_SYMMETRIC_IRREP.get(point_group)
         if irrep is not None:
-            return f"{multiplicity}{irrep}"
-
-    # Fallback: is_linear from Arkane conformer
-    if is_linear is True:
-        return f"{multiplicity}Sigma"
-    if is_linear is False:
-        return f"{multiplicity}A"
-    if is_linear is None:
-        # Monoatomic (no rotor detected by Arkane)
-        return f"{multiplicity}S"
+            return f"1{irrep}"
 
     return None
 

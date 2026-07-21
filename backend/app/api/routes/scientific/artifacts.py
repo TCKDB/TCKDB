@@ -1,20 +1,17 @@
-"""GET + POST /api/v1/scientific/artifacts/search.
+"""Scientific artifact metadata search and approved-byte download.
 
-Standalone artifact-metadata search. **Metadata only** — never inlines
-artifact bytes, never resolves a presigned download URL, never exposes
-geometry/coordinate payloads. The persisted ``uri`` is the storage URI
-verbatim, matching the existing ``include=artifacts`` projection on the
-calculation detail endpoint.
-
-Artifact body download is explicitly out of scope for the public
-scientific read surface; see ``backend/docs/specs/scientific_artifact_reads.md``.
+Search remains metadata-only. A separate content-addressed download route
+serves bytes only when an owning calculation is explicitly approved and
+re-verifies the persisted digest and size before returning content.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from mimetypes import guess_type
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -28,6 +25,14 @@ from app.db.models.common import (
 from app.schemas.reads.scientific_artifact_search import (
     ScientificArtifactSearchRequest,
     ScientificArtifactSearchResponse,
+)
+from app.services.artifact_storage import (
+    ArtifactIntegrityError,
+    ArtifactStorageUnavailable,
+    load_artifact_bytes,
+)
+from app.services.scientific_read.artifact_download import (
+    resolve_approved_artifact_by_sha256,
 )
 from app.services.scientific_read.artifacts_search import search_artifacts
 from app.services.scientific_read.internal_ids import (
@@ -148,3 +153,58 @@ def artifacts_search_post(
             ),
         )
     return apply_internal_ids_visibility(search_artifacts(session, body))
+
+
+@router.get(
+    "/{sha256}/download",
+    response_class=Response,
+    responses={
+        200: {"content": {"application/octet-stream": {}}},
+        404: {"description": "No approved artifact has this digest."},
+        502: {"description": "Stored bytes failed integrity verification."},
+        503: {"description": "Artifact storage is unavailable."},
+    },
+)
+def download_approved_artifact(
+    sha256: str = Path(pattern=r"^[0-9a-f]{64}$"),
+    session: Session = Depends(get_db),
+) -> Response:
+    """Download curator-approved bytes by their content-addressed digest."""
+
+    artifact = resolve_approved_artifact_by_sha256(session, sha256)
+    if artifact is None:
+        # Deliberately indistinguishable from an unknown digest: callers cannot
+        # probe whether non-approved/private content exists.
+        raise HTTPException(status_code=404, detail="Approved artifact not found.")
+
+    try:
+        content = load_artifact_bytes(
+            sha256,
+            expected_bytes=artifact.bytes,
+        )
+    except ArtifactIntegrityError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Stored artifact failed integrity verification.",
+        ) from exc
+    except ArtifactStorageUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Artifact storage is unavailable.",
+        ) from exc
+
+    media_type = guess_type(artifact.filename)[0] or "application/octet-stream"
+    encoded_filename = quote(artifact.filename, safe="")
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "public, max-age=0, must-revalidate",
+            "Content-Disposition": (
+                f"attachment; filename*=UTF-8''{encoded_filename}"
+            ),
+            "ETag": f'"{sha256}"',
+            "X-Content-SHA256": sha256,
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

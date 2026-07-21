@@ -2,9 +2,10 @@
 
 Four curator-gated, streaming exports over the scientific surface:
 
-* ``GET  /scientific/export/ndjson``  — lossless TCKDB NDJSON, streamed one
-  record per line via a server-side generator (never materializes the
-  whole mechanism). For programmatic consumers, backups, and re-ingestion.
+* ``GET  /scientific/export/ndjson``  — a selected TCKDB scientific
+  projection, streamed one record per line via a server-side generator
+  (never materializes the whole mechanism). It is not a backup or a
+  re-ingestible lossless archive; its manifest states the omissions.
 * ``POST /scientific/export/chemkin`` — a zip of ``chem.inp`` / ``therm.dat``
   / ``tran.dat`` + ``manifest.json``, ready for Cantera/CHEMKIN. POST
   because it carries options (units, transport, naming policy).
@@ -72,11 +73,12 @@ def export_ndjson(
     collapse: CollapseMode = Query(CollapseMode.first),
     selection_policy: SelectionPolicy = Query(SelectionPolicy.default),
 ) -> StreamingResponse:
-    """Stream a native NDJSON export for the seed selection.
+    """Stream a selected scientific NDJSON projection for the seed.
 
     Emits a header ``manifest`` line, then one ``species`` / ``reaction``
     line per record (computed lazily), then a trailing ``export_summary``
-    line with the gap list. Curator/admin only.
+    line with the gap list. The manifest explicitly marks the format as
+    non-lossless and non-reingestible. Curator/admin only.
 
     :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
         request over the export cap.

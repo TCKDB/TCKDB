@@ -1,6 +1,7 @@
 # Scientific artifact reads
 
-Standalone metadata-only read surface for `calculation_artifact` rows.
+Standalone metadata search plus integrity-verified download for
+`calculation_artifact` rows.
 
 ## 1. Purpose
 
@@ -26,6 +27,7 @@ artifact-shaped questions without first chaining a calculation search:
 
 - `GET  /api/v1/scientific/artifacts/search`
 - `POST /api/v1/scientific/artifacts/search`
+- `GET  /api/v1/scientific/artifacts/{sha256}/download`
 
 Standalone detail (`GET /api/v1/scientific/artifacts/{ref_or_id}`) is
 **deferred**: `calculation_artifact` has no `public_ref` column today,
@@ -35,10 +37,10 @@ artifact is already available via its owning calculation, so this slice
 does not block on the schema change. When `calculation_artifact` grows
 a `public_ref`, adding the detail endpoint is non-breaking.
 
-## 3. Metadata-only contract
+## 3. Search is metadata-only
 
-The artifact body is never exposed by the scientific read surface.
-The endpoint:
+Search endpoints never expose artifact body bytes; the separately gated
+digest-download endpoint does. Artifact search:
 
 - never inlines artifact body bytes (no `body`, `content`, `data`,
   `xyz_text`, `atoms`, `coords` keys);
@@ -61,10 +63,20 @@ that the underlying storage bucket is private. Specifically:
 - The `uri` returned by this endpoint is a name, not an access grant —
   but it loses that property if the bucket is also publicly listable
   or readable.
-- No public TCKDB endpoint accepts a caller-supplied artifact `uri` as
-  input for download, presign, or proxy. If a future endpoint
-  generates presigned download URLs it must enforce its own
-  authorization separately; this read surface deliberately does not.
+- No TCKDB endpoint accepts a caller-supplied artifact `uri` as input for
+  download, presign, or proxy.
+
+The download route instead resolves an exact lowercase SHA-256 only when at
+least one owning calculation has an explicit `approved` review state. It reads
+the content-addressed object and verifies both digest and persisted byte count
+before returning it. Unknown, under-review, rejected, deprecated, and otherwise
+non-approved digests all return the same 404 response so existence cannot be
+probed. Storage failure returns 503; integrity failure returns 502.
+
+Successful downloads require cache revalidation so a later review-state change
+can take effect. They carry an ETag equal to the quoted SHA-256,
+`X-Content-SHA256`, `X-Content-Type-Options: nosniff`, and a content-disposition
+filename derived from the approved upload-event row.
 
 The deployment-side restatement of this assumption lives in
 [`docs/deployment/production_checklist.md`](../../../docs/deployment/production_checklist.md#artifact-storage-buckets-must-be-private).
@@ -115,8 +127,8 @@ class ScientificArtifactSearchResponse(BaseModel):
 | `filename` | exact filename |
 | `filename_contains` | case-insensitive substring match (`LIKE` over `lower(filename)`) |
 | `sha256` | exact match |
-| `has_sha256` | true → `sha256 IS NOT NULL`; false → `sha256 IS NULL` |
-| `has_bytes` | true → `bytes IS NOT NULL`; false → `bytes IS NULL` |
+| `has_sha256` | Compatibility filter: true matches integrity-complete rows; false is empty after the integrity migration |
+| `has_bytes` | Compatibility filter: true matches integrity-complete rows; false is empty after the integrity migration |
 | `bytes_min` / `bytes_max` | inclusive range over `bytes` |
 | `calculation_ref` | exact owning calc |
 | `calculation_type` | `Calculation.type` |

@@ -11,10 +11,12 @@ Two paths are exposed:
 - :func:`persist_artifact_batch` — two-pass batch helper for the
   ``POST /calculations/{id}/artifacts`` endpoint. Pass 1 decodes and
   validates every artifact in memory before any storage write. Pass 2
-  attempts S3 writes one by one and, on the first storage failure,
-  compensates by deleting any objects already written in this batch
-  before raising :class:`ArtifactStorageUnavailable` so the caller can
-  return 503.
+  attempts S3 writes one by one and raises
+  :class:`ArtifactStorageUnavailable` on failure so the caller can return
+  503. Content-addressed objects written before a failure are retained:
+  a key may already be shared by committed rows or concurrent transactions,
+  so eager deletion is unsafe. Reference-aware garbage collection is a
+  separate maintenance concern.
 
 The two-pass design exists because object-store writes are not part of
 the SQL transaction. Looping the single-artifact helper means artifact
@@ -45,7 +47,6 @@ from app.schemas.fragments.artifact import ArtifactIn
 from app.services.artifact_storage import (
     ArtifactStorageUnavailable,
     ArtifactValidationError,
-    delete_artifact_object,
     store_artifact,
     validate_artifact,
     validate_encoded_lengths,
@@ -142,7 +143,7 @@ def persist_artifact_batch(
     artifacts: list[ArtifactIn],
     created_by: int | None = None,
 ) -> list[CalculationArtifact]:
-    """Two-pass: validate-all-then-store-all with compensation.
+    """Two-pass: validate-all-then-store-all with safe SQL rollback.
 
     1. :func:`validate_and_decode_all_artifacts` — any per-artifact
        validation failure or an aggregate-size overflow raises
@@ -152,11 +153,12 @@ def persist_artifact_batch(
        object store, then create a ``CalculationArtifact`` row. After
        all rows are added, ``session.flush()`` is called inside this
        service so SQL-level errors (constraint violations, schema drift,
-       FK problems) trigger the same compensation path as storage
-       errors. On any failure during pass 2 *or* at flush time, every
-       object stored earlier in the same batch is best-effort deleted
-       before :class:`ArtifactStorageUnavailable` is raised. The route
-       maps that to 503; SQL rollback is handled by the outer session.
+       FK problems) trigger the same rollback path as storage errors.
+       On failure, pending rows are detached while content-addressed
+       objects are retained. Eager deletion is unsafe because a digest
+       key can be shared by committed rows or a concurrent upload. The
+       route maps storage failures to 503; SQL rollback is handled by
+       the outer session.
 
     **Service contract**: if this function returns successfully, the
     rows have been flushed and are present in the session's view of the
@@ -183,7 +185,7 @@ def persist_artifact_batch(
             rows.append(row)
         # Flush inside the service so SQL-layer errors (constraint
         # violations, missing columns from schema drift, FK problems)
-        # trigger the same compensation block as storage errors.
+        # trigger the same rollback block as storage errors.
         session.flush()
     except ArtifactStorageUnavailable:
         # Real storage outage — keep the explicit type so the route maps
@@ -193,7 +195,7 @@ def persist_artifact_batch(
     except Exception:
         # Anything else (IntegrityError, ProgrammingError, etc.) is not
         # "storage unavailable" — that label would mislead operators.
-        # Run compensation, then re-raise the original so the default
+        # Detach pending rows, then re-raise the original so the default
         # exception handler maps the HTTP status appropriately (e.g.
         # 500 for DB schema drift, FK violations, constraint conflicts).
         _undo_partial_batch(session, rows, stored_shas)
@@ -231,15 +233,19 @@ def _store_and_record(
 
 
 def _compensate_stored_objects(stored_shas: list[str]) -> None:
-    """Best-effort delete of objects stored earlier in a failing batch."""
-    for sha in stored_shas:
-        try:
-            delete_artifact_object(sha)
-        except Exception:
-            logger.exception(
-                "compensating delete failed for sha=%s; manual GC may be required",
-                sha,
-            )
+    """Retain possible orphans rather than risk deleting shared CAS keys.
+
+    Kept as the cross-workflow failure hook while callers migrate to a
+    reference-aware garbage-collection design. A digest in this list does not
+    prove the current transaction created the object; ``store_artifact`` may
+    have deduplicated against committed or concurrently written content.
+    """
+    if stored_shas:
+        logger.warning(
+            "retaining %d content-addressed object(s) after failed upload; "
+            "reference-aware garbage collection may reclaim true orphans",
+            len(set(stored_shas)),
+        )
 
 
 def _undo_partial_batch(
@@ -247,12 +253,13 @@ def _undo_partial_batch(
     rows: list[CalculationArtifact],
     stored_shas: list[str],
 ) -> None:
-    """Roll back a half-finished pass-2: detach DB rows + delete S3 objects.
+    """Roll back a half-finished pass-2 and retain content-addressed bytes.
 
     The session-level rollback is the route's job; here we additionally
     expunge the rows we already added so the session does not hand a
     caller stale objects between the failure point and the eventual
-    rollback. Object-store cleanup is best-effort.
+    rollback. Object-store keys are deliberately not deleted here because
+    they may be shared with committed or concurrent rows.
     """
     for row in rows:
         try:

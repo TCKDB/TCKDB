@@ -185,15 +185,11 @@ def test_search_by_has_sha256_true(client, db_session):
 
 
 def test_search_by_has_sha256_false(client, db_session):
-    _, _, calc1 = _make_species_owned_calc(db_session)
-    a1 = attach_artifact(db_session, calculation=calc1)
-    a1.sha256 = "c" * 64
-    _, _, calc2 = _make_species_owned_calc(db_session)
-    attach_artifact(db_session, calculation=calc2)
-    db_session.flush()
+    _, _, calc = _make_species_owned_calc(db_session)
+    attach_artifact(db_session, calculation=calc)
     body = client.get(SEARCH_URL + "?has_sha256=false").json()
-    for rec in body["records"]:
-        assert rec["artifact"]["sha256"] is None
+    assert body["records"] == []
+    assert body["pagination"]["total"] == 0
 
 
 def test_search_by_has_bytes(client, db_session):

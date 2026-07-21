@@ -77,6 +77,8 @@ def test_ndjson_export_streams(client, db_session, login_as, _api_curator_user):
     lines = [ln for ln in resp.text.splitlines() if ln.strip()]
     parsed = [json.loads(ln) for ln in lines]
     assert parsed[0]["record_type"] == "manifest"
+    assert parsed[0]["contract"]["lossless"] is False
+    assert parsed[0]["contract"]["reingestible"] is False
     assert parsed[-1]["record_type"] == "export_summary"
     kinds = [p["record_type"] for p in parsed]
     assert kinds.count("species") == 2

@@ -231,6 +231,8 @@ def _attach_ts_opt_calc(
                 calculation_id=calc.id,
                 kind=ArtifactKind.output_log,
                 uri="s3://test/opt-log",
+                sha256="3" * 64,
+                bytes=1,
                 filename="opt.log",
             )
         )

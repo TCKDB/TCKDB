@@ -24,6 +24,7 @@ Configuration (environment variables):
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
 
 import boto3
@@ -114,6 +115,10 @@ class ArtifactStorageUnavailable(Exception):
     map it to a 503 Service Unavailable response while validation
     failures stay 422.
     """
+
+
+class ArtifactIntegrityError(Exception):
+    """Raised when stored bytes no longer match their persisted digest/size."""
 
 
 # ---------------------------------------------------------------------------
@@ -297,13 +302,25 @@ def store_artifact(
 
     key = content_addressed_key(sha256)
 
-    # Check if object already exists (content-addressed dedup)
+    # A HEAD hit is not enough evidence that the stored bytes are sound:
+    # verify an existing content-addressed object before attaching another
+    # database row to the shared key.
     try:
         client.head_object(Bucket=bucket, Key=key)
-        # Already exists — dedup
+        load_artifact_bytes(
+            sha256,
+            expected_bytes=len(content),
+            client=client,
+            bucket=bucket,
+        )
         return f"s3://{bucket}/{key}"
-    except ClientError:
-        pass
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        if code not in {"404", "NoSuchKey", "NotFound"}:
+            raise ArtifactStorageUnavailable(
+                f"Artifact storage HEAD failed for sha={sha256}: "
+                f"{code or type(exc).__name__}"
+            ) from exc
 
     client.put_object(
         Bucket=bucket,
@@ -318,20 +335,23 @@ def store_artifact(
 def load_artifact_bytes(
     sha256: str,
     *,
+    expected_bytes: int | None = None,
     client=None,
     bucket: str | None = None,
 ) -> bytes:
-    """Read the raw content of a previously stored artifact by SHA-256.
+    """Read and verify previously stored artifact bytes by SHA-256.
 
     Used by paths that need the file content after it has already left
-    the upload pipeline — most notably the calculation-parameter
-    backfill script, which has only the ``CalculationArtifact`` row to
-    work from. The upload hook never calls this; it works from the
-    decoded bytes already in memory to avoid a round-trip.
+    the upload pipeline — notably the calculation-parameter backfill and
+    approved scientific download. The upload hook never calls this; it works
+    from the decoded bytes already in memory to avoid a round-trip.
 
+    :param expected_bytes: Optional persisted byte count to verify on read.
     :raises ArtifactStorageUnavailable: When the object cannot be read
         (missing key, network error, etc.). Callers in opportunistic
         contexts should catch this.
+    :raises ArtifactIntegrityError: When retrieved content does not match the
+        content-addressed digest or persisted byte count.
     """
     if client is None:
         client = _get_s3_client()
@@ -339,12 +359,25 @@ def load_artifact_bytes(
     key = content_addressed_key(sha256)
     try:
         response = client.get_object(Bucket=bucket, Key=key)
-        return response["Body"].read()
+        content = response["Body"].read()
     except ClientError as exc:
         raise ArtifactStorageUnavailable(
             f"Artifact storage read failed for sha={sha256}: "
             f"{type(exc).__name__}: {exc}"
         ) from exc
+
+    computed_sha256 = hashlib.sha256(content).hexdigest()
+    if not hmac.compare_digest(computed_sha256, sha256):
+        raise ArtifactIntegrityError(
+            f"Artifact digest verification failed for sha={sha256}: "
+            f"retrieved sha={computed_sha256}."
+        )
+    if expected_bytes is not None and len(content) != expected_bytes:
+        raise ArtifactIntegrityError(
+            f"Artifact size verification failed for sha={sha256}: "
+            f"expected {expected_bytes} bytes, retrieved {len(content)}."
+        )
+    return content
 
 
 def delete_artifact_object(
@@ -355,11 +388,9 @@ def delete_artifact_object(
 ) -> None:
     """Delete an object previously written by :func:`store_artifact`.
 
-    Used as a compensating action when a batch upload fails partway
-    through pass-2 storage writes — the API layer must clean up bytes
-    that have no DB row pointing at them. Best-effort: any error is
-    swallowed (logged by the caller) because compensation is already a
-    cleanup path and re-raising would mask the root cause.
+    Reserved for a future reference-aware garbage collector. Upload failure
+    paths must never call this directly: content-addressed keys may already be
+    shared by committed rows or concurrent transactions.
     """
     if client is None:
         client = _get_s3_client()

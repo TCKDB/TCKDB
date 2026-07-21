@@ -1061,14 +1061,22 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
         index=True,
     )
     uri: Mapped[str] = mapped_column(Text, nullable=False)
-    sha256: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True, index=True)
-    bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    sha256: Mapped[str] = mapped_column(CHAR(64), nullable=False, index=True)
+    bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # created_by from CreatedByMixin (nullable FK to app_user.id)
     # created_at from TimestampMixin
 
     calculation: Mapped["Calculation"] = relationship(back_populates="artifacts")
+
+    __table_args__ = (
+        CheckConstraint(
+            "sha256 ~ '^[0-9a-f]{64}$'",
+            name="sha256_lower_hex",
+        ),
+        CheckConstraint("bytes > 0", name="bytes_gt_0"),
+    )
 
 
 class CalculationParameterVocab(Base, TimestampMixin):

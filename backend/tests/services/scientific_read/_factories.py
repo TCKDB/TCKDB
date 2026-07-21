@@ -1050,12 +1050,16 @@ def attach_artifact(
     kind: ArtifactKind = ArtifactKind.output_log,
     filename: str = "output.log",
     uri: str = "s3://bucket/output.log",
+    sha256: str = "0" * 64,
+    bytes_: int = 1,
 ) -> CalculationArtifact:
     """Attach a CalculationArtifact row."""
     row = CalculationArtifact(
         calculation_id=calculation.id,
         kind=kind,
         uri=uri,
+        sha256=sha256,
+        bytes=bytes_,
         filename=filename,
     )
     session.add(row)

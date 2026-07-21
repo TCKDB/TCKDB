@@ -242,6 +242,8 @@ def _make_minimal_opt_calc(
                 calculation_id=calc.id,
                 kind=ArtifactKind.output_log,
                 uri="s3://test/log",
+                sha256="1" * 64,
+                bytes=1,
                 filename="log.out",
             )
         )
@@ -303,6 +305,8 @@ def _make_minimal_freq_calc(db_session: Session) -> Calculation:
             calculation_id=calc.id,
             kind=ArtifactKind.output_log,
             uri="s3://test/freq-log",
+            sha256="2" * 64,
+            bytes=1,
             filename="freq.log",
         )
     )

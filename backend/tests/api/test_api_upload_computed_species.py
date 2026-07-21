@@ -54,7 +54,7 @@ def stub_delete_artifact(monkeypatch) -> list[str]:
         deleted.append(sha256)
 
     monkeypatch.setattr(
-        "app.services.artifact_persistence.delete_artifact_object", _fake_delete
+        "app.services.artifact_storage.delete_artifact_object", _fake_delete
     )
     return deleted
 
@@ -301,8 +301,7 @@ class TestArtifactHandling:
     def test_storage_failure_compensates_cross_calc_writes(
         self, client, db_session, monkeypatch, stub_delete_artifact
     ):
-        """Calc A's artifact succeeds; calc B's artifact fails on storage.
-        Bundle compensation deletes A's S3 object before raising."""
+        """Calc A succeeds and calc B fails without deleting shared CAS bytes."""
         call_count = {"n": 0}
         stored: list[str] = []
 
@@ -326,12 +325,9 @@ class TestArtifactHandling:
         ]
         resp = client.post("/api/v1/uploads/computed-species", json=payload)
         assert resp.status_code == 503
-        # The first stored sha was compensated cross-batch — the load-
-        # bearing assertion of bundle-level S3 cleanup. SQL rollback is
-        # the route's get_write_db responsibility (verified by primitive
-        # endpoint tests); the test client's override does not commit on
-        # exception, so we only assert S3 compensation here.
-        assert sorted(stored) == sorted(stub_delete_artifact)
+        # SQL rollback is the route's responsibility. Stored CAS bytes remain
+        # because the workflow cannot prove that the digest key is unshared.
+        assert stub_delete_artifact == []
         assert len(stored) >= 1
 
 

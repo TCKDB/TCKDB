@@ -11,10 +11,12 @@ from app.db.models.common import ArtifactKind
 from app.services.artifact_storage import (
     MAX_ARTIFACT_BYTES,
     MAX_TOTAL_UPLOAD_BYTES,
+    ArtifactIntegrityError,
     ArtifactValidationError,
     _ensure_bucket,
     _get_s3_client,
     content_addressed_key,
+    load_artifact_bytes,
     store_artifact,
     validate_artifact,
     validate_total_upload_size,
@@ -27,6 +29,22 @@ ORCA_OPT_LOG = FIXTURES / "orca" / "opt_orca.out"
 
 # Dedicated test bucket so tests don't pollute the dev bucket.
 TEST_BUCKET = "tckdb-artifacts-test"
+
+
+class _BytesBody:
+    def __init__(self, content: bytes) -> None:
+        self.content = content
+
+    def read(self) -> bytes:
+        return self.content
+
+
+class _ReadClient:
+    def __init__(self, content: bytes) -> None:
+        self.content = content
+
+    def get_object(self, **_kwargs):
+        return {"Body": _BytesBody(self.content)}
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +116,41 @@ class TestIntegrityValidation:
             validate_artifact(
                 content, ArtifactKind.output_log, declared_bytes=len(content) + 1
             )
+
+
+def test_load_artifact_bytes_verifies_digest_and_size() -> None:
+    content = b"preserved artifact bytes"
+    sha256 = hashlib.sha256(content).hexdigest()
+
+    loaded = load_artifact_bytes(
+        sha256,
+        expected_bytes=len(content),
+        client=_ReadClient(content),
+        bucket=TEST_BUCKET,
+    )
+
+    assert loaded == content
+
+
+def test_load_artifact_bytes_rejects_digest_mismatch() -> None:
+    with pytest.raises(ArtifactIntegrityError, match="digest verification failed"):
+        load_artifact_bytes(
+            "a" * 64,
+            client=_ReadClient(b"corrupted bytes"),
+            bucket=TEST_BUCKET,
+        )
+
+
+def test_load_artifact_bytes_rejects_size_mismatch() -> None:
+    content = b"preserved artifact bytes"
+    sha256 = hashlib.sha256(content).hexdigest()
+    with pytest.raises(ArtifactIntegrityError, match="size verification failed"):
+        load_artifact_bytes(
+            sha256,
+            expected_bytes=len(content) + 1,
+            client=_ReadClient(content),
+            bucket=TEST_BUCKET,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +291,16 @@ class TestS3Storage:
         uri1 = store_artifact(content, sha, client=client, bucket=bucket)
         uri2 = store_artifact(content, sha, client=client, bucket=bucket)
         assert uri1 == uri2
+
+    def test_dedup_rejects_corrupt_existing_object(self, s3_test_bucket):
+        client, bucket = s3_test_bucket
+        expected = GAUSSIAN_OPT_LOG.read_bytes()
+        sha = hashlib.sha256(expected).hexdigest()
+        key = content_addressed_key(sha)
+        client.put_object(Bucket=bucket, Key=key, Body=b"corrupt")
+
+        with pytest.raises(ArtifactIntegrityError, match="digest verification"):
+            store_artifact(expected, sha, client=client, bucket=bucket)
 
     def test_different_files_different_keys(self, s3_test_bucket):
         client, bucket = s3_test_bucket

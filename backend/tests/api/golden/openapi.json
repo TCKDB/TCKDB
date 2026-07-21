@@ -2735,16 +2735,9 @@
       "CalculationArtifactRead": {
         "properties": {
           "bytes": {
-            "anyOf": [
-              {
-                "minimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bytes"
+            "exclusiveMinimum": 0.0,
+            "title": "Bytes",
+            "type": "integer"
           },
           "calculation_id": {
             "title": "Calculation Id",
@@ -2790,17 +2783,11 @@
             "title": "Note"
           },
           "sha256": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "minLength": 64,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sha256"
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
           },
           "uri": {
             "minLength": 1,
@@ -2814,13 +2801,15 @@
           "calculation_id",
           "kind",
           "uri",
+          "sha256",
+          "bytes",
           "filename"
         ],
         "title": "CalculationArtifactRead",
         "type": "object"
       },
       "CalculationArtifactSummary": {
-        "description": "One artifact-metadata row for the ``include=artifacts`` heavy\ninclude of the calculation detail endpoint.\n\n**Metadata only — no body bytes, no pre-signed download URL.**\nThe ``uri`` field carries the storage URI exactly as persisted\n(typically ``s3://bucket/key``); resolving it to a downloadable URL\nis an upload-side / artifact-service responsibility, not a public\nread concern.\n\n``artifact_ref`` is always ``None`` until ``calculation_artifact``\ngrows a ``public_ref`` column (see open question 1 in\n``backend/docs/specs/scientific_calculation_reads.md``); the field\nexists in the schema now so adding refs later is non-breaking.\n\n``artifact_id`` is subject to the Phase D internal-ID visibility\npolicy and is stripped by the strip helper when the deployment\nforbids exposing internal ids.",
+        "description": "One artifact-metadata row for the ``include=artifacts`` heavy\ninclude of the calculation detail endpoint.\n\n**Metadata only — no body bytes or pre-signed URL is inlined.**\nThe ``uri`` field carries the storage URI exactly as persisted\n(typically ``s3://bucket/key``); resolving it to a downloadable URL\nis an upload-side / artifact-service responsibility, not a public\nread concern. Approved bytes are retrieved separately through the\ncontent-addressed scientific artifact download route.\n\n``artifact_ref`` is always ``None`` until ``calculation_artifact``\ngrows a ``public_ref`` column (see open question 1 in\n``backend/docs/specs/scientific_calculation_reads.md``); the field\nexists in the schema now so adding refs later is non-breaking.\n\n``artifact_id`` is subject to the Phase D internal-ID visibility\npolicy and is stripped by the strip helper when the deployment\nforbids exposing internal ids.",
         "properties": {
           "artifact_id": {
             "anyOf": [
@@ -2845,15 +2834,9 @@
             "title": "Artifact Ref"
           },
           "bytes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bytes"
+            "exclusiveMinimum": 0.0,
+            "title": "Bytes",
+            "type": "integer"
           },
           "created_at": {
             "anyOf": [
@@ -2882,15 +2865,9 @@
             "$ref": "#/components/schemas/ArtifactKind"
           },
           "sha256": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sha256"
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
           },
           "uri": {
             "title": "Uri",
@@ -2899,7 +2876,9 @@
         },
         "required": [
           "kind",
-          "uri"
+          "uri",
+          "sha256",
+          "bytes"
         ],
         "title": "CalculationArtifactSummary",
         "type": "object"
@@ -50271,6 +50250,55 @@
           }
         },
         "summary": "Artifacts Search Post",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/artifacts/{sha256}/download": {
+      "get": {
+        "description": "Download curator-approved bytes by their content-addressed digest.",
+        "operationId": "download_approved_artifact_api_v1_scientific_artifacts__sha256__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sha256",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No approved artifact has this digest."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "description": "Stored bytes failed integrity verification."
+          },
+          "503": {
+            "description": "Artifact storage is unavailable."
+          }
+        },
+        "summary": "Download Approved Artifact",
         "tags": [
           "scientific"
         ]

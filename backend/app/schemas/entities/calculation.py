@@ -198,8 +198,8 @@ class CalculationArtifactBase(BaseModel):
     calculation_id: int
     kind: ArtifactKind
     uri: str = Field(min_length=1)
-    sha256: str | None = Field(default=None, min_length=64, max_length=64)
-    bytes: int | None = Field(default=None, ge=0)
+    sha256: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
+    bytes: int = Field(gt=0)
     filename: str = Field(min_length=1)
     note: str | None = None
 

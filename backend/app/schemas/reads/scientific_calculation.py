@@ -267,11 +267,12 @@ class CalculationArtifactSummary(BaseModel):
     """One artifact-metadata row for the ``include=artifacts`` heavy
     include of the calculation detail endpoint.
 
-    **Metadata only — no body bytes, no pre-signed download URL.**
+    **Metadata only — no body bytes or pre-signed URL is inlined.**
     The ``uri`` field carries the storage URI exactly as persisted
     (typically ``s3://bucket/key``); resolving it to a downloadable URL
     is an upload-side / artifact-service responsibility, not a public
-    read concern.
+    read concern. Approved bytes are retrieved separately through the
+    content-addressed scientific artifact download route.
 
     ``artifact_ref`` is always ``None`` until ``calculation_artifact``
     grows a ``public_ref`` column (see open question 1 in
@@ -288,8 +289,8 @@ class CalculationArtifactSummary(BaseModel):
     kind: ArtifactKind
     uri: str
     filename: str | None = None
-    sha256: str | None = None
-    bytes: int | None = None
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bytes: int = Field(gt=0)
     created_at: datetime | None = None
 
 

@@ -84,17 +84,17 @@ Operational consequence:
 
 ### Artifact storage buckets must be private
 
-The scientific artifact read surface (`/api/v1/scientific/artifacts/...` and the `include=artifacts` projections on calculation detail / search) exposes artifact **metadata** only:
+Artifact search and the `include=artifacts` projections on calculation detail expose metadata only:
 
 - `kind`, `filename`, `sha256`, `bytes`, `created_at`
 - `uri` — the raw storage URI verbatim, e.g. `s3://bucket/key`
 
-The endpoint never inlines artifact body bytes, never resolves the URI to a presigned download URL, and no public endpoint accepts a caller-supplied URI as a download target.
+Search never inlines artifact body bytes or resolves the URI to a presigned URL. The separate `GET /api/v1/scientific/artifacts/{sha256}/download` route accepts only a canonical digest, requires an explicitly approved owning calculation, and verifies both SHA-256 and byte length before returning content. It never accepts a caller-supplied storage URI.
 
 Operational consequence:
 
 - **Artifact storage buckets must be private** (no anonymous read ACL, no public bucket policy). The `uri` is a name, not an access grant — but it loses that property if the bucket is also publicly listable.
-- If a future endpoint generates presigned download URLs, it must enforce its own authorization separately; the public scientific read surface deliberately does not.
+- The digest-download route is public only for explicitly approved calculations. Unknown and non-approved digests must remain indistinguishable (404), and integrity/storage failures must fail closed.
 - Bucket-listing capabilities should also be private — leaking a bucket-key namespace via the API is acceptable only when those names cannot be turned into reads externally.
 
 A deploy that fails either assumption is not safe to expose anonymously, regardless of how strict the application-level checks are.

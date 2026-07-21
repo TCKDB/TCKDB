@@ -2,8 +2,8 @@
 
 These tests exercise the calculation-targeted artifact upload endpoint
 end-to-end: happy path, batch atomicity, authorization, validation,
-idempotency (including cross-calc-id isolation), and pass-2 storage
-failure with compensating delete.
+idempotency (including cross-calc-id isolation), and safe pass-2 storage
+failure handling.
 
 S3 writes are stubbed with a per-test fake so the suite does not
 require a live MinIO; storage round-trips are covered by
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -29,15 +30,18 @@ from app.api.deps import (
     get_write_db,
 )
 from app.db.models.app_user import AppUser
-from app.db.models.calculation import CalculationArtifact
+from app.db.models.calculation import Calculation, CalculationArtifact
 from app.db.models.common import (
     AppUserRole,
+    RecordReviewEventKind,
+    RecordReviewStatus,
     SubmissionKind,
     SubmissionRecordType,
     SubmissionSourceKind,
     SubmissionStatus,
 )
 from app.db.models.idempotency import IdempotencyRecord
+from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.submission import Submission, SubmissionRecordLink
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
@@ -138,7 +142,7 @@ def stub_delete_artifact(monkeypatch) -> list[str]:
         deleted.append(sha256)
 
     monkeypatch.setattr(
-        "app.services.artifact_persistence.delete_artifact_object", _fake_delete
+        "app.services.artifact_storage.delete_artifact_object", _fake_delete
     )
     return deleted
 
@@ -383,7 +387,7 @@ class TestBatchAtomicity:
 
 
 # ---------------------------------------------------------------------------
-# Pass-2 storage failure → compensating delete + 503
+# Pass-2 storage failure → retained CAS bytes + SQL rollback
 # ---------------------------------------------------------------------------
 
 
@@ -393,8 +397,7 @@ class TestStorageFailure:
     ) -> None:
         calc_id = _create_calc_via_conformer_upload(client)
 
-        # Succeed on the first store, raise on the second so compensation
-        # has something to delete.
+        # Succeed on the first store, then simulate an outage.
         call_count = {"n": 0}
         stored: list[str] = []
 
@@ -423,24 +426,22 @@ class TestStorageFailure:
         assert resp.status_code == 503, resp.text
         body = resp.json()
         assert body["code"] == "artifact_storage_unavailable"
-        # First object was stored, then deleted as compensation.
-        assert stored == stub_delete_artifact
+        # The first object is retained: deleting a digest key here could
+        # remove bytes already shared by a committed or concurrent row.
+        assert stored
+        assert stub_delete_artifact == []
         assert _artifact_count_for(db_session, calc_id) == 0
 
     def test_flush_failure_triggers_compensation(
         self, client, db_session, monkeypatch, stub_store_artifact, stub_delete_artifact
     ) -> None:
-        """Regression: a SQL-layer flush failure (e.g. schema drift, FK
-        violation, constraint conflict) must trigger the same
-        compensation as a storage failure — every already-stored S3
-        object is deleted and no rows persist.
+        """A SQL-layer flush failure detaches rows but retains CAS bytes.
 
         The original SQL exception propagates as itself (it is NOT
         wrapped as ``ArtifactStorageUnavailable`` — that label means
         "object store cannot accept writes," which a flush failure is
         not). The HTTP status the route ultimately returns is the
-        default exception handler's choice; the correctness property
-        asserted here is the cleanup, not the status code.
+        default exception handler's choice.
         """
         from sqlalchemy.exc import IntegrityError
 
@@ -479,8 +480,7 @@ class TestStorageFailure:
 
         # The IntegrityError handler in app/api/errors.py maps SQL
         # IntegrityErrors to a 409 with code=integrity_conflict. The
-        # exact status mapping is the existing handler's choice; what
-        # this test asserts is that compensation ran, not the status.
+        # exact status mapping is the existing handler's choice.
         resp = client.post(
             f"/api/v1/calculations/{calc_id}/artifacts",
             json={"artifacts": [opt_log, freq_log]},
@@ -488,11 +488,10 @@ class TestStorageFailure:
         assert resp.status_code == 409, resp.text
         assert resp.json().get("code") == "integrity_conflict"
 
-        # Both artifacts were stored to S3 before flush blew up; both
-        # were compensated by delete.
+        # Both artifacts were stored before flush failed. They remain for a
+        # future reference-aware GC rather than risking shared-key deletion.
         assert len(stub_store_artifact) == 2
-        stored_shas = [sha for (_uri, sha) in stub_store_artifact]
-        assert sorted(stub_delete_artifact) == sorted(stored_shas)
+        assert stub_delete_artifact == []
 
         # No rows persisted: the conditional patch lets the count query's
         # autoflush pass through (no pending artifact rows after
@@ -576,6 +575,43 @@ class TestAuthorization:
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert resp.status_code == 201
+
+    def test_ever_approved_calculation_artifacts_are_frozen(
+        self, client, db_session, stub_store_artifact
+    ) -> None:
+        calc_id = _create_calc_via_conformer_upload(client)
+        calculation = db_session.get(Calculation, calc_id)
+        assert calculation is not None
+
+        review = db_session.scalar(
+            select(RecordReview).where(
+                RecordReview.record_type == SubmissionRecordType.calculation,
+                RecordReview.record_id == calc_id,
+            )
+        )
+        assert review is not None
+        review.status = RecordReviewStatus.under_review
+        db_session.flush()
+        db_session.add(
+            RecordReviewEvent(
+                record_review_id=review.id,
+                event_kind=RecordReviewEventKind.status_change,
+                from_status=RecordReviewStatus.under_review,
+                to_status=RecordReviewStatus.approved,
+                actor_user_id=calculation.created_by,
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        db_session.flush()
+
+        resp = client.post(
+            f"/api/v1/calculations/{calc_id}/artifacts",
+            json={"artifacts": [_ancillary_artifact()]},
+        )
+        assert resp.status_code == 409
+        assert "frozen after calculation approval" in resp.json()["detail"]
+        assert stub_store_artifact == []
+        assert _artifact_count_for(db_session, calc_id) == 0
 
     def test_submission_owner_via_pending_link(
         self,

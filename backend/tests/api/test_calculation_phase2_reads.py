@@ -365,6 +365,7 @@ class TestArtifacts:
         db_session.add(CalculationArtifact(
             calculation_id=calc_id, kind=ArtifactKind.input,
             uri="s3://bucket/input.gjf",
+            sha256="1" * 64, bytes=1,
             filename="input.gjf",
         ))
         db_session.add(CalculationArtifact(

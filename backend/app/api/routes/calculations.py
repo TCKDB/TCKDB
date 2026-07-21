@@ -42,9 +42,15 @@ from app.db.models.calculation import (
     CalculationSPResult,
     CalculationWavefunctionDiagnostic,
 )
-from app.db.models.common import CalculationQuality, CalculationType
+from app.db.models.common import (
+    CalculationQuality,
+    CalculationType,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
 from app.db.models.geometry import Geometry
 from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.software import Software, SoftwareRelease
 from app.schemas.entities.calculation import (
     CalculationArtifactRead,
@@ -569,8 +575,9 @@ def upload_calculation_artifacts(
     The upload is batch-atomic — any per-artifact validation failure in
     the request rejects the entire batch with 422 and no DB rows or S3
     writes are produced. If a storage write fails partway through pass-2,
-    earlier objects in the batch are best-effort deleted and the route
-    returns 503.
+    pending rows roll back and content-addressed objects are retained for
+    reference-aware garbage collection; deleting a digest key eagerly could
+    remove bytes shared with an existing record. The route returns 503.
 
     Authorization (any one of):
 
@@ -603,6 +610,36 @@ def upload_calculation_artifacts(
             status_code=404, detail="Calculation not found."
         )
 
+    # Approval publishes the exact evidence set attached at review time.
+    # Once a calculation has ever been approved, appending an artifact would
+    # make unreviewed bytes immediately eligible for public download. Curators
+    # must publish a corrected calculation instead of mutating accepted
+    # evidence.
+    was_approved = session.scalar(
+        select(RecordReview.id)
+        .outerjoin(
+            RecordReviewEvent,
+            RecordReviewEvent.record_review_id == RecordReview.id,
+        )
+        .where(
+            RecordReview.record_type == SubmissionRecordType.calculation,
+            RecordReview.record_id == calculation_id,
+            (
+                (RecordReview.status == RecordReviewStatus.approved)
+                | (RecordReviewEvent.to_status == RecordReviewStatus.approved)
+            ),
+        )
+        .limit(1)
+    )
+    if was_approved is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Artifacts are frozen after calculation approval; publish a "
+                "corrected calculation instead of changing accepted evidence."
+            ),
+        )
+
     if not can_modify_calculation_artifacts(session, calculation, current_user):
         raise HTTPException(
             status_code=403,
@@ -610,8 +647,9 @@ def upload_calculation_artifacts(
         )
 
     # persist_artifact_batch flushes internally so SQL-layer errors are
-    # caught by its compensation block (deletes already-stored S3 objects).
-    # If it returns, rows are flushed; if it raises, no S3 leak.
+    # caught by its rollback block. If it returns, rows are flushed; if it
+    # raises, SQL rows roll back and newly written CAS bytes remain as safe,
+    # reclaimable orphans.
     rows = persist_artifact_batch(
         session,
         calculation_id=calculation_id,

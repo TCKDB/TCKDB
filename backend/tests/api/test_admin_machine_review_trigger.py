@@ -161,6 +161,8 @@ def _make_opt_calc(db_session: Session, *, artifact: bool = True) -> Calculation
                 calculation_id=calc.id,
                 kind=ArtifactKind.output_log,
                 uri="s3://test/log",
+                sha256="4" * 64,
+                bytes=1,
                 filename="log.out",
             )
         )

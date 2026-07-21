@@ -253,6 +253,8 @@ class TestArtifactLinkage:
             calculation_id=calc_id,
             kind=ArtifactKind.ancillary,
             uri="s3://bucket/stability.log",
+            sha256="5" * 64,
+            bytes=1,
             filename="stability.log",
             note="scf_stability",
         )

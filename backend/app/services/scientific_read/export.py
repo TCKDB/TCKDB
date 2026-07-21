@@ -72,7 +72,8 @@ from app.services.scientific_read.common import (
     visible_statuses,
 )
 
-#: Schema tag stamped on every export so a re-ingester can branch on format.
+#: Schema tag for the selected scientific projection.  This is intentionally
+#: distinct from the future ``tckdb.archive.v1`` lossless archive contract.
 EXPORT_SCHEMA = "tckdb.export.v0"
 
 #: Hard cap on ``all`` exports (guards the "no silent bulk scan" posture).
@@ -82,6 +83,24 @@ DEFAULT_ALL_CAP = 50_000
 #: review status is at or above ``approved`` are eligible; a lower value is
 #: reported as a gap, not exported.
 DEFAULT_MIN_REVIEW_STATUS = RecordReviewStatus.approved
+
+
+def _projection_contract() -> dict:
+    """Describe what the v0 export does and, critically, does not preserve."""
+    return {
+        "kind": "selected_scientific_projection",
+        "lossless": False,
+        "reingestible": False,
+        "archive_schema": None,
+        "omits": [
+            "unselected_candidates",
+            "calculation_provenance",
+            "raw_artifact_bytes",
+            "review_event_history",
+            "submission_and_actor_metadata",
+            "record_families_outside_species_thermo_transport_reaction_kinetics",
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -443,6 +462,7 @@ class ExportRecordSet:
         return {
             "record_type": "manifest",
             "schema": EXPORT_SCHEMA,
+            "contract": _projection_contract(),
             "generated_at": self.generated_at.isoformat(),
             "seed": self.seed.to_manifest(),
             "collapse": self.collapse.value,
@@ -1052,6 +1072,7 @@ def _stream_ndjson(
     header = {
         "record_type": "manifest",
         "schema": EXPORT_SCHEMA,
+        "contract": _projection_contract(),
         "generated_at": generated_at.isoformat(),
         "seed": seed.to_manifest(),
         "collapse": collapse.value,
