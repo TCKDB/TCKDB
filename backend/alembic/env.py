@@ -14,21 +14,26 @@ load_dotenv(verbose=True)  # Will make true for now
 config = context.config
 
 ## Custom set env vars
-user = os.getenv("DB_USER")
-password = os.getenv("DB_PASSWORD")
+# Hosted migrations use a dedicated non-superuser owner.  Local development
+# remains backward compatible with the ordinary DB_* credentials.
+owner_user = os.getenv("DB_OWNER_USER")
+owner_password = os.getenv("DB_OWNER_PASSWORD")
+if bool(owner_user) != bool(owner_password):
+    raise RuntimeError("DB_OWNER_USER and DB_OWNER_PASSWORD must be set together")
+if os.getenv("DEPLOYMENT_MODE") in {"shared_private", "hosted_public"} and not owner_user:
+    raise RuntimeError("Hosted migrations require DB_OWNER_USER and DB_OWNER_PASSWORD")
+
+user = owner_user or os.getenv("DB_USER")
+password = owner_password or os.getenv("DB_PASSWORD")
 host = os.getenv("DB_HOST", "127.0.0.1")
 port = os.getenv("DB_PORT", 5432)
 database = os.getenv("DB_NAME")
 encoding = os.getenv("DB_CLIENT_ENCODING", "utf8")
 
 if not all([user, password, database]):
-    raise RuntimeError("Must set DB_USER, DB_PASSWORD, DB_NAME - missing in .env")
+    raise RuntimeError("Must set database user/password and DB_NAME - missing in environment")
 
-database_url = (
-    f"postgresql+psycopg://{user}:{password}"
-    f"@{host}:{port}/{database}"
-    f"?client_encoding={encoding}"
-)
+database_url = f"postgresql+psycopg://{user}:{password}@{host}:{port}/{database}?client_encoding={encoding}"
 
 config.set_main_option("sqlalchemy.url", database_url)
 ###

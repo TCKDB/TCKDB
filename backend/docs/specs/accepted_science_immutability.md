@@ -60,9 +60,10 @@ cryptographically unforgeable database invariant.
 Triggers are an adversarial guarantee only when the application role is a
 non-superuser, does not own the protected tables/functions, and lacks DDL and
 TRUNCATE privileges. A separate migration-owner role must own schema objects.
-The current Pi deployment runs as `tckdb`, which is both superuser and owner;
-role separation is therefore required before claiming this guarantee in
-production.
+The deployment procedure in `backend/docs/deployment/database_roles.md`
+provisions a restricted runtime account and a separate migration owner. The
+guarantee applies only after its read-only role-contract check passes on the
+target deployment.
 
 There is deliberately no bypass GUC or normal maintenance escape hatch. Data
 repair after acceptance must use replacement records and supersession. Schema

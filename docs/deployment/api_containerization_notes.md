@@ -6,6 +6,7 @@ self-hosted operator's top-level invocation becomes:
 
 ```bash
 docker compose --env-file .env.selfhosted \
+    --env-file .env.db-admin \
     up -d db minio api
 ```
 

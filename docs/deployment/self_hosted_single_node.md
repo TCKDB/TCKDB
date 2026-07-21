@@ -244,6 +244,7 @@ The Compose default brings up only the core services:
 
 ```bash
 docker compose --env-file .env.selfhosted \
+    --env-file .env.db-admin \
     up -d db minio
 ```
 
@@ -251,6 +252,7 @@ Cloudflare Tunnel ingress is opt-in via the `cloudflare` profile:
 
 ```bash
 docker compose --env-file .env.selfhosted \
+    --env-file .env.db-admin \
     --profile cloudflare up -d cloudflared
 ```
 
@@ -475,13 +477,13 @@ Two layers — both should be on:
    This is applied on every new DBAPI connection and protects against
    a runaway query in the pool. Set it as a positive integer in ms.
 
-2. **Role level (recommended).** Persist the same value on the role so
-   any client — including ad-hoc `psql` sessions — inherits it:
+2. **Role level.** `configure_database_roles.py apply` persists the same
+   value on the restricted runtime role so any client inherits it. Verify it
+   without exposing operator credentials to the API:
 
    ```bash
-   docker compose --env-file .env.selfhosted \
-       exec -T db psql -U "$DB_USER" -d "$DB_NAME" \
-       -c "ALTER ROLE tckdb SET statement_timeout = '30s';"
+   PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" \
+       -c "SHOW statement_timeout;"
    ```
 
    Tighten further (e.g. `10s`) once you've observed legitimate query
@@ -497,10 +499,12 @@ sudo mkdir -p /opt/tckdb && sudo chown -R tckdb:tckdb /opt/tckdb
 sudo -u tckdb git clone <repo-url> /opt/tckdb
 cd /opt/tckdb
 sudo -u tckdb cp .env.selfhosted.example .env.selfhosted
-sudo -u tckdb $EDITOR .env.selfhosted        # fill in every change-me-* value
+sudo -u tckdb cp .env.db-admin.example .env.db-admin
+sudo -u tckdb chmod 600 .env.selfhosted .env.db-admin
+sudo -u tckdb $EDITOR .env.selfhosted .env.db-admin  # fill every placeholder
 
 # 1. Bring up the data plane
-docker compose --env-file .env.selfhosted up -d db minio
+docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db minio
 
 # 2. Run migrations.
 #    For first bootstrap of an empty DB this is straightforward.
@@ -509,11 +513,13 @@ docker compose --env-file .env.selfhosted up -d db minio
 #    backend/docs/deployment/migrations.md (pg_dump first, read
 #    revision docstrings, upgrade, smoke-test).
 cd backend
-DB_NAME=$(grep ^DB_NAME ../.env.selfhosted | cut -d= -f2) \
-DB_USER=$(grep ^DB_USER ../.env.selfhosted | cut -d= -f2) \
-DB_PASSWORD=$(grep ^DB_PASSWORD ../.env.selfhosted | cut -d= -f2) \
-DB_HOST=127.0.0.1 DB_PORT=5432 \
-    /opt/conda/bin/conda run -n tckdb_env alembic upgrade head
+set -a
+source ../.env.selfhosted
+source ../.env.db-admin
+set +a
+/opt/conda/bin/conda run -n tckdb_env python scripts/configure_database_roles.py apply
+/opt/conda/bin/conda run -n tckdb_env alembic upgrade head
+/opt/conda/bin/conda run -n tckdb_env python scripts/configure_database_roles.py check
 
 # 3. Persist the statement_timeout at role level (see above)
 
@@ -534,6 +540,7 @@ sudo systemctl enable --now tckdb-api.service
 #    configure that ingress separately.
 cd ..
 docker compose --env-file .env.selfhosted \
+    --env-file .env.db-admin \
     --profile cloudflare up -d cloudflared
 ```
 
@@ -586,14 +593,14 @@ docker compose exec -T minio \
 
 ```bash
 # Drop and recreate the DB (destructive)
-docker compose --env-file .env.selfhosted exec -T db \
-    psql -U "$DB_USER" -d postgres \
-    -c "DROP DATABASE IF EXISTS $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_USER;"
+docker compose --env-file .env.selfhosted --env-file .env.db-admin exec -T db \
+    psql -U "$DB_ADMIN_USER" -d postgres \
+    -c "DROP DATABASE IF EXISTS $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_OWNER_USER;"
 
 # Restore from a dump
 gunzip -c /var/backups/tckdb/tckdb-2026-05-12.sql.gz | \
-    docker compose --env-file .env.selfhosted exec -T db \
-    psql -U "$DB_USER" -d "$DB_NAME"
+    docker compose --env-file .env.selfhosted --env-file .env.db-admin exec -T db \
+    psql -U "$DB_ADMIN_USER" -d "$DB_NAME"
 ```
 
 Run this drill on a scratch DB at least quarterly — an untested backup
@@ -854,7 +861,7 @@ regressions** and **config regressions**. Both have a clean undo:
 #    leak into a downstream client. The exact "stop ingress" step
 #    depends on which ingress you chose (see "Ingress options").
 #    For the Compose cloudflared service:
-docker compose --env-file .env.selfhosted stop cloudflared
+docker compose --env-file .env.selfhosted --env-file .env.db-admin stop cloudflared
 #    For a host-side cloudflared systemd unit:
 #      sudo systemctl stop cloudflared
 #    For nginx/Caddy/Traefik: stop or reload-with-503 the proxy.
@@ -866,6 +873,7 @@ sudo -u tckdb git checkout <prev-good-sha>
 sudo systemctl start tckdb-api
 # Restart the ingress that matches your setup:
 docker compose --env-file .env.selfhosted \
+    --env-file .env.db-admin \
     --profile cloudflare start cloudflared
 ```
 
@@ -875,18 +883,18 @@ checked-out code, restore the previous nightly:
 ```bash
 # from /var/backups/tckdb/
 sudo systemctl stop tckdb-api
-docker compose ... exec db psql -U $DB_USER -d postgres \
-    -c "DROP DATABASE $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_USER;"
+docker compose ... exec db psql -U $DB_ADMIN_USER -d postgres \
+    -c "DROP DATABASE $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_OWNER_USER;"
 gunzip -c tckdb-YYYY-MM-DD.sql.gz | docker compose ... exec -T db \
-    psql -U $DB_USER -d $DB_NAME
+    psql -U $DB_ADMIN_USER -d $DB_NAME
 sudo systemctl start tckdb-api
 ```
 
 ### Config rollback
 
-`.env.selfhosted` is the single source of hosted-posture truth. Keep the
-previous version in git (in a *private* repo, not this one — it has
-secrets) or copy it before edits:
+`.env.selfhosted` is the runtime-posture source; `.env.db-admin` contains
+operator-only database credentials. Keep encrypted/private backups of both,
+never commit them to this repository, and copy them before edits:
 
 ```bash
 sudo cp /opt/tckdb/.env.selfhosted /opt/tckdb/.env.selfhosted.$(date +%F)
@@ -904,6 +912,7 @@ cloudflared service:
 
 ```bash
 docker compose --env-file .env.selfhosted \
+    --env-file .env.db-admin \
     stop cloudflared
 ```
 

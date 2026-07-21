@@ -19,6 +19,11 @@ conda run -n tckdb_env alembic downgrade -1          # step back one revision
 
 For Docker-Compose-based deployments where Alembic is run via the API image rather than the host conda env, use the compose variant shown later in this document.
 
+Hosted deployments must use the separate migration-owner credentials described
+in [`database_roles.md`](database_roles.md). Alembic prefers
+`DB_OWNER_USER` / `DB_OWNER_PASSWORD` and refuses to use the API runtime login
+when `DEPLOYMENT_MODE` is `shared_private` or `hosted_public`.
+
 ---
 
 ## Empty DB bootstrap
@@ -29,14 +34,13 @@ For a brand-new database (local dev, a fresh shared host, a CI run, a restored b
 # 1. Confirm the database exists and is reachable.
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c '\conninfo'
 
-# 2. Enable the RDKit extension (handled by the first migration on most
-#    setups; check that the RDKit-enabled image / extension is installed).
+# 2. Hosted only: provision the role split. This installs RDKit with the
+#    bootstrap administrator and transfers application ownership.
+conda run -n tckdb_env python scripts/configure_database_roles.py apply
 
 # 3. Apply all migrations.
 cd backend
-DB_USER=$DB_USER DB_PASSWORD=$DB_PASSWORD \
-DB_NAME=$DB_NAME DB_HOST=$DB_HOST DB_PORT=${DB_PORT:-5432} \
-    conda run -n tckdb_env alembic upgrade head
+conda run -n tckdb_env alembic upgrade head
 
 # 4. Verify.
 conda run -n tckdb_env alembic current
@@ -99,9 +103,7 @@ If the docstring is silent on these and the change is non-trivial, stop and ask 
 
 ```bash
 cd backend
-DB_USER=$DB_USER DB_PASSWORD=$DB_PASSWORD \
-DB_NAME=$DB_NAME DB_HOST=$DB_HOST DB_PORT=${DB_PORT:-5432} \
-    conda run -n tckdb_env alembic upgrade head
+conda run -n tckdb_env alembic upgrade head
 ```
 
 For step-by-step application (recommended when several revisions are pending and the change set is large):

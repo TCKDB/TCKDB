@@ -155,12 +155,16 @@ venv.bak/
 # tracked; the populated counterparts must never be committed.
 .env.local
 .env.selfhosted
+.env.db-admin
+.env.pi
+.env.pi.db-admin
 .env.test.local
 backend/.env.test.local
 docker-compose.dev.local.yml
 !.env.example
 !.env.local.example
 !.env.selfhosted.example
+!.env.db-admin.example
 
 # Spyder project settings
 .spyderproject

@@ -346,14 +346,18 @@ etc.) that exposes TCKDB to a wider audience:
 ```bash
 # 1. Copy the env template and fill in change-me-* values
 cp .env.selfhosted.example .env.selfhosted
-$EDITOR .env.selfhosted
+cp .env.db-admin.example .env.db-admin
+$EDITOR .env.selfhosted .env.db-admin
 
 # 2. Bring up the core data plane (Postgres + MinIO)
-docker compose --env-file .env.selfhosted up -d db minio
+docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db minio
 
-# 3. Run migrations and seed an admin (from backend/)
+# 3. Provision DB roles, run migrations, and seed an admin (from backend/)
+set -a; source .env.selfhosted; source .env.db-admin; set +a
 cd backend
+conda run -n tckdb_env python scripts/configure_database_roles.py apply
 conda run -n tckdb_env alembic upgrade head
+conda run -n tckdb_env python scripts/configure_database_roles.py check
 conda run -n tckdb_env python scripts/bootstrap_admin.py \
     --username alice --email alice@example.org --role admin
 ```
@@ -374,6 +378,7 @@ supported option, behind the `cloudflare` Compose profile:
 
 ```bash
 docker compose --env-file .env.selfhosted \
+    --env-file .env.db-admin \
     --profile cloudflare up -d cloudflared
 ```
 

@@ -52,8 +52,9 @@ Every row below must be set to the indicated value before the API is reachable f
 | `RATE_LIMIT_ENABLED` | `true` | **enforced** The app-level rate limiter. The test suite turns it off via env var; nothing else should. |
 | `CORS_ALLOW_ORIGINS` | explicit allow-list or unset | **enforced (no wildcard)** Default empty means no CORS middleware is registered, which is the correct posture for an API-key-only API. Set to a comma-separated list of trusted browser origins (e.g. `https://app.tckdb.example.org`) only if a browser app needs to call the API. `*` is rejected at startup in both hosted modes. |
 | `TRUSTED_PROXY_HEADER` | match your ingress, or unset | Tells the rate limiter where to read the real client IP. Only set when terminating TLS behind a trusted reverse proxy that overwrites the header. Examples: Cloudflare Tunnel → `CF-Connecting-IP`; nginx with `proxy_set_header X-Real-IP` → `X-Real-IP`. Leave unset for loopback-only / no-proxy setups. |
-| `DB_STATEMENT_TIMEOUT_MS` | `30000` (or your chosen budget) | Caps the time any one query may hold a pool slot. Belt-and-braces; also set `ALTER ROLE tckdb SET statement_timeout = '30s'` at the role level. |
+| `DB_STATEMENT_TIMEOUT_MS` | `30000` (or your chosen budget) | Caps the time any one query may hold a pool slot. `configure_database_roles.py apply` also persists it on the runtime role. |
 | `DB_PASSWORD` | strong random value | Never leave at `tckdb` outside local dev. The hosted compose file refuses to start without one. |
+| `DB_ADMIN_*` / `DB_OWNER_*` | strong, distinct operator-only credentials | Keep these in a separate mode-600 env file that the API and worker never load. Alembic uses the owner account. |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | strong random values | Same: never leave at the local-dev defaults in a hosted setup. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | production DB coordinates | Point at the production PostgreSQL+RDKit instance. Verify the DB exists and the user has appropriate privileges before starting the API. |
 | `TCKDB_API_HOST` | `127.0.0.1` | The API should listen on loopback only; the ingress (Cloudflare Tunnel, nginx, Caddy, Traefik, Tailscale, …) is the only thing that talks to it directly. |
@@ -130,6 +131,8 @@ Settings alone are not enough. Before opening the deployment to traffic:
 - [ ] `DEPLOYMENT_MODE` is set to `shared_private` or `hosted_public`. The API exits at startup if any **enforced** row in the table above is at an unsafe value — the error message lists every violation in one pass.
 - [ ] `.env.selfhosted` (or your equivalent) is on the host, with every `change-me-*` placeholder replaced.
 - [ ] The DB is reachable: `PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c '\conninfo'`.
+- [ ] `python scripts/configure_database_roles.py check` passes: the API role is a non-owner, non-superuser with no DDL, temporary-table, or `TRUNCATE` capability.
+- [ ] The API/worker environment contains no `DB_ADMIN_*` or `DB_OWNER_*` credentials.
 - [ ] Migrations are at head: `alembic current` matches `alembic heads`. See [Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md).
 - [ ] At least one admin account has been seeded via `backend/scripts/bootstrap_admin.py`.
 - [ ] `AUTH_ALLOW_OPEN_REGISTRATION=false` is verified by sending `POST /api/v1/auth/register` and confirming the response is `403` or equivalent.
@@ -137,7 +140,7 @@ Settings alone are not enough. Before opening the deployment to traffic:
 - [ ] `LEGACY_READS_REQUIRE_AUTH=true` is verified by hitting `/api/v1/thermo` without credentials and confirming the response is `401`.
 - [ ] `SESSION_COOKIE_SECURE=true` is verified by logging in and confirming the `Set-Cookie` response has `Secure` set.
 - [ ] Rate limits trip under intentional flood: hit `/auth/login` 11 times in one minute from one IP, confirm the 11th returns `429` with a `Retry-After` header.
-- [ ] PostgreSQL `statement_timeout` is set at the role level: `ALTER ROLE tckdb SET statement_timeout = '30s'`.
+- [ ] PostgreSQL `statement_timeout` is set on the runtime role; the role-contract provisioning command applies it.
 - [ ] `/api/v1/health` returns `200`.
 - [ ] `/api/v1/readyz` returns `200` and a body of the shape `{"status":"ready","database":"ok","alembic_revision":"<rev>"}`. A non-`ready` response means the API is up but the DB / schema is not — do *not* route traffic in that state.
 - [ ] `X-Request-ID` is present on every response (try `curl -i https://your-host/api/v1/health` and confirm the header). Clients may set their own `X-Request-ID` on requests for correlation; the server echoes it when safe.

@@ -79,11 +79,14 @@ This is the reference setup for a Raspberry Pi.
 
 ```bash
 cd <repo>
-docker compose --env-file .env.pi up -d db minio
+docker compose --env-file .env.pi --env-file .env.pi.db-admin up -d db minio
 ```
 
-`.env.pi` holds the DB credentials, S3 keys, rate-limit config, cookie/security
-settings, etc. **Keep it out of git** (it's ignored) and `chmod 600` it.
+`.env.pi` holds only runtime DB credentials, S3 keys, rate-limit config,
+cookie/security settings, etc. `.env.pi.db-admin` holds the database
+administrator and migration-owner credentials. **Keep both out of git**, make
+them mode `600`, and never load `.env.pi.db-admin` into the API service. See
+[`database_roles.md`](../../backend/docs/deployment/database_roles.md).
 
 ### 2. Environment (native)
 
@@ -109,7 +112,10 @@ micromamba run -n tckdb_env pip install -e schemas/python/tckdb-schemas
 ```bash
 cd backend
 set -a; source ../.env.pi; set +a
+set -a; source ../.env.pi.db-admin; set +a
+micromamba run -n tckdb_env python scripts/configure_database_roles.py apply
 micromamba run -n tckdb_env alembic upgrade head
+micromamba run -n tckdb_env python scripts/configure_database_roles.py check
 ```
 
 (See the migrations runbook for the deployed-DB flow: back up first, check
@@ -247,7 +253,7 @@ change rather than a moving `:latest`.
 
 | Task | Command |
 |---|---|
-| Bring up infra | `docker compose --env-file .env.pi up -d db minio` |
+| Bring up infra | `docker compose --env-file .env.pi --env-file .env.pi.db-admin up -d db minio` |
 | API status / logs | `systemctl status tckdb-api` · `journalctl -u tckdb-api -f` |
 | Restart API | `sudo systemctl restart tckdb-api` |
 | Apply migrations | `alembic upgrade head` (env sourced; back up first) |
