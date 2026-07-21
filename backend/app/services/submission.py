@@ -460,10 +460,15 @@ def _record_links_as_targets(
 ) -> list[RecordRef]:
     """Project ``submission_record_link`` rows into the ``RecordRef`` shape
     used by the record-review service.
+
+    Artifact links are evidence lineage only. Their visibility and acceptance
+    inherit from the owning calculation, so they must never acquire an
+    independent ``record_review`` row during submission transitions.
     """
     return [
         RecordRef(record_type=link.record_type, record_id=link.record_id)
         for link in submission.record_links
+        if link.record_type is not SubmissionRecordType.artifact
     ]
 
 

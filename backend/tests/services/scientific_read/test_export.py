@@ -494,8 +494,8 @@ def test_chemkin_falloff_emits_low_and_troe(db_session):
 # ---------------------------------------------------------------------------
 
 
-def _reaction_with_kinetics(session, **kin_kwargs):
-    """A -> C reaction with a single approved kinetics record."""
+def _reaction_with_kinetics(session, *, approve=True, **kin_kwargs):
+    """A -> C reaction with one optionally approved kinetics record."""
     sp_a = make_species(session, inchi_key=next_inchi_key("KRA"))
     e_a = make_species_entry(session, sp_a)
     sp_c = make_species(session, inchi_key=next_inchi_key("KRC"))
@@ -505,7 +505,8 @@ def _reaction_with_kinetics(session, **kin_kwargs):
         session, reaction=chem, reactant_entries=[e_a], product_entries=[e_c]
     )
     kin = make_kinetics(session, reaction_entry=entry, **kin_kwargs)
-    _approve(session, SubmissionRecordType.kinetics, kin.id)
+    if approve:
+        _approve(session, SubmissionRecordType.kinetics, kin.id)
     return entry, kin
 
 
@@ -549,6 +550,7 @@ def test_scalar_arrhenius_export_keeps_legacy_keys(db_session):
 def test_multi_arrhenius_export_emits_terms_and_null_scalars(db_session):
     entry, kin = _reaction_with_kinetics(
         db_session,
+        approve=False,
         model_kind=KineticsModelKind.multi_arrhenius,
         a=None,
         a_units=None,
@@ -562,6 +564,7 @@ def test_multi_arrhenius_export_emits_terms_and_null_scalars(db_session):
     attach_kinetics_arrhenius_entry(
         db_session, kinetics=kin, entry_index=1, a=1.0e12, n=0.0, ea_kj_mol=10.0
     )
+    _approve(db_session, SubmissionRecordType.kinetics, kin.id)
 
     d = _export_kinetics_dict(db_session, entry)
     assert d["model_kind"] == "multi_arrhenius"
@@ -582,7 +585,7 @@ def test_multi_arrhenius_export_emits_terms_and_null_scalars(db_session):
 
 def test_plog_export_emits_ordered_pressure_entries(db_session):
     entry, kin = _reaction_with_kinetics(
-        db_session, model_kind=KineticsModelKind.plog
+        db_session, approve=False, model_kind=KineticsModelKind.plog
     )
     attach_kinetics_plog_entry(
         db_session, kinetics=kin, entry_index=2, pressure_bar=10.0, a=2.0e13,
@@ -592,6 +595,7 @@ def test_plog_export_emits_ordered_pressure_entries(db_session):
         db_session, kinetics=kin, entry_index=1, pressure_bar=1.0, a=1.0e12,
         a_units=ArrheniusAUnits.cm3_mol_s, n=0.0, ea_kj_mol=10.0,
     )
+    _approve(db_session, SubmissionRecordType.kinetics, kin.id)
 
     d = _export_kinetics_dict(db_session, entry)
     assert d["model_kind"] == "plog"
@@ -608,6 +612,7 @@ def test_plog_export_emits_ordered_pressure_entries(db_session):
 def test_chebyshev_export_emits_matrix_and_domain(db_session):
     entry, kin = _reaction_with_kinetics(
         db_session,
+        approve=False,
         model_kind=KineticsModelKind.chebyshev,
         a=None,
         a_units=None,
@@ -620,6 +625,7 @@ def test_chebyshev_export_emits_matrix_and_domain(db_session):
         coefficients=matrix, tmin_k=300.0, tmax_k=2000.0,
         pmin_bar=0.01, pmax_bar=100.0,
     )
+    _approve(db_session, SubmissionRecordType.kinetics, kin.id)
 
     d = _export_kinetics_dict(db_session, entry)
     assert d["model_kind"] == "chebyshev"
@@ -637,6 +643,7 @@ def test_chebyshev_export_emits_matrix_and_domain(db_session):
 def test_falloff_export_emits_block_and_sorted_third_body(db_session):
     entry, kin = _reaction_with_kinetics(
         db_session,
+        approve=False,
         model_kind=KineticsModelKind.troe,
         a=1.0e13,
         a_units=ArrheniusAUnits.cm3_mol_s,
@@ -662,6 +669,7 @@ def test_falloff_export_emits_block_and_sorted_third_body(db_session):
     attach_kinetics_third_body_efficiency(
         db_session, kinetics=kin, collider_species=col_b, efficiency=0.7
     )
+    _approve(db_session, SubmissionRecordType.kinetics, kin.id)
 
     d = _export_kinetics_dict(db_session, entry)
     assert d["model_kind"] == "troe"

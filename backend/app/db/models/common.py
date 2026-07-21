@@ -807,6 +807,27 @@ class RecordReviewEventKind(str, Enum):
     status_change = "status_change"
 
 
+class ReproducibilityGrade(str, Enum):
+    """Highest reproducibility claim supported by one assessment snapshot.
+
+    This vocabulary is independent of record-review state and deterministic
+    trust badges.  The values form an increasing evidence ladder, but the
+    persisted assessment also records its passed, missing, and warning checks
+    so consumers do not have to infer evidence from the grade alone.
+    """
+
+    described = "described"
+    auditable = "auditable"
+    rerunnable = "rerunnable"
+
+
+class ReproducibilityAssessorKind(str, Enum):
+    """Who produced a reproducibility assessment snapshot."""
+
+    system = "system"
+    curator = "curator"
+
+
 class MachineReviewStatus(str, Enum):
     """DB-layer mirror of the advisory machine-review status vocabulary.
 

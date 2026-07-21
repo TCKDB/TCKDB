@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from app.api.errors import DomainError, NotFoundError
 from app.db.models.app_user import AppUser
@@ -18,9 +19,8 @@ from app.db.models.common import (
     SubmissionSourceKind,
     SubmissionStatus,
 )
-from app.db.models.submission import (
-    Submission,
-)
+from app.db.models.record_review import RecordReview
+from app.db.models.submission import Submission
 from app.services.submission import (
     append_audit_event,
     approve_submission,
@@ -259,6 +259,28 @@ class TestApproval:
 
         with pytest.raises(DomainError):
             approve_submission(db_session, submission_id=sub.id, actor=curator)
+
+    def test_artifact_evidence_link_is_not_independently_reviewed(self, db_session):
+        alice = _uploader(db_session)
+        curator = _curator(db_session)
+        sub = _open_pending(db_session, alice.id)
+        link_record(
+            db_session,
+            submission=sub,
+            record_type=SubmissionRecordType.artifact,
+            record_id=999_001,
+            role="artifact",
+        )
+
+        approve_submission(db_session, submission_id=sub.id, actor=curator)
+
+        artifact_review = db_session.scalar(
+            select(RecordReview).where(
+                RecordReview.record_type == SubmissionRecordType.artifact,
+                RecordReview.record_id == 999_001,
+            )
+        )
+        assert artifact_review is None
 
 
 class TestRejection:

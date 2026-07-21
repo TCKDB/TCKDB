@@ -1428,6 +1428,38 @@ Notes:
 - `temperature_k > 0` when present
 - `applied_energy_correction_component.multiplicity >= 1`
 
+### 10.4 Reproducibility Assessment
+
+`record_reproducibility_assessment` fields:
+
+- `id`
+- `record_type`
+- `record_id`
+- `grade`
+- `rubric_name`
+- `rubric_version`
+- `context_hash`
+- `context_json`
+- `passed_json`
+- `missing_json`
+- `warnings_json`
+- `assessor_kind`
+- `assessor_user_id`
+- `source_submission_id`
+- `assessed_at`
+- `created_at`
+
+Notes:
+
+- grades are `described`, `auditable`, and `rerunnable`
+- the service validates that the polymorphic target exists, canonicalizes the
+  mandatory context object, and computes `context_hash` server-side
+- assessment history is append-only; a database trigger rejects updates and
+  deletes
+- the latest assessment is derived by `(assessed_at DESC, id DESC)`, not a
+  mutable current flag
+- this axis is independent of human record-review status and trust badges
+
 ## 11. Important Integrity Rules
 
 - `calculation` ownership is exclusive between species-entry and transition-state-entry paths
@@ -1441,6 +1473,7 @@ Notes:
 - scan-coordinate and calculation-constraint tables both enforce atom-arity rules with database checks
 - network solve and network kinetics tables enforce positive and ordered temperature/pressure ranges
 - applied energy corrections enforce exactly one target and exactly one provenance source
+- reproducibility assessments preserve their hashed context and cannot be updated or deleted
 
 ## 12. Current Semantic Model
 
@@ -1451,3 +1484,4 @@ Notes:
 - `calculation` stores provenance and ownership; result/link tables hold structured ESS outputs
 - `statmech`, `thermo`, `transport`, `kinetics`, `network`, and `applied_energy_correction` are scientific product layers built on top of identity and provenance tables
 - `submission`, `submission_audit_event`, and `submission_record_link` are the moderation/publication layer for all contributed records
+- `record_reproducibility_assessment` is an append-only curation projection of reproducibility evidence, separate from approval and trust

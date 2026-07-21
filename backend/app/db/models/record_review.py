@@ -82,6 +82,11 @@ class RecordReview(Base, TimestampMixin, CreatedByMixin):
         DateTime(timezone=False),
         nullable=True,
     )
+    first_approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
+        doc="Permanent timestamp of this record's first approval.",
+    )
 
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -116,6 +121,10 @@ class RecordReview(Base, TimestampMixin, CreatedByMixin):
             "(status NOT IN ('approved', 'rejected', 'deprecated')) "
             "OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL)",
             name="record_review_terminal_requires_reviewer",
+        ),
+        CheckConstraint(
+            "status <> 'approved' OR first_approved_at IS NOT NULL",
+            name="record_review_approved_has_first_approval",
         ),
     )
 

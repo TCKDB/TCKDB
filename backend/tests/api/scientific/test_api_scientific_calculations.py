@@ -3019,12 +3019,6 @@ def test_detail_include_review_combines_with_other_includes(
     _, entry, calc = _make_species_owned_calc(
         db_session, calc_type=CalculationType.opt
     )
-    set_review(
-        db_session,
-        record_type=SubmissionRecordType.calculation,
-        record_id=calc.id,
-        status=RecordReviewStatus.approved,
-    )
     attach_opt_result(
         db_session, calculation=calc, final_energy_hartree=-10.0
     )
@@ -3061,6 +3055,12 @@ def test_detail_include_review_combines_with_other_includes(
         constraint_kind=ConstraintKind.bond,
         atom1_index=1,
         atom2_index=2,
+    )
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.calculation,
+        record_id=calc.id,
+        status=RecordReviewStatus.approved,
     )
 
     body = client.get(
@@ -3366,15 +3366,15 @@ def test_detail_include_scan_combines_with_other_includes(client, db_session):
         db_session, calculation=calc, point_index=1,
         electronic_energy_hartree=-99.0,
     )
+    attach_artifact(db_session, calculation=calc)
+    _attach_calc_parameter(
+        db_session, calculation=calc, raw_key="MaxStep", raw_value="0.1"
+    )
     set_review(
         db_session,
         record_type=SubmissionRecordType.calculation,
         record_id=calc.id,
         status=RecordReviewStatus.approved,
-    )
-    attach_artifact(db_session, calculation=calc)
-    _attach_calc_parameter(
-        db_session, calculation=calc, raw_key="MaxStep", raw_value="0.1"
     )
 
     body = client.get(
@@ -3655,13 +3655,13 @@ def test_detail_include_irc_combines_with_other_includes(client, db_session):
         direction=IRCDirection.forward,
         electronic_energy_hartree=-99.0,
     )
+    attach_artifact(db_session, calculation=calc)
     set_review(
         db_session,
         record_type=SubmissionRecordType.calculation,
         record_id=calc.id,
         status=RecordReviewStatus.approved,
     )
-    attach_artifact(db_session, calculation=calc)
     body = client.get(
         f"/api/v1/scientific/calculations/{calc.public_ref}"
         "?include=irc,artifacts,review"
@@ -3961,13 +3961,13 @@ def test_detail_include_path_search_combines_with_other_includes(
         electronic_energy_hartree=-99.0,
         is_ts_guess=True,
     )
+    attach_artifact(db_session, calculation=calc)
     set_review(
         db_session,
         record_type=SubmissionRecordType.calculation,
         record_id=calc.id,
         status=RecordReviewStatus.approved,
     )
-    attach_artifact(db_session, calculation=calc)
 
     body = client.get(
         f"/api/v1/scientific/calculations/{calc.public_ref}"

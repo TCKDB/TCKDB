@@ -103,14 +103,14 @@ class TestTransitionPolicy:
         creator = _user(db_session, "uploader", AppUserRole.curator)
         ensure_record_review(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=12,
             created_by=creator.id,
         )
         with pytest.raises(DomainError, match="cannot approve a record they created"):
             set_record_review_status(
                 db_session,
-                record_type=SubmissionRecordType.thermo,
+                record_type=SubmissionRecordType.species,
                 record_id=12,
                 status=RecordReviewStatus.approved,
                 actor=creator,
@@ -123,13 +123,13 @@ class TestTransitionPolicy:
         other = _user(db_session, "other", AppUserRole.curator)
         ensure_record_review(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=13,
             created_by=creator.id,
         )
         set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=13,
             status=RecordReviewStatus.approved,
             actor=other,
@@ -138,7 +138,7 @@ class TestTransitionPolicy:
         # is gated by the self-review guard.
         row = set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=13,
             status=RecordReviewStatus.deprecated,
             actor=creator,
@@ -159,12 +159,12 @@ class TestTransitionPolicy:
         # deprecated all require reviewer stamps; we go via not_reviewed.
         ensure_record_review(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=14,
         )
         set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=14,
             status=from_status,
             actor=admin,
@@ -172,7 +172,7 @@ class TestTransitionPolicy:
         with pytest.raises(DomainError, match="Disallowed record-review"):
             set_record_review_status(
                 db_session,
-                record_type=SubmissionRecordType.thermo,
+                record_type=SubmissionRecordType.species,
                 record_id=14,
                 status=to_status,
                 actor=admin,
@@ -182,12 +182,12 @@ class TestTransitionPolicy:
         admin = _user(db_session, "admin", AppUserRole.admin)
         ensure_record_review(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=15,
         )
         approved = set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=15,
             status=RecordReviewStatus.approved,
             actor=admin,
@@ -199,7 +199,7 @@ class TestTransitionPolicy:
         # for clean semantics.
         reopened = set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=15,
             status=RecordReviewStatus.under_review,
             actor=admin,
@@ -235,14 +235,12 @@ class TestBulk:
     def test_bulk_set_status_uses_actor_per_call(self, db_session):
         admin = _user(db_session, "admin-bulk", AppUserRole.admin)
         targets = [
-            RecordRef(SubmissionRecordType.thermo, 200),
-            RecordRef(SubmissionRecordType.thermo, 201),
-            RecordRef(SubmissionRecordType.thermo, 202),
+            RecordRef(SubmissionRecordType.species, 200),
+            RecordRef(SubmissionRecordType.species, 201),
+            RecordRef(SubmissionRecordType.species, 202),
         ]
         for t in targets:
-            ensure_record_review(
-                db_session, record_type=t.record_type, record_id=t.record_id
-            )
+            ensure_record_review(db_session, record_type=t.record_type, record_id=t.record_id)
         rows = bulk_set_record_review_status(
             db_session,
             targets=targets,
@@ -258,24 +256,18 @@ class TestBulk:
 class TestList:
     def test_filters(self, db_session):
         admin = _user(db_session, "admin-list", AppUserRole.admin)
-        ensure_record_review(
-            db_session, record_type=SubmissionRecordType.thermo, record_id=300
-        )
-        ensure_record_review(
-            db_session, record_type=SubmissionRecordType.kinetics, record_id=301
-        )
+        ensure_record_review(db_session, record_type=SubmissionRecordType.species, record_id=300)
+        ensure_record_review(db_session, record_type=SubmissionRecordType.kinetics, record_id=301)
         set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=300,
             status=RecordReviewStatus.approved,
             actor=admin,
         )
-        only_approved = list_record_reviews(
-            db_session, status=RecordReviewStatus.approved, limit=50
-        )
+        only_approved = list_record_reviews(db_session, status=RecordReviewStatus.approved, limit=50)
         statuses = {(r.record_type, r.record_id) for r in only_approved}
-        assert (SubmissionRecordType.thermo, 300) in statuses
+        assert (SubmissionRecordType.species, 300) in statuses
         # The kinetics one stayed not_reviewed.
         for r in only_approved:
             assert r.status is RecordReviewStatus.approved
@@ -335,27 +327,27 @@ class TestReviewEventHistory:
         curator = _user(db_session, "hist-curator", AppUserRole.curator)
         ensure_record_review(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=402,
             created_by=creator.id,
         )
         set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=402,
             status=RecordReviewStatus.under_review,
             actor=curator,
         )
         set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=402,
             status=RecordReviewStatus.approved,
             actor=curator,
         )
         events = list_record_review_events(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=402,
         )
         # created + two status_change events, no extras.
@@ -387,14 +379,14 @@ class TestReviewEventHistory:
         admin = _user(db_session, "hist-admin", AppUserRole.admin)
         set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=403,
             status=RecordReviewStatus.approved,
             actor=admin,
         )
         events = list_record_review_events(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=403,
         )
         assert len(events) == 2
@@ -411,12 +403,12 @@ class TestReviewEventHistory:
         admin = _user(db_session, "hist-note", AppUserRole.admin)
         ensure_record_review(
             db_session,
-            record_type=SubmissionRecordType.kinetics,
+            record_type=SubmissionRecordType.reaction,
             record_id=404,
         )
         set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.kinetics,
+            record_type=SubmissionRecordType.reaction,
             record_id=404,
             status=RecordReviewStatus.approved,
             actor=admin,
@@ -424,7 +416,7 @@ class TestReviewEventHistory:
         )
         events = list_record_review_events(
             db_session,
-            record_type=SubmissionRecordType.kinetics,
+            record_type=SubmissionRecordType.reaction,
             record_id=404,
         )
         assert len(events) == 2
@@ -451,13 +443,13 @@ class TestReviewEventHistory:
         curator_b = _user(db_session, "sl-curator-b", AppUserRole.curator)
         ensure_record_review(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=405,
             created_by=creator.id,
         )
         set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=405,
             status=RecordReviewStatus.approved,
             actor=curator_a,
@@ -465,7 +457,7 @@ class TestReviewEventHistory:
         # created + status_change(not_reviewed->approved) so far.
         base = list_record_review_events(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=405,
         )
         assert len(base) == 2
@@ -473,7 +465,7 @@ class TestReviewEventHistory:
         # Same-status re-approval by a DIFFERENT curator: reviewer reassigned.
         row = set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=405,
             status=RecordReviewStatus.approved,
             actor=curator_b,
@@ -481,7 +473,7 @@ class TestReviewEventHistory:
         assert row.reviewed_by == curator_b.id
         after_reassign = list_record_review_events(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=405,
         )
         assert len(after_reassign) == 3
@@ -494,14 +486,14 @@ class TestReviewEventHistory:
         # True no-op: same actor re-approves, reviewed_by unchanged -> no event.
         set_record_review_status(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=405,
             status=RecordReviewStatus.approved,
             actor=curator_b,
         )
         after_noop = list_record_review_events(
             db_session,
-            record_type=SubmissionRecordType.thermo,
+            record_type=SubmissionRecordType.species,
             record_id=405,
         )
         assert len(after_noop) == 3

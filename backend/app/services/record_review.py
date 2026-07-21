@@ -50,6 +50,7 @@ from app.db.models.common import (
 )
 from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.submission import SubmissionRecordLink
+from app.services.accepted_science import lock_scientific_records
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
@@ -365,9 +366,8 @@ def set_record_review_status(
 
     if status is RecordReviewStatus.approved:
         if existing.created_by is not None and existing.created_by == actor.id:
-            raise DomainError(
-                "Actor cannot approve a record they created."
-            )
+            raise DomainError("Actor cannot approve a record they created.")
+        lock_scientific_records(session, (RecordRef(record_type, record_id),))
 
     existing.status = status
     if submission_id is not None:
@@ -377,7 +377,13 @@ def set_record_review_status(
 
     if status in _TERMINAL_STATUSES:
         existing.reviewed_by = actor.id
-        existing.reviewed_at = _now_naive_utc()
+        reviewed_at = _now_naive_utc()
+        existing.reviewed_at = reviewed_at
+        if (
+            status is RecordReviewStatus.approved
+            and existing.first_approved_at is None
+        ):
+            existing.first_approved_at = reviewed_at
     else:
         # not_reviewed / under_review: reviewer metadata is meaningless;
         # null it for clear semantics.
@@ -424,6 +430,13 @@ def bulk_set_record_review_status(
     is disallowed, the call raises before mutating later targets and
     the caller's outer transaction rolls back.
     """
+    targets = list(targets)
+    if status is RecordReviewStatus.approved:
+        # Approval activates database immutability. Lock all roots in one
+        # stable order before changing review rows so concurrent bulk
+        # approvals cannot deadlock by receiving targets in opposite orders.
+        lock_scientific_records(session, targets)
+
     out: list[RecordReview] = []
     for target in targets:
         out.append(

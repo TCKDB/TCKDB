@@ -24893,6 +24893,18 @@
             ],
             "title": "Created By"
           },
+          "first_approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Approved At"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -42991,7 +43003,7 @@
         ]
       },
       "post": {
-        "description": "Attach one or more artifacts (logs, inputs, checkpoints) to a\ncalculation.\n\nSecond-phase upload: the calculation must already exist (typically\ncreated via ``POST /uploads/conformers`` or a contribution bundle).\nThe upload is batch-atomic — any per-artifact validation failure in\nthe request rejects the entire batch with 422 and no DB rows or S3\nwrites are produced. If a storage write fails partway through pass-2,\nearlier objects in the batch are best-effort deleted and the route\nreturns 503.\n\nAuthorization (any one of):\n\n- the caller created the calculation (``calculation.created_by ==\n  current_user.id``);\n- the caller owns a live submission linked to this calculation\n  through ``submission_record_link`` (rejected/superseded\n  submissions do not qualify);\n- the caller has the ``curator`` or ``admin`` role.\n\nNotes for future maintainers:\n\n- This endpoint assumes calculations are non-deletable. There is no\n  ``DELETE /calculations/{id}`` route today; if one is added later\n  it must hold a row lock on the calculation before deletion to\n  avoid a TOCTOU race against in-flight artifact uploads.\n- ``CalculationArtifact`` rows are append-only artifact-metadata\n  records. They intentionally do not deduplicate rows by content\n  hash; same-bytes uploads from different events produce two rows\n  pointing at one content-addressed object. Each row records\n  ``filename`` and ``created_by`` so the audit trail is meaningful\n  even when the bytes are opaque (e.g. binary checkpoints).",
+        "description": "Attach one or more artifacts (logs, inputs, checkpoints) to a\ncalculation.\n\nSecond-phase upload: the calculation must already exist (typically\ncreated via ``POST /uploads/conformers`` or a contribution bundle).\nThe upload is batch-atomic — any per-artifact validation failure in\nthe request rejects the entire batch with 422 and no DB rows or S3\nwrites are produced. If a storage write fails partway through pass-2,\npending rows roll back and content-addressed objects are retained for\nreference-aware garbage collection; deleting a digest key eagerly could\nremove bytes shared with an existing record. The route returns 503.\n\nAuthorization (any one of):\n\n- the caller created the calculation (``calculation.created_by ==\n  current_user.id``);\n- the caller owns a live submission linked to this calculation\n  through ``submission_record_link`` (rejected/superseded\n  submissions do not qualify);\n- the caller has the ``curator`` or ``admin`` role.\n\nNotes for future maintainers:\n\n- This endpoint assumes calculations are non-deletable. There is no\n  ``DELETE /calculations/{id}`` route today; if one is added later\n  it must hold a row lock on the calculation before deletion to\n  avoid a TOCTOU race against in-flight artifact uploads.\n- ``CalculationArtifact`` rows are append-only artifact-metadata\n  records. They intentionally do not deduplicate rows by content\n  hash; same-bytes uploads from different events produce two rows\n  pointing at one content-addressed object. Each row records\n  ``filename`` and ``created_by`` so the audit trail is meaningful\n  even when the bytes are opaque (e.g. binary checkpoints).",
         "operationId": "upload_calculation_artifacts_api_v1_calculations__calculation_id__artifacts_post",
         "parameters": [
           {
@@ -52899,7 +52911,7 @@
     },
     "/api/v1/scientific/export/ndjson": {
       "get": {
-        "description": "Stream a native NDJSON export for the seed selection.\n\nEmits a header ``manifest`` line, then one ``species`` / ``reaction``\nline per record (computed lazily), then a trailing ``export_summary``\nline with the gap list. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
+        "description": "Stream a selected scientific NDJSON projection for the seed.\n\nEmits a header ``manifest`` line, then one ``species`` / ``reaction``\nline per record (computed lazily), then a trailing ``export_summary``\nline with the gap list. The manifest explicitly marks the format as\nnon-lossless and non-reingestible. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
         "operationId": "export_ndjson_api_v1_scientific_export_ndjson_get",
         "parameters": [
           {

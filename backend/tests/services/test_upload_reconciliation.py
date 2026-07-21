@@ -257,15 +257,18 @@ class TestReconcileSpeciesEntryFull:
         assert W_N_IMAG_CONTRADICTS_MINIMUM in codes
         assert W_N_IMAG_SUGGESTS_TS in codes
 
-    def test_term_symbol_mismatch_warns(self) -> None:
-        """User provides wrong term symbol vs what multiplicity+symmetry derives."""
+    def test_term_symbol_not_derived_without_closed_shell_evidence(self) -> None:
+        """Multiplicity and point group alone do not establish a term symbol."""
         warnings = reconcile_species_entry_full(
             _identity(multiplicity=1, term_symbol="3A1"),
             primary_calc=_opt_calc(),
             statmech=ConformerUploadStatmechPayload(point_group="C2v"),
         )
-        codes = {w.code for w in warnings}
-        assert W_TERM_SYMBOL_MISMATCH in codes
+        # A singlet can still be open-shell. Without an explicit trusted
+        # closed-shell signal, deriving the totally symmetric 1A1 state would
+        # overstate what multiplicity and molecular symmetry establish.
+        term_warnings = [w for w in warnings if w.code == W_TERM_SYMBOL_MISMATCH]
+        assert term_warnings == []
 
     def test_correct_term_symbol_no_warning(self) -> None:
         """User provides correct term symbol — no warning."""

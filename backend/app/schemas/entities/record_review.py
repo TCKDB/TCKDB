@@ -22,6 +22,7 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
     submission_id: int | None = None
     reviewed_by: int | None = None
     reviewed_at: datetime | None = None
+    first_approved_at: datetime | None = None
     note: str | None = None
 
 
