@@ -40,7 +40,11 @@ from app.db.models.calculation import (
 from app.db.models.common import ArtifactKind, ParameterSource
 from app.schemas.fragments.artifact import ArtifactIn
 from app.schemas.fragments.calculation import CalculationParameterObservation
-from app.services import gaussian_parameter_parser, orca_parameter_parser
+from app.services import (
+    gaussian_parameter_parser,
+    molpro_parameter_parser,
+    orca_parameter_parser,
+)
 from app.services.artifact_storage import (
     ArtifactStorageUnavailable,
     load_artifact_bytes,
@@ -54,7 +58,7 @@ from app.services.calculation_resolution import (
 logger = logging.getLogger(__name__)
 
 
-SoftwareName = Literal["gaussian", "orca"]
+SoftwareName = Literal["gaussian", "orca", "molpro"]
 
 
 class ParameterExtractionError(RuntimeError):
@@ -71,17 +75,24 @@ _GAUSSIAN_MARKERS = re.compile(
 _ORCA_MARKERS = re.compile(
     r"\* O   R   C   A \*|Program Version\s+\d+\.\d+\.\d+", re.IGNORECASE
 )
+_MOLPRO_MARKERS = re.compile(
+    r"PROGRAM SYSTEM MOLPRO", re.IGNORECASE
+)
 
 
 def _detect_software_from_text(text: str) -> SoftwareName | None:
-    """Best-effort sniff for ``"gaussian"`` or ``"orca"`` from log text.
+    """Best-effort sniff for ``"gaussian"``, ``"orca"`` or ``"molpro"``.
 
-    Returns ``None`` when no recognised marker is found.
+    Returns ``None`` when no recognised marker is found. Molpro's banner
+    (``***  PROGRAM SYSTEM MOLPRO  ***``) is unambiguous and checked before
+    the ORCA fallback so it can never be mistaken for another program.
     """
 
     head = text[:8000]
     if _GAUSSIAN_MARKERS.search(head):
         return "gaussian"
+    if _MOLPRO_MARKERS.search(head):
+        return "molpro"
     if _ORCA_MARKERS.search(head):
         return "orca"
     return None
@@ -99,7 +110,7 @@ def _resolve_software(
     release = calculation.software_release
     if release is not None and release.software is not None:
         name = (release.software.name or "").strip().lower()
-        if name in ("gaussian", "orca"):
+        if name in ("gaussian", "orca", "molpro"):
             return name  # type: ignore[return-value]
 
     sniffed = _detect_software_from_text(artifact_text)
@@ -109,7 +120,7 @@ def _resolve_software(
     raise ParameterExtractionError(
         "Cannot determine ESS software for parameter extraction: "
         "calculation has no software_release and the artifact text "
-        "contains no recognised Gaussian/ORCA markers."
+        "contains no recognised Gaussian/ORCA/Molpro markers."
     )
 
 
@@ -154,6 +165,8 @@ def _run_parser(software: SoftwareName, artifact_text: str) -> dict:
             # Inline a text-mode call by reproducing the steps from the
             # filepath wrapper without touching disk.
             return _parse_gaussian_text(artifact_text)
+        if software == "molpro":
+            return molpro_parameter_parser.parse_molpro_log(text=artifact_text)
         return orca_parameter_parser.parse_orca_log(text=artifact_text)
     except Exception as exc:
         raise ParameterExtractionError(

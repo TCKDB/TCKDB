@@ -106,3 +106,33 @@ class ESSResult:
     extras: dict = field(default_factory=dict)
     # Parser provenance
     parser_version: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Molpro single-point energy path
+# ---------------------------------------------------------------------------
+
+
+def parse_molpro_sp(text: str) -> ESSSPResult | None:
+    """Extract the Molpro single-point electronic energy as an ``ESSSPResult``.
+
+    Delegates to the DB-free
+    :func:`app.services.molpro_parameter_parser.parse_sp_energy`, which
+    follows ARC's convention: MRCI (Davidson relaxed reference) takes
+    precedence over CCSD(T)-F12a/F12b, and ``MRCI-F12`` is unsupported
+    (returns ``None``).  The energy is stored in Hartree — Molpro's native
+    unit, matching ``ESSSPResult.electronic_energy_hartree`` — with no
+    conversion.
+
+    Returns ``None`` when no supported single-point energy is present (e.g.
+    an incomplete or unsupported job), so callers must tolerate a missing
+    result exactly as with the other ESS parsers.
+    """
+    # Local import keeps this module's import surface to the dataclasses;
+    # the parser is pure-text and free of DB dependencies.
+    from app.services.molpro_parameter_parser import parse_sp_energy
+
+    energy = parse_sp_energy(text)
+    if energy is None:
+        return None
+    return ESSSPResult(electronic_energy_hartree=energy)

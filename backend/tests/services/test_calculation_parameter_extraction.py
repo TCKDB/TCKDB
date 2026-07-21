@@ -33,6 +33,7 @@ from app.schemas.fragments.calculation import (
 )
 from app.services.calculation_parameter_extraction import (
     ParameterExtractionError,
+    _detect_software_from_text,
     extract_and_store_calculation_parameters,
 )
 from app.services.calculation_resolution import (
@@ -43,6 +44,8 @@ from app.services.calculation_resolution import (
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 GAUSSIAN_LOG = FIXTURES_DIR / "gaussian" / "opt_g09.log"
 ORCA_LOG = FIXTURES_DIR / "orca" / "opt_orca.out"
+MOLPRO_LOG = FIXTURES_DIR / "molpro" / "ch4_closed_shell" / "input.out"
+MOLPRO_MRCI_LOG = FIXTURES_DIR / "molpro" / "mrci" / "hydrazine_closed" / "input.out"
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +165,35 @@ def test_orca_dispatch_via_software_release(db_engine) -> None:
 
         stored = session.get(Calculation, calc.id)
         assert stored.parameters_parser_version == "orca_v2"
+
+
+def test_detect_software_from_text_recognises_molpro() -> None:
+    """The Molpro banner routes to the ``molpro`` parser, not ORCA."""
+    assert _detect_software_from_text(MOLPRO_LOG.read_text()) == "molpro"
+    assert _detect_software_from_text(MOLPRO_MRCI_LOG.read_text()) == "molpro"
+
+
+def test_molpro_dispatch_via_text_sniff(db_engine) -> None:
+    """A Molpro ``.out`` is sniffed as molpro and routed to its parser."""
+    text_data = MOLPRO_LOG.read_text()
+    with Session(db_engine) as session, session.begin():
+        calc = _make_calculation(session, software_name=None)
+
+        rows = extract_and_store_calculation_parameters(
+            session, calc, text_data
+        )
+        assert rows, "expected parameter rows from the Molpro fixture"
+        assert all(r.source is ParameterSource.parser for r in rows)
+        assert all(r.parser_version == "molpro_v1" for r in rows)
+
+        # The newly seeded f12.ansatz canonical key resolves through the FK.
+        canonical_keys = {r.canonical_key for r in rows}
+        assert "f12.ansatz" in canonical_keys
+        assert "scf.max_cycles" in canonical_keys
+        assert "memory.raw" in canonical_keys
+
+        stored = session.get(Calculation, calc.id)
+        assert stored.parameters_parser_version == "molpro_v1"
 
 
 def test_text_sniff_fallback_when_no_software_release(db_engine) -> None:
