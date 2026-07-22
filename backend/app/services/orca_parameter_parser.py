@@ -1139,3 +1139,17 @@ def parse_sp_energy(text: str) -> float | None:
             except (ValueError, IndexError):
                 continue
     return None
+
+
+def parse_hessian(text: str) -> tuple[int, list[float]] | None:
+    """Cartesian Hessian (hartree/bohr²) from an ORCA ``.hess`` file's text.
+
+    Mirrors Arkane's ``OrcaLog.load_force_constant_matrix`` for the
+    ``$hessian`` block, but keeps ORCA's native atomic units — no conversion
+    to J/m². ORCA writes the Hessian to a separate ``.hess`` artifact (no
+    program banner), so the caller dispatches to this by artifact *kind*.
+    Returns ``(natoms, packed_lower_triangle)`` or ``None`` when absent.
+    """
+    from app.services.hessian_parsing import parse_orca_hess_force_constants
+
+    return parse_orca_hess_force_constants(text)

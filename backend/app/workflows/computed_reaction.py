@@ -60,6 +60,9 @@ from app.services.energy_correction_resolution import (
 )
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.geometry_validation import run_and_persist_geometry_validation
+from app.services.hessian_extraction import (
+    try_extract_hessian_from_artifact_upload,
+)
 from app.services.kinetics_resolution import (
     assert_kinetics_source_role_compatible,
 )
@@ -162,6 +165,13 @@ def _persist_calculation(
         fallback_geometry_id=resolved_geom_id,
         context=context,
     )
+
+    # Fill-when-absent Hessian extraction runs *after* input geometries are
+    # attached (unlike the SP-energy hook above, which needs no geometry): a
+    # freq log / ORCA .hess yields the Cartesian force-constant matrix, bound
+    # to this calc's now-resolved input geometry.
+    for artifact_in in calc_in.artifacts:
+        try_extract_hessian_from_artifact_upload(session, calculation, artifact_in)
 
     # Persist scan_result for type=scan calcs. The schema layer guarantees
     # scan_result is only present when type=scan. Conformer/TS primaries

@@ -724,3 +724,19 @@ def parse_sp_energy(text: str) -> float | None:
         if value is not None:
             e_elect = value
     return e_elect
+
+
+def parse_hessian(text: str) -> tuple[int, list[float]] | None:
+    """Cartesian Hessian (hartree/bohr²) from a Gaussian output log.
+
+    Mirrors Arkane's ``GaussianLog.load_force_constant_matrix`` for the
+    ``Force constants in Cartesian coordinates:`` block (the last one wins),
+    but keeps Gaussian's native atomic units — no conversion to J/m². Returns
+    ``(natoms, packed_lower_triangle)`` or ``None`` when the block is absent.
+    """
+    from app.services.hessian_parsing import (
+        GAUSSIAN_HESSIAN_MARKER,
+        parse_triangular_force_constants,
+    )
+
+    return parse_triangular_force_constants(text, marker=GAUSSIAN_HESSIAN_MARKER)
