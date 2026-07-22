@@ -19,7 +19,11 @@ from tckdb_client import (
     KineticsSearchRecord,
     KineticsSearchResponse,
     NetworkKineticsSearchResponse,
+    NetworkRecord,
     NetworkSearchResponse,
+    NetworkStateComposition,
+    NetworkStateCompositionParticipant,
+    NetworkStateSummary,
     ReactionSearchResponse,
     ReactionKineticsResponse,
     SpeciesCalculationsSearchResponse,
@@ -65,11 +69,17 @@ def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
     assert "reaction" not in KineticsDetailRecord.__annotations__
     assert "assessments" in StatmechRecord.__annotations__
     assert "assessments" in TransportRecord.__annotations__
+    assert get_type_hints(NetworkRecord)["states"] == list[NetworkStateSummary] | None
+    assert get_type_hints(NetworkStateSummary)["composition"] is NetworkStateComposition
+    assert get_type_hints(NetworkStateComposition)["participants"] == list[NetworkStateCompositionParticipant]
     for name in (
         "ThermoDetailRecord",
         "ThermoSearchRecord",
         "KineticsDetailRecord",
         "KineticsSearchRecord",
+        "NetworkStateComposition",
+        "NetworkStateCompositionParticipant",
+        "NetworkStateSummary",
     ):
         assert name in tckdb_client.__all__
 

@@ -1,8 +1,8 @@
-"""Bounded chemistry projection and filters for pressure-dependent channels.
+"""Bounded chemistry projection and filters for pressure-dependent networks.
 
 This module is the single seam between the normalized network-state tables and
-machine-facing network-kinetics reads.  Callers get stable public identifiers
-and canonical chemistry without learning internal state ids.
+machine-facing network and network-kinetics reads. Callers get stable public
+identifiers and canonical chemistry without learning internal state ids.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from app.db.models.network_pdep import (
     NetworkStateParticipant,
 )
 from app.db.models.species import Species, SpeciesEntry
-from app.schemas.reads.scientific_network_kinetics import (
+from app.schemas.reads.scientific_network_composition import (
     NetworkStateComposition,
     NetworkStateCompositionParticipant,
 )
@@ -32,16 +32,19 @@ def build_network_state_composition(
     *,
     state_id: int | None,
     cap: int,
+    participant_count_total: int | None = None,
 ) -> NetworkStateComposition:
     """Return a deterministic, bounded public projection of one state."""
     if state_id is None:
         return NetworkStateComposition()
 
-    total = session.scalar(
-        select(func.count())
-        .select_from(NetworkStateParticipant)
-        .where(NetworkStateParticipant.state_id == state_id)
-    ) or 0
+    total = participant_count_total
+    if total is None:
+        total = session.scalar(
+            select(func.count())
+            .select_from(NetworkStateParticipant)
+            .where(NetworkStateParticipant.state_id == state_id)
+        ) or 0
     rows = session.execute(
         select(
             SpeciesEntry.public_ref.label("species_entry_ref"),
@@ -73,7 +76,7 @@ def build_network_state_composition(
     ]
     return NetworkStateComposition(
         participants=participants,
-        participant_count_total=total,
+        participant_count_total=int(total),
         participants_truncated=total > len(participants),
     )
 

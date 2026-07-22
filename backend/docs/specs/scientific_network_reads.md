@@ -111,7 +111,12 @@ Defined in [scientific_network.py](../../app/schemas/reads/scientific_network.py
   reversibility.
 - **`NetworkStateSummary`** — composition_hash (the stable
   per-network address since `network_state` has no public_ref),
-  kind, label, participant_count.
+  kind, label, participant_count, and a bounded public `composition`
+  block. The composition is deterministically ordered by canonical SMILES,
+  species-entry ref, then internal tie-breaker; it carries public species and
+  species-entry refs, stoichiometry, full participant-row count, and a
+  truncation flag. `participant_count` and
+  `composition.participant_count_total` describe the same full state.
 - **`NetworkChannelSummary`** — source/sink composition_hashes,
   channel kind, `has_kinetics` boolean.
 - **`NetworkSolveSummary`** — `nsolve_…` ref + ME/grain/T/P metadata
@@ -261,6 +266,9 @@ Network reads never inline:
 The live `/scientific/network-kinetics/{ref}` endpoint surfaces coefficient,
 PLOG, and point payloads under their own include tokens with explicit size
 policies. The network-grain response intentionally retains summaries only.
+State participant compositions are the exception: each state exposes a bounded
+public prefix with total/truncation metadata, using the same cap and ordering
+as network-kinetics channel context.
 
 ## 10. Relationship to other surfaces
 
