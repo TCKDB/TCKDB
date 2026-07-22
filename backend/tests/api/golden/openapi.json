@@ -22280,7 +22280,7 @@
         "type": "object"
       },
       "NetworkStateComposition": {
-        "description": "Bounded, deterministically ordered composition of a network state.",
+        "description": "Bounded, deterministically ordered composition of a network state.\n\n``participant_count_total`` describes the complete normalized state;\n``participants`` is its deterministic, capped public prefix.",
         "properties": {
           "participant_count_total": {
             "default": 0,
@@ -22493,6 +22493,9 @@
       "NetworkStateSummary": {
         "description": "One ``network_state`` row projected for ``include=states``.\n\nNo public_ref on ``network_state``; states are identified by\n``network_state_id`` (policy-gated) + ``composition_hash`` (always\npresent — it's a deduplication key over species participants, not\nan internal id).",
         "properties": {
+          "composition": {
+            "$ref": "#/components/schemas/NetworkStateComposition"
+          },
           "composition_hash": {
             "title": "Composition Hash",
             "type": "string"
@@ -22531,7 +22534,8 @@
         "required": [
           "composition_hash",
           "kind",
-          "participant_count"
+          "participant_count",
+          "composition"
         ],
         "title": "NetworkStateSummary",
         "type": "object"

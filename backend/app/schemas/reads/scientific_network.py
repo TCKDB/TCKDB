@@ -45,6 +45,9 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_network_composition import (
+    NetworkStateComposition,
+)
 
 # ---------------------------------------------------------------------------
 # Request
@@ -137,6 +140,7 @@ class NetworkStateSummary(BaseModel):
     kind: NetworkStateKind
     label: str | None = None
     participant_count: int
+    composition: NetworkStateComposition
 
 
 class NetworkChannelSummary(BaseModel):

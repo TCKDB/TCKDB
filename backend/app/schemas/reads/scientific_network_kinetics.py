@@ -37,6 +37,10 @@ from app.schemas.reads.scientific_network import (
     NetworkSourceCalculationSummary,
     RequestEcho,
 )
+from app.schemas.reads.scientific_network_composition import (
+    NetworkStateComposition,
+    NetworkStateCompositionParticipant,
+)
 
 # ---------------------------------------------------------------------------
 # Core block
@@ -97,25 +101,6 @@ class NetworkKineticsSolveContext(BaseModel):
     network_solve_id: int | None = None
     network_solve_ref: str
     me_method: str | None = None
-
-
-class NetworkStateCompositionParticipant(BaseModel):
-    """One public species participant in a network state."""
-
-    species_entry_ref: str
-    species_ref: str
-    canonical_smiles: str
-    stoichiometry: int = Field(ge=1)
-
-
-class NetworkStateComposition(BaseModel):
-    """Bounded, deterministically ordered composition of a network state."""
-
-    participants: list[NetworkStateCompositionParticipant] = Field(
-        default_factory=list
-    )
-    participant_count_total: int = 0
-    participants_truncated: bool = False
 
 
 class NetworkKineticsChannelContext(BaseModel):

@@ -148,13 +148,35 @@ class SpeciesCalculationRecord(TypedDict, total=False):
     conformer: JSONDict | None
 
 
+class NetworkStateCompositionParticipant(TypedDict):
+    species_entry_ref: str
+    species_ref: str
+    canonical_smiles: str
+    stoichiometry: int
+
+
+class NetworkStateComposition(TypedDict):
+    participants: list[NetworkStateCompositionParticipant]
+    participant_count_total: int
+    participants_truncated: bool
+
+
+class NetworkStateSummary(TypedDict, total=False):
+    composition_hash: Required[str]
+    kind: Required[str]
+    participant_count: Required[int]
+    composition: Required[NetworkStateComposition]
+    label: str | None
+    network_state_id: int
+
+
 class NetworkRecord(TypedDict, total=False):
     network: Required[JSONDict]
     evidence_summary: Required[JSONDict]
     available_sections: Required[JSONDict]
     species: list[JSONDict] | None
     reactions: list[JSONDict] | None
-    states: list[JSONDict] | None
+    states: list[NetworkStateSummary] | None
     channels: list[JSONDict] | None
     solves: list[JSONDict] | None
     kinetics: list[JSONDict] | None
@@ -266,6 +288,9 @@ __all__ = [
     "NetworkKineticsSearchResponse",
     "NetworkRecord",
     "NetworkSearchResponse",
+    "NetworkStateComposition",
+    "NetworkStateCompositionParticipant",
+    "NetworkStateSummary",
     "Pagination",
     "ReactionKineticsResponse",
     "ReactionRecord",

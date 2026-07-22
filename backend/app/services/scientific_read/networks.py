@@ -27,6 +27,7 @@ from __future__ import annotations
 from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session
 
+from app.api.config import settings
 from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
@@ -97,6 +98,9 @@ from app.services.scientific_read.handles import (
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
+)
+from app.services.scientific_read.network_channel_chemistry import (
+    build_network_state_composition,
 )
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
@@ -542,6 +546,12 @@ def _build_states(
             kind=s.kind,
             label=s.label,
             participant_count=int(counts_by_state.get(s.id, 0)),
+            composition=build_network_state_composition(
+                session,
+                state_id=s.id,
+                cap=max(1, int(settings.public_max_limit)),
+                participant_count_total=int(counts_by_state.get(s.id, 0)),
+            ),
         )
         for s in rows
     ]

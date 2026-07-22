@@ -188,6 +188,44 @@ def _search_url(**params) -> str:
     return f"{base}?{qs}"
 
 
+def _make_network_with_capped_state_composition(db_session, monkeypatch):
+    from app.api.config import settings as _settings
+
+    fx = _make_simple_network(
+        db_session,
+        with_kinetics_kind=NetworkKineticsModelKind.chebyshev,
+    )
+    for index, smiles in enumerate(("[OH]", "[CH3]", "[NH2]"), start=1):
+        species = make_species(db_session, smiles=smiles)
+        attach_network_state_participant(
+            db_session,
+            state=fx["state_a"],
+            species_entry=make_species_entry(db_session, species),
+            stoichiometry=index,
+        )
+    monkeypatch.setattr(_settings, "public_max_limit", 2)
+    return fx
+
+
+def _assert_public_state_composition(state, composition_hash: str) -> None:
+    composition = state["composition"]
+    assert state["composition_hash"] == composition_hash
+    assert state["participant_count"] == composition["participant_count_total"] == 4
+    assert composition["participants_truncated"] is True
+    assert len(composition["participants"]) == 2
+    assert composition["participants"] == sorted(
+        composition["participants"],
+        key=lambda item: (item["canonical_smiles"], item["species_entry_ref"]),
+    )
+    public_keys = {
+        "species_entry_ref",
+        "species_ref",
+        "canonical_smiles",
+        "stoichiometry",
+    }
+    assert all(set(item) == public_keys for item in composition["participants"])
+
+
 # ===========================================================================
 # Detail endpoint
 # ===========================================================================
@@ -318,6 +356,28 @@ def test_detail_include_states(client, db_session):
         fx["state_a"].composition_hash,
         fx["state_b"].composition_hash,
     }
+
+
+def test_network_states_include_public_participant_compositions(
+    client, db_session, monkeypatch
+):
+    """Network states reuse the bounded public channel-composition contract."""
+    fx = _make_network_with_capped_state_composition(db_session, monkeypatch)
+    network_state = next(
+        state
+        for state in client.get(
+            _detail_url(fx["network"].public_ref, include="states")
+        ).json()["record"]["states"]
+        if state["composition_hash"] == fx["state_a"].composition_hash
+    )
+    _assert_public_state_composition(
+        network_state, fx["state_a"].composition_hash
+    )
+
+    channel = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref)
+    ).json()["record"]["network_channel"]
+    assert network_state["composition"] == channel["source_state"]
 
 
 def test_detail_include_channels(client, db_session):
@@ -899,6 +959,37 @@ def test_search_get_post_parity(client, db_session):
     ).json()
     assert get_body["pagination"] == post_body["pagination"]
     assert get_body["records"] == post_body["records"]
+
+
+def test_search_include_states_projects_public_compositions_get_post_parity(
+    client, db_session, monkeypatch
+):
+    fx = _make_network_with_capped_state_composition(db_session, monkeypatch)
+    payload = {
+        "network_ref": fx["network"].public_ref,
+        "include": ["states"],
+        "limit": 2,
+    }
+    get_response = client.get(
+        _search_url(
+            network_ref=fx["network"].public_ref,
+            include="states",
+            limit=2,
+        )
+    )
+    post_response = client.post(_search_url(), json=payload)
+    assert get_response.status_code == 200, get_response.text
+    assert post_response.status_code == 200, post_response.text
+    get_record = get_response.json()["records"][0]
+    post_record = post_response.json()["records"][0]
+    assert get_record == post_record
+
+    state = next(
+        item
+        for item in get_record["states"]
+        if item["composition_hash"] == fx["state_a"].composition_hash
+    )
+    _assert_public_state_composition(state, fx["state_a"].composition_hash)
 
 
 def test_search_post_rejects_query_string_search_fields(client, db_session):
