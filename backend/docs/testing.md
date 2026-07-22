@@ -205,9 +205,12 @@ moment a caller sets `PYTEST_XDIST_WORKER`.
   every save.
 - Land Tier 1 green at minimum before pushing. Land Tier 3 green
   before opening a PR. Tier 4 is required before merging.
-- The initial backend CI gate runs Tier 3 plus the scientific Tier 2/3
-  slice. Local Tier 4 remains the pre-push and pre-merge insurance
-  until full-suite CI runtime is known.
+- The initial backend CI gate runs two independent jobs in parallel: the API
+  job runs Tier 3 with `tests/api/scientific/` ignored, while the scientific
+  job runs the scientific API directory plus `tests/services/scientific_read/`
+  through Tier 2. Together they cover every API test once and every
+  scientific-read service test once. Local Tier 4 remains the pre-push and
+  pre-merge insurance until full-suite CI runtime is known.
 
 ## CI gate
 
@@ -249,10 +252,19 @@ The gate runs:
 - the scientific read/service gate via
   [`../scripts/test-scientific.sh`](../scripts/test-scientific.sh)
 
-`DB_TEST_NAME` includes the GitHub run id and run attempt so concurrent
-workflow runs do not share the same pytest-created database on one
-Postgres service. The workflow does not enable pytest-xdist yet, so the
-fixture-level worker isolation remains available for a later CI slice.
+The API gate ignores both `tests/api/scientific/` (covered by the scientific
+job) and `tests/api/test_openapi_snapshot.py` (run once by its dedicated
+golden-snapshot step). The final `Backend CI` job is a stable aggregate status
+check: it runs even after an upstream failure or cancellation and fails unless
+the matrix result is `success`, while leaving both detailed gate checks visible.
+
+Each CI job owns an isolated Postgres service and MinIO service. Its
+`DB_TEST_NAME` and `S3_BUCKET` include both the GitHub run id/attempt and the
+job role, so concurrent jobs and workflow runs do not share test resources.
+The workflow does not enable pytest-xdist: an explicit `DB_TEST_NAME` takes
+precedence over `PYTEST_XDIST_WORKER`, so adding `-n` would still make workers
+race on one recreated database. The scientific test factories also need
+worker-aware isolation before xdist can safely be added.
 
 The full Tier 4 suite is intentionally not part of this v0 PR workflow.
 Keep running `make test-full` locally before push/merge until a
@@ -342,13 +354,17 @@ Things to verify before enabling xdist by default:
 - The test DB is named per worker (`tckdb_test_gw0`, `tckdb_test_gw1`,
   ...) so workers do not race on the same `alembic upgrade head` /
   drop-and-recreate sequence in [`tests/conftest.py`](../tests/conftest.py).
-  **Done** — `_resolve_test_db_name` in `conftest.py` honors
-  `PYTEST_XDIST_WORKER` automatically (see "Concurrent runs" above).
+  This requires omitting `DB_TEST_NAME` (or making it worker-specific),
+  because explicit names intentionally take precedence over
+  `PYTEST_XDIST_WORKER`.
 - The rate-limit middleware in-memory store is disabled per test
   (already the case via `_disable_rate_limit_by_default` autouse
   fixture) so two workers do not poison each other's bucket counters
   when they happen to land on the same IP.
 - The MinIO/artifact-storage tests that skip on `not _minio_available()`
-  do the right thing under parallel workers.
+  do the right thing under parallel workers, including worker-isolated object
+  keys/buckets and subprocess inheritance.
+- The process-global scientific-read factory counters use worker-distinct
+  prefixes or another isolation mechanism.
 
 Until that work is done, the scripts run pytest single-threaded.
