@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from app.db.models.common import ScientificOriginKind
+from app.db.models.common import ScientificOriginKind, SubmissionRecordType
+from app.services.reproducibility_rubric import evaluate_and_append_reproducibility_v1
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_kinetics,
@@ -109,7 +110,7 @@ def test_ordinary_validation_errors_keep_generic_codes(client):
 
 
 def test_assessment_summary_is_opt_in_for_get_and_post(client, db_session):
-    _setup(db_session, r="Q1", p="Q2")
+    _, _, kinetics = _setup(db_session, r="Q1", p="Q2")
     base = "/api/v1/scientific/kinetics/search"
 
     default_record = client.get(
@@ -123,6 +124,7 @@ def test_assessment_summary_is_opt_in_for_get_and_post(client, db_session):
     summary = get_body["records"][0]["kinetics"]["assessments"]
     assert summary["deterministic_trust"]["rubric"] == "computed_kinetics"
     assert summary["reproducibility"]["state"] == "unassessed"
+    assert summary["reproducibility"]["assessment_ref"] is None
 
     post = client.post(
         base,
@@ -134,6 +136,14 @@ def test_assessment_summary_is_opt_in_for_get_and_post(client, db_session):
     )
     assert post.status_code == 200, post.text
     assert post.json()["records"][0]["kinetics"]["assessments"] == summary
+
+    assessment = evaluate_and_append_reproducibility_v1(
+        db_session, record_type=SubmissionRecordType.kinetics, record_id=kinetics.id
+    )
+    current = client.get(
+        f"{base}?reactants=Q1&products=Q2&include=assessments"
+    ).json()["records"][0]["kinetics"]["assessments"]["reproducibility"]
+    assert current["assessment_ref"] == assessment.public_ref
 
 
 def test_post_rejects_query_string_filters(client, db_session):

@@ -12,6 +12,22 @@ from typing import Any, Generic, NotRequired, Required, TypeAlias, TypeVar, Type
 JSONDict: TypeAlias = dict[str, Any]
 
 
+class ReproducibilityAssessmentSummary(TypedDict):
+    """Compact immutable assessment identity and freshness state."""
+
+    state: Required[str]
+    assessment_ref: str | None
+    rubric: str | None
+    rubric_version: str | None
+    grade: str | None
+    assessed_at: str | None
+
+
+class PublicAssessmentSummary(TypedDict):
+    deterministic_trust: Required[JSONDict]
+    reproducibility: Required[ReproducibilityAssessmentSummary]
+
+
 class Pagination(TypedDict):
     offset: int
     limit: int
@@ -83,7 +99,7 @@ class ThermoSearchRecord(TypedDict):
     """One composed thermo-search row with resolved species context."""
 
     species: JSONDict
-    thermo: JSONDict
+    thermo: JSONDict  # Nested wire block remains unexpanded for backward-compatible search typing.
 
 
 class ThermoDetailRecord(TypedDict, total=False):
@@ -100,14 +116,14 @@ class ThermoDetailRecord(TypedDict, total=False):
     s298_j_mol_k: float | None
     temperature_coverage: JSONDict | None
     trust: JSONDict | None
-    assessments: JSONDict | None
+    assessments: PublicAssessmentSummary | None
 
 
 class KineticsSearchRecord(TypedDict):
     """One composed kinetics-search row with resolved reaction context."""
 
     reaction: JSONDict
-    kinetics: JSONDict
+    kinetics: JSONDict  # Nested wire block remains unexpanded for backward-compatible search typing.
 
 
 class KineticsDetailRecord(TypedDict, total=False):
@@ -126,7 +142,7 @@ class KineticsDetailRecord(TypedDict, total=False):
     pressure_bar: float | None
     temperature_coverage: JSONDict | None
     trust: JSONDict | None
-    assessments: JSONDict | None
+    assessments: PublicAssessmentSummary | None
 
 
 # Backward-compatible names for the composed search-row shapes published in
@@ -221,7 +237,7 @@ class StatmechRecord(TypedDict, total=False):
     workflow_tool_release: JSONDict | None
     literature: JSONDict | None
     trust: JSONDict | None
-    assessments: JSONDict | None
+    assessments: PublicAssessmentSummary | None
 
 
 class TransportRecord(TypedDict, total=False):
@@ -235,7 +251,7 @@ class TransportRecord(TypedDict, total=False):
     workflow_tool_release: JSONDict | None
     literature: JSONDict | None
     trust: JSONDict | None
-    assessments: JSONDict | None
+    assessments: PublicAssessmentSummary | None
 
 
 class ArtifactRecord(TypedDict, total=False):
@@ -292,6 +308,8 @@ __all__ = [
     "NetworkStateCompositionParticipant",
     "NetworkStateSummary",
     "Pagination",
+    "PublicAssessmentSummary",
+    "ReproducibilityAssessmentSummary",
     "ReactionKineticsResponse",
     "ReactionRecord",
     "ReactionSearchResponse",

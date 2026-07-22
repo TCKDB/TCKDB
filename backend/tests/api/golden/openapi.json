@@ -25496,6 +25496,10 @@
             "title": "Assessed At",
             "type": "string"
           },
+          "assessment_ref": {
+            "title": "Assessment Ref",
+            "type": "string"
+          },
           "assessor_kind": {
             "$ref": "#/components/schemas/ReproducibilityAssessorKind"
           },
@@ -25575,6 +25579,7 @@
         },
         "required": [
           "id",
+          "assessment_ref",
           "record_type",
           "record_id",
           "grade",
@@ -25595,7 +25600,7 @@
         "type": "object"
       },
       "ReproducibilityAssessmentSummary": {
-        "description": "Latest immutable reproducibility assessment and freshness state.",
+        "description": "Latest immutable reproducibility assessment and freshness state.\n\n``assessment_ref`` identifies the stored immutable claim; it does not\nimply that the claim remains current or curator-approved.",
         "properties": {
           "assessed_at": {
             "anyOf": [
@@ -25608,6 +25613,17 @@
               }
             ],
             "title": "Assessed At"
+          },
+          "assessment_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Ref"
           },
           "grade": {
             "anyOf": [

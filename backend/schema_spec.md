@@ -1438,6 +1438,7 @@ Notes:
 `record_reproducibility_assessment` fields:
 
 - `id`
+- `public_ref` — opaque, unique `rpa_` handle for the exact immutable assessment row
 - `record_type`
 - `record_id`
 - `grade`

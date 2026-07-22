@@ -81,6 +81,7 @@ PREFIXES: dict[str, str] = {
     "NetworkSolve": "nsolve",
     "NetworkKinetics": "nkin",
     "Submission": "sub",
+    "RecordReproducibilityAssessment": "rpa",
 }
 
 # Classes whose ref is content-derived from existing identity columns.
@@ -485,6 +486,7 @@ def backfill_public_refs(session: Session) -> dict[str, int]:
     from app.db.models.level_of_theory import LevelOfTheory
     from app.db.models.literature import Literature
     from app.db.models.reaction import ChemReaction, ReactionEntry
+    from app.db.models.reproducibility_assessment import RecordReproducibilityAssessment
     from app.db.models.software import Software, SoftwareRelease
     from app.db.models.species import (
         ConformerAssignmentScheme,
@@ -518,6 +520,7 @@ def backfill_public_refs(session: Session) -> dict[str, int]:
         Literature,
         FrequencyScaleFactor, EnergyCorrectionScheme,
         Submission,
+        RecordReproducibilityAssessment,
     ]
 
     counts: dict[str, int] = {}

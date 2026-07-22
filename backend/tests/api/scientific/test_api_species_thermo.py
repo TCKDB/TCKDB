@@ -137,13 +137,14 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     assert unassessed["deterministic_trust"]["rubric_version"] == "1"
     assert unassessed["reproducibility"] == {
         "state": "unassessed",
+        "assessment_ref": None,
         "rubric": None,
         "rubric_version": None,
         "grade": None,
         "assessed_at": None,
     }
 
-    evaluate_and_append_reproducibility_v1(
+    current_row = evaluate_and_append_reproducibility_v1(
         db_session,
         record_type=SubmissionRecordType.thermo,
         record_id=thermo.id,
@@ -152,11 +153,12 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         "assessments"
     ]["reproducibility"]
     assert current["state"] == "current"
+    assert current["assessment_ref"] == current_row.public_ref
     assert current["rubric"] == "tckdb_reproducibility"
     assert current["rubric_version"] == "v1"
     assert current["assessed_at"] is not None
 
-    append_reproducibility_assessment(
+    stale_row = append_reproducibility_assessment(
         db_session,
         record_type=SubmissionRecordType.thermo,
         record_id=thermo.id,
@@ -170,6 +172,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         "assessments"
     ]["reproducibility"]
     assert stale["state"] == "stale"
+    assert stale["assessment_ref"] == stale_row.public_ref
 
 
 def test_include_all_does_not_expand_assessments(client, db_session):
