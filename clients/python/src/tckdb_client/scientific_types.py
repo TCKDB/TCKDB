@@ -199,6 +199,7 @@ class StatmechRecord(TypedDict, total=False):
     workflow_tool_release: JSONDict | None
     literature: JSONDict | None
     trust: JSONDict | None
+    assessments: JSONDict | None
 
 
 class TransportRecord(TypedDict, total=False):
@@ -212,6 +213,7 @@ class TransportRecord(TypedDict, total=False):
     workflow_tool_release: JSONDict | None
     literature: JSONDict | None
     trust: JSONDict | None
+    assessments: JSONDict | None
 
 
 class ArtifactRecord(TypedDict, total=False):

@@ -25,6 +25,7 @@ from tckdb_client import (
     SpeciesCalculationsSearchResponse,
     SpeciesSearchResponse,
     SpeciesThermoResponse,
+    StatmechRecord,
     StatmechSearchResponse,
     TCKDBClient,
     TCKDBPaginationError,
@@ -33,6 +34,7 @@ from tckdb_client import (
     ThermoRecord,
     ThermoSearchRecord,
     TransportSearchResponse,
+    TransportRecord,
 )
 from tckdb_client.pagination import iter_paginated_records
 
@@ -61,6 +63,8 @@ def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
     assert "species" not in ThermoDetailRecord.__annotations__
     assert "kinetics_ref" in KineticsDetailRecord.__annotations__
     assert "reaction" not in KineticsDetailRecord.__annotations__
+    assert "assessments" in StatmechRecord.__annotations__
+    assert "assessments" in TransportRecord.__annotations__
     for name in (
         "ThermoDetailRecord",
         "ThermoSearchRecord",

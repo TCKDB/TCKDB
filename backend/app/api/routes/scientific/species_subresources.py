@@ -9,9 +9,10 @@ Two thin list endpoints that mirror
 They close the species-centered read asymmetry: thermo already had a
 per-entry read while statmech / transport only had record-grain detail
 + broad search. Each returns the existing statmech / transport search
-response envelope with records pinned to the species entry, and honours
-the same ``include=trust`` policy as the per-entry thermo endpoint
-(trust is opt-in only; ``include=all`` does not surface it).
+response envelope with records pinned to the species entry. Both expose
+opt-in compact ``include=assessments`` summaries; their existing
+``include=trust`` policy remains unchanged (trust is opt-in only and
+``include=all`` does not surface either token).
 
 The path parameter accepts either the integer ``species_entry.id`` or
 a public ref of the form ``spe_…`` (the historical ``{species_entry_id}``
@@ -27,7 +28,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
-from app.api.routes.scientific._response import omit_trust_unless_requested
+from app.api.routes.scientific._response import (
+    omit_trust_unless_requested,
+    prepare_assessment_response,
+)
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.schemas.reads.scientific_statmech_search import (
@@ -37,8 +41,9 @@ from app.schemas.reads.scientific_transport_search import (
     ScientificTransportSearchResponse,
 )
 from app.services.scientific_read.handles import resolve_species_entry_handle
-from app.services.scientific_read.internal_ids import (
-    apply_internal_ids_visibility,
+from app.services.scientific_read.public_assessments import (
+    attach_statmech_assessments,
+    attach_transport_assessments,
 )
 from app.services.scientific_read.species_statmech import get_species_statmech
 from app.services.scientific_read.species_transport import (
@@ -70,7 +75,9 @@ def species_statmech(
     Path handle is the species-entry resource: an integer
     ``species_entry.id`` or a public ref starting with ``spe_``. A
     wrong-prefix ref returns 422; an unknown entry returns 404.
-    ``sort=`` is rejected (v0). ``include=trust`` adds the
+    ``sort=`` is rejected (v0). ``include=assessments`` adds compact
+    deterministic-trust and reproducibility freshness summaries, while
+    ``include=trust`` adds the
     ``computed_statmech_v1`` fragment per record; ``include=all`` does
     not include trust.
 
@@ -96,7 +103,9 @@ def species_statmech(
         offset=offset,
         limit=limit,
     )
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = prepare_assessment_response(
+        session, payload, attach_assessments=attach_statmech_assessments
+    )
     return omit_trust_unless_requested(visibility, payload, scope="search")
 
 
@@ -122,7 +131,9 @@ def species_transport(
     Path handle is the species-entry resource: an integer
     ``species_entry.id`` or a public ref starting with ``spe_``. A
     wrong-prefix ref returns 422; an unknown entry returns 404.
-    ``sort=`` is rejected (v0). ``include=trust`` adds the
+    ``sort=`` is rejected (v0). ``include=assessments`` adds compact
+    deterministic-trust and reproducibility freshness summaries, while
+    ``include=trust`` adds the
     ``computed_transport_v1`` fragment per record; ``include=all`` does
     not include trust.
 
@@ -148,5 +159,7 @@ def species_transport(
         offset=offset,
         limit=limit,
     )
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = prepare_assessment_response(
+        session, payload, attach_assessments=attach_transport_assessments
+    )
     return omit_trust_unless_requested(visibility, payload, scope="search")

@@ -29115,6 +29115,16 @@
       "ScientificStatmechRecord": {
         "description": "One statmech projected as a scientific record.\n\nDefault response carries:\n\n- ``statmech`` — direct-row metadata + review badge.\n- ``species`` — parent species_entry context.\n- ``frequency_scale_factor`` — provenance behind the scalar\n  (always present when the row has a scale factor; ``None``\n  otherwise — symmetric with how other surfaces expose\n  pointer-style summary blocks).\n- ``evidence_summary`` — bounded counts/booleans.\n- ``available_sections`` — boolean map of heavy include presence.\n- ``provenance`` block (LoT not directly on statmech today; the\n  summary points at the FSF's LoT instead — documented in the\n  spec).\n\nOptional heavy include blocks populate only when the caller opts\nin.",
         "properties": {
+          "assessments": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicAssessmentSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "available_sections": {
             "$ref": "#/components/schemas/AvailableStatmechSections"
           },
@@ -29586,6 +29596,16 @@
       "ScientificTransportRecord": {
         "description": "One transport projected as a scientific record.\n\nDefault response carries the core block + species context +\noptional software / workflow / literature provenance pointers +\nbounded evidence and available_sections summaries.\n``source_calculations`` / ``review_history`` populate only under\nthe corresponding include tokens.",
         "properties": {
+          "assessments": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicAssessmentSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "available_sections": {
             "$ref": "#/components/schemas/AvailableTransportSections"
           },
@@ -58315,7 +58335,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/statmech": {
       "get": {
-        "description": "Return statmech records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=trust`` adds the\n``computed_statmech_v1`` fragment per record; ``include=all`` does\nnot include trust.\n\nStatmech records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
+        "description": "Return statmech records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\n``computed_statmech_v1`` fragment per record; ``include=all`` does\nnot include trust.\n\nStatmech records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
         "operationId": "species_statmech_api_v1_scientific_species_entries__species_entry_id__statmech_get",
         "parameters": [
           {
@@ -58725,7 +58745,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/transport": {
       "get": {
-        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=trust`` adds the\n``computed_transport_v1`` fragment per record; ``include=all`` does\nnot include trust.\n\nTransport records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
+        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\n``computed_transport_v1`` fragment per record; ``include=all`` does\nnot include trust.\n\nTransport records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
         "operationId": "species_transport_api_v1_scientific_species_entries__species_entry_id__transport_get",
         "parameters": [
           {

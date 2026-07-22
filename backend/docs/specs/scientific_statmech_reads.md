@@ -84,7 +84,7 @@ species_entry as a *context hint*, not a hard membership pointer.
 
 Legal include tokens: `source_calculations`, `torsions`,
 `electronic_levels`, `frequencies`, `conformers`, `review`,
-`internal_ids`, `all`.
+`internal_ids`, `assessments`, `all`.
 
 ```text
 include=source_calculations  — list of compact source-calc summaries
@@ -103,8 +103,11 @@ include=conformers           — list of conformer_group refs reachable
                                (context hint — see §3)
 include=review               — record_review history for the statmech
                                row
+include=assessments          — compact current deterministic trust plus
+                               latest reproducibility assessment freshness
+                               (`current`, `stale`, or `unassessed`)
 include=all                  — expands to all six public tokens;
-                               never expands to internal_ids
+                               never expands to internal_ids or assessments
 include=internal_ids         — Phase D policy gate; restores integer
                                IDs when the deployment permits
 ```
@@ -130,6 +133,15 @@ request `include=trust` explicitly. Mechanically this is the
 `_DETAIL_LEGAL_INCLUDE_TOKENS` (detail/subresource) vs
 `_LEGAL_INCLUDE_TOKENS` (search) split in
 `services/scientific_read/statmech.py`, mirroring `transport.py`.
+
+### Assessment token policy
+
+`assessments` is legal on statmech detail, broad search, and the
+species-entry subresource. It is internal-tokenized everywhere, so
+`include=all` never returns it. The compact block has the shared
+deterministic-trust and reproducibility freshness semantics documented in
+`public_assessment_summaries.md`; a missing immutable assessment is always
+reported as `unassessed`, never as approval.
 
 ## 5. Search filters
 

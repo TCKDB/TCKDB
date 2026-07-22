@@ -12,6 +12,8 @@ from __future__ import annotations
 from app.db.models.common import (
     CalculationType,
     RecordReviewStatus,
+    ReproducibilityAssessorKind,
+    ReproducibilityGrade,
     StatmechCalculationRole,
     StatmechTreatmentKind,
     SubmissionRecordType,
@@ -19,6 +21,12 @@ from app.db.models.common import (
 )
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.services.reproducibility_assessment import (
+    append_reproducibility_assessment,
+)
+from app.services.reproducibility_rubric import (
+    evaluate_and_append_reproducibility_v1,
+)
 from tests.services.scientific_read._factories import (
     attach_statmech_electronic_level,
     attach_statmech_source_calculation,
@@ -1085,6 +1093,82 @@ def test_search_include_trust_returns_422(client, db_session):
     resp = client.get(_search_url(statmech_ref=sm.public_ref, include="trust"))
     assert resp.status_code == 422
     assert "unknown_include_token" in resp.text
+
+
+def test_assessments_are_opt_in_and_report_freshness(client, db_session):
+    """Detail and GET/POST search share absent, current, and stale semantics."""
+    _, entry, sm = _make_statmech(
+        db_session,
+        statmech_treatment=None,
+        external_symmetry=None,
+        point_group=None,
+        is_linear=None,
+    )
+
+    default = client.get(_detail_url(sm.public_ref)).json()["record"]
+    assert "assessments" not in default
+
+    detail = client.get(
+        _detail_url(sm.public_ref, include="assessments")
+    ).json()["record"]["assessments"]
+    assert detail["deterministic_trust"]["rubric"] == "computed_statmech"
+    assert detail["deterministic_trust"]["grade"] in {
+        "partial",
+        "sparse",
+        "unsupported",
+        "hard_failed",
+    }
+    assert detail["reproducibility"]["state"] == "unassessed"
+
+    search = client.get(
+        _search_url(statmech_ref=sm.public_ref, include="assessments")
+    ).json()["records"][0]["assessments"]
+    assert search == detail
+    post = client.post(
+        "/api/v1/scientific/statmech/search",
+        json={"statmech_ref": sm.public_ref, "include": ["assessments"]},
+    )
+    assert post.status_code == 200, post.text
+    assert post.json()["records"][0]["assessments"] == detail
+    subresource = client.get(
+        f"/api/v1/scientific/species-entries/{entry.public_ref}/statmech?include=assessments"
+    )
+    assert subresource.status_code == 200, subresource.text
+    assert subresource.json()["records"][0]["assessments"] == detail
+
+    evaluate_and_append_reproducibility_v1(
+        db_session,
+        record_type=SubmissionRecordType.statmech,
+        record_id=sm.id,
+    )
+    current = client.get(
+        _detail_url(sm.public_ref, include="assessments")
+    ).json()["record"]["assessments"]["reproducibility"]
+    assert current["state"] == "current"
+
+    append_reproducibility_assessment(
+        db_session,
+        record_type=SubmissionRecordType.statmech,
+        record_id=sm.id,
+        grade=ReproducibilityGrade.described,
+        rubric_name="tckdb_reproducibility",
+        rubric_version="v1",
+        context_json={"outdated": True},
+        assessor_kind=ReproducibilityAssessorKind.system,
+    )
+    stale = client.get(
+        _detail_url(sm.public_ref, include="assessments")
+    ).json()["record"]["assessments"]["reproducibility"]
+    assert stale["state"] == "stale"
+
+
+def test_search_include_all_does_not_expand_assessments(client, db_session):
+    _, _, sm = _make_statmech(db_session)
+    body = client.get(
+        _search_url(statmech_ref=sm.public_ref, include="all")
+    ).json()
+    assert "assessments" not in body["request"]["include"]
+    assert "assessments" not in body["records"][0]
 
 
 def test_search_default_omits_trust(client, db_session):

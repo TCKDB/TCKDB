@@ -5,6 +5,8 @@ from __future__ import annotations
 from app.db.models.common import (
     CalculationType,
     RecordReviewStatus,
+    ReproducibilityAssessorKind,
+    ReproducibilityGrade,
     ScientificOriginKind,
     SubmissionRecordType,
     TransportCalculationRole,
@@ -12,6 +14,12 @@ from app.db.models.common import (
 )
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.services.reproducibility_assessment import (
+    append_reproducibility_assessment,
+)
+from app.services.reproducibility_rubric import (
+    evaluate_and_append_reproducibility_v1,
+)
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_geometry_validation,
@@ -874,6 +882,71 @@ def test_search_include_trust_returns_422(client, db_session):
     resp = client.get(_search_url(transport_ref=tr.public_ref, include="trust"))
     assert resp.status_code == 422
     assert "unknown_include_token" in resp.text
+
+
+def test_assessments_are_opt_in_and_report_freshness(client, db_session):
+    """Detail and GET/POST search share absent, current, and stale semantics."""
+    _, entry, tr = _make_transport(db_session)
+
+    default = client.get(_detail_url(tr.public_ref)).json()["record"]
+    assert "assessments" not in default
+
+    detail = client.get(
+        _detail_url(tr.public_ref, include="assessments")
+    ).json()["record"]["assessments"]
+    assert detail["deterministic_trust"]["rubric"] == "computed_transport"
+    assert detail["deterministic_trust"]["grade"] in {"partial", "sparse"}
+    assert detail["reproducibility"]["state"] == "unassessed"
+
+    search = client.get(
+        _search_url(transport_ref=tr.public_ref, include="assessments")
+    ).json()["records"][0]["assessments"]
+    assert search == detail
+    post = client.post(
+        "/api/v1/scientific/transport/search",
+        json={"transport_ref": tr.public_ref, "include": ["assessments"]},
+    )
+    assert post.status_code == 200, post.text
+    assert post.json()["records"][0]["assessments"] == detail
+    subresource = client.get(
+        f"/api/v1/scientific/species-entries/{entry.public_ref}/transport?include=assessments"
+    )
+    assert subresource.status_code == 200, subresource.text
+    assert subresource.json()["records"][0]["assessments"] == detail
+
+    evaluate_and_append_reproducibility_v1(
+        db_session,
+        record_type=SubmissionRecordType.transport,
+        record_id=tr.id,
+    )
+    current = client.get(
+        _detail_url(tr.public_ref, include="assessments")
+    ).json()["record"]["assessments"]["reproducibility"]
+    assert current["state"] == "current"
+
+    append_reproducibility_assessment(
+        db_session,
+        record_type=SubmissionRecordType.transport,
+        record_id=tr.id,
+        grade=ReproducibilityGrade.described,
+        rubric_name="tckdb_reproducibility",
+        rubric_version="v1",
+        context_json={"outdated": True},
+        assessor_kind=ReproducibilityAssessorKind.system,
+    )
+    stale = client.get(
+        _detail_url(tr.public_ref, include="assessments")
+    ).json()["record"]["assessments"]["reproducibility"]
+    assert stale["state"] == "stale"
+
+
+def test_search_include_all_does_not_expand_assessments(client, db_session):
+    _, _, tr = _make_transport(db_session)
+    body = client.get(
+        _search_url(transport_ref=tr.public_ref, include="all")
+    ).json()
+    assert "assessments" not in body["request"]["include"]
+    assert "assessments" not in body["records"][0]
 
 
 def test_search_internal_ids_restored_when_policy_allows(

@@ -29,6 +29,7 @@ from app.db.models.common import (
     ScientificOriginKind,
     TransportCalculationRole,
 )
+from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -202,6 +203,7 @@ class ScientificTransportRecord(BaseModel):
     source_calculations: list[TransportSourceCalculationSummary] | None = None
     review_history: list[TransportReviewEntry] | None = None
     trust: TrustFragment | None = None
+    assessments: PublicAssessmentSummary | None = None
 
 
 class ScientificTransportDetailResponse(BaseModel):
