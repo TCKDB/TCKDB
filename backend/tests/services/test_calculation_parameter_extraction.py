@@ -33,12 +33,14 @@ from app.schemas.fragments.calculation import (
 )
 from app.services.calculation_parameter_extraction import (
     ParameterExtractionError,
-    _detect_software_from_text,
     extract_and_store_calculation_parameters,
 )
 from app.services.calculation_resolution import (
     persist_calculation_parameters,
     resolve_and_persist_calculation_with_results,
+)
+from app.services.ess_software_detection import (
+    detect_software_from_text as _detect_software_from_text,
 )
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"

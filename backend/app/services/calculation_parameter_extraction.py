@@ -26,9 +26,7 @@ from __future__ import annotations
 import base64
 import binascii
 import logging
-import re
 from datetime import datetime, timezone
-from typing import Literal
 
 from sqlalchemy.orm import Session
 
@@ -54,11 +52,12 @@ from app.services.calculation_resolution import (
     record_software_reconciliation,
     software_release_to_declared_ref,
 )
+from app.services.ess_software_detection import (
+    SoftwareName,
+    detect_software_from_text,
+)
 
 logger = logging.getLogger(__name__)
-
-
-SoftwareName = Literal["gaussian", "orca", "molpro"]
 
 
 class ParameterExtractionError(RuntimeError):
@@ -67,35 +66,6 @@ class ParameterExtractionError(RuntimeError):
     Callers in opportunistic contexts (e.g. an artifact upload hook) must
     catch this and log/skip rather than letting it abort the transaction.
     """
-
-
-_GAUSSIAN_MARKERS = re.compile(
-    r"Gaussian\s+\d+:|Entering Gaussian System", re.IGNORECASE
-)
-_ORCA_MARKERS = re.compile(
-    r"\* O   R   C   A \*|Program Version\s+\d+\.\d+\.\d+", re.IGNORECASE
-)
-_MOLPRO_MARKERS = re.compile(
-    r"PROGRAM SYSTEM MOLPRO", re.IGNORECASE
-)
-
-
-def _detect_software_from_text(text: str) -> SoftwareName | None:
-    """Best-effort sniff for ``"gaussian"``, ``"orca"`` or ``"molpro"``.
-
-    Returns ``None`` when no recognised marker is found. Molpro's banner
-    (``***  PROGRAM SYSTEM MOLPRO  ***``) is unambiguous and checked before
-    the ORCA fallback so it can never be mistaken for another program.
-    """
-
-    head = text[:8000]
-    if _GAUSSIAN_MARKERS.search(head):
-        return "gaussian"
-    if _MOLPRO_MARKERS.search(head):
-        return "molpro"
-    if _ORCA_MARKERS.search(head):
-        return "orca"
-    return None
 
 
 def _resolve_software(
@@ -113,7 +83,7 @@ def _resolve_software(
         if name in ("gaussian", "orca", "molpro"):
             return name  # type: ignore[return-value]
 
-    sniffed = _detect_software_from_text(artifact_text)
+    sniffed = detect_software_from_text(artifact_text)
     if sniffed is not None:
         return sniffed
 

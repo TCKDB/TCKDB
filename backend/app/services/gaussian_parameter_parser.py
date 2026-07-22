@@ -598,3 +598,129 @@ def parse_gaussian_log(filepath: str | Path) -> dict:
         "method_basis": parse_method_basis(route),
         "parser_version": PARSER_VERSION,
     }
+
+
+# ---------------------------------------------------------------------------
+# Single-point electronic energy
+# ---------------------------------------------------------------------------
+
+# Composite methods (CBS-*, G1-G4 and their MP2/B3 variants, Wn) interleave
+# intermediate ``SCF Done``/``EUMP2`` lines whose energy is NOT the method
+# result, so the electronic energy cannot be cross-checked from the log alone.
+# Declaring them unverifiable (returning None) is safer than reporting a wrong
+# sub-step value.
+#
+# The Gaussian route line declares the method and is the authoritative,
+# truncation- and case-robust signal, so we gate on it primarily. As a backstop
+# for logs whose route cannot be extracted, we also match the composite *result*
+# lines — their ``(0 K)``/``Energy=`` suffix cannot occur in a user title/comment,
+# so this never suppresses a plain DFT job that merely mentions a composite name.
+_COMPOSITE_ROUTE_PATTERN = re.compile(
+    r"\b(cbs-[a-z0-9]+|g[1-4](mp2|b3)?|w1(u|bd|ro)?)\b", re.IGNORECASE
+)
+_COMPOSITE_RESULT_MARKERS = (
+    "CBS-QB3 (0 K)",
+    "CBS-4 (0 K)",
+    "CBS-APNO (0 K)",
+    "G1(0 K)",
+    "G2(0 K)",
+    "G2MP2(0 K)",
+    "G3(0 K)",
+    "G3MP2(0 K)",
+    "G3B3(0 K)",
+    "G4(0 K)",
+    "G4MP2(0 K)",
+    "W1BD (0 K)",
+    "W1U (0 K)",
+    "W1RO (0 K)",
+)
+
+
+def _is_composite_gaussian(text: str, route: str) -> bool:
+    """True if the log is a composite (CBS/Gn/Wn) job — unverifiable here."""
+    if route and _COMPOSITE_ROUTE_PATTERN.search(route):
+        return True
+    return any(marker in text for marker in _COMPOSITE_RESULT_MARKERS)
+
+
+def _sp_float_at_index(line: str, idx: int) -> float | None:
+    parts = line.split()
+    if len(parts) > idx:
+        try:
+            return float(parts[idx].replace("D", "E"))
+        except ValueError:
+            return None
+    return None
+
+
+def _sp_last_float(line: str) -> float | None:
+    parts = line.split()
+    if parts:
+        try:
+            return float(parts[-1].replace("D", "E"))
+        except ValueError:
+            return None
+    return None
+
+
+def _sp_scf_done(line: str) -> float | None:
+    match = re.search(r"E\(.+\)\s+=\s+([-]?\d+\.\d+)", line)
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+def _sp_archive_hf(line: str, lines: list[str], idx: int) -> float | None:
+    # The ``HF=<energy>`` field of the Gaussian archive block may wrap onto
+    # the next line; join and slice between ``HF=`` and the next backslash.
+    next_line = lines[idx + 1].strip() if idx + 1 < len(lines) else ""
+    joined = line.strip() + next_line
+    start = joined.find("HF=") + 3
+    end = joined.find("\\", start)
+    if start > 2 and end > start:
+        try:
+            return float(joined[start:end])
+        except ValueError:
+            return None
+    return None
+
+
+def parse_sp_energy(text: str) -> float | None:
+    """Electronic energy (Hartree) from a Gaussian single-point output.
+
+    Mirrors ARC's Gaussian adapter for the single-value method families
+    (DFT/HF ``SCF Done``, ``CCSD(T)=``, ``MP2 =``, ``E(CORR)=``, the
+    ``E2(...)/E(...)`` line, and the archive ``HF=`` fallback). The last
+    matching value wins, matching Gaussian's re-print order.
+
+    Composite methods (CBS-*, Gn, Wn) are **not** supported here: their
+    electronic energy cannot be cross-checked from interleaved intermediate
+    ``SCF Done`` lines, so the function returns ``None`` (unverifiable)
+    rather than a wrong sub-step value — see :func:`_is_composite_gaussian`.
+    Returns ``None`` when no electronic energy is found.
+    """
+    if _is_composite_gaussian(text, extract_gaussian_route_text(text) or ""):
+        return None
+
+    lines = text.splitlines()
+    e_elect: float | None = None
+    for i, line in enumerate(lines):
+        value: float | None = None
+        if "SCF Done:" in line:
+            value = _sp_scf_done(line)
+        elif " E2(" in line and " E(" in line:
+            value = _sp_last_float(line)
+        elif "MP2 =" in line:
+            value = _sp_last_float(line)
+        elif "E(CORR)=" in line:
+            value = _sp_float_at_index(line, 3)
+        elif "CCSD(T)=" in line:
+            value = _sp_float_at_index(line, 1)
+        elif "HF=" in line and e_elect is None:
+            value = _sp_archive_hf(line, lines, i)
+        if value is not None:
+            e_elect = value
+    return e_elect
