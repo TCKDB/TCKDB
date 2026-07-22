@@ -19527,7 +19527,7 @@
         "type": "object"
       },
       "NetworkKineticsSummary": {
-        "description": "One ``network_kinetics`` row projected for ``include=kinetics``.\n\nNo public_ref on ``network_kinetics`` today. The id is\npolicy-gated and the row is addressed within the parent network by\nthe (channel_id, solve_id, model_kind) triple. Coefficient\npayloads (Chebyshev matrix, PLOG rows, point triplets) are\nintentionally **not** inlined here — only shape metadata travels.\nA future ``/scientific/network-kinetics/{ref}`` detail endpoint\nwould surface them.",
+        "description": "One ``network_kinetics`` row projected for ``include=kinetics``.\n\n``network_kinetics`` has a public ref and a live standalone detail\nendpoint. This compact embedded summary omits that ref and exposes only\na policy-gated id plus the (channel_id, solve_id, model_kind) context.\nCoefficient payloads (Chebyshev matrix, PLOG rows, point triplets) are\nintentionally **not** inlined here — only shape metadata travels. The\nstandalone ``/scientific/network-kinetics/{ref}`` endpoint exposes those\npayloads under explicit, bounded include tokens.",
         "properties": {
           "channel_sink_composition_hash": {
             "title": "Channel Sink Composition Hash",
