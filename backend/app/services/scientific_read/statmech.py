@@ -84,11 +84,9 @@ from app.services.trust import (
 # ---------------------------------------------------------------------------
 
 
-# Public include tokens shared by the search and species-entry surfaces.
-# ``trust`` is deliberately **absent** here: search/list endpoints never
-# expose trust, so a caller passing ``include=trust`` to
-# ``/scientific/statmech/search`` gets a 422 ``unknown_include_token`` and
-# ``include=all`` cannot expand to it.
+# Public include tokens shared by search and species-entry surfaces.
+# ``trust`` remains detail/subresource-only, while opt-in compact
+# ``assessments`` are available on every scientific statmech response.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "source_calculations",
     "torsions",
@@ -97,14 +95,15 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "conformers",
     "review",
     "internal_ids",
+    "assessments",
     "all",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 
 # ``trust`` is legal only on the trust-bearing surfaces: the standalone
 # statmech detail endpoint and the species-entry statmech subresource. Like
-# ``internal_ids``, it is internal-tokenized on those surfaces so
-# ``include=all`` does not pull it in — callers must opt in with
+# ``internal_ids`` and ``assessments``, it is internal-tokenized on those
+# surfaces so ``include=all`` does not pull it in — callers must opt in with
 # ``include=trust`` explicitly. The narrower ``_LEGAL_INCLUDE_TOKENS`` set
 # used by search keeps trust out of broad list/search responses entirely.
 _DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS | {"trust"}
@@ -161,6 +160,10 @@ _TRUST_EAGER_LOADS = (
     .selectinload(StatmechSourceCalculation.calculation)
     .selectinload(Calculation.child_dependencies),
 )
+
+# Public seam for consumers that must load the same evidence graph before
+# calling ``evaluate_loaded_statmech``.
+STATMECH_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 
 
 # ---------------------------------------------------------------------------

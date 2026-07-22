@@ -34,6 +34,7 @@ from app.db.models.common import (
     StatmechTreatmentKind,
     TorsionTreatmentKind,
 )
+from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -353,6 +354,7 @@ class ScientificStatmechRecord(BaseModel):
     conformers: list[StatmechConformerContextItem] | None = None
     review_history: list[StatmechReviewEntry] | None = None
     trust: TrustFragment | None = None
+    assessments: PublicAssessmentSummary | None = None
 
 
 class ScientificStatmechDetailResponse(BaseModel):

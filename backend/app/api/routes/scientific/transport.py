@@ -20,7 +20,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
-from app.api.routes.scientific._response import omit_trust_unless_requested
+from app.api.routes.scientific._response import (
+    omit_trust_unless_requested,
+    prepare_assessment_response,
+)
 from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
@@ -32,8 +35,8 @@ from app.schemas.reads.scientific_transport_search import (
     ScientificTransportSearchResponse,
     TransportSearchRequest,
 )
-from app.services.scientific_read.internal_ids import (
-    apply_internal_ids_visibility,
+from app.services.scientific_read.public_assessments import (
+    attach_transport_assessments,
 )
 from app.services.scientific_read.transport import get_transport
 from app.services.scientific_read.transport_search import search_transport
@@ -102,7 +105,9 @@ def scientific_transport_search_get(
         limit=limit,
     )
     payload = search_transport(session, request_obj)
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = prepare_assessment_response(
+        session, payload, attach_assessments=attach_transport_assessments
+    )
     return omit_trust_unless_requested(visibility, payload, scope="search")
 
 
@@ -124,7 +129,9 @@ def scientific_transport_search_post(
             ),
         )
     payload = search_transport(session, body)
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = prepare_assessment_response(
+        session, payload, attach_assessments=attach_transport_assessments
+    )
     return omit_trust_unless_requested(visibility, payload, scope="search")
 
 
@@ -148,5 +155,7 @@ def scientific_transport_detail(
         transport_handle=transport_ref_or_id,
         include=parse_include(include),
     )
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = prepare_assessment_response(
+        session, payload, attach_assessments=attach_transport_assessments
+    )
     return omit_trust_unless_requested(visibility, payload)

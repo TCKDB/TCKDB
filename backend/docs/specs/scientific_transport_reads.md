@@ -71,15 +71,18 @@ pattern the statmech surface uses.
 ## 4. Include behavior
 
 Legal include tokens: `source_calculations`, `review`, `internal_ids`,
-`all`.
+`assessments`, `all`.
 
 ```text
 include=source_calculations  — list of compact source-calc summaries
                                keyed by role
 include=review               — record_review history for the
                                transport row
+include=assessments          — compact current deterministic trust plus
+                               latest reproducibility assessment freshness
+                               (`current`, `stale`, or `unassessed`)
 include=all                  — source_calculations + review
-                               (never internal_ids)
+                               (never internal_ids or assessments)
 include=internal_ids         — Phase D policy gate; restores integer
                                IDs when the deployment permits
 ```
@@ -88,6 +91,15 @@ The default response (no include) carries the bounded fields:
 transport core block + species context + software / workflow /
 literature pointers when populated + evidence summary +
 available_sections.
+
+### Assessment token policy
+
+`assessments` is legal on transport detail, broad search, and the
+species-entry subresource. It is internal-tokenized everywhere, so
+`include=all` never returns it. The compact block has the shared
+deterministic-trust and reproducibility freshness semantics documented in
+`public_assessment_summaries.md`; a missing immutable assessment is always
+reported as `unassessed`, never as approval.
 
 ## 5. Search filters
 

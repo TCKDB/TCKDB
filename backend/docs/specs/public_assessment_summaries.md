@@ -1,6 +1,6 @@
 # Public Assessment Summaries
 
-Scientific kinetics and thermo detail/search records accept the explicit
+Scientific kinetics, thermo, statmech, and transport detail/search records accept the explicit
 `include=assessments` token. The compact block is designed for automated
 consumers and contains two independent signals:
 
@@ -19,6 +19,7 @@ filter is exposed: filtering stored grades without first enforcing freshness
 would mix current and stale claims and give machine clients misleading
 results.
 
-Statmech and transport already expose deterministic `trust` fragments, but
-assessment summaries are deferred there to avoid changing their high-impact
-record builders in this slice.
+Statmech and transport retain their existing detail/subresource-only `trust`
+fragments. Their compact assessment summary is available on detail, broad
+search, and species-entry subresource responses. As on thermo and kinetics,
+the summary is absent by default and `include=all` never expands it.

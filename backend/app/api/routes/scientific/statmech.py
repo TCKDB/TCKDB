@@ -20,7 +20,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
-from app.api.routes.scientific._response import omit_trust_unless_requested
+from app.api.routes.scientific._response import (
+    omit_trust_unless_requested,
+    prepare_assessment_response,
+)
 from app.db.models.common import (
     RecordReviewStatus,
     StatmechTreatmentKind,
@@ -32,8 +35,8 @@ from app.schemas.reads.scientific_statmech_search import (
     ScientificStatmechSearchResponse,
     StatmechSearchRequest,
 )
-from app.services.scientific_read.internal_ids import (
-    apply_internal_ids_visibility,
+from app.services.scientific_read.public_assessments import (
+    attach_statmech_assessments,
 )
 from app.services.scientific_read.statmech import get_statmech
 from app.services.scientific_read.statmech_search import search_statmech
@@ -107,7 +110,9 @@ def scientific_statmech_search_get(
         limit=limit,
     )
     payload = search_statmech(session, request_obj)
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = prepare_assessment_response(
+        session, payload, attach_assessments=attach_statmech_assessments
+    )
     return omit_trust_unless_requested(visibility, payload, scope="search")
 
 
@@ -135,7 +140,9 @@ def scientific_statmech_search_post(
             ),
         )
     payload = search_statmech(session, body)
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = prepare_assessment_response(
+        session, payload, attach_assessments=attach_statmech_assessments
+    )
     return omit_trust_unless_requested(visibility, payload, scope="search")
 
 
@@ -159,5 +166,7 @@ def scientific_statmech_detail(
         statmech_handle=statmech_ref_or_id,
         include=parse_include(include),
     )
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = prepare_assessment_response(
+        session, payload, attach_assessments=attach_statmech_assessments
+    )
     return omit_trust_unless_requested(visibility, payload)

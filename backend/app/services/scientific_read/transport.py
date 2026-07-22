@@ -69,10 +69,11 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "source_calculations",
     "review",
     "internal_ids",
+    "assessments",
     "all",
 }
 _DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS | {"trust"}
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 _TRUST_EAGER_LOADS = (
     selectinload(Transport.species_entry),
     selectinload(Transport.source_calculations)
@@ -100,6 +101,10 @@ _TRUST_EAGER_LOADS = (
     .selectinload(TransportSourceCalculation.calculation)
     .selectinload(Calculation.path_search_result),
 )
+
+# Public seam for consumers that must load the same evidence graph before
+# calling ``evaluate_loaded_transport``.
+TRANSPORT_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 
 
 # ---------------------------------------------------------------------------

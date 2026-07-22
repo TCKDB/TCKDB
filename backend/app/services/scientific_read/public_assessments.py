@@ -18,7 +18,9 @@ from app.db.models.kinetics import Kinetics
 from app.db.models.reproducibility_assessment import (
     RecordReproducibilityAssessment,
 )
+from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
+from app.db.models.transport import Transport
 from app.schemas.reads.scientific_assessment import (
     DeterministicTrustSummary,
     PublicAssessmentSummary,
@@ -33,8 +35,15 @@ from app.services.reproducibility_rubric import (
     evaluate_reproducibility_v1,
 )
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
+from app.services.scientific_read.statmech import STATMECH_TRUST_EAGER_LOADS
 from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS
-from app.services.trust import evaluate_loaded_kinetics, evaluate_loaded_thermo
+from app.services.scientific_read.transport import TRANSPORT_TRUST_EAGER_LOADS
+from app.services.trust import (
+    evaluate_loaded_kinetics,
+    evaluate_loaded_statmech,
+    evaluate_loaded_thermo,
+    evaluate_loaded_transport,
+)
 from app.services.trust.models import EvidenceEvaluation
 
 
@@ -66,6 +75,32 @@ def attach_thermo_assessments(session: Session, payload: Any) -> Any:
     return payload
 
 
+def attach_statmech_assessments(session: Session, payload: Any) -> Any:
+    """Attach summaries to statmech detail, search, and subresource records."""
+    _attach(
+        session,
+        records=list(_statmech_records(payload)),
+        record_type=SubmissionRecordType.statmech,
+        model=Statmech,
+        eager_loads=STATMECH_TRUST_EAGER_LOADS,
+        evaluator=evaluate_loaded_statmech,
+    )
+    return payload
+
+
+def attach_transport_assessments(session: Session, payload: Any) -> Any:
+    """Attach summaries to transport detail, search, and subresource records."""
+    _attach(
+        session,
+        records=list(_transport_records(payload)),
+        record_type=SubmissionRecordType.transport,
+        model=Transport,
+        eager_loads=TRANSPORT_TRUST_EAGER_LOADS,
+        evaluator=evaluate_loaded_transport,
+    )
+    return payload
+
+
 def _kinetics_records(payload: Any) -> Iterable[tuple[Any, int]]:
     for item in payload.records:
         record = item.kinetics if hasattr(item, "kinetics") else item
@@ -76,6 +111,18 @@ def _thermo_records(payload: Any) -> Iterable[tuple[Any, int]]:
     for item in payload.records:
         record = item.thermo if hasattr(item, "thermo") else item
         yield record, record.thermo_id
+
+
+def _statmech_records(payload: Any) -> Iterable[tuple[Any, int]]:
+    records = payload.records if hasattr(payload, "records") else [payload.record]
+    for record in records:
+        yield record, record.statmech.statmech_id
+
+
+def _transport_records(payload: Any) -> Iterable[tuple[Any, int]]:
+    records = payload.records if hasattr(payload, "records") else [payload.record]
+    for record in records:
+        yield record, record.transport.transport_id
 
 
 def _attach(
@@ -176,4 +223,9 @@ def _reproducibility_summary(
     )
 
 
-__all__ = ["attach_kinetics_assessments", "attach_thermo_assessments"]
+__all__ = [
+    "attach_kinetics_assessments",
+    "attach_statmech_assessments",
+    "attach_thermo_assessments",
+    "attach_transport_assessments",
+]

@@ -490,6 +490,7 @@ but plausibly meaningful.
 | `artifacts` | ✓ | n/a | n/a (use calc detail) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a (`/artifacts/search` is its own surface) | n/a |
 | `review` | ✓ | n/a (review per-row inline) | ✓ | n/a | ✓ | n/a | ✓ | n/a | ✓ | n/a | ✓ | n/a | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | n/a (non-reviewable) |
 | `trust` | ✓ | ✗ by policy | ✓ (TS-entry detail only; TS-concept ✗) | ✗ by policy | ✗ | ✗ | ✓ | ✗ by policy | ✓ | ✗ by policy | ✗ (no rubric) | ✗ | ✓ | ✗ by policy | ✓ | ✗ by policy | ✗ (not propagated) | n/a | n/a | n/a | n/a |
+| `assessments` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ | ✓ | ✓ | ✗ | n/a | n/a | n/a | n/a |
 | `internal_ids` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | ✓ | ✓ |
 | `all` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | n/a | n/a | ✓ | ✓ |
 | `used_by` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | ✓ (inverse links) |
@@ -498,8 +499,9 @@ but plausibly meaningful.
 
 1. **`include=all` semantics are consistent.** Every surface defines
    `all = legal − internal_tokens`, where `internal_tokens` is
-   `{internal_ids}` plus `{trust}` on the trust-enabled surfaces. No
-   endpoint accidentally leaks `internal_ids` or `trust` through `all`.
+   `{internal_ids}` plus `{trust}` on the trust-enabled surfaces and
+   `{assessments}` on assessment-enabled surfaces. No endpoint accidentally
+   leaks an internal opt-in block through `all`.
 2. **`include=trust` is detail-only by policy.** Search surfaces that
    *could* meaningfully attach trust (thermo / kinetics / statmech /
    transport / calculations search) explicitly omit it. This audit
@@ -528,7 +530,12 @@ but plausibly meaningful.
    `species-calculations/search`. Other surfaces require an extra hop
    to `/scientific/geometries/{handle}`. This is a deliberate
    "geometries are big" decision and is correctly scoped.
-7. **No missing include tokens identified beyond §0.6.3 and §0.9.2.3.**
+7. **`include=assessments` is a compact freshness-bearing projection.** It
+   is available on thermo, kinetics, statmech, and transport scientific
+   responses, but deliberately absent from `all` and from assessment-grade
+   filters because a stored grade without a current evidence comparison is
+   misleading.
+8. **No missing include tokens identified beyond §0.6.3 and §0.9.2.3.**
    The Phase D internal-ID story is fully threaded.
 
 ### 0.9.3 Recommended include-vocabulary stabilization (advisory)
