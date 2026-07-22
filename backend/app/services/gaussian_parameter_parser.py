@@ -724,3 +724,37 @@ def parse_sp_energy(text: str) -> float | None:
         if value is not None:
             e_elect = value
     return e_elect
+
+
+def parse_hessian(text: str) -> tuple[int, list[float]] | None:
+    """Cartesian Hessian (hartree/bohr²) from a Gaussian output log.
+
+    Mirrors Arkane's ``GaussianLog.load_force_constant_matrix`` for the
+    ``Force constants in Cartesian coordinates:`` block (the last one wins),
+    but keeps Gaussian's native atomic units — no conversion to J/m². Returns
+    ``(natoms, packed_lower_triangle)`` or ``None`` when the block is absent.
+
+    Orientation guard (Arkane): when the route requests an optimization and
+    the molecule has more than 13 atoms, Gaussian prints the force-constant
+    matrix in *standard* (not input) orientation unless ``IOp(2/9=2000)`` is
+    set. That matrix is meaningless against the input-orientation geometry we
+    would bind, so — consistent with the best-effort contract — we skip
+    (return ``None``) rather than raise as Arkane does.
+    """
+    from app.services.hessian_parsing import (
+        GAUSSIAN_HESSIAN_MARKER,
+        parse_triangular_force_constants,
+    )
+
+    result = parse_triangular_force_constants(text, marker=GAUSSIAN_HESSIAN_MARKER)
+    if result is None:
+        return None
+
+    natoms, _ = result
+    route = (extract_gaussian_route_text(text) or "").lower()
+    optimization_requested = "opt" in route
+    iop_2_9_2000 = "2/9=2000" in text
+    if optimization_requested and natoms > 13 and not iop_2_9_2000:
+        return None
+
+    return result

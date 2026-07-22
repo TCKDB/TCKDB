@@ -67,6 +67,9 @@ from app.services.energy_correction_resolution import (
 )
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.geometry_validation import run_and_persist_geometry_validation
+from app.services.hessian_extraction import (
+    try_extract_hessian_from_artifact_upload,
+)
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.record_review import (
     RecordRef,
@@ -563,6 +566,11 @@ def persist_computed_species_upload(
                     )
                     if sp_warning is not None:
                         sp_energy_warnings.append(sp_warning)
+                    # Input geometries for this calc were attached in an
+                    # earlier pass, so the Hessian can bind to them here.
+                    try_extract_hessian_from_artifact_upload(
+                        session, calc_row, art_in
+                    )
 
         thermo_row, thermo_aec_ids = _persist_thermo_block(
             session,

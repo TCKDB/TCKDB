@@ -531,3 +531,29 @@ def parse_molpro_log(
         "sp_electronic_energy_hartree": parse_sp_energy(text),
         "parser_version": PARSER_VERSION,
     }
+
+
+def parse_hessian(text: str) -> tuple[int, list[float]] | None:
+    """Cartesian Hessian (hartree/bohr²) from a Molpro output log.
+
+    Mirrors Arkane's ``MolproLog.load_force_constant_matrix`` for the
+    ``Force Constants (Second Derivatives of the Energy) in [a.u.]`` block
+    (emitted when the deck contains ``print,hessian``). Molpro already prints
+    in atomic units, so the packed lower triangle is stored verbatim. Returns
+    ``(natoms, packed_lower_triangle)`` or ``None`` when the block is absent.
+
+    NOTE (deferred): unlike ORCA's ``.hess``, a Molpro log offers no clean
+    in-frame geometry to cross-check the matrix's orientation against the
+    bound geometry (Molpro reorients to its own frame by default and the
+    force-constant block carries atom-axis labels, not coordinates). The
+    orientation cross-check the hook applies to ORCA is therefore not
+    available here; binding relies on the exactly-one-input-geometry and
+    atom-count guards. Revisit if a reliable in-frame coordinate block is
+    identified in the Molpro output.
+    """
+    from app.services.hessian_parsing import (
+        MOLPRO_HESSIAN_MARKER,
+        parse_triangular_force_constants,
+    )
+
+    return parse_triangular_force_constants(text, marker=MOLPRO_HESSIAN_MARKER)
