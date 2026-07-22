@@ -33,6 +33,8 @@ from enum import Enum
 
 from tckdb_schemas.upload_warning import UploadWarning
 
+from app.services.ess_software_detection import detect_software_from_text
+
 # Two single-point energies count as "the same number" within this absolute
 # tolerance in Hartree (~6e-4 kcal/mol). A mismatch is a non-blocking
 # reviewer flag, not a reject, so the bound is deliberately tight: a wrong
@@ -46,10 +48,6 @@ W_SP_ENERGY_MISMATCH = "sp_energy_payload_log_mismatch"
 #: it from the log. Recorded so the fill is auditable in the upload response
 #: and the review context rather than happening silently.
 W_SP_ENERGY_FILLED_FROM_LOG = "sp_energy_filled_from_log"
-
-#: Molpro's output banner — the only marker we need to gate SP-energy
-#: re-derivation today, since Molpro is the only wired extractor.
-_MOLPRO_BANNER = "PROGRAM SYSTEM MOLPRO"
 
 
 class SpEnergyAction(str, Enum):
@@ -82,22 +80,27 @@ class SpEnergyReconciliation:
 def parse_sp_energy_from_log(text: str | None) -> float | None:
     """Re-derive the single-point electronic energy (Hartree) from log text.
 
-    Software-dispatched and ESS-agnostic in shape. Only Molpro is wired
-    today: a log without the Molpro banner (ORCA, Gaussian, or anything
-    else) returns ``None`` so the caller treats it as *unverifiable*
-    rather than guessing. Extractors for other programs slot in here as
-    they are built from real logs.
-
-    Returns ``None`` for an unsupported program, an unsupported Molpro
-    method (e.g. MRCI-F12), or a log with no single-point energy.
+    Picks the right parser for the uploaded log by sniffing the program
+    banner in its *content* (not the filename): Gaussian, ORCA, and Molpro
+    are wired. Any other program, or a log with no recognised single-point
+    energy (e.g. an unsupported Molpro MRCI-F12 or a Gaussian composite
+    method), returns ``None`` so the caller treats it as *unverifiable*
+    rather than guessing.
     """
     if not text:
         return None
-    # Case-insensitive, matching the parameter-extraction software sniffer.
-    if _MOLPRO_BANNER not in text[:8000].upper():
+    software = detect_software_from_text(text)
+    if software is None:
         return None
-    # Local import keeps this module free of the parser's import surface.
-    from app.services.molpro_parameter_parser import parse_sp_energy
+
+    # Local imports keep this module's own import surface to the dataclasses;
+    # each parser is pure-text and free of DB dependencies.
+    if software == "molpro":
+        from app.services.molpro_parameter_parser import parse_sp_energy
+    elif software == "orca":
+        from app.services.orca_parameter_parser import parse_sp_energy
+    else:  # gaussian
+        from app.services.gaussian_parameter_parser import parse_sp_energy
 
     energy = parse_sp_energy(text)
     # A non-finite parse (NaN/inf from a garbage or overflowed energy line)

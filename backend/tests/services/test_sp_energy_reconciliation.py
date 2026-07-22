@@ -22,15 +22,28 @@ from app.services.sp_energy_reconciliation import (
     reconcile_sp_energy,
 )
 
-FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures", "molpro")
+_FIX = os.path.join(os.path.dirname(__file__), "..", "fixtures")
+FIXTURES_DIR = os.path.join(_FIX, "molpro")
 
-# Known SP energies re-derived from the fixtures (Hartree).
+# Known SP energies re-derived from the real fixtures (Hartree).
 CH4_ENERGY = -40.457885930635
 NH2_ENERGY = -55.79346542
+ORCA_ENERGY = -155.014748716014  # tests/fixtures/orca — DLPNO-CCSD(T)
+GAUSSIAN_ENERGY = -75.096275352  # tests/fixtures/gaussian — UB3LYP DFT
 
 
 def _read(name: str) -> str:
     with open(os.path.join(FIXTURES_DIR, name, "input.out")) as f:
+        return f.read()
+
+
+def _read_orca() -> str:
+    with open(os.path.join(_FIX, "orca", "sp_dlpno_ccsdt_orca.out")) as f:
+        return f.read()
+
+
+def _read_gaussian() -> str:
+    with open(os.path.join(_FIX, "gaussian", "sp_ub3lyp_g16.log")) as f:
         return f.read()
 
 
@@ -145,3 +158,93 @@ def test_dispatcher_rejects_non_finite_energy(monkeypatch) -> None:
             lambda _text, _v=bad: _v,
         )
         assert parse_sp_energy_from_log(banner) is None
+
+
+# ---------------------------------------------------------------------------
+# ORCA and Gaussian — the log picks its own parser by banner content
+# ---------------------------------------------------------------------------
+
+
+def test_dispatcher_extracts_real_orca_energy() -> None:
+    assert parse_sp_energy_from_log(_read_orca()) == ORCA_ENERGY
+
+
+def test_dispatcher_extracts_real_gaussian_energy() -> None:
+    assert parse_sp_energy_from_log(_read_gaussian()) == GAUSSIAN_ENERGY
+
+
+def test_orca_confirms_matching_payload() -> None:
+    result = reconcile_sp_energy(
+        payload_energy_hartree=ORCA_ENERGY, log_text=_read_orca()
+    )
+    assert result.action is SpEnergyAction.confirmed
+    assert result.warning is None
+
+
+def test_orca_fills_when_payload_missing() -> None:
+    result = reconcile_sp_energy(payload_energy_hartree=None, log_text=_read_orca())
+    assert result.action is SpEnergyAction.filled
+    assert result.resolved_energy_hartree == ORCA_ENERGY
+
+
+def test_gaussian_mismatch_warns_and_keeps_payload() -> None:
+    wrong = GAUSSIAN_ENERGY + 0.01
+    result = reconcile_sp_energy(
+        payload_energy_hartree=wrong, log_text=_read_gaussian()
+    )
+    assert result.action is SpEnergyAction.mismatch
+    assert result.resolved_energy_hartree == wrong
+    assert result.log_energy_hartree == GAUSSIAN_ENERGY
+    assert result.warning is not None
+    assert result.warning.code == W_SP_ENERGY_MISMATCH
+
+
+def test_gaussian_composite_method_is_unverifiable() -> None:
+    """A composite (CBS/Gn) run interleaves intermediate SCF Done lines;
+    the value is not cross-checkable, so the payload stands unchanged."""
+    composite_log = (
+        "Entering Gaussian System, Link 0=g16\n"
+        "# CBS-QB3\n"
+        "SCF Done:  E(RHF) =  -76.000000  A.U. after 8 cycles\n"
+        "CBS-QB3 (0 K)=  -76.500000\n"
+        "E(CBS-QB3)=  -76.400000\n"
+    )
+    result = reconcile_sp_energy(
+        payload_energy_hartree=-76.4, log_text=composite_log
+    )
+    assert result.action is SpEnergyAction.unverifiable
+    assert result.log_energy_hartree is None
+    assert result.resolved_energy_hartree == -76.4
+
+
+def test_gaussian_g3mp2_and_truncated_composite_unverifiable() -> None:
+    # G3MP2 is a family the old substring gate missed; its intermediate
+    # EUMP2 must NOT leak as the SP energy.
+    g3mp2 = (
+        "Entering Gaussian System, Link 0=g16\n"
+        "#p g3mp2\n\ntitle\n\n"
+        " SCF Done:  E(UHF) =  -75.58  A.U. after 8 cycles\n"
+        " E2 = -0.18D+00 EUMP2 = -0.75773189207D+02\n"
+        " G3MP2(0 K)=  -75.912418      G3MP2 Energy=  -75.909529\n"
+    )
+    assert parse_sp_energy_from_log(g3mp2) is None
+    # A composite job killed before its result section (lowercase route,
+    # no result markers) is caught by the route echo.
+    truncated = (
+        "Entering Gaussian System, Link 0=g16\n"
+        "#p g3\n\ntitle\n\n"
+        " SCF Done:  E(UHF) =  -75.58  A.U. after 8 cycles\n"
+    )
+    assert parse_sp_energy_from_log(truncated) is None
+
+
+def test_gaussian_dft_mentioning_composite_in_title_still_extracts() -> None:
+    # A plain DFT job whose title merely mentions a composite method must
+    # still have its SCF Done energy extracted (route-based gate, not a
+    # whole-text substring scan).
+    log = (
+        "Entering Gaussian System, Link 0=g16\n"
+        "#p ub3lyp/def2tzvp\n\nbenchmark vs G4MP2 reference set\n\n"
+        " SCF Done:  E(UB3LYP) =  -76.123400  A.U. after 10 cycles\n"
+    )
+    assert parse_sp_energy_from_log(log) == -76.1234

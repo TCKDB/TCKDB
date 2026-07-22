@@ -1122,3 +1122,20 @@ def parse_orca_log(
         "method_basis": parse_method_basis(text),
         "parser_version": "orca_v2",
     }
+
+
+def parse_sp_energy(text: str) -> float | None:
+    """Electronic energy (Hartree) from an ORCA single-point output.
+
+    Mirrors ARC's ORCA adapter: the authoritative value is the last
+    ``FINAL SINGLE POINT ENERGY`` line — for DLPNO-CCSD(T), DFT, HF, or MP2
+    alike it carries the final electronic energy. Returned in Hartree
+    (ORCA's native unit); ``None`` when no such line is present.
+    """
+    for line in reversed(text.splitlines()):
+        if "FINAL SINGLE POINT ENERGY" in line:
+            try:
+                return float(line.split()[-1])
+            except (ValueError, IndexError):
+                continue
+    return None
