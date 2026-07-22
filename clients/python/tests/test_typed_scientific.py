@@ -485,7 +485,9 @@ def test_iterator_uses_post_collapse_total_as_authoritative_bound() -> None:
         page["pagination"]["post_collapse_total"] = 1
         return page
 
-    records = list(iter_paginated_records(fetch, {"limit": 1}))
+    records = list(
+        iter_paginated_records(fetch, {"collapse": "first", "limit": 1})
+    )
 
     assert records == [{"ordinal": 0}]
     assert calls == 1
@@ -502,15 +504,62 @@ def test_iterator_rejects_invalid_post_collapse_total(
         list(iter_paginated_records(lambda **_kwargs: page, {"limit": 1}))
 
 
-def test_iterator_rejects_post_collapse_total_that_changes() -> None:
-    first = _page(limit=1, total=2)
-    first["pagination"]["post_collapse_total"] = 2
-    second = _page(offset=1, limit=1, total=2)
-    second["pagination"]["post_collapse_total"] = 1
-    pages = iter([first, second])
+@pytest.mark.parametrize(
+    ("collapse", "total", "post_collapse_total"),
+    [
+        ("all", 8, 0),
+        ("all", 8, 1),
+        ("first", 8, 0),
+        ("first", 8, 8),
+    ],
+)
+def test_iterator_rejects_post_collapse_total_that_disagrees_with_mode(
+    collapse: str,
+    total: int,
+    post_collapse_total: int,
+) -> None:
+    page = _page(limit=1, total=total)
+    page["pagination"]["post_collapse_total"] = post_collapse_total
 
-    with pytest.raises(TCKDBPaginationError, match="post_collapse_total changed"):
-        list(iter_paginated_records(lambda **_kwargs: next(pages), {"limit": 1}))
+    with pytest.raises(TCKDBPaginationError, match="collapse mode"):
+        list(
+            iter_paginated_records(
+                lambda **_kwargs: page,
+                {"collapse": collapse, "limit": 1},
+            )
+        )
+
+
+def test_legacy_collapsed_iterator_rejects_empty_first_page_before_total() -> None:
+    page = _page(limit=1, total=8)
+    page["records"] = []
+    page["pagination"]["returned"] = 0
+
+    with pytest.raises(TCKDBPaginationError, match="did not advance"):
+        list(
+            iter_paginated_records(
+                lambda **_kwargs: page,
+                {"collapse": "first", "limit": 1},
+            )
+        )
+
+
+@pytest.mark.parametrize(("offset", "returned"), [(0, 2), (1, 1)])
+def test_legacy_collapsed_iterator_rejects_records_outside_single_result(
+    offset: int,
+    returned: int,
+) -> None:
+    page = _page(offset=offset, limit=2, total=8)
+    page["records"] = [{"ordinal": offset + index} for index in range(returned)]
+    page["pagination"]["returned"] = returned
+
+    with pytest.raises(TCKDBPaginationError, match="legacy collapsed"):
+        list(
+            iter_paginated_records(
+                lambda **_kwargs: page,
+                {"collapse": "first", "offset": offset, "limit": 2},
+            )
+        )
 
 
 def test_collapsed_iterator_accepts_empty_page_after_offset() -> None:

@@ -58,7 +58,6 @@ def iter_paginated_records(
         minimum=1,
     )
     expected_total: int | None = None
-    expected_post_collapse_total: int | None = None
 
     while True:
         page = fetch_page(
@@ -98,6 +97,13 @@ def iter_paginated_records(
                 "Malformed pagination: post_collapse_total must be between zero "
                 "and total."
             )
+        if has_post_collapse_total:
+            expected_post_total = min(total, 1) if collapse_first else total
+            if post_collapse_total != expected_post_total:
+                raise TCKDBPaginationError(
+                    "Malformed pagination: post_collapse_total does not match "
+                    "the requested collapse mode."
+                )
         if page_offset != requested_offset:
             raise TCKDBPaginationError(
                 "Malformed pagination: server offset does not match the requested offset."
@@ -110,18 +116,17 @@ def iter_paginated_records(
             raise TCKDBPaginationError(
                 "Malformed pagination: returned exceeds the server page limit."
             )
+        if collapse_first and not has_post_collapse_total:
+            if returned > 1 or (page_offset >= 1 and returned > 0):
+                raise TCKDBPaginationError(
+                    "Malformed pagination: legacy collapsed pages may return only "
+                    "one record at offset zero."
+                )
         if expected_total is None:
             expected_total = total
         elif total != expected_total:
             raise TCKDBPaginationError(
                 "Pagination total changed while iterating; restart the query."
-            )
-        if expected_post_collapse_total is None:
-            expected_post_collapse_total = post_collapse_total
-        elif post_collapse_total != expected_post_collapse_total:
-            raise TCKDBPaginationError(
-                "Pagination post_collapse_total changed while iterating; "
-                "restart the query."
             )
         if returned == 0 and page_offset >= post_collapse_total:
             return
@@ -140,7 +145,8 @@ def iter_paginated_records(
         # Their collapsed result set has at most one row even though ``total``
         # reports the larger pre-collapse candidate count.
         if collapse_first and not has_post_collapse_total:
-            return
+            if returned == 1 or page_offset >= 1:
+                return
         if returned == 0 or next_offset <= requested_offset:
             raise TCKDBPaginationError(
                 "Pagination did not advance before reaching the reported total."

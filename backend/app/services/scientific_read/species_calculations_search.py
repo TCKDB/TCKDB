@@ -70,7 +70,6 @@ from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CollapseMode,
     LevelOfTheorySummary,
-    Pagination,
     ReviewStatusSummary,
     SCFStabilitySummary,
     SoftwareReleaseSummary,
@@ -1097,11 +1096,10 @@ def _empty_response(
         ),
         review_summary=ReviewStatusSummary(),
         records=[],
-        pagination=Pagination(
+        pagination=build_pagination(
             offset=offset,
             limit=limit,
             returned=0,
             total=0,
-            post_collapse_total=0,
         ),
     )
