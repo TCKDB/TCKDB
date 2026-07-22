@@ -610,8 +610,11 @@ Important rules:
   distance, then review rank, then evidence completeness, then
   `created_at`, then `id`).
 - `pagination.total` is the **pre-collapse, post-filter** match count.
-  When `collapse="first"`, `total` may be larger than `returned`
-  (returned is then 0 or 1).
+- `pagination.post_collapse_total` is the count **after collapse and before
+  offset/limit slicing**. It equals `total` for `collapse="all"` and is 0 or 1
+  for `collapse="first"`.
+- `pagination.returned` is the actual page length, so it can be smaller than
+  either total because of page slicing.
 - `review_summary` counts the **pre-collapse filtered candidate set**,
   so callers see the trust posture of every candidate, not only the one
   record returned.

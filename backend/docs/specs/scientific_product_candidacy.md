@@ -88,7 +88,9 @@ Read paths return candidates, and collapse to one only under explicit policy:
 - **Single-record collapse is explicit and named.** `collapse=first` returns
   exactly one record, chosen by an explicit, named `selection_policy`. The
   chosen `collapse` and `selection_policy` are echoed in the response; the
-  pre-collapse candidate count stays in `pagination.total`.
+  pre-collapse candidate count stays in `pagination.total`, while
+  `pagination.post_collapse_total` reports the count after selection collapse
+  and before offset/limit slicing.
 
 ### Named selection policies
 

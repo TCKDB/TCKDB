@@ -605,6 +605,7 @@ def get_reaction_kinetics(
             limit=limit,
             returned=len(returned),
             total=pre_collapse_total,
+            collapse_first=collapse_first,
         ),
     )
 

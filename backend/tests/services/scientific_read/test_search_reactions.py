@@ -287,4 +287,5 @@ def test_collapse_first_applies_before_offset(db_session):
 
     assert response.records == []
     assert response.pagination.total == 1
+    assert response.pagination.post_collapse_total == 1
     assert response.pagination.returned == 0

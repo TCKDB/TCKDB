@@ -320,8 +320,12 @@ def _print_envelope_summary(label: str, response: dict[str, Any]) -> None:
     pagination = response.get("pagination") or {}
     review = response.get("review_summary") or {}
     total = pagination.get("total", 0)
+    post_collapse_total = pagination.get("post_collapse_total", total)
     returned = pagination.get("returned", len(response.get("records", []) or []))
-    print(f"  {label}: returned={returned}, pre-collapse total={total}")
+    print(
+        f"  {label}: returned={returned}, post-collapse total="
+        f"{post_collapse_total}, pre-collapse total={total}"
+    )
     print(
         "    review counts:",
         f"approved={review.get('approved', 0)},",

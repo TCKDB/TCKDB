@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CollapseMode,
-    Pagination,
     ReviewStatusSummary,
 )
 from app.schemas.reads.scientific_species import SpeciesSearchRequest
@@ -272,6 +271,7 @@ def search_thermo(
             limit=limit,
             returned=len(returned),
             total=pre_collapse_total,
+            collapse_first=collapse_first,
         ),
     )
 
@@ -326,5 +326,10 @@ def _empty_response(
         ),
         review_summary=ReviewStatusSummary(),
         records=[],
-        pagination=Pagination(offset=offset, limit=limit, returned=0, total=0),
+        pagination=build_pagination(
+            offset=offset,
+            limit=limit,
+            returned=0,
+            total=0,
+        ),
     )

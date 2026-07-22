@@ -308,14 +308,25 @@ def review_rank(badge: RecordReviewBadge) -> int:
 
 
 def build_pagination(
-    *, offset: int, limit: int, returned: int, total: int
+    *,
+    offset: int,
+    limit: int,
+    returned: int,
+    total: int,
+    collapse_first: bool = False,
 ) -> Pagination:
     """Construct the response Pagination block.
 
-    ``total`` is the pre-collapse, post-filter count (per spec).
+    ``total`` is the pre-collapse, post-filter count. The additive
+    ``post_collapse_total`` is the count after collapse and before offset/limit
+    slicing; it equals ``total`` unless ``collapse=first`` was requested.
     """
     return Pagination(
-        offset=offset, limit=limit, returned=returned, total=total
+        offset=offset,
+        limit=limit,
+        returned=returned,
+        total=total,
+        post_collapse_total=min(total, 1) if collapse_first else total,
     )
 
 

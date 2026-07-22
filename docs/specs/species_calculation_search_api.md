@@ -579,7 +579,7 @@ ranking=lowest_energy without both exact comparability refs → 422 unsafe_lowes
 ranking=latest orders by created_at DESC
 ranking=earliest orders by created_at ASC
 NULLS LAST: a calc with null energy ranks below a calc with populated energy under lowest_energy
-collapse=first preserves plural records array; pagination.total reflects pre-collapse count
+collapse=first preserves plural records array; pagination.total reflects the pre-collapse count and pagination.post_collapse_total reflects the collapsed count
 level_of_theory_id filters Calculation.lot_id directly
 method/basis filter via LoT join on the calculation row
 software filter via SoftwareRelease.software join

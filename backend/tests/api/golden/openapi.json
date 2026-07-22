@@ -23422,7 +23422,7 @@
         "type": "object"
       },
       "Pagination": {
-        "description": "Echoed pagination block per L5.\n\n``total``    pre-collapse, post-filter match count.\n``returned`` actual length of ``records``.",
+        "description": "Echoed pagination block per L5.\n\n``total``                pre-collapse, post-filter match count.\n``post_collapse_total``  count after collapse, before page slicing.\n``returned``             actual length of ``records``.",
         "properties": {
           "limit": {
             "maximum": 200.0,
@@ -23433,6 +23433,11 @@
           "offset": {
             "minimum": 0.0,
             "title": "Offset",
+            "type": "integer"
+          },
+          "post_collapse_total": {
+            "minimum": 0.0,
+            "title": "Post Collapse Total",
             "type": "integer"
           },
           "returned": {
@@ -23450,7 +23455,8 @@
           "offset",
           "limit",
           "returned",
-          "total"
+          "total",
+          "post_collapse_total"
         ],
         "title": "Pagination",
         "type": "object"

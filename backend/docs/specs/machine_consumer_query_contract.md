@@ -1,16 +1,14 @@
 # Machine-consumer query contract
 
-Status: requirements 1–4 and 6–9 are implemented at the scopes stated below.
-Requirement 5 is exhaustive within the hosted traversal bound but still lacks a
-second post-collapse count. Requirement 10 remains ongoing as each surface
-expands.
+Status: requirements 1–9 are implemented at the scopes stated below.
+Requirement 10 remains ongoing as each surface expands.
 
 ## Compatibility rules
 
 - Additive response fields are backward compatible. Removing or changing the meaning/type of a field requires a versioned contract.
 - A declared filter is either enforced or rejected. It must never be accepted and ignored.
 - Public refs are stable identifiers. Integer database IDs are deployment-policy fields and are optional in hosted response schemas.
-- Pagination metadata describes the complete filtered candidate set before collapse and page slicing. Collapse is applied first, so `collapse=first&offset=1` returns an empty page while retaining the pre-collapse `total`.
+- Pagination metadata reports `total` for the complete filtered candidate set before collapse and `post_collapse_total` after collapse but before page slicing. Collapse is applied first, so `collapse=first&offset=1` returns an empty page while retaining `total >= 1` and `post_collapse_total = 1`.
 
 ## Ordered requirements
 
@@ -22,7 +20,7 @@ expands.
 
 4. **Canonical pressure query — implemented.** `pressure_bar` is canonical on reaction-entry and chemistry-first kinetics reads; `pressure` remains a deprecated alias. Both accept only finite positive values at every GET/POST request boundary. After numeric parsing, equal aliases (for example `1` and `1.0`) are canonicalized to `pressure_bar`; any exact inequality returns 422 `pressure_alias_conflict` without tolerance. A valid pressure includes pressure-independent rates; matches exact apparent-pressure records; applies bounded PLOG/Chebyshev coverage; accepts populated falloff/third-body models; and excludes high-pressure-limit, out-of-range, or indeterminate pressure-dependent records. Incompatible records are filtered out rather than silently broadened. A non-null `reaction_path_degeneracy` reports an explicit `convention`: `already_applied` maps to `true/false`, `not_applied` maps to `false/true`, and `unknown` maps to `null/null` for `reported_rate_coefficient_includes_degeneracy` / `apply_to_rate_coefficient`. Legacy rows are backfilled as `unknown`; semantics are never inferred from the numeric degeneracy. Null degeneracy remains unknown, not one.
 
-5. **Exhaustive composed searches — bounded implementation.** Thermo, kinetics, and species-calculation composition walks every reachable identity page before downstream filtering, ordering, collapse, and pagination. If the complete identity set exceeds the hosted offset/limit traversal bound, the request fails with 422 `composed_search_candidate_limit_exceeded`; it is never silently truncated. `pagination.total` is the complete post-filter, pre-collapse candidate count and `pagination.returned` is the actual record-list length. A distinct post-collapse total is not yet exposed, so `collapse=first` can legitimately return one record while `pagination.total > 1`.
+5. **Exhaustive composed searches — bounded implementation.** Thermo, kinetics, and species-calculation composition walks every reachable identity page before downstream filtering, ordering, collapse, and pagination. If the complete identity set exceeds the hosted offset/limit traversal bound, the request fails with 422 `composed_search_candidate_limit_exceeded`; it is never silently truncated. `pagination.total` is the complete post-filter, pre-collapse candidate count, `pagination.post_collapse_total` is the count after collapse and before page slicing, and `pagination.returned` is the actual record-list length. The same additive pagination contract applies across scientific reads; without collapse, `post_collapse_total == total`.
 
 6. **Comparable `lowest_energy` — implemented.** Species-calculation `ranking=lowest_energy` requires `calculation_type=sp|opt`, one exact `species_entry_ref`, and one exact `level_of_theory_ref`; unsafe requests fail with coded 422 errors. SP ranks `electronic_energy_hartree`; opt ranks its final-energy field, so calculation types and energy meanings are not mixed within one query. Missing energies sort last when at least one candidate has an energy. If candidates match but every energy is null, the request fails with 422 `lowest_energy_unavailable`; a search with no matching candidates remains a normal empty result.
 
@@ -30,7 +28,7 @@ expands.
 
 8. **Compact trust and reproducibility summaries — implemented for kinetics and thermo.** The single opt-in token is `include=assessments`; it is deliberately excluded from `include=all`. The block contains current deterministic trust (`rubric`, version, grade, optional hard fail) and the latest immutable reproducibility assessment (`current|stale|unassessed`, rubric/version, grade, timestamp). Absence serializes as `unassessed`, never approval. No assessment-grade filter is offered because filtering without freshness enforcement would mix current and stale claims. The compact projection does not currently expose an assessment public ref. Statmech and transport retain their existing deterministic `trust` fragments; their reproducibility-assessment projection is deferred.
 
-9. **Typed Python models and complete iterators — implemented for the supported client search surface.** The dependency-light client exports `TypedDict` wire models for errors and species, reaction, thermo, kinetics, species-calculation, network, network-kinetics, statmech, transport, and artifact search responses. Thermo and kinetics use distinct flat detail-record types and composed search-row types. Existing methods still return ordinary dictionaries. Matching lazy `iter_*` methods preserve filters/includes, advance using returned pagination metadata, stop at the reported total, and fail on malformed, changing, empty-before-total, or non-advancing pages. Because hosted collapse reports a pre-collapse total, `collapse=first` yields at most the one collapsed record and stops; an initial offset of one or more yields an empty page.
+9. **Typed Python models and complete iterators — implemented for the supported client search surface.** The dependency-light client exports `TypedDict` wire models for errors and species, reaction, thermo, kinetics, species-calculation, network, network-kinetics, statmech, transport, artifact search responses, and additive `post_collapse_total` pagination metadata. Thermo and kinetics use distinct flat detail-record types and composed search-row types. Existing methods still return ordinary dictionaries. Matching lazy `iter_*` methods preserve filters/includes, advance using returned pagination metadata, stop at `post_collapse_total`, and fail on malformed, changing, empty-before-total, or non-advancing pages. When talking to an older server that omits the additive field, the client falls back to `total` plus the legacy `collapse=first` stop rule.
 
 10. **Guides and regression coverage — partial, ongoing.** Every requirement lands with positive, conflict, empty-result, policy-hidden, and legacy-compatibility tests as applicable. Public examples use supported ranking fields and the actual nested geometry shape. Guides identify planned behavior explicitly and never demonstrate accepted-but-ignored filters.
 

@@ -107,6 +107,7 @@ def test_collapse_first_preserves_plural_records_with_pre_collapse_total(db_sess
 
     assert len(response.records) == 1
     assert response.pagination.total == 2
+    assert response.pagination.post_collapse_total == 1
     assert response.pagination.returned == 1
 
 
