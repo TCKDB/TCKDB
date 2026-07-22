@@ -231,7 +231,9 @@ Each supported paginated search also has a lazy ``iter_*`` form. It keeps
 filters and include tokens unchanged, follows returned pagination metadata,
 and raises ``TCKDBPaginationError`` on malformed, changing, or non-advancing
 pages. ``collapse="first"`` yields the one collapsed record and stops because
-hosted ``pagination.total`` intentionally remains the pre-collapse count.
+hosted responses report both the pre-collapse ``pagination.total`` and the
+post-collapse, pre-page ``pagination.post_collapse_total``. The client retains
+the legacy stop rule for older servers that omit the additive field.
 
 ```python
 for record in client.iter_network_kinetics(

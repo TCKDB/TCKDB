@@ -78,14 +78,16 @@ MAX_LIMIT = 200
 class Pagination(BaseModel):
     """Echoed pagination block per L5.
 
-    ``total``    pre-collapse, post-filter match count.
-    ``returned`` actual length of ``records``.
+    ``total``                pre-collapse, post-filter match count.
+    ``post_collapse_total``  count after collapse, before page slicing.
+    ``returned``             actual length of ``records``.
     """
 
     offset: int = Field(ge=0)
     limit: int = Field(ge=1, le=MAX_LIMIT)
     returned: int = Field(ge=0)
     total: int = Field(ge=0)
+    post_collapse_total: int = Field(ge=0)
 
 
 # ---------------------------------------------------------------------------

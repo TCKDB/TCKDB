@@ -1116,7 +1116,8 @@ or a calculation type** — only species-rooted search exists.
 Scientific endpoints use a richer envelope
 (`backend/app/schemas/reads/scientific_common.py:55-65`):
 `offset` (≥0, default 0), `limit` (1–200, default 50),
-`returned` (actual count), `total` (pre-collapse, post-filter).
+`returned` (actual page count), `total` (pre-collapse, post-filter), and
+`post_collapse_total` (post-collapse, pre-page count).
 Bounds enforced in `validate_pagination()` (services/scientific_read/common.py:59-83):
 `offset` capped at `settings.public_max_offset`, `limit` capped at
 `min(MAX_LIMIT=200, settings.public_max_limit)`. Excess → 422.

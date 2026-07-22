@@ -17,6 +17,7 @@ class Pagination(TypedDict):
     limit: int
     returned: int
     total: int
+    post_collapse_total: NotRequired[int]
 
 
 class ScientificRequestEcho(TypedDict, total=False):

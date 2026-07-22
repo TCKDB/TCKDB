@@ -499,6 +499,7 @@ def get_species_thermo(
             limit=limit,
             returned=len(returned),
             total=pre_collapse_total,
+            collapse_first=collapse_first,
         ),
     )
 

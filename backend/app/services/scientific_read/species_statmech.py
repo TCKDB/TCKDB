@@ -187,7 +187,11 @@ def get_species_statmech(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset,
+            limit=limit,
+            returned=len(records),
+            total=total,
+            collapse_first=collapse_first,
         ),
     )
 

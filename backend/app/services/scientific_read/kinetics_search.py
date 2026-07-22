@@ -250,6 +250,7 @@ def search_kinetics(
             limit=limit,
             returned=len(returned),
             total=pre_collapse_total,
+            collapse_first=collapse_first,
         ),
     )
 
@@ -305,5 +306,11 @@ def _empty_response(
         ),
         review_summary=ReviewStatusSummary(),
         records=[],
-        pagination=Pagination(offset=offset, limit=limit, returned=0, total=0),
+        pagination=Pagination(
+            offset=offset,
+            limit=limit,
+            returned=0,
+            total=0,
+            post_collapse_total=0,
+        ),
     )

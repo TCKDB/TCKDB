@@ -370,6 +370,7 @@ def test_collapse_first_returns_at_most_one_with_pre_collapse_total(db_session):
     assert len(response.records) == 1
     # Pre-collapse total should reflect both candidates.
     assert response.pagination.total == 2
+    assert response.pagination.post_collapse_total == 1
     assert response.pagination.returned == 1
 
 

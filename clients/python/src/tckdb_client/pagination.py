@@ -58,6 +58,7 @@ def iter_paginated_records(
         minimum=1,
     )
     expected_total: int | None = None
+    expected_post_collapse_total: int | None = None
 
     while True:
         page = fetch_page(
@@ -81,10 +82,21 @@ def iter_paginated_records(
         page_limit = _integer_field(pagination, "limit")
         returned = _integer_field(pagination, "returned")
         total = _integer_field(pagination, "total")
+        has_post_collapse_total = "post_collapse_total" in pagination
+        post_collapse_total = (
+            _integer_field(pagination, "post_collapse_total")
+            if has_post_collapse_total
+            else total
+        )
         if page_offset < 0 or page_limit < 1 or returned < 0 or total < 0:
             raise TCKDBPaginationError(
                 "Malformed pagination: offset/returned/total must be non-negative "
                 "and limit must be positive."
+            )
+        if post_collapse_total < 0 or post_collapse_total > total:
+            raise TCKDBPaginationError(
+                "Malformed pagination: post_collapse_total must be between zero "
+                "and total."
             )
         if page_offset != requested_offset:
             raise TCKDBPaginationError(
@@ -104,22 +116,30 @@ def iter_paginated_records(
             raise TCKDBPaginationError(
                 "Pagination total changed while iterating; restart the query."
             )
-        if returned == 0 and page_offset >= total:
-            return
-        if page_offset + returned > total:
+        if expected_post_collapse_total is None:
+            expected_post_collapse_total = post_collapse_total
+        elif post_collapse_total != expected_post_collapse_total:
             raise TCKDBPaginationError(
-                "Malformed pagination: page extends beyond the reported total."
+                "Pagination post_collapse_total changed while iterating; "
+                "restart the query."
+            )
+        if returned == 0 and page_offset >= post_collapse_total:
+            return
+        if page_offset + returned > post_collapse_total:
+            raise TCKDBPaginationError(
+                "Malformed pagination: page extends beyond the reported "
+                "post-collapse total."
             )
 
         yield from cast(list[RecordT], records)
 
         next_offset = page_offset + returned
-        if next_offset >= total:
+        if next_offset >= post_collapse_total:
             return
-        # The collapsed result set has at most one row. A valid empty page at
-        # offset > 0 is therefore complete, even though ``total`` reports the
-        # larger pre-collapse candidate count.
-        if collapse_first:
+        # Compatibility fallback for servers predating post_collapse_total.
+        # Their collapsed result set has at most one row even though ``total``
+        # reports the larger pre-collapse candidate count.
+        if collapse_first and not has_post_collapse_total:
             return
         if returned == 0 or next_offset <= requested_offset:
             raise TCKDBPaginationError(

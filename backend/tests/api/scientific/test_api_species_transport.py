@@ -305,6 +305,7 @@ def test_collapse_first_returns_single_record_with_pre_collapse_total(
     assert body["request"]["collapse"] == "first"
     assert len(body["records"]) == 1
     assert body["pagination"]["total"] == 2
+    assert body["pagination"]["post_collapse_total"] == 1
 
 
 def test_collapse_first_offset_one_returns_empty(client, db_session):
@@ -315,6 +316,7 @@ def test_collapse_first_offset_one_returns_empty(client, db_session):
 
     assert body["records"] == []
     assert body["pagination"]["total"] == 1
+    assert body["pagination"]["post_collapse_total"] == 1
 
 
 def test_default_policy_selects_best_reviewed(client, db_session):

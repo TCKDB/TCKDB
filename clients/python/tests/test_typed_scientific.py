@@ -475,6 +475,44 @@ def test_collapsed_iterator_stops_after_the_single_collapsed_record() -> None:
     assert calls == 1
 
 
+def test_iterator_uses_post_collapse_total_as_authoritative_bound() -> None:
+    calls = 0
+
+    def fetch(**_kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        page = _page(limit=1, total=8)
+        page["pagination"]["post_collapse_total"] = 1
+        return page
+
+    records = list(iter_paginated_records(fetch, {"limit": 1}))
+
+    assert records == [{"ordinal": 0}]
+    assert calls == 1
+
+
+@pytest.mark.parametrize("post_collapse_total", [-1, 3])
+def test_iterator_rejects_invalid_post_collapse_total(
+    post_collapse_total: int,
+) -> None:
+    page = _page(limit=1, total=2)
+    page["pagination"]["post_collapse_total"] = post_collapse_total
+
+    with pytest.raises(TCKDBPaginationError, match="post_collapse_total"):
+        list(iter_paginated_records(lambda **_kwargs: page, {"limit": 1}))
+
+
+def test_iterator_rejects_post_collapse_total_that_changes() -> None:
+    first = _page(limit=1, total=2)
+    first["pagination"]["post_collapse_total"] = 2
+    second = _page(offset=1, limit=1, total=2)
+    second["pagination"]["post_collapse_total"] = 1
+    pages = iter([first, second])
+
+    with pytest.raises(TCKDBPaginationError, match="post_collapse_total changed"):
+        list(iter_paginated_records(lambda **_kwargs: next(pages), {"limit": 1}))
+
+
 def test_collapsed_iterator_accepts_empty_page_after_offset() -> None:
     calls = 0
 

@@ -275,6 +275,7 @@ def search_species(
         limit=limit,
         returned=len(returned_records),
         total=pre_collapse_total,
+        collapse_first=collapse_first,
     )
 
     request_filter = _filter_echo(request)

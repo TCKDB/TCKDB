@@ -351,6 +351,7 @@ def search_reactions(
             limit=limit,
             returned=len(returned_records),
             total=pre_collapse_total,
+            collapse_first=collapse_first,
         ),
     )
 
