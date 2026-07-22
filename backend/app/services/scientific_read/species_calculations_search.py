@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.error_contract import reject_unsupported_filters
+from app.api.error_contract import CodedValueError, reject_unsupported_filters
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
     Calculation,
@@ -265,6 +265,28 @@ def search_species_calculations(
     rows = [r for r in rows if badges[r.calc_id].status in visible]
     if not rows:
         return _empty_response(request, includes, offset, limit)
+
+    if (
+        request.ranking == CalculationRanking.lowest_energy
+        and all(row.energy_hartree is None for row in rows)
+    ):
+        energy_field = (
+            "electronic_energy_hartree"
+            if request.calculation_type == CalculationType.sp
+            else "final_energy_hartree"
+        )
+        raise CodedValueError(
+            "lowest_energy_unavailable",
+            "No lowest energy is available because none of the matching "
+            f"calculations has a recorded {energy_field} value.",
+            context={
+                "candidate_count": len(rows),
+                "calculation_type": request.calculation_type.value,
+                "energy_field": energy_field,
+                "species_entry_ref": request.species_entry_ref,
+                "level_of_theory_ref": request.level_of_theory_ref,
+            },
+        )
 
     # Bulk-load supporting blocks keyed by calculation_id.
     calc_ids = [r.calc_id for r in rows]

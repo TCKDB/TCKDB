@@ -98,6 +98,41 @@ def test_lowest_energy_with_sp_returns_lowest_first(client, db_session):
     assert body["pagination"]["total"] == 2
 
 
+def test_lowest_energy_all_null_candidates_returns_coded_error(client, db_session):
+    _, entry = _seed(db_session, smiles="NOENERGY")
+    lot = make_lot(db_session)
+    make_calculation(
+        db_session,
+        type=CalculationType.sp,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+    )
+
+    resp = client.get(
+        "/api/v1/scientific/species-calculations/search"
+        f"?species_entry_ref={entry.public_ref}"
+        f"&level_of_theory_ref={lot.public_ref}"
+        "&calculation_type=sp&ranking=lowest_energy"
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {
+        "code": "lowest_energy_unavailable",
+        "detail": (
+            "lowest_energy_unavailable: No lowest energy is available because "
+            "none of the matching calculations has a recorded "
+            "electronic_energy_hartree value."
+        ),
+        "context": {
+            "candidate_count": 1,
+            "calculation_type": "sp",
+            "energy_field": "electronic_energy_hartree",
+            "species_entry_ref": entry.public_ref,
+            "level_of_theory_ref": lot.public_ref,
+        },
+    }
+
+
 def test_lowest_energy_with_freq_returns_422(client, db_session):
     resp = client.get(
         "/api/v1/scientific/species-calculations/search"
