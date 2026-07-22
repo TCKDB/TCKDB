@@ -1,10 +1,9 @@
 # Machine-consumer query contract
 
-Status: requirements 1–4 and 7–9 are implemented at the scopes stated below.
+Status: requirements 1–4 and 6–9 are implemented at the scopes stated below.
 Requirement 5 is exhaustive within the hosted traversal bound but still lacks a
-second post-collapse count. Requirement 6 enforces the principal comparability
-guards; its remaining all-null-energy case is called out explicitly. Requirement
-10 remains ongoing as each surface expands.
+second post-collapse count. Requirement 10 remains ongoing as each surface
+expands.
 
 ## Compatibility rules
 
@@ -25,7 +24,7 @@ guards; its remaining all-null-energy case is called out explicitly. Requirement
 
 5. **Exhaustive composed searches — bounded implementation.** Thermo, kinetics, and species-calculation composition walks every reachable identity page before downstream filtering, ordering, collapse, and pagination. If the complete identity set exceeds the hosted offset/limit traversal bound, the request fails with 422 `composed_search_candidate_limit_exceeded`; it is never silently truncated. `pagination.total` is the complete post-filter, pre-collapse candidate count and `pagination.returned` is the actual record-list length. A distinct post-collapse total is not yet exposed, so `collapse=first` can legitimately return one record while `pagination.total > 1`.
 
-6. **Comparable `lowest_energy` — guarded implementation.** Species-calculation `ranking=lowest_energy` requires `calculation_type=sp|opt`, one exact `species_entry_ref`, and one exact `level_of_theory_ref`; unsafe requests fail with coded 422 errors. SP ranks `electronic_energy_hartree`; opt ranks its final-energy field, so calculation types and energy meanings are not mixed within one query. Missing energies sort last rather than being compared numerically. The current implementation does not yet reject an all-null-energy candidate set; callers requiring a numeric minimum must verify the selected record's energy is non-null.
+6. **Comparable `lowest_energy` — implemented.** Species-calculation `ranking=lowest_energy` requires `calculation_type=sp|opt`, one exact `species_entry_ref`, and one exact `level_of_theory_ref`; unsafe requests fail with coded 422 errors. SP ranks `electronic_energy_hartree`; opt ranks its final-energy field, so calculation types and energy meanings are not mixed within one query. Missing energies sort last when at least one candidate has an energy. If candidates match but every energy is null, the request fails with 422 `lowest_energy_unavailable`; a search with no matching candidates remains a normal empty result.
 
 7. **Chemistry-first PDep results — implemented at the stated projections.** Network-kinetics search exposes public network/species refs and bounded, ordered source/sink composition blocks with stoichiometry and truncation metadata. Network search exposes participant counts and composition hashes, not full participant blocks; a full public participant projection there is a future enhancement. Network search supports participant species/reaction and network-ref filters. Network-kinetics search supports `network_ref` plus source/sink public species-entry-ref or canonical-SMILES multisets. Repeated requested values encode stoichiometry. The matching rule is multiset-subset containment: every requested participant must occur at least at the requested multiplicity; additional unmentioned channel participants are allowed. Ref and SMILES filters AND-combine.
 

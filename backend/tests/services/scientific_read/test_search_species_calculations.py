@@ -369,6 +369,66 @@ def test_lowest_energy_nulls_last(db_session):
     assert ordered.index(with_energy.id) < ordered.index(without_energy.id)
 
 
+@pytest.mark.parametrize(
+    ("calculation_type", "energy_field"),
+    [
+        (CalculationType.sp, "electronic_energy_hartree"),
+        (CalculationType.opt, "final_energy_hartree"),
+    ],
+)
+def test_lowest_energy_all_null_candidates_raise_clear_error(
+    db_session, calculation_type, energy_field
+):
+    _, entry = _entry(db_session, smiles=f"NULL-{calculation_type.value}")
+    lot = make_lot(db_session)
+    make_calculation(
+        db_session,
+        type=calculation_type,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+    )
+
+    with pytest.raises(CodedValueError) as exc_info:
+        search_species_calculations(
+            db_session,
+            SpeciesCalculationsSearchRequest(
+                species_entry_ref=entry.public_ref,
+                level_of_theory_ref=lot.public_ref,
+                calculation_type=calculation_type,
+                ranking=CalculationRanking.lowest_energy,
+            ),
+        )
+
+    error = exc_info.value
+    assert error.code == "lowest_energy_unavailable"
+    assert "No lowest energy is available" in error.detail
+    assert error.context == {
+        "candidate_count": 1,
+        "calculation_type": calculation_type.value,
+        "energy_field": energy_field,
+        "species_entry_ref": entry.public_ref,
+        "level_of_theory_ref": lot.public_ref,
+    }
+
+
+def test_lowest_energy_with_no_matching_candidates_remains_empty(db_session):
+    _, entry = _entry(db_session, smiles="NO-CANDIDATES")
+    lot = make_lot(db_session)
+
+    response = search_species_calculations(
+        db_session,
+        SpeciesCalculationsSearchRequest(
+            species_entry_ref=entry.public_ref,
+            level_of_theory_ref=lot.public_ref,
+            calculation_type=CalculationType.sp,
+            ranking=CalculationRanking.lowest_energy,
+        ),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 0
+
+
 # ---------------------------------------------------------------------------
 # Collapse + pagination
 # ---------------------------------------------------------------------------
