@@ -70,6 +70,24 @@ def test_post_accepts_json_body(client, db_session):
     assert body["records"][0]["reactants"][0]["smiles"] == "P1"
 
 
+def test_collapse_first_offset_one_returns_empty(client, db_session):
+    _setup(db_session, reactant_smiles="ROFF_A", product_smiles="ROFF_B")
+
+    response = client.get(
+        "/api/v1/scientific/reactions/search",
+        params={
+            "reactants": "ROFF_A",
+            "products": "ROFF_B",
+            "collapse": "first",
+            "offset": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["records"] == []
+    assert response.json()["pagination"]["total"] == 1
+
+
 def test_post_rejects_query_string_filters(client, db_session):
     _setup(db_session, reactant_smiles="Q1", product_smiles="Q2")
 

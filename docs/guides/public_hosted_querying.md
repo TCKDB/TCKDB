@@ -129,21 +129,40 @@ client.search_kinetics(
     products=["[CH3]", "O"],
     temperature_min=500,
     temperature_max=2000,
+    pressure_bar=1.0,
     include=["provenance", "review"],
 )
 ```
 
-Lowest single-point energy for a species:
+`pressure_bar` is an applicability filter, not an annotation: finite-pressure
+queries exclude high-pressure-limit records, require an exact match for an
+apparent-at-pressure fit, and require the requested pressure to lie inside a
+PLOG or Chebyshev domain. Returned records explain the match in
+`pressure_coverage`. The deprecated `pressure` alias is accepted for one
+release and conflicts with `pressure_bar` are rejected.
+
+Lowest single-point energy for one species entry at one level of theory:
 
 ```python
 client.search_species_calculations(
-    smiles="O",
+    species_entry_ref="spe_...",
+    level_of_theory_ref="lot_...",
     calculation_type="sp",
-    sort="electronic_energy_hartree",
+    ranking="lowest_energy",
+    collapse="first",
     limit=1,
     include=["provenance"],
 )
 ```
+
+Both refs are required because raw electronic energies are only rankable
+within an explicitly comparable species-entry/level-of-theory set.
+
+When `reaction_path_degeneracy` is present, inspect its explicit `convention`.
+`already_applied` gives include/apply flags `true/false`; `not_applied` gives
+`false/true`; `unknown` gives `null/null`, so a consumer must not guess. Legacy
+rows are `unknown`. TCKDB does not transform stored Arrhenius, PLOG, falloff,
+or Chebyshev coefficients when serving them.
 
 Optimized geometry for a species:
 
@@ -153,7 +172,7 @@ calcs = client.search_species_calculations(
     calculation_type="opt",
     include=["geometry", "provenance"],
 )
-geom_ref = calcs["records"][0]["primary_output_geometry_ref"]
+geom_ref = calcs["records"][0]["geometry"]["primary_output_geometry_ref"]
 ```
 
 Geometry coordinates by `geom_ref`:

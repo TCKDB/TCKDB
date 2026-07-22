@@ -380,6 +380,7 @@ def _kinetics_to_upload(kinetics: Kinetics) -> dict[str, Any]:
         "tmin_k": kinetics.tmin_k,
         "tmax_k": kinetics.tmax_k,
         "degeneracy": kinetics.degeneracy,
+        "degeneracy_convention": kinetics.degeneracy_convention.value,
         "tunneling_model": kinetics.tunneling_model,
         "note": kinetics.note,
     }

@@ -61,6 +61,81 @@ def test_post_accepts_json_body(client, db_session):
     assert len(resp.json()["records"]) == 1
 
 
+def test_pressure_bar_is_canonical_and_deprecated_alias_conflicts(client, db_session):
+    _setup(db_session, r="XP1", p="YP1")
+
+    canonical = client.post(
+        "/api/v1/scientific/kinetics/search",
+        json={"reactants": ["XP1"], "products": ["YP1"], "pressure_bar": 1.0},
+    )
+    assert canonical.status_code == 200
+    assert canonical.json()["request"]["filter"]["pressure_bar"] == 1.0
+
+    post_conflict = client.post(
+        "/api/v1/scientific/kinetics/search",
+        json={
+            "reactants": ["XP1"],
+            "products": ["YP1"],
+            "pressure_bar": 1.0,
+            "pressure": 10.0,
+        },
+    )
+    get_conflict = client.get(
+        "/api/v1/scientific/kinetics/search",
+        params={
+            "reactants": "XP1",
+            "products": "YP1",
+            "pressure_bar": 1.0,
+            "pressure": 10.0,
+        },
+    )
+    for conflict in (post_conflict, get_conflict):
+        assert conflict.status_code == 422
+        assert conflict.json()["code"] == "pressure_alias_conflict"
+        assert conflict.json()["context"] == {}
+
+
+def test_ordinary_validation_errors_keep_generic_codes(client):
+    post_error = client.post(
+        "/api/v1/scientific/kinetics/search",
+        json={"reactants": "not-a-list", "products": 4},
+    )
+    get_error = client.get(
+        "/api/v1/scientific/kinetics/search?reactants=XP1&limit=999",
+    )
+
+    assert post_error.json()["code"] == "request_validation_error"
+    assert get_error.json()["code"] == "request_validation_error"
+
+
+def test_assessment_summary_is_opt_in_for_get_and_post(client, db_session):
+    _setup(db_session, r="Q1", p="Q2")
+    base = "/api/v1/scientific/kinetics/search"
+
+    default_record = client.get(
+        f"{base}?reactants=Q1&products=Q2"
+    ).json()["records"][0]["kinetics"]
+    assert "assessments" not in default_record
+
+    get_body = client.get(
+        f"{base}?reactants=Q1&products=Q2&include=assessments"
+    ).json()
+    summary = get_body["records"][0]["kinetics"]["assessments"]
+    assert summary["deterministic_trust"]["rubric"] == "computed_kinetics"
+    assert summary["reproducibility"]["state"] == "unassessed"
+
+    post = client.post(
+        base,
+        json={
+            "reactants": ["Q1"],
+            "products": ["Q2"],
+            "include": ["assessments"],
+        },
+    )
+    assert post.status_code == 200, post.text
+    assert post.json()["records"][0]["kinetics"]["assessments"] == summary
+
+
 def test_post_rejects_query_string_filters(client, db_session):
     _setup(db_session, r="X3", p="Y3")
 

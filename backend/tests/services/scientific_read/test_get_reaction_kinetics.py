@@ -6,11 +6,14 @@ import pytest
 
 from app.api.errors import NotFoundError
 from app.db.models.common import (
+    KineticsDegeneracyConvention,
     KineticsModelKind,
+    PressureContext,
     RecordReviewStatus,
     ScientificOriginKind,
     SubmissionRecordType,
 )
+from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from tests.services.scientific_read._factories import (
@@ -61,6 +64,21 @@ def test_empty_kinetics_returns_200_empty_records(db_session):
     assert response.records == []
     assert response.pagination.total == 0
     assert response.reaction_entry_id == entry.id
+
+
+def test_collapse_first_applies_before_offset(db_session):
+    entry = _setup_entry(db_session)
+    make_kinetics(db_session, reaction_entry=entry)
+
+    response = get_reaction_kinetics(
+        db_session,
+        reaction_entry_id=entry.id,
+        request=KineticsReadRequest(collapse=CollapseMode.first, offset=1),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 1
+    assert response.pagination.returned == 0
 
 
 # ---------------------------------------------------------------------------
@@ -761,3 +779,109 @@ def test_plain_modified_arrhenius_has_null_pdep_blocks(db_session):
     assert rec.chebyshev is None
     assert rec.falloff is None
     assert rec.third_body_efficiencies is None
+
+
+def test_pressure_bar_filters_by_model_applicability_and_reports_coverage(db_session):
+    from tests.services.scientific_read._factories import (
+        attach_kinetics_chebyshev,
+        attach_kinetics_plog_entry,
+    )
+
+    entry = _setup_entry(db_session)
+    independent = make_kinetics(db_session, reaction_entry=entry)
+    make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        pressure_context=PressureContext.high_p_limit,
+    )
+    exact = make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        pressure_context=PressureContext.apparent_at_pressure,
+        pressure_bar=1.0,
+    )
+    make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        pressure_context=PressureContext.apparent_at_pressure,
+        pressure_bar=10.0,
+    )
+    plog = make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        model_kind=KineticsModelKind.plog,
+        a=None,
+        n=None,
+        ea_kj_mol=None,
+    )
+    attach_kinetics_plog_entry(
+        db_session, kinetics=plog, entry_index=1, pressure_bar=0.1, a=1.0e10
+    )
+    attach_kinetics_plog_entry(
+        db_session, kinetics=plog, entry_index=2, pressure_bar=10.0, a=1.0e12
+    )
+    chebyshev = make_kinetics(
+        db_session,
+        reaction_entry=entry,
+        model_kind=KineticsModelKind.chebyshev,
+        a=None,
+        n=None,
+        ea_kj_mol=None,
+    )
+    attach_kinetics_chebyshev(
+        db_session,
+        kinetics=chebyshev,
+        n_temperature=1,
+        n_pressure=1,
+        coefficients=[[1.0]],
+        pmin_bar=2.0,
+        pmax_bar=20.0,
+    )
+
+    response = get_reaction_kinetics(
+        db_session,
+        reaction_entry_id=entry.id,
+        request=KineticsReadRequest(pressure_bar=1.0),
+    )
+
+    by_id = {record.kinetics_id: record for record in response.records}
+    assert set(by_id) == {independent.id, exact.id, plog.id}
+    assert by_id[independent.id].pressure_coverage.basis == "pressure_independent"
+    assert by_id[exact.id].pressure_coverage.basis == "exact_pressure"
+    assert by_id[plog.id].pressure_coverage.basis == "bounded_pressure_surface"
+    assert response.request.filter == {"pressure_bar": 1.0}
+
+
+def test_deprecated_pressure_alias_is_canonicalized_and_conflicts_rejected():
+    request = KineticsReadRequest(pressure=1.0)
+    assert request.pressure_bar == 1.0
+
+    with pytest.raises(ValueError, match="pressure_alias_conflict"):
+        KineticsReadRequest(pressure_bar=1.0, pressure=10.0)
+
+
+@pytest.mark.parametrize(
+    ("stored_convention", "includes", "apply"),
+    [
+        (KineticsDegeneracyConvention.already_applied, True, False),
+        (KineticsDegeneracyConvention.not_applied, False, True),
+        (KineticsDegeneracyConvention.unknown, None, None),
+    ],
+)
+def test_reaction_path_degeneracy_reports_explicit_convention(
+    db_session, stored_convention, includes, apply
+):
+    entry = _setup_entry(db_session)
+    kinetics = make_kinetics(db_session, reaction_entry=entry, degeneracy=2.0)
+    kinetics.degeneracy_convention = stored_convention
+    db_session.flush()
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    convention = response.records[0].reaction_path_degeneracy
+    assert convention is not None
+    assert convention.value == 2.0
+    assert convention.convention is stored_convention
+    assert convention.reported_rate_coefficient_includes_degeneracy is includes
+    assert convention.apply_to_rate_coefficient is apply

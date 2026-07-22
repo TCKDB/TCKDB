@@ -70,19 +70,25 @@ def test_post_rejects_query_string_filters(client, db_session):
 
 
 def test_lowest_energy_with_sp_returns_lowest_first(client, db_session):
+    # ranking=lowest_energy requires exact species_entry_ref AND
+    # level_of_theory_ref so the compared energies are physically comparable
+    # (same species entry, same level of theory).
     _, entry = _seed(db_session, smiles="LE")
+    lot = make_lot(db_session)
     high = make_calculation(
-        db_session, type=CalculationType.sp, species_entry_id=entry.id
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id
     )
     attach_sp_result(db_session, calculation=high, electronic_energy_hartree=-100.0)
     low = make_calculation(
-        db_session, type=CalculationType.sp, species_entry_id=entry.id
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id
     )
     attach_sp_result(db_session, calculation=low, electronic_energy_hartree=-200.0)
 
     resp = client.get(
         "/api/v1/scientific/species-calculations/search"
-        "?smiles=LE&calculation_type=sp&ranking=lowest_energy&collapse=first"
+        f"?species_entry_ref={entry.public_ref}"
+        f"&level_of_theory_ref={lot.public_ref}"
+        "&calculation_type=sp&ranking=lowest_energy&collapse=first"
     )
     assert resp.status_code == 200
     body = resp.json()

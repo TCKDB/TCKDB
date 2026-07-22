@@ -991,6 +991,7 @@ def _kinetics_blocks(
                 "tmin_k": k.tmin_k,
                 "tmax_k": k.tmax_k,
                 "degeneracy": k.degeneracy,
+                "degeneracy_convention": k.degeneracy_convention.value,
             }
         )
     return out

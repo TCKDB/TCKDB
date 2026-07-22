@@ -62,6 +62,9 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.network_channel_chemistry import (
+    apply_channel_chemistry_filters,
+)
 from app.services.scientific_read.network_kinetics import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
@@ -78,6 +81,10 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "network_kinetics_ref",
     "network_ref",
     "network_solve_ref",
+    "source_species_entry_refs",
+    "sink_species_entry_refs",
+    "source_smiles",
+    "sink_smiles",
     "model_kind",
     "temperature_min",
     "temperature_max",
@@ -151,6 +158,7 @@ def search_network_kinetics(
         network_id=network_id,
         solve_id=solve_id,
     )
+    stmt = apply_channel_chemistry_filters(stmt, request)
     stmt = _apply_scalar_filters(stmt, request)
     stmt = _apply_envelope_filters(stmt, request)
     stmt = _apply_evidence_filters(stmt, request)
@@ -225,7 +233,7 @@ def _enforce_at_least_one_filter(
     explicit ``False`` is meaningful."""
     for name in _MEANINGFUL_FILTER_FIELDS:
         value = getattr(request, name)
-        if value is None:
+        if value is None or value == []:
             continue
         return
     raise ValueError(

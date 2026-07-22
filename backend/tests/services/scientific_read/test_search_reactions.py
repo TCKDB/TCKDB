@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_reactions import (
     ReactionDirectionQuery,
     ReactionSearchRequest,
@@ -267,3 +268,23 @@ def test_sort_is_deterministic(db_session):
         ReactionSearchRequest(reactants=["D1"], products=["D2"]),
     )
     assert r1.model_dump() == r2.model_dump()
+
+
+def test_collapse_first_applies_before_offset(db_session):
+    _setup_reaction(
+        db_session, reactants_smiles=["ROFF1"], products_smiles=["ROFF2"]
+    )
+
+    response = search_reactions(
+        db_session,
+        ReactionSearchRequest(
+            reactants=["ROFF1"],
+            products=["ROFF2"],
+            collapse=CollapseMode.first,
+            offset=1,
+        ),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 1
+    assert response.pagination.returned == 0

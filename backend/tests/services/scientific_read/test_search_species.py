@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.api.error_contract import CodedValueError
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
@@ -131,39 +132,45 @@ def test_search_by_formula_matches_charged_ion_suffix(db_session):
 
 
 # ---------------------------------------------------------------------------
-# InChI filter — no stored/derivable column, so an inchi-only query must
-# never silently return the full unfiltered species table.
+# InChI filter — no stored/derivable column, so every supplied InChI must
+# fail closed rather than being ignored, including alongside supported filters.
 # ---------------------------------------------------------------------------
 
 
-def test_search_by_inchi_only_returns_empty_not_everything(db_session):
+def test_search_by_inchi_only_is_rejected(db_session):
     species_a = make_species(db_session, smiles="O", inchi_key=next_inchi_key("INCHIONLY1"))
     make_species_entry(db_session, species_a)
     species_b = make_species(db_session, smiles="C1CC1", inchi_key=next_inchi_key("INCHIONLY2"))
     make_species_entry(db_session, species_b)
 
-    response = search_species(
-        db_session,
-        SpeciesSearchRequest(inchi="InChI=1S/H2O/h1H2"),
-    )
+    with pytest.raises(CodedValueError) as exc_info:
+        search_species(
+            db_session,
+            SpeciesSearchRequest(inchi="InChI=1S/H2O/h1H2"),
+        )
 
-    assert response.records == []
-    assert response.pagination.total == 0
+    assert exc_info.value.code == "unsupported_filter"
+    assert exc_info.value.context == {
+        "endpoint": "/scientific/species/search",
+        "filters": ["inchi"],
+    }
 
 
-def test_search_by_inchi_with_smiles_still_filters_by_smiles(db_session):
-    # inchi cannot be verified, but a co-supplied real identifier (smiles)
-    # still narrows the query as usual — inchi is echoed, not filtered.
+def test_search_by_inchi_with_smiles_is_rejected(db_session):
     species = make_species(db_session, smiles="CCO", inchi_key=next_inchi_key("INCHIWS"))
     make_species_entry(db_session, species)
 
-    response = search_species(
-        db_session,
-        SpeciesSearchRequest(smiles="CCO", inchi="InChI=1S/C2H6O/..."),
-    )
+    with pytest.raises(CodedValueError) as exc_info:
+        search_species(
+            db_session,
+            SpeciesSearchRequest(smiles="CCO", inchi="InChI=1S/C2H6O/..."),
+        )
 
-    assert len(response.records) == 1
-    assert response.records[0].species_id == species.id
+    assert exc_info.value.code == "unsupported_filter"
+    assert exc_info.value.context == {
+        "endpoint": "/scientific/species/search",
+        "filters": ["inchi"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -364,3 +371,23 @@ def test_collapse_first_returns_at_most_one_with_pre_collapse_total(db_session):
     # Pre-collapse total should reflect both candidates.
     assert response.pagination.total == 2
     assert response.pagination.returned == 1
+
+
+def test_collapse_first_applies_before_offset(db_session):
+    species = make_species(
+        db_session, smiles="C_OFFSET", inchi_key=next_inchi_key("COFF")
+    )
+    make_species_entry(db_session, species)
+
+    response = search_species(
+        db_session,
+        SpeciesSearchRequest(
+            smiles="C_OFFSET",
+            collapse=CollapseMode.first,
+            offset=1,
+        ),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 1
+    assert response.pagination.returned == 0

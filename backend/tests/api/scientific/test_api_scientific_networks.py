@@ -2187,6 +2187,42 @@ def test_nkin_detail_channel_context_present(client, db_session):
     assert channel_ctx["network_channel_ref"] is None
 
 
+def test_nkin_detail_channel_context_has_public_compositions(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    extra_species = make_species(db_session, smiles="[OH]")
+    extra_entry = make_species_entry(db_session, extra_species)
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_a"],
+        species_entry=extra_entry,
+        stoichiometry=2,
+    )
+
+    channel = client.get(
+        _nkin_detail_url(fx["kinetics"].public_ref)
+    ).json()["record"]["network_channel"]
+    source = channel["source_state"]
+    sink = channel["sink_state"]
+    assert source["participant_count_total"] == 2
+    assert source["participants_truncated"] is False
+    assert source["participants"] == sorted(
+        source["participants"],
+        key=lambda row: (row["canonical_smiles"], row["species_entry_ref"]),
+    )
+    projected = next(
+        row
+        for row in source["participants"]
+        if row["species_entry_ref"] == extra_entry.public_ref
+    )
+    assert projected == {
+        "species_entry_ref": extra_entry.public_ref,
+        "species_ref": extra_species.public_ref,
+        "canonical_smiles": "[OH]",
+        "stoichiometry": 2,
+    }
+    assert sink["participant_count_total"] == 1
+
+
 def test_nkin_detail_evidence_summary_present(client, db_session):
     fx = _make_kinetics(
         db_session,
@@ -2793,6 +2829,111 @@ def test_nkin_search_by_network_solve_ref(client, db_session):
         _nkin_search_url(network_solve_ref=fx_a["solve"].public_ref)
     ).json()
     assert _nkin_search_refs(body) == {fx_a["kinetics"].public_ref}
+
+
+def test_nkin_search_channel_chemistry_filters_and_combine(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    source_species = make_species(db_session, smiles="[CH3]")
+    source_entry = make_species_entry(db_session, source_species)
+    sink_species = make_species(db_session, smiles="[OH]")
+    sink_entry = make_species_entry(db_session, sink_species)
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_a"],
+        species_entry=source_entry,
+        stoichiometry=2,
+    )
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_b"],
+        species_entry=sink_entry,
+        stoichiometry=1,
+    )
+
+    get_body = client.get(
+        _nkin_search_url(
+            source_species_entry_refs=source_entry.public_ref,
+            source_smiles="[CH3]",
+            sink_species_entry_refs=sink_entry.public_ref,
+            sink_smiles="[OH]",
+        )
+    ).json()
+    assert _nkin_search_refs(get_body) == {fx["kinetics"].public_ref}
+    assert get_body["request"]["filter"]["source_smiles"] == ["[CH3]"]
+
+    mismatch = client.post(
+        _nkin_search_url(),
+        json={
+            "source_species_entry_refs": [source_entry.public_ref],
+            "sink_smiles": ["N#N"],
+        },
+    )
+    assert mismatch.status_code == 200, mismatch.text
+    assert mismatch.json()["records"] == []
+
+
+def test_nkin_search_channel_filter_repetition_encodes_stoichiometry(
+    client, db_session
+):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    species = make_species(db_session, smiles="[CH3]")
+    entry = make_species_entry(db_session, species)
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_a"],
+        species_entry=entry,
+        stoichiometry=2,
+    )
+
+    matches_two = client.post(
+        _nkin_search_url(),
+        json={"source_species_entry_refs": [entry.public_ref, entry.public_ref]},
+    )
+    assert _nkin_search_refs(matches_two.json()) == {fx["kinetics"].public_ref}
+
+    misses_three = client.post(
+        _nkin_search_url(),
+        json={
+            "source_species_entry_refs": [
+                entry.public_ref,
+                entry.public_ref,
+                entry.public_ref,
+            ]
+        },
+    )
+    assert misses_three.status_code == 200, misses_three.text
+    assert misses_three.json()["records"] == []
+
+
+def test_nkin_smiles_multiplicity_aggregates_rows_per_side(client, db_session):
+    fx = _make_kinetics(db_session, NetworkKineticsModelKind.chebyshev)
+    source_a = make_species(db_session, smiles="[SiH3]", multiplicity=1)
+    source_b = make_species(db_session, smiles="[SiH3]", multiplicity=2)
+    sink = make_species(db_session, smiles="[SiH3]", multiplicity=3)
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_a"],
+        species_entry=make_species_entry(db_session, source_a),
+    )
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_b"],
+        species_entry=make_species_entry(db_session, sink),
+    )
+
+    source_two = {"source_smiles": ["[SiH3]", "[SiH3]"]}
+    scoped = client.post(_nkin_search_url(), json=source_two)
+    assert scoped.status_code == 200, scoped.text
+    assert scoped.json()["records"] == []
+
+    attach_network_state_participant(
+        db_session,
+        state=fx["state_a"],
+        species_entry=make_species_entry(db_session, source_b),
+    )
+    aggregated = client.post(_nkin_search_url(), json=source_two)
+    assert aggregated.status_code == 200, aggregated.text
+    assert _nkin_search_refs(aggregated.json()) == {fx["kinetics"].public_ref}
 
 
 def test_nkin_search_by_model_kind(client, db_session):

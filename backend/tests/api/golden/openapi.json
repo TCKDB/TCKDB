@@ -1127,7 +1127,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -1809,7 +1810,7 @@
       },
       "BundleKineticsIn": {
         "additionalProperties": false,
-        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional multiplicative reaction-path degeneracy\n    associated with the reported kinetics expression. ``None`` means\n    no claim is made; do not interpret it as ``1.0``.\n:param note: Optional note.",
+        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional finite, strictly positive multiplicative\n    reaction-path degeneracy associated with the reported kinetics\n    expression. ``None`` means no claim is made; do not interpret it as\n    ``1.0``.\n:param degeneracy_convention: Whether degeneracy is already included in\n    the reported rate. Defaults to ``unknown`` for legacy producers.\n:param note: Optional note.",
         "properties": {
           "a": {
             "anyOf": [
@@ -1875,6 +1876,10 @@
               }
             ],
             "title": "Degeneracy"
+          },
+          "degeneracy_convention": {
+            "$ref": "#/components/schemas/KineticsDegeneracyConvention",
+            "default": "unknown"
           },
           "is_third_body": {
             "default": false,
@@ -2820,7 +2825,8 @@
                 "type": "null"
               }
             ],
-            "title": "Artifact Id"
+            "title": "Artifact Id",
+            "x-tckdb-policy-hidden": true
           },
           "artifact_ref": {
             "anyOf": [
@@ -3087,7 +3093,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "constraint_index": {
             "title": "Constraint Index",
@@ -3194,7 +3201,8 @@
                 "type": "null"
               }
             ],
-            "title": "Child Calculation Id"
+            "title": "Child Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "child_calculation_ref": {
             "title": "Child Calculation Ref",
@@ -3217,7 +3225,8 @@
                 "type": "null"
               }
             ],
-            "title": "Parent Calculation Id"
+            "title": "Parent Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "parent_calculation_ref": {
             "title": "Parent Calculation Ref",
@@ -3309,7 +3318,8 @@
                 "type": "null"
               }
             ],
-            "title": "Submission Id"
+            "title": "Submission Id",
+            "x-tckdb-policy-hidden": true
           },
           "submission_ref": {
             "anyOf": [
@@ -3336,7 +3346,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -3407,7 +3418,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_type",
           "geometry_validation_status",
           "scf_stability_status"
@@ -3689,7 +3699,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_ref": {
             "title": "Geometry Ref",
@@ -3893,7 +3904,8 @@
                 "type": "null"
               }
             ],
-            "title": "Input Geometry Id"
+            "title": "Input Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "input_geometry_ref": {
             "anyOf": [
@@ -3930,7 +3942,8 @@
                 "type": "null"
               }
             ],
-            "title": "Output Geometry Id"
+            "title": "Output Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "output_geometry_ref": {
             "anyOf": [
@@ -5291,7 +5304,8 @@
                 "type": "null"
               }
             ],
-            "title": "Parameter Id"
+            "title": "Parameter Id",
+            "x-tckdb-policy-hidden": true
           },
           "parameter_index": {
             "anyOf": [
@@ -5893,7 +5907,8 @@
                 "type": "null"
               }
             ],
-            "title": "Submission Id"
+            "title": "Submission Id",
+            "x-tckdb-policy-hidden": true
           },
           "submission_ref": {
             "anyOf": [
@@ -5911,7 +5926,8 @@
               "type": "integer"
             },
             "title": "Supporting Calculation Ids",
-            "type": "array"
+            "type": "array",
+            "x-tckdb-policy-hidden": true
           },
           "supporting_calculations": {
             "items": {
@@ -6154,7 +6170,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review Id"
+            "title": "Review Id",
+            "x-tckdb-policy-hidden": true
           },
           "reviewed_at": {
             "anyOf": [
@@ -6177,7 +6194,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewer Id"
+            "title": "Reviewer Id",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "$ref": "#/components/schemas/RecordReviewStatus"
@@ -6191,7 +6209,8 @@
                 "type": "null"
               }
             ],
-            "title": "Submission Id"
+            "title": "Submission Id",
+            "x-tckdb-policy-hidden": true
           },
           "submission_ref": {
             "anyOf": [
@@ -6405,7 +6424,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Artifact Id"
+            "title": "Source Artifact Id",
+            "x-tckdb-policy-hidden": true
           },
           "source_artifact_ref": {
             "anyOf": [
@@ -6427,7 +6447,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Calculation Id"
+            "title": "Source Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "source_calculation_ref": {
             "anyOf": [
@@ -9228,7 +9249,8 @@
                 "type": "null"
               }
             ],
-            "title": "Assignment Scheme Id"
+            "title": "Assignment Scheme Id",
+            "x-tckdb-policy-hidden": true
           },
           "assignment_scheme_ref": {
             "anyOf": [
@@ -9361,7 +9383,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -9436,7 +9459,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Assignment Scheme Id"
+            "title": "Conformer Assignment Scheme Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_assignment_scheme_ref": {
             "anyOf": [
@@ -9451,7 +9475,8 @@
           },
           "conformer_group_id": {
             "title": "Conformer Group Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_group_label": {
             "anyOf": [
@@ -9470,7 +9495,8 @@
           },
           "conformer_observation_id": {
             "title": "Conformer Observation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_observation_ref": {
             "title": "Conformer Observation Ref",
@@ -9497,9 +9523,7 @@
           }
         },
         "required": [
-          "conformer_observation_id",
           "conformer_observation_ref",
-          "conformer_group_id",
           "conformer_group_ref"
         ],
         "title": "ConformerContextBlock",
@@ -9517,7 +9541,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -9546,7 +9571,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Group Id"
+            "title": "Conformer Group Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_group_ref": {
             "title": "Conformer Group Ref",
@@ -9944,7 +9970,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Observation Id"
+            "title": "Conformer Observation Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_observation_ref": {
             "title": "Conformer Observation Ref",
@@ -10119,7 +10146,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -10264,7 +10292,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Selection Id"
+            "title": "Conformer Selection Id",
+            "x-tckdb-policy-hidden": true
           },
           "created_at": {
             "anyOf": [
@@ -10355,7 +10384,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -10370,7 +10400,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -11543,6 +11574,41 @@
         "title": "CuratorPriority",
         "type": "string"
       },
+      "DeterministicTrustSummary": {
+        "description": "Current code-defined evidence assessment; not a quality claim.",
+        "properties": {
+          "grade": {
+            "title": "Grade",
+            "type": "string"
+          },
+          "hard_fail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hard Fail"
+          },
+          "rubric": {
+            "title": "Rubric",
+            "type": "string"
+          },
+          "rubric_version": {
+            "title": "Rubric Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rubric",
+          "rubric_version",
+          "grade"
+        ],
+        "title": "DeterministicTrustSummary",
+        "type": "object"
+      },
       "DryRunAction": {
         "description": "Preview action a real import would take for a given record/dependency.",
         "enum": [
@@ -11716,7 +11782,8 @@
                 "type": "null"
               }
             ],
-            "title": "Energy Correction Scheme Id"
+            "title": "Energy Correction Scheme Id",
+            "x-tckdb-policy-hidden": true
           },
           "energy_correction_scheme_ref": {
             "title": "Energy Correction Scheme Ref",
@@ -12037,7 +12104,7 @@
         "type": "object"
       },
       "EnergyCorrectionSchemeSearchRequest": {
-        "description": "Service-layer request for /scientific/energy-correction-schemes/search.\n\nFilters AND-combine; at least one meaningful filter is required\n(422 ``missing_filter`` otherwise). Bool filters default to\n``None``; explicit ``False`` is meaningful — only ``None`` skips\nthe filter gate.\n\nFilters that are accepted but not yet wired to a backing column\nare documented as deferred in the spec.",
+        "description": "Service-layer request for /scientific/energy-correction-schemes/search.\n\nFilters AND-combine; at least one meaningful filter is required\n(422 ``missing_filter`` otherwise). Bool filters default to\n``None``; explicit ``False`` is meaningful — only ``None`` skips\nthe filter gate.\n\nDeclared fields without an enforceable backing path remain accepted\nby request validation for compatibility, then fail closed with 422\n``unsupported_filter`` (see the spec).",
         "properties": {
           "basis": {
             "anyOf": [
@@ -12247,7 +12314,8 @@
                 "type": "null"
               }
             ],
-            "title": "Record Id"
+            "title": "Record Id",
+            "x-tckdb-policy-hidden": true
           },
           "record_ref": {
             "title": "Record Ref",
@@ -12940,7 +13008,8 @@
                 "type": "null"
               }
             ],
-            "title": "Frequency Scale Factor Id"
+            "title": "Frequency Scale Factor Id",
+            "x-tckdb-policy-hidden": true
           },
           "frequency_scale_factor_ref": {
             "title": "Frequency Scale Factor Ref",
@@ -13098,7 +13167,7 @@
         "type": "object"
       },
       "FrequencyScaleFactorSearchRequest": {
-        "description": "Service-layer request for /scientific/frequency-scale-factors/search.\n\nFilters AND-combine; at least one meaningful filter is required\n(422 ``missing_filter`` otherwise). Bool filters default to\n``None``; explicit ``False`` is meaningful — only ``None`` skips\nthe filter gate.\n\nThe FSF row has no ``model_kind`` column; the request field is\naccepted for forward compatibility but currently unsupported and\ndocumented as deferred (see the spec).",
+        "description": "Service-layer request for /scientific/frequency-scale-factors/search.\n\nFilters AND-combine; at least one meaningful filter is required\n(422 ``missing_filter`` otherwise). Bool filters default to\n``None``; explicit ``False`` is meaningful — only ``None`` skips\nthe filter gate.\n\nDeclared fields without an enforceable backing path remain accepted\nby request validation for compatibility, then fail closed with 422\n``unsupported_filter`` (see the spec).",
         "properties": {
           "basis": {
             "anyOf": [
@@ -13307,7 +13376,8 @@
                 "type": "null"
               }
             ],
-            "title": "Record Id"
+            "title": "Record Id",
+            "x-tckdb-policy-hidden": true
           },
           "record_ref": {
             "title": "Record Ref",
@@ -13428,7 +13498,8 @@
               "type": "integer"
             },
             "title": "Input Geometry Ids",
-            "type": "array"
+            "type": "array",
+            "x-tckdb-policy-hidden": true
           },
           "output_geometries": {
             "items": {
@@ -13442,7 +13513,8 @@
               "type": "integer"
             },
             "title": "Output Geometry Ids",
-            "type": "array"
+            "type": "array",
+            "x-tckdb-policy-hidden": true
           },
           "primary_output_geometry_id": {
             "anyOf": [
@@ -13453,7 +13525,8 @@
                 "type": "null"
               }
             ],
-            "title": "Primary Output Geometry Id"
+            "title": "Primary Output Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "primary_output_geometry_ref": {
             "anyOf": [
@@ -13544,7 +13617,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -13567,7 +13641,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "calculation_type"
         ],
@@ -13631,7 +13704,8 @@
         "properties": {
           "geometry_id": {
             "title": "Geometry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_ref": {
             "title": "Geometry Ref",
@@ -13649,7 +13723,6 @@
           }
         },
         "required": [
-          "geometry_id",
           "geometry_ref"
         ],
         "title": "GeometryRef",
@@ -13689,7 +13762,8 @@
           },
           "scheme_id": {
             "title": "Scheme Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "scheme_name": {
             "title": "Scheme Name",
@@ -13712,7 +13786,6 @@
           }
         },
         "required": [
-          "scheme_id",
           "scheme_ref",
           "scheme_name"
         ],
@@ -13919,15 +13992,35 @@
       },
       "HTTPValidationError": {
         "properties": {
+          "code": {
+            "type": "string"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object"
+          },
           "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "title": "Detail",
-            "type": "array"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ]
           }
         },
-        "title": "HTTPValidationError",
+        "required": [
+          "code",
+          "detail",
+          "context"
+        ],
+        "title": "MachineErrorEnvelope",
         "type": "object"
       },
       "HessianPayload": {
@@ -14033,7 +14126,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_link": {
             "anyOf": [
@@ -14471,6 +14565,16 @@
         "title": "KineticsCalculationRole",
         "type": "string"
       },
+      "KineticsDegeneracyConvention": {
+        "description": "Whether a stored reaction-path degeneracy is already in the rate.",
+        "enum": [
+          "already_applied",
+          "not_applied",
+          "unknown"
+        ],
+        "title": "KineticsDegeneracyConvention",
+        "type": "string"
+      },
       "KineticsDirection": {
         "description": "Direction a reaction-level kinetics fit describes (DR-0036).\n\nGraph-level ``chem_reaction.reversible`` only says a reaction *can* run\nboth ways; it cannot tell apart a forward-rate fit from a reverse-rate\nfit deposited against the same ``reaction_entry``. This per-record enum\ndisambiguates the two so both can coexist distinctly (needed for\nChemkin/Cantera round-trip, where forward and reverse rates are given\nas separate expressions).\n\n``forward`` / ``reverse`` are relative to the reaction_entry's stored\nreactant→product orientation. ``net`` marks a rate that already folds\nboth directions (e.g. an apparent/observed net rate). A ``NULL`` column\nmeans the producer did not specify — the historical default, so existing\nrows are unaffected.",
         "enum": [
@@ -14539,7 +14643,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Kinetics Id"
+            "title": "Network Kinetics Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_kinetics_ref": {
             "anyOf": [
@@ -14611,7 +14716,8 @@
                 "type": "null"
               }
             ],
-            "title": "Transition State Entry Id"
+            "title": "Transition State Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_entry_ref": {
             "anyOf": [
@@ -14633,7 +14739,8 @@
                 "type": "null"
               }
             ],
-            "title": "Ts Freq Calculation Id"
+            "title": "Ts Freq Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "ts_freq_calculation_ref": {
             "anyOf": [
@@ -14655,7 +14762,8 @@
                 "type": "null"
               }
             ],
-            "title": "Ts Opt Calculation Id"
+            "title": "Ts Opt Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "ts_opt_calculation_ref": {
             "anyOf": [
@@ -14677,7 +14785,8 @@
                 "type": "null"
               }
             ],
-            "title": "Ts Sp Calculation Id"
+            "title": "Ts Sp Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "ts_sp_calculation_ref": {
             "anyOf": [
@@ -14848,6 +14957,7 @@
           "degeneracy": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "number"
               },
               {
@@ -14855,6 +14965,10 @@
               }
             ],
             "title": "Degeneracy"
+          },
+          "degeneracy_convention": {
+            "$ref": "#/components/schemas/KineticsDegeneracyConvention",
+            "default": "unknown"
           },
           "direction": {
             "anyOf": [
@@ -15061,6 +15175,16 @@
       "KineticsRecord": {
         "description": "One kinetics record returned by the kinetics endpoint.\n\nPhase B: ``kinetics_ref`` is the public stable handle alongside\n``kinetics_id``.",
         "properties": {
+          "assessments": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicAssessmentSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "chebyshev": {
             "anyOf": [
               {
@@ -15101,7 +15225,8 @@
           },
           "kinetics_id": {
             "title": "Kinetics Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "kinetics_ref": {
             "title": "Kinetics Ref",
@@ -15162,8 +15287,28 @@
               }
             ]
           },
+          "pressure_coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PressureCoverage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "provenance": {
             "$ref": "#/components/schemas/KineticsProvenance"
+          },
+          "reaction_path_degeneracy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReactionPathDegeneracy"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"
@@ -15221,7 +15366,6 @@
           }
         },
         "required": [
-          "kinetics_id",
           "kinetics_ref",
           "scientific_origin",
           "model_kind",
@@ -15271,7 +15415,8 @@
           },
           "reaction_entry_id": {
             "title": "Reaction Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -15282,7 +15427,8 @@
           },
           "reaction_id": {
             "title": "Reaction Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "title": "Reaction Ref",
@@ -15294,9 +15440,7 @@
           }
         },
         "required": [
-          "reaction_id",
           "reaction_ref",
-          "reaction_entry_id",
           "reaction_entry_ref",
           "equation",
           "reversible",
@@ -15421,13 +15565,29 @@
           "pressure": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "number"
               },
               {
                 "type": "null"
               }
             ],
+            "deprecated": true,
+            "description": "Deprecated alias for pressure_bar; retained for one release.",
             "title": "Pressure"
+          },
+          "pressure_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Requested pressure in bar.",
+            "title": "Pressure Bar"
           },
           "products": {
             "items": {
@@ -15622,7 +15782,7 @@
       },
       "KineticsUploadRequest": {
         "additionalProperties": false,
-        "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional reaction-path degeneracy.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
+        "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
         "properties": {
           "a": {
             "anyOf": [
@@ -15697,6 +15857,7 @@
           "degeneracy": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "number"
               },
               {
@@ -15704,6 +15865,10 @@
               }
             ],
             "title": "Degeneracy"
+          },
+          "degeneracy_convention": {
+            "$ref": "#/components/schemas/KineticsDegeneracyConvention",
+            "default": "unknown"
           },
           "direction": {
             "anyOf": [
@@ -16215,7 +16380,8 @@
           },
           "level_of_theory_id": {
             "title": "Level Of Theory Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "level_of_theory_ref": {
             "title": "Level Of Theory Ref",
@@ -16238,7 +16404,6 @@
           }
         },
         "required": [
-          "level_of_theory_id",
           "level_of_theory_ref",
           "method"
         ],
@@ -16282,7 +16447,8 @@
                 "type": "null"
               }
             ],
-            "title": "Author Id"
+            "title": "Author Id",
+            "x-tckdb-policy-hidden": true
           },
           "author_ref": {
             "anyOf": [
@@ -16410,7 +16576,8 @@
                 "type": "null"
               }
             ],
-            "title": "Literature Id"
+            "title": "Literature Id",
+            "x-tckdb-policy-hidden": true
           },
           "literature_ref": {
             "title": "Literature Ref",
@@ -16619,7 +16786,8 @@
                 "type": "null"
               }
             ],
-            "title": "Record Id"
+            "title": "Record Id",
+            "x-tckdb-policy-hidden": true
           },
           "record_ref": {
             "title": "Record Ref",
@@ -16921,7 +17089,8 @@
           },
           "id": {
             "title": "Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "literature_ref": {
             "title": "Literature Ref",
@@ -16951,7 +17120,6 @@
           }
         },
         "required": [
-          "id",
           "literature_ref"
         ],
         "title": "LiteratureSummary",
@@ -17759,7 +17927,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Channel Id"
+            "title": "Network Channel Id",
+            "x-tckdb-policy-hidden": true
           },
           "sink_state_composition_hash": {
             "title": "Sink State Composition Hash",
@@ -17774,7 +17943,8 @@
                 "type": "null"
               }
             ],
-            "title": "Sink State Id"
+            "title": "Sink State Id",
+            "x-tckdb-policy-hidden": true
           },
           "source_state_composition_hash": {
             "title": "Source State Composition Hash",
@@ -17789,7 +17959,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source State Id"
+            "title": "Source State Id",
+            "x-tckdb-policy-hidden": true
           }
         },
         "required": [
@@ -17835,7 +18006,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Id"
+            "title": "Network Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_ref": {
             "title": "Network Ref",
@@ -17887,7 +18059,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Id"
+            "title": "Network Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_ref": {
             "title": "Network Ref",
@@ -18172,7 +18345,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Channel Id"
+            "title": "Network Channel Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_channel_ref": {
             "anyOf": [
@@ -18185,9 +18359,15 @@
             ],
             "title": "Network Channel Ref"
           },
+          "sink_state": {
+            "$ref": "#/components/schemas/NetworkStateComposition"
+          },
           "sink_state_composition_hash": {
             "title": "Sink State Composition Hash",
             "type": "string"
+          },
+          "source_state": {
+            "$ref": "#/components/schemas/NetworkStateComposition"
           },
           "source_state_composition_hash": {
             "title": "Source State Composition Hash",
@@ -18197,7 +18377,9 @@
         "required": [
           "channel_kind",
           "source_state_composition_hash",
-          "sink_state_composition_hash"
+          "sink_state_composition_hash",
+          "source_state",
+          "sink_state"
         ],
         "title": "NetworkKineticsChannelContext",
         "type": "object"
@@ -18325,7 +18507,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Kinetics Id"
+            "title": "Network Kinetics Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_kinetics_ref": {
             "title": "Network Kinetics Ref",
@@ -18695,7 +18878,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Id"
+            "title": "Network Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_ref": {
             "title": "Network Ref",
@@ -19188,6 +19372,22 @@
             ],
             "title": "Pressure Min"
           },
+          "sink_smiles": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Sink Smiles",
+            "type": "array"
+          },
+          "sink_species_entry_refs": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Sink Species Entry Refs",
+            "type": "array"
+          },
           "software": {
             "anyOf": [
               {
@@ -19222,6 +19422,22 @@
               }
             ],
             "title": "Sort"
+          },
+          "source_smiles": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Source Smiles",
+            "type": "array"
+          },
+          "source_species_entry_refs": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Source Species Entry Refs",
+            "type": "array"
           },
           "temperature_max": {
             "anyOf": [
@@ -19296,7 +19512,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "title": "Network Solve Ref",
@@ -19310,7 +19527,7 @@
         "type": "object"
       },
       "NetworkKineticsSummary": {
-        "description": "One ``network_kinetics`` row projected for ``include=kinetics``.\n\nNo public_ref on ``network_kinetics`` today. The id is\npolicy-gated and the row is addressed within the parent network by\nthe (channel_id, solve_id, model_kind) triple. Coefficient\npayloads (Chebyshev matrix, PLOG rows, point triplets) are\nintentionally **not** inlined here — only shape metadata travels.\nA future ``/scientific/network-kinetics/{ref}`` detail endpoint\nwould surface them.",
+        "description": "One ``network_kinetics`` row projected for ``include=kinetics``.\n\n``network_kinetics`` has a public ref and a live standalone detail\nendpoint. This compact embedded summary omits that ref and exposes only\na policy-gated id plus the (channel_id, solve_id, model_kind) context.\nCoefficient payloads (Chebyshev matrix, PLOG rows, point triplets) are\nintentionally **not** inlined here — only shape metadata travels. The\nstandalone ``/scientific/network-kinetics/{ref}`` endpoint exposes those\npayloads under explicit, bounded include tokens.",
         "properties": {
           "channel_sink_composition_hash": {
             "title": "Channel Sink Composition Hash",
@@ -19343,7 +19560,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Channel Id"
+            "title": "Network Channel Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_kinetics_id": {
             "anyOf": [
@@ -19354,7 +19572,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Kinetics Id"
+            "title": "Network Kinetics Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_id": {
             "anyOf": [
@@ -19365,7 +19584,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "anyOf": [
@@ -19866,7 +20086,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Entry Id"
+            "title": "Reaction Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -19881,7 +20102,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Id"
+            "title": "Reaction Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "title": "Reaction Ref",
@@ -19941,7 +20163,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -20334,7 +20557,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -20432,7 +20656,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "title": "Network Solve Ref",
@@ -20842,7 +21067,8 @@
                 "type": "null"
               }
             ],
-            "title": "Energy Transfer Id"
+            "title": "Energy Transfer Id",
+            "x-tckdb-policy-hidden": true
           },
           "model": {
             "anyOf": [
@@ -21726,7 +21952,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "title": "Network Solve Ref",
@@ -21818,7 +22045,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -21846,7 +22074,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network Solve Id"
+            "title": "Network Solve Id",
+            "x-tckdb-policy-hidden": true
           },
           "network_solve_ref": {
             "title": "Network Solve Ref",
@@ -22030,7 +22259,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -22047,6 +22277,60 @@
           "role"
         ],
         "title": "NetworkSpeciesSummary",
+        "type": "object"
+      },
+      "NetworkStateComposition": {
+        "description": "Bounded, deterministically ordered composition of a network state.",
+        "properties": {
+          "participant_count_total": {
+            "default": 0,
+            "title": "Participant Count Total",
+            "type": "integer"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkStateCompositionParticipant"
+            },
+            "title": "Participants",
+            "type": "array"
+          },
+          "participants_truncated": {
+            "default": false,
+            "title": "Participants Truncated",
+            "type": "boolean"
+          }
+        },
+        "title": "NetworkStateComposition",
+        "type": "object"
+      },
+      "NetworkStateCompositionParticipant": {
+        "description": "One public species participant in a network state.",
+        "properties": {
+          "canonical_smiles": {
+            "title": "Canonical Smiles",
+            "type": "string"
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          },
+          "species_ref": {
+            "title": "Species Ref",
+            "type": "string"
+          },
+          "stoichiometry": {
+            "minimum": 1.0,
+            "title": "Stoichiometry",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "species_entry_ref",
+          "species_ref",
+          "canonical_smiles",
+          "stoichiometry"
+        ],
+        "title": "NetworkStateCompositionParticipant",
         "type": "object"
       },
       "NetworkStateIn": {
@@ -22236,7 +22520,8 @@
                 "type": "null"
               }
             ],
-            "title": "Network State Id"
+            "title": "Network State Id",
+            "x-tckdb-policy-hidden": true
           },
           "participant_count": {
             "title": "Participant Count",
@@ -23216,7 +23501,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_link": {
             "anyOf": [
@@ -23615,7 +23901,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -23651,9 +23938,6 @@
             "title": "Method"
           }
         },
-        "required": [
-          "calculation_id"
-        ],
         "title": "PathSearchSummary",
         "type": "object"
       },
@@ -23872,7 +24156,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_ref": {
             "title": "Geometry Ref",
@@ -23906,6 +24191,70 @@
         "title": "PressureContext",
         "type": "string"
       },
+      "PressureCoverage": {
+        "description": "Why a returned rate is applicable at the requested pressure.\n\nRecords with indeterminate or incompatible pressure semantics are filtered\nout, so ``applies_at_requested_pressure`` is always true when this block is\npresent. ``basis`` distinguishes exact-pressure, bounded-surface,\nfunctional pressure-dependence, and pressure-independent records.",
+        "properties": {
+          "applies_at_requested_pressure": {
+            "const": true,
+            "default": true,
+            "title": "Applies At Requested Pressure",
+            "type": "boolean"
+          },
+          "basis": {
+            "enum": [
+              "pressure_independent",
+              "exact_pressure",
+              "bounded_pressure_surface",
+              "pressure_dependent_model"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "record_pressure_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Pressure Bar"
+          },
+          "record_pressure_max_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Pressure Max Bar"
+          },
+          "record_pressure_min_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Pressure Min Bar"
+          },
+          "requested_pressure_bar": {
+            "title": "Requested Pressure Bar",
+            "type": "number"
+          }
+        },
+        "required": [
+          "requested_pressure_bar",
+          "basis"
+        ],
+        "title": "PressureCoverage",
+        "type": "object"
+      },
       "PressureUnit": {
         "enum": [
           "bar",
@@ -23913,6 +24262,23 @@
         ],
         "title": "PressureUnit",
         "type": "string"
+      },
+      "PublicAssessmentSummary": {
+        "description": "Small opt-in assessment projection shared by scientific records.",
+        "properties": {
+          "deterministic_trust": {
+            "$ref": "#/components/schemas/DeterministicTrustSummary"
+          },
+          "reproducibility": {
+            "$ref": "#/components/schemas/ReproducibilityAssessmentSummary"
+          }
+        },
+        "required": [
+          "deterministic_trust",
+          "reproducibility"
+        ],
+        "title": "PublicAssessmentSummary",
+        "type": "object"
       },
       "ReactionAvailability": {
         "description": "Boolean availability flags + counts per L1.",
@@ -24008,7 +24374,8 @@
           },
           "id": {
             "title": "Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -24016,7 +24383,8 @@
           },
           "reaction_id": {
             "title": "Reaction Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "title": "Reaction Ref",
@@ -24031,9 +24399,7 @@
           }
         },
         "required": [
-          "id",
           "reaction_entry_ref",
-          "reaction_id",
           "reaction_ref",
           "equation",
           "reversible",
@@ -24061,7 +24427,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -24089,7 +24456,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -24170,7 +24538,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_type",
           "geometry_validation_status",
           "scf_stability_status"
@@ -24196,7 +24563,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Group Id"
+            "title": "Conformer Group Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_group_ref": {
             "title": "Conformer Group Ref",
@@ -24243,7 +24611,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -24283,7 +24652,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -24323,7 +24693,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -24402,7 +24773,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -24417,7 +24789,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -24449,7 +24822,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -24457,7 +24831,6 @@
           }
         },
         "required": [
-          "species_entry_id",
           "species_entry_ref",
           "smiles",
           "participant_index",
@@ -24479,7 +24852,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -24487,7 +24861,6 @@
           }
         },
         "required": [
-          "species_entry_id",
           "species_entry_ref",
           "smiles",
           "participant_index"
@@ -24533,6 +24906,46 @@
           }
         },
         "title": "ReactionParticipantUpload",
+        "type": "object"
+      },
+      "ReactionPathDegeneracy": {
+        "description": "Stored path degeneracy plus the rate-coefficient convention.\n\nTCKDB returns the reported/fitted rate coefficient unchanged. The explicit\nconvention tells consumers whether they must apply the stored degeneracy;\nlegacy records remain unknown rather than being inferred.",
+        "properties": {
+          "apply_to_rate_coefficient": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply To Rate Coefficient"
+          },
+          "convention": {
+            "$ref": "#/components/schemas/KineticsDegeneracyConvention"
+          },
+          "reported_rate_coefficient_includes_degeneracy": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Rate Coefficient Includes Degeneracy"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value",
+          "convention"
+        ],
+        "title": "ReactionPathDegeneracy",
         "type": "object"
       },
       "ReactionRole": {
@@ -24583,7 +24996,8 @@
           },
           "reaction_entry_id": {
             "title": "Reaction Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -24591,7 +25005,8 @@
           },
           "reaction_id": {
             "title": "Reaction Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "title": "Reaction Ref",
@@ -24606,9 +25021,7 @@
           }
         },
         "required": [
-          "reaction_id",
           "reaction_ref",
-          "reaction_entry_id",
           "reaction_entry_ref",
           "equation",
           "matched_direction",
@@ -25171,6 +25584,69 @@
         "title": "ReproducibilityAssessmentRead",
         "type": "object"
       },
+      "ReproducibilityAssessmentSummary": {
+        "description": "Latest immutable reproducibility assessment and freshness state.",
+        "properties": {
+          "assessed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessed At"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReproducibilityGrade"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rubric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rubric"
+          },
+          "rubric_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rubric Version"
+          },
+          "state": {
+            "enum": [
+              "current",
+              "stale",
+              "unassessed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "ReproducibilityAssessmentSummary",
+        "type": "object"
+      },
       "ReproducibilityAssessorKind": {
         "description": "Who produced a reproducibility assessment snapshot.",
         "enum": [
@@ -25230,7 +25706,8 @@
         "properties": {
           "record_id": {
             "title": "Record Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "record_type": {
             "title": "Record Type",
@@ -25254,7 +25731,6 @@
         },
         "required": [
           "record_type",
-          "record_id",
           "status"
         ],
         "title": "ReviewRecordEntry",
@@ -25438,7 +25914,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -25464,8 +25941,7 @@
           }
         },
         "required": [
-          "status",
-          "calculation_id"
+          "status"
         ],
         "title": "SCFStabilitySummary",
         "type": "object"
@@ -25692,7 +26168,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Id"
+            "title": "Geometry Id",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_link": {
             "anyOf": [
@@ -27229,7 +27706,8 @@
           },
           "geometry_id": {
             "title": "Geometry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "geometry_ref": {
             "title": "Geometry Ref",
@@ -27266,7 +27744,6 @@
         },
         "required": [
           "request",
-          "geometry_id",
           "geometry_ref",
           "natoms",
           "geom_hash",
@@ -28138,7 +28615,8 @@
           },
           "reaction_entry_id": {
             "title": "Reaction Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
@@ -28160,7 +28638,6 @@
         },
         "required": [
           "request",
-          "reaction_entry_id",
           "reaction_entry_ref",
           "review_summary",
           "records",
@@ -28374,7 +28851,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -28392,7 +28870,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -28588,7 +29067,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -28597,7 +29077,6 @@
         },
         "required": [
           "request",
-          "species_entry_id",
           "species_entry_ref",
           "review_summary",
           "records",
@@ -29457,7 +29936,8 @@
           },
           "software_release_id": {
             "title": "Software Release Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "software_release_ref": {
             "title": "Software Release Ref",
@@ -29476,7 +29956,6 @@
           }
         },
         "required": [
-          "software_release_id",
           "software_release_ref",
           "software"
         ],
@@ -29911,7 +30390,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -29922,7 +30402,8 @@
           },
           "species_id": {
             "title": "Species Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -29930,9 +30411,7 @@
           }
         },
         "required": [
-          "species_id",
           "species_ref",
-          "species_entry_id",
           "species_entry_ref",
           "canonical_smiles",
           "inchi_key",
@@ -30166,7 +30645,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -30177,7 +30657,8 @@
           },
           "species_id": {
             "title": "Species Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -30185,9 +30666,7 @@
           }
         },
         "required": [
-          "species_id",
           "species_ref",
-          "species_entry_id",
           "species_entry_ref",
           "canonical_smiles",
           "inchi_key",
@@ -30427,7 +30906,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -30468,7 +30948,6 @@
           }
         },
         "required": [
-          "species_entry_id",
           "species_entry_ref",
           "species_entry_kind",
           "electronic_state_kind",
@@ -30593,7 +31072,8 @@
           },
           "species_id": {
             "title": "Species Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -30601,7 +31081,6 @@
           }
         },
         "required": [
-          "species_id",
           "species_ref",
           "canonical_smiles",
           "inchi_key",
@@ -30725,7 +31204,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformer Group Id"
+            "title": "Conformer Group Id",
+            "x-tckdb-policy-hidden": true
           },
           "conformer_group_ref": {
             "title": "Conformer Group Ref",
@@ -30881,7 +31361,8 @@
                 "type": "null"
               }
             ],
-            "title": "Statmech Id"
+            "title": "Statmech Id",
+            "x-tckdb-policy-hidden": true
           },
           "statmech_ref": {
             "title": "Statmech Ref",
@@ -31060,7 +31541,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Freq Calculation Ids"
+            "title": "Source Freq Calculation Ids",
+            "x-tckdb-policy-hidden": true
           },
           "source_freq_calculation_refs": {
             "items": {
@@ -31085,7 +31567,8 @@
                 "type": "null"
               }
             ],
-            "title": "Frequency Scale Factor Id"
+            "title": "Frequency Scale Factor Id",
+            "x-tckdb-policy-hidden": true
           },
           "frequency_scale_factor_ref": {
             "title": "Frequency Scale Factor Ref",
@@ -31555,7 +32038,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -31903,7 +32387,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -32025,7 +32510,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -32040,7 +32526,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -32641,7 +33128,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Scan Calculation Id"
+            "title": "Source Scan Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "source_scan_calculation_ref": {
             "anyOf": [
@@ -33701,7 +34189,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -33709,7 +34198,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref"
         ],
         "title": "SupportingCalculationRef",
@@ -34973,7 +35461,8 @@
                 "type": "null"
               }
             ],
-            "title": "Freq Calculation Id"
+            "title": "Freq Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "freq_calculation_ref": {
             "anyOf": [
@@ -35025,7 +35514,8 @@
                 "type": "null"
               }
             ],
-            "title": "Sp Calculation Id"
+            "title": "Sp Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "sp_calculation_ref": {
             "anyOf": [
@@ -35047,7 +35537,8 @@
                 "type": "null"
               }
             ],
-            "title": "Statmech Id"
+            "title": "Statmech Id",
+            "x-tckdb-policy-hidden": true
           },
           "statmech_ref": {
             "anyOf": [
@@ -35327,6 +35818,16 @@
       "ThermoRecord": {
         "description": "One thermo record returned by the thermo endpoint.\n\nThe underlying schema does not store cp units explicitly; per\n``app/db/models/thermo.py``, ``ThermoPoint.cp_j_mol_k`` is the canonical\n(and only) cp representation in v0. Future schema work may surface a\ncp-units field; v0 omits it from the response.\n\nPhase B: ``thermo_ref`` is the public stable handle alongside the\ninteger ``thermo_id``.",
         "properties": {
+          "assessments": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicAssessmentSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "evidence_completeness": {
             "$ref": "#/components/schemas/EvidenceCompletenessBreakdown"
           },
@@ -35446,7 +35947,8 @@
           },
           "thermo_id": {
             "title": "Thermo Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "thermo_ref": {
             "title": "Thermo Ref",
@@ -35474,7 +35976,6 @@
           }
         },
         "required": [
-          "thermo_id",
           "thermo_ref",
           "scientific_origin",
           "model_kind",
@@ -35766,7 +36267,8 @@
           },
           "species_entry_id": {
             "title": "Species Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
@@ -35780,7 +36282,8 @@
           },
           "species_id": {
             "title": "Species Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -35788,13 +36291,11 @@
           }
         },
         "required": [
-          "species_id",
           "species_ref",
           "canonical_smiles",
           "inchi_key",
           "charge",
           "multiplicity",
-          "species_entry_id",
           "species_entry_ref",
           "species_entry_kind",
           "electronic_state_kind",
@@ -36514,7 +37015,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -36537,7 +37039,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "type"
         ],
@@ -36549,7 +37050,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -36601,7 +37103,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "type",
           "quality",
@@ -36646,7 +37147,8 @@
           },
           "transition_state_id": {
             "title": "Transition State Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_ref": {
             "title": "Transition State Ref",
@@ -36654,7 +37156,6 @@
           }
         },
         "required": [
-          "transition_state_id",
           "transition_state_ref",
           "created_at",
           "review"
@@ -36667,7 +37168,8 @@
         "properties": {
           "child_calculation_id": {
             "title": "Child Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "child_calculation_ref": {
             "title": "Child Calculation Ref",
@@ -36675,7 +37177,8 @@
           },
           "parent_calculation_id": {
             "title": "Parent Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "parent_calculation_ref": {
             "title": "Parent Calculation Ref",
@@ -36687,9 +37190,7 @@
           }
         },
         "required": [
-          "parent_calculation_id",
           "parent_calculation_ref",
-          "child_calculation_id",
           "child_calculation_ref",
           "role"
         ],
@@ -36741,7 +37242,8 @@
           },
           "transition_state_entry_id": {
             "title": "Transition State Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_entry_ref": {
             "title": "Transition State Entry Ref",
@@ -36760,7 +37262,6 @@
           }
         },
         "required": [
-          "transition_state_entry_id",
           "transition_state_entry_ref",
           "charge",
           "multiplicity",
@@ -36802,7 +37303,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Entry Id"
+            "title": "Reaction Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "anyOf": [
@@ -36820,7 +37322,8 @@
           },
           "transition_state_entry_id": {
             "title": "Transition State Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_entry_ref": {
             "title": "Transition State Entry Ref",
@@ -36828,7 +37331,8 @@
           },
           "transition_state_id": {
             "title": "Transition State Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_ref": {
             "title": "Transition State Ref",
@@ -36836,9 +37340,7 @@
           }
         },
         "required": [
-          "transition_state_id",
           "transition_state_ref",
-          "transition_state_entry_id",
           "transition_state_entry_ref",
           "charge",
           "multiplicity",
@@ -37024,7 +37526,8 @@
           },
           "transition_state_entry_id": {
             "title": "Transition State Entry Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_entry_ref": {
             "title": "Transition State Entry Ref",
@@ -37039,7 +37542,8 @@
                 "type": "null"
               }
             ],
-            "title": "Transition State Id"
+            "title": "Transition State Id",
+            "x-tckdb-policy-hidden": true
           },
           "transition_state_ref": {
             "title": "Transition State Ref",
@@ -37058,7 +37562,6 @@
         },
         "required": [
           "transition_state_ref",
-          "transition_state_entry_id",
           "transition_state_entry_ref",
           "review",
           "evidence_summary"
@@ -37100,7 +37603,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Entry Id"
+            "title": "Reaction Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_entry_ref": {
             "anyOf": [
@@ -37122,7 +37626,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reaction Id"
+            "title": "Reaction Id",
+            "x-tckdb-policy-hidden": true
           },
           "reaction_ref": {
             "anyOf": [
@@ -37250,7 +37755,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -37798,7 +38304,8 @@
                 "type": "null"
               }
             ],
-            "title": "Transport Id"
+            "title": "Transport Id",
+            "x-tckdb-policy-hidden": true
           },
           "transport_ref": {
             "title": "Transport Ref",
@@ -38042,7 +38549,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reviewed By"
+            "title": "Reviewed By",
+            "x-tckdb-policy-hidden": true
           },
           "status": {
             "title": "Status",
@@ -38338,7 +38846,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculation Id"
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -38460,7 +38969,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Entry Id"
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -38475,7 +38985,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species Id"
+            "title": "Species Id",
+            "x-tckdb-policy-hidden": true
           },
           "species_ref": {
             "title": "Species Ref",
@@ -38998,7 +39509,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "anyOf": [
@@ -39023,8 +39535,7 @@
           }
         },
         "required": [
-          "status",
-          "calculation_id"
+          "status"
         ],
         "title": "ValidationSummary",
         "type": "object"
@@ -39643,7 +40154,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_ref": {
             "title": "Calculation Ref",
@@ -39665,7 +40177,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "type",
           "quality",
@@ -39736,7 +40247,8 @@
           },
           "workflow_tool_release_id": {
             "title": "Workflow Tool Release Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "workflow_tool_release_ref": {
             "title": "Workflow Tool Release Ref",
@@ -39744,7 +40256,6 @@
           }
         },
         "required": [
-          "workflow_tool_release_id",
           "workflow_tool_release_ref",
           "workflow_tool"
         ],
@@ -40189,7 +40700,8 @@
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
-            "type": "integer"
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
           },
           "calculation_quality": {
             "$ref": "#/components/schemas/CalculationQuality"
@@ -40211,7 +40723,6 @@
           }
         },
         "required": [
-          "calculation_id",
           "calculation_ref",
           "calculation_type",
           "calculation_quality",
@@ -52602,7 +53113,7 @@
     },
     "/api/v1/scientific/energy-correction-schemes/search": {
       "get": {
-        "description": "Energy-correction-scheme search.\n\nAND-combines the supplied filters; at least one meaningful filter\nis required. ``software`` / ``software_version`` / ``used_by_thermo``\nare accepted but currently deferred (no backing column on this row\nor no available relationship) — see the spec for details.",
+        "description": "Energy-correction-scheme search.\n\nAND-combines the supplied filters; at least one meaningful filter\nis required. Declared filters without an enforceable backing path\nfail closed with 422 ``unsupported_filter``.",
         "operationId": "scientific_energy_correction_scheme_search_get_api_v1_scientific_energy_correction_schemes_search_get",
         "parameters": [
           {
@@ -54243,18 +54754,42 @@
             }
           },
           {
+            "description": "Requested pressure in bar.",
             "in": "query",
-            "name": "pressure",
+            "name": "pressure_bar",
             "required": false,
             "schema": {
               "anyOf": [
                 {
+                  "exclusiveMinimum": 0,
                   "type": "number"
                 },
                 {
                   "type": "null"
                 }
               ],
+              "description": "Requested pressure in bar.",
+              "title": "Pressure Bar"
+            }
+          },
+          {
+            "deprecated": true,
+            "description": "Deprecated alias for pressure_bar; retained for one release.",
+            "in": "query",
+            "name": "pressure",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "deprecated": true,
+              "description": "Deprecated alias for pressure_bar; retained for one release.",
               "title": "Pressure"
             }
           },
@@ -54844,6 +55379,82 @@
                 }
               ],
               "title": "Network Solve Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_species_entry_refs",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Species Entry Refs"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sink_species_entry_refs",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sink Species Entry Refs"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_smiles",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Smiles"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sink_smiles",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sink Smiles"
             }
           },
           {
@@ -56655,18 +57266,42 @@
             }
           },
           {
+            "description": "Requested pressure in bar.",
             "in": "query",
-            "name": "pressure",
+            "name": "pressure_bar",
             "required": false,
             "schema": {
               "anyOf": [
                 {
+                  "exclusiveMinimum": 0,
                   "type": "number"
                 },
                 {
                   "type": "null"
                 }
               ],
+              "description": "Requested pressure in bar.",
+              "title": "Pressure Bar"
+            }
+          },
+          {
+            "deprecated": true,
+            "description": "Deprecated alias for pressure_bar; retained for one release.",
+            "in": "query",
+            "name": "pressure",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "deprecated": true,
+              "description": "Deprecated alias for pressure_bar; retained for one release.",
               "title": "Pressure"
             }
           },

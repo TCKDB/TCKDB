@@ -6,9 +6,17 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError, NoResultFound, OperationalError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api.error_contract import (
+    CodedValueError,
+    error_envelope,
+    validation_detail_code,
+)
 from app.services.artifact_storage import ArtifactStorageUnavailable
 from app.services.idempotency import (
     IDEMPOTENCY_UNIQUE_CONSTRAINT,
@@ -47,32 +55,94 @@ class DataIntegrityError(Exception):
 
 
 def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
-    return JSONResponse(status_code=422, content={"detail": str(exc)})
+    if isinstance(exc, CodedValueError):
+        content = error_envelope(
+            str(exc),
+            code=exc.code,
+            context=exc.context,
+            fallback_code="validation_error",
+        )
+    else:
+        validation_detail = (
+            exc.errors() if callable(getattr(exc, "errors", None)) else str(exc)
+        )
+        content = error_envelope(
+            str(exc),
+            code=validation_detail_code(
+                validation_detail, fallback="validation_error"
+            ),
+            fallback_code="validation_error",
+        )
+    return JSONResponse(status_code=422, content=content)
+
+
+def _request_validation_error_handler(
+    _request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    details = exc.errors()
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder(
+            error_envelope(
+                details,
+                code=validation_detail_code(
+                    details, fallback="request_validation_error"
+                ),
+                fallback_code="request_validation_error",
+            )
+        ),
+    )
+
+
+def _http_exception_handler(
+    _request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_envelope(
+            exc.detail,
+            fallback_code=f"http_{exc.status_code}",
+        ),
+        headers=exc.headers,
+    )
 
 
 def _data_integrity_error_handler(
     _request: Request, exc: DataIntegrityError
 ) -> JSONResponse:
-    return JSONResponse(status_code=500, content={"detail": str(exc)})
+    return JSONResponse(
+        status_code=500,
+        content=error_envelope(
+            str(exc), fallback_code="data_integrity_error"
+        ),
+    )
 
 
 def _domain_error_handler(_request: Request, exc: DomainError) -> JSONResponse:
-    return JSONResponse(status_code=400, content={"detail": str(exc)})
+    return JSONResponse(
+        status_code=400,
+        content=error_envelope(str(exc), fallback_code="domain_error"),
+    )
 
 
 def _not_found_handler(_request: Request, exc: NotFoundError) -> JSONResponse:
-    body: dict[str, Any] = {"detail": str(exc)}
     code = getattr(exc, "code", None)
-    if code:
-        body["code"] = code
-    return JSONResponse(status_code=404, content=body)
+    return JSONResponse(
+        status_code=404,
+        content=error_envelope(
+            str(exc), code=code, fallback_code="resource_not_found"
+        ),
+    )
 
 
 def _no_result_found_handler(
     _request: Request, _exc: NoResultFound
 ) -> JSONResponse:
     return JSONResponse(
-        status_code=404, content={"detail": "Resource not found"}
+        status_code=404,
+        content=error_envelope(
+            "Resource not found", fallback_code="resource_not_found"
+        ),
     )
 
 
@@ -148,6 +218,7 @@ def _integrity_error_handler(
             "detail": message,
             "code": code,
             "category": "integrity_error",
+            "context": {},
         },
     )
 
@@ -157,7 +228,11 @@ def _invalid_idempotency_key_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=400,
-        content={"detail": str(exc), "code": "invalid_idempotency_key"},
+        content=error_envelope(
+            str(exc),
+            code="invalid_idempotency_key",
+            fallback_code="invalid_idempotency_key",
+        ),
     )
 
 
@@ -169,6 +244,7 @@ def _artifact_storage_unavailable_handler(
         content={
             "detail": "Artifact storage is temporarily unavailable. Retry later.",
             "code": "artifact_storage_unavailable",
+            "context": {},
         },
     )
 
@@ -208,7 +284,9 @@ def _operational_error_handler(
     )
     return JSONResponse(
         status_code=status,
-        content={"detail": message, "code": code},
+        content=error_envelope(
+            message, code=code, fallback_code="database_error"
+        ),
     )
 
 
@@ -222,12 +300,18 @@ def _idempotency_conflict_handler(
         ),
         "endpoint": exc.endpoint,
         "created_at": exc.created_at.isoformat(),
+        "context": {
+            "endpoint": exc.endpoint,
+            "created_at": exc.created_at.isoformat(),
+        },
     }
     return JSONResponse(status_code=409, content=body)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach all custom exception handlers to *app*."""
+    app.add_exception_handler(StarletteHTTPException, _http_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, _request_validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ValueError, _value_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DomainError, _domain_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NotFoundError, _not_found_handler)  # type: ignore[arg-type]

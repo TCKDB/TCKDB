@@ -4,10 +4,19 @@ from __future__ import annotations
 
 from app.db.models.common import (
     CalculationType,
+    ReproducibilityAssessorKind,
+    ReproducibilityGrade,
     ScientificOriginKind,
+    SubmissionRecordType,
     ThermoCalculationRole,
 )
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
+from app.services.reproducibility_assessment import (
+    append_reproducibility_assessment,
+)
+from app.services.reproducibility_rubric import (
+    evaluate_and_append_reproducibility_v1,
+)
 from tests.services.scientific_read._factories import (
     attach_thermo_nasa,
     attach_thermo_nasa9,
@@ -40,6 +49,20 @@ def test_returns_200_for_valid_species_entry_id(client, db_session):
     assert body["species_entry_ref"] == entry.public_ref
     assert len(body["records"]) == 1
     assert body["records"][0]["model_kind"] == "scalar"
+
+
+def test_collapse_first_offset_one_returns_empty(client, db_session):
+    entry = _entry(db_session)
+    make_thermo_scalar(db_session, species_entry=entry)
+
+    response = client.get(
+        f"/api/v1/scientific/species-entries/{entry.id}/thermo",
+        params={"collapse": "first", "offset": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["records"] == []
+    assert response.json()["pagination"]["total"] == 1
 
 
 def test_returns_404_for_missing_species_entry_id(client, db_session):
@@ -97,6 +120,66 @@ def test_unknown_include_token_rejected(client, db_session):
     )
     assert resp.status_code == 422
     assert "unknown_include_token" in resp.text
+
+
+def test_assessments_are_opt_in_and_report_freshness(client, db_session):
+    entry = _entry(db_session)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    url = f"/api/v1/scientific/species-entries/{entry.id}/thermo"
+
+    default_record = client.get(url).json()["records"][0]
+    assert "assessments" not in default_record
+
+    unassessed = client.get(f"{url}?include=assessments").json()["records"][0][
+        "assessments"
+    ]
+    assert unassessed["deterministic_trust"]["rubric"] == "computed_thermo"
+    assert unassessed["deterministic_trust"]["rubric_version"] == "1"
+    assert unassessed["reproducibility"] == {
+        "state": "unassessed",
+        "rubric": None,
+        "rubric_version": None,
+        "grade": None,
+        "assessed_at": None,
+    }
+
+    evaluate_and_append_reproducibility_v1(
+        db_session,
+        record_type=SubmissionRecordType.thermo,
+        record_id=thermo.id,
+    )
+    current = client.get(f"{url}?include=assessments").json()["records"][0][
+        "assessments"
+    ]["reproducibility"]
+    assert current["state"] == "current"
+    assert current["rubric"] == "tckdb_reproducibility"
+    assert current["rubric_version"] == "v1"
+    assert current["assessed_at"] is not None
+
+    append_reproducibility_assessment(
+        db_session,
+        record_type=SubmissionRecordType.thermo,
+        record_id=thermo.id,
+        grade=ReproducibilityGrade.described,
+        rubric_name="tckdb_reproducibility",
+        rubric_version="v1",
+        context_json={"outdated": True},
+        assessor_kind=ReproducibilityAssessorKind.system,
+    )
+    stale = client.get(f"{url}?include=assessments").json()["records"][0][
+        "assessments"
+    ]["reproducibility"]
+    assert stale["state"] == "stale"
+
+
+def test_include_all_does_not_expand_assessments(client, db_session):
+    entry = _entry(db_session)
+    make_thermo_scalar(db_session, species_entry=entry)
+    body = client.get(
+        f"/api/v1/scientific/species-entries/{entry.id}/thermo?include=all"
+    ).json()
+    assert "assessments" not in body["request"]["include"]
+    assert "assessments" not in body["records"][0]
 
 
 def test_trust_omitted_when_not_requested(client, db_session):

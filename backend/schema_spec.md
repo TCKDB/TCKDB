@@ -1170,6 +1170,7 @@ Fields:
 - `tmin_k`
 - `tmax_k`
 - `degeneracy`
+- `degeneracy_convention`
 - `tunneling_model`
 - `note`
 - `created_at`
@@ -1184,6 +1185,10 @@ Notes:
 - `model_kind` is enum-backed (`arrhenius` or `modified_arrhenius`)
 - `a_units` uses the `ArrheniusAUnits` enum
 - temperature bounds must be positive when present, with `tmin_k <= tmax_k`
+- `degeneracy` is either null or a finite value greater than zero
+- `degeneracy_convention` is enum-backed (`already_applied`, `not_applied`, or
+  `unknown`); legacy rows are backfilled as `unknown`, and the convention is
+  never inferred from the numeric degeneracy
 
 ## 9. Network and Pressure-Dependent Layer
 

@@ -8,6 +8,8 @@ suite).
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from tckdb_client.builders import (
@@ -205,6 +207,56 @@ class TestKinetics:
         with pytest.raises(TCKDBBuilderValidationError):
             Kinetics.modified_arrhenius(
                 A=1.0, A_units="per_s", n=0, Ea=0, degeneracy=0,
+            )
+
+    @pytest.mark.parametrize("value", [None, 1.0e-12, 1, 2.5])
+    def test_degeneracy_accepts_none_or_finite_positive(self, value):
+        kinetics = Kinetics.modified_arrhenius(
+            A=1.0,
+            A_units="per_s",
+            n=0,
+            Ea=0,
+            degeneracy=value,
+        )
+        assert kinetics.degeneracy == value
+
+    @pytest.mark.parametrize("value", [0, -1.0, math.nan, math.inf, -math.inf])
+    def test_degeneracy_rejects_non_positive_or_nonfinite(self, value):
+        with pytest.raises(
+            TCKDBBuilderValidationError,
+            match=r"Kinetics\.degeneracy must be finite and > 0",
+        ):
+            Kinetics.modified_arrhenius(
+                A=1.0,
+                A_units="per_s",
+                n=0,
+                Ea=0,
+                degeneracy=value,
+            )
+
+    def test_degeneracy_convention_is_validated_and_emitted(self):
+        kinetics = Kinetics.modified_arrhenius(
+            A=1.0,
+            A_units="per_s",
+            n=0,
+            Ea=0,
+            degeneracy=2.0,
+            degeneracy_convention="not_applied",
+        )
+        payload = kinetics.to_payload(
+            reactant_keys=["a"],
+            product_keys=["b"],
+            calc_key_lookup=lambda calculation: "unused",
+        )
+        assert payload["degeneracy_convention"] == "not_applied"
+
+        with pytest.raises(TCKDBBuilderValidationError):
+            Kinetics.modified_arrhenius(
+                A=1.0,
+                A_units="per_s",
+                n=0,
+                Ea=0,
+                degeneracy_convention="assumed",
             )
 
     def test_source_calculations_role_aliasing(self):

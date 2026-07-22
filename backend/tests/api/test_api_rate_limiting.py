@@ -267,10 +267,15 @@ def test_429_envelope_shape(rate_limited_client):
     assert set(body.keys()) >= {
         "detail",
         "code",
+        "context",
         "bucket",
         "retry_after_seconds",
     }
     assert body["code"] == "rate_limit_exceeded"
+    assert body["context"] == {
+        "bucket": body["bucket"],
+        "retry_after_seconds": body["retry_after_seconds"],
+    }
     assert isinstance(body["retry_after_seconds"], int)
     assert blocked.headers.get("retry-after") == str(body["retry_after_seconds"])
     # Operators correlate 429s back to the access log via X-Request-ID;

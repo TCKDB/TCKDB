@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import reject_unsupported_filters
 from app.db.models.energy_correction import FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
@@ -59,9 +60,8 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "used_by_statmech",
 )
 
-# Filters declared in the schema but not yet wired to a backing column.
-# Documented as deferred in the spec. Listed here so the request echo
-# faithfully reports what the caller sent even when the filter is a no-op.
+# Legacy grouping name for declared filters without a backing column.
+# The service rejects these before querying; none is treated as a no-op.
 _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("model_kind",)
 
 
@@ -81,6 +81,14 @@ def search_frequency_scale_factors(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
+
+    reject_unsupported_filters(
+        {
+            "model_kind": request.model_kind,
+            "software_version": request.software_version,
+        },
+        endpoint="/scientific/frequency-scale-factors/search",
+    )
 
     _enforce_at_least_one_filter(request)
 
@@ -127,8 +135,6 @@ def search_frequency_scale_factors(
         stmt = stmt.join(
             Software, Software.id == FrequencyScaleFactor.software_id
         ).where(Software.name == request.software)
-    # ``software_version`` is documented as deferred — the FSF row only
-    # carries ``software_id``, not a software release.
     if request.used_by_statmech is not None:
         ex = exists().where(
             Statmech.frequency_scale_factor_id == FrequencyScaleFactor.id

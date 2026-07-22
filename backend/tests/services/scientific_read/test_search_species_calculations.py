@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError
 from app.db.models.common import (
     ArtifactKind,
@@ -89,6 +90,25 @@ def test_search_by_species_entry_id_handle(db_session):
 
     assert len(response.records) == 1
     assert response.records[0].species.species_entry_id == entry.id
+
+
+def test_explicit_entry_ref_does_not_bypass_unsupported_inchi(db_session):
+    _, entry = _entry(db_session, smiles="EH_INCHI")
+
+    with pytest.raises(CodedValueError) as exc_info:
+        search_species_calculations(
+            db_session,
+            SpeciesCalculationsSearchRequest(
+                species_entry_ref=entry.public_ref,
+                inchi="InChI=1S/CH4/h1H4",
+            ),
+        )
+
+    assert exc_info.value.code == "unsupported_filter"
+    assert exc_info.value.context == {
+        "endpoint": "/scientific/species-calculations/search",
+        "filters": ["inchi"],
+    }
 
 
 def test_unknown_species_entry_id_handle_raises_404(db_session):
@@ -197,19 +217,21 @@ def test_method_basis_filter_via_calculation_lot(db_session):
 
 def test_lowest_energy_ranking_for_sp_orders_by_electronic_energy_asc(db_session):
     _, entry = _entry(db_session, smiles="LE1")
+    lot = make_lot(db_session)
     high = make_calculation(
-        db_session, type=CalculationType.sp, species_entry_id=entry.id
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id
     )
     attach_sp_result(db_session, calculation=high, electronic_energy_hartree=-100.0)
     low = make_calculation(
-        db_session, type=CalculationType.sp, species_entry_id=entry.id
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id
     )
     attach_sp_result(db_session, calculation=low, electronic_energy_hartree=-200.0)
 
     response = search_species_calculations(
         db_session,
         SpeciesCalculationsSearchRequest(
-            smiles="LE1",
+            species_entry_ref=entry.public_ref,
+            level_of_theory_ref=lot.public_ref,
             calculation_type=CalculationType.sp,
             ranking=CalculationRanking.lowest_energy,
         ),
@@ -220,19 +242,21 @@ def test_lowest_energy_ranking_for_sp_orders_by_electronic_energy_asc(db_session
 
 def test_lowest_energy_ranking_for_opt_orders_by_final_energy_asc(db_session):
     _, entry = _entry(db_session, smiles="LE2")
+    lot = make_lot(db_session)
     high = make_calculation(
-        db_session, type=CalculationType.opt, species_entry_id=entry.id
+        db_session, type=CalculationType.opt, species_entry_id=entry.id, lot_id=lot.id
     )
     attach_opt_result(db_session, calculation=high, final_energy_hartree=-50.0)
     low = make_calculation(
-        db_session, type=CalculationType.opt, species_entry_id=entry.id
+        db_session, type=CalculationType.opt, species_entry_id=entry.id, lot_id=lot.id
     )
     attach_opt_result(db_session, calculation=low, final_energy_hartree=-77.0)
 
     response = search_species_calculations(
         db_session,
         SpeciesCalculationsSearchRequest(
-            smiles="LE2",
+            species_entry_ref=entry.public_ref,
+            level_of_theory_ref=lot.public_ref,
             calculation_type=CalculationType.opt,
             ranking=CalculationRanking.lowest_energy,
         ),
@@ -263,6 +287,18 @@ def test_lowest_energy_ranking_without_calculation_type_returns_422(db_session):
             db_session,
             SpeciesCalculationsSearchRequest(
                 smiles="X", ranking=CalculationRanking.lowest_energy
+            ),
+        )
+
+
+def test_lowest_energy_requires_exact_comparability_refs(db_session):
+    with pytest.raises(ValueError, match="unsafe_lowest_energy_comparison"):
+        search_species_calculations(
+            db_session,
+            SpeciesCalculationsSearchRequest(
+                smiles="X",
+                calculation_type=CalculationType.sp,
+                ranking=CalculationRanking.lowest_energy,
             ),
         )
 
@@ -308,21 +344,23 @@ def test_ranking_earliest_orders_by_created_at_asc(db_session):
 def test_lowest_energy_nulls_last(db_session):
     """A calc with null energy must rank below a calc with populated energy."""
     _, entry = _entry(db_session, smiles="NL")
+    lot = make_lot(db_session)
     with_energy = make_calculation(
-        db_session, type=CalculationType.sp, species_entry_id=entry.id
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id
     )
     attach_sp_result(
         db_session, calculation=with_energy, electronic_energy_hartree=-100.0
     )
     without_energy = make_calculation(
-        db_session, type=CalculationType.sp, species_entry_id=entry.id
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id
     )
     # No SP result row attached → energy is null.
 
     response = search_species_calculations(
         db_session,
         SpeciesCalculationsSearchRequest(
-            smiles="NL",
+            species_entry_ref=entry.public_ref,
+            level_of_theory_ref=lot.public_ref,
             calculation_type=CalculationType.sp,
             ranking=CalculationRanking.lowest_energy,
         ),
@@ -355,6 +393,25 @@ def test_collapse_first_preserves_plural_records_with_pre_collapse_total(db_sess
     assert len(response.records) == 1
     assert response.pagination.total == 2
     assert response.pagination.returned == 1
+
+
+def test_collapse_first_applies_offset_after_collapse(db_session):
+    _, entry = _entry(db_session, smiles="[GeH4]")
+    make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+    make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+
+    response = search_species_calculations(
+        db_session,
+        SpeciesCalculationsSearchRequest(
+            smiles="[GeH4]",
+            collapse=CollapseMode.first,
+            offset=1,
+        ),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 2
+    assert response.pagination.returned == 0
 
 
 # ---------------------------------------------------------------------------

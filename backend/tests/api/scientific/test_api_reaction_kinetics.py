@@ -56,6 +56,20 @@ def test_returns_200_for_valid_reaction_entry_id(client, db_session):
     assert len(body["records"]) == 1
 
 
+def test_collapse_first_offset_one_returns_empty(client, db_session):
+    entry = _entry(db_session)
+    make_kinetics(db_session, reaction_entry=entry)
+
+    response = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/kinetics",
+        params={"collapse": "first", "offset": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["records"] == []
+    assert response.json()["pagination"]["total"] == 1
+
+
 def test_returns_404_for_missing_reaction_entry_id(client, db_session):
     resp = client.get("/api/v1/scientific/reaction-entries/999999/kinetics")
     assert resp.status_code == 404
@@ -123,6 +137,19 @@ def test_temperature_coverage_metadata_present(client, db_session):
     cov = resp.json()["records"][0]["temperature_coverage"]
     assert cov["covers_requested_range"] is False
     assert cov["extrapolation_distance_k"] == 500.0
+
+
+def test_deprecated_pressure_alias_echoes_canonical_pressure_bar(client, db_session):
+    entry = _entry(db_session)
+    make_kinetics(db_session, reaction_entry=entry)
+
+    resp = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/kinetics?pressure=1"
+    )
+    assert resp.status_code == 200
+    query_filter = resp.json()["request"]["filter"]
+    assert query_filter["pressure_bar"] == 1.0
+    assert "pressure" not in query_filter
 
 
 def test_unknown_include_token_rejected(client, db_session):

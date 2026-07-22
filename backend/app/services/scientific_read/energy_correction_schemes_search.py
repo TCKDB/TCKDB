@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import reject_unsupported_filters
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     EnergyCorrectionScheme,
@@ -59,9 +60,8 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "used_by_calculation",
 )
 
-# Filters accepted but not wired to a backing column on this row.
-# Documented as deferred in the spec; ECS has no direct software /
-# software_release / thermo linkage.
+# Legacy grouping name for declared filters without a backing path.
+# The service rejects these before querying; none is treated as a no-op.
 _DEFERRED_FILTER_FIELDS: tuple[str, ...] = (
     "software",
     "software_version",
@@ -85,6 +85,15 @@ def search_energy_correction_schemes(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
+
+    reject_unsupported_filters(
+        {
+            "software": request.software,
+            "software_version": request.software_version,
+            "used_by_thermo": request.used_by_thermo,
+        },
+        endpoint="/scientific/energy-correction-schemes/search",
+    )
 
     _enforce_at_least_one_filter(request)
 

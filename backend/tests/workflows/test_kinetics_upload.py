@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
-from app.db.models.common import ArrheniusAUnits, KineticsUncertaintyKind
+from app.db.models.common import (
+    ArrheniusAUnits,
+    KineticsDegeneracyConvention,
+    KineticsUncertaintyKind,
+)
 from app.db.models.kinetics import Kinetics
 from app.db.models.literature import Literature
 from app.db.models.reaction import ReactionEntryStructureParticipant
@@ -166,6 +172,59 @@ def test_additive_a_uncertainty_accepts_small_values() -> None:
     payload["a_uncertainty_kind"] = "additive"
     request = KineticsUploadRequest.model_validate(payload)
     assert request.a_uncertainty_kind == KineticsUncertaintyKind.additive
+
+
+@pytest.mark.parametrize(
+    "convention",
+    ["already_applied", "not_applied", "unknown"],
+)
+def test_persist_kinetics_upload_preserves_degeneracy_convention(
+    db_engine, convention
+) -> None:
+    request = _kinetics_request(
+        degeneracy_convention=convention,
+        literature=None,
+        software_release=None,
+        workflow_tool_release=None,
+    )
+    with Session(db_engine) as session, session.begin():
+        kinetics = persist_kinetics_upload(session, request)
+        assert kinetics.degeneracy_convention.value == convention
+
+
+def test_kinetics_upload_defaults_degeneracy_convention_to_unknown() -> None:
+    request = _kinetics_request()
+    assert (
+        request.degeneracy_convention
+        is KineticsDegeneracyConvention.unknown
+    )
+
+
+@pytest.mark.parametrize("value", [None, 1.0e-12, 1, 2.5])
+def test_kinetics_upload_accepts_optional_finite_positive_degeneracy(value) -> None:
+    assert _kinetics_request(degeneracy=value).degeneracy == value
+
+
+@pytest.mark.parametrize(
+    ("value", "error_type"),
+    [
+        (0, "greater_than"),
+        (-1.0, "greater_than"),
+        (math.nan, "finite_number"),
+        (math.inf, "finite_number"),
+        (-math.inf, "finite_number"),
+    ],
+)
+def test_kinetics_upload_rejects_non_positive_or_nonfinite_degeneracy(
+    value,
+    error_type,
+) -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        _kinetics_request(degeneracy=value)
+
+    assert [(error["loc"], error["type"]) for error in exc_info.value.errors()] == [
+        (("degeneracy",), error_type)
+    ]
 
 
 def test_persist_kinetics_upload_carries_multiplicative_uncertainty(

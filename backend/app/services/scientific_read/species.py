@@ -8,6 +8,7 @@ from __future__ import annotations
 from sqlalchemy import Text, func, select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import reject_unsupported_filters
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     SubmissionRecordType,
@@ -38,6 +39,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -91,6 +93,13 @@ def search_species(
     )
     includes = filter_internal_ids_from_resolved(includes)
 
+    # InChI is not persisted, so accepting it would violate the advertised
+    # AND semantics whenever another identifier is supplied.
+    reject_unsupported_filters(
+        {"inchi": request.inchi},
+        endpoint="/scientific/species/search",
+    )
+
     # Phase C: ref-by-handle filters are valid identifier sources. Resolve
     # them first so we know whether the caller supplied a real identifier
     # and, if so, what id(s) to scope by.
@@ -123,20 +132,6 @@ def search_species(
             "missing_identifier: at least one of {smiles, inchi, inchi_key, "
             "formula, species_ref, species_entry_ref} is required."
         )
-
-    # InChI is not stored on Species and cannot be cheaply (re)computed from
-    # the stored RDKit mol in Postgres, so it can never be used to filter.
-    # If it is the *only* identifier supplied — i.e. no other identifier
-    # narrows the query — we must not silently fall through to "no filter
-    # at all" (which would return every species in the database). Per v0
-    # policy this returns an empty result set instead. If inchi is
-    # supplied alongside another real identifier, that identifier still
-    # narrows the query as usual; inchi itself is simply not verified.
-    other_identifier_narrows = any(
-        v is not None for v in (request.smiles, request.inchi_key, request.formula)
-    ) or species_ref_id is not None or species_entry_ref_id is not None
-    if request.inchi is not None and not other_identifier_narrows:
-        return _empty_response(request, includes, offset, limit)
 
     species_rows = _query_matching_species(
         session,
@@ -268,10 +263,12 @@ def search_species(
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
 
-    if collapse_first:
-        returned_records = records[:1]
-    else:
-        returned_records = records[offset : offset + limit]
+    returned_records = slice_for_pagination(
+        records,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
 
     pagination = build_pagination(
         offset=offset,
@@ -345,12 +342,6 @@ def _query_matching_species(
         # surrounding whitespace from client input.
         formula_expr = func.mol_formula(func.mol_from_smiles(Species.smiles)).cast(Text)
         stmt = stmt.where(formula_expr == request.formula.strip())
-    # inchi is not stored on Species and cannot be cheaply (re)computed by
-    # the cartridge, so it is never used to filter here. The inchi-only
-    # "would return everything" case is short-circuited to an empty result
-    # earlier in search_species(); when inchi is supplied alongside another
-    # real identifier we simply rely on that identifier and leave inchi
-    # unverified (echoed back to the caller but not filtered).
     return session.scalars(stmt).all()
 
 

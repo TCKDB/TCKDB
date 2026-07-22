@@ -47,6 +47,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -140,7 +141,8 @@ def get_species_transport(
 
     summary = review_summary(badges[cid] for cid in visible_ids)
     total = len(visible_ids)
-    if collapse is CollapseMode.first:
+    collapse_first = collapse is CollapseMode.first
+    if collapse_first:
         # Selection policy governs the single selected record only. The
         # default candidate-list order is unchanged for collapse=all.
         review_status_by_id = {cid: badges[cid].status for cid in visible_ids}
@@ -153,7 +155,7 @@ def get_species_transport(
                 created_at_by_id=created_at_by_id,
             ),
         )
-        page_ids = ranked[:1]
+        ordered_ids = ranked
     else:
         visible_ids.sort(
             key=lambda cid: (
@@ -162,7 +164,13 @@ def get_species_transport(
                 -cid,
             )
         )
-        page_ids = visible_ids[offset : offset + limit]
+        ordered_ids = visible_ids
+    page_ids = slice_for_pagination(
+        ordered_ids,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificTransportSearchResponse(

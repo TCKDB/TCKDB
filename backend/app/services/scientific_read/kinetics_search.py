@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
+    CollapseMode,
     Pagination,
     ReviewStatusSummary,
 )
@@ -39,8 +40,10 @@ from app.schemas.reads.scientific_kinetics_search import (
 from app.schemas.reads.scientific_reactions import ReactionSearchRequest
 from app.services.scientific_read.common import (
     build_pagination,
+    collect_bounded_pages,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     validate_includes,
     validate_pagination,
     validate_temperature_range,
@@ -62,8 +65,9 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "irc",
     "internal_ids",
     "all",
+    "assessments",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 
 # Tokens passed through to the kinetics detail endpoint (it has its own
 # legal set; intersection prevents 422 noise from cross-endpoint tokens).
@@ -111,29 +115,34 @@ def search_kinetics(
     validate_temperature_range(request.temperature_min, request.temperature_max)
 
     # 1) Resolve reaction_entries.
-    reactions_request = ReactionSearchRequest(
-        reactants=request.reactants,
-        products=request.products,
-        direction=request.direction,
-        family=request.family,
-        # Phase C: pass through explicit reaction-handle refs.
-        reaction_ref=request.reaction_ref,
-        reaction_entry_ref=request.reaction_entry_ref,
-        # Default trust posture on entry; kinetics-level review filter is
-        # applied below so it stays shallow per D7.
-        min_review_status=None,
-        include_rejected=request.include_rejected,
-        include_deprecated=request.include_deprecated,
-        offset=0,
-        limit=200,
-        collapse=request.collapse,
-        include=[],
+    def fetch_reaction_page(page_offset: int, page_limit: int):
+        return search_reactions(
+            session,
+            ReactionSearchRequest(
+                reactants=request.reactants,
+                products=request.products,
+                direction=request.direction,
+                family=request.family,
+                reaction_ref=request.reaction_ref,
+                reaction_entry_ref=request.reaction_entry_ref,
+                min_review_status=None,
+                include_rejected=request.include_rejected,
+                include_deprecated=request.include_deprecated,
+                offset=page_offset,
+                limit=page_limit,
+                collapse=CollapseMode.all,
+                include=[],
+            ),
+        )
+
+    reaction_records = collect_bounded_pages(
+        fetch_reaction_page,
+        resource_name="reaction discovery candidates",
     )
-    reactions_resp = search_reactions(session, reactions_request)
 
     # Flatten reaction records into reaction context tuples.
     reaction_contexts: list[tuple[KineticsSearchReactionContext, int]] = []
-    for r_record in reactions_resp.records:
+    for r_record in reaction_records:
         ctx = KineticsSearchReactionContext(
             reaction_id=r_record.reaction_id,
             reaction_ref=r_record.reaction_ref,
@@ -157,30 +166,37 @@ def search_kinetics(
 
     flat: list[KineticsSearchRecord] = []
     for ctx, entry_id in reaction_contexts:
-        # Always fetch the full candidate set from the inner detail
-        # endpoint; collapse is applied once at the outer level below.
-        from app.schemas.reads.scientific_common import CollapseMode
+        def fetch_kinetics_page(
+            page_offset: int,
+            page_limit: int,
+            reaction_entry_id: int = entry_id,
+        ):
+            return get_reaction_kinetics(
+                session,
+                reaction_entry_id=reaction_entry_id,
+                request=KineticsReadRequest(
+                    temperature_min=request.temperature_min,
+                    temperature_max=request.temperature_max,
+                    pressure_bar=request.pressure_bar,
+                    model_kind=request.model_kind,
+                    level_of_theory_id=request.level_of_theory_id,
+                    level_of_theory_ref=request.level_of_theory_ref,
+                    software=request.software,
+                    min_review_status=request.min_review_status,
+                    include_rejected=request.include_rejected,
+                    include_deprecated=request.include_deprecated,
+                    include=inner_includes,
+                    collapse=CollapseMode.all,
+                    offset=page_offset,
+                    limit=page_limit,
+                ),
+            )
 
-        kinetics_request = KineticsReadRequest(
-            temperature_min=request.temperature_min,
-            temperature_max=request.temperature_max,
-            pressure=request.pressure,
-            model_kind=request.model_kind,
-            level_of_theory_id=request.level_of_theory_id,
-            level_of_theory_ref=request.level_of_theory_ref,
-            software=request.software,
-            min_review_status=request.min_review_status,
-            include_rejected=request.include_rejected,
-            include_deprecated=request.include_deprecated,
-            include=inner_includes,
-            collapse=CollapseMode.all,
-            offset=0,
-            limit=200,
+        kinetics_records = collect_bounded_pages(
+            fetch_kinetics_page,
+            resource_name=f"kinetics candidates for reaction_entry {entry_id}",
         )
-        kinetics_resp = get_reaction_kinetics(
-            session, reaction_entry_id=entry_id, request=kinetics_request
-        )
-        for kinetics_record in kinetics_resp.records:
+        for kinetics_record in kinetics_records:
             flat.append(
                 KineticsSearchRecord(reaction=ctx, kinetics=kinetics_record)
             )
@@ -211,10 +227,12 @@ def search_kinetics(
     # 4) Collapse + pagination.
     pre_collapse_total = len(flat)
     collapse_first = request.collapse.value == "first"
-    if collapse_first:
-        returned = flat[:1]
-    else:
-        returned = flat[offset : offset + limit]
+    returned = slice_for_pagination(
+        flat,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
 
     summary = review_summary(rec.kinetics.review for rec in flat)
 
@@ -249,8 +267,8 @@ def _filter_echo(request: KineticsSearchRequest) -> dict[str, object]:
         echo["temperature_min"] = request.temperature_min
     if request.temperature_max is not None:
         echo["temperature_max"] = request.temperature_max
-    if request.pressure is not None:
-        echo["pressure"] = request.pressure
+    if request.pressure_bar is not None:
+        echo["pressure_bar"] = request.pressure_bar
     if request.model_kind is not None:
         echo["model_kind"] = request.model_kind.value
     if request.level_of_theory_id is not None:

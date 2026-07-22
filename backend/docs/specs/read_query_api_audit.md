@@ -1053,7 +1053,7 @@ empty identifier set → 422 `missing_identifier`.
 | reaction_entry_id | ✓ | path-only | ✓ |
 | reactants/products | ✓ | ✗ | ✗ |
 | temperature_min / max | ✓ | ✓ | ✗ |
-| pressure | ✓ | ✓ | ✗ |
+| pressure_bar | ✓ (model-aware applicability; deprecated `pressure` alias) | ✓ (same) | ✗ |
 | model_kind | ✓ | ✓ | ✓ |
 | has_uncertainty | ✗ | ✗ | ✗ |
 | has_tunneling | ✗ | ✗ | ✗ |

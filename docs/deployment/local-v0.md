@@ -94,8 +94,11 @@ set -a; source .env; set +a
 conda run -n tckdb_env alembic upgrade head
 ```
 
-This applies the single initial migration and seeds reference data
-(e.g. `reaction_family`).
+This applies the full ordered migration chain through the current head. The
+baseline revision seeds reference data (for example, `reaction_family`), and
+later revisions upgrade the deployed schema in place. Review the
+[migration runbook](../../backend/docs/deployment/migrations.md) before
+upgrading a database that already contains data.
 
 ---
 

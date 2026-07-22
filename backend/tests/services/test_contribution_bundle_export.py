@@ -18,6 +18,8 @@ from typing import Iterator
 import pytest
 from sqlalchemy.orm import Session
 
+from app.db.models.common import KineticsDegeneracyConvention
+from app.db.models.kinetics import Kinetics
 from app.schemas.workflows.contribution_bundle import (
     BUNDLE_FORMAT,
     BUNDLE_VERSION,
@@ -305,6 +307,31 @@ def test_export_kinetics_bundle_validates_and_carries_kinetics_only(
     assert any(k.startswith("kinetics:") for k in revalidated.local_refs)
     assert any(k.startswith("reaction:") for k in revalidated.local_refs)
     assert any(k.startswith("species_entry:") for k in revalidated.local_refs)
+
+
+def test_kinetics_bundle_round_trip_preserves_degeneracy_convention(
+    db_engine,
+) -> None:
+    with _isolated_session(db_engine) as session:
+        kinetics_id = _seed_kinetics(session, note="degeneracy-convention")
+        kinetics = session.get(Kinetics, kinetics_id)
+        assert kinetics is not None
+        kinetics.degeneracy_convention = KineticsDegeneracyConvention.not_applied
+        session.flush()
+
+        bundle = export_kinetics_bundle(
+            session,
+            kinetics_ids=[kinetics_id],
+            title="Degeneracy convention",
+            summary="Convention round trip.",
+            exporter_label="tester",
+        )
+
+    payload = bundle.model_dump(mode="json")
+    reingested = ContributionBundleV0.model_validate(payload)
+    upload = reingested.records.kinetics_uploads[0]
+    assert upload.degeneracy == 2.0
+    assert upload.degeneracy_convention.value == "not_applied"
 
 
 # ---------------------------------------------------------------------------

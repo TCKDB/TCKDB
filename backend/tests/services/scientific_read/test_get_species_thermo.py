@@ -6,6 +6,7 @@ import pytest
 
 from app.api.errors import NotFoundError
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_thermo import (
     ThermoModelKindQuery,
     ThermoReadRequest,
@@ -54,6 +55,21 @@ def test_empty_thermo_returns_empty_records(db_session):
     )
     assert response.records == []
     assert response.species_entry_id == entry.id
+
+
+def test_collapse_first_applies_before_offset(db_session):
+    entry = _entry_with_smiles(db_session)
+    make_thermo_scalar(db_session, species_entry=entry)
+
+    response = get_species_thermo(
+        db_session,
+        species_entry_id=entry.id,
+        request=ThermoReadRequest(collapse=CollapseMode.first, offset=1),
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 1
+    assert response.pagination.returned == 0
 
 
 # ---------------------------------------------------------------------------

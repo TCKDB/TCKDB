@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import reject_unsupported_filters
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
     Calculation,
@@ -67,6 +68,7 @@ from app.db.models.species import (
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
+    CollapseMode,
     LevelOfTheorySummary,
     Pagination,
     ReviewStatusSummary,
@@ -94,9 +96,11 @@ from app.schemas.reads.scientific_species_calculations import (
 )
 from app.services.scientific_read.common import (
     build_pagination,
+    collect_bounded_pages,
     fetch_review_badges,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -185,6 +189,13 @@ def search_species_calculations(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
+    reject_unsupported_filters(
+        {
+            "inchi": request.inchi,
+            "scientific_origin": request.scientific_origin,
+        },
+        endpoint="/scientific/species-calculations/search",
+    )
     _validate_ranking(request)
 
     # Phase C: reconcile species_id+species_ref, species_entry_id+
@@ -311,10 +322,12 @@ def search_species_calculations(
 
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
-    if collapse_first:
-        returned = records[:1]
-    else:
-        returned = records[offset : offset + limit]
+    returned = slice_for_pagination(
+        records,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
 
     return ScientificSpeciesCalculationsSearchResponse(
         request=RequestEcho(
@@ -341,13 +354,18 @@ def search_species_calculations(
 
 
 def _validate_ranking(request: SpeciesCalculationsSearchRequest) -> None:
-    """``ranking=lowest_energy`` requires ``calculation_type`` in {sp, opt}."""
+    """Validate that lowest-energy candidates are physically comparable."""
     if request.ranking != CalculationRanking.lowest_energy:
         return
     if request.calculation_type not in _LOWEST_ENERGY_LEGAL_TYPES:
         raise ValueError(
             "unsupported_ranking_for_calculation_type: ranking=lowest_energy "
             "requires calculation_type=sp or calculation_type=opt."
+        )
+    if request.species_entry_ref is None or request.level_of_theory_ref is None:
+        raise ValueError(
+            "unsafe_lowest_energy_comparison: ranking=lowest_energy requires "
+            "exact species_entry_ref and level_of_theory_ref filters."
         )
 
 
@@ -421,28 +439,35 @@ def _resolve_species_entry_context(
             "species_entry_ref} is required."
         )
 
-    species_request = SpeciesSearchRequest(
-        smiles=request.smiles,
-        inchi=request.inchi,
-        inchi_key=request.inchi_key,
-        formula=request.formula,
-        charge=request.charge,
-        multiplicity=request.multiplicity,
-        electronic_state_kind=request.electronic_state_kind,
-        species_entry_kind=request.species_entry_kind,
-        # Don't push min_review_status here — calc-level review is shallow per D7.
-        min_review_status=None,
-        include_rejected=request.include_rejected,
-        include_deprecated=request.include_deprecated,
-        offset=0,
-        limit=200,
-        collapse=request.collapse,
-        include=[],
+    def fetch_species_page(page_offset: int, page_limit: int):
+        return search_species(
+            session,
+            SpeciesSearchRequest(
+                smiles=request.smiles,
+                inchi=request.inchi,
+                inchi_key=request.inchi_key,
+                formula=request.formula,
+                charge=request.charge,
+                multiplicity=request.multiplicity,
+                electronic_state_kind=request.electronic_state_kind,
+                species_entry_kind=request.species_entry_kind,
+                min_review_status=None,
+                include_rejected=request.include_rejected,
+                include_deprecated=request.include_deprecated,
+                offset=page_offset,
+                limit=page_limit,
+                collapse=CollapseMode.all,
+                include=[],
+            ),
+        )
+
+    species_records = collect_bounded_pages(
+        fetch_species_page,
+        resource_name="species-calculation discovery candidates",
     )
-    species_resp = search_species(session, species_request)
 
     out: dict[int, SpeciesCalculationsSpeciesContext] = {}
-    for sp_record in species_resp.records:
+    for sp_record in species_records:
         for entry in sp_record.entries:
             out[entry.species_entry_id] = SpeciesCalculationsSpeciesContext(
                 species_id=sp_record.species_id,
@@ -568,12 +593,6 @@ def _query_candidate_calculations(
         stmt = stmt.where(Software.name == request.software)
     if request.workflow_tool is not None:
         stmt = stmt.where(WorkflowTool.name == request.workflow_tool)
-    # scientific_origin: Calculation rows are computed by definition; the
-    # filter is provided for parity with other endpoints but will only match
-    # if a populated equivalent column exists. Calculation has no
-    # scientific_origin column, so this filter is a no-op in v0 (parity
-    # only). Future schema work could add it.
-
     # CalculationQuality filter (separate from review's "rejected").
     if request.calculation_quality is not None:
         stmt = stmt.where(Calculation.quality == request.calculation_quality)

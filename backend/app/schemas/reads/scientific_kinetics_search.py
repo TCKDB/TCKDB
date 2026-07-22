@@ -8,7 +8,9 @@ workflow tools see the same kinetics block as the entry-id detail endpoint.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Self
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads._field_bounds import (
@@ -70,7 +72,19 @@ class KineticsSearchRequest(BaseModel):
     # Kinetics filters
     temperature_min: float | None = None
     temperature_max: float | None = None
-    pressure: float | None = None
+    pressure_bar: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        description="Requested pressure in bar.",
+    )
+    pressure: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        deprecated=True,
+        description="Deprecated alias for pressure_bar; retained for one release.",
+    )
     model_kind: KineticsModelKind | None = None
     level_of_theory_id: int | None = None
     level_of_theory_ref: str | None = Field(
@@ -101,6 +115,19 @@ class KineticsSearchRequest(BaseModel):
                     f"the maximum length of {_MAX_SMILES_LENGTH}."
                 )
         return value
+
+    @model_validator(mode="after")
+    def _resolve_pressure_alias(self) -> Self:
+        pressure_alias = self.__dict__.get("pressure")
+        if self.pressure_bar is not None and pressure_alias is not None:
+            if self.pressure_bar != pressure_alias:
+                raise ValueError(
+                    "pressure_alias_conflict: pressure_bar and deprecated "
+                    "pressure must agree."
+                )
+        elif self.pressure_bar is None:
+            self.pressure_bar = pressure_alias
+        return self
 
 
 # ---------------------------------------------------------------------------

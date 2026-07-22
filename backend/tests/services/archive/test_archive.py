@@ -79,6 +79,11 @@ def test_registry_classifies_every_orm_table_and_codec() -> None:
     ]
 
 
+def test_archive_declares_degeneracy_convention_column() -> None:
+    kinetics = Base.metadata.tables["kinetics"]
+    assert "degeneracy_convention" in archive_core.included_column_names(kinetics)
+
+
 def test_restore_accepts_exact_fresh_migration_seeds(db_session) -> None:
     _empty_archive_tables(db_session)
     archive_file = io.BytesIO()

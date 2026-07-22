@@ -189,6 +189,23 @@ def test_search_kinetics_get_form_uses_repeated_query_params():
     assert qs["direction"] == ["forward"]
 
 
+def test_search_kinetics_sends_canonical_pressure_bar():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _ok()
+
+    client, _ = make_client(handler)
+    client.search_kinetics(
+        reactants=["A"], products=["B"], pressure_bar=1.0
+    )
+
+    payload = json.loads(seen[0].content.decode("utf-8"))
+    assert payload["pressure_bar"] == 1.0
+    assert "pressure" not in payload
+
+
 def test_search_kinetics_signature_has_no_sort_param():
     import inspect
 

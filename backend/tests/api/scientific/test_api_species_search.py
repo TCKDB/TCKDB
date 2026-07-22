@@ -50,6 +50,22 @@ def test_get_parses_collapse_offset_limit(client, db_session):
     assert len(body["records"]) == 1
 
 
+def test_collapse_first_offset_one_returns_empty(client, db_session):
+    species = make_species(
+        db_session, smiles="X_OFFSET", inchi_key=next_inchi_key("APIOFF")
+    )
+    make_species_entry(db_session, species)
+
+    response = client.get(
+        "/api/v1/scientific/species/search",
+        params={"smiles": "X_OFFSET", "collapse": "first", "offset": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["records"] == []
+    assert response.json()["pagination"]["total"] == 1
+
+
 def test_get_parses_include_repeated_and_comma_forms(client, db_session):
     species = make_species(db_session, smiles="OC", inchi_key=next_inchi_key("INC"))
     entry = make_species_entry(db_session, species)

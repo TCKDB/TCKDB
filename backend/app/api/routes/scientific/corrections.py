@@ -216,9 +216,8 @@ def scientific_energy_correction_scheme_search_get(
     """Energy-correction-scheme search.
 
     AND-combines the supplied filters; at least one meaningful filter
-    is required. ``software`` / ``software_version`` / ``used_by_thermo``
-    are accepted but currently deferred (no backing column on this row
-    or no available relationship) — see the spec for details.
+    is required. Declared filters without an enforceable backing path
+    fail closed with 422 ``unsupported_filter``.
     """
     request_obj = EnergyCorrectionSchemeSearchRequest(
         energy_correction_scheme_ref=energy_correction_scheme_ref,

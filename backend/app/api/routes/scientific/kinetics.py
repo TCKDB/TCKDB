@@ -13,7 +13,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
-from app.api.routes.scientific._response import omit_trust_unless_requested
+from app.api.routes.scientific._response import (
+    omit_trust_unless_requested,
+    prepare_assessment_response,
+)
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics import (
@@ -21,10 +24,10 @@ from app.schemas.reads.scientific_kinetics import (
     ScientificReactionKineticsResponse,
 )
 from app.services.scientific_read.handles import resolve_reaction_entry_handle
-from app.services.scientific_read.internal_ids import (
-    apply_internal_ids_visibility,
-)
 from app.services.scientific_read.kinetics import get_reaction_kinetics
+from app.services.scientific_read.public_assessments import (
+    attach_kinetics_assessments,
+)
 
 router = APIRouter(prefix="/reaction-entries")
 
@@ -38,7 +41,19 @@ def reaction_kinetics(
     session: Session = Depends(get_db),
     temperature_min: float | None = Query(None),
     temperature_max: float | None = Query(None),
-    pressure: float | None = Query(None),
+    pressure_bar: float | None = Query(
+        None,
+        gt=0,
+        allow_inf_nan=False,
+        description="Requested pressure in bar.",
+    ),
+    pressure: float | None = Query(
+        None,
+        gt=0,
+        allow_inf_nan=False,
+        deprecated=True,
+        description="Deprecated alias for pressure_bar; retained for one release.",
+    ),
     model_kind: KineticsModelKind | None = Query(None),
     level_of_theory_id: int | None = Query(None),
     level_of_theory_ref: str | None = Query(None),
@@ -62,12 +77,14 @@ def reaction_kinetics(
     D9 chain. ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``
     §Endpoint 3 and ``docs/specs/public_identifier_policy.md``.
     """
-    resolved_reaction_entry_id = resolve_reaction_entry_handle(
-        session, reaction_entry_id
-    )
+    # Validate the request (pressure alias conflict, etc.) before resolving
+    # the resource handle, so a malformed request is rejected with 422
+    # regardless of whether the reaction entry exists (request validation
+    # precedes resource lookup).
     request = KineticsReadRequest(
         temperature_min=temperature_min,
         temperature_max=temperature_max,
+        pressure_bar=pressure_bar,
         pressure=pressure,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
@@ -82,10 +99,15 @@ def reaction_kinetics(
         offset=offset,
         limit=limit,
     )
+    resolved_reaction_entry_id = resolve_reaction_entry_handle(session, reaction_entry_id)
     payload = get_reaction_kinetics(
         session,
         reaction_entry_id=resolved_reaction_entry_id,
         request=request,
     )
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = prepare_assessment_response(
+        session,
+        payload,
+        attach_assessments=attach_kinetics_assessments,
+    )
     return omit_trust_unless_requested(visibility, payload, scope="search")

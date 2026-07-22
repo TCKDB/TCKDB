@@ -7,21 +7,18 @@ Covers the detail endpoint and is reused by the search response:
 
 The Network surface ships at the **network grain** (one record per
 ``network`` row). Channels, states, solves, kinetics are exposed as
-bounded **embedded summaries** under explicit include tokens — they
-do not have public_ref columns today, so they're not standalone
-addressable surfaces. ``NetworkSolve`` carries a ``nsolve_…`` public
-ref (added by the same PR that ships this surface); a future PR can
-ship a `/scientific/network-solves/{ref}` standalone detail endpoint
-without changing this schema.
+bounded **embedded summaries** under explicit include tokens. States and
+channels do not have public refs; solves and network-kinetics rows do, and
+their standalone detail endpoints are live at
+``/scientific/network-solves/{ref}`` and
+``/scientific/network-kinetics/{ref}``.
 
 Kinetics coefficient payloads (Chebyshev coefficient matrix, PLOG
 rows, point-table triplets) are deliberately **not** inlined under
 ``include=kinetics`` — the summary surfaces shape metadata
-(`chebyshev_shape`, `plog_count`, `point_count`) only. Full
-coefficient arrays are deferred to a future
-``/scientific/network-kinetics/{ref}`` standalone surface that
-requires `network_kinetics.public_ref` (open question §11.2 of the
-spec doc).
+(`chebyshev_shape`, `plog_entry_count`, `point_count`) only. The live
+``/scientific/network-kinetics/{ref}`` standalone surface exposes full
+coefficient arrays under explicit, bounded include tokens.
 
 See ``backend/docs/specs/scientific_network_reads.md``.
 """
@@ -203,13 +200,13 @@ class NetworkSolveSummary(BaseModel):
 class NetworkKineticsSummary(BaseModel):
     """One ``network_kinetics`` row projected for ``include=kinetics``.
 
-    No public_ref on ``network_kinetics`` today. The id is
-    policy-gated and the row is addressed within the parent network by
-    the (channel_id, solve_id, model_kind) triple. Coefficient
-    payloads (Chebyshev matrix, PLOG rows, point triplets) are
-    intentionally **not** inlined here — only shape metadata travels.
-    A future ``/scientific/network-kinetics/{ref}`` detail endpoint
-    would surface them.
+    ``network_kinetics`` has a public ref and a live standalone detail
+    endpoint. This compact embedded summary omits that ref and exposes only
+    a policy-gated id plus the (channel_id, solve_id, model_kind) context.
+    Coefficient payloads (Chebyshev matrix, PLOG rows, point triplets) are
+    intentionally **not** inlined here — only shape metadata travels. The
+    standalone ``/scientific/network-kinetics/{ref}`` endpoint exposes those
+    payloads under explicit, bounded include tokens.
     """
 
     network_kinetics_id: int | None = None

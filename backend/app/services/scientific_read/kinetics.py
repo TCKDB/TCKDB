@@ -10,6 +10,7 @@ records and never gate validity.
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 
 from sqlalchemy import select
@@ -24,7 +25,9 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationType,
     KineticsCalculationRole,
+    KineticsDegeneracyConvention,
     KineticsModelKind,
+    PressureContext,
     RecordReviewStatus,
     SCFStabilityStatus,
     SubmissionRecordType,
@@ -64,6 +67,8 @@ from app.schemas.reads.scientific_kinetics import (
     KineticsUncertainty,
     MultiArrheniusTerm,
     PlogEntryBlock,
+    PressureCoverage,
+    ReactionPathDegeneracy,
     RequestEcho,
     ScientificReactionKineticsResponse,
     ThirdBodyEfficiencyBlock,
@@ -73,6 +78,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     temperature_coverage,
     validate_includes,
     validate_pagination,
@@ -103,8 +109,29 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "internal_ids",
     "all",
     "trust",
+    "assessments",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
+
+
+def _reaction_path_degeneracy(kinetics: Kinetics) -> ReactionPathDegeneracy | None:
+    """Return explicit rate/degeneracy semantics without inferring legacy data."""
+    if kinetics.degeneracy is None:
+        return None
+    includes: bool | None = None
+    apply: bool | None = None
+    if kinetics.degeneracy_convention is KineticsDegeneracyConvention.already_applied:
+        includes, apply = True, False
+    elif kinetics.degeneracy_convention is KineticsDegeneracyConvention.not_applied:
+        includes, apply = False, True
+    return ReactionPathDegeneracy(
+        value=kinetics.degeneracy,
+        convention=kinetics.degeneracy_convention,
+        reported_rate_coefficient_includes_degeneracy=includes,
+        apply_to_rate_coefficient=apply,
+    )
+
+
 _TRUST_EAGER_LOADS = (
     selectinload(Kinetics.reaction_entry).selectinload(
         ReactionEntry.structure_participants
@@ -150,6 +177,10 @@ _TRUST_EAGER_LOADS = (
     .selectinload(Calculation.child_dependencies),
 )
 
+# Public seam for consumers that must load the same evidence graph before
+# calling ``evaluate_loaded_kinetics``.
+KINETICS_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
+
 # Pressure-dependent / third-body child collections are part of every
 # kinetics record now (DR-0032 read exposure); eager-load them on the base
 # query to avoid an N+1 over plog/chebyshev/falloff/third-body children.
@@ -171,6 +202,89 @@ _LOT_FILTER_ROLE_PRIORITY = (
     KineticsCalculationRole.fit_source,
     KineticsCalculationRole.freq,
 )
+
+
+def _pressure_coverage(
+    kinetics: Kinetics,
+    requested_pressure_bar: float,
+) -> PressureCoverage | None:
+    """Return applicability metadata, or ``None`` when incompatible.
+
+    A finite request does not match a high-pressure-limit rate or an
+    indeterminate pressure-dependent record.
+    """
+    if kinetics.pressure_context == PressureContext.high_p_limit:
+        return None
+
+    if kinetics.pressure_context == PressureContext.apparent_at_pressure:
+        if kinetics.pressure_bar is None or not math.isclose(
+            kinetics.pressure_bar,
+            requested_pressure_bar,
+            rel_tol=1.0e-9,
+            abs_tol=1.0e-12,
+        ):
+            return None
+        return PressureCoverage(
+            requested_pressure_bar=requested_pressure_bar,
+            basis="exact_pressure",
+            record_pressure_bar=kinetics.pressure_bar,
+        )
+
+    if kinetics.model_kind == KineticsModelKind.plog:
+        pressures = [entry.pressure_bar for entry in kinetics.plog_entries]
+        if not pressures:
+            return None
+        pmin, pmax = min(pressures), max(pressures)
+        if not pmin <= requested_pressure_bar <= pmax:
+            return None
+        return PressureCoverage(
+            requested_pressure_bar=requested_pressure_bar,
+            basis="bounded_pressure_surface",
+            record_pressure_min_bar=pmin,
+            record_pressure_max_bar=pmax,
+        )
+
+    if kinetics.model_kind == KineticsModelKind.chebyshev:
+        surface = kinetics.chebyshev
+        if (
+            surface is None
+            or surface.pmin_bar is None
+            or surface.pmax_bar is None
+            or not surface.pmin_bar <= requested_pressure_bar <= surface.pmax_bar
+        ):
+            return None
+        return PressureCoverage(
+            requested_pressure_bar=requested_pressure_bar,
+            basis="bounded_pressure_surface",
+            record_pressure_min_bar=surface.pmin_bar,
+            record_pressure_max_bar=surface.pmax_bar,
+        )
+
+    if kinetics.model_kind in {
+        KineticsModelKind.lindemann,
+        KineticsModelKind.troe,
+        KineticsModelKind.sri,
+    }:
+        if kinetics.falloff is None:
+            return None
+        return PressureCoverage(
+            requested_pressure_bar=requested_pressure_bar,
+            basis="pressure_dependent_model",
+        )
+
+    if kinetics.is_third_body:
+        return PressureCoverage(
+            requested_pressure_bar=requested_pressure_bar,
+            basis="pressure_dependent_model",
+        )
+
+    if kinetics.pressure_context == PressureContext.pressure_dependent:
+        return None
+
+    return PressureCoverage(
+        requested_pressure_bar=requested_pressure_bar,
+        basis="pressure_independent",
+    )
 
 
 def get_reaction_kinetics(
@@ -233,6 +347,20 @@ def get_reaction_kinetics(
         stmt = stmt.where(Kinetics.model_kind == request.model_kind)
     kinetics_rows: list[Kinetics] = list(session.scalars(stmt).all())
 
+    if not kinetics_rows:
+        return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
+
+    pressure_coverages: dict[int, PressureCoverage] = {}
+    if request.pressure_bar is not None:
+        for kinetics in kinetics_rows:
+            coverage = _pressure_coverage(kinetics, request.pressure_bar)
+            if coverage is not None:
+                pressure_coverages[kinetics.id] = coverage
+        kinetics_rows = [
+            kinetics
+            for kinetics in kinetics_rows
+            if kinetics.id in pressure_coverages
+        ]
     if not kinetics_rows:
         return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
@@ -408,6 +536,8 @@ def get_reaction_kinetics(
                 is_third_body=k.is_third_body,
                 pressure_context=k.pressure_context,
                 pressure_bar=k.pressure_bar,
+                pressure_coverage=pressure_coverages.get(k.id),
+                reaction_path_degeneracy=_reaction_path_degeneracy(k),
                 plog_entries=_plog_blocks(k),
                 chebyshev=_chebyshev_block(k),
                 falloff=_falloff_block(k),
@@ -452,10 +582,12 @@ def get_reaction_kinetics(
 
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
-    if collapse_first:
-        returned = records[:1]
-    else:
-        returned = records[offset : offset + limit]
+    returned = slice_for_pagination(
+        records,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
 
     return ScientificReactionKineticsResponse(
         request=RequestEcho(
@@ -1243,8 +1375,8 @@ def _filter_echo(request: KineticsReadRequest) -> dict[str, object]:
         echo["temperature_min"] = request.temperature_min
     if request.temperature_max is not None:
         echo["temperature_max"] = request.temperature_max
-    if request.pressure is not None:
-        echo["pressure"] = request.pressure
+    if request.pressure_bar is not None:
+        echo["pressure_bar"] = request.pressure_bar
     if request.model_kind is not None:
         echo["model_kind"] = request.model_kind.value
     if request.level_of_theory_id is not None:

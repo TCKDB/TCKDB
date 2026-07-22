@@ -40,8 +40,9 @@ class EnergyCorrectionSchemeSearchRequest(BaseModel):
     ``None``; explicit ``False`` is meaningful — only ``None`` skips
     the filter gate.
 
-    Filters that are accepted but not yet wired to a backing column
-    are documented as deferred in the spec.
+    Declared fields without an enforceable backing path remain accepted
+    by request validation for compatibility, then fail closed with 422
+    ``unsupported_filter`` (see the spec).
     """
 
     # --- identity filters -------------------------------------------------
@@ -61,7 +62,7 @@ class EnergyCorrectionSchemeSearchRequest(BaseModel):
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
 
-    # --- deferred (no backing column on ECS) -----------------------------
+    # --- declared but fail-closed until wired to a column ----------------
     software: str | None = Field(default=None, max_length=256)
     software_version: str | None = Field(default=None, max_length=128)
 

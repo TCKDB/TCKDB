@@ -309,6 +309,16 @@ def test_collapse_first_returns_single_record_with_pre_collapse_total(
     assert body["pagination"]["total"] == 2
 
 
+def test_collapse_first_offset_one_returns_empty(client, db_session):
+    _, entry = _entry(db_session)
+    make_statmech(db_session, species_entry=entry)
+
+    body = client.get(_url(entry.id, collapse="first", offset=1)).json()
+
+    assert body["records"] == []
+    assert body["pagination"]["total"] == 1
+
+
 def test_default_policy_selects_best_reviewed(client, db_session):
     _, entry = _entry(db_session)
     sm_old_approved = make_statmech(db_session, species_entry=entry)

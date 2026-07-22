@@ -183,9 +183,11 @@ cd backend
 conda run -n tckdb_env alembic upgrade head
 ```
 
-The repo currently keeps a single initial migration; that is a
-project convention, not a native-install detail. Migrations require
-the database to exist and the RDKit cartridge to be loaded.
+The repo maintains an ordered Alembic revision chain. The command applies every
+pending revision through the current head; migrations require the database to
+exist and the RDKit cartridge to be loaded. Review the
+[migration runbook](../../backend/docs/deployment/migrations.md) before
+upgrading a database that already contains data.
 
 ---
 

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.db.models.common import (
     NetworkKineticsModelKind,
@@ -37,8 +37,12 @@ from app.schemas.reads._field_bounds import (
     MAX_METHOD_LENGTH as _MAX_METHOD_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
+    MAX_PARTICIPANTS_PER_REACTION as _MAX_PARTICIPANTS,
+)
+from app.schemas.reads._field_bounds import (
     MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
 )
+from app.schemas.reads._field_bounds import MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH
 from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
 )
@@ -71,6 +75,22 @@ class NetworkKineticsSearchRequest(BaseModel):
     )
     network_solve_ref: str | None = Field(
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
+
+    # --- channel chemistry filters --------------------------------------
+    # Repeated values encode required stoichiometry. All supplied filters
+    # AND-combine; states may contain additional unmentioned participants.
+    source_species_entry_refs: list[str] = Field(
+        default_factory=list, max_length=_MAX_PARTICIPANTS
+    )
+    sink_species_entry_refs: list[str] = Field(
+        default_factory=list, max_length=_MAX_PARTICIPANTS
+    )
+    source_smiles: list[str] = Field(
+        default_factory=list, max_length=_MAX_PARTICIPANTS
+    )
+    sink_smiles: list[str] = Field(
+        default_factory=list, max_length=_MAX_PARTICIPANTS
     )
 
     # --- scalar filters --------------------------------------------------
@@ -110,6 +130,20 @@ class NetworkKineticsSearchRequest(BaseModel):
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
+
+    @field_validator("source_species_entry_refs", "sink_species_entry_refs")
+    @classmethod
+    def _bound_participant_refs(cls, value: list[str]) -> list[str]:
+        if any(not item or len(item) > _MAX_PUBLIC_REF_LENGTH for item in value):
+            raise ValueError("participant species-entry refs must be non-empty and bounded")
+        return value
+
+    @field_validator("source_smiles", "sink_smiles")
+    @classmethod
+    def _bound_participant_smiles(cls, value: list[str]) -> list[str]:
+        if any(not item or len(item) > _MAX_SMILES_LENGTH for item in value):
+            raise ValueError("participant SMILES must be non-empty and bounded")
+        return value
 
 
 class RequestEcho(BaseModel):

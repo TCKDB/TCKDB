@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._response import prepare_assessment_response
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics_search import (
@@ -14,10 +15,10 @@ from app.schemas.reads.scientific_kinetics_search import (
     ScientificKineticsSearchResponse,
 )
 from app.schemas.reads.scientific_reactions import ReactionDirectionQuery
-from app.services.scientific_read.internal_ids import (
-    apply_internal_ids_visibility,
-)
 from app.services.scientific_read.kinetics_search import search_kinetics
+from app.services.scientific_read.public_assessments import (
+    attach_kinetics_assessments,
+)
 
 router = APIRouter(prefix="/kinetics")
 
@@ -35,7 +36,19 @@ def kinetics_search_get(
     reaction_entry_ref: str | None = Query(None),
     temperature_min: float | None = Query(None),
     temperature_max: float | None = Query(None),
-    pressure: float | None = Query(None),
+    pressure_bar: float | None = Query(
+        None,
+        gt=0,
+        allow_inf_nan=False,
+        description="Requested pressure in bar.",
+    ),
+    pressure: float | None = Query(
+        None,
+        gt=0,
+        allow_inf_nan=False,
+        deprecated=True,
+        description="Deprecated alias for pressure_bar; retained for one release.",
+    ),
     model_kind: KineticsModelKind | None = Query(None),
     level_of_theory_id: int | None = Query(None),
     level_of_theory_ref: str | None = Query(None),
@@ -65,6 +78,7 @@ def kinetics_search_get(
         reaction_entry_ref=reaction_entry_ref,
         temperature_min=temperature_min,
         temperature_max=temperature_max,
+        pressure_bar=pressure_bar,
         pressure=pressure,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
@@ -79,7 +93,12 @@ def kinetics_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(search_kinetics(session, request))
+    payload = search_kinetics(session, request)
+    return prepare_assessment_response(
+        session,
+        payload,
+        attach_assessments=attach_kinetics_assessments,
+    )
 
 
 @router.post("/search", response_model=ScientificKineticsSearchResponse)
@@ -104,4 +123,9 @@ def kinetics_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(search_kinetics(session, body))
+    payload = search_kinetics(session, body)
+    return prepare_assessment_response(
+        session,
+        payload,
+        attach_assessments=attach_kinetics_assessments,
+    )

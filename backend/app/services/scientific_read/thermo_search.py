@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
+    CollapseMode,
     Pagination,
     ReviewStatusSummary,
 )
@@ -41,8 +42,10 @@ from app.schemas.reads.scientific_thermo_search import (
 )
 from app.services.scientific_read.common import (
     build_pagination,
+    collect_bounded_pages,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     validate_includes,
     validate_pagination,
     validate_temperature_range,
@@ -60,8 +63,9 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
     "internal_ids",
     "all",
+    "assessments",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 
 # Tokens forwarded to the inner thermo retrieval. The set matches the
 # public legal tokens minus ``internal_ids`` / ``all`` — there are no
@@ -122,35 +126,38 @@ def search_thermo(
         )
 
     # 1) Resolve species + species_entries.
-    species_request = SpeciesSearchRequest(
-        smiles=request.smiles,
-        inchi=request.inchi,
-        inchi_key=request.inchi_key,
-        formula=request.formula,
-        charge=request.charge,
-        multiplicity=request.multiplicity,
-        electronic_state_kind=request.electronic_state_kind,
-        species_entry_kind=request.species_entry_kind,
-        # Phase C: pass through explicit refs as identity filters.
-        species_ref=request.species_ref,
-        species_entry_ref=request.species_entry_ref,
-        # Pass through the trust posture so entry-level filtering is
-        # consistent across the two layers.
-        min_review_status=None,  # entry filtering only — thermo filter is shallow
-        include_rejected=request.include_rejected,
-        include_deprecated=request.include_deprecated,
-        # We need every entry in this discovery pass; pagination is final
-        # only after the inner thermo expansion.
-        offset=0,
-        limit=200,
-        collapse=request.collapse,
-        include=[],
+    def fetch_species_page(page_offset: int, page_limit: int):
+        return search_species(
+            session,
+            SpeciesSearchRequest(
+                smiles=request.smiles,
+                inchi=request.inchi,
+                inchi_key=request.inchi_key,
+                formula=request.formula,
+                charge=request.charge,
+                multiplicity=request.multiplicity,
+                electronic_state_kind=request.electronic_state_kind,
+                species_entry_kind=request.species_entry_kind,
+                species_ref=request.species_ref,
+                species_entry_ref=request.species_entry_ref,
+                min_review_status=None,
+                include_rejected=request.include_rejected,
+                include_deprecated=request.include_deprecated,
+                offset=page_offset,
+                limit=page_limit,
+                collapse=CollapseMode.all,
+                include=[],
+            ),
+        )
+
+    species_records = collect_bounded_pages(
+        fetch_species_page,
+        resource_name="species discovery candidates",
     )
-    species_resp = search_species(session, species_request)
 
     # Flatten species → entries with their species context.
     entry_contexts: list[tuple[ThermoSearchSpeciesContext, int]] = []
-    for sp_record in species_resp.records:
+    for sp_record in species_records:
         for entry in sp_record.entries:
             ctx = ThermoSearchSpeciesContext(
                 species_id=sp_record.species_id,
@@ -178,30 +185,36 @@ def search_thermo(
 
     flat: list[ThermoSearchRecord] = []
     for ctx, entry_id in entry_contexts:
-        # Always fetch the full candidate set from the inner detail
-        # endpoint so the outer ``pagination.total`` reflects every
-        # candidate. Collapse is applied once at the outer level below.
-        from app.schemas.reads.scientific_common import CollapseMode
+        def fetch_thermo_page(
+            page_offset: int,
+            page_limit: int,
+            species_entry_id: int = entry_id,
+        ):
+            return get_species_thermo(
+                session,
+                species_entry_id=species_entry_id,
+                request=ThermoReadRequest(
+                    temperature_min=request.temperature_min,
+                    temperature_max=request.temperature_max,
+                    model_kind=request.model_kind,
+                    level_of_theory_id=request.level_of_theory_id,
+                    level_of_theory_ref=request.level_of_theory_ref,
+                    software=request.software,
+                    min_review_status=request.min_review_status,
+                    include_rejected=request.include_rejected,
+                    include_deprecated=request.include_deprecated,
+                    include=inner_includes,
+                    collapse=CollapseMode.all,
+                    offset=page_offset,
+                    limit=page_limit,
+                ),
+            )
 
-        thermo_request = ThermoReadRequest(
-            temperature_min=request.temperature_min,
-            temperature_max=request.temperature_max,
-            model_kind=request.model_kind,
-            level_of_theory_id=request.level_of_theory_id,
-            level_of_theory_ref=request.level_of_theory_ref,
-            software=request.software,
-            min_review_status=request.min_review_status,
-            include_rejected=request.include_rejected,
-            include_deprecated=request.include_deprecated,
-            include=inner_includes,
-            collapse=CollapseMode.all,
-            offset=0,
-            limit=200,
+        thermo_records = collect_bounded_pages(
+            fetch_thermo_page,
+            resource_name=f"thermo candidates for species_entry {entry_id}",
         )
-        thermo_resp = get_species_thermo(
-            session, species_entry_id=entry_id, request=thermo_request
-        )
-        for thermo_record in thermo_resp.records:
+        for thermo_record in thermo_records:
             flat.append(ThermoSearchRecord(species=ctx, thermo=thermo_record))
 
     if not flat:
@@ -236,10 +249,12 @@ def search_thermo(
     # 4) Collapse + pagination on the flat list.
     pre_collapse_total = len(flat)
     collapse_first = request.collapse.value == "first"
-    if collapse_first:
-        returned = flat[:1]
-    else:
-        returned = flat[offset : offset + limit]
+    returned = slice_for_pagination(
+        flat,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
 
     summary = review_summary(rec.thermo.review for rec in flat)
 

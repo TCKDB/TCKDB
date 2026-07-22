@@ -14,6 +14,7 @@ import pytest
 from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
+    KineticsDegeneracyConvention,
     RecordReviewStatus,
     SubmissionRecordType,
 )
@@ -481,6 +482,37 @@ def test_reaction_export_barrier_null_without_shared_lot(db_session):
     assert record["barrier"] is None
     # But the TS block is still emitted.
     assert record["transition_state"]["energy"]["electronic_energy_hartree"] == -114.9
+
+
+def test_ml_reaction_export_preserves_degeneracy_convention(db_session):
+    reactant = make_species(db_session, smiles="C", inchi_key=next_inchi_key("MD"))
+    product = make_species(db_session, smiles="CO", inchi_key=next_inchi_key("MD"))
+    reactant_entry = make_species_entry(db_session, reactant)
+    product_entry = make_species_entry(db_session, product)
+    reaction = make_chem_reaction(
+        db_session, reactants=[reactant], products=[product]
+    )
+    reaction_entry = make_reaction_entry(
+        db_session,
+        reaction=reaction,
+        reactant_entries=[reactant_entry],
+        product_entries=[product_entry],
+    )
+    _approve(db_session, SubmissionRecordType.reaction_entry, reaction_entry.id)
+    kinetics = make_kinetics(
+        db_session, reaction_entry=reaction_entry, degeneracy=2.0
+    )
+    kinetics.degeneracy_convention = KineticsDegeneracyConvention.not_applied
+    _approve(db_session, SubmissionRecordType.kinetics, kinetics.id)
+    db_session.flush()
+
+    lines = iter_ml_reactions_ndjson(
+        db_session, reaction_refs=[reaction_entry.public_ref]
+    )
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
+
+    assert record["kinetics"][0]["degeneracy"] == 2.0
+    assert record["kinetics"][0]["degeneracy_convention"] == "not_applied"
 
 
 def test_reaction_export_barrier_lot_fallback(db_session):

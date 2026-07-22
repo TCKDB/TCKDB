@@ -67,6 +67,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
+    slice_for_pagination,
     temperature_coverage,
     validate_includes,
     validate_pagination,
@@ -95,8 +96,9 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "internal_ids",
     "all",
     "trust",
+    "assessments",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 _TRUST_EAGER_LOADS = (
     selectinload(Thermo.species_entry),
     selectinload(Thermo.nasa),
@@ -149,6 +151,10 @@ _TRUST_EAGER_LOADS = (
     .selectinload(ThermoSourceCalculation.calculation)
     .selectinload(Calculation.child_dependencies),
 )
+
+# Public seam for consumers that must load the same evidence graph before
+# calling ``evaluate_loaded_thermo``.
+THERMO_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 
 _DEFAULT_SORT_ECHO = (
     "covers_requested_temperature_range,extrapolation_distance_k,review_rank,"
@@ -455,28 +461,26 @@ def get_species_thermo(
 
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
-    if collapse_first:
-        if request.selection_policy is SelectionPolicy.default:
-            # Standard thermo ranking (sort_key) already applied above.
-            returned = records[:1]
-        else:
-            # Named policy re-ranks the selected record only; the default
-            # candidate order (collapse=all) is unaffected.
-            review_status_by_id = {
-                t.id: badges[t.id].status for t, _ in classified
-            }
-            ranked = sorted(
-                records,
-                key=lambda rec: simple_selection_sort_key(
-                    rec.thermo_id,
-                    policy=request.selection_policy,
-                    review_status_by_id=review_status_by_id,
-                    created_at_by_id=created_at,
-                ),
-            )
-            returned = ranked[:1]
-    else:
-        returned = records[offset : offset + limit]
+    ordered_records = records
+    if collapse_first and request.selection_policy is not SelectionPolicy.default:
+        # Named policy re-ranks the selected record only; the default candidate
+        # order (collapse=all) is unaffected.
+        review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
+        ordered_records = sorted(
+            records,
+            key=lambda rec: simple_selection_sort_key(
+                rec.thermo_id,
+                policy=request.selection_policy,
+                review_status_by_id=review_status_by_id,
+                created_at_by_id=created_at,
+            ),
+        )
+    returned = slice_for_pagination(
+        ordered_records,
+        offset=offset,
+        limit=limit,
+        collapse_first=collapse_first,
+    )
 
     return ScientificSpeciesThermoResponse(
         request=RequestEcho(

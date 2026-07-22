@@ -22,6 +22,7 @@ from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     ArrheniusAUnits,
     KineticsCalculationRole,
+    KineticsDegeneracyConvention,
     KineticsDirection,
     KineticsModelKind,
     KineticsUncertaintyKind,
@@ -131,6 +132,15 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     tmax_k: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
 
     degeneracy: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    degeneracy_convention: Mapped[KineticsDegeneracyConvention] = mapped_column(
+        SAEnum(
+            KineticsDegeneracyConvention,
+            name="kinetics_degeneracy_convention",
+        ),
+        nullable=False,
+        default=KineticsDegeneracyConvention.unknown,
+        server_default=KineticsDegeneracyConvention.unknown.value,
+    )
     tunneling_model: Mapped[Optional[TunnelingModel]] = mapped_column(
         SAEnum(TunnelingModel, name="tunneling_model"),
         nullable=True,
@@ -198,6 +208,11 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         CheckConstraint(
             "a_uncertainty_kind <> 'multiplicative' OR a_uncertainty >= 1.0",
             name="a_uncertainty_multiplicative_ge_1",
+        ),
+        CheckConstraint(
+            "degeneracy IS NULL OR "
+            "(degeneracy > 0 AND degeneracy < 'Infinity'::double precision)",
+            name="degeneracy_finite_positive",
         ),
         CheckConstraint("pressure_bar IS NULL OR pressure_bar > 0", name="pressure_bar_gt_0"),
         # An apparent-at-pressure rate must state the pressure it applies at.

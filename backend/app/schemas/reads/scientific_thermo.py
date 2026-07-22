@@ -14,6 +14,7 @@ from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
 )
+from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     CollapseMode,
@@ -214,6 +215,7 @@ class ThermoRecord(BaseModel):
     # estimated thermo with an attached GA breakdown (DR-0035).
     group_additivity: GroupAdditivityBlock | None = None
     trust: TrustFragment | None = None
+    assessments: PublicAssessmentSummary | None = None
 
 
 class RequestEcho(BaseModel):
