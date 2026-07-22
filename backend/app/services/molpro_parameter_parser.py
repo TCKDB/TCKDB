@@ -541,6 +541,15 @@ def parse_hessian(text: str) -> tuple[int, list[float]] | None:
     (emitted when the deck contains ``print,hessian``). Molpro already prints
     in atomic units, so the packed lower triangle is stored verbatim. Returns
     ``(natoms, packed_lower_triangle)`` or ``None`` when the block is absent.
+
+    NOTE (deferred): unlike ORCA's ``.hess``, a Molpro log offers no clean
+    in-frame geometry to cross-check the matrix's orientation against the
+    bound geometry (Molpro reorients to its own frame by default and the
+    force-constant block carries atom-axis labels, not coordinates). The
+    orientation cross-check the hook applies to ORCA is therefore not
+    available here; binding relies on the exactly-one-input-geometry and
+    atom-count guards. Revisit if a reliable in-frame coordinate block is
+    identified in the Molpro output.
     """
     from app.services.hessian_parsing import (
         MOLPRO_HESSIAN_MARKER,

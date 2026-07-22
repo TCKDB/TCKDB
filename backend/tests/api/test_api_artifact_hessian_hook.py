@@ -69,14 +69,38 @@ def _xyz(natoms: int, *, element: str = "C") -> str:
     return "\n".join(lines)
 
 
+def _orca_frame_xyz() -> str:
+    """Build a geometry XYZ in the exact frame of the ORCA ``.hess`` ``$atoms``.
+
+    The ORCA orientation cross-check compares the matrix's own atomic frame
+    against the bound geometry, so the happy-path geometry must be that frame
+    (element + Angstrom coordinates). Correctness of the underlying coordinate
+    parse is asserted separately in ``test_hessian_parsing``."""
+    from app.services.hessian_parsing import parse_orca_hess_reference_atoms
+
+    atoms = parse_orca_hess_reference_atoms(ORCA_HESS.decode())
+    assert atoms is not None
+    lines = [str(len(atoms)), "orca frame"]
+    for element, x, y, z in atoms:
+        lines.append(f"{element} {x:.10f} {y:.10f} {z:.10f}")
+    return "\n".join(lines)
+
+
 def _artifact(content: bytes, *, kind: str, filename: str) -> dict:
     return {"kind": kind, "filename": filename, "content_base64": _b64(content)}
 
 
-def _conformer_payload(*, natoms: int, calc_type: str = "freq") -> dict:
+def _conformer_payload(
+    *,
+    natoms: int,
+    calc_type: str = "freq",
+    xyz: str | None = None,
+    input_geometries: list[str] | None = None,
+) -> dict:
     # A freq (or sp) primary calc links the conformer geometry as its input
     # geometry via the standard fallback; opt does not (its real input is the
-    # pre-opt xyz), so freq is the natural vehicle for a Hessian.
+    # pre-opt xyz), so freq is the natural vehicle for a Hessian. An opt calc
+    # can still declare an explicit input geometry via ``input_geometries``.
     calc: dict = {
         "type": calc_type,
         "software_release": {"name": "Gaussian", "version": "09"},
@@ -84,18 +108,32 @@ def _conformer_payload(*, natoms: int, calc_type: str = "freq") -> dict:
     }
     if calc_type == "opt":
         calc["opt_result"] = {"converged": True}
+    if input_geometries is not None:
+        calc["input_geometries"] = [{"xyz_text": g} for g in input_geometries]
     return {
         "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
-        "geometry": {"xyz_text": _xyz(natoms)},
+        "geometry": {"xyz_text": xyz if xyz is not None else _xyz(natoms)},
         "calculation": calc,
         "label": "hessian-hook",
     }
 
 
-def _create_calc(client, *, natoms: int, calc_type: str = "freq") -> int:
+def _create_calc(
+    client,
+    *,
+    natoms: int = 0,
+    calc_type: str = "freq",
+    xyz: str | None = None,
+    input_geometries: list[str] | None = None,
+) -> int:
     resp = client.post(
         "/api/v1/uploads/conformers",
-        json=_conformer_payload(natoms=natoms, calc_type=calc_type),
+        json=_conformer_payload(
+            natoms=natoms,
+            calc_type=calc_type,
+            xyz=xyz,
+            input_geometries=input_geometries,
+        ),
     )
     assert resp.status_code == 201, resp.text
     return resp.json()["primary_calculation"]["calculation_id"]
@@ -152,7 +190,9 @@ class TestHessianHook:
     def test_orca_hess_fills_hessian_dispatched_by_kind(
         self, client, db_session, stub_store_artifact
     ):
-        calc_id = _create_calc(client, natoms=ORCA_NATOMS)
+        # The geometry must be in the .hess's own frame — the ORCA orientation
+        # cross-check compares atomic coordinates before binding.
+        calc_id = _create_calc(client, xyz=_orca_frame_xyz())
 
         resp = client.post(
             f"/api/v1/calculations/{calc_id}/artifacts",
@@ -166,6 +206,20 @@ class TestHessianHook:
         assert row.source is HessianSource.parsed_hess
         assert row.natoms == ORCA_NATOMS
         assert row.lower_triangle_hartree_bohr2[0] == ORCA_HEAD
+
+    def test_orca_hess_wrong_frame_geometry_is_not_stored(
+        self, client, db_session, stub_store_artifact
+    ):
+        # Right atom count (6), but a different molecule/frame (bare carbons).
+        # The $atoms cross-check must refuse to bind.
+        calc_id = _create_calc(client, natoms=ORCA_NATOMS)
+
+        resp = client.post(
+            f"/api/v1/calculations/{calc_id}/artifacts",
+            json={"artifacts": [_artifact(ORCA_HESS, kind="hessian", filename="ts.hess")]},
+        )
+        assert resp.status_code == 201, resp.text
+        assert _stored(db_session, calc_id) is None
 
     def test_natoms_mismatch_is_not_stored(
         self, client, db_session, stub_store_artifact
@@ -181,11 +235,32 @@ class TestHessianHook:
         # Refused to bind a 12-atom Hessian to a 5-atom geometry.
         assert _stored(db_session, calc_id) is None
 
-    def test_non_freq_opt_calc_type_is_skipped(
+    def test_sp_calc_type_is_skipped(
         self, client, db_session, stub_store_artifact
     ):
         # A single-point calc never carries a Hessian; the type gate skips it.
         calc_id = _create_calc(client, natoms=GAUSSIAN_NATOMS, calc_type="sp")
+
+        resp = client.post(
+            f"/api/v1/calculations/{calc_id}/artifacts",
+            json={"artifacts": [_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
+        )
+        assert resp.status_code == 201, resp.text
+        assert _stored(db_session, calc_id) is None
+
+    def test_opt_calc_type_is_skipped_even_with_input_geometry(
+        self, client, db_session, stub_store_artifact
+    ):
+        # An opt calc with an explicit, atom-count-matching input geometry would
+        # otherwise pass the geometry gate — but its input geometry is the
+        # PRE-opt guess, while the FC matrix in an opt+freq log is at the
+        # CONVERGED geometry. The type gate (freq only) must skip it.
+        calc_id = _create_calc(
+            client,
+            natoms=GAUSSIAN_NATOMS,
+            calc_type="opt",
+            input_geometries=[_xyz(GAUSSIAN_NATOMS)],
+        )
 
         resp = client.post(
             f"/api/v1/calculations/{calc_id}/artifacts",

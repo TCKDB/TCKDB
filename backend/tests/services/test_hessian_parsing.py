@@ -15,14 +15,18 @@ length, ``natoms``, symmetry, and the reported source.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 from app.db.models.common import HessianSource
 from app.services.gaussian_parameter_parser import parse_hessian as parse_gaussian
 from app.services.hessian_parsing import (
+    BOHR_TO_ANGSTROM,
     GAUSSIAN_HESSIAN_MARKER,
     HESSIAN_PARSER_VERSION,
     parse_hessian_from_artifact,
+    parse_orca_hess_force_constants,
+    parse_orca_hess_reference_atoms,
     parse_triangular_force_constants,
 )
 from app.services.molpro_parameter_parser import parse_hessian as parse_molpro
@@ -214,3 +218,180 @@ class TestRobustness:
             )
             is None
         )
+
+
+# ---------------------------------------------------------------------------
+# Synthetic builders for the guard tests
+# ---------------------------------------------------------------------------
+
+
+def _fmt_d(value: float) -> str:
+    """Format a value in Gaussian ``D``-exponent notation (``1.000000D-02``)."""
+    return f"{value:.6E}".replace("E", "D")
+
+
+def _gaussian_fc(natoms: int, *, route: str | None = None, iop: bool = False) -> str:
+    """A synthetic Gaussian ``Force constants in Cartesian coordinates`` block."""
+    n3 = 3 * natoms
+    out: list[str] = []
+    if route is not None:
+        out.append(f" #p {route}")
+        out.append("")
+    if iop:
+        out.append(" IOp(2/9=2000) requested")
+    out.append(f" {GAUSSIAN_HESSIAN_MARKER} ")
+    for b in range(math.ceil(n3 / 5.0)):
+        cols = range(b * 5, min(b * 5 + 5, n3))
+        out.append("      " + "".join(f"{c + 1:>14}" for c in cols))
+        for r in range(b * 5, n3):
+            vals = [_fmt_d(0.01 * (min(r, c) + 1)) for c in cols if c <= r]
+            out.append(f"{r + 1:>7} " + " ".join(vals))
+    out.append("")  # blank terminator
+    return "\n".join(out)
+
+
+# A minimal valid ORCA .hess (natoms=1, 3x3, symmetric, complete markers).
+_ORCA_BASE = """$orca_hessian_file
+
+$act_atom
+  0
+
+$act_coord
+  2
+
+$hessian
+3
+                    0                  1                  2
+    0     1.0000000000E+00   1.0000000000E-01   2.0000000000E-01
+    1     1.0000000000E-01   2.0000000000E+00   3.0000000000E-01
+    2     2.0000000000E-01   3.0000000000E-01   3.0000000000E+00
+
+$atoms
+1
+ C     12.01100      0.100000000000    0.200000000000    0.300000000000
+
+$end
+"""
+
+
+class TestStrictFloatTruncation:
+    def test_gaussian_truncated_final_token_rejects_block(self):
+        # A killed job leaves a final token missing its exponent digits; it must
+        # NOT be read as 0.300000 (orders of magnitude off) — reject the block.
+        valid = (
+            f" {GAUSSIAN_HESSIAN_MARKER} \n"
+            "                1             2             3\n"
+            "      1  0.100000D+00\n"
+            "      2  0.100000D-01  0.200000D+00\n"
+            "      3  0.200000D-01  0.300000D-01  0.300000D+00\n"
+            "\n"
+        )
+        assert parse_triangular_force_constants(
+            valid, marker=GAUSSIAN_HESSIAN_MARKER
+        ) == (1, [0.1, 0.01, 0.2, 0.02, 0.03, 0.3])
+
+        truncated = valid.replace("0.300000D+00\n", "0.300000D+\n")
+        assert (
+            parse_triangular_force_constants(truncated, marker=GAUSSIAN_HESSIAN_MARKER)
+            is None
+        )
+
+
+class TestOrcaGuards:
+    def test_base_fixture_parses(self):
+        assert parse_orca_hess_force_constants(_ORCA_BASE) == (
+            1,
+            [1.0, 0.1, 2.0, 0.2, 0.3, 3.0],
+        )
+
+    def test_row_missing_a_value_rejected(self):
+        broken = _ORCA_BASE.replace(
+            "    2     2.0000000000E-01   3.0000000000E-01   3.0000000000E+00",
+            "    2     2.0000000000E-01   3.0000000000E-01",
+        )
+        assert parse_orca_hess_force_constants(broken) is None
+
+    def test_corrupted_row_token_rejected(self):
+        broken = _ORCA_BASE.replace(
+            "    1     1.0000000000E-01   2.0000000000E+00   3.0000000000E-01",
+            "    1     1.0000000000E-01   ***   3.0000000000E-01",
+        )
+        assert parse_orca_hess_force_constants(broken) is None
+
+    def test_lying_dimension_rejected(self):
+        # Dimension claims 6 but only a 3x3 block is present -> the reader runs
+        # into $atoms and the per-row count fails.
+        broken = _ORCA_BASE.replace("$hessian\n3\n", "$hessian\n6\n")
+        assert parse_orca_hess_force_constants(broken) is None
+
+    def test_asymmetric_matrix_rejected(self):
+        broken = _ORCA_BASE.replace(
+            "    1     1.0000000000E-01   2.0000000000E+00   3.0000000000E-01",
+            "    1     9.0000000000E-01   2.0000000000E+00   3.0000000000E-01",
+        )
+        assert parse_orca_hess_force_constants(broken) is None
+
+    def test_incomplete_act_marker_rejected(self):
+        # Last displacement recorded is coord 1 (y), not the final coord 2 (z).
+        broken = _ORCA_BASE.replace("$act_coord\n  2\n", "$act_coord\n  1\n")
+        assert parse_orca_hess_force_constants(broken) is None
+
+    def test_missing_atoms_block_still_parses_but_no_reference(self):
+        no_atoms = _ORCA_BASE.split("$atoms")[0] + "$end\n"
+        assert parse_orca_hess_force_constants(no_atoms) == (
+            1,
+            [1.0, 0.1, 2.0, 0.2, 0.3, 3.0],
+        )
+        parsed = parse_hessian_from_artifact(no_atoms, from_hess_file=True)
+        assert parsed is not None
+        assert parsed.reference_coords_angstrom is None
+
+
+class TestOrcaReferenceAtoms:
+    def test_parses_real_fixture_atoms_in_angstrom(self):
+        atoms = parse_orca_hess_reference_atoms(ORCA_HESS)
+        assert atoms is not None
+        assert len(atoms) == 6
+        element, x, y, z = atoms[0]
+        assert element == "C"
+        # First $atoms row: C ... -3.714532101532 (bohr) -> Angstrom.
+        assert x == -3.714532101532 * BOHR_TO_ANGSTROM
+        assert [a[0] for a in atoms] == ["C", "Cl", "H", "H", "H", "F"]
+
+    def test_dispatch_attaches_reference_coords(self):
+        parsed = parse_hessian_from_artifact(ORCA_HESS, from_hess_file=True)
+        assert parsed is not None
+        assert parsed.reference_coords_angstrom is not None
+        assert len(parsed.reference_coords_angstrom) == 6
+
+
+class TestGaussianOrientationGuard:
+    def test_opt_over_13_atoms_without_iop_is_skipped(self):
+        # Arkane's standard-orientation trap: opt + >13 atoms + no IOp(2/9=2000)
+        # -> the printed FC matrix is not in input-orientation Cartesians.
+        text = _gaussian_fc(14, route="opt freq")
+        # The raw matrix parses fine...
+        assert parse_triangular_force_constants(
+            text, marker=GAUSSIAN_HESSIAN_MARKER
+        ) is not None
+        # ...but the orientation guard skips it.
+        assert parse_gaussian(text) is None
+
+    def test_opt_over_13_atoms_with_iop_is_kept(self):
+        text = _gaussian_fc(14, route="opt freq", iop=True)
+        result = parse_gaussian(text)
+        assert result is not None
+        assert result[0] == 14
+
+    def test_freq_only_over_13_atoms_is_kept(self):
+        # A freq job with no opt keeps the input orientation.
+        text = _gaussian_fc(14, route="freq")
+        result = parse_gaussian(text)
+        assert result is not None
+        assert result[0] == 14
+
+    def test_opt_under_14_atoms_is_kept(self):
+        text = _gaussian_fc(12, route="opt freq")
+        result = parse_gaussian(text)
+        assert result is not None
+        assert result[0] == 12

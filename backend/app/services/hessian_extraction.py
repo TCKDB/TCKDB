@@ -50,7 +50,7 @@ from app.db.models.calculation import (
     CalculationInputGeometry,
 )
 from app.db.models.common import ArtifactKind, CalculationType
-from app.db.models.geometry import Geometry
+from app.db.models.geometry import Geometry, GeometryAtom
 from app.schemas.fragments.artifact import ArtifactIn
 from app.services.hessian_parsing import (
     HESSIAN_PARSER_VERSION,
@@ -64,12 +64,21 @@ logger = logging.getLogger(__name__)
 #: logs, and the ORCA ``.hess`` file.
 _HESSIAN_ARTIFACT_KINDS = (ArtifactKind.output_log, ArtifactKind.hessian)
 
-#: Calculation types a Hessian legitimately comes from. Hessians are the
-#: product of frequency jobs; ``opt`` is admitted because an opt+freq job may
-#: be recorded as ``opt`` and still print the force-constant matrix. The parse
-#: itself only succeeds when a matrix is actually present, so this gate simply
-#: keeps the hook off single-point / scan / IRC logs.
-_HESSIAN_CALC_TYPES = (CalculationType.freq, CalculationType.opt)
+#: Calculation types a Hessian legitimately comes from. Restricted to
+#: ``freq`` on purpose: a ``freq`` calc's input geometry IS the frame the
+#: force-constant matrix was evaluated at, so the binding is sound. ``opt`` is
+#: deliberately excluded — an opt calc's input geometry is the *pre*-opt
+#: guess, but the FC matrix in an ``opt freq`` log is printed at the
+#: *converged* geometry. The atom count would match trivially, so admitting
+#: ``opt`` is exactly the case that would bind a Hessian to the wrong
+#: geometry. (A pure ``opt`` with no freq has no matrix and no input-geometry
+#: link anyway, so nothing useful is lost.)
+_HESSIAN_CALC_TYPES = (CalculationType.freq,)
+
+#: Absolute tolerance (Angstrom) for the ORCA frame cross-check. A genuine
+#: orientation/molecule mismatch differs by far more than this; the bound is
+#: only loose enough to absorb coordinate rounding.
+_COORD_ATOL_ANGSTROM = 1e-2
 
 
 def try_extract_hessian_from_artifact_upload(
@@ -184,7 +193,51 @@ def _resolve_input_geometry_id(
         )
         return None
 
+    # Decisive orientation check: when the artifact records its own atomic
+    # frame (ORCA .hess $atoms), the matrix is only valid for a geometry in
+    # that exact frame. An atom-count match against a different molecule or a
+    # rotated/translated frame is otherwise undetectable.
+    if parsed.reference_coords_angstrom is not None:
+        if not _frame_matches(session, geometry_id, parsed.reference_coords_angstrom):
+            logger.info(
+                "hessian extraction skipped: the artifact's atomic frame does "
+                "not match the bound input geometry — refusing to bind a "
+                "Hessian computed at a different geometry/orientation"
+            )
+            return None
+
     return geometry_id
+
+
+def _frame_matches(
+    session: Session,
+    geometry_id: int,
+    reference_coords_angstrom: list[tuple[str, float, float, float]],
+) -> bool:
+    """True if the bound geometry's atoms match the artifact's frame.
+
+    Compares element (case-insensitive) and Cartesian coordinates in atom
+    order within :data:`_COORD_ATOL_ANGSTROM`. Order matters: the artifact's
+    atom ordering is the calculation's atom ordering, which is preserved into
+    the stored geometry.
+    """
+    atoms = session.scalars(
+        select(GeometryAtom)
+        .where(GeometryAtom.geometry_id == geometry_id)
+        .order_by(GeometryAtom.atom_index)
+    ).all()
+    if len(atoms) != len(reference_coords_angstrom):
+        return False
+    for atom, (element, x, y, z) in zip(atoms, reference_coords_angstrom, strict=True):
+        if atom.element.strip().lower() != element.strip().lower():
+            return False
+        if (
+            abs(atom.x - x) > _COORD_ATOL_ANGSTROM
+            or abs(atom.y - y) > _COORD_ATOL_ANGSTROM
+            or abs(atom.z - z) > _COORD_ATOL_ANGSTROM
+        ):
+            return False
+    return True
 
 
 def _insert(
