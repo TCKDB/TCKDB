@@ -9,10 +9,31 @@ top-level ``code`` field.
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
 _NESTED_CODE_PATTERN = re.compile(r"(?<![a-z0-9_])([a-z][a-z0-9_]*_[a-z0-9_]+): ")
+
+
+def _json_safe(obj: Any) -> Any:
+    """Recursively replace non-finite floats with their string form.
+
+    A validation error echoes the offending input, which for the
+    ``allow_inf_nan=False`` fields may itself be ``nan``/``inf``. Left as a
+    float that value would break ``json.dumps(allow_nan=False)`` when the
+    response is rendered, cascading the request-validation error into the
+    generic ``ValueError`` handler and mislabelling its ``code``. Coercing
+    to ``"nan"``/``"inf"`` keeps the echo readable and the envelope
+    serialisable.
+    """
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else str(obj)
+    if isinstance(obj, dict):
+        return {key: _json_safe(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(value) for value in obj]
+    return obj
 
 
 class CodedValueError(ValueError):
@@ -92,13 +113,19 @@ def error_envelope(
     context: dict[str, Any] | None = None,
     fallback_code: str,
 ) -> dict[str, Any]:
-    """Return the additive ``code`` / ``detail`` / ``context`` envelope."""
+    """Return the additive ``code`` / ``detail`` / ``context`` envelope.
 
-    return {
-        "code": code or detail_code(detail, fallback=fallback_code),
-        "detail": detail,
-        "context": dict(context or {}),
-    }
+    The envelope is deep-sanitised so any non-finite float echoed from the
+    offending request cannot break JSON rendering (see :func:`_json_safe`).
+    """
+
+    return _json_safe(
+        {
+            "code": code or detail_code(detail, fallback=fallback_code),
+            "detail": detail,
+            "context": dict(context or {}),
+        }
+    )
 
 
 def reject_unsupported_filters(

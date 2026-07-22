@@ -77,7 +77,10 @@ def reaction_kinetics(
     D9 chain. ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``
     §Endpoint 3 and ``docs/specs/public_identifier_policy.md``.
     """
-    resolved_reaction_entry_id = resolve_reaction_entry_handle(session, reaction_entry_id)
+    # Validate the request (pressure alias conflict, etc.) before resolving
+    # the resource handle, so a malformed request is rejected with 422
+    # regardless of whether the reaction entry exists (request validation
+    # precedes resource lookup).
     request = KineticsReadRequest(
         temperature_min=temperature_min,
         temperature_max=temperature_max,
@@ -96,6 +99,7 @@ def reaction_kinetics(
         offset=offset,
         limit=limit,
     )
+    resolved_reaction_entry_id = resolve_reaction_entry_handle(session, reaction_entry_id)
     payload = get_reaction_kinetics(
         session,
         reaction_entry_id=resolved_reaction_entry_id,
