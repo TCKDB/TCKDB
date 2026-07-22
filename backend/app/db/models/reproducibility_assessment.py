@@ -23,7 +23,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     ReproducibilityAssessorKind,
     ReproducibilityGrade,
@@ -31,7 +31,7 @@ from app.db.models.common import (
 )
 
 
-class RecordReproducibilityAssessment(Base, TimestampMixin):
+class RecordReproducibilityAssessment(Base, TimestampMixin, PublicRefMixin):
     """One immutable, versioned assessor claim about reproducibility."""
 
     __tablename__ = "record_reproducibility_assessment"

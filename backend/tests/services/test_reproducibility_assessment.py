@@ -287,6 +287,17 @@ def test_database_trigger_rejects_update(db_session):
     assert db_session.get(RecordReproducibilityAssessment, row.id).rubric_version == "v1"
 
 
+def test_assessment_public_ref_round_trips_through_curator_read_schema(db_session):
+    from app.schemas.entities.reproducibility_assessment import ReproducibilityAssessmentRead
+
+    target_id = _make_target(db_session)
+    row = _append(db_session, record_id=target_id)
+    payload = ReproducibilityAssessmentRead.model_validate(row)
+    assert payload.id == row.id
+    assert payload.assessment_ref == row.public_ref
+    assert payload.assessment_ref.startswith("rpa_")
+
+
 def test_database_trigger_rejects_delete(db_session):
     target_id = _make_target(db_session)
     row = _append(db_session, record_id=target_id)

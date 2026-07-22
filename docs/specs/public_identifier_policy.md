@@ -95,6 +95,7 @@ hide PKs.
 | `energy_correction_scheme` | `energy_correction_scheme.id` | ⚠ When exposed | `ecs_` | **Content-derived** from `(name, version)` | Only when surfaced | No | Reference table. |
 | `submission` | `submission.id` | ⚠ Internal-tilted | `sub_` | **Opaque** (ULID) | Curator/admin context only | No | Provenance audit. |
 | `record_review` | `record_review.id` | ❌ No | n/a | n/a | Never (use `record_type` + record_ref instead) | n/a | Polymorphic; the badge is what's public. |
+| `record_reproducibility_assessment` | `record_reproducibility_assessment.id` | ✅ Yes | `rpa_` | **Opaque** (ULID-like) | Only in opt-in compact assessment summaries | No | Immutable provenance/curation claim; the ref identifies the exact stored assessment, not its currentness or approval. |
 
 **Rules for the table:**
 

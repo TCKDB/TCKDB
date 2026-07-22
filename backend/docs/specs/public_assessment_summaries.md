@@ -7,7 +7,8 @@ consumers and contains two independent signals:
 - `deterministic_trust`: the current code-defined evidence rubric, its
   version, evidence grade, and an explicit hard-fail reason when present.
 - `reproducibility`: the latest immutable assessment's rubric, version,
-  grade, timestamp, and one of `current`, `stale`, or `unassessed`.
+  grade, timestamp, stable `assessment_ref`, and one of `current`, `stale`,
+  or `unassessed`.
 
 `current` means the latest assessment uses the active rubric and its stored
 context hash exactly matches a fresh evaluation. A changed rubric or evidence
@@ -18,6 +19,10 @@ requires evaluation against current evidence. No assessment-grade search
 filter is exposed: filtering stored grades without first enforcing freshness
 would mix current and stale claims and give machine clients misleading
 results.
+
+`assessment_ref` is the opaque `rpa_` handle of that exact immutable stored
+claim. It is present for both `current` and `stale` summaries and `null` for
+`unassessed`; it neither implies approval nor guarantees freshness.
 
 Statmech and transport retain their existing detail/subresource-only `trust`
 fragments. Their compact assessment summary is available on detail, broad

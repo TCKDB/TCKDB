@@ -57,6 +57,7 @@ class ReproducibilityAssessmentRead(ORMBaseSchema):
     """Read projection for one immutable assessment row."""
 
     id: int
+    assessment_ref: str = Field(validation_alias="public_ref")
     record_type: SubmissionRecordType
     record_id: int
     grade: ReproducibilityGrade

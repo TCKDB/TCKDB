@@ -216,6 +216,7 @@ def _reproducibility_summary(
     )
     return ReproducibilityAssessmentSummary(
         state="current" if is_current else "stale",
+        assessment_ref=assessment.public_ref,
         rubric=assessment.rubric_name,
         rubric_version=assessment.rubric_version,
         grade=assessment.grade,

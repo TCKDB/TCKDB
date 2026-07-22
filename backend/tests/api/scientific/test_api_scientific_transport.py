@@ -897,6 +897,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     assert detail["deterministic_trust"]["rubric"] == "computed_transport"
     assert detail["deterministic_trust"]["grade"] in {"partial", "sparse"}
     assert detail["reproducibility"]["state"] == "unassessed"
+    assert detail["reproducibility"]["assessment_ref"] is None
 
     search = client.get(
         _search_url(transport_ref=tr.public_ref, include="assessments")
@@ -914,7 +915,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     assert subresource.status_code == 200, subresource.text
     assert subresource.json()["records"][0]["assessments"] == detail
 
-    evaluate_and_append_reproducibility_v1(
+    current_row = evaluate_and_append_reproducibility_v1(
         db_session,
         record_type=SubmissionRecordType.transport,
         record_id=tr.id,
@@ -923,8 +924,9 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         _detail_url(tr.public_ref, include="assessments")
     ).json()["record"]["assessments"]["reproducibility"]
     assert current["state"] == "current"
+    assert current["assessment_ref"] == current_row.public_ref
 
-    append_reproducibility_assessment(
+    stale_row = append_reproducibility_assessment(
         db_session,
         record_type=SubmissionRecordType.transport,
         record_id=tr.id,
@@ -938,6 +940,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         _detail_url(tr.public_ref, include="assessments")
     ).json()["record"]["assessments"]["reproducibility"]
     assert stale["state"] == "stale"
+    assert stale["assessment_ref"] == stale_row.public_ref
 
 
 def test_search_include_all_does_not_expand_assessments(client, db_session):

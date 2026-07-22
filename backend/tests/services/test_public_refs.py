@@ -22,6 +22,7 @@ from app.db.models.kinetics import Kinetics
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
 from app.db.models.reaction import ChemReaction, ReactionEntry
+from app.db.models.reproducibility_assessment import RecordReproducibilityAssessment
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import (
     ConformerAssignmentScheme,
@@ -140,12 +141,21 @@ class TestPrefixRegistry:
             "Literature",
             "FrequencyScaleFactor", "EnergyCorrectionScheme",
             "Submission",
+            "RecordReproducibilityAssessment",
         }
         assert expected.issubset(PREFIXES.keys())
 
     def test_no_duplicate_prefixes(self):
         prefixes = list(PREFIXES.values())
         assert len(prefixes) == len(set(prefixes))
+
+    def test_reproducibility_assessment_refs_are_opaque_and_independent(self):
+        first = generate_ref_for(RecordReproducibilityAssessment())
+        second = generate_ref_for(RecordReproducibilityAssessment())
+        assert first != second
+        for ref in (first, second):
+            assert ref.startswith("rpa_")
+            assert re.fullmatch(r"rpa_[a-z2-7]{26}", ref)
 
 
 # ---------------------------------------------------------------------------

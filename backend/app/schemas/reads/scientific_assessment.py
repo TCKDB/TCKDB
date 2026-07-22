@@ -20,9 +20,14 @@ class DeterministicTrustSummary(BaseModel):
 
 
 class ReproducibilityAssessmentSummary(BaseModel):
-    """Latest immutable reproducibility assessment and freshness state."""
+    """Latest immutable reproducibility assessment and freshness state.
+
+    ``assessment_ref`` identifies the stored immutable claim; it does not
+    imply that the claim remains current or curator-approved.
+    """
 
     state: Literal["current", "stale", "unassessed"]
+    assessment_ref: str | None = None
     rubric: str | None = None
     rubric_version: str | None = None
     grade: ReproducibilityGrade | None = None
