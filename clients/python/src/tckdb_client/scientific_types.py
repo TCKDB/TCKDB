@@ -203,6 +203,23 @@ class NetworkRecord(TypedDict, total=False):
     literature: JSONDict | None
 
 
+class NetworkSolveRecord(TypedDict, total=False):
+    """One scientific network-solve record from search or detail reads."""
+
+    network_solve: Required[JSONDict]
+    network: Required[JSONDict]
+    evidence_summary: Required[JSONDict]
+    available_sections: Required[JSONDict]
+    bath_gas: list[JSONDict] | None
+    energy_transfer: list[JSONDict] | None
+    source_calculations: list[JSONDict] | None
+    kinetics: list[JSONDict] | None
+    review_history: list[JSONDict] | None
+    software_release: JSONDict | None
+    workflow_tool_release: JSONDict | None
+    literature: JSONDict | None
+
+
 class NetworkKineticsRecord(TypedDict, total=False):
     network_kinetics: Required[JSONDict]
     network: Required[JSONDict]
@@ -283,6 +300,7 @@ SpeciesCalculationsSearchResponse: TypeAlias = ScientificSearchResponse[
     SpeciesCalculationRecord
 ]
 NetworkSearchResponse: TypeAlias = ScientificSearchResponse[NetworkRecord]
+NetworkSolveSearchResponse: TypeAlias = ScientificSearchResponse[NetworkSolveRecord]
 NetworkKineticsSearchResponse: TypeAlias = ScientificSearchResponse[
     NetworkKineticsRecord
 ]
@@ -304,6 +322,8 @@ __all__ = [
     "NetworkKineticsSearchResponse",
     "NetworkRecord",
     "NetworkSearchResponse",
+    "NetworkSolveRecord",
+    "NetworkSolveSearchResponse",
     "NetworkStateComposition",
     "NetworkStateCompositionParticipant",
     "NetworkStateSummary",
