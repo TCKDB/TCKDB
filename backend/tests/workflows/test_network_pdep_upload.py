@@ -1392,10 +1392,13 @@ def test_pdep_species_statmech_persists_via_shared_seam(db_engine) -> None:
     }
 
     with _rolled_back_session(db_engine) as session:
+        baseline_statmech_id = session.scalar(select(func.max(Statmech.id))) or 0
         request = NetworkPDepUploadRequest(**payload)
         persist_network_pdep_upload(session, request, created_by=None)
 
-        statmechs = session.scalars(select(Statmech)).all()
+        statmechs = session.scalars(
+            select(Statmech).where(Statmech.id > baseline_statmech_id)
+        ).all()
         assert len(statmechs) == 1
         sm = statmechs[0]
         assert sm.external_symmetry == 2
@@ -1476,10 +1479,13 @@ def test_pdep_species_statmech_torsion_scan_persists(db_engine) -> None:
     }
 
     with _rolled_back_session(db_engine) as session:
+        baseline_statmech_id = session.scalar(select(func.max(Statmech.id))) or 0
         request = NetworkPDepUploadRequest(**payload)
         persist_network_pdep_upload(session, request, created_by=None)
 
-        sm = session.scalars(select(Statmech)).one()
+        sm = session.scalars(
+            select(Statmech).where(Statmech.id > baseline_statmech_id)
+        ).one()
         torsions = session.scalars(
             select(StatmechTorsion).where(StatmechTorsion.statmech_id == sm.id)
         ).all()
@@ -1568,16 +1574,24 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> N
     )
 
     with _rolled_back_session(db_engine) as session:
+        baseline_calc_id = session.scalar(select(func.max(Calculation.id))) or 0
+        baseline_torsion_id = (
+            session.scalar(select(func.max(StatmechTorsion.id))) or 0
+        )
         request = NetworkPDepUploadRequest(**payload)
         network = persist_network_pdep_upload(session, request)
         assert network.id is not None
 
         # Resolve the O2 scan calc and a species entry that is NOT its owner.
         o2_scan = session.scalars(
-            select(Calculation).where(Calculation.type == CalculationType.scan)
+            select(Calculation).where(
+                Calculation.id > baseline_calc_id,
+                Calculation.type == CalculationType.scan,
+            )
         ).one()
         foreign_calc = session.scalars(
             select(Calculation).where(
+                Calculation.id > baseline_calc_id,
                 Calculation.species_entry_id.isnot(None),
                 Calculation.species_entry_id != o2_scan.species_entry_id,
             )
@@ -1602,5 +1616,9 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> N
                 created_by=None,
             )
         # No torsion row was persisted for a foreign scan link.
-        leaked = session.scalars(select(StatmechTorsion)).all()
+        leaked = session.scalars(
+            select(StatmechTorsion).where(
+                StatmechTorsion.id > baseline_torsion_id
+            )
+        ).all()
         assert leaked == []

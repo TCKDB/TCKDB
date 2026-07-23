@@ -1,0 +1,14 @@
+Program Version 5.0.4 - RELEASE -
+! uHF dlpno-ccsd(t) cc-pvtz-f12 aug-cc-pvtz/c cc-pvtz-f12-cabs tightscf normalpno
+! sp
+
+%maxcore 4096
+%pal nprocs 8 end
+
+* xyz 0 2
+H 0.000000 0.000000 0.000000
+*
+
+%scf
+MaxIter 500
+end

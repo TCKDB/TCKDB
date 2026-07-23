@@ -162,6 +162,7 @@ PRESEEDED_TABLES: Mapping[
         frozenset(
             (key,)
             for key in (
+                "f12.ansatz",
                 "grid.quality",
                 "guess.strategy",
                 "integral.accuracy",

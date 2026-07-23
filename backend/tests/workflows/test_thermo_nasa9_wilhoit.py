@@ -131,7 +131,7 @@ def test_nasa9_read_back_exposes_intervals(rb_session) -> None:
     response = get_species_thermo(
         session,
         species_entry_id=thermo.species_entry_id,
-        request=ThermoReadRequest(),
+        request=ThermoReadRequest(model_kind=ThermoModelKindQuery.nasa9),
     )
     record = response.records[0]
     assert record.model_kind == ThermoModelKindQuery.nasa9
@@ -173,7 +173,7 @@ def test_wilhoit_read_back_exposes_block(rb_session) -> None:
     response = get_species_thermo(
         session,
         species_entry_id=thermo.species_entry_id,
-        request=ThermoReadRequest(),
+        request=ThermoReadRequest(model_kind=ThermoModelKindQuery.wilhoit),
     )
     record = response.records[0]
     assert record.model_kind == ThermoModelKindQuery.wilhoit
