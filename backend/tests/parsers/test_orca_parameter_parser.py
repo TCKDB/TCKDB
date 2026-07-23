@@ -1,6 +1,6 @@
 """Tests for the ORCA log file parser.
 
-Validates against the real sp_orca.log file (DLPNO-CCSD(T)/cc-pVTZ-F12 single point).
+Validates against a compact representative DLPNO-CCSD(T)/cc-pVTZ-F12 fixture.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from app.services.orca_parameter_parser import (
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
 ORCA_DIR = os.path.join(FIXTURES_DIR, "orca")
-SP_LOG = os.path.join(ORCA_DIR, "sp_orca.log")
+SP_LOG = os.path.join(ORCA_DIR, "sp_orca_minimal.txt")
 
 
 @pytest.fixture

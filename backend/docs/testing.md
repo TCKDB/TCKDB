@@ -133,6 +133,21 @@ Test isolation in this repo is per-test transaction rollback (see
 [`tests/conftest.py`](../tests/conftest.py)); intermittent failures
 are usually fixture-ordering or shared-state bugs surfacing.
 
+### Recovering from a local test-database port conflict
+
+If pytest reports `psycopg.OperationalError` while connecting to
+`127.0.0.1:5432`, another PostgreSQL instance may already own the default
+port. Select an available backend test port and update the ignored local
+environment file with:
+
+```bash
+conda run -n tckdb_env python backend/scripts/dev/ensure_test_db_port.py --apply
+```
+
+Then restart the backend database service so Compose uses the selected
+port. This recovery procedure is backend tooling and applies equally to
+local development environments and automation.
+
 ## Profiling slow tests
 
 `test-profile.sh` runs the requested subset with `--durations=50` so

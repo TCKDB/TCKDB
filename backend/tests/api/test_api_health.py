@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import sessionmaker
 
 from app.api.routes import health as health_route
+
+
+@pytest.fixture(autouse=True)
+def _bind_health_probe_to_test_database(db_engine, monkeypatch):
+    """Run direct health-probe sessions against the migrated pytest database."""
+    test_session_factory = sessionmaker(bind=db_engine, expire_on_commit=False)
+    monkeypatch.setattr(health_route, "SessionLocal", test_session_factory)
 
 
 def test_health(client):

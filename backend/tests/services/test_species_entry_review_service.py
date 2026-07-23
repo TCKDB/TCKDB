@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 
 from app.api.errors import DomainError, NotFoundError
 from app.db.models.app_user import AppUser
@@ -18,19 +19,39 @@ from app.services.species_entry_review import (
     list_species_entry_reviews,
 )
 
+_REVIEW_ENTRY_COUNTER = 0
+
 
 def _make_species_entry(session) -> int:
-    species = Species(
-        kind=MoleculeKind.molecule,
-        smiles="[H]",
-        inchi_key="YZCKVEUIGOORGS-UHFFFAOYSA-N",
-        charge=0,
-        multiplicity=2,
-        stereo_kind=StereoKind.achiral,
+    global _REVIEW_ENTRY_COUNTER
+    species = session.scalar(
+        select(Species)
+        .where(
+            Species.kind == MoleculeKind.molecule,
+            Species.smiles == "[H]",
+            Species.charge == 0,
+            Species.multiplicity == 2,
+            Species.stereo_kind == StereoKind.achiral,
+        )
+        .order_by(Species.id)
+        .limit(1)
     )
-    session.add(species)
-    session.flush()
-    entry = SpeciesEntry(species_id=species.id)
+    if species is None:
+        species = Species(
+            kind=MoleculeKind.molecule,
+            smiles="[H]",
+            inchi_key="YZCKVEUIGOORGS-UHFFFAOYSA-N",
+            charge=0,
+            multiplicity=2,
+            stereo_kind=StereoKind.achiral,
+        )
+        session.add(species)
+        session.flush()
+    _REVIEW_ENTRY_COUNTER += 1
+    entry = SpeciesEntry(
+        species_id=species.id,
+        stereo_label=f"review-fixture-{_REVIEW_ENTRY_COUNTER}",
+    )
     session.add(entry)
     session.flush()
     return entry.id
@@ -176,7 +197,7 @@ class TestListSpeciesEntryReviews:
         # Create a second distinct species + entry
         species_b = Species(
             kind=MoleculeKind.molecule,
-            smiles="[He]",
+            smiles="[4He]",
             inchi_key="SWQJXJOGLNCZEY-UHFFFAOYSA-N",
             charge=0,
             multiplicity=1,

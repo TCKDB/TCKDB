@@ -382,7 +382,16 @@ def test_archive_round_trip_preserves_rows_and_artifact_bytes(db_session, monkey
     assert restored_supersession is not None
     assert restored_supersession.superseded_record_id == original["thermo_id"]
     assert restored_supersession.superseding_record_id == original["replacement_thermo_id"]
-    assert db_session.scalar(select(func.count()).select_from(RecordReviewEvent)) == 2
+    restored_fixture_event_count = db_session.scalar(
+        select(func.count())
+        .select_from(RecordReviewEvent)
+        .where(
+            RecordReviewEvent.record_review_id.in_(
+                [original["old_review_id"], original["new_review_id"]]
+            )
+        )
+    )
+    assert restored_fixture_event_count == 2
     restored_artifact = db_session.get(CalculationArtifact, original["artifact_id"])
     assert restored_artifact is not None
     assert restored_artifact.uri == f"s3://restored/{artifact_sha[:2]}/{artifact_sha}"

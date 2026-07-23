@@ -585,7 +585,9 @@ def test_reaction_export_duplicate_reactant_counted_twice(db_session):
     barrier and delta_h298."""
     lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
     e_a = _reactant_with_energy(db_session, "C", -40.0, lot, h298=-74.6)
-    e_p = _reactant_with_energy(db_session, "CC", -80.1, lot, h298=-140.0)
+    e_p = _reactant_with_energy(
+        db_session, "[13CH3][13CH3]", -80.1, lot, h298=-140.0
+    )
     chem = make_chem_reaction(
         db_session,
         reactants=[e_a.species, e_a.species],

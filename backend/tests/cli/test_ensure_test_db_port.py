@@ -110,11 +110,9 @@ def test_apply_writes_expected_files(monkeypatch, tmp_path):
     assert status.wrote_files == [env_file]
 
 
-def test_claude_rule_mentions_recovery_triggers_and_command():
-    rule = (Path(__file__).resolve().parents[3] / ".claude" / "rules" / "dev-test-db.md").read_text(
-        encoding="utf-8"
-    )
+def test_backend_testing_docs_mention_recovery_triggers_and_command():
+    docs = (Path(__file__).resolve().parents[2] / "docs" / "testing.md").read_text(encoding="utf-8")
 
-    assert "psycopg.OperationalError" in rule
-    assert "127.0.0.1:5432" in rule
-    assert "ensure_test_db_port.py --apply" in rule
+    assert "psycopg.OperationalError" in docs
+    assert "127.0.0.1:5432" in docs
+    assert "ensure_test_db_port.py --apply" in docs
