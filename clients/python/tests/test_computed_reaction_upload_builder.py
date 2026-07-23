@@ -162,6 +162,7 @@ def test_to_payload_snapshot(minimal_upload):
                 "model_kind": "modified_arrhenius",
                 "a": 1.2e13,
                 "a_units": "cm3_mol_s",
+                "degeneracy_convention": "unknown",
                 "n": 0.5,
                 "reported_ea": 10.0,
                 "reported_ea_units": "kj_mol",
