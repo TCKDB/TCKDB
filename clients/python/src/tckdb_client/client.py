@@ -41,6 +41,8 @@ from tckdb_client.scientific_types import (
     NetworkKineticsSearchResponse,
     NetworkRecord,
     NetworkSearchResponse,
+    NetworkSolveRecord,
+    NetworkSolveSearchResponse,
     ReactionKineticsResponse,
     ReactionRecord,
     ReactionSearchResponse,
@@ -1443,6 +1445,73 @@ class TCKDBClient:
             method_http=method_http,
         )
 
+    def search_network_solves(
+        self,
+        *,
+        network_solve_ref: str | None = None,
+        network_ref: str | None = None,
+        solve_method: str | None = None,
+        temperature_min: float | None = None,
+        temperature_max: float | None = None,
+        pressure_min: float | None = None,
+        pressure_max: float | None = None,
+        has_bath_gas: bool | None = None,
+        has_energy_transfer: bool | None = None,
+        has_source_calculations: bool | None = None,
+        has_kinetics: bool | None = None,
+        has_chebyshev: bool | None = None,
+        has_plog: bool | None = None,
+        has_point_kinetics: bool | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        method_http: _ScientificSearchMethod = "POST",
+    ) -> NetworkSolveSearchResponse:
+        """Search pressure-dependence network solves and their evidence."""
+
+        body = {
+            "network_solve_ref": network_solve_ref,
+            "network_ref": network_ref,
+            "solve_method": solve_method,
+            "temperature_min": temperature_min,
+            "temperature_max": temperature_max,
+            "pressure_min": pressure_min,
+            "pressure_max": pressure_max,
+            "has_bath_gas": has_bath_gas,
+            "has_energy_transfer": has_energy_transfer,
+            "has_source_calculations": has_source_calculations,
+            "has_kinetics": has_kinetics,
+            "has_chebyshev": has_chebyshev,
+            "has_plog": has_plog,
+            "has_point_kinetics": has_point_kinetics,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self._request_scientific_search(
+            "/scientific/network-solves/search",
+            body,
+            method_http=method_http,
+        )
+
     def search_statmech(
         self,
         *,
@@ -1662,6 +1731,13 @@ class TCKDBClient:
 
         return iter_paginated_records(self.search_networks, parameters)
 
+    def iter_network_solves(
+        self, **parameters: Any
+    ) -> Iterator[NetworkSolveRecord]:
+        """Lazily yield network-solve records matching the supplied filters."""
+
+        return iter_paginated_records(self.search_network_solves, parameters)
+
     def iter_network_kinetics(
         self, **parameters: Any
     ) -> Iterator[NetworkKineticsRecord]:
@@ -1739,6 +1815,25 @@ class TCKDBClient:
         params = {"include": include}
         return self.request_json(
             "GET", path, params=params, authenticated=False
+        ).data
+
+    def get_network_solve(
+        self,
+        network_solve_ref_or_id: int | str,
+        *,
+        include: list[str] | None = None,
+    ) -> Any:
+        """``GET /scientific/network-solves/{network_solve_ref_or_id}``.
+
+        ``network_solve_ref_or_id`` accepts either an integer database id or
+        a public ``nsolve_…`` ref. Optional repeated ``include`` tokens expose
+        bounded detail sections such as bath gas, energy transfer, source
+        calculations, kinetics, and review history.
+        """
+
+        path = f"/scientific/network-solves/{network_solve_ref_or_id}"
+        return self.request_json(
+            "GET", path, params={"include": include}, authenticated=False
         ).data
 
 
