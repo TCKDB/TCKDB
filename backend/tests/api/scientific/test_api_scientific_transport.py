@@ -18,7 +18,7 @@ from app.services.reproducibility_assessment import (
     append_reproducibility_assessment,
 )
 from app.services.reproducibility_rubric import (
-    evaluate_and_append_reproducibility_v1,
+    evaluate_and_append_reproducibility_v2,
 )
 from tests.services.scientific_read._factories import (
     attach_artifact,
@@ -915,7 +915,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     assert subresource.status_code == 200, subresource.text
     assert subresource.json()["records"][0]["assessments"] == detail
 
-    current_row = evaluate_and_append_reproducibility_v1(
+    current_row = evaluate_and_append_reproducibility_v2(
         db_session,
         record_type=SubmissionRecordType.transport,
         record_id=tr.id,

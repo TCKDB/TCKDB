@@ -2680,6 +2680,7 @@ _ALL_EXPANSION_TOKENS = {
     "scan",
     "irc",
     "path_search",
+    "execution_environment",
 }
 
 
