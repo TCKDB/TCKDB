@@ -43,6 +43,8 @@ from app.db.models.common import (
 from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
+from app.services.calculation_resolution import resolve_execution_environment_manifest
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_dependency,
@@ -4033,7 +4035,48 @@ _ALL_EXPANSION_TOKENS = {
     "scan",
     "irc",
     "path_search",
+    "execution_environment",
 }
+
+
+def _execution_environment_payload() -> dict:
+    return {
+        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
+        "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        "closure": [
+            {"role": "runtime", "locator": "registry.example/arc@sha256:" + "a" * 64, "digest": "sha256:" + "a" * 64},
+            {"role": "executable", "locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        ],
+    }
+
+
+def test_detail_execution_environment_is_opt_in_and_secret_free(client, db_session):
+    _, _, calc = _make_species_owned_calc(db_session)
+    calc.execution_environment_manifest = resolve_execution_environment_manifest(
+        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
+    )
+    db_session.flush()
+    default = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}").json()["record"]
+    assert "execution_environment" not in default
+    assert default["available_sections"]["has_execution_environment"] is True
+    included = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}?include=execution_environment").json()["record"]
+    environment = included["execution_environment"]
+    assert environment["environment_ref"] == calc.execution_environment_manifest.content_digest
+    assert environment["runtime"] == _execution_environment_payload()["runtime"]
+    assert environment["executable"] == _execution_environment_payload()["executable"]
+    assert environment["closure"] == sorted(_execution_environment_payload()["closure"], key=lambda entry: entry["role"])
+    assert "id" not in environment and "canonical_json" not in environment
+    assert "token" not in str(environment).lower() and "secret" not in str(environment).lower()
+
+
+def test_detail_execution_environment_absence_and_include_all_policy(client, db_session):
+    _, _, calc = _make_species_owned_calc(db_session)
+    absent = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}?include=execution_environment").json()["record"]
+    assert absent["execution_environment"] is None
+    assert absent["available_sections"]["has_execution_environment"] is False
+    all_record = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}?include=all").json()["record"]
+    assert "execution_environment" in all_record
 
 
 def test_detail_include_all_returns_200_with_summary_blocks(

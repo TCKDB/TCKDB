@@ -35,6 +35,8 @@ from tckdb_client.pagination import iter_paginated_records
 from tckdb_client.scientific_types import (
     ArtifactRecord,
     ArtifactSearchResponse,
+    CalculationDetailResponse,
+    CalculationSearchResponse,
     KineticsRecord,
     KineticsSearchResponse,
     NetworkKineticsRecord,
@@ -417,6 +419,29 @@ class TCKDBClient:
 
     def get_json(self, path: str) -> Any:
         return self.request_json("GET", path).data
+
+    def get_calculation(
+        self, calculation_ref_or_id: str | int, *, include: list[str] | None = None
+    ) -> CalculationDetailResponse:
+        """Fetch one scientific calculation, optionally including its environment."""
+        return self.request_json(
+            "GET",
+            f"/scientific/calculations/{calculation_ref_or_id}",
+            params={"include": include} if include is not None else None,
+            authenticated=False,
+        ).data
+
+    def search_calculations(
+        self, *, method_http: _ScientificSearchMethod = "POST", **filters: Any
+    ) -> CalculationSearchResponse:
+        """Search scientific calculations; ``include`` may request execution_environment."""
+        if method_http.upper() == "GET":
+            return self.request_json(
+                "GET", "/scientific/calculations/search", params=filters, authenticated=False
+            ).data
+        return self.request_json(
+            "POST", "/scientific/calculations/search", json=filters, authenticated=False
+        ).data
 
     def post_json(
         self,

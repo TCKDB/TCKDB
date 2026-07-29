@@ -34,6 +34,8 @@ from app.db.models.common import (
 )
 from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
+from app.services.calculation_resolution import resolve_execution_environment_manifest
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_dependency,
@@ -53,6 +55,40 @@ from tests.services.scientific_read._factories import (
 )
 
 SEARCH_URL = "/api/v1/scientific/calculations/search"
+
+
+def _execution_environment_payload() -> dict:
+    return {
+        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
+        "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        "closure": [
+            {"role": "runtime", "locator": "registry.example/arc@sha256:" + "a" * 64, "digest": "sha256:" + "a" * 64},
+            {"role": "executable", "locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        ],
+    }
+
+
+def test_search_execution_environment_is_opt_in_for_get_and_post(client, db_session):
+    _, _, calc = _make_species_owned_calc(db_session)
+    calc.execution_environment_manifest = resolve_execution_environment_manifest(
+        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
+    )
+    db_session.flush()
+    default = client.get(SEARCH_URL + "?calculation_type=opt").json()
+    row = next(item for item in default["records"] if item["calculation"]["calculation_ref"] == calc.public_ref)
+    assert "execution_environment" not in row
+    via_get = client.get(SEARCH_URL + "?calculation_type=opt&include=execution_environment").json()
+    via_post = client.post(SEARCH_URL, json={"calculation_type": "opt", "include": ["execution_environment"]}).json()
+    for body in (via_get, via_post):
+        record = next(item for item in body["records"] if item["calculation"]["calculation_ref"] == calc.public_ref)
+        assert record["available_sections"]["has_execution_environment"] is True
+        environment = record["execution_environment"]
+        assert environment["environment_ref"] == calc.execution_environment_manifest.content_digest
+        assert environment["runtime"] == _execution_environment_payload()["runtime"]
+        assert environment["executable"] == _execution_environment_payload()["executable"]
+        assert environment["closure"] == sorted(_execution_environment_payload()["closure"], key=lambda entry: entry["role"])
+        assert "id" not in environment
 
 # All heavy include tokens have shipped a summary loader. The only
 # include token still rejected is ``all``, gated by the

@@ -76,6 +76,20 @@ nonblank version/revision/build token, and fails when declared-versus-parsed
 software reconciliation is `mismatch`; this is a nonconflicting declared
 identity, not a verified runtime environment.
 
+## System rubric v2
+
+`tckdb_reproducibility:v2` preserves v1 rows and checks. It may award
+`rerunnable` only for a calculation when every v1 requirement passes and its
+stored `tckdb.execution-environment.v1` closure revalidates against its
+canonical SHA-256 identity. It does not claim bitwise-identical output,
+available licences/schedulers, or recomputability of product records without
+their own recipe and source-role closure.
+
+The v2 closure is runtime-specific: immutable OCI image digest for containers,
+content-addressed lockfile plus executable for conda, or resolved-environment
+and dependency-manifest digests plus executable for HPC modules. Descriptive
+module names, image tags, and bare-metal/VM descriptions do not qualify.
+
 Canonical chemical identity/alignment rows use `not_applicable` source
 attribution. Selected collections such as conformer groups and networks do
 not: `created_by` is administrative provenance, so they remain below

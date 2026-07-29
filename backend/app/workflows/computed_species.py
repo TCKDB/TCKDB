@@ -163,6 +163,7 @@ def _to_calc_with_results_payload(
         workflow_tool_release=calc_in.workflow_tool_release,
         level_of_theory=calc_in.level_of_theory,
         literature_id=literature_id,
+        execution_environment=calc_in.execution_environment,
         opt_result=calc_in.opt_result,
         freq_result=calc_in.freq_result,
         sp_result=calc_in.sp_result,

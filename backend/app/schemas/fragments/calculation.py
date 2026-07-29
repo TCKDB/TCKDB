@@ -32,6 +32,7 @@ from app.db.models.common import (
     CalculationType,
 )
 from app.schemas.common import SchemaBase
+from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from app.schemas.fragments.refs import (
     LevelOfTheoryRef,
     SoftwareReleaseRef,
@@ -86,3 +87,4 @@ class CalculationCreateRequest(CalculationOwnerRequiredMixin, SchemaBase):
     level_of_theory: LevelOfTheoryRef
 
     literature_id: int | None = None
+    execution_environment: ExecutionEnvironmentManifestPayload | None = None

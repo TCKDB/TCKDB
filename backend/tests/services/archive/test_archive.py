@@ -19,11 +19,13 @@ from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
 )
+from app.db.models.execution_environment import ExecutionEnvironmentManifest
 from app.db.models.geometry import Geometry, GeometryAtom
 from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.scientific_record_supersession import ScientificRecordSupersession
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.thermo import Thermo
+from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from app.services.archive import (
     ArchiveIntegrityError,
     ArchiveNotEmptyError,
@@ -38,6 +40,7 @@ from app.services.archive.registry import (
     included_tables_in_fk_order,
     validate_registry,
 )
+from app.services.calculation_resolution import resolve_execution_environment_manifest
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_geometry_atoms,
@@ -65,6 +68,18 @@ def _empty_archive_tables(session) -> None:
     session.expunge_all()
 
 
+def _execution_environment_payload() -> dict:
+    return {
+        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
+        "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        "closure": [
+            {"role": "runtime", "locator": "registry.example/arc@sha256:" + "a" * 64, "digest": "sha256:" + "a" * 64},
+            {"role": "executable", "locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        ],
+    }
+
+
 def test_registry_classifies_every_orm_table_and_codec() -> None:
     validate_registry(Base.metadata)
     assert set(Base.metadata.tables) == set(INCLUDED_TABLES) | set(EXCLUDED_TABLES)
@@ -77,11 +92,46 @@ def test_registry_classifies_every_orm_table_and_codec() -> None:
         "record_review_event",
         "scientific_record_supersession",
     ]
+    assert "execution_environment_manifest" in names
+    assert names.index("execution_environment_manifest") < names.index("calculation")
+
+
+def test_archive_registry_fails_closed_without_execution_environment_manifest() -> None:
+    """A newly classified immutable registry cannot silently fall out of archives."""
+    from app.services.archive import registry
+
+    original = registry.INCLUDED_TABLES
+    registry.INCLUDED_TABLES = frozenset(name for name in original if name != "execution_environment_manifest")
+    try:
+        with pytest.raises(registry.ArchiveRegistryError):
+            registry.validate_registry(Base.metadata)
+    finally:
+        registry.INCLUDED_TABLES = original
 
 
 def test_archive_declares_degeneracy_convention_column() -> None:
     kinetics = Base.metadata.tables["kinetics"]
     assert "degeneracy_convention" in archive_core.included_column_names(kinetics)
+
+
+def test_archive_round_trip_preserves_execution_environment_manifest_and_calculation_fk(db_session) -> None:
+    species = make_species(db_session, inchi_key=next_inchi_key("ARCHENV"))
+    entry = make_species_entry(db_session, species)
+    calculation = make_calculation(db_session, species_entry_id=entry.id)
+    manifest = resolve_execution_environment_manifest(
+        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
+    )
+    calculation.execution_environment_manifest_id = manifest.id
+    db_session.flush()
+    archive = io.BytesIO()
+    write_archive(db_session, archive)
+    _empty_archive_tables(db_session)
+    restore_archive(db_session, io.BytesIO(archive.getvalue()))
+    restored = db_session.get(Calculation, calculation.id)
+    restored_manifest = db_session.get(ExecutionEnvironmentManifest, manifest.id)
+    assert restored.execution_environment_manifest_id == restored_manifest.id
+    assert restored_manifest.content_digest == manifest.content_digest
+    assert restored_manifest.canonical_json == manifest.canonical_json
 
 
 def test_restore_accepts_exact_fresh_migration_seeds(db_session) -> None:

@@ -7,7 +7,7 @@ dependency or changing the objects returned by existing methods.
 
 from __future__ import annotations
 
-from typing import Any, Generic, NotRequired, Required, TypeAlias, TypeVar, TypedDict
+from typing import Any, Generic, Literal, NotRequired, Required, TypeAlias, TypeVar, TypedDict
 
 JSONDict: TypeAlias = dict[str, Any]
 
@@ -164,6 +164,93 @@ class SpeciesCalculationRecord(TypedDict, total=False):
     conformer: JSONDict | None
 
 
+class CalculationAvailableSections(TypedDict):
+    """Presence flags returned with scientific calculation records."""
+
+    has_results: bool
+    has_dependencies: bool
+    has_parameters: bool
+    has_constraints: bool
+    has_artifacts: bool
+    has_input_geometries: bool
+    has_output_geometries: bool
+    has_geometry_validation: bool
+    has_scf_stability: bool
+    has_wavefunction_diagnostic: bool
+    has_spin_diagnostic: bool
+    has_freq_modes: bool
+    has_scan: bool
+    has_irc: bool
+    has_path_search: bool
+    has_execution_environment: bool
+
+
+class ExecutionEnvironmentContentReference(TypedDict):
+    """One content-addressed item in the public environment wire contract."""
+
+    locator: str
+    digest: str
+
+
+class ExecutionEnvironmentClosureEntry(ExecutionEnvironmentContentReference):
+    role: Literal["runtime", "executable", "lockfile", "module_closure", "dependency_manifest"]
+
+
+class ExecutionEnvironmentModuleDescription(TypedDict):
+    name: str
+    version: str
+
+
+class ContainerExecutionRuntime(TypedDict):
+    runtime_kind: Literal["container"]
+    image: str
+
+
+class CondaExecutionRuntime(TypedDict):
+    runtime_kind: Literal["conda"]
+    lockfile: ExecutionEnvironmentContentReference
+
+
+class HPCModuleExecutionRuntime(TypedDict):
+    runtime_kind: Literal["hpc_module"]
+    modules: list[ExecutionEnvironmentModuleDescription]
+    resolved_environment_digest: str
+    dependency_manifest_digest: str
+
+
+ExecutionEnvironmentRuntime: TypeAlias = (
+    ContainerExecutionRuntime | CondaExecutionRuntime | HPCModuleExecutionRuntime
+)
+
+
+class ExecutionEnvironmentManifestRecord(TypedDict):
+    """Canonical nested public execution-environment response."""
+
+    schema_version: Required[str]
+    platform: Required[str]
+    architecture: Required[str]
+    runtime: Required[ExecutionEnvironmentRuntime]
+    executable: Required[ExecutionEnvironmentContentReference]
+    closure: Required[list[ExecutionEnvironmentClosureEntry]]
+    environment_ref: Required[str]
+
+
+class CalculationRecord(TypedDict, total=False):
+    """Scientific calculation detail/search record."""
+
+    calculation: Required[JSONDict]
+    owner: Required[JSONDict]
+    provenance: Required[JSONDict]
+    available_sections: Required[CalculationAvailableSections]
+    execution_environment: ExecutionEnvironmentManifestRecord | None
+
+
+class CalculationDetailResponse(TypedDict):
+    request: Required[ScientificRequestEcho]
+    review_summary: Required[ReviewStatusSummary]
+    record: Required[CalculationRecord]
+
+
 class NetworkStateCompositionParticipant(TypedDict):
     species_entry_ref: str
     species_ref: str
@@ -299,6 +386,7 @@ class ReactionKineticsResponse(ScientificSearchResponse[KineticsDetailRecord]):
 SpeciesCalculationsSearchResponse: TypeAlias = ScientificSearchResponse[
     SpeciesCalculationRecord
 ]
+CalculationSearchResponse: TypeAlias = ScientificSearchResponse[CalculationRecord]
 NetworkSearchResponse: TypeAlias = ScientificSearchResponse[NetworkRecord]
 NetworkSolveSearchResponse: TypeAlias = ScientificSearchResponse[NetworkSolveRecord]
 NetworkKineticsSearchResponse: TypeAlias = ScientificSearchResponse[
@@ -312,7 +400,19 @@ ArtifactSearchResponse: TypeAlias = ScientificSearchResponse[ArtifactRecord]
 __all__ = [
     "ArtifactRecord",
     "ArtifactSearchResponse",
+    "CalculationAvailableSections",
+    "CalculationDetailResponse",
+    "CalculationRecord",
+    "CalculationSearchResponse",
+    "CondaExecutionRuntime",
+    "ContainerExecutionRuntime",
     "ErrorEnvelope",
+    "ExecutionEnvironmentManifestRecord",
+    "ExecutionEnvironmentClosureEntry",
+    "ExecutionEnvironmentContentReference",
+    "ExecutionEnvironmentModuleDescription",
+    "ExecutionEnvironmentRuntime",
+    "HPCModuleExecutionRuntime",
     "JSONDict",
     "KineticsDetailRecord",
     "KineticsRecord",

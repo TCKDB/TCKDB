@@ -32,6 +32,7 @@ from app.db.models.common import (
     TransitionStateEntryStatus,
     ValidationStatus,
 )
+from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from app.schemas.reads.scientific_common import (
     GeometryValidationStatus,
     LevelOfTheorySummary,
@@ -135,6 +136,12 @@ class CalculationCoreBlock(BaseModel):
     quality: CalculationQuality
     created_at: datetime
     review: RecordReviewBadge
+
+
+class ExecutionEnvironmentManifestSummary(ExecutionEnvironmentManifestPayload):
+    """Public, secret-free content reference for an optional closed runtime."""
+
+    environment_ref: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 class CalculationEvidenceProvenanceSummary(BaseModel):
@@ -752,6 +759,7 @@ class AvailableCalculationSections(BaseModel):
     has_scan: bool
     has_irc: bool
     has_path_search: bool
+    has_execution_environment: bool
 
 
 # ---------------------------------------------------------------------------
@@ -782,6 +790,7 @@ class ScientificCalculationRecord(BaseModel):
     results: CalculationResultSummary | None = None
     dependencies: list[CalculationDependencySummary] | None = None
     artifacts: list[CalculationArtifactSummary] | None = None
+    execution_environment: ExecutionEnvironmentManifestSummary | None = None
     input_geometries: list[CalculationGeometryLinkSummary] | None = None
     output_geometries: list[CalculationGeometryLinkSummary] | None = None
     geometry_validation: list[CalculationGeometryValidationSummary] | None = None
@@ -835,6 +844,7 @@ __all__ = [
     "CalculationScanSummary",
     "CalculationSpinDiagnosticSummary",
     "CalculationWavefunctionDiagnosticSummary",
+    "ExecutionEnvironmentManifestSummary",
     "RequestEcho",
     "ScanCoordinateSummary",
     "ScientificCalculationDetailResponse",

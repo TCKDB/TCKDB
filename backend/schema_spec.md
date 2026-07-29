@@ -21,6 +21,7 @@ The main structural choices are:
 - `transition_state` is reaction-entry-centered, and `transition_state_entry` stores candidate saddle-point structures
 - `conformer_group` is basin identity, while `conformer_observation` and `conformer_selection` capture provenance and curation
 - `calculation` is the hub for computational provenance and ownership
+- `execution_environment_manifest` is an immutable, SHA-256 content-addressed closure shared by calculations; its optional FK preserves legacy uploads while allowing a calculation-level rerun claim when inputs, parameters, dependencies, and the closed runtime all exist.
 - direct ESS outputs live in dedicated result/link tables instead of overloading `calculation`
 - submission/moderation state is modeled explicitly in `submission`, `submission_audit_event`, and `submission_record_link`
 - network solving, phenomenological kinetics, and energy-correction data are first-class relational objects rather than JSON payloads

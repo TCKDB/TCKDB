@@ -39,7 +39,9 @@ from app.db.models.reaction import ChemReaction
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
+from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from app.services.artifact_storage import ArtifactIntegrityError, ArtifactStorageUnavailable
+from app.services.calculation_resolution import resolve_execution_environment_manifest
 from app.services.reproducibility_assessment import SUPPORTED_REPRODUCIBILITY_RECORD_TYPES
 from app.services.reproducibility_rubric import (
     MAX_ARTIFACT_VERIFICATION_BYTES,
@@ -48,7 +50,22 @@ from app.services.reproducibility_rubric import (
     _geometry_snapshot,
     _rows,
     evaluate_and_append_reproducibility_v1,
+    evaluate_and_append_reproducibility_v2,
     evaluate_reproducibility_v1,
+    evaluate_reproducibility_v2,
+)
+from tests.services.scientific_read._factories import (
+    make_chem_reaction,
+    make_kinetics,
+    make_network,
+    make_network_solve,
+    make_reaction_entry,
+    make_species,
+    make_species_entry,
+    make_statmech,
+    make_thermo_scalar,
+    make_transport,
+    next_inchi_key,
 )
 
 
@@ -202,6 +219,129 @@ def test_verified_typed_output_can_be_auditable_but_v1_never_rerunnable(
     assert result.grade is ReproducibilityGrade.auditable
     assert "verified_output_artifact_bytes" in {item["name"] for item in result.passed}
     assert "execution_environment_manifest" in {item["name"] for item in result.missing}
+
+
+def _execution_environment_payload() -> dict:
+    return {
+        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
+        "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        "closure": [
+            {"role": "runtime", "locator": "registry.example/arc@sha256:" + "a" * 64, "digest": "sha256:" + "a" * 64},
+            {"role": "executable", "locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        ],
+    }
+
+
+def test_v2_requires_valid_manifest_and_preserves_v1_result(db_session, _api_test_user) -> None:
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(db_session, complete=True, created_by=_api_test_user, objects=objects)
+    v1 = _evaluate(db_session, calculation, objects)
+    v2_missing = evaluate_reproducibility_v2(db_session, record_type="calculation", record_id=calculation.id,
+                                              artifact_loader=_verified_loader(objects))
+    assert v1.grade is ReproducibilityGrade.auditable
+    assert v2_missing.grade is ReproducibilityGrade.auditable
+    assert next(item for item in v2_missing.missing if item["name"] == "execution_environment_manifest")["evidence"]["reason"] == "execution_environment_manifest_missing"
+
+    calculation.execution_environment_manifest = resolve_execution_environment_manifest(
+        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
+    )
+    db_session.flush()
+    v2 = evaluate_reproducibility_v2(db_session, record_type="calculation", record_id=calculation.id,
+                                      artifact_loader=_verified_loader(objects))
+    assert v2.grade is ReproducibilityGrade.rerunnable
+    stored = evaluate_and_append_reproducibility_v2(db_session, record_type="calculation", record_id=calculation.id,
+                                                    artifact_loader=_verified_loader(objects))
+    assert stored.rubric_version == "v2"
+
+
+def test_v2_corrupt_or_unavailable_output_blocks_rerunnable(db_session, _api_test_user) -> None:
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(db_session, complete=True, created_by=_api_test_user, objects=objects)
+    calculation.execution_environment_manifest = resolve_execution_environment_manifest(
+        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
+    )
+    calculation.artifacts.append(
+        CalculationArtifact(
+            kind=ArtifactKind.output_log,
+            uri="file:///missing.log",
+            filename="missing.log",
+            sha256="d" * 64,
+            bytes=4,
+        )
+    )
+    db_session.flush()
+    result = evaluate_reproducibility_v2(
+        db_session, record_type="calculation", record_id=calculation.id, artifact_loader=_verified_loader(objects)
+    )
+    assert result.grade is not ReproducibilityGrade.rerunnable
+    assert "v1_evidence_warnings_clear" in {item["name"] for item in result.missing}
+
+
+@pytest.mark.parametrize("mutation", ["canonical", "normalized", "closure"])
+def test_v2_manifest_corruption_fails_closed(db_session, _api_test_user, mutation) -> None:
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(db_session, complete=True, created_by=_api_test_user, objects=objects)
+    manifest = resolve_execution_environment_manifest(
+        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
+    )
+    calculation.execution_environment_manifest = manifest
+    db_session.flush()
+    # The database trigger deliberately makes production rows immutable; keep
+    # this intentionally corrupt in-memory projection out of autoflush.
+    if mutation == "canonical":
+        manifest.canonical_json = {"broken": True}
+    elif mutation == "normalized":
+        manifest.platform = "darwin"
+    else:
+        manifest.closure_json = [{"role": "runtime", "locator": "bad", "digest": "sha256:" + "c" * 64}]
+    with db_session.no_autoflush:
+        result = evaluate_reproducibility_v2(
+            db_session,
+            record_type="calculation",
+            record_id=calculation.id,
+            artifact_loader=_verified_loader(objects),
+        )
+    assert result.grade is ReproducibilityGrade.auditable
+    assert "execution_environment_manifest" in {item["name"] for item in result.missing}
+
+
+@pytest.mark.parametrize(
+    ("record_type", "factory"),
+    [
+        ("thermo", "thermo"),
+        ("kinetics", "kinetics"),
+        ("statmech", "statmech"),
+        ("transport", "transport"),
+        ("network", "network"),
+        ("network_solve", "network_solve"),
+    ],
+)
+def test_v2_never_awards_rerunnable_to_product_records(db_session, record_type, factory) -> None:
+    """A closed source runtime never turns a derived product into a rerun claim."""
+    species = make_species(db_session, inchi_key=next_inchi_key("V2PRODUCT"))
+    entry = make_species_entry(db_session, species)
+    if factory == "thermo":
+        target = make_thermo_scalar(db_session, species_entry=entry)
+    elif factory == "kinetics":
+        reaction = make_chem_reaction(db_session, reactants=[species], products=[species])
+        target = make_kinetics(
+            db_session,
+            reaction_entry=make_reaction_entry(
+                db_session, reaction=reaction, reactant_entries=[entry], product_entries=[entry]
+            ),
+        )
+    elif factory == "statmech":
+        target = make_statmech(db_session, species_entry=entry)
+    elif factory == "transport":
+        target = make_transport(db_session, species_entry=entry)
+    else:
+        network = make_network(db_session, name=f"v2-product-{factory}-{entry.id}")
+        target = network if factory == "network" else make_network_solve(db_session, network=network)
+
+    result = evaluate_reproducibility_v2(db_session, record_type=record_type, record_id=target.id)
+    assert result.grade is not ReproducibilityGrade.rerunnable
+    assert result.context_json["rubric"]["version"] == "v2"
 
 
 @pytest.mark.parametrize("failure", ["unavailable", "integrity"])

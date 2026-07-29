@@ -64,6 +64,7 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeBondParam,
     FrequencyScaleFactor,
 )
+from app.db.models.execution_environment import ExecutionEnvironmentManifest
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
 from app.db.models.reaction import (
     ChemReaction,
@@ -262,6 +263,37 @@ def _minimal_payload() -> dict:
             }
         ],
     }
+
+
+def _execution_environment() -> dict:
+    return {
+        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
+        "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        "closure": [
+            {"role": "runtime", "locator": "registry.example/arc@sha256:" + "a" * 64, "digest": "sha256:" + "a" * 64},
+            {"role": "executable", "locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        ],
+    }
+
+
+def test_computed_reaction_calculation_environment_persists_dedups_and_is_optional(db_engine) -> None:
+    with _isolated_session(db_engine) as session:
+        session.add(AppUser(id=50_199, username="computed_rxn_environment"))
+        session.flush()
+        payload = _minimal_payload()
+        payload["species"][0]["conformers"][0]["calculation"]["execution_environment"] = _execution_environment()
+        payload["species"][0]["calculations"][0]["execution_environment"] = _execution_environment()
+        request = ComputedReactionUploadRequest(**payload)
+        persist_computed_reaction_upload(session, request, created_by=50_199)
+        calculations = session.scalars(select(Calculation).where(Calculation.created_by == 50_199)).all()
+        populated = [calc for calc in calculations if calc.execution_environment_manifest_id is not None]
+        assert len(populated) == 2
+        assert len({calc.execution_environment_manifest_id for calc in populated}) == 1
+        assert session.scalar(select(func.count()).select_from(ExecutionEnvironmentManifest)) == 1
+        # A legacy workflow payload remains valid and writes no FK.
+        persist_computed_reaction_upload(session, ComputedReactionUploadRequest(**_minimal_payload()), created_by=50_199)
+        assert any(calc.execution_environment_manifest_id is None for calc in session.scalars(select(Calculation).where(Calculation.created_by == 50_199)))
 
 
 @contextmanager

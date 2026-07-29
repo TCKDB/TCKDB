@@ -36,6 +36,7 @@ from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
+from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
@@ -796,6 +797,120 @@ def evaluate_and_append_reproducibility_v1(
         grade=evaluation.grade,
         rubric_name=RUBRIC_NAME,
         rubric_version=RUBRIC_VERSION,
+        context_json=evaluation.context_json,
+        passed=evaluation.passed,
+        missing=evaluation.missing,
+        warnings=evaluation.warnings,
+        assessor_kind=ReproducibilityAssessorKind.system,
+    )
+
+
+RUBRIC_VERSION_V2 = "v2"
+
+
+def _closed_execution_environment_evidence(calculation: Calculation | None) -> tuple[bool, dict[str, Any]]:
+    """Verify the stored manifest's content identity without trusting a claim."""
+    manifest = None if calculation is None else calculation.execution_environment_manifest
+    if manifest is None:
+        return False, {"reason": "execution_environment_manifest_missing"}
+    try:
+        payload = ExecutionEnvironmentManifestPayload.model_validate(manifest.canonical_json)
+    except Exception as exc:
+        return False, {"reason": "execution_environment_manifest_invalid", "error": type(exc).__name__}
+    canonical = payload.canonical_payload()
+    actual_digest = payload.content_digest()
+    valid = bool(
+        manifest.schema_version == payload.schema_version
+        and manifest.content_digest == actual_digest
+        and manifest.platform == payload.platform
+        and manifest.architecture == payload.architecture
+        and manifest.runtime_kind == payload.runtime_kind
+        and manifest.runtime_locator == payload.runtime_locator
+        and manifest.executable_locator == payload.executable_locator
+        and manifest.closure_json == canonical["closure"]
+        and manifest.canonical_json == canonical
+    )
+    return valid, {
+        "environment_ref": manifest.content_digest,
+        "schema_version": manifest.schema_version,
+        "content_digest_valid": actual_digest == manifest.content_digest,
+        "closure_count": len(canonical["closure"]),
+    }
+
+
+def evaluate_reproducibility_v2(
+    session: Session,
+    *,
+    record_type: str | SubmissionRecordType,
+    record_id: int,
+    artifact_loader: ArtifactLoader = load_artifact_bytes,
+) -> ReproducibilityEvaluation:
+    """Evaluate v2: only a calculation with all v1 evidence plus closed environment reruns.
+
+    Product records intentionally retain the v1 source-role limitation; v2
+    never turns thermo, kinetics, statmech, transport, or PDep products into
+    universal recomputability claims.
+    """
+    v1 = evaluate_reproducibility_v1(
+        session, record_type=record_type, record_id=record_id, artifact_loader=artifact_loader
+    )
+    _, model = resolve_reproducibility_record_model(v1.record_type)
+    target = session.get(model, record_id)
+    calculation = target if isinstance(target, Calculation) else None
+    environment_ok, evidence = _closed_execution_environment_evidence(calculation)
+    checks = list(v1.context_json["checks"])
+    for check in checks:
+        if check["name"] == "execution_environment_manifest":
+            check.update({"outcome": "passed" if environment_ok else "missing", "evidence": evidence})
+    # A rerun claim is only as strong as *all* v1 evidence.  Warnings are
+    # emitted specifically when artifact bytes could not be verified, so none
+    # may be silently upgraded into a rerunnable result by v2.
+    warnings_block_rerunnable = bool(v1.warnings)
+    checks.append(
+        _check(
+            "v1_evidence_warnings_clear",
+            CheckLevel.rerunnable,
+            not warnings_block_rerunnable,
+            {
+                "reason": "v1_warnings_block_rerunnable" if warnings_block_rerunnable else "no_v1_warnings",
+                "warning_codes": [warning["code"] for warning in v1.warnings],
+            },
+        ).snapshot()
+    )
+    missing = tuple(check for check in checks if check["outcome"] == "missing")
+    grade = ReproducibilityGrade.rerunnable if not missing and calculation is not None else v1.grade
+    context = dict(v1.context_json)
+    context["rubric"] = {"name": RUBRIC_NAME, "version": RUBRIC_VERSION_V2}
+    context["checks"] = checks
+    return ReproducibilityEvaluation(
+        record_type=v1.record_type,
+        record_id=v1.record_id,
+        grade=grade,
+        context_json=context,
+        passed=tuple(check for check in checks if check["outcome"] in {"passed", "not_applicable"}),
+        missing=missing,
+        warnings=v1.warnings,
+    )
+
+
+def evaluate_and_append_reproducibility_v2(
+    session: Session,
+    *,
+    record_type: str | SubmissionRecordType,
+    record_id: int,
+    artifact_loader: ArtifactLoader = load_artifact_bytes,
+) -> RecordReproducibilityAssessment:
+    """Append a v2 assessment while leaving historical v1 rows unchanged."""
+    evaluation = evaluate_reproducibility_v2(
+        session, record_type=record_type, record_id=record_id, artifact_loader=artifact_loader
+    )
+    return append_reproducibility_assessment(
+        session,
+        record_type=evaluation.record_type,
+        record_id=evaluation.record_id,
+        grade=evaluation.grade,
+        rubric_name=RUBRIC_NAME,
+        rubric_version=RUBRIC_VERSION_V2,
         context_json=evaluation.context_json,
         passed=evaluation.passed,
         missing=evaluation.missing,

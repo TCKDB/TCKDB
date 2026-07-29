@@ -15,7 +15,10 @@ This module also hosts :class:`LevelOfTheory` and
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import Any, Mapping
+
+from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 
 from tckdb_client.builders.artifact import Artifact
 from tckdb_client.builders.geometry import Geometry
@@ -164,6 +167,9 @@ class Calculation:
     # locally but not emitted on the wire. Lift to the payload only
     # once the backend schemas grow a matching field.
     note: str | None = None
+    #: Optional server-validated, content-addressed runtime closure. The
+    #: builder preserves it verbatim; TCKDB schemas own canonical validation.
+    execution_environment: ExecutionEnvironmentManifestPayload | Mapping[str, Any] | None = None
 
     # Result-block fields (one cluster per type).
     final_energy_hartree: float | None = None
@@ -212,6 +218,15 @@ class Calculation:
                 raise TCKDBBuilderValidationError(
                     "depends_on entries must be Calculation builders."
                 )
+        if self.execution_environment is not None:
+            try:
+                self.execution_environment = ExecutionEnvironmentManifestPayload.model_validate(
+                    self.execution_environment
+                )
+            except Exception as exc:
+                raise TCKDBBuilderValidationError(
+                    "execution_environment must be a valid closed execution-environment manifest."
+                ) from exc
         if self.n_steps is not None:
             n_steps = ensure_int(self.n_steps, field="n_steps")
             if n_steps < 0:
@@ -288,6 +303,7 @@ class Calculation:
         depends_on: "Calculation | list[Calculation] | None" = None,
         label: str | None = None,
         note: str | None = None,
+        execution_environment: ExecutionEnvironmentManifestPayload | Mapping[str, Any] | None = None,
     ) -> "Calculation":
         """Geometry-optimisation calculation.
 
@@ -305,6 +321,7 @@ class Calculation:
             depends_on=_normalise_depends_on(depends_on),
             label=label,
             note=note,
+            execution_environment=execution_environment,
             final_energy_hartree=final_energy_hartree,
             converged=converged,
             n_steps=n_steps,
@@ -325,6 +342,7 @@ class Calculation:
         depends_on: "Calculation | list[Calculation] | None" = None,
         label: str | None = None,
         note: str | None = None,
+        execution_environment: ExecutionEnvironmentManifestPayload | Mapping[str, Any] | None = None,
     ) -> "Calculation":
         """Harmonic-frequency calculation.
 
@@ -340,6 +358,7 @@ class Calculation:
             depends_on=_normalise_depends_on(depends_on),
             label=label,
             note=note,
+            execution_environment=execution_environment,
             frequencies_cm1=(
                 list(frequencies_cm1) if frequencies_cm1 is not None else None
             ),
@@ -360,6 +379,7 @@ class Calculation:
         depends_on: "Calculation | list[Calculation] | None" = None,
         label: str | None = None,
         note: str | None = None,
+        execution_environment: ExecutionEnvironmentManifestPayload | Mapping[str, Any] | None = None,
     ) -> "Calculation":
         """Single-point energy calculation.
 
@@ -375,6 +395,7 @@ class Calculation:
             depends_on=_normalise_depends_on(depends_on),
             label=label,
             note=note,
+            execution_environment=execution_environment,
             electronic_energy_hartree=electronic_energy_hartree,
         )
 

@@ -51,7 +51,7 @@ def test_evaluation_is_curator_gated_and_server_derived(
     body = response.json()
     assert body["grade"] == ReproducibilityGrade.insufficient.value
     assert body["rubric_name"] == "tckdb_reproducibility"
-    assert body["rubric_version"] == "v1"
+    assert body["rubric_version"] == "v2"
     assert body["assessor_kind"] == "system"
     assert body["assessor_user_id"] is None
 

@@ -118,3 +118,17 @@ def test_openapi_snapshot_is_normalized() -> None:
         f"Regenerate with: {_UPDATE_ENV}=1 pytest "
         f"tests/api/test_openapi_snapshot.py"
     )
+
+
+def test_openapi_execution_environment_contract_is_narrow_and_opt_in(client) -> None:
+    """Supplement the golden with the public manifest and read-policy canary."""
+    schema = _fetch_openapi(client)
+    components = schema["components"]["schemas"]
+    payload = components["ExecutionEnvironmentManifestPayload"]
+    summary = components["ExecutionEnvironmentManifestSummary"]
+    assert {"runtime", "executable", "closure"} <= set(payload["properties"])
+    assert "canonical_json" not in summary["properties"]
+    calculation = components["ScientificCalculationRecord"]
+    assert "execution_environment" in calculation["properties"]
+    available = components["AvailableCalculationSections"]
+    assert "has_execution_environment" in available["properties"]

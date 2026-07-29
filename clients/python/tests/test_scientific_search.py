@@ -29,6 +29,61 @@ def _split_qs(url: str) -> dict[str, list[str]]:
     return parse_qs(urlsplit(url).query)
 
 
+def test_calculation_detail_and_search_expose_execution_environment_section():
+    seen: list[httpx.Request] = []
+    digest = "sha256:" + "a" * 64
+    executable_digest = "sha256:" + "b" * 64
+    available_sections = {
+        "has_results": False, "has_dependencies": False, "has_parameters": False,
+        "has_constraints": False, "has_artifacts": False, "has_input_geometries": False,
+        "has_output_geometries": False, "has_geometry_validation": False,
+        "has_scf_stability": False, "has_wavefunction_diagnostic": False,
+        "has_spin_diagnostic": False, "has_freq_modes": False, "has_scan": False,
+        "has_irc": False, "has_path_search": False, "has_execution_environment": True,
+    }
+    environment = {
+        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "runtime": {"runtime_kind": "container", "image": "registry.example/arc@" + digest},
+        "executable": {"locator": "file:///opt/arc/bin/arc", "digest": executable_digest},
+        "closure": [
+            {"role": "runtime", "locator": "registry.example/arc@" + digest, "digest": digest},
+            {"role": "executable", "locator": "file:///opt/arc/bin/arc", "digest": executable_digest},
+        ],
+        "environment_ref": digest,
+    }
+    body = {
+        "request": {}, "review_summary": {},
+        "record": {"calculation": {}, "owner": {}, "provenance": {},
+                   "available_sections": available_sections, "execution_environment": environment},
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=body if "/calculations/calc-1" in str(request.url) else {"records": [], "pagination": {}})
+
+    client, _ = make_client(handler)
+    detail = client.get_calculation("calc-1", include=["execution_environment"])
+    searched_get = client.search_calculations(
+        method_http="GET", calculation_type="sp", include=["execution_environment"]
+    )
+    searched_post = client.search_calculations(calculation_type="sp", include=["execution_environment"])
+    assert detail["record"]["available_sections"]["has_execution_environment"] is True
+    detail_environment = detail["record"]["execution_environment"]
+    assert detail_environment is not None
+    assert detail_environment["environment_ref"] == digest
+    assert detail_environment["runtime"]["runtime_kind"] == "container"
+    assert detail_environment["runtime"]["image"] == "registry.example/arc@" + digest
+    assert detail_environment["executable"]["locator"] == "file:///opt/arc/bin/arc"
+    assert detail_environment["closure"][0]["role"] == "runtime"
+    assert searched_get["records"] == []
+    assert searched_post["records"] == []
+    assert urlsplit(str(seen[0].url)).path.endswith("/scientific/calculations/calc-1")
+    assert seen[1].method == "GET"
+    assert _split_qs(str(seen[1].url))["include"] == ["execution_environment"]
+    assert seen[2].method == "POST"
+    assert json.loads(seen[2].content)["include"] == ["execution_environment"]
+
+
 # ===========================================================================
 # search_thermo
 # ===========================================================================

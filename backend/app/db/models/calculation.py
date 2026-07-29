@@ -44,6 +44,7 @@ from app.db.models.common import (
 )
 
 if TYPE_CHECKING:
+    from app.db.models.execution_environment import ExecutionEnvironmentManifest
     from app.db.models.geometry import Geometry
     from app.db.models.level_of_theory import LevelOfTheory
     from app.db.models.literature import Literature
@@ -105,6 +106,17 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=True,
         index=True,
     )
+    execution_environment_manifest_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "execution_environment_manifest.id",
+            name="fk_calculation_execution_environment_manifest",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=True,
+        index=True,
+    )
 
     conformer_observation_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
@@ -162,6 +174,9 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
     lot: Mapped[Optional["LevelOfTheory"]] = relationship(back_populates="calculations")
     literature: Mapped[Optional["Literature"]] = relationship()
+    execution_environment_manifest: Mapped[Optional["ExecutionEnvironmentManifest"]] = relationship(
+        back_populates="calculations"
+    )
     conformer_observation: Mapped[Optional["ConformerObservation"]] = relationship(
         back_populates="calculations",
         foreign_keys=[conformer_observation_id],
