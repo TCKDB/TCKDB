@@ -59,7 +59,7 @@ SEARCH_URL = "/api/v1/scientific/calculations/search"
 
 def _execution_environment_payload() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"}, "platform": "linux", "architecture": "x86_64",
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         "closure": [
@@ -71,9 +71,12 @@ def _execution_environment_payload() -> dict:
 
 def test_search_execution_environment_is_opt_in_for_get_and_post(client, db_session):
     _, _, calc = _make_species_owned_calc(db_session)
-    calc.execution_environment_manifest = resolve_execution_environment_manifest(
+    manifest = resolve_execution_environment_manifest(
         db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
     )
+    calc.software_release_id = manifest.software_release_id
+    calc.workflow_tool_release_id = manifest.workflow_tool_release_id
+    calc.execution_environment_manifest = manifest
     db_session.flush()
     default = client.get(SEARCH_URL + "?calculation_type=opt").json()
     row = next(item for item in default["records"] if item["calculation"]["calculation_ref"] == calc.public_ref)

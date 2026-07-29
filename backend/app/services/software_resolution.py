@@ -4,17 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
+from tckdb_schemas.software import normalize_software_name
 
 from app.db.models.software import Software, SoftwareRelease
 from app.schemas.fragments.refs import SoftwareReleaseRef
-from app.schemas.utils import normalize_required_text
-
-_SOFTWARE_NAME_ALIASES = {
-    "arc": "ARC",
-    "gaussian": "Gaussian",
-    "orca": "ORCA",
-    "rmg": "RMG",
-}
 
 
 def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement[bool]:
@@ -26,18 +19,6 @@ def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement
     """
 
     return column.is_(None) if value is None else column == value
-
-
-def normalize_software_name(name: str) -> str:
-    """Normalize uploaded software names to canonical stored identities.
-
-    :param name: Raw uploaded software name.
-    :returns: Canonical normalized software name used for dedupe and storage.
-    """
-
-    normalized = normalize_required_text(name)
-    alias_key = " ".join(normalized.split()).lower()
-    return _SOFTWARE_NAME_ALIASES.get(alias_key, normalized)
 
 
 def resolve_software(

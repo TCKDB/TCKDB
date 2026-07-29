@@ -42,6 +42,7 @@ from app.db.models.thermo import Thermo, ThermoSourceCalculation
 from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from app.services.artifact_storage import ArtifactIntegrityError, ArtifactStorageUnavailable
 from app.services.calculation_resolution import resolve_execution_environment_manifest
+from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.reproducibility_assessment import SUPPORTED_REPRODUCIBILITY_RECORD_TYPES
 from app.services.reproducibility_rubric import (
     MAX_ARTIFACT_VERIFICATION_BYTES,
@@ -54,6 +55,7 @@ from app.services.reproducibility_rubric import (
     evaluate_reproducibility_v1,
     evaluate_reproducibility_v2,
 )
+from app.services.scientific_read.calculations import _build_execution_environment_summary
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_kinetics,
@@ -223,7 +225,7 @@ def test_verified_typed_output_can_be_auditable_but_v1_never_rerunnable(
 
 def _execution_environment_payload() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"}, "platform": "linux", "architecture": "x86_64",
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         "closure": [
@@ -231,6 +233,12 @@ def _execution_environment_payload() -> dict:
             {"role": "executable", "locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         ],
     }
+
+
+def _attach_execution_environment(db_session, calculation: Calculation) -> None:
+    payload = _execution_environment_payload()
+    payload["software_release"] = {"name": calculation.software_release.software.name, "version": calculation.software_release.version, "revision": calculation.software_release.revision, "build": calculation.software_release.build}
+    calculation.execution_environment_manifest = resolve_execution_environment_manifest(db_session, ExecutionEnvironmentManifestPayload.model_validate(payload))
 
 
 def test_v2_requires_valid_manifest_and_preserves_v1_result(db_session, _api_test_user) -> None:
@@ -243,9 +251,7 @@ def test_v2_requires_valid_manifest_and_preserves_v1_result(db_session, _api_tes
     assert v2_missing.grade is ReproducibilityGrade.auditable
     assert next(item for item in v2_missing.missing if item["name"] == "execution_environment_manifest")["evidence"]["reason"] == "execution_environment_manifest_missing"
 
-    calculation.execution_environment_manifest = resolve_execution_environment_manifest(
-        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
-    )
+    _attach_execution_environment(db_session, calculation)
     db_session.flush()
     v2 = evaluate_reproducibility_v2(db_session, record_type="calculation", record_id=calculation.id,
                                       artifact_loader=_verified_loader(objects))
@@ -258,9 +264,7 @@ def test_v2_requires_valid_manifest_and_preserves_v1_result(db_session, _api_tes
 def test_v2_corrupt_or_unavailable_output_blocks_rerunnable(db_session, _api_test_user) -> None:
     objects: dict[str, bytes] = {}
     calculation = _calculation(db_session, complete=True, created_by=_api_test_user, objects=objects)
-    calculation.execution_environment_manifest = resolve_execution_environment_manifest(
-        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
-    )
+    _attach_execution_environment(db_session, calculation)
     calculation.artifacts.append(
         CalculationArtifact(
             kind=ArtifactKind.output_log,
@@ -278,14 +282,12 @@ def test_v2_corrupt_or_unavailable_output_blocks_rerunnable(db_session, _api_tes
     assert "v1_evidence_warnings_clear" in {item["name"] for item in result.missing}
 
 
-@pytest.mark.parametrize("mutation", ["canonical", "normalized", "closure"])
+@pytest.mark.parametrize("mutation", ["canonical", "normalized", "closure", "binding"])
 def test_v2_manifest_corruption_fails_closed(db_session, _api_test_user, mutation) -> None:
     objects: dict[str, bytes] = {}
     calculation = _calculation(db_session, complete=True, created_by=_api_test_user, objects=objects)
-    manifest = resolve_execution_environment_manifest(
-        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
-    )
-    calculation.execution_environment_manifest = manifest
+    _attach_execution_environment(db_session, calculation)
+    manifest = calculation.execution_environment_manifest
     db_session.flush()
     # The database trigger deliberately makes production rows immutable; keep
     # this intentionally corrupt in-memory projection out of autoflush.
@@ -293,9 +295,18 @@ def test_v2_manifest_corruption_fails_closed(db_session, _api_test_user, mutatio
         manifest.canonical_json = {"broken": True}
     elif mutation == "normalized":
         manifest.platform = "darwin"
+    elif mutation == "binding":
+        manifest.software_release_id += 1
     else:
         manifest.closure_json = [{"role": "runtime", "locator": "bad", "digest": "sha256:" + "c" * 64}]
     with db_session.no_autoflush:
+        valid, evidence = manifest_integrity_evidence(manifest, calculation=calculation)
+        assert valid is False
+        if mutation == "canonical":
+            assert evidence["reason"] == "execution_environment_manifest_invalid"
+        else:
+            assert evidence["release_bindings_valid"] is (mutation != "binding")
+        assert _build_execution_environment_summary(calculation) is None
         result = evaluate_reproducibility_v2(
             db_session,
             record_type="calculation",

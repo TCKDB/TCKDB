@@ -36,12 +36,12 @@ from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
-from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
     load_artifact_bytes,
 )
+from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.reproducibility_assessment import (
     append_reproducibility_assessment,
     resolve_reproducibility_record_model,
@@ -813,29 +813,7 @@ def _closed_execution_environment_evidence(calculation: Calculation | None) -> t
     manifest = None if calculation is None else calculation.execution_environment_manifest
     if manifest is None:
         return False, {"reason": "execution_environment_manifest_missing"}
-    try:
-        payload = ExecutionEnvironmentManifestPayload.model_validate(manifest.canonical_json)
-    except Exception as exc:
-        return False, {"reason": "execution_environment_manifest_invalid", "error": type(exc).__name__}
-    canonical = payload.canonical_payload()
-    actual_digest = payload.content_digest()
-    valid = bool(
-        manifest.schema_version == payload.schema_version
-        and manifest.content_digest == actual_digest
-        and manifest.platform == payload.platform
-        and manifest.architecture == payload.architecture
-        and manifest.runtime_kind == payload.runtime_kind
-        and manifest.runtime_locator == payload.runtime_locator
-        and manifest.executable_locator == payload.executable_locator
-        and manifest.closure_json == canonical["closure"]
-        and manifest.canonical_json == canonical
-    )
-    return valid, {
-        "environment_ref": manifest.content_digest,
-        "schema_version": manifest.schema_version,
-        "content_digest_valid": actual_digest == manifest.content_digest,
-        "closure_count": len(canonical["closure"]),
-    }
+    return manifest_integrity_evidence(manifest, calculation=calculation)
 
 
 def evaluate_reproducibility_v2(

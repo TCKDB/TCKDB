@@ -14,6 +14,7 @@ class _KeyMinter:
 def _environment() -> dict:
     return {
         "schema_version": "tckdb.execution-environment.v1",
+        "software_release": {"name": "Gaussian", "version": "16"},
         "platform": "linux",
         "architecture": "x86_64",
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},

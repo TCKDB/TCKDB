@@ -59,6 +59,7 @@ from app.schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.software_reconciliation import (
     SoftwareReconciliationResult,
@@ -75,21 +76,18 @@ def _validate_execution_environment_manifest(
     manifest: ExecutionEnvironmentManifest,
     *,
     payload: ExecutionEnvironmentManifestPayload,
-    canonical: dict,
     digest: str,
+    software_release_id: int,
+    workflow_tool_release_id: int | None,
 ) -> ExecutionEnvironmentManifest:
     """Fail closed unless every stored projection matches the typed payload."""
-    if not (
-        manifest.schema_version == payload.schema_version
-        and manifest.content_digest == digest
-        and manifest.platform == payload.platform
-        and manifest.architecture == payload.architecture
-        and manifest.runtime_kind == payload.runtime_kind
-        and manifest.runtime_locator == payload.runtime_locator
-        and manifest.executable_locator == payload.executable_locator
-        and manifest.closure_json == canonical["closure"]
-        and manifest.canonical_json == canonical
-    ):
+    valid, _ = manifest_integrity_evidence(
+        manifest,
+        expected_payload=payload,
+        expected_software_release_id=software_release_id,
+        expected_workflow_tool_release_id=workflow_tool_release_id,
+    )
+    if not valid or manifest.content_digest != digest:
         raise ExecutionEnvironmentManifestIntegrityError(
             "stored execution-environment manifest does not match its canonical content digest"
         )
@@ -241,13 +239,25 @@ def resolve_execution_environment_manifest(
     """Resolve one typed, canonical environment closure by its content digest."""
     if payload is None:
         return None
+    software_release = resolve_software_release_ref(session, SoftwareReleaseRef(**payload.software_release.model_dump()))
+    workflow_tool_release = resolve_workflow_tool_release_ref(
+        session,
+        WorkflowToolReleaseRef(**payload.workflow_tool_release.model_dump()) if payload.workflow_tool_release else None,
+    )
+    software_release_id = software_release.id
+    workflow_tool_release_id = workflow_tool_release.id if workflow_tool_release else None
     canonical = payload.canonical_payload()
     digest = payload.content_digest()
     manifest = session.scalar(
         select(ExecutionEnvironmentManifest).where(ExecutionEnvironmentManifest.content_digest == digest)
     )
     if manifest is not None:
-        return _validate_execution_environment_manifest(manifest, payload=payload, canonical=canonical, digest=digest)
+        return _validate_execution_environment_manifest(
+            manifest,
+            payload=payload,
+            digest=digest,
+            software_release_id=software_release_id, workflow_tool_release_id=workflow_tool_release_id,
+        )
     # Entering a savepoint can flush unrelated caller state.  Deliberately do
     # not catch that operation: only the explicit manifest INSERT below is a
     # digest-race candidate.
@@ -258,6 +268,7 @@ def resolve_execution_environment_manifest(
             platform=payload.platform, architecture=payload.architecture,
             runtime_kind=payload.runtime_kind, runtime_locator=payload.runtime_locator,
             executable_locator=payload.executable_locator, closure_json=canonical["closure"],
+            software_release_id=software_release_id, workflow_tool_release_id=workflow_tool_release_id,
             canonical_json=canonical,
         )
         session.add(manifest)
@@ -266,7 +277,12 @@ def resolve_execution_environment_manifest(
         except IntegrityError as exc:
             insert_error = exc
     if insert_error is None:
-        return _validate_execution_environment_manifest(manifest, payload=payload, canonical=canonical, digest=digest)
+        return _validate_execution_environment_manifest(
+            manifest,
+            payload=payload,
+            digest=digest,
+            software_release_id=software_release_id, workflow_tool_release_id=workflow_tool_release_id,
+        )
     original = insert_error.orig
     if not (
         getattr(original, "sqlstate", None) == "23505"
@@ -277,7 +293,12 @@ def resolve_execution_environment_manifest(
     winner = session.scalar(select(ExecutionEnvironmentManifest).where(ExecutionEnvironmentManifest.content_digest == digest))
     if winner is None:
         raise insert_error
-    return _validate_execution_environment_manifest(winner, payload=payload, canonical=canonical, digest=digest)
+    return _validate_execution_environment_manifest(
+        winner,
+        payload=payload,
+        digest=digest,
+        software_release_id=software_release_id, workflow_tool_release_id=workflow_tool_release_id,
+    )
 
 
 def resolve_calculation_create_request(
@@ -297,6 +318,13 @@ def resolve_calculation_create_request(
     )
     level_of_theory = resolve_level_of_theory_ref(session, request.level_of_theory)
     environment = resolve_execution_environment_manifest(session, request.execution_environment)
+    if environment is not None and (
+        environment.software_release_id != software_release.id
+        or environment.workflow_tool_release_id != (workflow_tool_release.id if workflow_tool_release else None)
+    ):
+        raise ExecutionEnvironmentManifestIntegrityError(
+            "execution-environment manifest release bindings do not match calculation provenance"
+        )
 
     return CalculationCreateResolved(
         type=request.type,

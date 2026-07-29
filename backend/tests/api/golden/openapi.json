@@ -12674,6 +12674,19 @@
             "const": "tckdb.execution-environment.v1",
             "title": "Schema Version",
             "type": "string"
+          },
+          "software_release": {
+            "$ref": "#/components/schemas/ScientificSoftwareReleaseIdentity"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowToolReleaseIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -12681,6 +12694,7 @@
           "platform",
           "architecture",
           "runtime",
+          "software_release",
           "executable",
           "closure"
         ],
@@ -12752,6 +12766,19 @@
             "const": "tckdb.execution-environment.v1",
             "title": "Schema Version",
             "type": "string"
+          },
+          "software_release": {
+            "$ref": "#/components/schemas/ScientificSoftwareReleaseIdentity"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowToolReleaseIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -12759,6 +12786,7 @@
           "platform",
           "architecture",
           "runtime",
+          "software_release",
           "executable",
           "closure",
           "environment_ref"
@@ -29141,6 +29169,55 @@
         "title": "ScientificRecordSupersessionRequest",
         "type": "object"
       },
+      "ScientificSoftwareReleaseIdentity": {
+        "additionalProperties": false,
+        "description": "Portable identity of the scientific executable's declared release.\n\nThis deliberately contains only the four fields used by the software\nrelease registry's dedupe identity.  Dates and notes are descriptive,\nmutable provenance and must not affect a manifest's byte identity.",
+        "properties": {
+          "build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ScientificSoftwareReleaseIdentity",
+        "type": "object"
+      },
       "ScientificSpeciesCalculationsSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/species-calculations/search.",
         "properties": {
@@ -40171,6 +40248,46 @@
           "workflow_tool"
         ],
         "title": "WorkflowToolReleaseDetailRead",
+        "type": "object"
+      },
+      "WorkflowToolReleaseIdentity": {
+        "additionalProperties": false,
+        "description": "Portable identity of the optional workflow-tool code state.",
+        "properties": {
+          "git_commit": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Commit"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorkflowToolReleaseIdentity",
         "type": "object"
       },
       "WorkflowToolReleaseRead": {

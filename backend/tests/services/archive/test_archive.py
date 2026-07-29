@@ -70,7 +70,7 @@ def _empty_archive_tables(session) -> None:
 
 def _execution_environment_payload() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"}, "platform": "linux", "architecture": "x86_64",
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         "closure": [
@@ -121,6 +121,8 @@ def test_archive_round_trip_preserves_execution_environment_manifest_and_calcula
     manifest = resolve_execution_environment_manifest(
         db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
     )
+    calculation.software_release_id = manifest.software_release_id
+    calculation.workflow_tool_release_id = manifest.workflow_tool_release_id
     calculation.execution_environment_manifest_id = manifest.id
     db_session.flush()
     archive = io.BytesIO()
@@ -132,6 +134,8 @@ def test_archive_round_trip_preserves_execution_environment_manifest_and_calcula
     assert restored.execution_environment_manifest_id == restored_manifest.id
     assert restored_manifest.content_digest == manifest.content_digest
     assert restored_manifest.canonical_json == manifest.canonical_json
+    assert restored_manifest.software_release_id == manifest.software_release_id
+    assert restored_manifest.workflow_tool_release_id == manifest.workflow_tool_release_id
 
 
 def test_restore_accepts_exact_fresh_migration_seeds(db_session) -> None:

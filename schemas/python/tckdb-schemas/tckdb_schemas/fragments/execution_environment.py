@@ -16,6 +16,8 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.software import normalize_software_name
+from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 
 Digest = str
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -130,6 +132,51 @@ class HPCModuleRuntime(SchemaBase):
         return "module://" + ",".join(f"{module.name}/{module.version}" for module in self.modules)
 
 
+class ScientificSoftwareReleaseIdentity(SchemaBase):
+    """Portable identity of the scientific executable's declared release.
+
+    This deliberately contains only the four fields used by the software
+    release registry's dedupe identity.  Dates and notes are descriptive,
+    mutable provenance and must not affect a manifest's byte identity.
+    """
+
+    name: str = Field(min_length=1)
+    version: str | None = None
+    revision: str | None = None
+    build: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return normalize_software_name(value)
+
+    @model_validator(mode="after")
+    def normalize_optional_fields(self):
+        self.version = normalize_optional_text(self.version)
+        self.revision = normalize_optional_text(self.revision)
+        self.build = normalize_optional_text(self.build)
+        return self
+
+
+class WorkflowToolReleaseIdentity(SchemaBase):
+    """Portable identity of the optional workflow-tool code state."""
+
+    name: str = Field(min_length=1)
+    version: str | None = None
+    git_commit: str | None = Field(default=None, min_length=1, max_length=40)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return normalize_required_text(value)
+
+    @model_validator(mode="after")
+    def normalize_optional_fields(self):
+        self.version = normalize_optional_text(self.version)
+        self.git_commit = normalize_optional_text(self.git_commit)
+        return self
+
+
 class ExecutionEnvironmentManifestPayload(SchemaBase):
     """A closed execution environment for container, conda, or HPC module runs.
 
@@ -141,6 +188,8 @@ class ExecutionEnvironmentManifestPayload(SchemaBase):
     platform: Literal["linux", "darwin", "windows"]
     architecture: Literal["x86_64", "aarch64", "ppc64le"]
     runtime: ContainerRuntime | CondaRuntime | HPCModuleRuntime = Field(discriminator="runtime_kind")
+    software_release: ScientificSoftwareReleaseIdentity
+    workflow_tool_release: WorkflowToolReleaseIdentity | None = None
     executable: ContentAddressedReference
     closure: list[EnvironmentClosureEntry] = Field(min_length=2, max_length=5)
 
@@ -196,6 +245,10 @@ class ExecutionEnvironmentManifestPayload(SchemaBase):
             "platform": self.platform,
             "architecture": self.architecture,
             "runtime": self.runtime.model_dump(mode="json"),
+            "software_release": self.software_release.model_dump(mode="json"),
+            "workflow_tool_release": (
+                self.workflow_tool_release.model_dump(mode="json") if self.workflow_tool_release else None
+            ),
             "executable": self.executable.model_dump(mode="json"),
             "closure": [entry.model_dump(mode="json") for entry in sorted(self.closure, key=lambda entry: entry.role)],
         }

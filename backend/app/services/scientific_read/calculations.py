@@ -96,6 +96,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
@@ -817,19 +818,8 @@ def _build_execution_environment_summary(
         )
     except Exception:
         return None
-    payload = summary
-    canonical = payload.canonical_payload()
-    if not (
-        payload.content_digest() == manifest.content_digest
-        and manifest.schema_version == payload.schema_version
-        and manifest.platform == payload.platform
-        and manifest.architecture == payload.architecture
-        and manifest.runtime_kind == payload.runtime_kind
-        and manifest.runtime_locator == payload.runtime_locator
-        and manifest.executable_locator == payload.executable_locator
-        and manifest.closure_json == canonical["closure"]
-        and manifest.canonical_json == canonical
-    ):
+    valid, _ = manifest_integrity_evidence(manifest, calculation=calc)
+    if not valid:
         return None
     return summary
 

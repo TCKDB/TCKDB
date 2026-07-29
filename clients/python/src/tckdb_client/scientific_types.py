@@ -223,6 +223,23 @@ ExecutionEnvironmentRuntime: TypeAlias = (
 )
 
 
+class ScientificSoftwareReleaseIdentity(TypedDict):
+    """Portable scientific-software identity bound into a manifest."""
+
+    name: str
+    version: NotRequired[str | None]
+    revision: NotRequired[str | None]
+    build: NotRequired[str | None]
+
+
+class WorkflowToolReleaseIdentity(TypedDict):
+    """Portable optional workflow-tool identity bound into a manifest."""
+
+    name: str
+    version: NotRequired[str | None]
+    git_commit: NotRequired[str | None]
+
+
 class ExecutionEnvironmentManifestRecord(TypedDict):
     """Canonical nested public execution-environment response."""
 
@@ -230,6 +247,8 @@ class ExecutionEnvironmentManifestRecord(TypedDict):
     platform: Required[str]
     architecture: Required[str]
     runtime: Required[ExecutionEnvironmentRuntime]
+    software_release: Required[ScientificSoftwareReleaseIdentity]
+    workflow_tool_release: NotRequired[WorkflowToolReleaseIdentity | None]
     executable: Required[ExecutionEnvironmentContentReference]
     closure: Required[list[ExecutionEnvironmentClosureEntry]]
     environment_ref: Required[str]
@@ -436,6 +455,7 @@ __all__ = [
     "ReviewStatusSummary",
     "ScientificRequestEcho",
     "ScientificSearchResponse",
+    "ScientificSoftwareReleaseIdentity",
     "SpeciesCalculationRecord",
     "SpeciesCalculationsSearchResponse",
     "SpeciesRecord",
@@ -449,4 +469,5 @@ __all__ = [
     "ThermoSearchResponse",
     "TransportRecord",
     "TransportSearchResponse",
+    "WorkflowToolReleaseIdentity",
 ]

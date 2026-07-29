@@ -842,6 +842,7 @@ def test_available_sections_all_false_for_bare_calculation(
         "has_scan": False,
         "has_irc": False,
         "has_path_search": False,
+        "has_execution_environment": False,
     }
 
 
@@ -4041,7 +4042,7 @@ _ALL_EXPANSION_TOKENS = {
 
 def _execution_environment_payload() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"}, "platform": "linux", "architecture": "x86_64",
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         "closure": [
@@ -4053,16 +4054,23 @@ def _execution_environment_payload() -> dict:
 
 def test_detail_execution_environment_is_opt_in_and_secret_free(client, db_session):
     _, _, calc = _make_species_owned_calc(db_session)
-    calc.execution_environment_manifest = resolve_execution_environment_manifest(
-        db_session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment_payload())
+    payload = _execution_environment_payload()
+    payload["software_release"]["name"] = "gaussian"
+    manifest = resolve_execution_environment_manifest(
+        db_session, ExecutionEnvironmentManifestPayload.model_validate(payload)
     )
+    calc.software_release_id = manifest.software_release_id
+    calc.workflow_tool_release_id = manifest.workflow_tool_release_id
+    calc.execution_environment_manifest = manifest
     db_session.flush()
     default = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}").json()["record"]
     assert "execution_environment" not in default
+    assert manifest.software_release.software.name == "Gaussian"
     assert default["available_sections"]["has_execution_environment"] is True
     included = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}?include=execution_environment").json()["record"]
     environment = included["execution_environment"]
     assert environment["environment_ref"] == calc.execution_environment_manifest.content_digest
+    assert environment["software_release"]["name"] == "Gaussian"
     assert environment["runtime"] == _execution_environment_payload()["runtime"]
     assert environment["executable"] == _execution_environment_payload()["executable"]
     assert environment["closure"] == sorted(_execution_environment_payload()["closure"], key=lambda entry: entry["role"])

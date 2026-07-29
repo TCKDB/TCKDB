@@ -42,7 +42,7 @@ def test_calculation_detail_and_search_expose_execution_environment_section():
         "has_irc": False, "has_path_search": False, "has_execution_environment": True,
     }
     environment = {
-        "schema_version": "tckdb.execution-environment.v1", "platform": "linux", "architecture": "x86_64",
+        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"}, "platform": "linux", "architecture": "x86_64",
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@" + digest},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": executable_digest},
         "closure": [
@@ -71,6 +71,9 @@ def test_calculation_detail_and_search_expose_execution_environment_section():
     detail_environment = detail["record"]["execution_environment"]
     assert detail_environment is not None
     assert detail_environment["environment_ref"] == digest
+    assert detail_environment["software_release"]["name"] == "Gaussian"
+    assert detail_environment["software_release"]["version"] == "16"
+    assert "workflow_tool_release" not in detail_environment
     assert detail_environment["runtime"]["runtime_kind"] == "container"
     assert detail_environment["runtime"]["image"] == "registry.example/arc@" + digest
     assert detail_environment["executable"]["locator"] == "file:///opt/arc/bin/arc"

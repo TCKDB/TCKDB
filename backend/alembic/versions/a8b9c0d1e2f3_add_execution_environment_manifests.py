@@ -35,6 +35,8 @@ def upgrade() -> None:
         sa.Column("runtime_kind", sa.String(length=32), nullable=False),
         sa.Column("runtime_locator", sa.Text(), nullable=False),
         sa.Column("executable_locator", sa.Text(), nullable=False),
+        sa.Column("software_release_id", sa.BigInteger(), nullable=False),
+        sa.Column("workflow_tool_release_id", sa.BigInteger(), nullable=True),
         sa.Column("closure_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("canonical_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
@@ -48,6 +50,14 @@ def upgrade() -> None:
             "jsonb_typeof(canonical_json) = 'object'", name="ck_execution_environment_manifest_canonical_json_object"
         ),
         sa.UniqueConstraint("content_digest", name="uq_execution_environment_manifest_content_digest"),
+        sa.ForeignKeyConstraint(
+            ["software_release_id"], ["software_release.id"],
+            name="fk_execution_environment_manifest_software_release", deferrable=True, initially="IMMEDIATE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["workflow_tool_release_id"], ["workflow_tool_release.id"],
+            name="fk_execution_environment_manifest_workflow_tool_release", deferrable=True, initially="IMMEDIATE",
+        ),
     )
     op.add_column("calculation", sa.Column("execution_environment_manifest_id", sa.BigInteger(), nullable=True))
     op.create_foreign_key(
@@ -73,9 +83,32 @@ def upgrade() -> None:
         BEFORE UPDATE OR DELETE ON execution_environment_manifest
         FOR EACH ROW EXECUTE FUNCTION reject_execution_environment_manifest_mutation()
     """)
+    op.execute("""
+        CREATE FUNCTION validate_calculation_execution_environment_binding() RETURNS trigger
+        LANGUAGE plpgsql AS $$ DECLARE manifest_software_release_id bigint;
+        manifest_workflow_tool_release_id bigint; BEGIN
+          IF NEW.execution_environment_manifest_id IS NULL THEN RETURN NEW; END IF;
+          SELECT software_release_id, workflow_tool_release_id
+          INTO manifest_software_release_id, manifest_workflow_tool_release_id
+          FROM execution_environment_manifest WHERE id = NEW.execution_environment_manifest_id;
+          IF NOT FOUND
+             OR NEW.software_release_id IS DISTINCT FROM manifest_software_release_id
+             OR NEW.workflow_tool_release_id IS DISTINCT FROM manifest_workflow_tool_release_id THEN
+            RAISE EXCEPTION 'calculation execution environment release bindings must match';
+          END IF;
+          RETURN NEW;
+        END $$
+    """)
+    op.execute("""
+        CREATE TRIGGER trg_calculation_execution_environment_binding
+        BEFORE INSERT OR UPDATE OF execution_environment_manifest_id, software_release_id, workflow_tool_release_id ON calculation
+        FOR EACH ROW EXECUTE FUNCTION validate_calculation_execution_environment_binding()
+    """)
 
 
 def downgrade() -> None:
+    op.execute("DROP TRIGGER IF EXISTS trg_calculation_execution_environment_binding ON calculation")
+    op.execute("DROP FUNCTION IF EXISTS validate_calculation_execution_environment_binding()")
     op.execute("DROP TRIGGER IF EXISTS trg_execution_environment_manifest_immutable ON execution_environment_manifest")
     op.execute("DROP FUNCTION IF EXISTS reject_execution_environment_manifest_mutation()")
     op.drop_index("ix_calculation_execution_environment_manifest_id", table_name="calculation")

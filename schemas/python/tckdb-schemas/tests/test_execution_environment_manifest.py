@@ -9,6 +9,7 @@ from pydantic import ValidationError
 def _environment() -> dict:
     return {
         "schema_version": "tckdb.execution-environment.v1",
+        "software_release": {"name": "Gaussian", "version": "16"},
         "platform": "linux", "architecture": "x86_64",
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
@@ -45,6 +46,24 @@ def test_manifest_canonicalizes_closure_order_independently():
     reversed_payload["closure"].reverse()
     second = ExecutionEnvironmentManifestPayload.model_validate(reversed_payload)
     assert first.canonical_payload() == second.canonical_payload()
+    assert first.content_digest() == second.content_digest()
+
+
+def test_manifest_release_bindings_are_canonical_and_exclude_mutable_release_metadata():
+    from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
+
+    first_data = _environment()
+    first_data["workflow_tool_release"] = {"name": " ARC ", "version": " 1.0 ", "git_commit": "abc123"}
+    first = ExecutionEnvironmentManifestPayload.model_validate(first_data)
+    second = ExecutionEnvironmentManifestPayload.model_validate(
+        {**_environment(), "workflow_tool_release": {"name": "ARC", "version": "1.0", "git_commit": "abc123"}}
+    )
+    assert first.canonical_payload()["software_release"] == {
+        "name": "Gaussian", "version": "16", "revision": None, "build": None
+    }
+    assert first.canonical_payload()["workflow_tool_release"] == {
+        "name": "ARC", "version": "1.0", "git_commit": "abc123"
+    }
     assert first.content_digest() == second.content_digest()
 
 

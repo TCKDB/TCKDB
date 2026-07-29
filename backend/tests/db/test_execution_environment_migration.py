@@ -15,10 +15,16 @@ def test_execution_environment_migration_creates_and_reverses_complete_graph():
     for required in (
         'op.create_table(\n        "execution_environment_manifest"',
         'op.add_column("calculation", sa.Column("execution_environment_manifest_id"',
+        'sa.Column("software_release_id", sa.BigInteger(), nullable=False)',
+        'sa.Column("workflow_tool_release_id", sa.BigInteger(), nullable=True)',
+        '"fk_execution_environment_manifest_software_release"',
+        '"fk_execution_environment_manifest_workflow_tool_release"',
         '"fk_calculation_execution_environment_manifest"',
         '"ix_calculation_execution_environment_manifest_id"',
         "trg_execution_environment_manifest_immutable",
         "BEFORE UPDATE OR DELETE ON execution_environment_manifest",
+        "trg_calculation_execution_environment_binding",
+        "UPDATE OF execution_environment_manifest_id, software_release_id, workflow_tool_release_id ON calculation",
         'op.drop_column("calculation", "execution_environment_manifest_id")',
         'op.drop_table("execution_environment_manifest")',
     ):
@@ -61,6 +67,7 @@ def test_execution_environment_real_upgrade_and_downgrade_contract():
         with engine.begin() as conn:
             assert conn.scalar(text("SELECT execution_environment_manifest_id FROM calculation WHERE id = :id"), {"id": calc_id}) is None
             assert conn.scalar(text("SELECT tgname FROM pg_trigger WHERE tgrelid = 'execution_environment_manifest'::regclass AND tgname = 'trg_execution_environment_manifest_immutable'"))
+            assert conn.scalar(text("SELECT tgname FROM pg_trigger WHERE tgrelid = 'calculation'::regclass AND tgname = 'trg_calculation_execution_environment_binding'"))
             assert conn.scalar(text("SELECT indexname FROM pg_indexes WHERE tablename='calculation' AND indexname='ix_calculation_execution_environment_manifest_id'"))
         subprocess.run(["conda", "run", "-n", "tckdb_env", "alembic", "downgrade", "6a9d2e4c7b1f"], cwd=root, env=env, check=True)
         with engine.begin() as conn:

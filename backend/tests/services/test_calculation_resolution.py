@@ -38,6 +38,7 @@ from app.services.record_review import ensure_record_review, set_record_review_s
 def _execution_environment() -> dict:
     return {
         "schema_version": "tckdb.execution-environment.v1",
+        "software_release": {"name": "Gaussian", "version": "16"},
         "platform": "linux",
         "architecture": "x86_64",
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
@@ -162,28 +163,58 @@ def test_persist_calculation_persists_calculation(db_engine) -> None:
 
 
 def test_calculation_persistence_keeps_optional_environment_and_deduplicates(db_engine) -> None:
-    """Identical closure payloads resolve to one shared manifest FK."""
+    """Alias-equivalent release declarations resolve to one shared manifest."""
     with Session(db_engine) as session:
         with session.begin():
             species_id = _create_species(session.connection(), inchi_key=_next_inchi_key("CALCENV"))
             species_entry_id = _create_species_entry(session.connection(), species_id)
             common = {
                 "type": "sp", "species_entry_id": species_entry_id,
-                "software_release": {"name": "Gaussian", "version": "16"},
+                "software_release": {"name": "gaussian", "version": "16"},
                 "level_of_theory": {"method": "wb97xd", "basis": "def2-svp"},
             }
             absent = persist_calculation(session, resolve_calculation_create_request(session, CalculationCreateRequest(**common)))
             with_environment = CalculationCreateRequest(**common, execution_environment=_execution_environment())
             first = persist_calculation(session, resolve_calculation_create_request(session, with_environment))
             reordered = _execution_environment()
+            reordered["software_release"] = {"name": "gaussian", "version": "16"}
             reordered["closure"].reverse()
             second = persist_calculation(
                 session,
-                resolve_calculation_create_request(session, CalculationCreateRequest(**common, execution_environment=reordered)),
+                resolve_calculation_create_request(
+                    session,
+                    CalculationCreateRequest(
+                        **{**common, "software_release": {"name": "Gaussian", "version": "16"}},
+                        execution_environment=reordered,
+                    ),
+                ),
             )
             assert absent.execution_environment_manifest_id is None
             assert first.execution_environment_manifest_id == second.execution_environment_manifest_id
             assert len(session.scalars(select(ExecutionEnvironmentManifest)).all()) == 1
+            releases = session.scalars(
+                select(SoftwareRelease)
+                .join(Software)
+                .where(
+                    Software.name == "Gaussian",
+                    SoftwareRelease.version == "16",
+                    SoftwareRelease.revision.is_(None),
+                    SoftwareRelease.build.is_(None),
+                )
+            ).all()
+            assert len(releases) == 1
+            assert releases[0].software.name == "Gaussian"
+
+
+@pytest.mark.parametrize("field, value", [("software_release", {"name": "ORCA", "version": "5"}), ("workflow_tool_release", {"name": "ARC", "version": "1"})])
+def test_calculation_resolution_rejects_manifest_release_binding_mismatch(db_engine, field, value) -> None:
+    with Session(db_engine) as session, session.begin():
+        species_id = _create_species(session.connection(), inchi_key=_next_inchi_key("CMM"))
+        species_entry_id = _create_species_entry(session.connection(), species_id)
+        environment = _execution_environment()
+        environment[field] = value
+        with pytest.raises(ExecutionEnvironmentManifestIntegrityError, match="release bindings"):
+            resolve_calculation_create_request(session, CalculationCreateRequest(type="sp", species_entry_id=species_entry_id, software_release={"name": "Gaussian", "version": "16"}, level_of_theory={"method": "wb97xd"}, execution_environment=environment))
 
 
 class _FakePsycopgDiagnostics:
@@ -235,7 +266,13 @@ def test_execution_environment_resolver_reraises_exact_digest_unique_race_withou
     with Session(db_engine) as session:
         with session.begin():
             payload = ExecutionEnvironmentManifestPayload.model_validate(_execution_environment())
-            monkeypatch.setattr(session, "scalar", lambda *args, **kwargs: None)
+            original_scalar = session.scalar
+            def no_manifest_winner(statement, *args, **kwargs):
+                entities = getattr(statement, "column_descriptions", ())
+                if any(item.get("entity") is ExecutionEnvironmentManifest for item in entities):
+                    return None
+                return original_scalar(statement, *args, **kwargs)
+            monkeypatch.setattr(session, "scalar", no_manifest_winner)
             monkeypatch.setattr(
                 session,
                 "flush",
@@ -339,6 +376,25 @@ def test_unapproved_calculation_can_attach_and_replace_execution_environment(db_
             calc.execution_environment_manifest_id = second.id
             session.flush()
             assert calc.execution_environment_manifest_id == second.id
+
+
+def test_database_rejects_manifest_binding_mismatch_on_attach_and_release_update(db_engine) -> None:
+    with Session(db_engine) as session, session.begin():
+        species_id = _create_species(session.connection(), inchi_key=_next_inchi_key("CALCENVDB"))
+        entry_id = _create_species_entry(session.connection(), species_id)
+        calc = persist_calculation(session, resolve_calculation_create_request(session, CalculationCreateRequest(type="sp", species_entry_id=entry_id, software_release={"name": "Gaussian", "version": "16"}, level_of_theory={"method": "wb97xd"})))
+        mismatched_data = _execution_environment()
+        mismatched_data["software_release"] = {"name": "ORCA", "version": "5"}
+        manifest = resolve_execution_environment_manifest(session, ExecutionEnvironmentManifestPayload.model_validate(mismatched_data))
+        with pytest.raises(DBAPIError), session.begin_nested():
+            calc.execution_environment_manifest_id = manifest.id
+            session.flush()
+        matching = resolve_execution_environment_manifest(session, ExecutionEnvironmentManifestPayload.model_validate(_execution_environment()))
+        calc.execution_environment_manifest_id = matching.id
+        session.flush()
+        with pytest.raises(DBAPIError), session.begin_nested():
+            calc.software_release_id = manifest.software_release_id
+            session.flush()
 
 
 def test_approved_calculation_cannot_change_or_remove_execution_environment(db_engine) -> None:

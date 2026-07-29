@@ -64,6 +64,7 @@ from tckdb_client.scientific_types import (
     ReproducibilityAssessmentSummary,
     ScientificRequestEcho,
     ScientificSearchResponse,
+    ScientificSoftwareReleaseIdentity,
     SpeciesCalculationRecord,
     SpeciesCalculationsSearchResponse,
     SpeciesRecord,
@@ -77,6 +78,7 @@ from tckdb_client.scientific_types import (
     ThermoSearchResponse,
     TransportRecord,
     TransportSearchResponse,
+    WorkflowToolReleaseIdentity,
 )
 
 __all__ = [
@@ -136,6 +138,7 @@ __all__ = [
     "ReviewStatusSummary",
     "ScientificRequestEcho",
     "ScientificSearchResponse",
+    "ScientificSoftwareReleaseIdentity",
     "SpeciesCalculationRecord",
     "SpeciesCalculationsSearchResponse",
     "SpeciesRecord",
@@ -149,6 +152,7 @@ __all__ = [
     "ThermoSearchResponse",
     "TransportRecord",
     "TransportSearchResponse",
+    "WorkflowToolReleaseIdentity",
 ]
 
 try:
