@@ -32,7 +32,7 @@ from app.services.reproducibility_assessment import (
 from app.services.reproducibility_rubric import (
     RUBRIC_NAME,
     RUBRIC_VERSION,
-    evaluate_reproducibility_v1,
+    evaluate_reproducibility,
 )
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
 from app.services.scientific_read.statmech import STATMECH_TRUST_EAGER_LOADS
@@ -208,7 +208,7 @@ def _reproducibility_summary(
     if assessment is None:
         return ReproducibilityAssessmentSummary(state="unassessed")
 
-    current = evaluate_reproducibility_v1(session, record_type=record_type, record_id=record_id)
+    current = evaluate_reproducibility(session, record_type=record_type, record_id=record_id)
     is_current = (
         assessment.rubric_name == RUBRIC_NAME
         and assessment.rubric_version == RUBRIC_VERSION

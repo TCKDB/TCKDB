@@ -77,6 +77,7 @@ class CalculationCreateResolved(CalculationOwnerRequiredMixin, SchemaBase):
     lot_id: int
 
     literature_id: int | None = None
+    execution_environment_manifest_id: int | None = None
 
 
 class CalculationUpdate(SchemaBase):

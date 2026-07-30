@@ -27,6 +27,7 @@ from tckdb_schemas.enums import (
     TorsionTreatmentKind,
 )
 from tckdb_schemas.fragments.artifact import ArtifactIn
+from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from tckdb_schemas.fragments.calculation import (
     CalculationConstraintCreate,
     CalculationParameterObservation,
@@ -129,6 +130,7 @@ class CalculationInBundle(SchemaBase):
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     level_of_theory: LevelOfTheoryRef
     literature: LiteratureUploadRequest | None = None
+    execution_environment: ExecutionEnvironmentManifestPayload | None = None
 
     parameters_json: dict | None = None
     parameters: list[CalculationParameterObservation] | None = None

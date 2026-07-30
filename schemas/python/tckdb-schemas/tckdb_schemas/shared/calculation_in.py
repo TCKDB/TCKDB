@@ -14,6 +14,7 @@ from pydantic import Field, field_validator
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import CalculationQuality, CalculationType
 from tckdb_schemas.fragments.artifact import ArtifactIn
+from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from tckdb_schemas.fragments.calculation import (
     CalculationParameterObservation,
     CalculationWithResultsPayload,
@@ -74,6 +75,7 @@ class CalculationIn(SchemaBase):
     level_of_theory: LevelOfTheoryRef
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     literature_id: int | None = None
+    execution_environment: ExecutionEnvironmentManifestPayload | None = None
 
     # Optional inline results (avoids separate result upload)
     sp_electronic_energy_hartree: float | None = None
@@ -171,6 +173,7 @@ def calculation_in_to_with_results_payload(
         workflow_tool_release=calc_in.workflow_tool_release,
         level_of_theory=calc_in.level_of_theory,
         literature_id=calc_in.literature_id,
+        execution_environment=calc_in.execution_environment,
         opt_result=opt_result,
         freq_result=freq_result,
         sp_result=sp_result,

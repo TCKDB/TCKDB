@@ -81,6 +81,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationSpinDiagnosticSummary,
     CalculationSPResultSummary,
     CalculationWavefunctionDiagnosticSummary,
+    ExecutionEnvironmentManifestSummary,
     RequestEcho,
     ScanCoordinateSummary,
     ScientificCalculationDetailResponse,
@@ -95,6 +96,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
@@ -136,6 +138,7 @@ _HEAVY_INCLUDE_TOKENS: frozenset[str] = frozenset(
         "scan",
         "irc",
         "path_search",
+        "execution_environment",
     }
 )
 _LEGAL_INCLUDE_TOKENS: set[str] = {
@@ -291,8 +294,9 @@ def build_record(
         session, calc.workflow_tool_release_id
     )
     literature_summary = _build_literature_summary(session, calc.literature_id)
+    execution_environment = _build_execution_environment_summary(calc)
     provenance, available = _build_provenance_and_sections(
-        session, calc, calc.id
+        session, calc, calc.id, has_execution_environment=execution_environment is not None
     )
 
     results_summary: CalculationResultSummary | None = None
@@ -306,6 +310,10 @@ def build_record(
     artifacts_block: list[CalculationArtifactSummary] | None = None
     if "artifacts" in includes:
         artifacts_block = _build_artifacts(session, calc.id)
+
+    execution_environment_block: ExecutionEnvironmentManifestSummary | None = None
+    if "execution_environment" in includes:
+        execution_environment_block = execution_environment
 
     input_geometries_block: list[CalculationGeometryLinkSummary] | None = None
     if "input_geometries" in includes:
@@ -395,6 +403,7 @@ def build_record(
         results=results_summary,
         dependencies=dependencies_block,
         artifacts=artifacts_block,
+        execution_environment=execution_environment_block,
         input_geometries=input_geometries_block,
         output_geometries=output_geometries_block,
         geometry_validation=geometry_validation_block,
@@ -672,7 +681,7 @@ def _exists_for_calc(session: Session, model_cls, calculation_id: int) -> bool:
 
 
 def _build_provenance_and_sections(
-    session: Session, calc: Calculation, calculation_id: int
+    session: Session, calc: Calculation, calculation_id: int, *, has_execution_environment: bool
 ) -> tuple[CalculationEvidenceProvenanceSummary, AvailableCalculationSections]:
     """Compute the evidence provenance summary and ``available_sections``.
 
@@ -787,8 +796,32 @@ def _build_provenance_and_sections(
         has_scan=has_scan,
         has_irc=has_irc,
         has_path_search=has_path_search,
+        has_execution_environment=has_execution_environment,
     )
     return provenance, sections
+
+
+def _build_execution_environment_summary(
+    calc: Calculation,
+) -> ExecutionEnvironmentManifestSummary | None:
+    """Return a manifest only when every persisted projection revalidates.
+
+    A malformed or manually tampered stored row is intentionally invisible to
+    public reads and cannot be used to advertise a closed environment.
+    """
+    manifest = calc.execution_environment_manifest
+    if manifest is None:
+        return None
+    try:
+        summary = ExecutionEnvironmentManifestSummary.model_validate(
+            {"environment_ref": manifest.content_digest, **manifest.canonical_json}
+        )
+    except Exception:
+        return None
+    valid, _ = manifest_integrity_evidence(manifest, calculation=calc)
+    if not valid:
+        return None
+    return summary
 
 
 def _load_converged_flag(

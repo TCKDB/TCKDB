@@ -57,6 +57,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "energy_correction_scheme_atom_param",
         "energy_correction_scheme_bond_param",
         "energy_correction_scheme_component_param",
+        "execution_environment_manifest",
         "frequency_scale_factor",
         "geometry",
         "geometry_atom",

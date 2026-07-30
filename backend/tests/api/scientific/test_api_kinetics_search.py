@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.db.models.common import ScientificOriginKind, SubmissionRecordType
-from app.services.reproducibility_rubric import evaluate_and_append_reproducibility_v1
+from app.services.reproducibility_rubric import evaluate_and_append_reproducibility
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_kinetics,
@@ -137,7 +137,7 @@ def test_assessment_summary_is_opt_in_for_get_and_post(client, db_session):
     assert post.status_code == 200, post.text
     assert post.json()["records"][0]["kinetics"]["assessments"] == summary
 
-    assessment = evaluate_and_append_reproducibility_v1(
+    assessment = evaluate_and_append_reproducibility(
         db_session, record_type=SubmissionRecordType.kinetics, record_id=kinetics.id
     )
     current = client.get(

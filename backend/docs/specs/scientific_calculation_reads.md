@@ -1132,3 +1132,10 @@ with the include set as the public extension surface.
   `CalculationCoreBlock`). A future cleanup can replace those with
   `ScientificCalculationSummary` from this spec.
 ─────────────────────────────────────────────────
+# Execution environment include
+
+`include=execution_environment` projects the shared typed
+`tckdb.execution-environment.v1` manifest. It is opt-in and therefore absent
+from default record shapes. `available_sections.has_execution_environment` is
+true only when the linked persisted row validates against its canonical content
+digest and all persisted projections; malformed/tampered rows fail closed.

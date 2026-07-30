@@ -14,6 +14,7 @@ import tckdb_client
 from conftest import make_client
 from tckdb_client import (
     ArtifactSearchResponse,
+    ExecutionEnvironmentManifestRecord,
     KineticsDetailRecord,
     KineticsRecord,
     KineticsSearchRecord,
@@ -41,6 +42,8 @@ from tckdb_client import (
     ThermoSearchRecord,
     TransportSearchResponse,
     TransportRecord,
+    ScientificSoftwareReleaseIdentity,
+    WorkflowToolReleaseIdentity,
 )
 from tckdb_client.pagination import iter_paginated_records
 
@@ -77,6 +80,17 @@ def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
     assert get_type_hints(NetworkRecord)["states"] == list[NetworkStateSummary] | None
     assert get_type_hints(NetworkStateSummary)["composition"] is NetworkStateComposition
     assert get_type_hints(NetworkStateComposition)["participants"] == list[NetworkStateCompositionParticipant]
+    assert ScientificSoftwareReleaseIdentity.__annotations__["version"].__forward_arg__ == "NotRequired[str | None]"
+    assert ScientificSoftwareReleaseIdentity.__annotations__["revision"].__forward_arg__ == "NotRequired[str | None]"
+    assert ScientificSoftwareReleaseIdentity.__annotations__["build"].__forward_arg__ == "NotRequired[str | None]"
+    assert WorkflowToolReleaseIdentity.__annotations__["version"].__forward_arg__ == "NotRequired[str | None]"
+    assert WorkflowToolReleaseIdentity.__annotations__["git_commit"].__forward_arg__ == "NotRequired[str | None]"
+    assert ExecutionEnvironmentManifestRecord.__annotations__["software_release"].__forward_arg__ == (
+        "Required[ScientificSoftwareReleaseIdentity]"
+    )
+    assert ExecutionEnvironmentManifestRecord.__annotations__["workflow_tool_release"].__forward_arg__ == (
+        "NotRequired[WorkflowToolReleaseIdentity | None]"
+    )
     for name in (
         "ThermoDetailRecord",
         "ThermoSearchRecord",
@@ -87,6 +101,8 @@ def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
         "NetworkStateSummary",
         "PublicAssessmentSummary",
         "ReproducibilityAssessmentSummary",
+        "ScientificSoftwareReleaseIdentity",
+        "WorkflowToolReleaseIdentity",
     ):
         assert name in tckdb_client.__all__
 

@@ -16,6 +16,7 @@ from tckdb_schemas.enums import (
 )
 from tckdb_schemas.fragments.calculation_origin import CalculationOriginMetadata
 from tckdb_schemas.fragments.geometry import GeometryPayload
+from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from tckdb_schemas.fragments.refs import (
     LevelOfTheoryRef,
     SoftwareReleaseRef,
@@ -699,6 +700,7 @@ class CalculationWithResultsPayload(CalculationPayload):
     sp_result: SPResultPayload | None = None
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
+    execution_environment: ExecutionEnvironmentManifestPayload | None = None
 
     scf_stability: SCFStabilityPayload | None = None
     wavefunction_diagnostic: WavefunctionDiagnosticPayload | None = None

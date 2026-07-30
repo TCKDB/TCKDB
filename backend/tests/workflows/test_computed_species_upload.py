@@ -42,6 +42,7 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
     FrequencyScaleFactor,
 )
+from app.db.models.execution_environment import ExecutionEnvironmentManifest
 from app.db.models.species import ConformerGroup, ConformerObservation
 from app.db.models.statmech import (
     Statmech,
@@ -126,6 +127,40 @@ def _ensure_user(session: Session, *, username: str) -> int:
         session.add(user)
         session.flush()
     return user.id
+
+
+def _execution_environment() -> dict:
+    return {
+        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"}, "platform": "linux", "architecture": "x86_64",
+        "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
+        "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        "closure": [
+            {"role": "runtime", "locator": "registry.example/arc@sha256:" + "a" * 64, "digest": "sha256:" + "a" * 64},
+            {"role": "executable", "locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
+        ],
+    }
+
+
+def test_computed_species_calculation_environment_persists_dedups_and_is_optional(db_engine) -> None:
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection, expire_on_commit=False)
+    try:
+        user_id = _ensure_user(session, username="bundle_environment")
+        with_env = _hydrogen_bundle()
+        primary_type = type(with_env.conformers[0].primary_calculation)
+        with_env.conformers[0].primary_calculation = primary_type(**_calc("opt0", execution_environment=_execution_environment()))
+        with_env.conformers[0].additional_calculations = [primary_type(**_calc("sp0", calc_type="sp", execution_environment=_execution_environment()))]
+        outcome = persist_computed_species_upload(session, with_env, created_by=user_id)
+        calcs = [outcome.conformers[0].primary_calculation, *outcome.conformers[0].additional_calculations]
+        assert len({calc.execution_environment_manifest_id for calc in calcs}) == 1
+        assert session.scalar(select(func.count()).select_from(ExecutionEnvironmentManifest)) == 1
+        legacy = persist_computed_species_upload(session, _hydrogen_bundle(), created_by=user_id)
+        assert legacy.conformers[0].primary_calculation.execution_environment_manifest_id is None
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
 
 
 # ---------------------------------------------------------------------------

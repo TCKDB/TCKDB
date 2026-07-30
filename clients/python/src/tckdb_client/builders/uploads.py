@@ -460,6 +460,9 @@ class ComputedSpeciesUpload:
                 for parent in calc.depends_on
             ]
 
+        if calc.execution_environment is not None:
+            out["execution_environment"] = calc.execution_environment.model_dump(mode="json")
+
         result = calc.result_block()
         if result is not None:
             field_name, block = result
@@ -1726,6 +1729,8 @@ class ComputedReactionUpload:
         }
         if geometry_key is not None:
             out["geometry_key"] = geometry_key
+        if calc.execution_environment is not None:
+            out["execution_environment"] = calc.execution_environment.model_dump(mode="json")
         out.update(calc.result_fields_flat())
         if calc.depends_on:
             out["depends_on"] = [

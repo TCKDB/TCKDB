@@ -247,7 +247,7 @@ def reconcile_id_ref(
     ref_value: str | None,
     kind_label: str,
     conflict_code: str,
-) -> int | None | object:
+) -> int | object | None:
     """Reconcile sibling ``*_id`` and ``*_ref`` filter inputs.
 
     Returns one of:
@@ -423,7 +423,7 @@ def resolve_energy_correction_scheme_handle(
 
 def reconcile_species_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
-) -> int | None | object:
+) -> int | object | None:
     """Reconcile ``species_id`` + ``species_ref`` filter pair."""
     return reconcile_id_ref(
         session,
@@ -437,7 +437,7 @@ def reconcile_species_pair(
 
 def reconcile_species_entry_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
-) -> int | None | object:
+) -> int | object | None:
     """Reconcile ``species_entry_id`` + ``species_entry_ref`` filter pair."""
     return reconcile_id_ref(
         session,
@@ -451,7 +451,7 @@ def reconcile_species_entry_pair(
 
 def reconcile_reaction_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
-) -> int | None | object:
+) -> int | object | None:
     """Reconcile ``reaction_id`` + ``reaction_ref`` filter pair."""
     return reconcile_id_ref(
         session,
@@ -465,7 +465,7 @@ def reconcile_reaction_pair(
 
 def reconcile_reaction_entry_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
-) -> int | None | object:
+) -> int | object | None:
     """Reconcile ``reaction_entry_id`` + ``reaction_entry_ref`` filter pair."""
     return reconcile_id_ref(
         session,
@@ -479,7 +479,7 @@ def reconcile_reaction_entry_pair(
 
 def reconcile_level_of_theory_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
-) -> int | None | object:
+) -> int | object | None:
     """Reconcile ``level_of_theory_id`` + ``level_of_theory_ref`` filter pair."""
     return reconcile_id_ref(
         session,
@@ -493,7 +493,7 @@ def reconcile_level_of_theory_pair(
 
 def reconcile_calculation_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
-) -> int | None | object:
+) -> int | object | None:
     """Reconcile ``calculation_id`` + ``calculation_ref`` filter pair."""
     return reconcile_id_ref(
         session,

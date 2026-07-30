@@ -1,9 +1,19 @@
-"""Deterministic, fail-closed reproducibility rubric v1.
+"""Deterministic, fail-closed reproducibility rubric.
 
-Version 1 can award ``auditable`` only to calculations. It verifies preserved
-output bytes through the artifact read path, snapshots every evaluated datum,
-and deliberately cannot award ``rerunnable`` until TCKDB has a typed execution
-environment manifest and dependency closure contract.
+The rubric verifies preserved output bytes through the artifact read path and
+snapshots every evaluated datum. Only a calculation can be graded above
+``described``: products keep their source-role limitation, so the rubric never
+turns thermo, kinetics, statmech, transport, or PDep records into universal
+recomputability claims.
+
+``rerunnable`` additionally requires a stored execution-environment manifest
+whose content digest revalidates, and no evidence warnings — an unverifiable
+artifact byte can never be silently upgraded into a rerun claim.
+
+TCKDB is pre-release, so there is deliberately one rubric implementation rather
+than a chain of versioned ones. ``RUBRIC_VERSION`` labels stored rows; genuine
+staleness is detected by comparing an assessment's snapshotted
+``context_json`` against a fresh evaluation, not by the label alone.
 """
 
 from __future__ import annotations
@@ -41,6 +51,7 @@ from app.services.artifact_storage import (
     ArtifactStorageUnavailable,
     load_artifact_bytes,
 )
+from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.reproducibility_assessment import (
     append_reproducibility_assessment,
     resolve_reproducibility_record_model,
@@ -586,14 +597,22 @@ def _check(
     )
 
 
-def evaluate_reproducibility_v1(
+def _closed_execution_environment_evidence(calculation: Calculation | None) -> tuple[bool, dict[str, Any]]:
+    """Verify the stored manifest's content identity without trusting a claim."""
+    manifest = None if calculation is None else calculation.execution_environment_manifest
+    if manifest is None:
+        return False, {"reason": "execution_environment_manifest_missing"}
+    return manifest_integrity_evidence(manifest, calculation=calculation)
+
+
+def evaluate_reproducibility(
     session: Session,
     *,
     record_type: str | SubmissionRecordType,
     record_id: int,
     artifact_loader: ArtifactLoader = load_artifact_bytes,
 ) -> ReproducibilityEvaluation:
-    """Evaluate one record and snapshot all evidence consumed by rubric v1."""
+    """Evaluate one record and snapshot every datum the rubric consumed."""
     resolved_type, model = resolve_reproducibility_record_model(record_type)
     if record_id <= 0:
         raise ValueError("record_id must be positive")
@@ -662,6 +681,7 @@ def evaluate_reproducibility_v1(
         and exact_release_token
         and reconciliation_status != "mismatch"
     )
+    environment_ok, environment_evidence = _closed_execution_environment_evidence(direct_calculation)
 
     checks = [
         _check("target_identity", CheckLevel.described, bool(target_evidence["reference"]), target_evidence),
@@ -673,7 +693,7 @@ def evaluate_reproducibility_v1(
             evidence=attribution_detail,
         ),
         _check(
-            "record_type_audit_policy_v1",
+            "record_type_audit_policy",
             CheckLevel.auditable,
             direct_calculation is not None,
             {"supported_record_type": SubmissionRecordType.calculation.value},
@@ -709,7 +729,7 @@ def evaluate_reproducibility_v1(
             evidence={
                 "reason": "calculation_is_the_evidence_root"
                 if direct_calculation is not None
-                else "product_policy_deferred_v1",
+                else "product_policy_deferred",
                 "source_calculations": attribution_detail.get("source_calculations", []),
             },
         ),
@@ -737,8 +757,20 @@ def evaluate_reproducibility_v1(
         _check(
             "execution_environment_manifest",
             CheckLevel.rerunnable,
-            False,
-            {"reason": "typed_execution_environment_manifest_not_supported_by_v1"},
+            environment_ok,
+            environment_evidence,
+        ),
+        # A rerun claim is only as strong as *all* the evidence. Warnings are
+        # emitted specifically when artifact bytes could not be verified, so
+        # none may be silently upgraded into a rerunnable result.
+        _check(
+            "evidence_warnings_clear",
+            CheckLevel.rerunnable,
+            not warnings,
+            {
+                "reason": "warnings_block_rerunnable" if warnings else "no_warnings",
+                "warning_codes": [warning.code for warning in warnings],
+            },
         ),
     ]
 
@@ -751,7 +783,7 @@ def evaluate_reproducibility_v1(
         grade = ReproducibilityGrade.described
     elif not level_passed(CheckLevel.rerunnable):
         grade = ReproducibilityGrade.auditable
-    else:  # pragma: no cover - v1's environment-manifest check is intentionally missing
+    else:
         grade = ReproducibilityGrade.rerunnable
 
     check_snapshots = tuple(check.snapshot() for check in checks)
@@ -775,15 +807,15 @@ def evaluate_reproducibility_v1(
     )
 
 
-def evaluate_and_append_reproducibility_v1(
+def evaluate_and_append_reproducibility(
     session: Session,
     *,
     record_type: str | SubmissionRecordType,
     record_id: int,
     artifact_loader: ArtifactLoader = load_artifact_bytes,
 ) -> RecordReproducibilityAssessment:
-    """Derive and append a system-owned v1 assessment; callers provide no claims."""
-    evaluation = evaluate_reproducibility_v1(
+    """Derive and append a system-owned assessment; callers provide no claims."""
+    evaluation = evaluate_reproducibility(
         session,
         record_type=record_type,
         record_id=record_id,

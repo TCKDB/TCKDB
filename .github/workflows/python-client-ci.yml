@@ -5,12 +5,14 @@ on:
     paths:
       - ".github/workflows/python-client-ci.yml"
       - "clients/python/**"
+      - "schemas/python/tckdb-schemas/**"
   push:
     branches:
       - main
     paths:
       - ".github/workflows/python-client-ci.yml"
       - "clients/python/**"
+      - "schemas/python/tckdb-schemas/**"
   workflow_dispatch:
 
 permissions:
@@ -33,9 +35,10 @@ jobs:
           cache: pip
           cache-dependency-path: clients/python/pyproject.toml
 
-      - name: Install Python client and test dependencies
-        working-directory: clients/python
-        run: python -m pip install -e ".[test,notebook]"
+      - name: Install worktree schemas, client, and test dependencies
+        run: |
+          python -m pip install -e schemas/python/tckdb-schemas
+          python -m pip install -e "clients/python[test,notebook]"
 
       - name: Run Python client tests
         working-directory: clients/python
