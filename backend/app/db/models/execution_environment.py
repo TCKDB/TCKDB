@@ -29,8 +29,6 @@ class ExecutionEnvironmentManifest(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
     content_digest: Mapped[str] = mapped_column(String(71), nullable=False)
-    platform: Mapped[str] = mapped_column(String(128), nullable=False)
-    architecture: Mapped[str] = mapped_column(String(128), nullable=False)
     runtime_kind: Mapped[str] = mapped_column(String(32), nullable=False)
     runtime_locator: Mapped[str] = mapped_column(Text, nullable=False)
     executable_locator: Mapped[str] = mapped_column(Text, nullable=False)

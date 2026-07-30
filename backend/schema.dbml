@@ -169,6 +169,12 @@ enum KineticsCalculationRole {
   fit_source
 }
 
+enum KineticsDegeneracyConvention {
+  already_applied
+  not_applied
+  unknown
+}
+
 enum KineticsDirection {
   forward
   reverse
@@ -337,6 +343,18 @@ enum RecordReviewStatus {
   approved
   rejected
   deprecated
+}
+
+enum ReproducibilityAssessorKind {
+  system
+  curator
+}
+
+enum ReproducibilityGrade {
+  insufficient
+  described
+  auditable
+  rerunnable
 }
 
 enum RigidRotorKind {
@@ -1057,6 +1075,7 @@ Table calculation {
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   lot_id bigint [ref: > level_of_theory.id]
   literature_id bigint [ref: > literature.id]
+  execution_environment_manifest_id bigint [ref: > execution_environment_manifest.id]
   conformer_observation_id bigint [ref: > conformer_observation.id]
   parameters_json jsonb
   parameters_parser_version text
@@ -1069,6 +1088,7 @@ Table calculation {
 
   indexes {
     conformer_observation_id [name: 'ix_calculation_conformer_observation_id']
+    execution_environment_manifest_id [name: 'ix_calculation_execution_environment_manifest_id']
     literature_id [name: 'ix_calculation_literature_id']
     lot_id [name: 'ix_calculation_lot_id']
     public_ref [unique, name: 'ix_calculation_public_ref']
@@ -1101,8 +1121,8 @@ Table calculation_artifact {
   calculation_id bigint [not null, ref: > calculation.id]
   kind ArtifactKind [not null]
   uri text [not null]
-  sha256 varchar(64)
-  bytes bigint
+  sha256 varchar(64) [not null]
+  bytes bigint [not null]
   filename text [not null]
   note text
   created_at timestamp [not null, default: 'now']
@@ -1112,6 +1132,11 @@ Table calculation_artifact {
     calculation_id [name: 'ix_calculation_artifact_calculation_id']
     kind [name: 'ix_calculation_artifact_kind']
     sha256 [name: 'ix_calculation_artifact_sha256']
+  }
+
+  checks {
+    `bytes > 0` [name: 'ck_calculation_artifact_bytes_gt_0']
+    `sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_calculation_artifact_sha256_lower_hex']
   }
 
   Note: 'Append-only artifact metadata: bytes-on-S3 plus minimal upload context.'
@@ -1400,6 +1425,32 @@ Table energy_correction_scheme_component_param {
   Note: 'Multi-component parameter within a correction scheme.'
 }
 
+Table execution_environment_manifest {
+  id bigint [pk, not null]
+  schema_version string [not null]
+  content_digest string [not null]
+  runtime_kind string [not null]
+  runtime_locator text [not null]
+  executable_locator text [not null]
+  software_release_id bigint [not null, ref: > software_release.id]
+  workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
+  closure_json jsonb [not null]
+  canonical_json jsonb [not null]
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    content_digest [unique, name: 'uq_execution_environment_manifest_content_digest']
+  }
+
+  checks {
+    `jsonb_typeof(canonical_json) = 'object'` [name: 'ck_execution_environment_manifest_canonical_json_object']
+    `jsonb_typeof(closure_json) = 'array'` [name: 'ck_execution_environment_manifest_closure_json_array']
+    `content_digest ~ '^sha256:[0-9a-f]{64}$'` [name: 'ck_execution_environment_manifest_content_digest_sha256']
+  }
+
+  Note: 'A normalized, immutable manifest whose SHA-256 identifies its exact closure.'
+}
+
 Table frequency_scale_factor {
   id bigint [pk, not null]
   level_of_theory_id bigint [not null, ref: > level_of_theory.id]
@@ -1526,6 +1577,7 @@ Table kinetics {
   tmin_k double
   tmax_k double
   degeneracy double
+  degeneracy_convention KineticsDegeneracyConvention [not null, default: 'unknown']
   tunneling_model TunnelingModel
   pressure_context PressureContext
   pressure_bar double
@@ -1544,6 +1596,7 @@ Table kinetics {
     `(a_uncertainty IS NULL) = (a_uncertainty_kind IS NULL)` [name: 'ck_kinetics_a_uncertainty_kind_required_with_value']
     `a_uncertainty_kind <> 'multiplicative' OR a_uncertainty >= 1.0` [name: 'ck_kinetics_a_uncertainty_multiplicative_ge_1']
     `pressure_context <> 'apparent_at_pressure' OR pressure_bar IS NOT NULL` [name: 'ck_kinetics_apparent_pressure_requires_pressure_bar']
+    `degeneracy IS NULL OR (degeneracy > 0 AND degeneracy < 'Infinity'::double precision)` [name: 'ck_kinetics_degeneracy_finite_positive']
     `pressure_bar IS NULL OR pressure_bar > 0` [name: 'ck_kinetics_pressure_bar_gt_0']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_kinetics_tmax_k_gt_0']
     `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_kinetics_tmin_k_gt_0']
@@ -2157,6 +2210,45 @@ Table record_machine_review {
   Note: 'One persisted machine-review pass over one scientific record (append-only).'
 }
 
+Table record_reproducibility_assessment {
+  id bigint [pk, not null]
+  record_type SubmissionRecordType [not null]
+  record_id bigint [not null]
+  grade ReproducibilityGrade [not null]
+  rubric_name string [not null]
+  rubric_version string [not null]
+  context_hash string [not null]
+  context_json jsonb [not null]
+  passed_json jsonb [not null, default: '[]'::jsonb']
+  missing_json jsonb [not null, default: '[]'::jsonb']
+  warnings_json jsonb [not null, default: '[]'::jsonb']
+  assessor_kind ReproducibilityAssessorKind [not null]
+  assessor_user_id bigint [ref: > app_user.id]
+  source_submission_id bigint [ref: > submission.id]
+  assessed_at timestamp [not null, default: 'now']
+  created_at timestamp [not null, default: 'now']
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_record_reproducibility_assessment_public_ref']
+    assessor_user_id [name: 'ix_repro_assessment_assessor_user_id']
+    context_hash [name: 'ix_repro_assessment_context_hash']
+    (record_type, record_id) [name: 'ix_repro_assessment_record_latest']
+    source_submission_id [name: 'ix_repro_assessment_source_submission_id']
+  }
+
+  checks {
+    `(assessor_kind = 'system' AND assessor_user_id IS NULL) OR (assessor_kind = 'curator' AND assessor_user_id IS NOT NULL)` [name: 'ck_record_reproducibility_assessment_assessor_user_consistent']
+    `context_hash ~ '^[0-9a-f]{64}$'` [name: 'ck_record_reproducibility_assessment_context_hash_lower_hex']
+    `jsonb_typeof(context_json) = 'object'` [name: 'ck_record_reproducibility_assessment_context_json_is_object']
+    `jsonb_typeof(missing_json) = 'array'` [name: 'ck_record_reproducibility_assessment_missing_json_is_array']
+    `jsonb_typeof(passed_json) = 'array'` [name: 'ck_record_reproducibility_assessment_passed_json_is_array']
+    `jsonb_typeof(warnings_json) = 'array'` [name: 'ck_record_reproducibility_assessment_warnings_json_is_array']
+  }
+
+  Note: 'One immutable, versioned assessor claim about reproducibility.'
+}
+
 Table record_review {
   id bigint [pk, not null]
   record_type SubmissionRecordType [not null]
@@ -2165,6 +2257,7 @@ Table record_review {
   submission_id bigint [ref: > submission.id]
   reviewed_by bigint [ref: > app_user.id]
   reviewed_at timestamp
+  first_approved_at timestamp
   note text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
@@ -2176,6 +2269,7 @@ Table record_review {
   }
 
   checks {
+    `status <> 'approved' OR first_approved_at IS NOT NULL` [name: 'ck_record_review_record_review_approved_has_first_approval']
     `(status NOT IN ('approved', 'rejected', 'deprecated')) OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL)` [name: 'ck_record_review_record_review_terminal_requires_reviewer']
   }
 
@@ -2198,6 +2292,29 @@ Table record_review_event {
   }
 
   Note: 'Append-only history event for one :class:`RecordReview` row.'
+}
+
+Table scientific_record_supersession {
+  id bigint [pk, not null]
+  record_type SubmissionRecordType [not null]
+  superseded_record_id bigint [not null]
+  superseding_record_id bigint [not null]
+  reason text [not null]
+  created_by bigint [not null, ref: > app_user.id]
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    (record_type, superseding_record_id) [unique, name: 'uq_scientific_supersession_new_record']
+    (record_type, superseded_record_id) [unique, name: 'uq_scientific_supersession_old_record']
+  }
+
+  checks {
+    `superseded_record_id <> superseding_record_id` [name: 'ck_scientific_record_supersession_distinct_records']
+    `length(btrim(reason)) > 0` [name: 'ck_scientific_record_supersession_reason_nonblank']
+    `record_type IN ('calculation', 'thermo', 'statmech', 'kinetics', 'transport', 'network', 'network_solve', 'applied_energy_correction', 'transition_state_entry', 'conformer_observation')` [name: 'ck_scientific_record_supersession_supported_type']
+  }
+
+  Note: 'One immutable, one-to-one edge from an accepted record to its replacement.'
 }
 
 Table software {
@@ -2826,6 +2943,6 @@ Table workflow_tool_release {
   Note: 'Exact provenance for a workflow tool code state.'
 }
 
-Ref fk_calc_scan_point_coordinate_value_calculation_id_calc_scan_coordinate: calc_scan_point_coordinate_value.(calculation_id, coordinate_index) > calc_scan_coordinate.(calculation_id, coordinate_index)
+Ref fk_cspcv_calc_id_coordinate_index: calc_scan_point_coordinate_value.(calculation_id, coordinate_index) > calc_scan_coordinate.(calculation_id, coordinate_index)
 
-Ref fk_calc_scan_point_coordinate_value_calculation_id_calc_scan_point: calc_scan_point_coordinate_value.(calculation_id, point_index) > calc_scan_point.(calculation_id, point_index)
+Ref fk_cspcv_calc_id_point_index: calc_scan_point_coordinate_value.(calculation_id, point_index) > calc_scan_point.(calculation_id, point_index)

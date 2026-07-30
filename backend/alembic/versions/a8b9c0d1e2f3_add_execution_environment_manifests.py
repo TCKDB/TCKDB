@@ -30,8 +30,6 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), primary_key=True),
         sa.Column("schema_version", sa.String(length=32), nullable=False),
         sa.Column("content_digest", sa.String(length=71), nullable=False),
-        sa.Column("platform", sa.String(length=128), nullable=False),
-        sa.Column("architecture", sa.String(length=128), nullable=False),
         sa.Column("runtime_kind", sa.String(length=32), nullable=False),
         sa.Column("runtime_locator", sa.Text(), nullable=False),
         sa.Column("executable_locator", sa.Text(), nullable=False),

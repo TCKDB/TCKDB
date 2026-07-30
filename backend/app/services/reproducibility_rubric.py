@@ -6,9 +6,21 @@ snapshots every evaluated datum. Only a calculation can be graded above
 turns thermo, kinetics, statmech, transport, or PDep records into universal
 recomputability claims.
 
-``rerunnable`` additionally requires a stored execution-environment manifest
-whose content digest revalidates, and no evidence warnings — an unverifiable
-artifact byte can never be silently upgraded into a rerun claim.
+``rerunnable`` means **the deposited evidence is complete enough to attempt a
+rerun**: preserved inputs, an execution-parameter snapshot, the upstream
+dependency snapshot, and no warnings about artifact bytes we could not read. It
+is a statement about the completeness of what was deposited, not a promise of
+bitwise-identical output.
+
+The execution-environment manifest is deliberately **not** graded. It is
+recorded in ``context_json['execution_environment']`` as provenance. Gating a
+grade on a byte digest of a site-installed binary would make the top grade
+unreachable for the ordinary shared-cluster uploader, and a required field that
+someone cannot honestly fill gets filled with a guess that we would then store
+as though it were verified. The scientifically load-bearing values — applied
+energy corrections, frequency scale factors, level of theory, parameters — are
+already recorded as typed rows, which is stronger evidence than a pointer to an
+environment that could regenerate them.
 
 TCKDB is pre-release, so there is deliberately one rubric implementation rather
 than a chain of versioned ones. ``RUBRIC_VERSION`` labels stored rows; genuine
@@ -597,12 +609,22 @@ def _check(
     )
 
 
-def _closed_execution_environment_evidence(calculation: Calculation | None) -> tuple[bool, dict[str, Any]]:
-    """Verify the stored manifest's content identity without trusting a claim."""
+def _execution_environment_snapshot(calculation: Calculation | None) -> dict[str, Any]:
+    """Snapshot the linked environment manifest as provenance, never as a score.
+
+    A manifest is optional enrichment: most uploaders run a site-installed
+    binary on a shared cluster and have no digest to give, so its absence says
+    nothing about the quality of the deposited evidence and is not graded.
+
+    ``revalidates`` reports whether the stored projection still matches its own
+    content digest. That is a corruption/drift signal about our storage, not a
+    judgement about the uploader.
+    """
     manifest = None if calculation is None else calculation.execution_environment_manifest
     if manifest is None:
-        return False, {"reason": "execution_environment_manifest_missing"}
-    return manifest_integrity_evidence(manifest, calculation=calculation)
+        return {"recorded": False}
+    valid, evidence = manifest_integrity_evidence(manifest, calculation=calculation)
+    return {"recorded": True, "revalidates": valid, "tier": manifest.runtime_kind, **evidence}
 
 
 def evaluate_reproducibility(
@@ -681,7 +703,7 @@ def evaluate_reproducibility(
         and exact_release_token
         and reconciliation_status != "mismatch"
     )
-    environment_ok, environment_evidence = _closed_execution_environment_evidence(direct_calculation)
+    environment_snapshot = _execution_environment_snapshot(direct_calculation)
 
     checks = [
         _check("target_identity", CheckLevel.described, bool(target_evidence["reference"]), target_evidence),
@@ -754,12 +776,6 @@ def evaluate_reproducibility(
             bool(direct_calculation is not None and not dependency_cycle),
             {"cycle_detected": dependency_cycle, "calculation_ids": sorted(calculations)},
         ),
-        _check(
-            "execution_environment_manifest",
-            CheckLevel.rerunnable,
-            environment_ok,
-            environment_evidence,
-        ),
         # A rerun claim is only as strong as *all* the evidence. Warnings are
         # emitted specifically when artifact bytes could not be verified, so
         # none may be silently upgraded into a rerunnable result.
@@ -793,6 +809,8 @@ def evaluate_reproducibility(
         "target": target_evidence,
         "source_roles": [{"calculation_id": calculation.id, "role": role} for calculation, role in source_refs],
         "calculation_evidence": calculations,
+        # Recorded provenance, not a check: see _execution_environment_snapshot.
+        "execution_environment": environment_snapshot,
         "checks": list(check_snapshots),
         "warnings": list(warning_snapshots),
     }

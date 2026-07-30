@@ -24,8 +24,9 @@ unapproved record can have a complete execution package.
   metadata, typed outputs, and integrity-verified evidence to inspect how the
   claim was produced.
 - `rerunnable`: `auditable`, plus the deposited inputs, execution-affecting
-  settings, upstream dependency graph, and execution identity needed to run the
-  workflow again.
+  settings, and upstream dependency graph needed to attempt the workflow again.
+  This grades the *completeness of the deposited evidence*, not a promise of
+  bitwise-identical output.
 
 The grades are ordered outcomes, but the row's `passed_json`, `missing_json`, and
 `warnings_json` are the auditable explanation. Callers must not infer that a
@@ -89,17 +90,36 @@ identity, not a verified runtime environment.
 ### Reaching `rerunnable`
 
 `rerunnable` is awarded only to a calculation, and only when every `auditable`
-requirement passes, its stored `tckdb.execution-environment.v1` closure
-revalidates against its canonical SHA-256 identity, and no evidence warnings
-were raised — an artifact whose bytes could not be verified can never be
-silently upgraded into a rerun claim. The grade does not claim
-bitwise-identical output, available licences/schedulers, or recomputability of
-product records without their own recipe and source-role closure.
+requirement passes, the deposited inputs / parameters / upstream dependency
+snapshot are present, and no evidence warnings were raised — an artifact whose
+bytes could not be verified can never be silently upgraded into a rerun claim.
+The grade does not claim bitwise-identical output, available
+licences/schedulers, or recomputability of product records without their own
+recipe and source-role closure.
 
-The closure is runtime-specific: immutable OCI image digest for containers,
-content-addressed lockfile plus executable for conda, or resolved-environment
-and dependency-manifest digests plus executable for HPC modules. Descriptive
-module names, image tags, and bare-metal/VM descriptions do not qualify.
+**The execution-environment manifest is not graded.** It is recorded under
+`context_json['execution_environment']` as provenance and is deliberately
+excluded from every check, for two reasons.
+
+First, accessibility. Someone who runs `module load gaussian/16` against a site
+install cannot produce a byte digest for it, and they are the common case.
+Gating the top grade on data that most honest uploaders cannot obtain makes the
+grade a measure of local tooling rather than of evidence quality — and a
+required field that a person cannot honestly fill gets filled with a guess,
+which we would then store as though it were verified.
+
+Second, the environment is weaker evidence than what is already recorded. The
+values that actually determine a number — applied energy corrections per atom
+and per bond, frequency scale factors, level of theory, execution parameters —
+are stored as typed rows. Those beat a pointer to an environment that could
+regenerate them. For workflow-tool-derived products,
+`workflow_tool_release.git_commit` pins the code state (and therefore its
+declared dependency set) without asking for a lockfile.
+
+A pinned environment moves a converged SCF energy by roughly 1e-8 Hartree via
+BLAS summation order and FMA rounding — some five orders of magnitude below the
+~1.6 mHartree that is chemical accuracy. It is not what makes a result
+trustworthy.
 
 Canonical chemical identity/alignment rows use `not_applicable` source
 attribution. Selected collections such as conformer groups and networks do
@@ -107,10 +127,8 @@ not: `created_by` is administrative provenance, so they remain below
 `described` until explicit scientific collection provenance is modeled.
 
 A calculation with deposited inputs, parameters, and a full upstream snapshot
-but no manifest stops at `auditable` with an explicit missing
-`execution_environment_manifest` check. That explicit miss is what keeps
-software labels and filenames from being mistaken for environment closure.
-Reassessment always appends a new system-owned snapshot.
+reaches `rerunnable` whether or not a manifest was supplied. Reassessment always
+appends a new system-owned snapshot.
 
 ## Attribution
 

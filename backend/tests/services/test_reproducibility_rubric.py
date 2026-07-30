@@ -1,4 +1,4 @@
-"""Focused tests for the conservative reproducibility rubric v1."""
+"""Focused tests for the conservative reproducibility rubric."""
 
 from __future__ import annotations
 
@@ -202,10 +202,17 @@ def test_below_described_result_is_persisted_as_insufficient(db_session) -> None
     assert {item["name"] for item in row.missing_json} >= {"scientific_context"}
 
 
-def test_verified_typed_output_can_be_auditable_but_v1_never_rerunnable(
+def test_complete_deposited_evidence_is_rerunnable_without_a_manifest(
     db_session,
     _api_test_user,
 ) -> None:
+    """The ordinary shared-cluster upload can reach the top grade.
+
+    ``rerunnable`` grades the completeness of deposited evidence, so a
+    calculation with preserved inputs, parameters, dependencies, and readable
+    output bytes reaches it without anyone supplying a byte digest for a
+    site-installed binary.
+    """
     objects: dict[str, bytes] = {}
     calculation = _calculation(
         db_session,
@@ -216,14 +223,16 @@ def test_verified_typed_output_can_be_auditable_but_v1_never_rerunnable(
 
     result = _evaluate(db_session, calculation, objects)
 
-    assert result.grade is ReproducibilityGrade.auditable
+    assert result.grade is ReproducibilityGrade.rerunnable
     assert "verified_output_artifact_bytes" in {item["name"] for item in result.passed}
-    assert "execution_environment_manifest" in {item["name"] for item in result.missing}
+    # The manifest is recorded provenance, never a check.
+    assert "execution_environment_manifest" not in {item["name"] for item in result.missing}
+    assert result.context_json["execution_environment"] == {"recorded": False}
 
 
 def _execution_environment_payload() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"}, "platform": "linux", "architecture": "x86_64",
+        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"},
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         "closure": [
@@ -239,22 +248,26 @@ def _attach_execution_environment(db_session, calculation: Calculation) -> None:
     calculation.execution_environment_manifest = resolve_execution_environment_manifest(db_session, ExecutionEnvironmentManifestPayload.model_validate(payload))
 
 
-def test_rerunnable_requires_a_valid_manifest(db_session, _api_test_user) -> None:
+def test_manifest_is_recorded_provenance_and_never_changes_the_grade(db_session, _api_test_user) -> None:
+    """Supplying a manifest enriches the snapshot; it does not buy a grade."""
     objects: dict[str, bytes] = {}
     calculation = _calculation(db_session, complete=True, created_by=_api_test_user, objects=objects)
-    # Every other rerunnable requirement is already satisfied, so the manifest
-    # is the single check standing between auditable and rerunnable.
     without_manifest = _evaluate(db_session, calculation, objects)
-    assert without_manifest.grade is ReproducibilityGrade.auditable
-    missing_manifest = next(
-        item for item in without_manifest.missing if item["name"] == "execution_environment_manifest"
-    )
-    assert missing_manifest["evidence"]["reason"] == "execution_environment_manifest_missing"
+    assert without_manifest.grade is ReproducibilityGrade.rerunnable
+    assert without_manifest.context_json["execution_environment"] == {"recorded": False}
 
     _attach_execution_environment(db_session, calculation)
     db_session.flush()
     with_manifest = _evaluate(db_session, calculation, objects)
-    assert with_manifest.grade is ReproducibilityGrade.rerunnable
+    assert with_manifest.grade is without_manifest.grade
+    environment = with_manifest.context_json["execution_environment"]
+    assert environment["recorded"] is True
+    assert environment["revalidates"] is True
+    assert environment["tier"] == "container"
+    # It is provenance, so it must not appear as a check in either direction.
+    check_names = {item["name"] for item in with_manifest.passed + with_manifest.missing}
+    assert "execution_environment_manifest" not in check_names
+
     stored = evaluate_and_append_reproducibility(db_session, record_type="calculation", record_id=calculation.id,
                                                     artifact_loader=_verified_loader(objects))
     assert stored.rubric_version == "v1"
@@ -294,7 +307,7 @@ def test_manifest_corruption_fails_closed(db_session, _api_test_user, mutation) 
     if mutation == "canonical":
         manifest.canonical_json = {"broken": True}
     elif mutation == "normalized":
-        manifest.platform = "darwin"
+        manifest.runtime_locator = "registry.example/other@sha256:" + "e" * 64
     elif mutation == "binding":
         manifest.software_release_id += 1
     else:
@@ -313,8 +326,12 @@ def test_manifest_corruption_fails_closed(db_session, _api_test_user, mutation) 
             record_id=calculation.id,
             artifact_loader=_verified_loader(objects),
         )
-    assert result.grade is ReproducibilityGrade.auditable
-    assert "execution_environment_manifest" in {item["name"] for item in result.missing}
+    # Corruption is a storage-drift signal recorded on the snapshot. It does not
+    # penalise the uploader's grade, which rests on deposited evidence only.
+    assert result.grade is ReproducibilityGrade.rerunnable
+    assert result.context_json["execution_environment"]["revalidates"] is False
+    check_names = {item["name"] for item in result.passed + result.missing}
+    assert "execution_environment_manifest" not in check_names
 
 
 @pytest.mark.parametrize(
@@ -717,8 +734,10 @@ def test_transitive_parent_mutation_changes_context_hash(
         artifact_loader=loader,
     )
 
-    assert first.grade is ReproducibilityGrade.auditable
-    assert second.grade is ReproducibilityGrade.auditable
+    # The grade is unchanged by the mutation; the point is that the snapshotted
+    # evidence hash moves, which is what marks the stored assessment stale.
+    assert first.grade is ReproducibilityGrade.rerunnable
+    assert second.grade is first.grade
     assert first.context_hash != second.context_hash
 
 

@@ -196,9 +196,24 @@ class ExecutionEnvironmentClosureEntry(ExecutionEnvironmentContentReference):
     role: Literal["runtime", "executable", "lockfile", "module_closure", "dependency_manifest"]
 
 
+class ExecutionEnvironmentExecutable(TypedDict):
+    """The executable's location, and its digest only when the uploader had one."""
+
+    locator: str
+    digest: NotRequired[str | None]
+
+
 class ExecutionEnvironmentModuleDescription(TypedDict):
     name: str
     version: str
+
+
+class DescribedExecutionRuntime(TypedDict):
+    """A named-but-unpinned environment: the ordinary shared-cluster case."""
+
+    runtime_kind: Literal["described"]
+    description: str
+    modules: NotRequired[list[ExecutionEnvironmentModuleDescription]]
 
 
 class ContainerExecutionRuntime(TypedDict):
@@ -219,7 +234,7 @@ class HPCModuleExecutionRuntime(TypedDict):
 
 
 ExecutionEnvironmentRuntime: TypeAlias = (
-    ContainerExecutionRuntime | CondaExecutionRuntime | HPCModuleExecutionRuntime
+    DescribedExecutionRuntime | ContainerExecutionRuntime | CondaExecutionRuntime | HPCModuleExecutionRuntime
 )
 
 
@@ -244,12 +259,11 @@ class ExecutionEnvironmentManifestRecord(TypedDict):
     """Canonical nested public execution-environment response."""
 
     schema_version: Required[str]
-    platform: Required[str]
-    architecture: Required[str]
     runtime: Required[ExecutionEnvironmentRuntime]
     software_release: Required[ScientificSoftwareReleaseIdentity]
     workflow_tool_release: NotRequired[WorkflowToolReleaseIdentity | None]
-    executable: Required[ExecutionEnvironmentContentReference]
+    executable: Required[ExecutionEnvironmentExecutable]
+    #: Empty for a ``described`` runtime; populated for the pinned tiers.
     closure: Required[list[ExecutionEnvironmentClosureEntry]]
     environment_ref: Required[str]
 
@@ -429,7 +443,9 @@ __all__ = [
     "ExecutionEnvironmentManifestRecord",
     "ExecutionEnvironmentClosureEntry",
     "ExecutionEnvironmentContentReference",
+    "ExecutionEnvironmentExecutable",
     "ExecutionEnvironmentModuleDescription",
+    "DescribedExecutionRuntime",
     "ExecutionEnvironmentRuntime",
     "HPCModuleExecutionRuntime",
     "JSONDict",
