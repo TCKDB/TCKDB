@@ -207,7 +207,7 @@ def append_audit_event(
 
 
 def list_audit_events(
-    session: Session, *, submission_id: int
+    session: Session, *, submission_id: int, offset: int = 0, limit: int = 50
 ) -> list[SubmissionAuditEvent]:
     """Return audit events for a submission, oldest first.
 
@@ -215,11 +215,14 @@ def list_audit_events(
         distinguish "no events yet" from "unknown submission".
     """
     _require_submission(session, submission_id)
-    rows = session.scalars(
+    stmt = (
         select(SubmissionAuditEvent)
         .where(SubmissionAuditEvent.submission_id == submission_id)
         .order_by(SubmissionAuditEvent.id.asc())
-    ).all()
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = session.scalars(stmt).all()
     return list(rows)
 
 
@@ -749,15 +752,18 @@ def link_records(
 
 
 def list_record_links(
-    session: Session, *, submission_id: int
+    session: Session, *, submission_id: int, offset: int = 0, limit: int = 50
 ) -> list[SubmissionRecordLink]:
     """Return all record links for a submission, oldest first."""
     _require_submission(session, submission_id)
-    rows = session.scalars(
+    stmt = (
         select(SubmissionRecordLink)
         .where(SubmissionRecordLink.submission_id == submission_id)
         .order_by(SubmissionRecordLink.id.asc())
-    ).all()
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = session.scalars(stmt).all()
     return list(rows)
 
 
@@ -771,19 +777,23 @@ def list_my_submissions(
     *,
     user_id: int,
     statuses: Iterable[SubmissionStatus] | None = None,
+    offset: int = 0,
+    limit: int = 50,
 ) -> list[Submission]:
     """Return submissions created by ``user_id``, newest first."""
     stmt = select(Submission).where(Submission.created_by == user_id)
     if statuses is not None:
         stmt = stmt.where(Submission.status.in_(list(statuses)))
     stmt = stmt.order_by(Submission.created_at.desc(), Submission.id.desc())
-    return list(session.scalars(stmt).all())
+    return list(session.scalars(stmt.offset(offset).limit(limit)).all())
 
 
 def list_submissions_for_review(
     session: Session,
     *,
     statuses: Iterable[SubmissionStatus] | None = None,
+    offset: int = 0,
+    limit: int = 50,
 ) -> list[Submission]:
     """Return submissions awaiting curator review, oldest first.
 
@@ -800,4 +810,4 @@ def list_submissions_for_review(
         .where(Submission.status.in_(scoped))
         .order_by(Submission.created_at.asc(), Submission.id.asc())
     )
-    return list(session.scalars(stmt).all())
+    return list(session.scalars(stmt.offset(offset).limit(limit)).all())

@@ -9,7 +9,7 @@ criteria. Stage 0 is an acceptance gate, not work moved to later stages.
 | Stage | Deliverable | Baseline status | Acceptance gate / exit criterion |
 |---|---|---|---|
 | 0 — freeze the contract and baseline | Generated endpoint/client/ingestion/query/export parity matrices; supported/experimental labels; representative staging corpus; deployment inventory and restore-tested backup; manuscript claim-to-test/release evidence matrix | **PASS — versioned baseline** | **Every public claim and product journey has an owner, test, and versioned artifact.** The evidence is assembled below; these artifacts enter version control in this baseline change. Re-run and bind them when cutting a future release candidate. |
-| 1 — ingestion reliability and security | Worker lease/heartbeat/retry/reclaim; job authorization/idempotency; async parity; submission pagination; test-DB cleanup | Open | Kill-after-claim recovery is exactly once; cross-user job reads fail; retried enqueue returns same job; no duplicate science. |
+| 1 — ingestion reliability and security | Worker lease/heartbeat/retry/reclaim; job authorization/idempotency; async parity; submission pagination; test-DB cleanup | **PASS — versioned implementation** | Kill-after-claim recovery is exactly once; cross-user job reads fail; retried enqueue returns same job; no duplicate science. |
 | 2 — scientific integrity blockers | Kinetics/statmech validation; PDep pathway/state identity; bath/energy-transfer normalization; rate interpretation, TS validation, isotope boundary | Open | Multi-well/multi-pathway records round-trip without ambiguity; incomplete records fail before persistence. |
 | 3 — curated product and release semantics | Curated/exploratory profiles; attributed append-only selections; immutable manifest/checksums; version/license/citation metadata | Open | A user can cite and reproduce the exact selected dataset while retrieving candidates and review history. |
 | 4 — query and client validation | Catalog benchmark/plans; bounded analytics or numeric filters; release-watermarked traversal; client parity and safe retries | Open | Published SLOs hold on representative corpus and every documented journey has a tested Python-client example. |
@@ -53,6 +53,47 @@ git diff --exit-code -- backend/schema.dbml
 Run the DBML check only in a clean worktree or review any generated-file
 change deliberately; never redirect generator stdout because it writes its
 fixed output path.
+
+## Stage 1 implementation evidence recorded 2026-07-30
+
+- Additive migration `b1c2d3e4f5a6` adds nullable `upload_job.lease_expires_at`
+  and `heartbeat_at` plus the claim index; `alembic heads` reports it as the
+  sole head. The focused pytest fixture rebuilt a fresh database and applied
+  the complete migration chain before each stage test run.
+- The worker claims either queued jobs or expired, nonterminal leases; a
+  separate heartbeat session renews active work every 30 seconds. Lease expiry
+  after the final attempt is terminally failed and its submission receives the
+  failure audit event. Persistence and completion remain one transaction.
+- `/jobs/*` now uses the standard `Idempotency-Key` contract and limits status
+  reads to owner or curator/admin. The explicit product decision is documented
+  in `backend/docs/specs/ingestion_submission_model.md`: the nine async kinds
+  are experimental authenticated ingestion, not a public/Python-client
+  feature-parity surface.
+- Pagination (`offset`, `limit <= 200`) now bounds submission mine/review,
+  submission audit-event, and submission record-link lists. The existing
+  admin curator-task moderation list was audited and already had bounded
+  pagination.
+- `backend/tests/conftest.py` now drops the isolated per-run test database in
+  session teardown after terminating only its own connections.
+- Final verification passed: 91 full focused worker, job, submission,
+  upload-submission, lease-migration, and test-database-isolation tests after
+  the fence-order fix; all 3 source/CI OpenAPI snapshot tests; `ruff check`
+  for touched code; `alembic heads`; and `git diff --check`. Claim now obtains
+  its execution fence before mutating a job and scans a bounded 32-candidate
+  ordered batch; the expired-final-attempt reaper uses the same advisory key
+  through a transaction-scoped fence. Two PostgreSQL regressions prove claim
+  and reaper leave a fenced job (and its submission) untouched until release.
+  This includes a real subprocess claim/terminate/real thermo recovery test
+  proving exactly-once completion, concurrent keyed enqueue yielding exactly
+  one job/submission, prior-head migration-data recovery behavior, and DB-name
+  safety coverage.
+  Isolated `tckdb_stage1_schema_check_20260730` upgraded through the full
+  migration chain to `b1c2d3e4f5a6 (head)`; the upload-job lease index is
+  present in both ORM metadata and the migration. `alembic check` reports only
+  the two known, pre-existing RDKit expression/GiST index removals
+  (`ix_species_formula_lookup`, `ix_species_entry_mol_gist`), not Stage 1
+  drift. Independent Sol review passed; Stage 1 is **PASS — versioned
+  implementation**. Production/Pi deployment remains Stage 5 work.
 
 ## Exit rule
 

@@ -22,6 +22,7 @@ class UploadJob(Base):
     __tablename__ = "upload_job"
     __table_args__ = (
         Index("ix_upload_job_status_created_at", "status", "created_at"),
+        Index("ix_upload_job_status_lease_expires_at", "status", "lease_expires_at"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -49,6 +50,11 @@ class UploadJob(Base):
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # A processing row is claimable again only after its lease expires.  This
+    # makes an abrupt worker/host failure recoverable without trusting a
+    # process-local queue.
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, server_default="0", nullable=False)

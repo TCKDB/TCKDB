@@ -46,6 +46,27 @@ review-target set is linked; the bundle path keeps its own curated, role-bearing
 
 ## Async upload jobs (`/jobs/*`)
 
+### Support and retry contract
+
+`/jobs/*` is an **experimental authenticated ingestion surface**, not a
+public-release or Python-client feature.  It supports exactly the nine current
+job kinds (`computed_reaction`, `conformer`, `reaction`, `kinetics`, `network`,
+`network_pdep`, `thermo`, `transition_state`, and `transport`); statmech and
+computed-species have no async endpoint by deliberate v1 scope.  This avoids a
+false feature-parity claim: contributors should use the documented synchronous
+upload or contribution-bundle APIs unless an operator has explicitly enabled a
+worker.
+
+Every enqueue accepts the standard optional `Idempotency-Key`; an exact retry
+returns the original `202` response and creates neither a second job nor a
+second submission.  Job status is visible only to its owner or a curator/admin.
+Workers claim rows with a five-minute lease and heartbeat. A process killed
+after claim leaves a `processing` row that a later worker atomically reclaims
+after lease expiry. Each claim consumes one attempt; after `max_attempts` the
+job and its submission are terminally failed. Workflow persistence and marking
+the job complete share one transaction, so recovery replays only rolled-back
+scientific work.
+
 Async uploads are wrapped in the **same** submission model, on the Option-C
 "submission at enqueue" design:
 

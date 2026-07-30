@@ -13,12 +13,13 @@ once.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import SessionLocal
@@ -32,6 +33,9 @@ from app.services.upload_submission import review_policy_for_submission
 logger = logging.getLogger(__name__)
 
 _IDLE_SLEEP = 2.0
+_LEASE_DURATION = timedelta(minutes=5)
+_HEARTBEAT_INTERVAL = 30.0
+_CLAIM_CANDIDATE_BATCH_SIZE = 32
 
 
 def _utcnow() -> datetime:
@@ -43,26 +47,116 @@ def _utcnow() -> datetime:
 # ---------------------------------------------------------------------------
 
 def _claim_one_job(session: Session) -> UploadJob | None:
-    """Atomically claim the oldest queued job using FOR UPDATE SKIP LOCKED."""
-    job = session.scalars(
+    """Claim one unfenced queued or lease-expired job using SKIP LOCKED.
+
+    A recovered row is re-run only after the transaction which held the
+    scientific write rolled back.  Upload workflows write their result and
+    terminal job state in one transaction, so a process killed after claim
+    cannot leave a partial scientific record for a later attempt to duplicate.
+
+    The returned job owns a *session-scoped* advisory execution lock.  Its
+    caller must keep this session bound to the same database connection and
+    release the lock exactly once after processing it.
+    """
+    now = _utcnow()
+    candidates = session.scalars(
         select(UploadJob)
         .where(
-            UploadJob.status == UploadJobStatus.queued,
+            (UploadJob.status == UploadJobStatus.queued)
+            | (
+                (UploadJob.status == UploadJobStatus.processing)
+                & (UploadJob.lease_expires_at.is_not(None))
+                & (UploadJob.lease_expires_at <= now)
+            ),
             UploadJob.attempts < UploadJob.max_attempts,
         )
         .order_by(UploadJob.created_at)
-        .limit(1)
+        .limit(_CLAIM_CANDIDATE_BATCH_SIZE)
         .with_for_update(skip_locked=True)
-    ).first()
+    ).all()
 
-    if job is None:
-        return None
+    for job in candidates:
+        job_id = str(job.id)
+        if not _try_execution_lock(session, job_id):
+            # Do not consume an attempt or disturb an active executor's
+            # lease: a row lock alone is not an execution fence.
+            continue
+        try:
+            job.status = UploadJobStatus.processing
+            job.started_at = now
+            job.heartbeat_at = now
+            job.lease_expires_at = now + _LEASE_DURATION
+            job.attempts += 1
+            session.flush()
+        except Exception:
+            _release_execution_lock(session, job_id)
+            raise
+        return job
+    return None
 
-    job.status = UploadJobStatus.processing
-    job.started_at = _utcnow()
-    job.attempts += 1
+
+def _heartbeat_job(session: Session, job: UploadJob) -> None:
+    """Renew a claimed job's lease before doing its transactional work."""
+    now = _utcnow()
+    job.heartbeat_at = now
+    job.lease_expires_at = now + _LEASE_DURATION
     session.flush()
-    return job
+
+
+def _advisory_lock_key(job_id: str) -> int:
+    """Derive PostgreSQL's signed int64 advisory-lock key from a job UUID."""
+    return int.from_bytes(hashlib.sha256(job_id.encode("ascii")).digest()[:8], "big", signed=True)
+
+
+def _try_execution_lock(session: Session, job_id: str) -> bool:
+    """Acquire a session-scoped fence held for the complete job transaction."""
+    return bool(session.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": _advisory_lock_key(job_id)}))
+
+
+def _release_execution_lock(session: Session, job_id: str) -> None:
+    session.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": _advisory_lock_key(job_id)})
+
+
+def _try_execution_transaction_lock(session: Session, job_id: str) -> bool:
+    """Try the execution fence for a short terminal-state transaction."""
+    return bool(
+        session.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": _advisory_lock_key(job_id)})
+    )
+
+
+class _LeaseHeartbeat:
+    """Renew one in-flight lease from a short independent transaction.
+
+    The ingestion transaction can take minutes.  Keeping heartbeats on their
+    own session means its scientific writes never hold the queue-row lock that
+    a lease renewal needs.
+    """
+
+    def __init__(self, job_id: str) -> None:
+        self._job_id = job_id
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=_HEARTBEAT_INTERVAL + 1.0)
+
+    def _run(self) -> None:
+        while not self._stop.wait(_HEARTBEAT_INTERVAL):
+            try:
+                with SessionLocal() as session:
+                    with session.begin():
+                        job = session.get(UploadJob, self._job_id, with_for_update=True)
+                        if job is None or job.status != UploadJobStatus.processing:
+                            return
+                        _heartbeat_job(session, job)
+            except Exception:
+                # A later tick may succeed; lease expiry remains the safe
+                # recovery path if this worker or the database is unhealthy.
+                logger.exception("Unable to renew upload-job lease %s", self._job_id)
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +316,54 @@ def _submission_for_job(session: Session, job: UploadJob) -> Submission | None:
     )
 
 
+def _fail_expired_exhausted_jobs(session: Session) -> int:
+    """Make lease-expired final attempts terminal and audit their submission.
+
+    This closes the only recovery edge where a worker dies after claiming its
+    final permitted attempt: it must not remain ``processing`` forever merely
+    because no further claim is allowed.
+    """
+    now = _utcnow()
+    rows = session.scalars(
+        select(UploadJob)
+        .where(
+            UploadJob.attempts >= UploadJob.max_attempts,
+            (
+                (UploadJob.status == UploadJobStatus.queued)
+                | (
+                    (UploadJob.status == UploadJobStatus.processing)
+                    & (UploadJob.lease_expires_at.is_not(None))
+                    & (UploadJob.lease_expires_at <= now)
+                )
+            ),
+        )
+        .with_for_update(skip_locked=True)
+    ).all()
+    reaped = 0
+    for job in rows:
+        if not _try_execution_transaction_lock(session, str(job.id)):
+            # A live worker owns the session lock.  Leave both the job and
+            # its submission untouched; its own success/failure transaction
+            # will determine the terminal state.
+            continue
+        job.status = UploadJobStatus.failed
+        job.completed_at = now
+        job.lease_expires_at = None
+        job.heartbeat_at = now
+        job.error = job.error or "Worker lease expired after final permitted attempt."
+        submission = _submission_for_job(session, job)
+        if submission is not None:
+            mark_ingestion_failed(
+                session,
+                submission=submission,
+                reason=job.error,
+                details_json={"upload_job_id": str(job.id), "failure_policy": "lease_expired"},
+            )
+            submission.status = SubmissionStatus.failed
+        reaped += 1
+    return reaped
+
+
 def run_one_job(session: Session, job: UploadJob) -> None:
     """Execute a claimed job and write the result/error back to the row.
 
@@ -254,6 +396,8 @@ def run_one_job(session: Session, job: UploadJob) -> None:
 
     job.status = UploadJobStatus.complete
     job.completed_at = _utcnow()
+    job.lease_expires_at = None
+    job.heartbeat_at = _utcnow()
     job.result = result
     job.error = None
 
@@ -264,47 +408,75 @@ def run_one_job(session: Session, job: UploadJob) -> None:
 
 def _process_one_cycle() -> bool:
     """Claim and process one job. Returns True if a job was processed."""
-    with SessionLocal() as session:
-        with session.begin():
-            job = _claim_one_job(session)
-            if job is None:
-                return False
-            job_id = str(job.id)
-            job_kind = job.kind
+    # A session-scoped advisory lock must stay on one physical PostgreSQL
+    # connection across the claim commit and the later scientific transaction.
+    # Binding this worker Session to an explicitly checked-out connection
+    # prevents Session.commit() from returning that lock-owning connection to
+    # the pool in between.
+    with SessionLocal() as factory_session:
+        bind = factory_session.get_bind()
+    with bind.connect() as connection:
+        with Session(bind=connection, expire_on_commit=False) as session:
+            job = None
+            execution_lock = False
+            heartbeat = None
+            try:
+                with session.begin():
+                    reaped = _fail_expired_exhausted_jobs(session)
+                    job = _claim_one_job(session)
+                    if job is not None:
+                        execution_lock = True
+                        job_id = str(job.id)
+                        job_kind = job.kind
+                if job is None:
+                    return bool(reaped)
 
-        try:
-            with session.begin():
-                job = session.get(UploadJob, job_id)
-                run_one_job(session, job)
-                logger.info("job %s (%s) complete", job_id, job_kind)
+                heartbeat = _LeaseHeartbeat(job_id)
+                heartbeat.start()
+                try:
+                    with session.begin():
+                        # _claim_one_job already owns this exact session's
+                        # execution fence; reacquiring would hide a lost
+                        # connection or release-counting bug.
+                        job = session.get(UploadJob, job_id)
+                        run_one_job(session, job)
+                        logger.info("job %s (%s) complete", job_id, job_kind)
 
-        except Exception as exc:
-            logger.exception("job %s (%s) failed: %s", job_id, job_kind, exc)
-            # This block runs in a *fresh* transaction after the persistence
-            # transaction above rolled back — so no partial scientific records
-            # survive. The submission was committed at enqueue, so on terminal
-            # failure we durably record the failed attempt against it.
-            with session.begin():
-                job = session.get(UploadJob, job_id)
-                job.error = f"{type(exc).__name__}: {exc}"
-                if job.attempts >= job.max_attempts:
-                    job.status = UploadJobStatus.failed
-                    job.completed_at = _utcnow()
-                    submission = _submission_for_job(session, job)
-                    if submission is not None:
-                        mark_ingestion_failed(
-                            session,
-                            submission=submission,
-                            reason=job.error,
-                            details_json={"upload_job_id": job_id},
-                        )
-                        submission.status = SubmissionStatus.failed
-                    logger.warning(
-                        "job %s exhausted %d attempts — marked failed",
-                        job_id, job.max_attempts,
-                    )
-                else:
-                    job.status = UploadJobStatus.queued
+                except Exception as exc:
+                    logger.exception("job %s (%s) failed: %s", job_id, job_kind, exc)
+                    # This block runs in a *fresh* transaction after the persistence
+                    # transaction above rolled back — so no partial scientific records
+                    # survive. The submission was committed at enqueue, so on terminal
+                    # failure we durably record the failed attempt against it.
+                    with session.begin():
+                        job = session.get(UploadJob, job_id)
+                        job.error = f"{type(exc).__name__}: {exc}"
+                        job.lease_expires_at = None
+                        job.heartbeat_at = _utcnow()
+                        if job.attempts >= job.max_attempts:
+                            job.status = UploadJobStatus.failed
+                            job.completed_at = _utcnow()
+                            submission = _submission_for_job(session, job)
+                            if submission is not None:
+                                mark_ingestion_failed(
+                                    session,
+                                    submission=submission,
+                                    reason=job.error,
+                                    details_json={"upload_job_id": job_id},
+                                )
+                                submission.status = SubmissionStatus.failed
+                            logger.warning(
+                                "job %s exhausted %d attempts — marked failed",
+                                job_id, job.max_attempts,
+                            )
+                        else:
+                            job.status = UploadJobStatus.queued
+            finally:
+                if heartbeat is not None:
+                    heartbeat.stop()
+                if execution_lock:
+                    _release_execution_lock(session, job_id)
+                    session.commit()
 
     return True
 

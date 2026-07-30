@@ -140,6 +140,16 @@ class TestListMine:
         assert resp.status_code == 200
         assert [r["id"] for r in resp.json()] == [sub.id]
 
+    def test_offset_limit_pagination(self, client, db_session, _api_test_user):
+        first = _seed_submission(db_session, created_by=_api_test_user, title="first")
+        second = _seed_submission(db_session, created_by=_api_test_user, title="second")
+        newest = _seed_submission(db_session, created_by=_api_test_user, title="newest")
+
+        page = client.get("/api/v1/submissions/mine", params={"offset": 1, "limit": 1})
+        assert page.status_code == 200
+        assert [row["id"] for row in page.json()] == [second.id]
+        assert first.id != newest.id
+
 
 # ---------------------------------------------------------------------------
 # GET /submissions/for-review
@@ -162,6 +172,16 @@ class TestListForReview:
         assert resp.status_code == 200
         ids = [r["id"] for r in resp.json()]
         assert sub.id in ids
+
+    def test_curator_paginates_oldest_first(
+        self, client, db_session, _api_test_user, _api_curator_user, login_as
+    ):
+        oldest = _seed_submission(db_session, created_by=_api_test_user, title="oldest")
+        _seed_submission(db_session, created_by=_api_test_user, title="middle")
+        login_as(_api_curator_user)
+        page = client.get("/api/v1/submissions/for-review", params={"limit": 1})
+        assert page.status_code == 200
+        assert page.json()[0]["id"] == oldest.id
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +402,56 @@ class TestAuditEventsVisibility:
         # submission_created event from create_submission
         kinds = [e["event_kind"] for e in resp.json()]
         assert SubmissionAuditEventKind.submission_created.value in kinds
+
+    def test_audit_events_offset_limit(self, client, db_session, _api_test_user):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        first = append_audit_event(
+            db_session,
+            submission=sub,
+            actor_user_id=_api_test_user,
+            actor_kind=SubmissionActorKind.user,
+            event_kind=SubmissionAuditEventKind.status_changed,
+            summary="first paged event",
+        )
+        append_audit_event(
+            db_session,
+            submission=sub,
+            actor_user_id=_api_test_user,
+            actor_kind=SubmissionActorKind.user,
+            event_kind=SubmissionAuditEventKind.status_changed,
+            summary="second paged event",
+        )
+
+        response = client.get(
+            f"/api/v1/submissions/{sub.id}/audit-events",
+            params={"offset": 1, "limit": 1},
+        )
+        assert response.status_code == 200
+        assert response.json()[0]["id"] == first.id
+
+    def test_record_links_offset_limit(self, client, db_session, _api_test_user):
+        sub = _seed_submission(db_session, created_by=_api_test_user)
+        first = link_record(
+            db_session,
+            submission=sub,
+            record_type=SubmissionRecordType.calculation,
+            record_id=101,
+            role="first",
+        )
+        link_record(
+            db_session,
+            submission=sub,
+            record_type=SubmissionRecordType.calculation,
+            record_id=102,
+            role="second",
+        )
+
+        response = client.get(
+            f"/api/v1/submissions/{sub.id}/record-links",
+            params={"offset": 1, "limit": 1},
+        )
+        assert response.status_code == 200
+        assert response.json()[0]["id"] == first.id + 1
 
     def test_other_user_gets_403(
         self, client, db_session, _api_other_user
