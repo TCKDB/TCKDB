@@ -50,10 +50,8 @@ from app.services.reproducibility_rubric import (
     MAX_ARTIFACT_VERIFICATION_TOTAL_BYTES,
     _geometry_snapshot,
     _rows,
-    evaluate_and_append_reproducibility_v1,
-    evaluate_and_append_reproducibility_v2,
-    evaluate_reproducibility_v1,
-    evaluate_reproducibility_v2,
+    evaluate_and_append_reproducibility,
+    evaluate_reproducibility,
 )
 from app.services.scientific_read.calculations import _build_execution_environment_summary
 from tests.services.scientific_read._factories import (
@@ -180,7 +178,7 @@ def _calculation(
 
 
 def _evaluate(db_session, calculation: Calculation, objects: dict[str, bytes]):
-    return evaluate_reproducibility_v1(
+    return evaluate_reproducibility(
         db_session,
         record_type="calculation",
         record_id=calculation.id,
@@ -193,7 +191,7 @@ def test_below_described_result_is_persisted_as_insufficient(db_session) -> None
     db_session.add(reaction)
     db_session.flush()
 
-    row = evaluate_and_append_reproducibility_v1(
+    row = evaluate_and_append_reproducibility(
         db_session,
         record_type=SubmissionRecordType.reaction,
         record_id=reaction.id,
@@ -241,27 +239,29 @@ def _attach_execution_environment(db_session, calculation: Calculation) -> None:
     calculation.execution_environment_manifest = resolve_execution_environment_manifest(db_session, ExecutionEnvironmentManifestPayload.model_validate(payload))
 
 
-def test_v2_requires_valid_manifest_and_preserves_v1_result(db_session, _api_test_user) -> None:
+def test_rerunnable_requires_a_valid_manifest(db_session, _api_test_user) -> None:
     objects: dict[str, bytes] = {}
     calculation = _calculation(db_session, complete=True, created_by=_api_test_user, objects=objects)
-    v1 = _evaluate(db_session, calculation, objects)
-    v2_missing = evaluate_reproducibility_v2(db_session, record_type="calculation", record_id=calculation.id,
-                                              artifact_loader=_verified_loader(objects))
-    assert v1.grade is ReproducibilityGrade.auditable
-    assert v2_missing.grade is ReproducibilityGrade.auditable
-    assert next(item for item in v2_missing.missing if item["name"] == "execution_environment_manifest")["evidence"]["reason"] == "execution_environment_manifest_missing"
+    # Every other rerunnable requirement is already satisfied, so the manifest
+    # is the single check standing between auditable and rerunnable.
+    without_manifest = _evaluate(db_session, calculation, objects)
+    assert without_manifest.grade is ReproducibilityGrade.auditable
+    missing_manifest = next(
+        item for item in without_manifest.missing if item["name"] == "execution_environment_manifest"
+    )
+    assert missing_manifest["evidence"]["reason"] == "execution_environment_manifest_missing"
 
     _attach_execution_environment(db_session, calculation)
     db_session.flush()
-    v2 = evaluate_reproducibility_v2(db_session, record_type="calculation", record_id=calculation.id,
-                                      artifact_loader=_verified_loader(objects))
-    assert v2.grade is ReproducibilityGrade.rerunnable
-    stored = evaluate_and_append_reproducibility_v2(db_session, record_type="calculation", record_id=calculation.id,
+    with_manifest = _evaluate(db_session, calculation, objects)
+    assert with_manifest.grade is ReproducibilityGrade.rerunnable
+    stored = evaluate_and_append_reproducibility(db_session, record_type="calculation", record_id=calculation.id,
                                                     artifact_loader=_verified_loader(objects))
-    assert stored.rubric_version == "v2"
+    assert stored.rubric_version == "v1"
+    assert stored.grade is ReproducibilityGrade.rerunnable
 
 
-def test_v2_corrupt_or_unavailable_output_blocks_rerunnable(db_session, _api_test_user) -> None:
+def test_corrupt_or_unavailable_output_blocks_rerunnable(db_session, _api_test_user) -> None:
     objects: dict[str, bytes] = {}
     calculation = _calculation(db_session, complete=True, created_by=_api_test_user, objects=objects)
     _attach_execution_environment(db_session, calculation)
@@ -275,15 +275,15 @@ def test_v2_corrupt_or_unavailable_output_blocks_rerunnable(db_session, _api_tes
         )
     )
     db_session.flush()
-    result = evaluate_reproducibility_v2(
+    result = evaluate_reproducibility(
         db_session, record_type="calculation", record_id=calculation.id, artifact_loader=_verified_loader(objects)
     )
     assert result.grade is not ReproducibilityGrade.rerunnable
-    assert "v1_evidence_warnings_clear" in {item["name"] for item in result.missing}
+    assert "evidence_warnings_clear" in {item["name"] for item in result.missing}
 
 
 @pytest.mark.parametrize("mutation", ["canonical", "normalized", "closure", "binding"])
-def test_v2_manifest_corruption_fails_closed(db_session, _api_test_user, mutation) -> None:
+def test_manifest_corruption_fails_closed(db_session, _api_test_user, mutation) -> None:
     objects: dict[str, bytes] = {}
     calculation = _calculation(db_session, complete=True, created_by=_api_test_user, objects=objects)
     _attach_execution_environment(db_session, calculation)
@@ -307,7 +307,7 @@ def test_v2_manifest_corruption_fails_closed(db_session, _api_test_user, mutatio
         else:
             assert evidence["release_bindings_valid"] is (mutation != "binding")
         assert _build_execution_environment_summary(calculation) is None
-        result = evaluate_reproducibility_v2(
+        result = evaluate_reproducibility(
             db_session,
             record_type="calculation",
             record_id=calculation.id,
@@ -328,9 +328,9 @@ def test_v2_manifest_corruption_fails_closed(db_session, _api_test_user, mutatio
         ("network_solve", "network_solve"),
     ],
 )
-def test_v2_never_awards_rerunnable_to_product_records(db_session, record_type, factory) -> None:
+def test_never_awards_rerunnable_to_product_records(db_session, record_type, factory) -> None:
     """A closed source runtime never turns a derived product into a rerun claim."""
-    species = make_species(db_session, inchi_key=next_inchi_key("V2PRODUCT"))
+    species = make_species(db_session, inchi_key=next_inchi_key("PRODUCT"))
     entry = make_species_entry(db_session, species)
     if factory == "thermo":
         target = make_thermo_scalar(db_session, species_entry=entry)
@@ -350,9 +350,9 @@ def test_v2_never_awards_rerunnable_to_product_records(db_session, record_type, 
         network = make_network(db_session, name=f"v2-product-{factory}-{entry.id}")
         target = network if factory == "network" else make_network_solve(db_session, network=network)
 
-    result = evaluate_reproducibility_v2(db_session, record_type=record_type, record_id=target.id)
+    result = evaluate_reproducibility(db_session, record_type=record_type, record_id=target.id)
     assert result.grade is not ReproducibilityGrade.rerunnable
-    assert result.context_json["rubric"]["version"] == "v2"
+    assert result.context_json["rubric"]["version"] == "v1"
 
 
 @pytest.mark.parametrize("failure", ["unavailable", "integrity"])
@@ -375,7 +375,7 @@ def test_artifact_verification_failure_fails_closed(
             raise ArtifactStorageUnavailable("mock unavailable")
         raise ArtifactIntegrityError("mock corrupt")
 
-    result = evaluate_reproducibility_v1(
+    result = evaluate_reproducibility(
         db_session,
         record_type="calculation",
         record_id=calculation.id,
@@ -472,7 +472,7 @@ def test_oversized_output_fails_closed_without_loading(
         calls += 1
         raise AssertionError(expected_bytes)
 
-    result = evaluate_reproducibility_v1(
+    result = evaluate_reproducibility(
         db_session,
         record_type="calculation",
         record_id=calculation.id,
@@ -514,7 +514,7 @@ def test_multiple_outputs_respect_count_budget_and_keep_auditable(
         calls.append(expected_bytes or 0)
         return b"verified"
 
-    result = evaluate_reproducibility_v1(
+    result = evaluate_reproducibility(
         db_session,
         record_type="calculation",
         record_id=calculation.id,
@@ -557,7 +557,7 @@ def test_multiple_outputs_respect_aggregate_byte_budget(
         calls.append(expected_bytes or 0)
         return b"verified"
 
-    result = evaluate_reproducibility_v1(
+    result = evaluate_reproducibility(
         db_session,
         record_type="calculation",
         record_id=calculation.id,
@@ -604,7 +604,7 @@ def test_non_calculation_is_capped_at_described_and_preserves_source_roles(
         calls += 1
         raise AssertionError(expected_bytes)
 
-    result = evaluate_reproducibility_v1(
+    result = evaluate_reproducibility(
         db_session,
         record_type="thermo",
         record_id=thermo.id,
@@ -616,7 +616,7 @@ def test_non_calculation_is_capped_at_described_and_preserves_source_roles(
     assert result.context_json["source_roles"] == [
         {"calculation_id": calculation.id, "role": ThermoCalculationRole.sp.value}
     ]
-    assert "record_type_audit_policy_v1" in {item["name"] for item in result.missing}
+    assert "record_type_audit_policy" in {item["name"] for item in result.missing}
 
 
 def test_target_and_direct_source_mutations_change_context_hash(
@@ -648,7 +648,7 @@ def test_target_and_direct_source_mutations_change_context_hash(
     db_session.flush()
     loader = _verified_loader(objects)
 
-    first = evaluate_and_append_reproducibility_v1(
+    first = evaluate_and_append_reproducibility(
         db_session,
         record_type="thermo",
         record_id=thermo.id,
@@ -656,7 +656,7 @@ def test_target_and_direct_source_mutations_change_context_hash(
     )
     thermo.h298_kj_mol = -11.0
     db_session.flush()
-    target_changed = evaluate_and_append_reproducibility_v1(
+    target_changed = evaluate_and_append_reproducibility(
         db_session,
         record_type="thermo",
         record_id=thermo.id,
@@ -664,7 +664,7 @@ def test_target_and_direct_source_mutations_change_context_hash(
     )
     calculation.parameters[0].raw_value = "very_tight"
     db_session.flush()
-    source_changed = evaluate_and_append_reproducibility_v1(
+    source_changed = evaluate_and_append_reproducibility(
         db_session,
         record_type="thermo",
         record_id=thermo.id,
@@ -702,7 +702,7 @@ def test_transitive_parent_mutation_changes_context_hash(
     db_session.flush()
     loader = _verified_loader(objects)
 
-    first = evaluate_and_append_reproducibility_v1(
+    first = evaluate_and_append_reproducibility(
         db_session,
         record_type="calculation",
         record_id=child.id,
@@ -710,7 +710,7 @@ def test_transitive_parent_mutation_changes_context_hash(
     )
     parent.parameters[0].raw_value = "ultratight"
     db_session.flush()
-    second = evaluate_and_append_reproducibility_v1(
+    second = evaluate_and_append_reproducibility(
         db_session,
         record_type="calculation",
         record_id=child.id,
@@ -765,7 +765,7 @@ def test_registry_covers_all_addressable_assessment_types() -> None:
 
 def test_missing_record_fails_closed(db_session) -> None:
     with pytest.raises(ValueError, match="calculation record 999999999 does not exist"):
-        evaluate_reproducibility_v1(
+        evaluate_reproducibility(
             db_session,
             record_type="calculation",
             record_id=999_999_999,

@@ -52,12 +52,22 @@ committing. `get_latest_reproducibility_assessment(...)` is the sole initial
 read helper. The service does not modify science, submissions, reviews, or
 trust projections.
 
-## System rubric v1
+## System rubric
 
 `tckdb_reproducibility:v1` is deterministic and fail-closed across the record
 types supported by the assessment table. It derives every grade and check from
 persisted structured evidence; an API caller supplies only the record address.
-Version 1 caps every non-calculation record at `described`; product derivation
+
+TCKDB is pre-release, so there is deliberately **one** rubric implementation
+rather than a chain of versioned ones: the rubric is changed in place and the
+`v1` label is retained. The `rubric_version` column exists so that stored rows
+can be attributed after a release, but it is not the staleness mechanism —
+freshness is decided by comparing an assessment's snapshotted `context_json`
+hash against a fresh evaluation, so an evidence change is detected whether or
+not the label moved. Introduce a second version only when a released consumer
+depends on the old grades.
+
+The rubric caps every non-calculation record at `described`; product derivation
 and source-role policies remain explicit missing checks until their complete
 recipes are modeled. A calculation reaches `auditable` only when it has an
 exact software release, level-of-theory identity, type-appropriate structured
@@ -66,7 +76,7 @@ size verification through the normal artifact read path.
 
 Artifact reads are restricted to output logs attached directly to a
 calculation being assessed. Product records and transitive parent calculations
-are metadata-only in v1 and never trigger downloads. A direct output larger
+are metadata-only and never trigger downloads. A direct output larger
 than 50 MiB fails the verification check with a typed warning rather than being
 read. Each assessment reads at most eight output logs and at most 50 MiB in
 aggregate; further logs receive explicit count/aggregate budget statuses and
@@ -76,16 +86,17 @@ nonblank version/revision/build token, and fails when declared-versus-parsed
 software reconciliation is `mismatch`; this is a nonconflicting declared
 identity, not a verified runtime environment.
 
-## System rubric v2
+### Reaching `rerunnable`
 
-`tckdb_reproducibility:v2` preserves v1 rows and checks. It may award
-`rerunnable` only for a calculation when every v1 requirement passes and its
-stored `tckdb.execution-environment.v1` closure revalidates against its
-canonical SHA-256 identity. It does not claim bitwise-identical output,
-available licences/schedulers, or recomputability of product records without
-their own recipe and source-role closure.
+`rerunnable` is awarded only to a calculation, and only when every `auditable`
+requirement passes, its stored `tckdb.execution-environment.v1` closure
+revalidates against its canonical SHA-256 identity, and no evidence warnings
+were raised — an artifact whose bytes could not be verified can never be
+silently upgraded into a rerun claim. The grade does not claim
+bitwise-identical output, available licences/schedulers, or recomputability of
+product records without their own recipe and source-role closure.
 
-The v2 closure is runtime-specific: immutable OCI image digest for containers,
+The closure is runtime-specific: immutable OCI image digest for containers,
 content-addressed lockfile plus executable for conda, or resolved-environment
 and dependency-manifest digests plus executable for HPC modules. Descriptive
 module names, image tags, and bare-metal/VM descriptions do not qualify.
@@ -95,11 +106,11 @@ attribution. Selected collections such as conformer groups and networks do
 not: `created_by` is administrative provenance, so they remain below
 `described` until explicit scientific collection provenance is modeled.
 
-Version 1 never awards `rerunnable`. Deposited inputs, parameters, and the full
-upstream calculation snapshot are recorded, but the mandatory typed execution
-environment manifest is not yet supported. This explicit missing check avoids
-treating software labels or filenames as environment closure and makes no
-byte-exact claim. Reassessment always appends a new system-owned snapshot.
+A calculation with deposited inputs, parameters, and a full upstream snapshot
+but no manifest stops at `auditable` with an explicit missing
+`execution_environment_manifest` check. That explicit miss is what keeps
+software labels and filenames from being mistaken for environment closure.
+Reassessment always appends a new system-owned snapshot.
 
 ## Attribution
 

@@ -46348,7 +46348,7 @@
     },
     "/api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/evaluate": {
       "post": {
-        "description": "Derive and append the current system-owned v2 assessment.",
+        "description": "Derive and append the current system-owned assessment.",
         "operationId": "evaluate_reproducibility_api_v1_curation_reproducibility_assessments__record_type___record_id__evaluate_post",
         "parameters": [
           {

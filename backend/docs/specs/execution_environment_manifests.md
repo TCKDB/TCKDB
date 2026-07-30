@@ -19,9 +19,10 @@ credentials, URI userinfo/query/fragment, and secret-bearing text; every
 closure role and locator is unique. The server canonicalizes the role-sorted
 payload and hashes it; `sha256:<digest>` is the public content reference.
 
-The manifest is optional for backwards-compatible uploads. `tckdb_reproducibility`
-v1 remains unchanged. v2 awards `rerunnable` only to a calculation whose v1
-checks pass and whose current manifest closure validates. This means the saved
+The manifest is optional, so a calculation without one still uploads and still
+reaches `auditable`. `tckdb_reproducibility` awards `rerunnable` only to a
+calculation whose other checks pass and whose current manifest closure
+validates. This means the saved
 calculation can be re-executed from its preserved evidence; it does not promise
 bit-identical numerical output, licensed software availability, scheduler
 availability, or recomputation of thermo/kinetics/statmech/transport/PDep

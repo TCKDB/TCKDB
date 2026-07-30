@@ -15,7 +15,7 @@ from app.schemas.entities.scientific_record_supersession import (
     ScientificRecordSupersessionRequest,
 )
 from app.services.reproducibility_assessment import get_latest_reproducibility_assessment
-from app.services.reproducibility_rubric import evaluate_and_append_reproducibility_v2
+from app.services.reproducibility_rubric import evaluate_and_append_reproducibility
 from app.services.scientific_record_supersession import supersede_scientific_record
 
 router = APIRouter()
@@ -33,8 +33,8 @@ def evaluate_reproducibility(
     session: Session = Depends(get_write_db),
     _actor: AppUser = Depends(require_curator_or_admin),
 ) -> ReproducibilityAssessmentRead:
-    """Derive and append the current system-owned v2 assessment."""
-    row = evaluate_and_append_reproducibility_v2(
+    """Derive and append the current system-owned assessment."""
+    row = evaluate_and_append_reproducibility(
         session,
         record_type=record_type,
         record_id=record_id,
