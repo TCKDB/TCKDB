@@ -167,7 +167,10 @@ class Calculation:
     # locally but not emitted on the wire. Lift to the payload only
     # once the backend schemas grow a matching field.
     note: str | None = None
-    #: Optional server-validated, content-addressed runtime closure. The
+    #: Optional server-validated execution-environment manifest. Accepts the
+    #: ``described`` tier (module names, no digests) as well as the pinned
+    #: tiers; it is provenance only and never affects a reproducibility grade.
+    #: The
     #: builder preserves it verbatim; TCKDB schemas own canonical validation.
     execution_environment: ExecutionEnvironmentManifestPayload | Mapping[str, Any] | None = None
 
@@ -225,7 +228,7 @@ class Calculation:
                 )
             except Exception as exc:
                 raise TCKDBBuilderValidationError(
-                    "execution_environment must be a valid closed execution-environment manifest."
+                    "execution_environment must be a valid execution-environment manifest."
                 ) from exc
         if self.n_steps is not None:
             n_steps = ensure_int(self.n_steps, field="n_steps")

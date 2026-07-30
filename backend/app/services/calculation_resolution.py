@@ -265,7 +265,6 @@ def resolve_execution_environment_manifest(
     with session.begin_nested():
         manifest = ExecutionEnvironmentManifest(
             schema_version=payload.schema_version, content_digest=digest,
-            platform=payload.platform, architecture=payload.architecture,
             runtime_kind=payload.runtime_kind, runtime_locator=payload.runtime_locator,
             executable_locator=payload.executable_locator, closure_json=canonical["closure"],
             software_release_id=software_release_id, workflow_tool_release_id=workflow_tool_release_id,

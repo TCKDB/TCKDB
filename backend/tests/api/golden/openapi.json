@@ -11682,6 +11682,37 @@
         "title": "CuratorPriority",
         "type": "string"
       },
+      "DescribedRuntime": {
+        "additionalProperties": false,
+        "description": "A named-but-unpinned environment — the ordinary shared-cluster case.\n\nAccepted on purpose. ``module load gaussian/16`` on a site install is real\nprovenance: it is enough to compare two records and to ask an operator what\nwas there, even though it fixes no bytes.",
+        "properties": {
+          "description": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleDescription"
+            },
+            "maxItems": 64,
+            "title": "Modules",
+            "type": "array"
+          },
+          "runtime_kind": {
+            "const": "described",
+            "title": "Runtime Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runtime_kind",
+          "description"
+        ],
+        "title": "DescribedRuntime",
+        "type": "object"
+      },
       "DeterministicTrustSummary": {
         "description": "Current code-defined evidence assessment; not a quality claim.",
         "properties": {
@@ -12614,50 +12645,63 @@
         "title": "EvidenceCompletenessBreakdown",
         "type": "object"
       },
+      "ExecutableReference": {
+        "additionalProperties": false,
+        "description": "Where the scientific executable was, and its digest when that is known.\n\n``digest`` is optional because the great majority of uploaders run a shared\nor site-installed binary and have no reason to have hashed it. A pinned\n``runtime_kind`` still requires it, because a byte closure that omits the\nexecutable is not a closure.",
+        "properties": {
+          "digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digest"
+          },
+          "locator": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Locator",
+            "type": "string"
+          }
+        },
+        "required": [
+          "locator"
+        ],
+        "title": "ExecutableReference",
+        "type": "object"
+      },
       "ExecutionEnvironmentManifestPayload": {
         "additionalProperties": false,
-        "description": "A closed execution environment for container, conda, or HPC module runs.\n\nThere is intentionally no bare-metal/VM variant: those deployments cannot\nmake a rerunnable claim without an equivalent closed image or lockfile.",
+        "description": "An execution environment recorded at the tier the uploader could supply.\n\nA ``described`` runtime carries no digests and is fully acceptable; the\npinned runtimes additionally fix the environment by bytes. See the module\ndocstring for why both are accepted.",
         "properties": {
-          "architecture": {
-            "enum": [
-              "x86_64",
-              "aarch64",
-              "ppc64le"
-            ],
-            "title": "Architecture",
-            "type": "string"
-          },
           "closure": {
             "items": {
               "$ref": "#/components/schemas/EnvironmentClosureEntry"
             },
             "maxItems": 5,
-            "minItems": 2,
             "title": "Closure",
             "type": "array"
           },
           "executable": {
-            "$ref": "#/components/schemas/ContentAddressedReference"
-          },
-          "platform": {
-            "enum": [
-              "linux",
-              "darwin",
-              "windows"
-            ],
-            "title": "Platform",
-            "type": "string"
+            "$ref": "#/components/schemas/ExecutableReference"
           },
           "runtime": {
             "discriminator": {
               "mapping": {
                 "conda": "#/components/schemas/CondaRuntime",
                 "container": "#/components/schemas/ContainerRuntime",
+                "described": "#/components/schemas/DescribedRuntime",
                 "hpc_module": "#/components/schemas/HPCModuleRuntime"
               },
               "propertyName": "runtime_kind"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/DescribedRuntime"
+              },
               {
                 "$ref": "#/components/schemas/ContainerRuntime"
               },
@@ -12691,35 +12735,22 @@
         },
         "required": [
           "schema_version",
-          "platform",
-          "architecture",
           "runtime",
           "software_release",
-          "executable",
-          "closure"
+          "executable"
         ],
         "title": "ExecutionEnvironmentManifestPayload",
         "type": "object"
       },
       "ExecutionEnvironmentManifestSummary": {
         "additionalProperties": false,
-        "description": "Public, secret-free content reference for an optional closed runtime.",
+        "description": "Public, secret-free reference for an optional recorded runtime.\n\nCarries whichever tier the uploader supplied; ``runtime.runtime_kind`` is\n``described`` when no byte digests were available.",
         "properties": {
-          "architecture": {
-            "enum": [
-              "x86_64",
-              "aarch64",
-              "ppc64le"
-            ],
-            "title": "Architecture",
-            "type": "string"
-          },
           "closure": {
             "items": {
               "$ref": "#/components/schemas/EnvironmentClosureEntry"
             },
             "maxItems": 5,
-            "minItems": 2,
             "title": "Closure",
             "type": "array"
           },
@@ -12729,27 +12760,22 @@
             "type": "string"
           },
           "executable": {
-            "$ref": "#/components/schemas/ContentAddressedReference"
-          },
-          "platform": {
-            "enum": [
-              "linux",
-              "darwin",
-              "windows"
-            ],
-            "title": "Platform",
-            "type": "string"
+            "$ref": "#/components/schemas/ExecutableReference"
           },
           "runtime": {
             "discriminator": {
               "mapping": {
                 "conda": "#/components/schemas/CondaRuntime",
                 "container": "#/components/schemas/ContainerRuntime",
+                "described": "#/components/schemas/DescribedRuntime",
                 "hpc_module": "#/components/schemas/HPCModuleRuntime"
               },
               "propertyName": "runtime_kind"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/DescribedRuntime"
+              },
               {
                 "$ref": "#/components/schemas/ContainerRuntime"
               },
@@ -12783,12 +12809,9 @@
         },
         "required": [
           "schema_version",
-          "platform",
-          "architecture",
           "runtime",
           "software_release",
           "executable",
-          "closure",
           "environment_ref"
         ],
         "title": "ExecutionEnvironmentManifestSummary",

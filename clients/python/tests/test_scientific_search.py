@@ -42,7 +42,7 @@ def test_calculation_detail_and_search_expose_execution_environment_section():
         "has_irc": False, "has_path_search": False, "has_execution_environment": True,
     }
     environment = {
-        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"}, "platform": "linux", "architecture": "x86_64",
+        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"},
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@" + digest},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": executable_digest},
         "closure": [

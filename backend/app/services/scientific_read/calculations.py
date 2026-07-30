@@ -806,8 +806,10 @@ def _build_execution_environment_summary(
 ) -> ExecutionEnvironmentManifestSummary | None:
     """Return a manifest only when every persisted projection revalidates.
 
-    A malformed or manually tampered stored row is intentionally invisible to
-    public reads and cannot be used to advertise a closed environment.
+    A stored row whose denormalized columns no longer agree with its canonical
+    payload indicates corruption or a partial write on our side, so it is not
+    projected rather than served in a state we cannot vouch for. Both the
+    ``described`` and the byte-pinned tiers project normally.
     """
     manifest = calc.execution_environment_manifest
     if manifest is None:

@@ -39,8 +39,6 @@ def _execution_environment() -> dict:
     return {
         "schema_version": "tckdb.execution-environment.v1",
         "software_release": {"name": "Gaussian", "version": "16"},
-        "platform": "linux",
-        "architecture": "x86_64",
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         "closure": [
@@ -321,7 +319,7 @@ def test_execution_environment_resolver_rejects_corrupt_digest_match(db_engine) 
         try:
             payload = ExecutionEnvironmentManifestPayload.model_validate(_execution_environment())
             manifest = resolve_execution_environment_manifest(session, payload)
-            manifest.platform = "darwin"
+            manifest.runtime_locator = "registry.example/other@sha256:" + "e" * 64
             with session.no_autoflush, pytest.raises(ExecutionEnvironmentManifestIntegrityError):
                 resolve_execution_environment_manifest(session, payload)
         finally:
@@ -337,12 +335,13 @@ def test_execution_environment_manifest_is_database_immutable_without_calculatio
             )
             with pytest.raises(DBAPIError), session.begin_nested():
                 session.execute(
-                    text("UPDATE execution_environment_manifest SET platform = 'mutated' WHERE id = :id"),
+                    text("UPDATE execution_environment_manifest SET runtime_locator = 'mutated' WHERE id = :id"),
                     {"id": manifest.id},
                 )
             with pytest.raises(DBAPIError), session.begin_nested():
                 session.execute(text("DELETE FROM execution_environment_manifest WHERE id = :id"), {"id": manifest.id})
-            assert session.get(ExecutionEnvironmentManifest, manifest.id).platform == "linux"
+            stored = session.get(ExecutionEnvironmentManifest, manifest.id)
+            assert stored.runtime_locator == "registry.example/arc@sha256:" + "a" * 64
 
 
 def test_unapproved_calculation_can_attach_and_replace_execution_environment(db_engine) -> None:

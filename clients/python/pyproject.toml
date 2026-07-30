@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-client"
-version = "0.29.0"
+version = "0.30.0"
 description = "Synchronous Python HTTP client and scientific upload builders for the TCKDB API."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -40,7 +40,7 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.27",
-    "tckdb-schemas>=0.9.0",
+    "tckdb-schemas>=0.10.0",
 ]
 
 [project.optional-dependencies]

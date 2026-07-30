@@ -139,7 +139,11 @@ class CalculationCoreBlock(BaseModel):
 
 
 class ExecutionEnvironmentManifestSummary(ExecutionEnvironmentManifestPayload):
-    """Public, secret-free content reference for an optional closed runtime."""
+    """Public, secret-free reference for an optional recorded runtime.
+
+    Carries whichever tier the uploader supplied; ``runtime.runtime_kind`` is
+    ``described`` when no byte digests were available.
+    """
 
     environment_ref: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 

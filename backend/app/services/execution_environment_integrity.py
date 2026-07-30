@@ -1,4 +1,10 @@
-"""Shared fail-closed verification for persisted execution-environment manifests."""
+"""Consistency checks for persisted execution-environment manifests.
+
+This detects storage corruption and drift: whether a stored row's denormalized
+columns still agree with its canonical payload and its own content digest. It
+is not an honesty check on the uploader — a manifest that fails here indicates a
+bug, a partial write, or an out-of-band edit on our side.
+"""
 
 from typing import Any
 
@@ -15,7 +21,7 @@ def manifest_integrity_evidence(
     expected_software_release_id: int | None = None,
     expected_workflow_tool_release_id: int | None = None,
 ) -> tuple[bool, dict[str, Any]]:
-    """Return fail-closed canonical, release-binding, and attachment evidence."""
+    """Return canonical, release-binding, and attachment consistency evidence."""
     try:
         payload = ExecutionEnvironmentManifestPayload.model_validate(manifest.canonical_json)
     except Exception as exc:
@@ -66,8 +72,6 @@ def manifest_integrity_evidence(
     valid = bool(
         manifest.schema_version == payload.schema_version
         and manifest.content_digest == payload.content_digest()
-        and manifest.platform == payload.platform
-        and manifest.architecture == payload.architecture
         and manifest.runtime_kind == payload.runtime_kind
         and manifest.runtime_locator == payload.runtime_locator
         and manifest.executable_locator == payload.executable_locator

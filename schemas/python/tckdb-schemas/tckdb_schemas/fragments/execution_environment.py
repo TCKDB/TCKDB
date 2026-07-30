@@ -1,9 +1,26 @@
-"""Typed, secret-safe execution-environment closure contracts.
+"""Typed, secret-safe execution-environment contracts.
 
-The manifest deliberately describes only environments that can be pinned by
-bytes.  Human-readable module names and paths are useful locators, never the
-evidence of reproducibility: every executable and closure item has its own
-content digest.
+The manifest records an environment at one of two tiers, and **both are
+accepted**:
+
+``described``
+    A named-but-unpinned environment: module names, an environment name, a
+    human description. This is the common case — someone who runs
+    ``module load gaussian/16`` on a shared cluster cannot produce byte digests
+    for that install, and refusing the record would mean storing nothing where
+    useful provenance was available.
+
+``container`` / ``conda`` / ``hpc_module``
+    A byte-pinned closure: an immutable OCI digest, a content-addressed
+    lockfile, or resolved-environment plus dependency-manifest digests.
+
+The tier is readable from ``runtime_kind`` and is deliberately not stored
+separately — a derived fact with a second, un-arbitrated home is how the two
+copies come to disagree.
+
+Neither tier is scored by the reproducibility rubric. The manifest is additive
+provenance: it says what an uploader was able to tell us, and a missing digest
+means the digest was unavailable, not that a claim is suspect.
 """
 
 from __future__ import annotations
@@ -72,6 +89,29 @@ class EnvironmentClosureEntry(ContentAddressedReference):
     role: Literal["runtime", "executable", "lockfile", "module_closure", "dependency_manifest"]
 
 
+class ExecutableReference(SchemaBase):
+    """Where the scientific executable was, and its digest when that is known.
+
+    ``digest`` is optional because the great majority of uploaders run a shared
+    or site-installed binary and have no reason to have hashed it. A pinned
+    ``runtime_kind`` still requires it, because a byte closure that omits the
+    executable is not a closure.
+    """
+
+    locator: str = Field(min_length=1, max_length=2048)
+    digest: Digest | None = None
+
+    @field_validator("locator")
+    @classmethod
+    def validate_locator(cls, value: str) -> str:
+        return _validate_locator(value, field="locator")
+
+    @field_validator("digest")
+    @classmethod
+    def validate_digest(cls, value: str | None) -> str | None:
+        return None if value is None else _validate_digest(value, field="digest")
+
+
 class ModuleDescription(SchemaBase):
     """Descriptive HPC module identity; never sufficient closure evidence."""
 
@@ -82,6 +122,39 @@ class ModuleDescription(SchemaBase):
     @classmethod
     def validate_name(cls, value: str) -> str:
         return _validate_safe_identifier(value, field="module names and versions")
+
+
+class DescribedRuntime(SchemaBase):
+    """A named-but-unpinned environment — the ordinary shared-cluster case.
+
+    Accepted on purpose. ``module load gaussian/16`` on a site install is real
+    provenance: it is enough to compare two records and to ask an operator what
+    was there, even though it fixes no bytes.
+    """
+
+    runtime_kind: Literal["described"]
+    description: str = Field(min_length=1, max_length=512)
+    modules: list[ModuleDescription] = Field(default_factory=list, max_length=64)
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        if _SECRET.search(value):
+            raise ValueError("description must not contain credentials or secrets")
+        return value
+
+    @model_validator(mode="after")
+    def unique_modules(self):
+        identities = [(module.name, module.version) for module in self.modules]
+        if len(identities) != len(set(identities)):
+            raise ValueError("module descriptions must be unique")
+        return self
+
+    @property
+    def runtime_locator(self) -> str:
+        if self.modules:
+            return "module://" + ",".join(f"{module.name}/{module.version}" for module in self.modules)
+        return self.description
 
 
 class ContainerRuntime(SchemaBase):
@@ -178,27 +251,43 @@ class WorkflowToolReleaseIdentity(SchemaBase):
 
 
 class ExecutionEnvironmentManifestPayload(SchemaBase):
-    """A closed execution environment for container, conda, or HPC module runs.
+    """An execution environment recorded at the tier the uploader could supply.
 
-    There is intentionally no bare-metal/VM variant: those deployments cannot
-    make a rerunnable claim without an equivalent closed image or lockfile.
+    A ``described`` runtime carries no digests and is fully acceptable; the
+    pinned runtimes additionally fix the environment by bytes. See the module
+    docstring for why both are accepted.
     """
 
     schema_version: Literal["tckdb.execution-environment.v1"]
-    platform: Literal["linux", "darwin", "windows"]
-    architecture: Literal["x86_64", "aarch64", "ppc64le"]
-    runtime: ContainerRuntime | CondaRuntime | HPCModuleRuntime = Field(discriminator="runtime_kind")
+    runtime: DescribedRuntime | ContainerRuntime | CondaRuntime | HPCModuleRuntime = Field(
+        discriminator="runtime_kind"
+    )
     software_release: ScientificSoftwareReleaseIdentity
     workflow_tool_release: WorkflowToolReleaseIdentity | None = None
-    executable: ContentAddressedReference
-    closure: list[EnvironmentClosureEntry] = Field(min_length=2, max_length=5)
+    executable: ExecutableReference
+    closure: list[EnvironmentClosureEntry] = Field(default_factory=list, max_length=5)
+
+    @property
+    def closure_tier(self) -> Literal["described", "content_addressed"]:
+        """Which tier this manifest reached. Derived from ``runtime_kind``."""
+        return "described" if isinstance(self.runtime, DescribedRuntime) else "content_addressed"
 
     @model_validator(mode="after")
-    def validate_closed(self):
+    def validate_closure(self):
         roles = [entry.role for entry in self.closure]
         locators = [entry.locator for entry in self.closure]
         if len(roles) != len(set(roles)) or len(locators) != len(set(locators)):
             raise ValueError("closure roles and locators must be unique")
+        if isinstance(self.runtime, DescribedRuntime):
+            if self.closure:
+                raise ValueError(
+                    "a described runtime carries no closure digests; use a pinned runtime_kind to record them"
+                )
+            return self
+        if self.executable.digest is None:
+            raise ValueError("a pinned runtime requires the executable digest")
+        if len(self.closure) < 2:
+            raise ValueError("a pinned runtime requires at least the runtime and executable closure entries")
         by_role = {entry.role: entry for entry in self.closure}
         executable = by_role.get("executable")
         if executable is None or (
@@ -242,8 +331,6 @@ class ExecutionEnvironmentManifestPayload(SchemaBase):
     def canonical_payload(self) -> dict:
         return {
             "schema_version": self.schema_version,
-            "platform": self.platform,
-            "architecture": self.architecture,
             "runtime": self.runtime.model_dump(mode="json"),
             "software_release": self.software_release.model_dump(mode="json"),
             "workflow_tool_release": (
