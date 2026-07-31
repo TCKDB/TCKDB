@@ -10,7 +10,7 @@ criteria. Stage 0 is an acceptance gate, not work moved to later stages.
 |---|---|---|---|
 | 0 — freeze the contract and baseline | Generated endpoint/client/ingestion/query/export parity matrices; supported/experimental labels; representative staging corpus; deployment inventory and restore-tested backup; manuscript claim-to-test/release evidence matrix | **PASS — versioned baseline** | **Every public claim and product journey has an owner, test, and versioned artifact.** The evidence is assembled below; these artifacts enter version control in this baseline change. Re-run and bind them when cutting a future release candidate. |
 | 1 — ingestion reliability and security | Worker lease/heartbeat/retry/reclaim; job authorization/idempotency; async parity; submission pagination; test-DB cleanup | **PASS — versioned implementation** | Kill-after-claim recovery is exactly once; cross-user job reads fail; retried enqueue returns same job; no duplicate science. |
-| 2 — scientific integrity blockers | Kinetics/statmech validation; PDep pathway/state identity; bath/energy-transfer normalization; rate interpretation, TS validation, isotope boundary | Open | Multi-well/multi-pathway records round-trip without ambiguity; incomplete records fail before persistence. |
+| 2 — scientific integrity blockers | Kinetics/statmech validation; PDep pathway/state identity; bath/energy-transfer normalization; rate interpretation, TS validation, isotope boundary | **PASS — versioned implementation** | Multi-well/multi-pathway records round-trip without ambiguity; incomplete records fail before persistence. |
 | 3 — curated product and release semantics | Curated/exploratory profiles; attributed append-only selections; immutable manifest/checksums; version/license/citation metadata | Open | A user can cite and reproduce the exact selected dataset while retrieving candidates and review history. |
 | 4 — query and client validation | Catalog benchmark/plans; bounded analytics or numeric filters; release-watermarked traversal; client parity and safe retries | Open | Published SLOs hold on representative corpus and every documented journey has a tested Python-client example. |
 | 5 — production operations | Expected-head readiness; DB/object backup/restore; metrics/alerts; rate limits; immutable arm64 image smoke test | Open | Restore drill passes, worker crash self-heals, schema drift blocks readiness, Pi is reproducible from tagged release. |
@@ -94,6 +94,87 @@ fixed output path.
   (`ix_species_formula_lookup`, `ix_species_entry_mol_gist`), not Stage 1
   drift. Independent Sol review passed; Stage 1 is **PASS — versioned
   implementation**. Production/Pi deployment remains Stage 5 work.
+
+## Stage 2 implementation evidence recorded 2026-07-31
+
+Commit `e8981a5`, PR #66, branch `agent/stage-2-scientific-integrity`.
+Migrations `c1d2e3f4a5b6` (PDep scientific integrity) then `d2e3f4a5b6c7`
+(atom-resolved isotope identity); `alembic heads` reports `d2e3f4a5b6c7` as the
+sole head. Stage 2 **failed independent review twice** before passing on the
+third round; the failures are recorded here because they shaped the design.
+
+- **PDep pathway identity.** Channels are keyed by a producer-visible
+  `channel_key` rather than the endpoint triple, so parallel elementary paths
+  between the same two wells no longer collide, and several transition states
+  may share one micro reaction. The previous schema rule forced producers to
+  mint duplicate `reaction_entry` identity rows to express parallel paths,
+  contradicting the identity-tables-dedupe invariant.
+- **Per-path solve inputs.** Forward/reverse barriers per path, energies per
+  state, and energy transfer scoped to `(state, collider)`, each under an
+  enum-backed energy-zero and correction convention. Coverage is exact set
+  equality over the declared states, saddle-point paths, and
+  well x bath-collider pairs.
+- **Barrierless and submerged-barrier channels are first class.** These were
+  previously unrepresentable, and the repository's own reference payload
+  modelled `C2H5 + O2 -> C2H5OO` — a barrierless association — with an invented
+  15.0 kJ/mol barrier to satisfy a `> 0` constraint in both Pydantic and the
+  database. The fixture is now a genuine 3-state / 3-channel network whose
+  association and dissociation paths carry no transition state and no barrier,
+  plus a real saddle-point channel (concerted HO2 elimination) carrying two
+  transition states on one micro reaction.
+- **Statmech subjects and rate interpretation.** A statmech record describes
+  exactly one subject (species entry XOR transition-state entry), enforced in
+  the ORM, the database, and at the workflow seam. Each reactant slot, product
+  slot, and the TS binds to its exact statmech record; substitution across
+  subjects is rejected before persistence, verified in all three directions.
+- **Requirements attach to claims, not to record types.** Statmech source
+  calculations are warned at deposit and required at the point a computed rate
+  is built from them, so experimental, imported, and monatomic deposits stay
+  accessible while computed-TST reproducibility is enforced. IRC evidence is
+  optional and recommended, surfaced by an `UploadWarning` and an
+  always-present typed read descriptor. Normal-mode-displacement evidence was
+  removed entirely as an upstream (ARC) concern, not a TCKDB one.
+- **Two validator over-reaches were caught and corrected before merge.**
+  `modified_arrhenius` had been made to forbid `third_body_efficiencies`,
+  which breaks `H + O2 + M <=> HO2 + M` and the CHEMKIN round-trip; the
+  allowlist was re-derived and settled empirically against Cantera 3.2.0
+  rather than from code. A blanket statmech source-calculation requirement had
+  broken the repository's stored real ARC producer payloads and the Python
+  client builder contract.
+- **Atom-resolved isotope identity.** Per-atom mass numbers on geometry atoms,
+  isotopes carried in isotopic SMILES, and a derived canonical isotope key
+  replacing free-text `isotopologue_label` in species-entry identity.
+  Isotopomers are distinguished, not merged. `NULL` means the most abundant
+  natural isotope, so no backfill runs; the migration was verified to leave the
+  identity tuple of a 56-row production-shaped database byte-identical.
+- **Deployment is gated, not guessed.** The migration refuses to run against
+  pre-contract network data (the deployed database holds 2 networks, 42
+  channels, 2 unscoped energy-transfer rows) and raises before any DDL, leaving
+  `alembic_version` untouched. The operator export/delete/re-upload runbook is
+  in `backend/docs/deployment/migrations.md`. Four downgrade guards refuse
+  rollback while TS-owned statmech rows, parallel channels, or isotope-labelled
+  data exist.
+- **Archive completeness.** The six new tables are classified in the lossless
+  operator archive registry; without this they would have been silently absent
+  from every backup and restore, invalidating the Stage 0 restore evidence.
+- **Verification:** 835 non-scientific API tests; 1,391 scientific API tests;
+  2,612 service/schema/importer/client-contract/integration/db tests; 731
+  workflow/invariant/parser/worker/CLI/example/script tests; `ruff check` clean;
+  `alembic check` showing only the two known pre-existing RDKit index artifacts;
+  and a fresh disposable-database upgrade/downgrade/re-upgrade cycle. The
+  hydrazine/MRCI Arkane round-trip is green at 22 passed and the CHEMKIN
+  round-trip passes Cantera validation. One failure remains,
+  `tests/db/test_identifier_lengths.py`, on two over-long
+  `execution_environment_manifest` foreign-key names that predate this branch
+  and were confirmed byte-identical against baseline.
+
+Known gaps carried forward as task #7, recorded rather than hidden: the
+geometry/identity isotope check compares only the multiset of substitutions so
+an isotopomer position mismatch is accepted; only the first conformer's geometry
+is isotope-checked; the typed evidence descriptor covers IRC but not tunneling
+or interpretations; a canonical-TST rate may omit the TS partition function
+without warning; and `is_third_body` is accepted with PLOG, shifting the
+required A-unit order.
 
 ## Exit rule
 
