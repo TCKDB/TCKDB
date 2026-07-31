@@ -1982,7 +1982,7 @@ Table network_channel {
   source_state_id bigint [not null, ref: > network_state.id]
   sink_state_id bigint [not null, ref: > network_state.id]
   kind NetworkChannelKind [not null]
-  channel_key text
+  channel_key text [not null]
 
   indexes {
     (network_id, channel_key) [unique, name: 'uq_network_channel_key']

@@ -2746,6 +2746,14 @@
               }
             ],
             "title": "Unmapped Smiles"
+          },
+          "validation_evidence": {
+            "description": "Structured IRC evidence that this saddle point connects the bundle's declared reactants and products. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. ``source_calculation_key`` names an irc calculation owned by this transition state.",
+            "items": {
+              "$ref": "#/components/schemas/TransitionStateValidationEvidenceIn"
+            },
+            "title": "Validation Evidence",
+            "type": "array"
           }
         },
         "required": [
@@ -39721,6 +39729,14 @@
               }
             ],
             "title": "Unmapped Smiles"
+          },
+          "validation_evidence": {
+            "description": "Structured IRC evidence that this saddle point connects the declared reactants and products. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. This payload has no calculation-key namespace, so evidence binds to the upload's single 'irc' additional calculation; source_calculation_key must be omitted.",
+            "items": {
+              "$ref": "#/components/schemas/TransitionStateValidationEvidenceIn"
+            },
+            "title": "Validation Evidence",
+            "type": "array"
           }
         },
         "required": [
@@ -39801,7 +39817,7 @@
       },
       "TransitionStateValidationEvidenceIn": {
         "additionalProperties": false,
-        "description": "Producer-declared IRC validation evidence for one TS candidate.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.",
+        "description": "Producer-declared IRC validation evidence for one TS candidate.\n\n:param source_calculation_key: Local key of the ``irc`` calculation that\n    reconstructed the path, in the enclosing payload's calculation\n    namespace. Omitted on the standalone transition-state upload, which\n    has no key namespace and binds to its single ``irc`` calculation.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.",
         "properties": {
           "kind": {
             "const": "irc",
@@ -39852,16 +39868,22 @@
             "title": "Reactant Participant Mapping"
           },
           "source_calculation_key": {
-            "minLength": 1,
-            "title": "Source Calculation Key",
-            "type": "string"
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Key"
           }
         },
         "required": [
           "kind",
           "passed",
-          "rationale",
-          "source_calculation_key"
+          "rationale"
         ],
         "title": "TransitionStateValidationEvidenceIn",
         "type": "object"
