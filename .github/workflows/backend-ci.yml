@@ -72,7 +72,11 @@ jobs:
       DB_PASSWORD: tckdb
       DB_NAME: tckdb_${{ matrix.gate }}_ci
       DB_CLIENT_ENCODING: utf8
-      DB_TEST_NAME: tckdb_${{ matrix.gate }}_${{ github.run_id }}_${{ github.run_attempt }}
+      # Must match the isolated-test-database pattern enforced in
+      # backend/tests/conftest.py, which permits destructive fixture setup
+      # only for names beginning ``tckdb_test``. Keeping CI inside that
+      # pattern preserves the guard rather than widening it.
+      DB_TEST_NAME: tckdb_test_${{ matrix.gate }}_${{ github.run_id }}_${{ github.run_attempt }}
       AUTH_ALLOW_OPEN_REGISTRATION: "true"
       DEPLOYMENT_MODE: local
       EXPOSE_API_DOCS: "true"
