@@ -56,6 +56,7 @@ from app.schemas.reads.scientific_common import (
     CollapseMode,
     LevelOfTheorySummary,
     Pagination,
+    ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
     SCFStabilitySummary,
@@ -287,7 +288,7 @@ class SpeciesCalculationsSearchRecord(BaseModel):
     provenance: CalculationProvenanceBlock
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]

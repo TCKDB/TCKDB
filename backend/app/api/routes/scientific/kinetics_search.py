@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import prepare_assessment_response
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode
@@ -22,7 +23,11 @@ from app.services.scientific_read.public_assessments import (
 
 router = APIRouter(prefix="/kinetics")
 
-_POST_ALLOWED_QS_KEYS: set[str] = set()
+# The router-level ``?profile=`` dependency puts these two keys on every
+# scientific operation, POSTs included, so they must be allowed through the
+# "search fields belong in the body" guard. Everything else is still
+# rejected rather than silently ignored.
+_POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
 @router.get("/search", response_model=ScientificKineticsSearchResponse)

@@ -43,6 +43,7 @@ from app.db.models.common import (
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
+    ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
     SoftwareReleaseSummary,
@@ -63,7 +64,7 @@ class NetworkDetailRequest(BaseModel):
     include: list[str] = Field(default_factory=list)
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed include list, post-validation and post-policy."""
 
     include: list[str] = Field(default_factory=list)

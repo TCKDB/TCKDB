@@ -21,6 +21,7 @@ from app.schemas.reads.scientific_common import (
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     Pagination,
+    ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
     SelectionPolicy,
@@ -218,7 +219,7 @@ class ThermoRecord(BaseModel):
     assessments: PublicAssessmentSummary | None = None
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]

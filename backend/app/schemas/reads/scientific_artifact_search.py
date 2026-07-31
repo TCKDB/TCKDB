@@ -53,6 +53,7 @@ from app.schemas.reads.scientific_calculation import (
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     Pagination,
+    ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
     SoftwareReleaseSummary,
@@ -193,7 +194,7 @@ class ScientificArtifactSearchRequest(BaseModel):
     limit: int = 50
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
     filter: dict[str, object]

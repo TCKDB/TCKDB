@@ -71,6 +71,10 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     visible_statuses,
 )
+from app.services.scientific_read.profile import (
+    ResolvedReadProfile,
+    current_read_profile,
+)
 
 #: Schema tag for the selected scientific projection.  This is intentionally
 #: distinct from the future ``tckdb.archive.v1`` lossless archive contract.
@@ -92,6 +96,14 @@ def _projection_contract() -> dict:
         "lossless": False,
         "reingestible": False,
         "archive_schema": None,
+        # Neither a citable release nor a recovery archive. Stated here so the
+        # three formats can never be confused by a consumer holding only one
+        # of them (see backend/docs/specs/dataset_release_and_profiles.md).
+        "citable_release": False,
+        "distinct_from": {
+            "citable_release": "tckdb.dataset_release.v1",
+            "recovery_archive": "tckdb.archive.v1",
+        },
         "omits": [
             "unselected_candidates",
             "calculation_provenance",
@@ -455,15 +467,27 @@ class ExportRecordSet:
     collapse: CollapseMode
     selection_policy: SelectionPolicy
     generated_at: datetime
+    read_profile: ResolvedReadProfile | None = None
     species_records: list[SpeciesExportRecord] = field(default_factory=list)
     reaction_records: list[ReactionExportRecord] = field(default_factory=list)
     gaps: list[ExportGap] = field(default_factory=list)
 
     def manifest(self) -> dict:
+        # The resolved read profile is captured eagerly at build time rather
+        # than read lazily here: this manifest can be emitted from inside a
+        # streaming generator that outlives the request-scoped context the
+        # profile lives in.
+        resolved = self.read_profile or current_read_profile()
         return {
             "record_type": "manifest",
             "schema": EXPORT_SCHEMA,
             "contract": _projection_contract(),
+            # Echoed in every dataset manifest, exactly as in every scientific
+            # response, so a consumer never has to guess which contract the
+            # bytes were produced under.
+            "profile": resolved.profile.value,
+            "profile_recommendation": resolved.recommendation.value,
+            "profile_release_ref": resolved.release_ref,
             "generated_at": self.generated_at.isoformat(),
             "seed": self.seed.to_manifest(),
             "collapse": self.collapse.value,
@@ -973,6 +997,8 @@ def build_export_record_set(
         collapse=collapse,
         selection_policy=selection_policy,
         generated_at=datetime.now(timezone.utc),
+        # Capture the profile now, while the request context is still live.
+        read_profile=current_read_profile(),
     )
 
     for se_id in ordered_species_ids:
@@ -1046,6 +1072,10 @@ def iter_export_ndjson(
 
     return _stream_ndjson(
         session,
+        # Resolved now, before the generator is returned: once streaming
+        # starts, the request-scoped context that carries the profile may
+        # already have been torn down.
+        read_profile=current_read_profile(),
         reaction_entry_ids=reaction_entry_ids,
         ordered_species_ids=ordered_species_ids,
         participants_by_entry=participants_by_entry,
@@ -1060,6 +1090,7 @@ def iter_export_ndjson(
 def _stream_ndjson(
     session: Session,
     *,
+    read_profile: ResolvedReadProfile,
     reaction_entry_ids: list[int],
     ordered_species_ids: list[int],
     participants_by_entry: dict[int, list[ReactionEntryStructureParticipant]],
@@ -1074,6 +1105,11 @@ def _stream_ndjson(
         "record_type": "manifest",
         "schema": EXPORT_SCHEMA,
         "contract": _projection_contract(),
+        # Echoed in every dataset manifest, exactly as in every enveloped
+        # scientific response.
+        "profile": read_profile.profile.value,
+        "profile_recommendation": read_profile.recommendation.value,
+        "profile_release_ref": read_profile.release_ref,
         "generated_at": generated_at.isoformat(),
         "seed": seed.to_manifest(),
         "collapse": collapse.value,

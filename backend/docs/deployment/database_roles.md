@@ -12,6 +12,16 @@ This split makes accepted-science triggers meaningful against the application
 account. A table owner or superuser can disable triggers; the runtime role
 cannot.
 
+The same reasoning covers the append-only curation and release tables added in
+Stage 3 — `release_selection`, `release_manifest`, `release_artifact` — whose
+`BEFORE UPDATE OR DELETE` **and** `BEFORE TRUNCATE` triggers protect published,
+citable datasets. On a deployment that has not applied this split and runs the
+application as an owning role, those triggers stop application bugs and
+ordinary SQL clients but not a deliberate operator. Run `db-roles check` rather
+than assuming the posture holds; the trade-off is recorded in
+[`../specs/dataset_release_and_profiles.md`](../specs/dataset_release_and_profiles.md)
+§7a.
+
 ## Secret files
 
 Keep runtime and operator credentials separate:

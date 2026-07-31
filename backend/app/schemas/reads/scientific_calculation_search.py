@@ -46,6 +46,7 @@ from app.schemas.reads.scientific_calculation import (
 from app.schemas.reads.scientific_common import (
     GeometryValidationStatus,
     Pagination,
+    ProfiledRequestEcho,
     ReviewStatusSummary,
     SCFStabilityStatusValue,
 )
@@ -175,7 +176,7 @@ class CalculationsSearchRequest(BaseModel):
     limit: int = 50
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
     filter: dict[str, object]

@@ -35,6 +35,7 @@ from app.db.models.common import (
 )
 from app.schemas.reads.scientific_common import (
     Pagination,
+    ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
 )
@@ -175,7 +176,7 @@ class ScientificSpeciesStructureSearchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
     filter: dict[str, object]

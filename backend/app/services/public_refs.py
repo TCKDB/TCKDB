@@ -82,6 +82,12 @@ PREFIXES: dict[str, str] = {
     "NetworkKinetics": "nkin",
     "Submission": "sub",
     "RecordReproducibilityAssessment": "rpa",
+    # Curation overlay / citable releases (Stage 3). Opaque: a curation
+    # decision is an event, not a content-derived identity.
+    "CurationPolicy": "cpol",
+    "DatasetRelease": "rel",
+    "ReleaseSelection": "rsel",
+    "ReleaseManifest": "rman",
 }
 
 # Classes whose ref is content-derived from existing identity columns.

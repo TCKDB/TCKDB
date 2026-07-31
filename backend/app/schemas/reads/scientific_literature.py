@@ -19,14 +19,17 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.db.models.common import LiteratureKind
-from app.schemas.reads.scientific_common import ReviewStatusSummary
+from app.schemas.reads.scientific_common import (
+    ProfiledRequestEcho,
+    ReviewStatusSummary,
+)
 
 # ---------------------------------------------------------------------------
 # Request echo
 # ---------------------------------------------------------------------------
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed include list, post-validation and post-policy."""
 
     include: list[str] = Field(default_factory=list)

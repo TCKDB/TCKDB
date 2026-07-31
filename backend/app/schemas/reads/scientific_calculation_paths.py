@@ -23,14 +23,17 @@ from app.schemas.reads.scientific_calculation import (
     CalculationScanSummary,
     ScanCoordinateSummary,
 )
-from app.schemas.reads.scientific_common import Pagination
+from app.schemas.reads.scientific_common import (
+    Pagination,
+    ProfiledRequestEcho,
+)
 
 # ---------------------------------------------------------------------------
 # Request echo
 # ---------------------------------------------------------------------------
 
 
-class ScanRequestEcho(BaseModel):
+class ScanRequestEcho(ProfiledRequestEcho):
     """Echoes the parsed knobs the caller supplied to ``/scan``.
 
     Mirrors the convention used by other ``/scientific/*`` envelopes
@@ -115,7 +118,7 @@ class ScanPointDetail(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class IRCRequestEcho(BaseModel):
+class IRCRequestEcho(ProfiledRequestEcho):
     """Echoes the parsed knobs the caller supplied to ``/irc``.
 
     Same shape as :class:`ScanRequestEcho` so a generic client parser
@@ -181,7 +184,7 @@ class ScientificCalculationIRCResponse(BaseModel):
     pagination: Pagination
 
 
-class PathSearchRequestEcho(BaseModel):
+class PathSearchRequestEcho(ProfiledRequestEcho):
     """Echoes the parsed knobs the caller supplied to ``/path-search``.
 
     Same shape as :class:`ScanRequestEcho` / :class:`IRCRequestEcho` so

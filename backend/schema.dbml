@@ -97,6 +97,12 @@ enum CoordinateUnit {
   degree
 }
 
+enum DatasetReleaseStatus {
+  draft
+  published
+  withdrawn
+}
+
 enum EnergyCorrectionApplicationRole {
   zpe
   thermal_correction_energy
@@ -372,6 +378,11 @@ enum ReactionRole {
   product
 }
 
+enum ReadProfile {
+  exploratory
+  curated
+}
+
 enum RecordReviewEventKind {
   created
   status_change
@@ -383,6 +394,19 @@ enum RecordReviewStatus {
   approved
   rejected
   deprecated
+}
+
+enum ReleaseArtifactKind {
+  selected_records
+  candidate_records
+  review_history
+  selection_ledger
+}
+
+enum ReleaseSelectionAction {
+  select
+  supersede
+  withdraw
 }
 
 enum ReproducibilityAssessorKind {
@@ -1405,6 +1429,70 @@ Table conformer_selection {
   }
 
   Note: 'Store explicit workflow, curation, or UI selections for conformer groups.'
+}
+
+Table curation_policy {
+  id bigint [pk, not null]
+  name string [not null]
+  version string [not null]
+  description text [not null]
+  criteria_json jsonb [not null, default: '{}'::jsonb']
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_curation_policy_public_ref']
+    (name, version) [unique, name: 'uq_curation_policy_name']
+  }
+
+  checks {
+    `length(btrim(description)) > 0` [name: 'ck_curation_policy_description_nonblank']
+    `length(btrim(name)) > 0` [name: 'ck_curation_policy_name_nonblank']
+    `length(btrim(version)) > 0` [name: 'ck_curation_policy_version_nonblank']
+  }
+
+  Note: 'A named, versioned expert policy for choosing among candidate records.'
+}
+
+Table dataset_release {
+  id bigint [pk, not null]
+  tag string [not null]
+  title text [not null]
+  description text
+  status DatasetReleaseStatus [not null, default: 'draft']
+  curation_policy_id bigint [not null, ref: > curation_policy.id]
+  data_license string [not null]
+  code_license string [not null]
+  citation_text text [not null]
+  doi string
+  contact text [not null]
+  changelog_entry text
+  published_at timestamp
+  withdrawn_at timestamp
+  withdrawn_reason text
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_dataset_release_public_ref']
+    status [name: 'ix_dataset_release_status']
+    tag [unique, name: 'uq_dataset_release_tag']
+  }
+
+  checks {
+    `length(btrim(citation_text)) > 0` [name: 'ck_dataset_release_citation_nonblank']
+    `length(btrim(code_license)) > 0` [name: 'ck_dataset_release_code_license_nonblank']
+    `length(btrim(contact)) > 0` [name: 'ck_dataset_release_contact_nonblank']
+    `length(btrim(data_license)) > 0` [name: 'ck_dataset_release_data_license_nonblank']
+    `(status = 'draft' AND published_at IS NULL) OR (status IN ('published', 'withdrawn') AND published_at IS NOT NULL)` [name: 'ck_dataset_release_published_at_matches_status']
+    `length(btrim(tag)) > 0` [name: 'ck_dataset_release_tag_nonblank']
+    `length(btrim(title)) > 0` [name: 'ck_dataset_release_title_nonblank']
+    `(status <> 'withdrawn') OR (withdrawn_at IS NOT NULL AND length(btrim(coalesce(withdrawn_reason, ''))) > 0)` [name: 'ck_dataset_release_withdrawn_has_reason']
+  }
+
+  Note: 'A citable dataset release.'
 }
 
 Table energy_correction_scheme {
@@ -2451,6 +2539,115 @@ Table record_review_event {
   }
 
   Note: 'Append-only history event for one :class:`RecordReview` row.'
+}
+
+Table release_artifact {
+  id bigint [pk, not null]
+  release_manifest_id bigint [not null, ref: > release_manifest.id]
+  kind ReleaseArtifactKind [not null]
+  path string [not null]
+  media_type string [not null]
+  content largebinary [not null]
+  sha256 string [not null]
+  byte_count bigint [not null]
+  record_count bigint [not null]
+
+  indexes {
+    (release_manifest_id, path) [unique, name: 'uq_release_artifact_release_manifest_id']
+  }
+
+  checks {
+    `byte_count >= 0` [name: 'ck_release_artifact_byte_count_nonneg']
+    `length(btrim(path)) > 0` [name: 'ck_release_artifact_path_nonblank']
+    `record_count >= 0` [name: 'ck_release_artifact_record_count_nonneg']
+    `sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_release_artifact_sha256_hex']
+  }
+
+  Note: 'One checksummed file belonging to a :class:`ReleaseManifest`.'
+}
+
+Table release_manifest {
+  id bigint [pk, not null]
+  dataset_release_id bigint [not null, ref: > dataset_release.id]
+  manifest_schema string [not null]
+  profile ReadProfile [not null, default: 'curated']
+  alembic_revision string [not null]
+  backend_version string [not null]
+  schemas_package_version string [not null]
+  review_policy_version string [not null]
+  curation_policy_id bigint [not null, ref: > curation_policy.id]
+  recovery_archive_schema string [not null]
+  release_public_ref string [not null]
+  release_published_at timestamp
+  release_tag string [not null]
+  release_title text [not null]
+  release_description text
+  release_contact text [not null]
+  release_changelog_entry text
+  release_status_at_publication DatasetReleaseStatus [not null]
+  release_doi_at_publication string
+  data_license string [not null]
+  code_license string [not null]
+  citation_text text [not null]
+  curation_policy_ref string [not null]
+  curation_policy_name string [not null]
+  curation_policy_version string [not null]
+  curation_policy_description text [not null]
+  curation_policy_criteria_json jsonb [not null, default: '{}'::jsonb']
+  contract_json jsonb [not null]
+  document_json jsonb [not null]
+  content_sha256 string [not null]
+  selected_record_count bigint [not null]
+  candidate_record_count bigint [not null]
+  generated_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_release_manifest_public_ref']
+    dataset_release_id [unique, name: 'uq_release_manifest_dataset_release_id']
+  }
+
+  checks {
+    `length(btrim(alembic_revision)) > 0` [name: 'ck_release_manifest_alembic_revision_nonblank']
+    `candidate_record_count >= 0` [name: 'ck_release_manifest_candidate_count_nonneg']
+    `content_sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_release_manifest_content_sha256_hex']
+    `selected_record_count >= 0` [name: 'ck_release_manifest_selected_count_nonneg']
+  }
+
+  Note: 'The frozen, checksummed description of one published dataset release.'
+}
+
+Table release_selection {
+  id bigint [pk, not null]
+  dataset_release_id bigint [not null, ref: > dataset_release.id]
+  curation_policy_id bigint [not null, ref: > curation_policy.id]
+  record_type SubmissionRecordType [not null]
+  record_id bigint [not null]
+  subject_type SubmissionRecordType [not null]
+  subject_id bigint [not null]
+  action ReleaseSelectionAction [not null, default: 'select']
+  supersedes_selection_id bigint [ref: > release_selection.id]
+  rationale text [not null]
+  selected_by bigint [not null, ref: > app_user.id]
+  created_at timestamp [not null, default: 'now']
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_release_selection_public_ref']
+    (record_type, record_id) [name: 'ix_release_selection_record']
+    (dataset_release_id, subject_type, subject_id) [name: 'ix_release_selection_release_subject']
+    supersedes_selection_id [unique, name: 'uq_release_selection_supersedes_selection_id']
+  }
+
+  checks {
+    `supersedes_selection_id IS NULL OR supersedes_selection_id <> id` [name: 'ck_release_selection_no_self_supersession']
+    `length(btrim(rationale)) > 0` [name: 'ck_release_selection_rationale_nonblank']
+    `record_type IN ('kinetics', 'network_solve', 'statmech', 'thermo', 'transition_state_entry', 'transport')` [name: 'ck_release_selection_selectable_record_type']
+    `(action = 'select' AND supersedes_selection_id IS NULL) OR (action IN ('supersede', 'withdraw') AND supersedes_selection_id IS NOT NULL)` [name: 'ck_release_selection_supersession_matches_action']
+  }
+
+  Note: 'One attributed, append-only selection of a candidate record.'
 }
 
 Table scientific_record_supersession {

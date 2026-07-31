@@ -36,6 +36,7 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads.scientific_common import (
     Pagination,
+    ProfiledRequestEcho,
     ReviewStatusSummary,
 )
 from app.schemas.reads.scientific_transition_state import (
@@ -104,7 +105,7 @@ class TransitionStatesSearchRequest(BaseModel):
     limit: int = 50
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
     filter: dict[str, Any]

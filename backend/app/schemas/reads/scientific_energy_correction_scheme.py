@@ -23,6 +23,7 @@ from app.db.models.common import EnergyCorrectionSchemeKind, EnergyUnit
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
+    ProfiledRequestEcho,
     ReviewStatusSummary,
 )
 
@@ -31,7 +32,7 @@ from app.schemas.reads.scientific_common import (
 # ---------------------------------------------------------------------------
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed include list, post-validation and post-policy."""
 
     include: list[str] = Field(default_factory=list)

@@ -35,7 +35,7 @@ the whole design falls out of keeping them separate:
 | **Identity** | *What is this thing?* | Yes — reused across uploads | `species`, `species_entry`, `chem_reaction`, `conformer_group` |
 | **Provenance** | *How/when was this produced?* | No — every observation is new | `calculation`, `conformer_observation`, `software_release` |
 | **Result** | *What number came out?* | No — append-only | `thermo`, `statmech`, `kinetics`, `transport` |
-| **Curation** | *How much do we trust it?* | No — orthogonal overlay | `submission`, `record_review`, `record_machine_review` |
+| **Curation** | *How much do we trust it?* | No — orthogonal overlay | `submission`, `record_review`, `record_machine_review`, `release_selection` |
 
 > This split is load-bearing. Identity tables dedupe so the same
 > molecule isn't stored twice; result/provenance tables are append-only
@@ -203,6 +203,39 @@ Responses address records by **public ref** (`species_…`, `geom_…`,
 `min_review_status` so anonymous readers see curated data unless they
 explicitly opt into drafts.
 
+### Step 6 — Curated selection and citable releases (`app/services/release/`)
+
+Read-time sorting answers "give me a sensible one". It does not answer
+"what does TCKDB *recommend*?" — that needs a named human. Stage 3 adds
+an attributed, **append-only** selection layer on top, which still never
+touches the science:
+
+- `curation_policy` — a named, versioned expert rubric (identity).
+- `dataset_release` — the citable unit: licenses, citation string,
+  contact, and a DOI that stays `NULL` until a deposit is actually made.
+- `release_selection` — one decision: policy version + curator +
+  candidate + subject + rationale + release. Addressed by the same loose
+  `(record_type, record_id)` pointer `record_review` uses, so no product
+  table gains an `is_best` column. Revising a decision **appends** a
+  `supersede` row; a database trigger rejects `UPDATE`/`DELETE`.
+- `release_manifest` / `release_artifact` — the frozen, SHA-256-checksummed
+  description of a published release, bound to the Alembic revision and
+  package versions it was cut under.
+
+Every `/scientific/*` endpoint takes `?profile=exploratory|curated`.
+`exploratory` is the default and says, in a machine-readable token, that
+TCKDB recommends nothing; `curated` raises the review floor to `approved`
+and reports the release backing it. The resolved profile is echoed in
+**every** scientific response and every dataset manifest, from one seam
+(`scientific_read/internal_ids.py::apply_internal_ids_visibility`) so no
+endpoint can quietly opt out.
+
+A release ships its selections *together with* the candidates and review
+history they were chosen from — disagreeing with a TCKDB recommendation
+must require no privileged access. See
+[`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md),
+ADR 0006 and ADR 0007.
+
 ---
 
 ## 3. Where each subsystem lives (and its "start here" doc)
@@ -221,6 +254,7 @@ explicitly opt into drafts.
 | Uploads & idempotency | `api/routes/uploads.py`, `services/upload_reconciliation.py` | DR-0024 |
 | Bundles / offline | `api/routes/bundles*.py` | [`contribution-bundles/v0-format.md`](../contribution-bundles/v0-format.md) |
 | Read/query API | `services/scientific_read/`, `api/routes/` | `read_api_mvp.md` |
+| Curated selection & releases | `services/release/`, `db/models/dataset_release.py` | [`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md) |
 | Async jobs | `workers/upload_worker.py`, `db/models/upload_job.py` | `upload_worker_tests_spec.md` |
 | Auth & roles | `api/` dependencies | `auth-and-roles-v1-spec.md` |
 
@@ -235,7 +269,8 @@ For a *task → doc* router covering the full ~160-file doc set, see the
   let services resolve identity. (Read schemas may expose public refs.)
 - **Identity dedupes; results/provenance are append-only.** Never add a
   "preferred" or "selected" column to a result table — selection is a
-  read-time sort or an explicit curation row.
+  read-time sort or an explicit, attributed `release_selection` row that
+  points *at* the record and never edits it.
 - **Curation never edits science.** Reviews, trust, and machine review
   are overlays; they change *belief*, not values.
 - **Every write is a submission.** If you add a write path, it opens a

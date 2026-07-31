@@ -8,6 +8,8 @@ submission, and curation rows plus byte-exact calculation artifacts.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import io
 import json
@@ -37,6 +39,7 @@ from sqlalchemy.sql.sqltypes import (
     Enum,
     Float,
     Integer,
+    LargeBinary,
     SmallInteger,
     String,
     Text,
@@ -128,6 +131,11 @@ def _encode_value(value: Any, sql_type) -> Any:
         return value.isoformat()
     if isinstance(sql_type, (Double, Float)):
         return {"$float": float(value).hex()}
+    if isinstance(sql_type, LargeBinary):
+        # Tagged like ``$float`` so a byte string can never be confused with a
+        # text column that happens to hold base64. Base64 rather than hex
+        # because these payloads (frozen release artifacts) are large.
+        return {"$bytes": base64.b64encode(bytes(value)).decode("ascii")}
     if isinstance(sql_type, Boolean):
         return bool(value)
     if isinstance(sql_type, (BigInteger, Integer, SmallInteger)):
@@ -164,6 +172,13 @@ def _decode_value(value: Any, sql_type) -> Any:
         if not isinstance(value, dict) or set(value) != {"$float"}:
             raise ArchiveIntegrityError("Floating-point archive value is malformed")
         return float.fromhex(value["$float"])
+    if isinstance(sql_type, LargeBinary):
+        if not isinstance(value, dict) or set(value) != {"$bytes"}:
+            raise ArchiveIntegrityError("Binary archive value is malformed")
+        try:
+            return base64.b64decode(value["$bytes"], validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ArchiveIntegrityError("Binary archive value is not valid base64") from exc
     if isinstance(sql_type, Boolean):
         if not isinstance(value, bool):
             raise ArchiveIntegrityError("Boolean archive value is malformed")
@@ -191,6 +206,7 @@ def _supports_type(sql_type) -> bool:
             Date,
             Double,
             Float,
+            LargeBinary,
             Boolean,
             BigInteger,
             Integer,

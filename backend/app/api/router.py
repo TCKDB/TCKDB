@@ -31,6 +31,7 @@ from app.api.routes import (
     networks,
     reactions,
     record_reviews,
+    releases_admin,
     software,
     species,
     statmech,
@@ -69,6 +70,15 @@ api_router.include_router(
 # the user upgrades.
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(lookup.router, prefix="/lookup", tags=["lookup"])
+# Curator-gated release curation. The matching *public* read surface is
+# /api/v1/scientific/releases/*, which is deliberately unauthenticated: a
+# citation has to resolve for anyone.
+api_router.include_router(
+    releases_admin.router,
+    prefix="/releases",
+    tags=["releases"],
+    dependencies=_write_compat_dependency,
+)
 api_router.include_router(
     scientific_router, prefix="/scientific", tags=["scientific"]
 )

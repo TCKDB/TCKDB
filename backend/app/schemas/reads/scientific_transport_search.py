@@ -35,6 +35,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads.scientific_common import (
     CollapseMode,
     Pagination,
+    ProfiledRequestEcho,
     ReviewStatusSummary,
     SelectionPolicy,
 )
@@ -103,7 +104,7 @@ class TransportSearchRequest(BaseModel):
     limit: int = 50
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope.
 
     ``collapse`` / ``selection_policy`` are populated by the per-species

@@ -96,6 +96,10 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     visible_statuses,
 )
+from app.services.scientific_read.profile import (
+    ResolvedReadProfile,
+    current_read_profile,
+)
 
 #: Schema tag stamped on every ML record so a consumer can branch on format.
 ML_EXPORT_SCHEMA = "tckdb.ml.v0"
@@ -108,6 +112,15 @@ DEFAULT_MIN_REVIEW_STATUS = RecordReviewStatus.approved
 
 #: Hard cap on ``all`` exports, shared with the native export.
 DEFAULT_ALL_CAP = export_core.DEFAULT_ALL_CAP
+
+
+def _profile_manifest_block(resolved: ResolvedReadProfile) -> dict:
+    """The read-profile echo carried by every dataset manifest."""
+    return {
+        "profile": resolved.profile.value,
+        "profile_recommendation": resolved.recommendation.value,
+        "profile_release_ref": resolved.release_ref,
+    }
 
 
 def _dumps(obj: dict) -> str:
@@ -723,11 +736,17 @@ def _stream_species(
     visible: set[RecordReviewStatus],
 ) -> Iterator[str]:
     generated_at = datetime.now(timezone.utc)
+    # Captured before the first yield: a streaming generator can outlive
+    # the request-scoped context the profile lives in.
+    resolved_profile = current_read_profile()
     yield _dumps(
         {
             "record_type": "manifest",
             "schema": ML_EXPORT_SCHEMA,
             "dataset": "species",
+            # The resolved read profile is echoed in every dataset
+            # manifest, not only in enveloped JSON responses.
+            **_profile_manifest_block(resolved_profile),
             "generated_at": generated_at.isoformat(),
             "filters": filters.to_manifest(),
             "seed_species_entry_count": len(species_entry_ids),
@@ -1265,11 +1284,17 @@ def _stream_reactions(
     visible: set[RecordReviewStatus],
 ) -> Iterator[str]:
     generated_at = datetime.now(timezone.utc)
+    # Captured before the first yield: a streaming generator can outlive
+    # the request-scoped context the profile lives in.
+    resolved_profile = current_read_profile()
     yield _dumps(
         {
             "record_type": "manifest",
             "schema": ML_EXPORT_SCHEMA,
             "dataset": "reactions",
+            # The resolved read profile is echoed in every dataset
+            # manifest, not only in enveloped JSON responses.
+            **_profile_manifest_block(resolved_profile),
             "generated_at": generated_at.isoformat(),
             "filters": filters.to_manifest(),
             "seed_reaction_entry_count": len(reaction_entry_ids),

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.db.models.common import (
     ConformerSelectionKind,
     RecordReviewStatus,
@@ -46,7 +47,11 @@ co_router = APIRouter(prefix="/conformer-observations")
 search_router = APIRouter(prefix="/conformers")
 
 
-_POST_ALLOWED_QS_KEYS: set[str] = set()
+# The router-level ``?profile=`` dependency puts these two keys on every
+# scientific operation, POSTs included, so they must be allowed through the
+# "search fields belong in the body" guard. Everything else is still
+# rejected rather than silently ignored.
+_POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
 @search_router.get(
