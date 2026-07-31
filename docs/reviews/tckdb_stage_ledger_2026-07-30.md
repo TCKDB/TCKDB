@@ -168,13 +168,44 @@ third round; the failures are recorded here because they shaped the design.
   `execution_environment_manifest` foreign-key names that predate this branch
   and were confirmed byte-identical against baseline.
 
-Known gaps carried forward as task #7, recorded rather than hidden: the
-geometry/identity isotope check compares only the multiset of substitutions so
-an isotopomer position mismatch is accepted; only the first conformer's geometry
-is isotope-checked; the typed evidence descriptor covers IRC but not tunneling
-or interpretations; a canonical-TST rate may omit the TS partition function
-without warning; and `is_third_body` is accepted with PLOG, shifting the
-required A-unit order.
+The reviewer's non-blocking findings were closed in the same branch rather than
+deferred: `is_third_body` is rejected on PLOG/Chebyshev (it had silently shifted
+the required A-unit order, rejecting correctly-unitted entries and accepting
+incorrect ones); every conformer's geometry is isotope-checked, not only the
+first; a `conformer_selection` on a transition-state role is a 422 instead of an
+`IntegrityError` at flush; network Chebyshev kinetics require finite T/P bounds;
+`network_channel.channel_key` is `NOT NULL`; structured IRC evidence is
+depositable through the standalone transition-state upload and the
+computed-reaction bundle rather than only the PDep bundle; and a canonical-TST
+rate that omits the TS partition function emits
+`missing_kinetics_transition_state_interpretation`.
+
+Two gaps remain genuinely open and are documented in
+`backend/app/services/species_resolution.py` and
+`backend/docs/specs/pdep_upload_contract_v2.md` rather than left implicit. The
+geometry/identity isotope check compares only the multiset of substitutions, so
+an isotopomer position mismatch is accepted; a real fix needs SMILES-to-XYZ atom
+correspondence, which requires 3D bond perception that fails silently on hard
+cases. And the always-present typed evidence descriptor covers IRC but not
+tunneling or interpretation assignments, so a default kinetics read cannot
+distinguish absent tunneling evidence from an unrequested include.
+
+## Process finding recorded 2026-07-31
+
+Stages 0 and 1 had been committed to a local `main` and never pushed, so neither
+had ever run CI despite both being recorded above as review-passed and
+"versioned". The first CI run over that code failed immediately: Stage 1 added a
+guard permitting destructive test-fixture setup only for databases matching
+`^tckdb_test(?:_[A-Za-z0-9_]+)?$`, but `.github/workflows/backend-ci.yml` named
+its per-gate databases `tckdb_<gate>_<run>_<attempt>`, which does not match, so
+every backend gate aborted during fixture setup. The nightly workflow already
+conformed. The fix renames the CI databases into the guarded pattern rather than
+widening the guard, since the guard is what prevents a misconfigured run from
+dropping a development or production database.
+
+The lesson generalizes: a stage is not verified until it has run in an
+environment nobody in the implementation loop controls. Local suites and
+independent review both passed over code that could not execute in CI at all.
 
 ## Exit rule
 
