@@ -129,9 +129,31 @@ make test-fast ARGS="path/to/test_file.py::TestClass::test_case -vv -s"
 ```
 
 If a test is flaky, run it three times in a row before concluding.
-Test isolation in this repo is per-test transaction rollback (see
-[`tests/conftest.py`](../tests/conftest.py)); intermittent failures
-are usually fixture-ordering or shared-state bugs surfacing.
+
+Test isolation here is **two-tier**, and knowing which tier a test is in
+matters when diagnosing cross-file failures (see
+[`tests/conftest.py`](../tests/conftest.py)):
+
+- `db_session` / `db_conn` / `client` roll back per test. Rows written
+  through these never outlive the test.
+- The session-scoped `db_engine` fixture does **not**. Around 45 test
+  files use it with `with session.begin():`, which commits, so the shared
+  test database genuinely accumulates committed rows for the whole
+  pytest session.
+
+Two consequences worth remembering. Committed rows from tier two are
+visible to every later test file in the same run. And rollback does not
+undo everything even in tier one: PostgreSQL sequences are
+non-transactional, so a `setval` (as `restore_archive` performs when
+repairing primary-key sequences) survives a rollback and leaks into the
+rest of the session — see
+[`tests/services/archive/conftest.py`](../tests/services/archive/conftest.py)
+for the containment fixture and the failure it prevents.
+
+Because each CI gate job gets a fresh database, this class of bug is
+invisible in CI and only reproduces when several files share one local
+database. Intermittent or combination-only failures are usually
+fixture-ordering or shared-state bugs of exactly this kind.
 
 ### Recovering from a local test-database port conflict
 
