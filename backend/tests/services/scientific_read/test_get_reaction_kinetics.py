@@ -13,15 +13,21 @@ from app.db.models.common import (
     ScientificOriginKind,
     SubmissionRecordType,
 )
+from app.db.models.kinetics import KineticsInterpretationAssignment, KineticsTunnelingApplication
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from tests.services.scientific_read._factories import (
+    attach_artifact,
+    make_calculation,
     make_chem_reaction,
     make_kinetics,
     make_reaction_entry,
     make_species,
     make_species_entry,
+    make_statmech,
+    make_transition_state,
+    make_transition_state_entry,
     next_inchi_key,
     set_review,
 )
@@ -64,6 +70,94 @@ def test_empty_kinetics_returns_200_empty_records(db_session):
     assert response.records == []
     assert response.pagination.total == 0
     assert response.reaction_entry_id == entry.id
+
+
+def test_interpretations_include_exact_role_and_tunneling_evidence(db_session):
+    entry = _setup_entry(db_session)
+    kinetics = make_kinetics(db_session, reaction_entry=entry)
+    participant = entry.structure_participants[0]
+    statmech = make_statmech(db_session, species_entry=participant.species_entry)
+    ts_entry = make_transition_state_entry(
+        db_session, transition_state=make_transition_state(db_session, reaction_entry=entry)
+    )
+    db_session.add_all(
+        [
+            KineticsInterpretationAssignment(
+                kinetics_id=kinetics.id,
+                subject_key="reactant:1",
+                role="reactant",
+                statmech_id=statmech.id,
+                ensemble_policy="lowest_energy_conformer",
+                standard_state_convention="ideal_gas_1_bar",
+                degeneracy_interpretation="reaction_path_degeneracy",
+            ),
+            KineticsTunnelingApplication(
+                kinetics_id=kinetics.id,
+                model="wigner",
+                transition_state_entry_id=ts_entry.id,
+                imaginary_frequency_cm1=-1234.5,
+            ),
+        ]
+    )
+    db_session.flush()
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest(include=["interpretations"])
+    )
+
+    record = response.records[0]
+    assert record.interpretation_assignments is not None
+    assert record.interpretation_assignments[0].subject_key == "reactant:1"
+    assert record.interpretation_assignments[0].statmech_ref == statmech.public_ref
+    assert record.tunneling_application is not None
+    assert record.tunneling_application.model == "wigner"
+    assert record.tunneling_application.transition_state_entry_ref == ts_entry.public_ref
+
+
+def test_sct_tunneling_evidence_is_returned_not_silently_dropped(db_session):
+    """Both artifacts on a tunneling row need their own aliased join.
+
+    Joining only ``result_artifact_id`` left every SCT path-integral field
+    permanently null on reads even though the write path had persisted the id.
+    """
+    entry = _setup_entry(db_session)
+    kinetics = make_kinetics(db_session, reaction_entry=entry)
+    ts_entry = make_transition_state_entry(
+        db_session, transition_state=make_transition_state(db_session, reaction_entry=entry)
+    )
+    result_calc = make_calculation(db_session, transition_state_entry_id=ts_entry.id)
+    sct_calc = make_calculation(db_session, transition_state_entry_id=ts_entry.id)
+    source_calc = make_calculation(db_session, transition_state_entry_id=ts_entry.id)
+    result_artifact = attach_artifact(
+        db_session, calculation=result_calc, sha256="a" * 64, uri="s3://bucket/result.log"
+    )
+    sct_artifact = attach_artifact(
+        db_session, calculation=sct_calc, sha256="b" * 64, uri="s3://bucket/sct.dat"
+    )
+    db_session.add(
+        KineticsTunnelingApplication(
+            kinetics_id=kinetics.id,
+            model="sct",
+            transition_state_entry_id=ts_entry.id,
+            source_calculation_id=source_calc.id,
+            imaginary_frequency_cm1=-1234.5,
+            result_artifact_id=result_artifact.id,
+            sct_path_integral_artifact_id=sct_artifact.id,
+        )
+    )
+    db_session.flush()
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest(include=["interpretations"])
+    )
+    block = response.records[0].tunneling_application
+    assert block is not None
+    assert block.result_artifact_calculation_ref == result_calc.public_ref
+    assert block.result_artifact_sha256 == result_artifact.sha256
+    assert block.sct_path_integral_artifact_calculation_ref == sct_calc.public_ref
+    assert block.sct_path_integral_artifact_sha256 == sct_artifact.sha256
+    # And the barriers/energies it returns name the calculation they came from.
+    assert block.source_calculation_ref == source_calc.public_ref
 
 
 def test_collapse_first_applies_before_offset(db_session):

@@ -49,6 +49,8 @@ class TestKineticsUploadEaValidation:
         req = KineticsUploadRequest(
             reaction=_MINIMAL_REACTION,
             scientific_origin="computed",
+            a=1.0e13,
+            a_units="per_s",
             reported_ea=10.0,
             reported_ea_units="kcal_mol",
         )
@@ -59,6 +61,8 @@ class TestKineticsUploadEaValidation:
         req = KineticsUploadRequest(
             reaction=_MINIMAL_REACTION,
             scientific_origin="computed",
+            a=1.0e13,
+            a_units="per_s",
         )
         assert req.reported_ea is None
         assert req.reported_ea_units is None

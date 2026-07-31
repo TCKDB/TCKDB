@@ -8,8 +8,9 @@ content (reactants/products + TS geometry + calculations).
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.upload_warning import UploadWarning
 
-from app.db.models.common import SubmissionRecordType
+from app.db.models.common import CalculationType, SubmissionRecordType
 from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.workflows.reaction_upload import (
     ReactionUploadRequest,
@@ -27,6 +28,9 @@ from app.services.transition_state_resolution import (
     create_transition_state_and_entry,
     persist_ts_calculations,
 )
+from app.services.transition_state_validation import (
+    persist_transition_state_validation_evidence,
+)
 from app.workflows.reaction import persist_reaction_upload
 
 
@@ -36,6 +40,7 @@ def persist_transition_state_upload(
     *,
     created_by: int | None = None,
     review_policy: ReviewPolicy | None = ReviewPolicy(),
+    warnings: list[UploadWarning] | None = None,
 ) -> TransitionStateEntry:
     """Persist a complete transition-state upload workflow.
 
@@ -49,6 +54,8 @@ def persist_transition_state_upload(
     :param session: Active SQLAlchemy session.
     :param request: Upload-facing transition-state payload.
     :param created_by: Optional application user id for newly created rows.
+    :param warnings: Optional sink for non-blocking upload warnings (a TS
+        deposited without passing IRC validation evidence).
     :returns: Newly created ``TransitionStateEntry`` row.
     """
 
@@ -106,6 +113,26 @@ def persist_transition_state_upload(
         created_by=created_by,
     )
 
+    session.flush()
+
+    # 5. Structured IRC evidence, bound to the single irc calculation the
+    #    schema guarantees is present when evidence was supplied.
+    irc_calculation_ids = [
+        calc.id for calc in additional_calcs if calc.type == CalculationType.irc
+    ]
+    persist_transition_state_validation_evidence(
+        session,
+        request.validation_evidence,
+        transition_state_entry_id=ts_entry.id,
+        reconstruction_calculation_ids=[
+            irc_calculation_ids[0] if irc_calculation_ids else None
+            for _ in request.validation_evidence
+        ],
+        subject_label=request.label or "transition state",
+        field_path="validation_evidence",
+        created_by=created_by,
+        warnings=warnings,
+    )
     session.flush()
 
     targets: list[RecordRef] = [

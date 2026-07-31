@@ -312,12 +312,16 @@ class TestIdentityResolution:
         )
         db_session.add(species)
         db_session.flush()
-        for label in ("entryA", "entryB"):
+        # Two genuinely distinct isotopologues of water: ordinary H2O
+        # (isotope_key NULL) and D2O. Previously this fixture forked identity
+        # with meaningless free-text labels ("entryA"/"entryB"), which the
+        # schema no longer permits — and which was never science.
+        for isotope_key in (None, "[2H]O[2H]"):
             db_session.add(
                 SpeciesEntry(
                     species_id=species.id,
                     unmapped_smiles="O",
-                    isotopologue_label=label,
+                    isotope_key=isotope_key,
                 )
             )
         db_session.flush()

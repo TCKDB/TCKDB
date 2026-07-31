@@ -41,6 +41,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.transition_state import (
     TransitionState,
     TransitionStateEntry,
+    TransitionStateValidationEvidence,
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_calculation import (
@@ -68,6 +69,8 @@ from app.schemas.reads.scientific_transition_state import (
     TransitionStateEntryDetailRequest,
     TransitionStateReactionContext,
     TransitionStateReviewEntry,
+    TransitionStateValidationDescriptor,
+    TransitionStateValidationEvidenceSummary,
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
@@ -102,6 +105,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "calculations",
     "geometries",
     "review",
+    "validation_evidence",
     "internal_ids",
     "all",
 }
@@ -486,6 +490,10 @@ def _build_entry_record(
             session, SubmissionRecordType.transition_state_entry, entry.id
         )
 
+    validation_block: list[TransitionStateValidationEvidenceSummary] | None = None
+    if "validation_evidence" in includes:
+        validation_block = _build_validation_evidence(session, entry.id)
+
     # ``trust`` is only ever in *includes* on the standalone TS-entry detail
     # surface (the parent-TS and search surfaces reject the token), and only
     # that path eager-loads the graph the evaluator walks. Building it here
@@ -513,10 +521,12 @@ def _build_entry_record(
         transition_state=ts_core,
         reaction=reaction,
         evidence_summary=evidence,
+        validation=_build_validation_descriptor(session, entry.id),
         available_sections=available,
         calculations=calcs_block,
         geometries=geoms_block,
         review_history=review_block,
+        validation_evidence=validation_block,
         trust=trust_block,
     )
 
@@ -775,6 +785,16 @@ def _build_available_sections(
                 )
             )
     has_review = False
+    has_validation_evidence = bool(
+        entry_ids
+        and session.scalar(
+            select(
+                exists().where(
+                    TransitionStateValidationEvidence.transition_state_entry_id.in_(entry_ids)
+                )
+            )
+        )
+    )
     if entries is not None:
         has_review = bool(
             session.scalar(
@@ -796,6 +816,57 @@ def _build_available_sections(
         has_calculations=has_calcs,
         has_geometries=has_geoms,
         has_review=has_review,
+        has_validation_evidence=has_validation_evidence,
+    )
+
+
+def _build_validation_evidence(
+    session: Session, entry_id: int
+) -> list[TransitionStateValidationEvidenceSummary]:
+    rows = session.execute(
+        select(
+            TransitionStateValidationEvidence,
+            Calculation.public_ref.label("calculation_ref"),
+        )
+        .outerjoin(
+            Calculation,
+            Calculation.id == TransitionStateValidationEvidence.reconstruction_calculation_id,
+        )
+        .where(TransitionStateValidationEvidence.transition_state_entry_id == entry_id)
+        .order_by(TransitionStateValidationEvidence.id.asc())
+    ).all()
+    return [
+        TransitionStateValidationEvidenceSummary(
+            kind=row.TransitionStateValidationEvidence.kind,
+            passed=row.TransitionStateValidationEvidence.passed,
+            rationale=row.TransitionStateValidationEvidence.rationale,
+            reconstruction_calculation_ref=row.calculation_ref,
+            reactant_participant_mapping=row.TransitionStateValidationEvidence.reactant_participant_mapping,
+            product_participant_mapping=row.TransitionStateValidationEvidence.product_participant_mapping,
+        )
+        for row in rows
+    ]
+
+
+def _build_validation_descriptor(
+    session: Session, entry_id: int
+) -> TransitionStateValidationDescriptor:
+    """State IRC validation as one machine token, always.
+
+    A TS with no IRC evidence is a legitimate deposit (the upload emits a
+    warning), so the read surface must say ``absent`` rather than leave the
+    caller to infer it from an empty optional block.
+    """
+    passed_values = session.scalars(
+        select(TransitionStateValidationEvidence.passed).where(
+            TransitionStateValidationEvidence.transition_state_entry_id == entry_id,
+            TransitionStateValidationEvidence.kind == "irc",
+        )
+    ).all()
+    if not passed_values:
+        return TransitionStateValidationDescriptor(irc="absent")
+    return TransitionStateValidationDescriptor(
+        irc="present" if any(passed_values) else "failed"
     )
 
 

@@ -586,3 +586,124 @@ def test_ts_upload_with_path_search_neb_additional_persists_points(
         assert len(geom_ids) == len(set(geom_ids))  # no dupes on (calc, geom)
         roles = {link.role for link in links}
         assert CalculationGeometryRole.path_search_point in roles
+
+
+# ---------------------------------------------------------------------------
+# NB7: IRC validation evidence is depositable on this path too
+# ---------------------------------------------------------------------------
+
+
+def _ts_request_with_evidence(**evidence_overrides) -> TransitionStateUploadRequest:
+    """A TS upload carrying an irc calculation and passing IRC evidence.
+
+    The 3-atom TS is H + H2 -> H + H2, so a complete mapping accounts for all
+    three atoms on both sides.
+    """
+    evidence: dict = {
+        "kind": "irc",
+        "passed": True,
+        "rationale": "IRC descends to H + H2 on both sides.",
+        "reactant_participant_mapping": {"reactant:1": [1], "reactant:2": [2, 3]},
+        "product_participant_mapping": {"product:1": [3], "product:2": [1, 2]},
+    }
+    evidence.update(evidence_overrides)
+    return TransitionStateUploadRequest(
+        reaction=_REACTION,
+        charge=0,
+        multiplicity=2,
+        geometry={"xyz_text": _XYZ_TS},
+        primary_opt=CalculationWithResultsPayload(
+            type="opt", software_release=_SOFTWARE, level_of_theory=_LOT
+        ),
+        additional_calculations=[
+            CalculationWithResultsPayload(
+                type="irc", software_release=_SOFTWARE, level_of_theory=_LOT
+            )
+        ],
+        validation_evidence=[evidence],
+        label="H-transfer TS",
+    )
+
+
+def test_standalone_ts_upload_persists_irc_evidence(db_engine) -> None:
+    """The owner's "optional but visible on read" decision is reachable here.
+
+    Before this, structured evidence was depositable only through the PDep
+    bundle, so a TS uploaded this way always read back as
+    ``validation: {"irc": "absent"}`` even when the depositor had the IRC.
+    """
+    from app.db.models.transition_state import TransitionStateValidationEvidence
+    from app.services.scientific_read.transition_states import (
+        _build_validation_descriptor,
+    )
+
+    with Session(db_engine) as session, session.begin():
+        warnings: list = []
+        ts_entry = persist_transition_state_upload(
+            session, _ts_request_with_evidence(), warnings=warnings
+        )
+        session.flush()
+
+        rows = session.scalars(
+            select(TransitionStateValidationEvidence).where(
+                TransitionStateValidationEvidence.transition_state_entry_id
+                == ts_entry.id
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].kind == "irc"
+        assert rows[0].passed is True
+        linked = session.get(Calculation, rows[0].reconstruction_calculation_id)
+        assert linked is not None
+        assert linked.type == CalculationType.irc
+        # Passing evidence produces no absent-evidence warning...
+        assert warnings == []
+        # ... and the read surface now says "present" rather than "absent".
+        assert _build_validation_descriptor(session, ts_entry.id).irc == "present"
+
+
+def test_standalone_ts_upload_without_evidence_warns(db_engine) -> None:
+    with Session(db_engine) as session, session.begin():
+        warnings: list = []
+        ts_entry = persist_transition_state_upload(
+            session, _basic_ts_request(), warnings=warnings
+        )
+        session.flush()
+        assert [w.code for w in warnings] == [
+            "transition_state_missing_irc_evidence"
+        ]
+        from app.services.scientific_read.transition_states import (
+            _build_validation_descriptor,
+        )
+
+        assert _build_validation_descriptor(session, ts_entry.id).irc == "absent"
+
+
+def test_standalone_ts_evidence_requires_exactly_one_irc_calculation() -> None:
+    with pytest.raises(ValueError, match="exactly one additional calculation of type 'irc'"):
+        TransitionStateUploadRequest(
+            reaction=_REACTION,
+            charge=0,
+            multiplicity=2,
+            geometry={"xyz_text": _XYZ_TS},
+            primary_opt=CalculationWithResultsPayload(
+                type="opt", software_release=_SOFTWARE, level_of_theory=_LOT
+            ),
+            validation_evidence=[
+                {
+                    "kind": "irc",
+                    "passed": True,
+                    "rationale": "no irc calculation supplied",
+                    "reactant_participant_mapping": {"reactant:1": [1], "reactant:2": [2, 3]},
+                    "product_participant_mapping": {"product:1": [3], "product:2": [1, 2]},
+                }
+            ],
+        )
+
+
+def test_standalone_ts_evidence_enforces_full_atom_coverage() -> None:
+    """The same completeness rule as the PDep path, from the shared checker."""
+    with pytest.raises(ValueError, match="cover every one of the 3 TS atoms"):
+        _ts_request_with_evidence(
+            reactant_participant_mapping={"reactant:1": [1], "reactant:2": [2]}
+        )

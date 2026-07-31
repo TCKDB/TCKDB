@@ -19,6 +19,7 @@ import hashlib
 import json
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import (
@@ -33,18 +34,24 @@ from app.db.models.common import (
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
     NetworkChannel,
+    NetworkChannelMicroReaction,
     NetworkKinetics,
     NetworkKineticsChebyshev,
     NetworkKineticsPlog,
     NetworkSolve,
     NetworkSolveBathGas,
+    NetworkSolveChannelBarrier,
     NetworkSolveEnergyTransfer,
     NetworkSolveSourceCalculation,
+    NetworkSolveStateEnergy,
     NetworkState,
     NetworkStateParticipant,
 )
 from app.db.models.species import ConformerObservation
-from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.db.models.transition_state import (
+    TransitionState,
+    TransitionStateEntry,
+)
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.network_pdep_upload import (
     CalculationIn,
@@ -70,6 +77,9 @@ from app.services.record_review import (
 )
 from app.services.software_resolution import resolve_software_release_ref
 from app.services.species_resolution import resolve_species_entry
+from app.services.transition_state_validation import (
+    persist_transition_state_validation_evidence,
+)
 from app.services.transport_resolution import resolve_and_create_transport
 from app.workflows.computed_species import _persist_statmech_block
 from app.workflows.reaction import persist_reaction_upload
@@ -177,12 +187,18 @@ def persist_network_pdep_upload(
     *,
     created_by: int | None = None,
     review_policy: ReviewPolicy | None = ReviewPolicy(),
+    warnings: list[UploadWarning] | None = None,
 ) -> Network:
     """Persist a complete pressure-dependent network upload workflow.
 
     Handles the full pipeline: species + conformers + calculations,
     transition states, micro reactions, network topology, and solve.
+
+    :param warnings: Optional sink for non-blocking upload warnings (currently
+        transition states deposited without IRC validation evidence). Passed
+        as an out-parameter so the return type stays the created ``Network``.
     """
+    warning_sink = warnings if warnings is not None else []
 
     # Maps populated during resolution
     species_key_to_entry: dict[str, object] = {}
@@ -193,6 +209,7 @@ def persist_network_pdep_upload(
     # Calculation rows, checking species-entry ownership).
     calculation_key_to_calc: dict[str, Calculation] = {}
     reaction_key_to_entry: dict[str, object] = {}
+    ts_key_to_entry: dict[str, TransitionStateEntry] = {}
     observation_id_by_geometry_key: dict[str, int] = {}
     # Review-row targets accumulated as records are written; used at the end
     # of the workflow to apply the caller's ReviewPolicy to all of them.
@@ -202,10 +219,13 @@ def persist_network_pdep_upload(
     # 1. Resolve species
     # ------------------------------------------------------------------
     for sp in request.species:
-        first_xyz = sp.conformers[0].geometry.xyz_text if sp.conformers else None
+        conformer_geometries = [conf.geometry.to_payload() for conf in sp.conformers]
         species_entry = resolve_species_entry(
             session, sp.species_entry, created_by=created_by,
-            xyz_text=first_xyz,
+            # First geometry drives stereo perception; all of them are
+            # isotope-checked against the declared identity.
+            geometry=(conformer_geometries[0] if conformer_geometries else None),
+            additional_geometries=conformer_geometries[1:],
         )
         species_key_to_entry[sp.key] = species_entry
         review_targets.append(
@@ -219,7 +239,7 @@ def persist_network_pdep_upload(
         species_entry = species_key_to_entry[sp.key]
         for conf in sp.conformers:
             # Resolve geometry
-            geom_payload = GeometryPayload(xyz_text=conf.geometry.xyz_text)
+            geom_payload = conf.geometry.to_payload()
             geometry = resolve_geometry_payload(session, geom_payload)
             geometry_key_to_id[conf.geometry.key] = geometry.id
 
@@ -324,6 +344,7 @@ def persist_network_pdep_upload(
             species_entry_id=species_key_to_entry[sp.key].id,
             calc_keys_to_id=calculation_key_to_calc,
             created_by=created_by,
+            warnings=warning_sink,
         )
         if statmech_row is not None:
             review_targets.append(
@@ -386,6 +407,7 @@ def persist_network_pdep_upload(
         )
         session.add(ts_entry)
         session.flush()
+        ts_key_to_entry[ts_in.key] = ts_entry
         review_targets.append(
             RecordRef(SubmissionRecordType.transition_state, ts.id)
         )
@@ -408,6 +430,7 @@ def persist_network_pdep_upload(
             created_by=created_by,
         )
         calculation_key_to_id[ts_in.calculation.key] = ts_calc.id
+        calculation_key_to_calc[ts_in.calculation.key] = ts_calc
         review_targets.append(
             RecordRef(SubmissionRecordType.calculation, ts_calc.id)
         )
@@ -422,9 +445,36 @@ def persist_network_pdep_upload(
                 created_by=created_by,
             )
             calculation_key_to_id[calc_in.key] = calc.id
+            calculation_key_to_calc[calc_in.key] = calc
             review_targets.append(
                 RecordRef(SubmissionRecordType.calculation, calc.id)
             )
+
+        if ts_in.statmech is not None:
+            ts_statmech = _persist_statmech_block(
+                session,
+                ts_in.statmech,
+                transition_state_entry_id=ts_entry.id,
+                calc_keys_to_id=calculation_key_to_calc,
+                created_by=created_by,
+                warnings=warning_sink,
+            )
+            if ts_statmech is not None:
+                review_targets.append(RecordRef(SubmissionRecordType.statmech, ts_statmech.id))
+
+        persist_transition_state_validation_evidence(
+            session,
+            ts_in.validation_evidence,
+            transition_state_entry_id=ts_entry.id,
+            reconstruction_calculation_ids=[
+                calculation_key_to_id[evidence_in.source_calculation_key]
+                for evidence_in in ts_in.validation_evidence
+            ],
+            subject_label=ts_in.key,
+            field_path=f"transition_states[{ts_in.key}].validation_evidence",
+            created_by=created_by,
+            warnings=warning_sink,
+        )
 
     # ------------------------------------------------------------------
     # 6. Resolve network-level provenance and create network
@@ -493,19 +543,31 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     # 8. Create channels
     # ------------------------------------------------------------------
-    channel_pair_to_row: dict[tuple[str, str], NetworkChannel] = {}
+    channel_key_to_row: dict[str, NetworkChannel] = {}
     for ch_in in request.channels:
         channel_row = NetworkChannel(
             network_id=network.id,
             source_state_id=state_key_to_row[ch_in.source_state_key].id,
             sink_state_id=state_key_to_row[ch_in.sink_state_key].id,
             kind=ch_in.kind,
+            channel_key=ch_in.key,
         )
         session.add(channel_row)
-        channel_pair_to_row[
-            (ch_in.source_state_key, ch_in.sink_state_key)
-        ] = channel_row
     session.flush()
+    channel_rows = session.query(NetworkChannel).filter(NetworkChannel.network_id == network.id).all()
+    channel_key_to_row = {row.channel_key: row for row in channel_rows}
+    for ch_in in request.channels:
+        channel_row = channel_key_to_row[ch_in.key]
+        for path in ch_in.microreaction_paths:
+            session.add(NetworkChannelMicroReaction(
+                channel_id=channel_row.id,
+                reaction_entry_id=reaction_key_to_entry[path.micro_reaction_key].id,
+                transition_state_entry_id=(
+                    ts_key_to_entry[path.transition_state_key].id
+                    if path.transition_state_key is not None
+                    else None
+                ),
+            ))
 
     # ------------------------------------------------------------------
     # 9. Create flat membership (network_species + network_reaction)
@@ -615,11 +677,12 @@ def persist_network_pdep_upload(
             )
 
         # Energy transfer
-        if solve_in.energy_transfer:
-            et = solve_in.energy_transfer
+        for et in solve_in.energy_transfer:
             session.add(
                 NetworkSolveEnergyTransfer(
                     solve_id=solve.id,
+                    state_id=state_key_to_row[et.state_key].id,
+                    collider_species_entry_id=species_key_to_entry[et.collider_species_key].id,
                     model=et.model,
                     alpha0_cm_inv=et.alpha0_cm_inv,
                     t_exponent=et.t_exponent,
@@ -627,6 +690,33 @@ def persist_network_pdep_upload(
                     note=et.note,
                 )
             )
+
+        for energy_in in solve_in.state_energies:
+            session.add(NetworkSolveStateEnergy(
+                solve_id=solve.id,
+                state_id=state_key_to_row[energy_in.state_key].id,
+                energy_kj_mol=energy_in.energy_kj_mol,
+                energy_zero_convention=energy_in.energy_zero_convention,
+                correction_convention=energy_in.correction_convention,
+                convention_note=energy_in.convention_note,
+                source_calculation_id=(calculation_key_to_id[energy_in.source_calculation_key]
+                    if energy_in.source_calculation_key else None),
+            ))
+
+        for barrier_in in solve_in.channel_barriers:
+            session.add(NetworkSolveChannelBarrier(
+                solve_id=solve.id,
+                channel_id=channel_key_to_row[barrier_in.channel_key].id,
+                reaction_entry_id=reaction_key_to_entry[barrier_in.micro_reaction_key].id,
+                transition_state_entry_id=ts_key_to_entry[barrier_in.transition_state_key].id,
+                forward_barrier_kj_mol=barrier_in.forward_barrier_kj_mol,
+                reverse_barrier_kj_mol=barrier_in.reverse_barrier_kj_mol,
+                energy_zero_convention=barrier_in.energy_zero_convention,
+                correction_convention=barrier_in.correction_convention,
+                convention_note=barrier_in.convention_note,
+                source_calculation_id=(calculation_key_to_id[barrier_in.source_calculation_key]
+                    if barrier_in.source_calculation_key else None),
+            ))
 
         # Source calculations
         for sc in solve_in.source_calculations:
@@ -642,9 +732,7 @@ def persist_network_pdep_upload(
         # guarantees exactly one model sub-block matching ``model_kind``
         # (Chebyshev or PLOG); tabulated is rejected upstream.
         for nk_in in solve_in.channel_kinetics:
-            channel_row = channel_pair_to_row[
-                (nk_in.source_state_key, nk_in.sink_state_key)
-            ]
+            channel_row = channel_key_to_row[nk_in.channel_key]
             network_kinetics = NetworkKinetics(
                 channel_id=channel_row.id,
                 solve_id=solve.id,

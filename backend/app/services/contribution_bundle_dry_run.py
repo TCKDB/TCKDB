@@ -21,7 +21,7 @@ from typing import Mapping, Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.chemistry.species import canonical_species_identity
+from app.chemistry.species import canonical_isotope_key, canonical_species_identity
 from app.db.models.literature import Literature
 from app.db.models.reaction import ChemReaction
 from app.db.models.software import Software, SoftwareRelease
@@ -327,8 +327,8 @@ def _preview_species_entry_identity(
             ),
             null_safe_equals(SpeciesEntry.term_symbol, payload.term_symbol),
             null_safe_equals(
-                SpeciesEntry.isotopologue_label,
-                payload.isotopologue_label,
+                SpeciesEntry.isotope_key,
+                canonical_isotope_key(payload.smiles),
             ),
         )
     )
@@ -341,7 +341,7 @@ def _preview_species_entry_identity(
             if species_entry is not None
             else (
                 "Species exists but no entry with these identity attributes "
-                "(kind, stereo, electronic state, isotopologue) was found; "
+                "(kind, stereo, electronic state, isotope substitution) was found; "
                 "one would be created during real import."
             )
         ),

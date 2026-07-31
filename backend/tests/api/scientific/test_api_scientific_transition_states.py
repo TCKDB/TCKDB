@@ -552,6 +552,70 @@ def test_tse_detail_include_calculations(client, db_session):
     assert {c["type"] for c in calcs} == {"opt", "freq"}
 
 
+def test_tse_detail_includes_structured_irc_validation_evidence(
+    client, db_session
+):
+    from app.db.models.transition_state import TransitionStateValidationEvidence
+
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    tse = entries[0]
+    calc = _attach_calc(db_session, tse=tse, calc_type=CalculationType.irc)
+    db_session.add(
+        TransitionStateValidationEvidence(
+            transition_state_entry_id=tse.id,
+            kind="irc",
+            passed=True,
+            rationale="forward and reverse endpoints match participants",
+            reconstruction_calculation_id=calc.id,
+            reactant_participant_mapping={"reactant:1": [1, 2]},
+            product_participant_mapping={"product:1": [1, 2]},
+        )
+    )
+    db_session.flush()
+
+    body = client.get(
+        _tse_detail_url(tse.public_ref, include="validation_evidence")
+    ).json()
+    record = body["record"]
+    assert record["available_sections"]["has_validation_evidence"] is True
+    evidence = record["validation_evidence"]
+    assert len(evidence) == 1
+    assert evidence[0]["kind"] == "irc"
+    assert evidence[0]["reconstruction_calculation_ref"] == calc.public_ref
+    assert evidence[0]["reactant_participant_mapping"] == {"reactant:1": [1, 2]}
+    # NMD evidence is not a TCKDB concept; no such field survives.
+    assert "mode_index" not in evidence[0]
+    assert "displacement_artifact_sha256" not in evidence[0]
+    # One typed descriptor states validation status without any include token.
+    assert record["validation"] == {"irc": "present"}
+
+
+def test_tse_detail_validation_descriptor_reports_absent_and_failed(
+    client, db_session
+):
+    """The descriptor is always present, so 'no IRC' is stated, not inferred."""
+    from app.db.models.transition_state import TransitionStateValidationEvidence
+
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    tse = entries[0]
+    body = client.get(_tse_detail_url(tse.public_ref)).json()
+    assert body["record"]["validation"] == {"irc": "absent"}
+
+    calc = _attach_calc(db_session, tse=tse, calc_type=CalculationType.irc)
+    db_session.add(
+        TransitionStateValidationEvidence(
+            transition_state_entry_id=tse.id,
+            kind="irc",
+            passed=False,
+            rationale="IRC ran downhill to an unintended fragment pair",
+            reconstruction_calculation_id=calc.id,
+        )
+    )
+    db_session.flush()
+    body = client.get(_tse_detail_url(tse.public_ref)).json()
+    assert body["record"]["validation"] == {"irc": "failed"}
+
+
 def test_tse_detail_include_geometries(client, db_session):
     _, _, _, entries = _make_reaction_with_ts(db_session)
     calc = _attach_calc(db_session, tse=entries[0])

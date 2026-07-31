@@ -26,11 +26,14 @@ See ``backend/docs/specs/scientific_network_reads.md``.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.db.models.common import (
     CalculationType,
+    EnergyCorrectionConvention,
+    EnergyZeroConvention,
     NetworkChannelKind,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
@@ -153,12 +156,28 @@ class NetworkChannelSummary(BaseModel):
     """
 
     network_channel_id: int | None = None
+    channel_key: str | None = None
     kind: NetworkChannelKind
     source_state_composition_hash: str
     sink_state_composition_hash: str
     source_state_id: int | None = None
     sink_state_id: int | None = None
     has_kinetics: bool
+    microreactions: list["NetworkChannelMicroreactionSummary"] = Field(default_factory=list)
+
+
+class NetworkChannelMicroreactionSummary(BaseModel):
+    """A microscopic reaction/TS path supporting one macroscopic channel.
+
+    ``transition_state_entry_ref`` is ``None`` for a barrierless or
+    variational path, which has no saddle point; ``path_kind`` states which
+    case this is as a machine token so a caller never has to infer it from a
+    missing field.
+    """
+
+    reaction_entry_ref: str
+    transition_state_entry_ref: str | None = None
+    path_kind: Literal["saddle_point", "barrierless"]
 
 
 class NetworkSolveBathGasSummary(BaseModel):
@@ -388,6 +407,8 @@ class NetworkSolveEnergyTransferSummary(BaseModel):
     """
 
     energy_transfer_id: int | None = None
+    state_composition_hash: str | None = None
+    collider_species_entry_ref: str | None = None
     model: str | None = None
     alpha0_cm_inv: float | None = None
     t_exponent: float | None = None
@@ -395,11 +416,41 @@ class NetworkSolveEnergyTransferSummary(BaseModel):
     note: str | None = None
 
 
+class NetworkSolveStateEnergySummary(BaseModel):
+    """A solve-specific state energy and its explicit conventions."""
+
+    state_composition_hash: str
+    energy_kj_mol: float
+    energy_zero_convention: EnergyZeroConvention
+    correction_convention: EnergyCorrectionConvention
+    convention_note: str | None = None
+    source_calculation_ref: str | None = None
+
+
+class NetworkSolveChannelBarrierSummary(BaseModel):
+    """One solve-scoped barrier for a specific channel/reaction/TS path.
+
+    Barriers are oriented by the channel (source → sink) and signed relative
+    to ``energy_zero_convention``; a submerged barrier is negative.
+    """
+
+    channel_key: str
+    reaction_entry_ref: str
+    transition_state_entry_ref: str
+    forward_barrier_kj_mol: float
+    reverse_barrier_kj_mol: float
+    energy_zero_convention: EnergyZeroConvention
+    correction_convention: EnergyCorrectionConvention
+    convention_note: str | None = None
+    source_calculation_ref: str | None = None
+
+
 class NetworkSolveEvidenceSummary(BaseModel):
     """Bounded evidence projection for one network solve."""
 
     bath_gas_count: int
     energy_transfer_count: int
+    state_energy_count: int
     source_calculation_count: int
     kinetics_count: int
     has_chebyshev: bool
@@ -412,6 +463,8 @@ class AvailableNetworkSolveSections(BaseModel):
 
     has_bath_gas: bool
     has_energy_transfer: bool
+    has_state_energies: bool
+    has_channel_barriers: bool
     has_source_calculations: bool
     has_kinetics: bool
     has_review: bool
@@ -438,6 +491,8 @@ class ScientificNetworkSolveRecord(BaseModel):
 
     bath_gas: list[NetworkSolveBathGasSummary] | None = None
     energy_transfer: list[NetworkSolveEnergyTransferSummary] | None = None
+    state_energies: list[NetworkSolveStateEnergySummary] | None = None
+    channel_barriers: list[NetworkSolveChannelBarrierSummary] | None = None
     source_calculations: list[NetworkSourceCalculationSummary] | None = None
     kinetics: list[NetworkKineticsSummary] | None = None
     review_history: list[NetworkReviewEntry] | None = None
@@ -455,6 +510,7 @@ class ScientificNetworkSolveDetailResponse(BaseModel):
 __all__ = [
     "AvailableNetworkSections",
     "AvailableNetworkSolveSections",
+    "NetworkChannelMicroreactionSummary",
     "NetworkChannelSummary",
     "NetworkContextSummary",
     "NetworkCoreBlock",
@@ -464,9 +520,11 @@ __all__ = [
     "NetworkReactionSummary",
     "NetworkReviewEntry",
     "NetworkSolveBathGasSummary",
+    "NetworkSolveChannelBarrierSummary",
     "NetworkSolveCoreBlock",
     "NetworkSolveEnergyTransferSummary",
     "NetworkSolveEvidenceSummary",
+    "NetworkSolveStateEnergySummary",
     "NetworkSolveSummary",
     "NetworkSourceCalculationSummary",
     "NetworkSpeciesSummary",

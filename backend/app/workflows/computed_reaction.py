@@ -80,6 +80,9 @@ from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
 from app.services.species_resolution import resolve_species_entry
+from app.services.transition_state_validation import (
+    persist_transition_state_validation_evidence,
+)
 
 
 def _persist_calculation(
@@ -255,11 +258,13 @@ def persist_computed_reaction_upload(
     # 1. Resolve species + conformers + calculations
     # ------------------------------------------------------------------
     for sp in request.species:
-        # Use first conformer's XYZ for 3D stereo label derivation
-        first_xyz = sp.conformers[0].geometry.xyz_text if sp.conformers else None
+        # The first conformer's geometry drives 3D stereo label derivation;
+        # every conformer's geometry is isotope-checked against the identity.
+        conformer_geometries = [conf.geometry.to_payload() for conf in sp.conformers]
         species_entry = resolve_species_entry(
             session, sp.species_entry, created_by=created_by,
-            xyz_text=first_xyz,
+            geometry=(conformer_geometries[0] if conformer_geometries else None),
+            additional_geometries=conformer_geometries[1:],
         )
         species_key_to_entry[sp.key] = species_entry
         review_targets.append(
@@ -268,7 +273,7 @@ def persist_computed_reaction_upload(
 
         # Conformers
         for conf in sp.conformers:
-            geom_payload = GeometryPayload(xyz_text=conf.geometry.xyz_text)
+            geom_payload = conf.geometry.to_payload()
             geometry = resolve_geometry_payload(session, geom_payload)
             geometry_key_to_id[conf.geometry.key] = geometry.id
 
@@ -484,6 +489,22 @@ def persist_computed_reaction_upload(
             review_targets.append(
                 RecordRef(SubmissionRecordType.calculation, calc.id)
             )
+
+        # Structured IRC evidence for this saddle point. Optional on every
+        # path; its absence is reported, never rejected.
+        persist_transition_state_validation_evidence(
+            session,
+            ts_in.validation_evidence,
+            transition_state_entry_id=ts_entry.id,
+            reconstruction_calculation_ids=[
+                calculation_key_to_id[record.source_calculation_key]
+                for record in ts_in.validation_evidence
+            ],
+            subject_label=ts_in.label or "transition state",
+            field_path="transition_state.validation_evidence",
+            created_by=created_by,
+            warnings=sp_energy_warnings,
+        )
 
     session.flush()
 

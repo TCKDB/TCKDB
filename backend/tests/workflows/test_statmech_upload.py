@@ -82,8 +82,16 @@ def _basic_request(**overrides) -> StatmechUploadRequest:
         "point_group": "C2v",
         "is_linear": False,
         "note": "basic standalone statmech",
+        "calculations": [{"key": "freq0", "calculation": _freq_calc_payload()}],
+        "source_calculations": [{"calculation_key": "freq0", "role": "freq"}],
     }
     base.update(overrides)
+    calculation_keys = {item["key"] for item in base.get("calculations", [])}
+    if "freq0" not in calculation_keys:
+        base.setdefault("calculations", []).append(
+            {"key": "freq0", "calculation": _freq_calc_payload()}
+        )
+    base.setdefault("source_calculations", [{"calculation_key": "freq0", "role": "freq"}])
     return StatmechUploadRequest(**base)
 
 
@@ -113,8 +121,9 @@ def test_persist_statmech_upload_creates_row_linked_to_species_entry(db_engine) 
         assert statmech.is_linear is False
         assert statmech.note == "basic standalone statmech"
 
-        # No source calculations or torsions attached by default.
-        assert statmech.source_calculations == []
+        # Strict statmech provenance always retains the owned RRHO frequency.
+        assert len(statmech.source_calculations) == 1
+        assert statmech.source_calculations[0].role.value == "freq"
         assert statmech.torsions == []
 
 
@@ -420,6 +429,9 @@ class TestStatmechUploadRejectsRawFKs:
         ):
             StatmechUploadRequest(
                 species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
+                statmech_treatment="rrho",
+                calculations=[{"key": "freq0", "calculation": _freq_calc_payload()}],
+                source_calculations=[{"calculation_key": "freq0", "role": "freq"}],
                 torsions=[
                     {
                         "torsion_index": 1,
@@ -476,6 +488,13 @@ class TestStatmechUploadSchemaValidation:
         ):
             StatmechUploadRequest(
                 species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
+                statmech_treatment="rrho",
+                calculations=[
+                    {"key": "freq0", "calculation": _freq_calc_payload()},
+                ],
+                source_calculations=[
+                    {"calculation_key": "freq0", "role": "freq"},
+                ],
                 torsions=[
                     {
                         "torsion_index": 1,
@@ -770,32 +789,18 @@ def _water_identity_payload():
 
 
 def test_bundle_statmech_persists_rotational_constants(db_engine) -> None:
-    """StatmechInBundle -> _persist_statmech_block writes A/B/C (cm^-1)."""
+    """Strict standalone statmech persistence writes A/B/C (cm^-1)."""
     from app.db.models.statmech import Statmech
-    from app.schemas.workflows.computed_species_upload import StatmechInBundle
-    from app.services.species_resolution import resolve_species_entry
-    from app.workflows.computed_species import _persist_statmech_block
 
     connection = db_engine.connect()
     transaction = connection.begin()
     session = Session(bind=connection, expire_on_commit=False)
     try:
-        se = resolve_species_entry(session, _water_identity_payload())
-        session.flush()
-
-        block = StatmechInBundle(
-            scientific_origin="computed",
+        stm = persist_statmech_upload(session, _basic_request(
             rotational_constant_a_cm1=27.88,
             rotational_constant_b_cm1=14.52,
             rotational_constant_c_cm1=9.28,
-        )
-        stm = _persist_statmech_block(
-            session,
-            block,
-            species_entry_id=se.id,
-            calc_keys_to_id={},
-            created_by=None,
-        )
+        ))
         session.flush()
 
         row = session.get(Statmech, stm.id)

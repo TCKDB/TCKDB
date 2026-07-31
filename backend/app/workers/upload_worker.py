@@ -243,9 +243,21 @@ def _run_network_pdep(session: Session, job: UploadJob, review_policy: ReviewPol
     from app.workflows.network_pdep import persist_network_pdep_upload
 
     request = NetworkPDepUploadRequest.model_validate(job.payload)
-    network = persist_network_pdep_upload(session, request, created_by=job.created_by, review_policy=review_policy)
+    warnings: list = []
+    network = persist_network_pdep_upload(
+        session,
+        request,
+        created_by=job.created_by,
+        review_policy=review_policy,
+        warnings=warnings,
+    )
     solve_id = network.solves[0].id if network.solves else None
-    return {"type": "network_pdep", "id": network.id, "solve_id": solve_id}
+    return {
+        "type": "network_pdep",
+        "id": network.id,
+        "solve_id": solve_id,
+        "warnings": [w.model_dump(mode="json") for w in warnings],
+    }
 
 
 def _run_thermo(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:

@@ -40,9 +40,10 @@ def _hydrogen_request(*, label: str | None = None) -> ConformerUploadRequest:
             "xyz_text": "1\nH atom\nH 0.0 0.0 0.0",
         },
         calculation={
-            "type": "sp",
+            "type": "freq",
             "software_release": {"name": "Gaussian", "version": "16"},
             "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "freq_result": {"n_imag": 0},
         },
         label=label,
         note="uploaded conformer",
@@ -410,14 +411,16 @@ def test_conformer_upload_statmech_resolves_literature_from_payload(
         species_entry={"smiles": "[H]", "charge": 0, "multiplicity": 2},
         geometry={"xyz_text": "1\nH atom\nH 0.0 0.0 0.0"},
         calculation={
-            "type": "sp",
+            "type": "freq",
             "software_release": {"name": "Gaussian", "version": "16"},
             "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "freq_result": {"n_imag": 0},
         },
         label="conf-lit-doi",
         statmech={
             "scientific_origin": "computed",
             "statmech_treatment": "rrho",
+            "uploaded_calculation_role": "freq",
             "note": "statmech-with-literature-payload",
             "literature": {
                 "doi": "10.1063/conformer-statmech",

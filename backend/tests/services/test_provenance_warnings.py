@@ -11,6 +11,7 @@ These tests exercise the pure helpers in
 
 from __future__ import annotations
 
+from app.db.models.common import ScientificOriginKind
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
@@ -274,3 +275,72 @@ def test_warning_shape_matches_shared_upload_warning_pattern() -> None:
         }
         # Messages are non-empty, pre-formatted text
         assert w.message and isinstance(w.message, str)
+
+
+# ---------------------------------------------------------------------------
+# Statmech content warnings (evidence, not provenance)
+# ---------------------------------------------------------------------------
+
+
+def test_computed_statmech_without_source_calculations_warns() -> None:
+    from app.services.provenance_warnings import (
+        W_MISSING_STATMECH_SOURCE_CALCULATIONS,
+        collect_statmech_content_warnings,
+    )
+
+    warnings = collect_statmech_content_warnings(
+        scientific_origin=ScientificOriginKind.computed,
+        source_calculation_roles=set(),
+    )
+    assert [w.code for w in warnings] == [W_MISSING_STATMECH_SOURCE_CALCULATIONS]
+
+
+def test_non_computed_statmech_is_not_asked_for_calculations() -> None:
+    from app.services.provenance_warnings import collect_statmech_content_warnings
+
+    assert (
+        collect_statmech_content_warnings(
+            scientific_origin=ScientificOriginKind.experimental,
+            source_calculation_roles=set(),
+        )
+        == []
+    )
+
+
+def test_polyatomic_statmech_with_only_sp_warns_on_missing_frequencies() -> None:
+    """The audit gap: a polyatomic whose only source is an sp said nothing."""
+    from app.services.provenance_warnings import (
+        W_MISSING_STATMECH_FREQUENCY_SOURCE,
+        collect_statmech_content_warnings,
+    )
+
+    warnings = collect_statmech_content_warnings(
+        scientific_origin=ScientificOriginKind.computed,
+        source_calculation_roles={"sp"},
+        has_rotational_structure=True,
+    )
+    assert [w.code for w in warnings] == [W_MISSING_STATMECH_FREQUENCY_SOURCE]
+
+
+def test_monatomic_statmech_with_only_sp_stays_quiet() -> None:
+    """An atom has no vibrational modes, so a missing freq source is expected."""
+    from app.services.provenance_warnings import collect_statmech_content_warnings
+
+    assert (
+        collect_statmech_content_warnings(
+            scientific_origin=ScientificOriginKind.computed,
+            source_calculation_roles={"sp"},
+            has_rotational_structure=False,
+        )
+        == []
+    )
+
+
+def test_rotational_structure_is_read_off_the_record() -> None:
+    from app.services.provenance_warnings import statmech_has_rotational_structure
+
+    assert statmech_has_rotational_structure(
+        _statmech(rotational_constant_a_cm1=27.88)
+    )
+    # A bare H-atom-shaped record reports neither rotation nor torsions.
+    assert not statmech_has_rotational_structure(_statmech())

@@ -4,7 +4,7 @@ import math
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
@@ -12,15 +12,27 @@ from app.db.models.common import (
     ArrheniusAUnits,
     KineticsDegeneracyConvention,
     KineticsUncertaintyKind,
+    ReactionRole,
 )
 from app.db.models.kinetics import Kinetics
 from app.db.models.literature import Literature
 from app.db.models.reaction import ReactionEntryStructureParticipant
+from app.db.models.statmech import Statmech
+from app.db.models.transition_state import TransitionStateEntry
+from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
+from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
+from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.workflows.kinetics import persist_kinetics_upload
+from app.workflows.network_pdep import persist_network_pdep_upload
 
 
-def _kinetics_request(**overrides) -> KineticsUploadRequest:
+def _shape_kinetics_request(**overrides) -> KineticsUploadRequest:
+    """Noncomputed fixture for functional-form and unit-shape validation.
+
+    Computed fixtures must supply resolvable statmech/TS evidence; tests that
+    exercise only a rate-law shape use an experimental record deliberately.
+    """
     defaults = {
         "reaction": {
             "reversible": False,
@@ -50,7 +62,7 @@ def _kinetics_request(**overrides) -> KineticsUploadRequest:
                 }
             ],
         },
-        "scientific_origin": "computed",
+        "scientific_origin": "experimental",
         "model_kind": "modified_arrhenius",
         "software_release": {"name": "gaussian", "version": "09", "revision": "D.01"},
         "workflow_tool_release": {"name": "ARC", "version": "1.0.0"},
@@ -66,11 +78,223 @@ def _kinetics_request(**overrides) -> KineticsUploadRequest:
         "tmin_k": 300.0,
         "tmax_k": 2000.0,
         "degeneracy": 2.0,
-        "tunneling_model": "eckart",
         "note": "upload note",
     }
     defaults.update(overrides)
     return KineticsUploadRequest(**defaults)
+
+
+_kinetics_request = _shape_kinetics_request
+
+
+def test_computed_kinetics_without_interpretations_is_accepted_and_warned() -> None:
+    """`scientific_origin='computed'` does not mean the statmech lives here.
+
+    A rate read out of a CHEMKIN mechanism, or an Arkane TST result deposited
+    without its partition functions, is computed in origin and carries no
+    interpretation assignments. Rejecting it would lose a real record, so the
+    gap is reported as a warning instead.
+    """
+    from app.services.provenance_warnings import (
+        W_MISSING_KINETICS_INTERPRETATIONS,
+        collect_kinetics_content_warnings,
+    )
+
+    request = KineticsUploadRequest(
+        reaction={"reversible": False, "reactants": [{"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}], "products": [{"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}]},
+        scientific_origin="computed", a=1.0, a_units="per_s",
+    )
+    assert request.interpretation_assignments == []
+    assert [w.code for w in collect_kinetics_content_warnings(request)] == [
+        W_MISSING_KINETICS_INTERPRETATIONS
+    ]
+
+
+def test_partial_interpretation_set_is_still_rejected() -> None:
+    """Offering assignments is the reproducibility claim; a partial set is not.
+
+    This is the requirement the origin-scoped rule was standing in for: once a
+    record says "these are the partition functions I was built from", every
+    participant must be named.
+    """
+    with pytest.raises(ValidationError, match="missing: \\['product:1'\\]"):
+        KineticsUploadRequest(
+            reaction={"reversible": False, "reactants": [{"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}], "products": [{"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}]},
+            scientific_origin="computed", a=1.0, a_units="per_s",
+            interpretation_assignments=[
+                {
+                    "role": "reactant", "participant_index": 1, "statmech_ref": "sm_a",
+                    "ensemble_policy": "single_structure",
+                    "standard_state_convention": "ideal_gas_1_bar",
+                    "degeneracy_interpretation": "reaction_path_degeneracy",
+                }
+            ],
+        )
+
+
+def test_tunneling_label_without_evidence_is_accepted_and_warned() -> None:
+    """``tunneling_model`` is a reported label, not a reproducibility claim.
+
+    A literature rate whose authors state "Wigner tunneling was applied" has
+    no imaginary frequency and no artifact for the depositor to attach.
+    Demanding typed evidence for a label would force exactly the invention
+    this schema exists to prevent.
+    """
+    from app.services.provenance_warnings import (
+        W_MISSING_TUNNELING_APPLICATION,
+        collect_kinetics_content_warnings,
+    )
+
+    request = KineticsUploadRequest(
+        reaction={"reversible": False, "reactants": [{"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}], "products": [{"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}]},
+        scientific_origin="experimental", a=1.0, a_units="per_s", tunneling_model="wigner",
+    )
+    assert request.tunneling_application is None
+    assert W_MISSING_TUNNELING_APPLICATION in {
+        w.code for w in collect_kinetics_content_warnings(request)
+    }
+
+
+def test_tunneling_label_must_match_its_evidence() -> None:
+    """Evidence, once offered, must be evidence *for the declared model*."""
+    with pytest.raises(ValidationError, match="must match tunneling_model"):
+        KineticsUploadRequest(
+            reaction={"reversible": False, "reactants": [{"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}], "products": [{"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}]},
+            scientific_origin="experimental", a=1.0, a_units="per_s",
+            tunneling_model="wigner",
+            tunneling_application={
+                "model": "eckart", "transition_state_entry_ref": "tse_1",
+                "imaginary_frequency_cm1": -900.0,
+                "reactant_energy_kj_mol": 0.0, "product_energy_kj_mol": -10.0,
+                "forward_barrier_kj_mol": 40.0, "reverse_barrier_kj_mol": 50.0,
+                "energy_zero_convention": "separated_reactants",
+                "energy_correction_convention": "electronic_plus_zpe",
+            },
+        )
+
+
+def test_computed_kinetics_round_trips_explicit_subject_assignments_and_wigner(
+    db_engine,
+) -> None:
+    """A deposited computed rate retains every statmech subject and Wigner input."""
+    from tests.workflows.test_network_pdep_upload import _parallel_path_payload
+
+    payload = _parallel_path_payload()
+    # Add real RRHO source evidence for every kinetics participant; the
+    # PDep workflow, rather than a hand-built ORM row, persists all subjects.
+    for species_key, freq_key, geometry_key in (
+        ("ethylperoxy", "etoo_kinetics_freq", "etoo_geom"),
+        ("ethene", "ethene_kinetics_freq", "ethene_geom"),
+        ("HO2", "ho2_kinetics_freq", "HO2_geom"),
+    ):
+        species = next(item for item in payload["species"] if item["key"] == species_key)
+        species.setdefault("calculations", []).append(
+            {"key": freq_key, "type": "freq", "geometry_key": geometry_key,
+             "software_release": {"name": "Gaussian", "version": "16"},
+             "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"}, "freq_n_imag": 0}
+        )
+        species["statmech"] = {
+            "statmech_treatment": "rrho",
+            "source_calculations": [{"calculation_key": freq_key, "role": "freq"}],
+        }
+
+    conventions = {
+        "ensemble_policy": "single_structure",
+        "standard_state_convention": "ideal_gas_1_bar",
+        "degeneracy_interpretation": "reaction_path_degeneracy",
+    }
+
+    with Session(db_engine) as session, session.begin():
+        session.add(AppUser(id=77, username="computed_kinetics_roundtrip"))
+        session.flush()
+        persist_network_pdep_upload(session, NetworkPDepUploadRequest(**payload), created_by=77)
+        # The HO2-elimination step: one reactant, two products, and TWO
+        # distinct saddle points on the SAME reaction entry.
+        ts_entry = next(
+            entry
+            for entry in session.scalars(select(TransitionStateEntry)).all()
+            if len(
+                [
+                    participant
+                    for participant in entry.transition_state.reaction_entry.structure_participants
+                    if participant.role == ReactionRole.product
+                ]
+            )
+            == 2
+        )
+        reaction_participants = sorted(
+            ts_entry.transition_state.reaction_entry.structure_participants,
+            key=lambda participant: (participant.role.value, participant.participant_index),
+        )
+        species_statmech = {
+            statmech.species_entry_id: statmech
+            for statmech in session.scalars(
+                select(Statmech).where(Statmech.species_entry_id.is_not(None))
+            )
+        }
+        (reactant_sm,) = [
+            species_statmech[participant.species_entry_id]
+            for participant in reaction_participants
+            if participant.role == ReactionRole.reactant
+        ]
+        product_one_sm, product_two_sm = [
+            species_statmech[participant.species_entry_id]
+            for participant in reaction_participants
+            if participant.role == ReactionRole.product
+        ]
+        ts_sm = session.scalars(select(Statmech).where(Statmech.transition_state_entry_id == ts_entry.id)).first()
+
+        def _species_content(statmech):
+            species = statmech.species_entry.species
+            return {
+                "species_entry": {
+                    "smiles": species.smiles,
+                    "charge": species.charge,
+                    "multiplicity": species.multiplicity,
+                }
+            }
+
+        request = KineticsUploadRequest(
+            reaction={
+                "reversible": True,
+                "reactants": [_species_content(reactant_sm)],
+                "products": [
+                    _species_content(product_one_sm),
+                    _species_content(product_two_sm),
+                ],
+            },
+            scientific_origin="computed", a=1.0e12, a_units="per_s",
+            interpretation_assignments=[
+                {"role": "reactant", "participant_index": 1, "statmech_ref": reactant_sm.public_ref, **conventions},
+                {"role": "product", "participant_index": 1, "statmech_ref": product_one_sm.public_ref, **conventions},
+                {"role": "product", "participant_index": 2, "statmech_ref": product_two_sm.public_ref, **conventions},
+                {"role": "transition_state", "statmech_ref": ts_sm.public_ref, "transition_state_entry_ref": ts_entry.public_ref, **conventions},
+            ],
+            tunneling_application={"model": "wigner", "transition_state_entry_ref": ts_entry.public_ref, "imaginary_frequency_cm1": -1500.0},
+        )
+        invalid_payload = request.model_dump(mode="json")
+        invalid_payload["interpretation_assignments"][1]["statmech_ref"] = reactant_sm.public_ref
+        before = session.scalar(select(func.count(Kinetics.id)))
+        with pytest.raises(ValueError, match="must belong to its declared reaction participant"):
+            persist_kinetics_upload(session, KineticsUploadRequest.model_validate(invalid_payload), created_by=77)
+        assert session.scalar(select(func.count(Kinetics.id))) == before
+
+        wrong_direction = request.model_dump(mode="json")
+        wrong_direction["reaction"]["reversible"] = False
+        with pytest.raises(ValueError, match="submitted reaction content and direction do not match"):
+            persist_kinetics_upload(session, KineticsUploadRequest.model_validate(wrong_direction), created_by=77)
+        assert session.scalar(select(func.count(Kinetics.id))) == before
+
+        kinetics = persist_kinetics_upload(session, request, created_by=77)
+        response = get_reaction_kinetics(
+            session,
+            reaction_entry_id=kinetics.reaction_entry_id,
+            request=KineticsReadRequest(include={"interpretations"}),
+        )
+        record = next(item for item in response.records if item.kinetics_id == kinetics.id)
+        assert [item.subject_key for item in record.interpretation_assignments] == ["product:1", "product:2", "reactant:1", "transition_state"]
+        assert record.tunneling_application.model == "wigner"
+        assert record.tunneling_application.transition_state_entry_ref == ts_entry.public_ref
 
 
 def test_persist_kinetics_upload_resolves_reaction_and_provenance(
@@ -259,13 +483,11 @@ def _patch_doi(monkeypatch) -> None:
     )
 
 
-def test_tunneling_model_persists_as_enum(db_engine, monkeypatch) -> None:
-    from app.db.models.common import TunnelingModel
-
+def test_tunneling_model_defaults_to_null_without_application(db_engine, monkeypatch) -> None:
     _patch_doi(monkeypatch)
     with Session(db_engine) as session, session.begin():
         kinetics = persist_kinetics_upload(session, _kinetics_request())
-        assert kinetics.tunneling_model == TunnelingModel.eckart
+        assert kinetics.tunneling_model is None
 
 
 def test_pressure_context_high_p_limit_persists(db_engine, monkeypatch) -> None:
@@ -606,6 +828,7 @@ def _make_network_kinetics(session):
     channel = NetworkChannel(
         network_id=net.id, source_state_id=src.id, sink_state_id=sink.id,
         kind=NetworkChannelKind.dissociation,
+        channel_key="bridge_dissociation_path",
     )
     solve = NetworkSolve(network_id=net.id)
     session.add_all([channel, solve])
@@ -628,7 +851,7 @@ def test_network_bridge_resolves(db_engine, monkeypatch):
         nk = _make_network_kinetics(session)
         k = persist_kinetics_upload(
             session,
-            _kinetics_request(existing_network_kinetics_id=nk.id),
+            _kinetics_request(network_kinetics_ref=nk.public_ref),
         )
         assert k.network_kinetics_id == nk.id
         assert k.network_kinetics is not None
@@ -642,7 +865,7 @@ def test_network_bridge_unknown_id_rejected(db_engine, monkeypatch):
         with pytest.raises(ValueError, match="does not reference an existing"):
             persist_kinetics_upload(
                 session,
-                _kinetics_request(existing_network_kinetics_id=999_999),
+                _kinetics_request(network_kinetics_ref="nkin_missing"),
             )
 
 
@@ -832,3 +1055,412 @@ def test_multi_arrhenius_third_body_rejects_order2_term():
     payload["a_units"] = None  # scalar rate lives in the summed terms
     with pytest.raises(ValidationError, match=r"arrhenius_entries\[2\].a_units"):
         KineticsUploadRequest.model_validate(payload)
+
+
+# ---------------------------------------------------------------------------
+# Computed-origin interpretation completeness and typed conventions
+# ---------------------------------------------------------------------------
+
+
+_CONVENTIONS = {
+    "ensemble_policy": "single_structure",
+    "standard_state_convention": "ideal_gas_1_bar",
+    "degeneracy_interpretation": "reaction_path_degeneracy",
+}
+
+_BIMOLECULAR_REACTION = {
+    "reversible": False,
+    "reactants": [
+        {"species_entry": {"smiles": "[CH3]", "charge": 0, "multiplicity": 2}},
+        {"species_entry": {"smiles": "[OH]", "charge": 0, "multiplicity": 2}},
+    ],
+    "products": [
+        {"species_entry": {"smiles": "CO", "charge": 0, "multiplicity": 1}},
+    ],
+}
+
+
+def test_computed_kinetics_rejects_partial_interpretation_set() -> None:
+    """A partial set looks like provenance while accounting for nothing.
+
+    ``CH3 + OH -> CH3OH`` with only ``reactant:1`` named leaves the OH and the
+    methanol partition functions entirely unstated.
+    """
+    with pytest.raises(ValidationError, match="missing: \\['product:1', 'reactant:2'\\]"):
+        KineticsUploadRequest(
+            reaction=_BIMOLECULAR_REACTION,
+            scientific_origin="computed",
+            a=1.0e13,
+            a_units="cm3_mol_s",
+            interpretation_assignments=[
+                {"role": "reactant", "participant_index": 1, "statmech_ref": "sm_x", **_CONVENTIONS},
+            ],
+        )
+
+
+def test_computed_kinetics_accepts_a_complete_interpretation_set() -> None:
+    request = KineticsUploadRequest(
+        reaction=_BIMOLECULAR_REACTION,
+        scientific_origin="computed",
+        a=1.0e13,
+        a_units="cm3_mol_s",
+        interpretation_assignments=[
+            {"role": "reactant", "participant_index": 1, "statmech_ref": "sm_a", **_CONVENTIONS},
+            {"role": "reactant", "participant_index": 2, "statmech_ref": "sm_b", **_CONVENTIONS},
+            {"role": "product", "participant_index": 1, "statmech_ref": "sm_c", **_CONVENTIONS},
+        ],
+    )
+    assert len(request.interpretation_assignments) == 3
+
+
+def test_computed_kinetics_with_tunneling_requires_a_ts_interpretation() -> None:
+    """A tunneling correction is applied to a TS, so the TS must be named."""
+    with pytest.raises(ValidationError, match="missing: \\['transition_state'\\]"):
+        KineticsUploadRequest(
+            reaction=_BIMOLECULAR_REACTION,
+            scientific_origin="computed",
+            a=1.0e13,
+            a_units="cm3_mol_s",
+            interpretation_assignments=[
+                {"role": "reactant", "participant_index": 1, "statmech_ref": "sm_a", **_CONVENTIONS},
+                {"role": "reactant", "participant_index": 2, "statmech_ref": "sm_b", **_CONVENTIONS},
+                {"role": "product", "participant_index": 1, "statmech_ref": "sm_c", **_CONVENTIONS},
+            ],
+            tunneling_application={
+                "model": "wigner",
+                "transition_state_entry_ref": "tse_1",
+                "imaginary_frequency_cm1": -900.0,
+            },
+        )
+
+
+def test_participant_index_is_bounded_at_the_schema_boundary() -> None:
+    """An out-of-range slot is a 422, not a late persistence-time failure."""
+    with pytest.raises(ValidationError, match="outside the declared reactant list"):
+        KineticsUploadRequest(
+            reaction=_BIMOLECULAR_REACTION,
+            scientific_origin="computed",
+            a=1.0e13,
+            a_units="cm3_mol_s",
+            interpretation_assignments=[
+                {"role": "reactant", "participant_index": 99, "statmech_ref": "sm_a", **_CONVENTIONS},
+            ],
+        )
+
+
+def test_interpretation_conventions_reject_free_text() -> None:
+    with pytest.raises(ValidationError):
+        KineticsUploadRequest(
+            reaction=_BIMOLECULAR_REACTION,
+            scientific_origin="computed",
+            a=1.0e13,
+            a_units="cm3_mol_s",
+            interpretation_assignments=[
+                {
+                    "role": "reactant", "participant_index": 1, "statmech_ref": "sm_a",
+                    "ensemble_policy": "lowest-energy",
+                    "standard_state_convention": "1-bar",
+                    "degeneracy_interpretation": "already-applied",
+                },
+            ],
+        )
+
+
+def test_interpretation_other_convention_requires_a_note() -> None:
+    with pytest.raises(ValidationError, match="convention_note is required"):
+        KineticsUploadRequest(
+            reaction=_BIMOLECULAR_REACTION,
+            scientific_origin="computed",
+            a=1.0e13,
+            a_units="cm3_mol_s",
+            interpretation_assignments=[
+                {
+                    "role": "reactant", "participant_index": 1, "statmech_ref": "sm_a",
+                    "ensemble_policy": "other",
+                    "standard_state_convention": "ideal_gas_1_bar",
+                    "degeneracy_interpretation": "reaction_path_degeneracy",
+                },
+            ],
+        )
+
+
+def test_other_tunneling_model_must_stay_replayable() -> None:
+    """``{"model": "other"}`` alone is an unfalsifiable claim, not evidence."""
+    base = {
+        "reaction": _BIMOLECULAR_REACTION,
+        "scientific_origin": "experimental",
+        "a": 1.0e13,
+        "a_units": "cm3_mol_s",
+    }
+    with pytest.raises(ValidationError, match="requires model_identifier"):
+        KineticsUploadRequest(
+            **base,
+            tunneling_application={"model": "other", "transition_state_entry_ref": "tse_1"},
+        )
+    with pytest.raises(ValidationError, match="requires a result artifact"):
+        KineticsUploadRequest(
+            **base,
+            tunneling_application={
+                "model": "other",
+                "transition_state_entry_ref": "tse_1",
+                "model_identifier": "zero_curvature_tunneling",
+            },
+        )
+    request = KineticsUploadRequest(
+        **base,
+        tunneling_application={
+            "model": "other",
+            "transition_state_entry_ref": "tse_1",
+            "model_identifier": "zero_curvature_tunneling",
+            "result_artifact_calculation_ref": "calc_1",
+            "result_artifact_sha256": "a" * 64,
+        },
+    )
+    assert request.tunneling_application.model_identifier == "zero_curvature_tunneling"
+    # The label is normalised from the evidence block at parse time.
+    assert request.tunneling_model.value == "other"
+
+
+def test_model_identifier_is_a_machine_token_and_only_for_other() -> None:
+    base = {
+        "reaction": _BIMOLECULAR_REACTION,
+        "scientific_origin": "experimental",
+        "a": 1.0e13,
+        "a_units": "cm3_mol_s",
+    }
+    with pytest.raises(ValidationError):
+        KineticsUploadRequest(
+            **base,
+            tunneling_application={
+                "model": "other",
+                "transition_state_entry_ref": "tse_1",
+                "model_identifier": "Zero Curvature Tunneling",
+                "result_artifact_calculation_ref": "calc_1",
+                "result_artifact_sha256": "a" * 64,
+            },
+        )
+    with pytest.raises(ValidationError, match="only valid when model='other'"):
+        KineticsUploadRequest(
+            **base,
+            tunneling_application={
+                "model": "wigner",
+                "transition_state_entry_ref": "tse_1",
+                "imaginary_frequency_cm1": -900.0,
+                "model_identifier": "wigner_1932",
+            },
+        )
+
+
+def test_computed_statmech_without_source_calculations_cannot_back_a_rate(
+    db_engine,
+) -> None:
+    """Deposit-time statmech only warns; a rate that DEPENDS on it must not.
+
+    This is where "reproducible computed partition function" is actually
+    claimed, so this is where the source link is required. A monatomic species
+    or an experimental record may legitimately name no calculation — but a
+    computed statmech that a computed rate coefficient is built from may not.
+    """
+    from contextlib import contextmanager
+
+    from app.db.models.statmech import Statmech
+    from tests.services.scientific_read._factories import (
+        make_species,
+        make_species_entry,
+        next_inchi_key,
+    )
+
+    @contextmanager
+    def _rolled_back_session(engine):
+        connection = engine.connect()
+        transaction = connection.begin()
+        opened = Session(bind=connection, expire_on_commit=False)
+        try:
+            yield opened
+        finally:
+            opened.close()
+            transaction.rollback()
+            connection.close()
+
+    with _rolled_back_session(db_engine) as session:
+        # One species entry: the H atom is both sides of this trivial rate, so
+        # the workflow resolves both participants onto the entry that owns the
+        # statmech under test.
+        atom = make_species(session, smiles="[H]", inchi_key=next_inchi_key("USEA"))
+        atom_entry = make_species_entry(session, atom)
+        bare = Statmech(
+            species_entry_id=atom_entry.id, scientific_origin="computed"
+        )
+        session.add(bare)
+        session.flush()
+
+        request = KineticsUploadRequest(
+            reaction={
+                "reversible": False,
+                "reactants": [
+                    {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}
+                ],
+                "products": [
+                    {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}
+                ],
+            },
+            scientific_origin="computed",
+            a=1.0,
+            a_units="per_s",
+            interpretation_assignments=[
+                {
+                    "role": "reactant", "participant_index": 1,
+                    "statmech_ref": bare.public_ref, **_CONVENTIONS,
+                },
+                {
+                    "role": "product", "participant_index": 1,
+                    "statmech_ref": bare.public_ref, **_CONVENTIONS,
+                },
+            ],
+        )
+        with pytest.raises(ValueError, match="no source calculations"):
+            persist_kinetics_upload(session, request, created_by=None)
+
+
+# ---------------------------------------------------------------------------
+# NB6: PLOG / Chebyshev are not third-body reactions
+# ---------------------------------------------------------------------------
+
+
+def _plog_bimolecular(**overrides) -> dict:
+    """A bimolecular PLOG payload; ``a_units`` overridable to probe the order."""
+    base: dict = {
+        "reaction": _BIMOLECULAR_REACTION,
+        "scientific_origin": "experimental",
+        "model_kind": "plog",
+        "plog_entries": [
+            {
+                "entry_index": 1,
+                "pressure_bar": 1.0,
+                "a": 1.0e13,
+                "a_units": "cm3_mol_s",
+                "n": 0.0,
+                "ea_kj_mol": 40.0,
+            }
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_plog_rejects_is_third_body() -> None:
+    """CHEMKIN has no third-body PLOG: the pressure dependence is already fit."""
+    with pytest.raises(ValidationError, match="cannot be a third-body reaction"):
+        KineticsUploadRequest(**_plog_bimolecular(is_third_body=True))
+
+
+def test_chebyshev_rejects_is_third_body() -> None:
+    with pytest.raises(ValidationError, match="cannot be a third-body reaction"):
+        KineticsUploadRequest(
+            reaction=_BIMOLECULAR_REACTION,
+            scientific_origin="experimental",
+            model_kind="chebyshev",
+            is_third_body=True,
+            chebyshev={
+                "n_temperature": 2, "n_pressure": 2,
+                "tmin_k": 300.0, "tmax_k": 2000.0,
+                "pmin_bar": 0.01, "pmax_bar": 100.0,
+                "coefficients": [[1.0, 2.0], [3.0, 4.0]],
+            },
+        )
+
+
+def test_plog_a_units_are_judged_at_the_true_molecularity() -> None:
+    """Both directions of the unit consequence the flag used to invert.
+
+    ``is_third_body`` raised ``_main_line_molecularity`` by one, so for a
+    bimolecular PLOG the CORRECT ``cm3_mol_s`` was rejected as if the rate
+    were termolecular, while the WRONG ``cm6_mol2_s`` sailed through.
+    """
+    # Correct units for a bimolecular rate now validate.
+    request = KineticsUploadRequest(**_plog_bimolecular())
+    assert request.plog_entries[0].a_units.value == "cm3_mol_s"
+
+    # Third-order units on a bimolecular rate are rejected — previously they
+    # were accepted because the flag had inflated the expected order.
+    with pytest.raises(ValidationError, match="incompatible with bimolecular"):
+        KineticsUploadRequest(
+            **_plog_bimolecular(
+                plog_entries=[
+                    {
+                        "entry_index": 1,
+                        "pressure_bar": 1.0,
+                        "a": 1.0e13,
+                        "a_units": "cm6_mol2_s",
+                        "n": 0.0,
+                        "ea_kj_mol": 40.0,
+                    }
+                ]
+            )
+        )
+
+
+def test_transition_state_interpretation_rejects_conformer_selection() -> None:
+    """NB3: a 422 at the boundary, not an IntegrityError at flush.
+
+    ``kinetics_interpretation_subject_shape`` requires a NULL
+    conformer_selection_id for a TS subject, so letting this through produced
+    a 500-shaped failure deep in the persistence seam.
+    """
+    with pytest.raises(ValidationError, match="conformer_selection is only valid"):
+        KineticsUploadRequest(
+            reaction=_BIMOLECULAR_REACTION,
+            scientific_origin="computed",
+            a=1.0e13,
+            a_units="cm3_mol_s",
+            interpretation_assignments=[
+                {"role": "reactant", "participant_index": 1, "statmech_ref": "sm_a", **_CONVENTIONS},
+                {"role": "reactant", "participant_index": 2, "statmech_ref": "sm_b", **_CONVENTIONS},
+                {"role": "product", "participant_index": 1, "statmech_ref": "sm_c", **_CONVENTIONS},
+                {
+                    "role": "transition_state",
+                    "statmech_ref": "sm_ts",
+                    "transition_state_entry_ref": "tse_1",
+                    "conformer_selection": {
+                        "species_entry": {"smiles": "CO", "charge": 0, "multiplicity": 1},
+                        "selection_kind": "lowest_energy",
+                    },
+                    **_CONVENTIONS,
+                },
+            ],
+        )
+
+
+def test_interpretation_set_without_a_transition_state_is_warned() -> None:
+    """NB9: a TST rate with no Q-double-dagger is named, not silently accepted."""
+    from app.services.provenance_warnings import (
+        W_MISSING_TS_INTERPRETATION,
+        collect_kinetics_content_warnings,
+    )
+
+    request = KineticsUploadRequest(
+        reaction=_BIMOLECULAR_REACTION,
+        scientific_origin="computed",
+        a=1.0e13,
+        a_units="cm3_mol_s",
+        interpretation_assignments=[
+            {"role": "reactant", "participant_index": 1, "statmech_ref": "sm_a", **_CONVENTIONS},
+            {"role": "reactant", "participant_index": 2, "statmech_ref": "sm_b", **_CONVENTIONS},
+            {"role": "product", "participant_index": 1, "statmech_ref": "sm_c", **_CONVENTIONS},
+        ],
+    )
+    assert W_MISSING_TS_INTERPRETATION in {
+        w.code for w in collect_kinetics_content_warnings(request)
+    }
+
+    # A rate whose parameterization comes from a master-equation fit has no
+    # single dividing surface, and is not asked for one.
+    fitted = KineticsUploadRequest(
+        **{
+            **request.model_dump(mode="json", exclude_none=True),
+            "network_kinetics_ref": "nkin_abc",
+        }
+    )
+    assert W_MISSING_TS_INTERPRETATION not in {
+        w.code for w in collect_kinetics_content_warnings(fitted)
+    }

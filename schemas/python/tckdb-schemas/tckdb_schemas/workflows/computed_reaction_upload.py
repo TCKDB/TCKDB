@@ -48,6 +48,10 @@ from tckdb_schemas.fragments.refs import (
     WorkflowToolReleaseRef,
 )
 from tckdb_schemas.fragments.scan import CalculationScanResultCreate
+from tckdb_schemas.fragments.ts_validation_evidence import (
+    TransitionStateValidationEvidenceIn,
+    validate_ts_evidence_set,
+)
 from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.reaction_family import find_canonical_reaction_family
 from tckdb_schemas.shared.calculation_in import (
@@ -407,6 +411,41 @@ class BundleStatmechIn(SchemaBase):
             )
         return self
 
+    @model_validator(mode="after")
+    def validate_scientific_interpretation(self) -> Self:
+        """Scope each requirement to the claim this record actually makes.
+
+        ``statmech_treatment`` is deliberately NOT required. Real producers
+        (ARC among them) deposit symmetry, rotational constants and a
+        frequency scale factor without naming a treatment; an absent field is
+        honest where an invented one would not be.
+
+        Source calculations are likewise not required here. A monatomic
+        species has no vibrational modes to point at, and an experimental,
+        literature or imported statmech has no calculation at all — forcing
+        either to fabricate one buys nothing. Their absence on a *computed*
+        record is reported as a structured upload warning at the workflow
+        seam, and is enforced as an error only where a rate coefficient
+        actually depends on it (the kinetics interpretation seam).
+
+        What IS enforced is the one claim that is self-contradictory when
+        unsupported: a rotor-aware treatment is *defined* by the internal
+        rotors it treats, so it must list them. With no torsions the correct
+        treatment is plain ``rrho``.
+        """
+        rotor_aware = {"rrho_1d", "rrho_nd", "rrho_1d_nd"}
+        if (
+            self.statmech_treatment is not None
+            and self.statmech_treatment.value in rotor_aware
+            and not self.torsions
+        ):
+            raise ValueError(
+                f"statmech_treatment='{self.statmech_treatment.value}' claims a "
+                "rotor-aware treatment and must list the torsions it treated; "
+                "use 'rrho' when the species has none."
+            )
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Species (with conformers, calculations, thermo)
@@ -528,6 +567,17 @@ class BundleTransitionStateIn(SchemaBase):
             "state."
         ),
     )
+    validation_evidence: list[TransitionStateValidationEvidenceIn] = Field(
+        default_factory=list,
+        description=(
+            "Structured IRC evidence that this saddle point connects the "
+            "bundle's declared reactants and products. Optional but strongly "
+            "recommended: a deposit without it succeeds and returns a "
+            "'transition_state_missing_irc_evidence' upload warning. "
+            "``source_calculation_key`` names an irc calculation owned by this "
+            "transition state."
+        ),
+    )
     label: str | None = None
     note: str | None = None
 
@@ -545,6 +595,40 @@ class BundleTransitionStateIn(SchemaBase):
                 f"TS primary calculation must be type 'opt', "
                 f"got '{self.calculation.type.value}'."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_evidence_source_is_a_ts_irc_calculation(self) -> Self:
+        """Evidence must name an ``irc`` calculation owned by this TS.
+
+        Participant/atom completeness needs the bundle's reaction, which this
+        nested model cannot see; the enclosing request validates that.
+        """
+        if not self.validation_evidence:
+            return self
+        own_types = {
+            self.calculation.key: self.calculation.type,
+            **{calc.key: calc.type for calc in self.calculations},
+        }
+        for record in self.validation_evidence:
+            if record.source_calculation_key is None:
+                raise ValueError(
+                    "transition_state.validation_evidence requires "
+                    "source_calculation_key naming its irc calculation."
+                )
+            calculation_type = own_types.get(record.source_calculation_key)
+            if calculation_type is None:
+                raise ValueError(
+                    "transition_state.validation_evidence references "
+                    f"calculation_key '{record.source_calculation_key}', which is "
+                    "not one of this transition state's own calculations."
+                )
+            if calculation_type != CalculationType.irc:
+                raise ValueError(
+                    "transition_state.validation_evidence requires an irc "
+                    f"calculation; '{record.source_calculation_key}' is "
+                    f"'{calculation_type.value}'."
+                )
         return self
 
 
@@ -784,6 +868,25 @@ class ComputedReactionUploadRequest(SchemaBase):
 
     # Kinetics fits (empty when Arkane fitting didn't complete)
     kinetics: list[BundleKineticsIn] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_ts_validation_evidence(self) -> Self:
+        """Check TS evidence against the bundle's reaction and TS geometry.
+
+        Participant/atom completeness needs both the reaction's participant
+        counts and the TS atom count, neither of which the nested TS model can
+        see.
+        """
+        if self.transition_state is None or not self.transition_state.validation_evidence:
+            return self
+        validate_ts_evidence_set(
+            self.transition_state.validation_evidence,
+            subject_label=self.transition_state.label or "transition state",
+            xyz_text=self.transition_state.geometry.xyz_text,
+            reactant_count=len(self.reactant_keys),
+            product_count=len(self.product_keys),
+        )
+        return self
 
     @field_validator("reaction_family", "reaction_family_source_note")
     @classmethod

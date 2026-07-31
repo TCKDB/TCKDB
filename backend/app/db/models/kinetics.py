@@ -21,10 +21,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     ArrheniusAUnits,
+    EnergyCorrectionConvention,
+    EnergyZeroConvention,
     KineticsCalculationRole,
     KineticsDegeneracyConvention,
+    KineticsDegeneracyInterpretation,
     KineticsDirection,
+    KineticsEnsemblePolicy,
     KineticsModelKind,
+    KineticsStandardStateConvention,
     KineticsUncertaintyKind,
     PressureContext,
     ScientificOriginKind,
@@ -32,12 +37,14 @@ from app.db.models.common import (
 )
 
 if TYPE_CHECKING:
-    from app.db.models.calculation import Calculation
+    from app.db.models.calculation import Calculation, CalculationArtifact
     from app.db.models.literature import Literature
     from app.db.models.network_pdep import NetworkKinetics
     from app.db.models.reaction import ReactionEntry
     from app.db.models.software import SoftwareRelease
-    from app.db.models.species import Species
+    from app.db.models.species import ConformerSelection, Species
+    from app.db.models.statmech import Statmech
+    from app.db.models.transition_state import TransitionStateEntry
     from app.db.models.workflow import WorkflowToolRelease
 
 
@@ -193,6 +200,12 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    interpretation_assignments: Mapped[list["KineticsInterpretationAssignment"]] = relationship(
+        back_populates="kinetics", cascade="all, delete-orphan"
+    )
+    tunneling_applications: Mapped[list["KineticsTunnelingApplication"]] = relationship(
+        back_populates="kinetics", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("tmin_k IS NULL OR tmin_k > 0", name="tmin_k_gt_0"),
@@ -247,6 +260,129 @@ class KineticsSourceCalculation(Base):
     calculation: Mapped["Calculation"] = relationship()
 
     __table_args__ = (PrimaryKeyConstraint("kinetics_id", "calculation_id", "role"),)
+
+
+class KineticsInterpretationAssignment(Base):
+    """Exact statistical-mechanics/conformer interpretation used for a rate role."""
+
+    __tablename__ = "kinetics_interpretation_assignment"
+    kinetics_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("kinetics.id", deferrable=True, initially="IMMEDIATE"), primary_key=True)
+    # ``subject_key`` is ``reactant:<1-based slot>``, ``product:<slot>``, or
+    # ``transition_state``.  A role alone is not unique for bimolecular or
+    # higher-molecularity reactions.
+    subject_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    role: Mapped[str] = mapped_column(Text, nullable=False)  # reactant, product, transition_state
+    statmech_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("statmech.id", deferrable=True, initially="IMMEDIATE"), nullable=False)
+    conformer_selection_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("conformer_selection.id", name="fk_kinetics_interp_conformer_selection", deferrable=True, initially="IMMEDIATE"), nullable=True)
+    transition_state_entry_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("transition_state_entry.id", name="fk_kinetics_interp_ts_entry", deferrable=True, initially="IMMEDIATE"), nullable=True)
+    ensemble_policy: Mapped[KineticsEnsemblePolicy] = mapped_column(
+        SAEnum(KineticsEnsemblePolicy, name="kinetics_ensemble_policy", create_type=False),
+        nullable=False,
+    )
+    standard_state_convention: Mapped[KineticsStandardStateConvention] = mapped_column(
+        SAEnum(
+            KineticsStandardStateConvention,
+            name="kinetics_standard_state_convention",
+            create_type=False,
+        ),
+        nullable=False,
+    )
+    degeneracy_interpretation: Mapped[KineticsDegeneracyInterpretation] = mapped_column(
+        SAEnum(
+            KineticsDegeneracyInterpretation,
+            name="kinetics_degeneracy_interpretation",
+            create_type=False,
+        ),
+        nullable=False,
+    )
+    convention_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    kinetics: Mapped["Kinetics"] = relationship(back_populates="interpretation_assignments")
+    statmech: Mapped["Statmech"] = relationship()
+    conformer_selection: Mapped[Optional["ConformerSelection"]] = relationship()
+    transition_state_entry: Mapped[Optional["TransitionStateEntry"]] = relationship()
+
+    __table_args__ = (
+        # ``substring(... from '[0-9]+$')`` returns NULL when the key has no
+        # trailing digits, and PostgreSQL accepts a NULL CHECK, so the old form
+        # let ``subject_key='reactantXYZ'`` through. Match the whole shape.
+        CheckConstraint(
+            "(role = 'transition_state' AND subject_key = 'transition_state' "
+            "AND transition_state_entry_id IS NOT NULL AND conformer_selection_id IS NULL) "
+            "OR (role IN ('reactant', 'product') "
+            "AND subject_key ~ ('^' || role || ':[0-9]+$') "
+            "AND transition_state_entry_id IS NULL)",
+            name="subject_shape",
+        ),
+        CheckConstraint(
+            "(ensemble_policy <> 'other' AND standard_state_convention <> 'other' "
+            "AND degeneracy_interpretation <> 'other') OR convention_note IS NOT NULL",
+            name="other_note",
+        ),
+    )
+
+
+class KineticsTunnelingApplication(Base):
+    """Typed reproducibility evidence for a tunneling correction applied to a rate."""
+
+    __tablename__ = "kinetics_tunneling_application"
+    kinetics_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("kinetics.id", deferrable=True, initially="IMMEDIATE"), primary_key=True)
+    # The parent ``kinetics.tunneling_model`` owns the PostgreSQL enum type;
+    # this column stays textual with the same value set (guarded by CHECK)
+    # rather than re-declaring the type.
+    model: Mapped[TunnelingModel] = mapped_column(Text, nullable=False)
+    # Machine token naming the actual correction when ``model = 'other'``
+    # (e.g. ``zero_curvature_tunneling``). Required for ``other`` so an
+    # unrecognised correction is still identifiable and replayable.
+    model_identifier: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    transition_state_entry_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("transition_state_entry.id", name="fk_kinetics_tunneling_ts_entry", deferrable=True, initially="IMMEDIATE"), nullable=False)
+    # The calculation the barriers/energies below were read from. Without it
+    # the Eckart barriers this table returns are untraceable.
+    source_calculation_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("calculation.id", name="fk_kinetics_tunneling_source_calculation", deferrable=True, initially="IMMEDIATE"), nullable=True)
+    imaginary_frequency_cm1: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    frequency_sign_convention: Mapped[str] = mapped_column(Text, nullable=False, server_default="negative_imaginary_cm1")
+    reactant_energy_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    product_energy_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    forward_barrier_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    reverse_barrier_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    energy_zero_convention: Mapped[Optional[EnergyZeroConvention]] = mapped_column(
+        SAEnum(EnergyZeroConvention, name="energy_zero_convention", create_type=False),
+        nullable=True,
+    )
+    energy_correction_convention: Mapped[Optional[EnergyCorrectionConvention]] = mapped_column(
+        SAEnum(EnergyCorrectionConvention, name="energy_correction_convention", create_type=False),
+        nullable=True,
+    )
+    convention_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    result_artifact_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("calculation_artifact.id", name="fk_kinetics_tunneling_result_artifact", deferrable=True, initially="IMMEDIATE"), nullable=True)
+    sct_path_integral_artifact_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("calculation_artifact.id", name="fk_kinetics_tunneling_sct_artifact", deferrable=True, initially="IMMEDIATE"), nullable=True)
+
+    kinetics: Mapped["Kinetics"] = relationship(back_populates="tunneling_applications")
+    transition_state_entry: Mapped["TransitionStateEntry"] = relationship()
+    source_calculation: Mapped[Optional["Calculation"]] = relationship()
+    result_artifact: Mapped[Optional["CalculationArtifact"]] = relationship(foreign_keys=[result_artifact_id])
+    sct_path_integral_artifact: Mapped[Optional["CalculationArtifact"]] = relationship(foreign_keys=[sct_path_integral_artifact_id])
+
+    __table_args__ = (
+        CheckConstraint(
+            "model IN ('none', 'wigner', 'eckart', 'sct', 'other')",
+            name="model_enum",
+        ),
+        CheckConstraint(
+            "imaginary_frequency_cm1 IS NULL OR imaginary_frequency_cm1 < 0",
+            name="imaginary_negative",
+        ),
+        CheckConstraint(
+            "model <> 'other' OR (model_identifier IS NOT NULL AND result_artifact_id IS NOT NULL)",
+            name="other_replayable",
+        ),
+        CheckConstraint(
+            "(energy_zero_convention IS DISTINCT FROM 'other' "
+            "AND energy_correction_convention IS DISTINCT FROM 'other') "
+            "OR convention_note IS NOT NULL",
+            name="other_note",
+        ),
+    )
 
 
 class KineticsFalloff(Base):

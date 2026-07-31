@@ -1607,6 +1607,10 @@
             "title": "Has Bath Gas",
             "type": "boolean"
           },
+          "has_channel_barriers": {
+            "title": "Has Channel Barriers",
+            "type": "boolean"
+          },
           "has_energy_transfer": {
             "title": "Has Energy Transfer",
             "type": "boolean"
@@ -1622,11 +1626,17 @@
           "has_source_calculations": {
             "title": "Has Source Calculations",
             "type": "boolean"
+          },
+          "has_state_energies": {
+            "title": "Has State Energies",
+            "type": "boolean"
           }
         },
         "required": [
           "has_bath_gas",
           "has_energy_transfer",
+          "has_state_energies",
+          "has_channel_barriers",
           "has_source_calculations",
           "has_kinetics",
           "has_review"
@@ -1691,13 +1701,18 @@
           "has_review": {
             "title": "Has Review",
             "type": "boolean"
+          },
+          "has_validation_evidence": {
+            "title": "Has Validation Evidence",
+            "type": "boolean"
           }
         },
         "required": [
           "has_entries",
           "has_calculations",
           "has_geometries",
-          "has_review"
+          "has_review",
+          "has_validation_evidence"
         ],
         "title": "AvailableTransitionStateSections",
         "type": "object"
@@ -8310,6 +8325,74 @@
         "title": "CalculationsSearchRequest",
         "type": "object"
       },
+      "ChannelBarrierIn": {
+        "additionalProperties": false,
+        "description": "A solve barrier tied to one channel/reaction/TS path, never endpoints alone.\n\n``forward``/``reverse`` are oriented by the *channel* (source → sink), not\nby the micro reaction's own written direction — the channel is the\ndirected object this barrier is keyed on.\n\nBarriers are signed relative to ``energy_zero_convention``: a submerged\nentrance barrier sits *below* the entrance channel and is legitimately\nnegative, so no positivity bound applies. Only non-finite values are\nrejected. A barrierless path has no barrier and must not appear here.",
+        "properties": {
+          "channel_key": {
+            "minLength": 1,
+            "title": "Channel Key",
+            "type": "string"
+          },
+          "convention_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Note"
+          },
+          "correction_convention": {
+            "$ref": "#/components/schemas/EnergyCorrectionConvention"
+          },
+          "energy_zero_convention": {
+            "$ref": "#/components/schemas/EnergyZeroConvention"
+          },
+          "forward_barrier_kj_mol": {
+            "title": "Forward Barrier Kj Mol",
+            "type": "number"
+          },
+          "micro_reaction_key": {
+            "minLength": 1,
+            "title": "Micro Reaction Key",
+            "type": "string"
+          },
+          "reverse_barrier_kj_mol": {
+            "title": "Reverse Barrier Kj Mol",
+            "type": "number"
+          },
+          "source_calculation_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Key"
+          },
+          "transition_state_key": {
+            "minLength": 1,
+            "title": "Transition State Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "energy_zero_convention",
+          "correction_convention",
+          "channel_key",
+          "micro_reaction_key",
+          "transition_state_key",
+          "forward_barrier_kj_mol",
+          "reverse_barrier_kj_mol"
+        ],
+        "title": "ChannelBarrierIn",
+        "type": "object"
+      },
       "ChebyshevBlock": {
         "description": "Chebyshev-polynomial k(T,P) surface (DR-0032 Part C).\n\nMirrors the ``kinetics_chebyshev`` ORM child: the T/P validity domain and\nthe ``n_temperature`` x ``n_pressure`` coefficient matrix (list of rows).\n\nLog basis: the coefficients follow the CHEMKIN base-10 convention — the\nsurface expands ``log10 k`` in the Chebyshev basis over reduced T/P. This\nmatches how they are stored and how ``chemkin_serialize.py`` re-emits them\ninto the ``CHEB`` card, so a consumer reconstructing k must exponentiate\nbase-10 (``k = 10 ** value``).",
         "properties": {
@@ -10224,6 +10307,38 @@
         "title": "ConformerReviewEntry",
         "type": "object"
       },
+      "ConformerSelectionContentRef": {
+        "additionalProperties": false,
+        "description": "Content-first locator for a conformer-selection interpretation.",
+        "properties": {
+          "assignment_scheme_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Scheme Ref"
+          },
+          "selection_kind": {
+            "minLength": 1,
+            "title": "Selection Kind",
+            "type": "string"
+          },
+          "species_entry": {
+            "$ref": "#/components/schemas/SpeciesEntryIdentityPayload"
+          }
+        },
+        "required": [
+          "species_entry",
+          "selection_kind"
+        ],
+        "title": "ConformerSelectionContentRef",
+        "type": "object"
+      },
       "ConformerSelectionCreateBody": {
         "additionalProperties": false,
         "description": "Request body for creating a conformer selection (path carries group id).",
@@ -11831,6 +11946,18 @@
         "title": "EnergyCorrectionApplicationRole",
         "type": "string"
       },
+      "EnergyCorrectionConvention": {
+        "description": "Which corrections are already folded into a reported energy.\n\n- ``electronic_only``: bare electronic energy, no ZPE, no thermal term.\n- ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).\n- ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.\n- ``thermal_enthalpy_298k``: enthalpy at 298.15 K.\n- ``other``: anything else; requires ``convention_note``.",
+        "enum": [
+          "electronic_only",
+          "electronic_plus_zpe",
+          "atom_and_bond_corrected",
+          "thermal_enthalpy_298k",
+          "other"
+        ],
+        "title": "EnergyCorrectionConvention",
+        "type": "string"
+      },
       "EnergyCorrectionSchemeAtomParamRead": {
         "properties": {
           "element": {
@@ -12513,17 +12640,11 @@
         "description": "Energy transfer model parameters for a network solve.\n\n:param model: Energy transfer model name (e.g. ``single_exponential_down``).\n:param alpha0_cm_inv: Average downward energy transfer at reference temperature.\n:param t_exponent: Temperature exponent for the energy transfer model.\n:param t_ref_k: Reference temperature in K.\n:param note: Optional note.",
         "properties": {
           "alpha0_cm_inv": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Alpha0 Cm Inv"
+            "exclusiveMinimum": 0.0,
+            "title": "Alpha0 Cm Inv",
+            "type": "number"
           },
-          "model": {
+          "collider_species_key": {
             "anyOf": [
               {
                 "type": "string"
@@ -12532,7 +12653,12 @@
                 "type": "null"
               }
             ],
-            "title": "Model"
+            "title": "Collider Species Key"
+          },
+          "model": {
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
           },
           "note": {
             "anyOf": [
@@ -12544,6 +12670,17 @@
               }
             ],
             "title": "Note"
+          },
+          "state_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Key"
           },
           "t_exponent": {
             "anyOf": [
@@ -12569,6 +12706,10 @@
             "title": "T Ref K"
           }
         },
+        "required": [
+          "model",
+          "alpha0_cm_inv"
+        ],
         "title": "EnergyTransferIn",
         "type": "object"
       },
@@ -12579,6 +12720,18 @@
           "kcal_mol"
         ],
         "title": "EnergyUnit",
+        "type": "string"
+      },
+      "EnergyZeroConvention": {
+        "description": "Where the zero of an energy scale sits.\n\n- ``lowest_state``: zero at the lowest-energy state of the network.\n- ``entrance_channel``: zero at the declared entrance (reactant) channel.\n- ``separated_reactants``: zero at the infinitely separated reactants of\n  the elementary step in question (not necessarily a network state).\n- ``absolute``: values are absolute (unshifted) electronic energies.\n- ``other``: anything else; requires ``convention_note``.",
+        "enum": [
+          "lowest_state",
+          "entrance_channel",
+          "separated_reactants",
+          "absolute",
+          "other"
+        ],
+        "title": "EnergyZeroConvention",
         "type": "string"
       },
       "EnvironmentClosureEntry": {
@@ -13804,6 +13957,18 @@
             "title": "Geometry Id",
             "type": "integer"
           },
+          "isotope_mass_number": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Mass Number"
+          },
           "x": {
             "title": "X",
             "type": "number"
@@ -13900,8 +14065,22 @@
       },
       "GeometryIn": {
         "additionalProperties": false,
-        "description": "A geometry defined within this upload, with a local key for reuse.\n\n:param key: Globally unique local key for this geometry.\n:param xyz_text: Raw XYZ text block.",
+        "description": "A geometry defined within this upload, with a local key for reuse.\n\n:param key: Globally unique local key for this geometry.\n:param xyz_text: Raw XYZ text block.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number. See\n    :class:`tckdb_schemas.fragments.geometry.GeometryPayload`.",
         "properties": {
+          "isotopes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotopes"
+          },
           "key": {
             "minLength": 1,
             "title": "Key",
@@ -13922,8 +14101,22 @@
       },
       "GeometryPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing geometry payload.\n\n:param xyz_text: Raw XYZ text block for the uploaded geometry.",
+        "description": "Upload-facing geometry payload.\n\n:param xyz_text: Raw XYZ text block for the uploaded geometry.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number (``2`` for\n    deuterium, ``13`` for carbon-13, ...). Only substituted atoms need an\n    entry; every unlisted atom is taken to be at its most abundant\n    natural isotope. Omit the field entirely for an ordinary geometry.",
         "properties": {
+          "isotopes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotopes"
+          },
           "xyz_text": {
             "minLength": 1,
             "title": "Xyz Text",
@@ -14955,6 +15148,18 @@
         "title": "KineticsDegeneracyConvention",
         "type": "string"
       },
+      "KineticsDegeneracyInterpretation": {
+        "description": "How reaction-path degeneracy/symmetry was handled for this subject.\n\nDistinct from :class:`KineticsDegeneracyConvention`, which records whether\nthe *stored scalar* already includes degeneracy. This records how the\nsubject's own partition function treated symmetry.",
+        "enum": [
+          "external_symmetry_number",
+          "reaction_path_degeneracy",
+          "symmetry_number_and_path_degeneracy",
+          "no_symmetry_treatment",
+          "other"
+        ],
+        "title": "KineticsDegeneracyInterpretation",
+        "type": "string"
+      },
       "KineticsDirection": {
         "description": "Direction a reaction-level kinetics fit describes (DR-0036).\n\nGraph-level ``chem_reaction.reversible`` only says a reaction *can* run\nboth ways; it cannot tell apart a forward-rate fit from a reverse-rate\nfit deposited against the same ``reaction_entry``. This per-record enum\ndisambiguates the two so both can coexist distinctly (needed for\nChemkin/Cantera round-trip, where forward and reverse rates are given\nas separate expressions).\n\n``forward`` / ``reverse`` are relative to the reaction_entry's stored\nreactant→product orientation. ``net`` marks a rate that already folds\nboth directions (e.g. an apparent/observed net rate). A ``NULL`` column\nmeans the producer did not specify — the historical default, so existing\nrows are unaffected.",
         "enum": [
@@ -14964,6 +15169,188 @@
         ],
         "title": "KineticsDirection",
         "type": "string"
+      },
+      "KineticsEnsemblePolicy": {
+        "description": "How multiple structures of one subject were combined into a partition\nfunction used for a rate coefficient.",
+        "enum": [
+          "single_structure",
+          "lowest_energy_conformer",
+          "boltzmann_weighted_conformers",
+          "multi_structural_torsional",
+          "other"
+        ],
+        "title": "KineticsEnsemblePolicy",
+        "type": "string"
+      },
+      "KineticsInterpretationAssignmentBlock": {
+        "description": "Exact statmech/conformer/TS interpretation used for one rate role.",
+        "properties": {
+          "assignment_scheme_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Scheme Ref"
+          },
+          "conformer_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Group Ref"
+          },
+          "conformer_selection_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Selection Kind"
+          },
+          "convention_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Note"
+          },
+          "degeneracy_interpretation": {
+            "$ref": "#/components/schemas/KineticsDegeneracyInterpretation"
+          },
+          "ensemble_policy": {
+            "$ref": "#/components/schemas/KineticsEnsemblePolicy"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "standard_state_convention": {
+            "$ref": "#/components/schemas/KineticsStandardStateConvention"
+          },
+          "statmech_ref": {
+            "title": "Statmech Ref",
+            "type": "string"
+          },
+          "subject_key": {
+            "title": "Subject Key",
+            "type": "string"
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Ref"
+          }
+        },
+        "required": [
+          "role",
+          "subject_key",
+          "statmech_ref",
+          "ensemble_policy",
+          "standard_state_convention",
+          "degeneracy_interpretation"
+        ],
+        "title": "KineticsInterpretationAssignmentBlock",
+        "type": "object"
+      },
+      "KineticsInterpretationAssignmentUpload": {
+        "additionalProperties": false,
+        "description": "Exact statmech/conformer/TS interpretation for one rate role.\n\nThe three convention fields are machine tokens, not free text: a rate\ncoefficient is not reproducible without knowing how conformers were\ncombined, which standard state the partition functions use, and how\nsymmetry was counted. ``other`` on any of them requires\n``convention_note``.",
+        "properties": {
+          "conformer_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConformerSelectionContentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "convention_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Note"
+          },
+          "degeneracy_interpretation": {
+            "$ref": "#/components/schemas/KineticsDegeneracyInterpretation"
+          },
+          "ensemble_policy": {
+            "$ref": "#/components/schemas/KineticsEnsemblePolicy"
+          },
+          "participant_index": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participant Index"
+          },
+          "role": {
+            "pattern": "^(reactant|product|transition_state)$",
+            "title": "Role",
+            "type": "string"
+          },
+          "standard_state_convention": {
+            "$ref": "#/components/schemas/KineticsStandardStateConvention"
+          },
+          "statmech_ref": {
+            "minLength": 1,
+            "title": "Statmech Ref",
+            "type": "string"
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Ref"
+          }
+        },
+        "required": [
+          "role",
+          "statmech_ref",
+          "ensemble_policy",
+          "standard_state_convention",
+          "degeneracy_interpretation"
+        ],
+        "title": "KineticsInterpretationAssignmentUpload",
+        "type": "object"
       },
       "KineticsModelKind": {
         "enum": [
@@ -15598,6 +15985,20 @@
               }
             ]
           },
+          "interpretation_assignments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/KineticsInterpretationAssignmentBlock"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interpretation Assignments"
+          },
           "is_third_body": {
             "default": false,
             "title": "Is Third Body",
@@ -15724,6 +16125,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/TrustFragment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tunneling_application": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsTunnelingApplicationBlock"
               },
               {
                 "type": "null"
@@ -16101,6 +16512,376 @@
         "title": "KineticsSourceCalculationRead",
         "type": "object"
       },
+      "KineticsStandardStateConvention": {
+        "description": "The standard state the rate's partition functions are referenced to.",
+        "enum": [
+          "ideal_gas_1_bar",
+          "ideal_gas_1_atm",
+          "concentration_1_mol_cm3",
+          "concentration_1_mol_l",
+          "other"
+        ],
+        "title": "KineticsStandardStateConvention",
+        "type": "string"
+      },
+      "KineticsTunnelingApplicationBlock": {
+        "description": "Typed tunneling calculation inputs/results, never inferred from a note.",
+        "properties": {
+          "convention_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Note"
+          },
+          "energy_correction_convention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnergyCorrectionConvention"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "energy_zero_convention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnergyZeroConvention"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "forward_barrier_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward Barrier Kj Mol"
+          },
+          "frequency_sign_convention": {
+            "title": "Frequency Sign Convention",
+            "type": "string"
+          },
+          "imaginary_frequency_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Frequency Cm1"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_identifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Identifier"
+          },
+          "product_energy_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Energy Kj Mol"
+          },
+          "reactant_energy_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reactant Energy Kj Mol"
+          },
+          "result_artifact_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Artifact Calculation Ref"
+          },
+          "result_artifact_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Artifact Sha256"
+          },
+          "reverse_barrier_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reverse Barrier Kj Mol"
+          },
+          "sct_path_integral_artifact_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sct Path Integral Artifact Calculation Ref"
+          },
+          "sct_path_integral_artifact_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sct Path Integral Artifact Sha256"
+          },
+          "source_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Ref"
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "transition_state_entry_ref",
+          "frequency_sign_convention"
+        ],
+        "title": "KineticsTunnelingApplicationBlock",
+        "type": "object"
+      },
+      "KineticsTunnelingApplicationUpload": {
+        "additionalProperties": false,
+        "description": "Typed tunneling inputs/results, linked by public TS handle.\n\n:param model: The correction family. ``other`` is accepted only when the\n    deposit is still replayable: it must carry a ``model_identifier``\n    machine token naming the actual correction plus a result-artifact\n    locator, so a reader who does not recognise the model can still see\n    what was computed and by what.\n:param source_calculation_ref: The calculation the energies/barriers below\n    were read from. Without it the numbers this block returns are\n    untraceable.",
+        "properties": {
+          "convention_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Note"
+          },
+          "energy_correction_convention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnergyCorrectionConvention"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "energy_zero_convention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnergyZeroConvention"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "forward_barrier_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward Barrier Kj Mol"
+          },
+          "frequency_sign_convention": {
+            "default": "negative_imaginary_cm1",
+            "title": "Frequency Sign Convention",
+            "type": "string"
+          },
+          "imaginary_frequency_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Frequency Cm1"
+          },
+          "model": {
+            "$ref": "#/components/schemas/app__db__models__common__TunnelingModel"
+          },
+          "model_identifier": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9]+(_[a-z0-9]+)*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Identifier"
+          },
+          "product_energy_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Energy Kj Mol"
+          },
+          "reactant_energy_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reactant Energy Kj Mol"
+          },
+          "result_artifact_calculation_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Artifact Calculation Ref"
+          },
+          "result_artifact_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Artifact Sha256"
+          },
+          "reverse_barrier_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reverse Barrier Kj Mol"
+          },
+          "sct_path_integral_artifact_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sct Path Integral Artifact Calculation Ref"
+          },
+          "sct_path_integral_artifact_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sct Path Integral Artifact Sha256"
+          },
+          "source_calculation_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Ref"
+          },
+          "transition_state_entry_ref": {
+            "minLength": 1,
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "transition_state_entry_ref"
+        ],
+        "title": "KineticsTunnelingApplicationUpload",
+        "type": "object"
+      },
       "KineticsUncertainty": {
         "description": "Uncertainty block — always returned, may have all-null entries.",
         "properties": {
@@ -16270,18 +17051,6 @@
               }
             ]
           },
-          "existing_network_kinetics_id": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Existing Network Kinetics Id"
-          },
           "falloff": {
             "anyOf": [
               {
@@ -16291,6 +17060,13 @@
                 "type": "null"
               }
             ]
+          },
+          "interpretation_assignments": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsInterpretationAssignmentUpload"
+            },
+            "title": "Interpretation Assignments",
+            "type": "array"
           },
           "is_third_body": {
             "default": false,
@@ -16332,6 +17108,18 @@
               }
             ],
             "title": "N Uncertainty"
+          },
+          "network_kinetics_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Kinetics Ref"
           },
           "note": {
             "anyOf": [
@@ -16440,6 +17228,16 @@
               }
             ],
             "title": "Tmin K"
+          },
+          "tunneling_application": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsTunnelingApplicationUpload"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "tunneling_model": {
             "anyOf": [
@@ -18246,8 +19044,21 @@
         "additionalProperties": false,
         "description": "A directed phenomenological channel between two network states.\n\n:param source_state_key: Local key of the source state.\n:param sink_state_key: Local key of the sink state.\n:param kind: Channel classification.",
         "properties": {
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
           "kind": {
             "$ref": "#/components/schemas/NetworkChannelKind"
+          },
+          "microreaction_paths": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkChannelMicroReactionIn"
+            },
+            "minItems": 1,
+            "title": "Microreaction Paths",
+            "type": "array"
           },
           "sink_state_key": {
             "minLength": 1,
@@ -18261,9 +19072,11 @@
           }
         },
         "required": [
+          "key",
           "source_state_key",
           "sink_state_key",
-          "kind"
+          "kind",
+          "microreaction_paths"
         ],
         "title": "NetworkChannelIn",
         "type": "object"
@@ -18279,9 +19092,82 @@
         "title": "NetworkChannelKind",
         "type": "string"
       },
+      "NetworkChannelMicroReactionIn": {
+        "additionalProperties": false,
+        "description": "One elementary reaction supporting a channel, and how it proceeds.\n\n:param micro_reaction_key: Local key of the elementary step.\n:param transition_state_key: Local key of the saddle point on this path.\n    Omit it (or send ``null``) for a barrierless or variational path —\n    radical-radical association and simple bond fission have no saddle\n    point, and they are ubiquitous in multi-well PDep networks. A\n    barrierless path carries no ``channel_barriers`` entry.",
+        "properties": {
+          "micro_reaction_key": {
+            "minLength": 1,
+            "title": "Micro Reaction Key",
+            "type": "string"
+          },
+          "transition_state_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Key"
+          }
+        },
+        "required": [
+          "micro_reaction_key"
+        ],
+        "title": "NetworkChannelMicroReactionIn",
+        "type": "object"
+      },
+      "NetworkChannelMicroreactionSummary": {
+        "description": "A microscopic reaction/TS path supporting one macroscopic channel.\n\n``transition_state_entry_ref`` is ``None`` for a barrierless or\nvariational path, which has no saddle point; ``path_kind`` states which\ncase this is as a machine token so a caller never has to infer it from a\nmissing field.",
+        "properties": {
+          "path_kind": {
+            "enum": [
+              "saddle_point",
+              "barrierless"
+            ],
+            "title": "Path Kind",
+            "type": "string"
+          },
+          "reaction_entry_ref": {
+            "title": "Reaction Entry Ref",
+            "type": "string"
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Ref"
+          }
+        },
+        "required": [
+          "reaction_entry_ref",
+          "path_kind"
+        ],
+        "title": "NetworkChannelMicroreactionSummary",
+        "type": "object"
+      },
       "NetworkChannelRead": {
         "description": "A directed phenomenological channel between two network states.",
         "properties": {
+          "channel_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Key"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -18315,12 +19201,30 @@
       "NetworkChannelSummary": {
         "description": "One ``network_channel`` row projected for ``include=channels``.\n\nSource/sink state pointers use the composition_hash because\n``network_state`` has no public_ref. Composition_hash is unique\nper ``(network_id, composition_hash)`` so it's a stable address\nwithin a network.",
         "properties": {
+          "channel_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Key"
+          },
           "has_kinetics": {
             "title": "Has Kinetics",
             "type": "boolean"
           },
           "kind": {
             "$ref": "#/components/schemas/NetworkChannelKind"
+          },
+          "microreactions": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkChannelMicroreactionSummary"
+            },
+            "title": "Microreactions",
+            "type": "array"
           },
           "network_channel_id": {
             "anyOf": [
@@ -19097,6 +20001,18 @@
         "additionalProperties": false,
         "description": "Fitted phenomenological k(T,P) for one channel under this solve.\n\nSupports Chebyshev and PLOG fits. The channel is referenced by its\n``(source_state_key, sink_state_key)`` state-key pair (channels carry no\nlocal key of their own).\n\n:param source_state_key: Local key of the referenced channel's source state.\n:param sink_state_key: Local key of the referenced channel's sink state.\n:param model_kind: Parameterization kind (``chebyshev`` or ``plog``).\n:param chebyshev: Chebyshev coefficients (required when\n    ``model_kind == chebyshev``).\n:param plog: PLOG entries (required when ``model_kind == plog``).\n:param tmin_k: Minimum temperature of validity in K.\n:param tmax_k: Maximum temperature of validity in K.\n:param pmin_bar: Minimum pressure of validity in bar.\n:param pmax_bar: Maximum pressure of validity in bar.\n:param rate_units: Units of the fitted rate coefficient.\n:param pressure_units: Units the fit's pressure axis is expressed in.\n:param temperature_units: Units the fit's temperature axis is expressed in.\n:param stores_log10_k: Whether the coefficients fit ``log10(k)`` (Chebyshev\n    convention) rather than ``k`` directly.\n:param note: Optional free-text note.",
         "properties": {
+          "channel_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Key"
+          },
           "chebyshev": {
             "anyOf": [
               {
@@ -19176,14 +20092,28 @@
             ]
           },
           "sink_state_key": {
-            "minLength": 1,
-            "title": "Sink State Key",
-            "type": "string"
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sink State Key"
           },
           "source_state_key": {
-            "minLength": 1,
-            "title": "Source State Key",
-            "type": "string"
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source State Key"
           },
           "stores_log10_k": {
             "anyOf": [
@@ -19232,8 +20162,6 @@
           }
         },
         "required": [
-          "source_state_key",
-          "sink_state_key",
           "model_kind"
         ],
         "title": "NetworkKineticsIn",
@@ -20988,6 +21916,70 @@
         "title": "NetworkSolveCalculationRole",
         "type": "string"
       },
+      "NetworkSolveChannelBarrierSummary": {
+        "description": "One solve-scoped barrier for a specific channel/reaction/TS path.\n\nBarriers are oriented by the channel (source → sink) and signed relative\nto ``energy_zero_convention``; a submerged barrier is negative.",
+        "properties": {
+          "channel_key": {
+            "title": "Channel Key",
+            "type": "string"
+          },
+          "convention_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Note"
+          },
+          "correction_convention": {
+            "$ref": "#/components/schemas/EnergyCorrectionConvention"
+          },
+          "energy_zero_convention": {
+            "$ref": "#/components/schemas/EnergyZeroConvention"
+          },
+          "forward_barrier_kj_mol": {
+            "title": "Forward Barrier Kj Mol",
+            "type": "number"
+          },
+          "reaction_entry_ref": {
+            "title": "Reaction Entry Ref",
+            "type": "string"
+          },
+          "reverse_barrier_kj_mol": {
+            "title": "Reverse Barrier Kj Mol",
+            "type": "number"
+          },
+          "source_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Ref"
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_key",
+          "reaction_entry_ref",
+          "transition_state_entry_ref",
+          "forward_barrier_kj_mol",
+          "reverse_barrier_kj_mol",
+          "energy_zero_convention",
+          "correction_convention"
+        ],
+        "title": "NetworkSolveChannelBarrierSummary",
+        "type": "object"
+      },
       "NetworkSolveCoreBlock": {
         "description": "Direct ``network_solve`` row metadata for the standalone solve\ndetail surface.\n\nLarger than :class:`NetworkSolveSummary` (which is the embedded\nprojection on the network detail surface): the core block carries\nonly the row-level scalars and review badge; the bath-gas list /\nchild counts that the embedded summary inlines move to per-include\nblocks on the solve surface.",
         "properties": {
@@ -21181,6 +22173,13 @@
               }
             ]
           },
+          "energy_transfers": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkSolveEnergyTransferRead"
+            },
+            "title": "Energy Transfers",
+            "type": "array"
+          },
           "grain_count": {
             "anyOf": [
               {
@@ -21322,6 +22321,13 @@
             "title": "Source Calculations",
             "type": "array"
           },
+          "state_energies": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkSolveStateEnergyRead"
+            },
+            "title": "State Energies",
+            "type": "array"
+          },
           "tmax_k": {
             "anyOf": [
               {
@@ -21388,6 +22394,17 @@
             ],
             "title": "Alpha0 Cm Inv"
           },
+          "collider_species_entry_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collider Species Entry Id"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -21417,6 +22434,17 @@
           "solve_id": {
             "title": "Solve Id",
             "type": "integer"
+          },
+          "state_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Id"
           },
           "t_exponent": {
             "anyOf": [
@@ -21462,6 +22490,17 @@
             ],
             "title": "Alpha0 Cm Inv"
           },
+          "collider_species_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collider Species Entry Ref"
+          },
           "energy_transfer_id": {
             "anyOf": [
               {
@@ -21495,6 +22534,17 @@
               }
             ],
             "title": "Note"
+          },
+          "state_composition_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Composition Hash"
           },
           "t_exponent": {
             "anyOf": [
@@ -21552,11 +22602,16 @@
           "source_calculation_count": {
             "title": "Source Calculation Count",
             "type": "integer"
+          },
+          "state_energy_count": {
+            "title": "State Energy Count",
+            "type": "integer"
           }
         },
         "required": [
           "bath_gas_count",
           "energy_transfer_count",
+          "state_energy_count",
           "source_calculation_count",
           "kinetics_count",
           "has_chebyshev",
@@ -21575,6 +22630,13 @@
               "$ref": "#/components/schemas/BathGasIn"
             },
             "title": "Bath Gas",
+            "type": "array"
+          },
+          "channel_barriers": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelBarrierIn"
+            },
+            "title": "Channel Barriers",
             "type": "array"
           },
           "channel_kinetics": {
@@ -21596,14 +22658,11 @@
             "title": "Emax Kj Mol"
           },
           "energy_transfer": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EnergyTransferIn"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "items": {
+              "$ref": "#/components/schemas/EnergyTransferIn"
+            },
+            "title": "Energy Transfer",
+            "type": "array"
           },
           "grain_count": {
             "anyOf": [
@@ -21695,7 +22754,16 @@
             "items": {
               "$ref": "#/components/schemas/SolveSourceCalculationIn"
             },
+            "minItems": 1,
             "title": "Source Calculations",
+            "type": "array"
+          },
+          "state_energies": {
+            "items": {
+              "$ref": "#/components/schemas/StateEnergyIn"
+            },
+            "minItems": 1,
+            "title": "State Energies",
             "type": "array"
           },
           "tmax_k": {
@@ -21723,7 +22791,9 @@
           "tmin_k",
           "tmax_k",
           "pmin_bar",
-          "pmax_bar"
+          "pmax_bar",
+          "state_energies",
+          "source_calculations"
         ],
         "title": "NetworkSolveIn",
         "type": "object"
@@ -22267,6 +23337,100 @@
           "role"
         ],
         "title": "NetworkSolveSourceCalculationRead",
+        "type": "object"
+      },
+      "NetworkSolveStateEnergyRead": {
+        "description": "One explicit state energy used by a master-equation solve.",
+        "properties": {
+          "correction_convention": {
+            "title": "Correction Convention",
+            "type": "string"
+          },
+          "energy_kj_mol": {
+            "title": "Energy Kj Mol",
+            "type": "number"
+          },
+          "energy_zero_convention": {
+            "title": "Energy Zero Convention",
+            "type": "string"
+          },
+          "solve_id": {
+            "title": "Solve Id",
+            "type": "integer"
+          },
+          "source_calculation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Id"
+          },
+          "state_id": {
+            "title": "State Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "solve_id",
+          "state_id",
+          "energy_kj_mol",
+          "energy_zero_convention",
+          "correction_convention"
+        ],
+        "title": "NetworkSolveStateEnergyRead",
+        "type": "object"
+      },
+      "NetworkSolveStateEnergySummary": {
+        "description": "A solve-specific state energy and its explicit conventions.",
+        "properties": {
+          "convention_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Note"
+          },
+          "correction_convention": {
+            "$ref": "#/components/schemas/EnergyCorrectionConvention"
+          },
+          "energy_kj_mol": {
+            "title": "Energy Kj Mol",
+            "type": "number"
+          },
+          "energy_zero_convention": {
+            "$ref": "#/components/schemas/EnergyZeroConvention"
+          },
+          "source_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Ref"
+          },
+          "state_composition_hash": {
+            "title": "State Composition Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state_composition_hash",
+          "energy_kj_mol",
+          "energy_zero_convention",
+          "correction_convention"
+        ],
+        "title": "NetworkSolveStateEnergySummary",
         "type": "object"
       },
       "NetworkSolveSummary": {
@@ -28748,6 +29912,20 @@
             ],
             "title": "Bath Gas"
           },
+          "channel_barriers": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/NetworkSolveChannelBarrierSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Barriers"
+          },
           "energy_transfer": {
             "anyOf": [
               {
@@ -28832,6 +30010,20 @@
               }
             ],
             "title": "Source Calculations"
+          },
+          "state_energies": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/NetworkSolveStateEnergySummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Energies"
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -29711,7 +30903,14 @@
             "title": "Source Calculations"
           },
           "species": {
-            "$ref": "#/components/schemas/StatmechSpeciesContext"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatmechSpeciesContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "statmech": {
             "$ref": "#/components/schemas/StatmechCoreBlock"
@@ -29729,6 +30928,16 @@
               }
             ],
             "title": "Torsions"
+          },
+          "transition_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatmechTransitionStateContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "trust": {
             "anyOf": [
@@ -29753,7 +30962,6 @@
         },
         "required": [
           "statmech",
-          "species",
           "evidence_summary",
           "available_sections"
         ],
@@ -29929,6 +31137,23 @@
                 "type": "null"
               }
             ]
+          },
+          "validation": {
+            "$ref": "#/components/schemas/TransitionStateValidationDescriptor"
+          },
+          "validation_evidence": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransitionStateValidationEvidenceSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Evidence"
           }
         },
         "required": [
@@ -29936,6 +31161,7 @@
           "transition_state",
           "reaction",
           "evidence_summary",
+          "validation",
           "available_sections"
         ],
         "title": "ScientificTransitionStateEntryRecord",
@@ -31018,7 +32244,7 @@
       },
       "SpeciesEntryIdentityPayload": {
         "additionalProperties": false,
-        "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n:param isotopologue_label: Optional isotopologue label.",
+        "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
         "properties": {
           "charge": {
             "title": "Charge",
@@ -31039,18 +32265,6 @@
               }
             ],
             "title": "Electronic State Label"
-          },
-          "isotopologue_label": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Isotopologue Label"
           },
           "molecule_kind": {
             "$ref": "#/components/schemas/MoleculeKind",
@@ -31188,6 +32402,7 @@
         "type": "object"
       },
       "SpeciesEntryRead": {
+        "description": "Read shape for a species entry.\n\n``isotope_key`` is exposed on reads (clients need to see which\nisotopologue/isotopomer an entry is) but never on writes. It is the\ncanonical SMILES of the isotope-labelled molecule, or ``None`` when\nevery atom is at its most abundant natural isotope.",
         "properties": {
           "conformer_summary": {
             "anyOf": [
@@ -31235,17 +32450,16 @@
             "title": "Id",
             "type": "integer"
           },
-          "isotopologue_label": {
+          "isotope_key": {
             "anyOf": [
               {
-                "maxLength": 64,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Isotopologue Label"
+            "title": "Isotope Key"
           },
           "kind": {
             "$ref": "#/components/schemas/StationaryPointKind",
@@ -31660,6 +32874,57 @@
         ],
         "title": "SpinTreatment",
         "type": "string"
+      },
+      "StateEnergyIn": {
+        "additionalProperties": false,
+        "description": "One solve-state energy on a declared, reproducible energy zero.",
+        "properties": {
+          "convention_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Note"
+          },
+          "correction_convention": {
+            "$ref": "#/components/schemas/EnergyCorrectionConvention"
+          },
+          "energy_kj_mol": {
+            "title": "Energy Kj Mol",
+            "type": "number"
+          },
+          "energy_zero_convention": {
+            "$ref": "#/components/schemas/EnergyZeroConvention"
+          },
+          "source_calculation_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Key"
+          },
+          "state_key": {
+            "minLength": 1,
+            "title": "State Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "energy_zero_convention",
+          "correction_convention",
+          "state_key",
+          "energy_kj_mol"
+        ],
+        "title": "StateEnergyIn",
+        "type": "object"
       },
       "StationaryPointKind": {
         "enum": [
@@ -33693,6 +34958,105 @@
           "dimension"
         ],
         "title": "StatmechTorsionSummary",
+        "type": "object"
+      },
+      "StatmechTransitionStateContext": {
+        "description": "Lightweight TS/TS-entry pointer for a TS-owned statmech record.\n\nA statmech row describes exactly one subject: a species entry OR a\ntransition-state entry. For a TS-owned record ``species`` is ``None`` and\nthis block carries the attribution instead — the record is never dressed\nup with an empty species stand-in.",
+        "properties": {
+          "charge": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Charge"
+          },
+          "multiplicity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multiplicity"
+          },
+          "reaction_entry_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Entry Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "reaction_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Entry Ref"
+          },
+          "transition_state_entry_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          },
+          "transition_state_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "transition_state_ref": {
+            "title": "Transition State Ref",
+            "type": "string"
+          },
+          "unmapped_smiles": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unmapped Smiles"
+          }
+        },
+        "required": [
+          "transition_state_ref",
+          "transition_state_entry_ref"
+        ],
+        "title": "StatmechTransitionStateContext",
         "type": "object"
       },
       "StatmechTreatmentKind": {
@@ -37987,6 +39351,24 @@
               }
             ],
             "title": "Note"
+          },
+          "statmech": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatmechInBundle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validation_evidence": {
+            "description": "Structured IRC evidence. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. source_calculation_key resolves within this transition state's calculation namespace and must name an irc-type calculation.",
+            "items": {
+              "$ref": "#/components/schemas/TransitionStateValidationEvidenceIn"
+            },
+            "title": "Validation Evidence",
+            "type": "array"
           }
         },
         "required": [
@@ -38396,6 +39778,161 @@
           "reaction_entry_id"
         ],
         "title": "TransitionStateUploadResult",
+        "type": "object"
+      },
+      "TransitionStateValidationDescriptor": {
+        "description": "One compact, machine-readable statement of validation status.\n\nAlways present on a TS-entry record, independent of include tokens, so a\nconsumer never has to infer \"was this saddle point validated?\" from the\nabsence of an optional block. Values are machine tokens:\n\n- ``present``: a passed IRC evidence record exists.\n- ``failed``: an IRC evidence record exists but did not pass.\n- ``absent``: no IRC evidence was deposited.",
+        "properties": {
+          "irc": {
+            "enum": [
+              "present",
+              "absent",
+              "failed"
+            ],
+            "title": "Irc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "irc"
+        ],
+        "title": "TransitionStateValidationDescriptor",
+        "type": "object"
+      },
+      "TransitionStateValidationEvidenceIn": {
+        "additionalProperties": false,
+        "description": "Producer-declared IRC validation evidence for one TS candidate.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.",
+        "properties": {
+          "kind": {
+            "const": "irc",
+            "title": "Kind",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "product_participant_mapping": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Participant Mapping"
+          },
+          "rationale": {
+            "minLength": 1,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "reactant_participant_mapping": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reactant Participant Mapping"
+          },
+          "source_calculation_key": {
+            "minLength": 1,
+            "title": "Source Calculation Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "passed",
+          "rationale",
+          "source_calculation_key"
+        ],
+        "title": "TransitionStateValidationEvidenceIn",
+        "type": "object"
+      },
+      "TransitionStateValidationEvidenceSummary": {
+        "description": "Structured IRC validation evidence with a replayable source link.",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "product_participant_mapping": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Participant Mapping"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "reactant_participant_mapping": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reactant Participant Mapping"
+          },
+          "reconstruction_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconstruction Calculation Ref"
+          }
+        },
+        "required": [
+          "kind",
+          "passed",
+          "rationale"
+        ],
+        "title": "TransitionStateValidationEvidenceSummary",
         "type": "object"
       },
       "TransitionStatesSearchRequest": {

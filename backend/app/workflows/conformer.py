@@ -84,7 +84,7 @@ def persist_conformer_upload(
 
     species_entry = resolve_species_entry(
         session, request.species_entry, created_by=created_by,
-        xyz_text=request.geometry.xyz_text,
+        geometry=request.geometry,
     )
     geometry = resolve_geometry_payload(session, request.geometry)
 

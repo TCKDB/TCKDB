@@ -17,6 +17,7 @@ from __future__ import annotations
 
 # 1 hartree = 2625499.639 J/mol (CODATA-derived, matches Arkane's constant).
 HARTREE_TO_J_MOL: float = 2625499.639
+HARTREE_TO_KJ_MOL: float = HARTREE_TO_J_MOL / 1000.0
 
 # 1 kcal/mol = 349.7551 cm^-1 (thermochemical calorie).
 KCAL_MOL_TO_CM_INV: float = 349.7551

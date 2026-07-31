@@ -17,6 +17,7 @@ See ``backend/docs/specs/scientific_transition_state_reads.md``.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -181,6 +182,32 @@ class TransitionStateCalculationEvidenceSummary(BaseModel):
     has_scf_stability: bool
 
 
+class TransitionStateValidationEvidenceSummary(BaseModel):
+    """Structured IRC validation evidence with a replayable source link."""
+
+    kind: str
+    passed: bool
+    rationale: str
+    reconstruction_calculation_ref: str | None = None
+    reactant_participant_mapping: dict[str, list[int]] | None = None
+    product_participant_mapping: dict[str, list[int]] | None = None
+
+
+class TransitionStateValidationDescriptor(BaseModel):
+    """One compact, machine-readable statement of validation status.
+
+    Always present on a TS-entry record, independent of include tokens, so a
+    consumer never has to infer "was this saddle point validated?" from the
+    absence of an optional block. Values are machine tokens:
+
+    - ``present``: a passed IRC evidence record exists.
+    - ``failed``: an IRC evidence record exists but did not pass.
+    - ``absent``: no IRC evidence was deposited.
+    """
+
+    irc: Literal["present", "absent", "failed"]
+
+
 # ---------------------------------------------------------------------------
 # Available sections
 # ---------------------------------------------------------------------------
@@ -198,6 +225,7 @@ class AvailableTransitionStateSections(BaseModel):
     has_calculations: bool
     has_geometries: bool
     has_review: bool
+    has_validation_evidence: bool
 
 
 # ---------------------------------------------------------------------------
@@ -233,10 +261,12 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     transition_state: TransitionStateCoreBlock
     reaction: TransitionStateReactionContext
     evidence_summary: TransitionStateCalculationEvidenceSummary
+    validation: TransitionStateValidationDescriptor
     available_sections: AvailableTransitionStateSections
     calculations: list[TransitionStateCalculationSummary] | None = None
     geometries: list[CalculationGeometryLinkSummary] | None = None
     review_history: list[TransitionStateReviewEntry] | None = None
+    validation_evidence: list[TransitionStateValidationEvidenceSummary] | None = None
 
     # Deterministic trust / evidence fragment. Populated only by the
     # standalone TS-entry detail surface under ``include=trust`` — the
@@ -316,4 +346,5 @@ __all__ = [
     "TransitionStateEntryDetailRequest",
     "TransitionStateReactionContext",
     "TransitionStateReviewEntry",
+    "TransitionStateValidationEvidenceSummary",
 ]

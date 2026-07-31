@@ -5,6 +5,7 @@ import logging
 from rdkit import Chem
 from rdkit.Chem import AllChem, inchi, rdDetermineBonds
 
+from app.chemistry.isotopes import normalize_isotope, validate_isotope
 from app.db.models.common import MoleculeKind, StereoKind
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 
@@ -35,9 +36,19 @@ def spin_multiplicity(mol: Chem.Mol) -> int:
 def identity_mol_from_smiles(smiles: str) -> Chem.Mol:
     """Build a canonicalized identity molecule from SMILES.
 
+    Isotope labels written in the SMILES (``[2H]``, ``[13C]``, ``[18O]``)
+    are **retained**: they are the atom-resolved isotope content of the
+    deposit, and ``Chem.RemoveHs`` deliberately keeps isotope-labelled
+    hydrogens explicit so a deuterium never silently collapses into an
+    implicit-H count. A mass number that names the element's most abundant
+    isotope (``[1H]``, ``[12C]``) carries no information and is normalized
+    away, so ``[1H]C([1H])([1H])[1H]`` and ``C`` are the same molecule.
+
     :param smiles: Input SMILES string for the uploaded species identity.
-    :returns: Sanitized RDKit molecule with atom maps removed and hydrogens stripped.
-    :raises ValueError: If RDKit cannot parse the SMILES string.
+    :returns: Sanitized RDKit molecule with atom maps removed, standard-isotope
+        labels normalized away, and non-isotopic hydrogens stripped.
+    :raises ValueError: If RDKit cannot parse the SMILES string or the SMILES
+        names an isotope that does not exist for its element.
     """
 
     mol = Chem.MolFromSmiles(smiles)
@@ -47,9 +58,82 @@ def identity_mol_from_smiles(smiles: str) -> Chem.Mol:
     ident = Chem.Mol(mol)
     for atom in ident.GetAtoms():
         atom.SetAtomMapNum(0)
+        mass_number = atom.GetIsotope()
+        if not mass_number:
+            continue
+        symbol = atom.GetSymbol()
+        validate_isotope(symbol, mass_number, context="species_entry.smiles")
+        if normalize_isotope(symbol, mass_number) is None:
+            atom.SetIsotope(0)
     ident = Chem.RemoveHs(ident)
     Chem.SanitizeMol(ident)
     return ident
+
+
+def strip_isotopes(mol: Chem.Mol) -> Chem.Mol:
+    """Return a copy of ``mol`` with every isotope label cleared.
+
+    Isotopologues are the *same* chemical species — one molecular graph, one
+    potential energy surface — differing only in nuclear masses. Species-level
+    identity is therefore isotope-blind, and isotopic resolution lives one
+    level down on ``species_entry``. This helper produces the isotope-blind
+    graph used for ``species.smiles`` and ``species.inchi_key``.
+
+    :param mol: Identity molecule, possibly carrying isotope labels.
+    :returns: A sanitized copy with no isotope labels and no leftover explicit
+        hydrogens (a deuterium becomes an ordinary implicit H).
+    """
+
+    bare = Chem.Mol(mol)
+    for atom in bare.GetAtoms():
+        atom.SetIsotope(0)
+    bare = Chem.RemoveHs(bare)
+    Chem.SanitizeMol(bare)
+    return bare
+
+
+def canonical_isotope_key(smiles: str) -> str | None:
+    """Derive the canonical, atom-resolved isotope key for a species entry.
+
+    The key is the canonical SMILES of the isotope-labelled identity molecule.
+    Because RDKit's canonical ranking accounts for isotope labels, the key is
+    independent of the uploaded atom order and distinguishes *isotopomers*,
+    not merely isotopologues: ``[2H]CO`` (CH2D-OH) and ``[2H]OC`` (CH3-OD)
+    are the same isotopologue but produce different keys, as they must —
+    they have different frequencies, rotational constants and ZPE.
+
+    ``None`` is returned when every atom sits at its most abundant isotope.
+    That is the *stable* all-standard key: it does not depend on RDKit's
+    canonical-SMILES output at all, so every pre-existing species entry keeps
+    exactly the identity it already had.
+
+    :param smiles: Input SMILES string for the uploaded species identity.
+    :returns: Canonical isotopic SMILES, or ``None`` for an all-standard species.
+    :raises ValueError: If RDKit cannot parse the SMILES string.
+    """
+
+    ident = identity_mol_from_smiles(smiles)
+    if not any(atom.GetIsotope() for atom in ident.GetAtoms()):
+        return None
+    return Chem.MolToSmiles(ident, canonical=True)
+
+
+def isotope_substitutions(smiles: str) -> dict[tuple[str, int], int]:
+    """Count the non-standard isotope substitutions declared by a SMILES.
+
+    :param smiles: Input SMILES string for the uploaded species identity.
+    :returns: Mapping of ``(element_symbol, mass_number)`` to substituted-atom
+        count. Empty for an all-standard species.
+    :raises ValueError: If RDKit cannot parse the SMILES string.
+    """
+
+    counts: dict[tuple[str, int], int] = {}
+    for atom in identity_mol_from_smiles(smiles).GetAtoms():
+        mass_number = atom.GetIsotope()
+        if mass_number:
+            key = (atom.GetSymbol(), mass_number)
+            counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def derive_unmapped_smiles(smiles: str) -> str:
@@ -352,6 +436,13 @@ def canonical_species_identity(
     lets singlet CH₂ (SMILES ``[CH2]`` implies a triplet) and the singlet/
     triplet O₂ states be represented. Species identity carries multiplicity
     as part of its unique key; see DR-0031.
+
+    Isotope labels are stripped before canonicalization. Isotopologues share
+    one molecular graph and one potential energy surface, so they share a
+    ``species`` row; the isotopic resolution is carried by the species entry's
+    ``isotope_key`` (see :func:`canonical_isotope_key`). This also keeps
+    ``inchi_key`` isotope-blind, so an InChIKey lookup finds every
+    isotopologue of a compound rather than only the ordinary one.
     """
 
     if payload.molecule_kind != MoleculeKind.molecule:
@@ -365,6 +456,7 @@ def canonical_species_identity(
             f"species_entry.charge={payload.charge} does not match SMILES charge {charge}"
         )
 
-    canonical_smiles = Chem.MolToSmiles(ident, canonical=True)
-    inchi_key = inchi.MolToInchiKey(ident)
+    bare = strip_isotopes(ident)
+    canonical_smiles = Chem.MolToSmiles(bare, canonical=True)
+    inchi_key = inchi.MolToInchiKey(bare)
     return canonical_smiles, inchi_key

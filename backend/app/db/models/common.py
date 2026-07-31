@@ -531,6 +531,88 @@ class NetworkSolveCalculationRole(str, Enum):
     fit_source = "fit_source"
 
 
+# ---------------------------------------------------------------------------
+# Scientific conventions
+#
+# A stored energy is meaningless without the zero it is measured from and the
+# corrections folded into it. Free text made these unverifiable (and the repo's
+# own producers had already drifted apart), so both axes are machine tokens.
+# ``other`` is the single escape hatch and always requires the row's
+# ``convention_note`` free-text column to say what was actually done.
+# ---------------------------------------------------------------------------
+
+
+class EnergyZeroConvention(str, Enum):
+    """Where the zero of an energy scale sits.
+
+    - ``lowest_state``: zero at the lowest-energy state of the network.
+    - ``entrance_channel``: zero at the declared entrance (reactant) channel.
+    - ``separated_reactants``: zero at the infinitely separated reactants of
+      the elementary step in question (not necessarily a network state).
+    - ``absolute``: values are absolute (unshifted) electronic energies.
+    - ``other``: anything else; requires ``convention_note``.
+    """
+
+    lowest_state = "lowest_state"
+    entrance_channel = "entrance_channel"
+    separated_reactants = "separated_reactants"
+    absolute = "absolute"
+    other = "other"
+
+
+class EnergyCorrectionConvention(str, Enum):
+    """Which corrections are already folded into a reported energy.
+
+    - ``electronic_only``: bare electronic energy, no ZPE, no thermal term.
+    - ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).
+    - ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.
+    - ``thermal_enthalpy_298k``: enthalpy at 298.15 K.
+    - ``other``: anything else; requires ``convention_note``.
+    """
+
+    electronic_only = "electronic_only"
+    electronic_plus_zpe = "electronic_plus_zpe"
+    atom_and_bond_corrected = "atom_and_bond_corrected"
+    thermal_enthalpy_298k = "thermal_enthalpy_298k"
+    other = "other"
+
+
+class KineticsEnsemblePolicy(str, Enum):
+    """How multiple structures of one subject were combined into a partition
+    function used for a rate coefficient."""
+
+    single_structure = "single_structure"
+    lowest_energy_conformer = "lowest_energy_conformer"
+    boltzmann_weighted_conformers = "boltzmann_weighted_conformers"
+    multi_structural_torsional = "multi_structural_torsional"
+    other = "other"
+
+
+class KineticsStandardStateConvention(str, Enum):
+    """The standard state the rate's partition functions are referenced to."""
+
+    ideal_gas_1_bar = "ideal_gas_1_bar"
+    ideal_gas_1_atm = "ideal_gas_1_atm"
+    concentration_1_mol_cm3 = "concentration_1_mol_cm3"
+    concentration_1_mol_l = "concentration_1_mol_l"
+    other = "other"
+
+
+class KineticsDegeneracyInterpretation(str, Enum):
+    """How reaction-path degeneracy/symmetry was handled for this subject.
+
+    Distinct from :class:`KineticsDegeneracyConvention`, which records whether
+    the *stored scalar* already includes degeneracy. This records how the
+    subject's own partition function treated symmetry.
+    """
+
+    external_symmetry_number = "external_symmetry_number"
+    reaction_path_degeneracy = "reaction_path_degeneracy"
+    symmetry_number_and_path_degeneracy = "symmetry_number_and_path_degeneracy"
+    no_symmetry_treatment = "no_symmetry_treatment"
+    other = "other"
+
+
 class TransportCalculationRole(str, Enum):
     full_transport = "full_transport"
     dipole = "dipole"

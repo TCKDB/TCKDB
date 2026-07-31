@@ -14,11 +14,12 @@ import math
 from collections import defaultdict
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
     Calculation,
+    CalculationArtifact,
     CalculationGeometryValidation,
     CalculationSCFStability,
 )
@@ -36,14 +37,17 @@ from app.db.models.common import (
 from app.db.models.kinetics import (
     Kinetics,
     KineticsArrheniusEntry,
+    KineticsInterpretationAssignment,
     KineticsSourceCalculation,
+    KineticsTunnelingApplication,
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
 from app.db.models.network_pdep import NetworkKinetics
 from app.db.models.reaction import ReactionEntry
 from app.db.models.software import Software, SoftwareRelease
-from app.db.models.species import Species
+from app.db.models.species import ConformerAssignmentScheme, ConformerGroup, ConformerSelection, Species
+from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
@@ -61,9 +65,11 @@ from app.schemas.reads.scientific_kinetics import (
     ArrheniusParameters,
     ChebyshevBlock,
     FalloffBlock,
+    KineticsInterpretationAssignmentBlock,
     KineticsProvenance,
     KineticsReadRequest,
     KineticsRecord,
+    KineticsTunnelingApplicationBlock,
     KineticsUncertainty,
     MultiArrheniusTerm,
     PlogEntryBlock,
@@ -110,6 +116,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "all",
     "trust",
     "assessments",
+    "interpretations",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 
@@ -538,6 +545,14 @@ def get_reaction_kinetics(
                 pressure_bar=k.pressure_bar,
                 pressure_coverage=pressure_coverages.get(k.id),
                 reaction_path_degeneracy=_reaction_path_degeneracy(k),
+                interpretation_assignments=(
+                    _interpretation_blocks(session, k.id)
+                    if "interpretations" in includes else None
+                ),
+                tunneling_application=(
+                    _tunneling_block(session, k.id)
+                    if "interpretations" in includes else None
+                ),
                 plog_entries=_plog_blocks(k),
                 chebyshev=_chebyshev_block(k),
                 falloff=_falloff_block(k),
@@ -617,6 +632,102 @@ def build_kinetics_trust_fragment(
     """Build the read-layer trust fragment for a kinetics record."""
     evaluation = evaluate_loaded_kinetics(kinetics)
     return build_trust_fragment(evaluation, review_status=review_status)
+
+
+def _interpretation_blocks(session: Session, kinetics_id: int) -> list[KineticsInterpretationAssignmentBlock]:
+    rows = session.execute(
+        select(
+            KineticsInterpretationAssignment,
+            Statmech.public_ref,
+            TransitionStateEntry.public_ref,
+            ConformerGroup.public_ref,
+            ConformerSelection.selection_kind,
+            ConformerAssignmentScheme.public_ref,
+        )
+        .join(Statmech, Statmech.id == KineticsInterpretationAssignment.statmech_id)
+        .outerjoin(
+            TransitionStateEntry,
+            TransitionStateEntry.id == KineticsInterpretationAssignment.transition_state_entry_id,
+        )
+        .outerjoin(ConformerSelection, ConformerSelection.id == KineticsInterpretationAssignment.conformer_selection_id)
+        .outerjoin(ConformerGroup, ConformerGroup.id == ConformerSelection.conformer_group_id)
+        .outerjoin(ConformerAssignmentScheme, ConformerAssignmentScheme.id == ConformerSelection.assignment_scheme_id)
+        .where(KineticsInterpretationAssignment.kinetics_id == kinetics_id)
+        .order_by(KineticsInterpretationAssignment.role)
+    ).all()
+    return [
+        KineticsInterpretationAssignmentBlock(
+            role=row[0].role, subject_key=row[0].subject_key, statmech_ref=row[1], transition_state_entry_ref=row[2],
+            conformer_group_ref=row[3],
+            conformer_selection_kind=(row[4].value if row[4] is not None else None),
+            assignment_scheme_ref=row[5],
+            ensemble_policy=row[0].ensemble_policy,
+            standard_state_convention=row[0].standard_state_convention,
+            degeneracy_interpretation=row[0].degeneracy_interpretation,
+            convention_note=row[0].convention_note,
+        )
+        for row in rows
+    ]
+
+
+def _tunneling_block(session: Session, kinetics_id: int) -> KineticsTunnelingApplicationBlock | None:
+    # Two artifacts hang off this row (the result and, for SCT, the path
+    # integral) and each needs its own aliased artifact→calculation join.
+    # Joining only the result artifact left every SCT field permanently null
+    # even though the write path had persisted the id.
+    result_artifact = aliased(CalculationArtifact)
+    result_calculation = aliased(Calculation)
+    sct_artifact = aliased(CalculationArtifact)
+    sct_calculation = aliased(Calculation)
+    source_calculation = aliased(Calculation)
+    row = session.execute(
+        select(
+            KineticsTunnelingApplication,
+            TransitionStateEntry.public_ref,
+            result_calculation.public_ref,
+            result_artifact.sha256,
+            sct_calculation.public_ref,
+            sct_artifact.sha256,
+            source_calculation.public_ref,
+        )
+        .join(TransitionStateEntry, TransitionStateEntry.id == KineticsTunnelingApplication.transition_state_entry_id)
+        .outerjoin(result_artifact, result_artifact.id == KineticsTunnelingApplication.result_artifact_id)
+        .outerjoin(result_calculation, result_calculation.id == result_artifact.calculation_id)
+        .outerjoin(sct_artifact, sct_artifact.id == KineticsTunnelingApplication.sct_path_integral_artifact_id)
+        .outerjoin(sct_calculation, sct_calculation.id == sct_artifact.calculation_id)
+        .outerjoin(source_calculation, source_calculation.id == KineticsTunnelingApplication.source_calculation_id)
+        .where(KineticsTunnelingApplication.kinetics_id == kinetics_id)
+    ).one_or_none()
+    if row is None:
+        return None
+    (
+        application,
+        ts_ref,
+        artifact_calculation_ref,
+        artifact_sha256,
+        sct_calculation_ref,
+        sct_sha256,
+        source_calculation_ref,
+    ) = row
+    return KineticsTunnelingApplicationBlock(
+        model=application.model,
+        model_identifier=application.model_identifier,
+        transition_state_entry_ref=ts_ref,
+        source_calculation_ref=source_calculation_ref,
+        imaginary_frequency_cm1=application.imaginary_frequency_cm1,
+        frequency_sign_convention=application.frequency_sign_convention,
+        reactant_energy_kj_mol=application.reactant_energy_kj_mol,
+        product_energy_kj_mol=application.product_energy_kj_mol,
+        forward_barrier_kj_mol=application.forward_barrier_kj_mol,
+        reverse_barrier_kj_mol=application.reverse_barrier_kj_mol,
+        energy_zero_convention=application.energy_zero_convention,
+        energy_correction_convention=application.energy_correction_convention,
+        convention_note=application.convention_note,
+        result_artifact_calculation_ref=artifact_calculation_ref,
+        result_artifact_sha256=artifact_sha256,
+        sct_path_integral_artifact_calculation_ref=sct_calculation_ref,
+        sct_path_integral_artifact_sha256=sct_sha256,
+    )
 
 
 # ---------------------------------------------------------------------------

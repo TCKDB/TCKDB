@@ -8,11 +8,13 @@ from sqlalchemy import (
     CheckConstraint,
     Double,
     ForeignKey,
+    Index,
     Integer,
     PrimaryKeyConstraint,
     SmallInteger,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import CHAR, JSONB
@@ -21,6 +23,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     ArrheniusAUnits,
+    EnergyCorrectionConvention,
+    EnergyZeroConvention,
     NetworkChannelKind,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
@@ -33,8 +37,10 @@ if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
     from app.db.models.literature import Literature
     from app.db.models.network import Network
+    from app.db.models.reaction import ReactionEntry
     from app.db.models.software import SoftwareRelease
     from app.db.models.species import SpeciesEntry
+    from app.db.models.transition_state import TransitionStateEntry
     from app.db.models.workflow import WorkflowToolRelease
 
 
@@ -138,6 +144,12 @@ class NetworkChannel(Base):
         SAEnum(NetworkChannelKind, name="network_channel_kind"),
         nullable=False,
     )
+    # A stable, producer-visible identity is required because distinct
+    # mechanistic pathways may have the same macroscopic source and sink.
+    # NOT NULL on purpose: PostgreSQL treats NULLs as distinct, so a nullable
+    # key would silently defeat ``uq_network_channel_key``, and the read
+    # surface types ``channel_key`` as non-optional.
+    channel_key: Mapped[str] = mapped_column(Text, nullable=False)
 
     network: Mapped["Network"] = relationship(back_populates="channels")
     source_state: Mapped["NetworkState"] = relationship(
@@ -152,12 +164,127 @@ class NetworkChannel(Base):
         back_populates="channel",
         cascade="all, delete-orphan",
     )
+    microreaction_links: Mapped[list["NetworkChannelMicroReaction"]] = relationship(
+        back_populates="channel", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
-        UniqueConstraint("network_id", "source_state_id", "sink_state_id"),
+        UniqueConstraint("network_id", "channel_key", name="uq_network_channel_key"),
         CheckConstraint(
             "source_state_id <> sink_state_id",
             name="source_ne_sink",
+        ),
+    )
+
+
+class NetworkChannelMicroReaction(Base):
+    """Mechanistic evidence explicitly associating a channel with an elementary step/TS.
+
+    ``transition_state_entry_id`` is nullable on purpose: barrierless and
+    variational association/dissociation paths have no saddle point to point
+    at, and they are ubiquitous in exactly the multi-well networks this table
+    exists to describe. Path identity is therefore the surrogate ``id`` with
+    two uniqueness rules — one saddle-point path per
+    ``(channel, reaction, TS)``, and at most one barrierless path per
+    ``(channel, reaction)`` (a NULL TS would otherwise be distinct from
+    itself under SQL uniqueness semantics).
+    """
+
+    __tablename__ = "network_channel_microreaction"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    channel_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("network_channel.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    reaction_entry_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "reaction_entry.id",
+            name="fk_network_channel_microreaction_reaction_entry",
+            deferrable=True, initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
+    transition_state_entry_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "transition_state_entry.id",
+            name="fk_network_channel_microreaction_ts_entry",
+            deferrable=True, initially="IMMEDIATE",
+        ),
+        nullable=True,
+    )
+
+    channel: Mapped["NetworkChannel"] = relationship(back_populates="microreaction_links")
+    reaction_entry: Mapped["ReactionEntry"] = relationship()
+    transition_state_entry: Mapped[Optional["TransitionStateEntry"]] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id",
+            "reaction_entry_id",
+            "transition_state_entry_id",
+            name="uq_network_channel_microreaction_path",
+        ),
+        Index(
+            "uq_network_channel_microreaction_barrierless",
+            "channel_id",
+            "reaction_entry_id",
+            unique=True,
+            postgresql_where=text("transition_state_entry_id IS NULL"),
+        ),
+    )
+
+
+class NetworkSolveChannelBarrier(Base):
+    """Solve input barrier for one explicitly identified microscopic path.
+
+    Barriers are signed and measured from ``energy_zero_convention``: a
+    submerged entrance barrier is legitimately negative under an
+    entrance-channel zero, so no positivity constraint applies. Only NaN is
+    rejected — an unrepresentable barrier is a bug, not a scientific claim.
+    Barrierless paths carry no row here at all.
+
+    ``forward``/``reverse`` are oriented by the *channel*
+    (source → sink), never by the micro reaction's own written direction,
+    because the channel is the directed object this row is keyed on.
+    """
+
+    __tablename__ = "network_solve_channel_barrier"
+    solve_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("network_solve.id", deferrable=True, initially="IMMEDIATE"), primary_key=True)
+    channel_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("network_channel.id", deferrable=True, initially="IMMEDIATE"), primary_key=True)
+    reaction_entry_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("reaction_entry.id", name="fk_network_solve_channel_barrier_reaction_entry", deferrable=True, initially="IMMEDIATE"), primary_key=True)
+    transition_state_entry_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("transition_state_entry.id", name="fk_network_solve_channel_barrier_ts_entry", deferrable=True, initially="IMMEDIATE"), primary_key=True)
+    forward_barrier_kj_mol: Mapped[float] = mapped_column(Double, nullable=False)
+    reverse_barrier_kj_mol: Mapped[float] = mapped_column(Double, nullable=False)
+    energy_zero_convention: Mapped[EnergyZeroConvention] = mapped_column(
+        SAEnum(EnergyZeroConvention, name="energy_zero_convention", create_type=False),
+        nullable=False,
+    )
+    correction_convention: Mapped[EnergyCorrectionConvention] = mapped_column(
+        SAEnum(EnergyCorrectionConvention, name="energy_correction_convention", create_type=False),
+        nullable=False,
+    )
+    convention_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_calculation_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("calculation.id", name="fk_network_solve_channel_barrier_source_calc", deferrable=True, initially="IMMEDIATE"), nullable=True)
+
+    solve: Mapped["NetworkSolve"] = relationship(back_populates="channel_barriers")
+    channel: Mapped["NetworkChannel"] = relationship()
+    reaction_entry: Mapped["ReactionEntry"] = relationship()
+    transition_state_entry: Mapped["TransitionStateEntry"] = relationship()
+    source_calculation: Mapped[Optional["Calculation"]] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "forward_barrier_kj_mol <> 'NaN'::double precision "
+            "AND reverse_barrier_kj_mol <> 'NaN'::double precision",
+            name="barriers_finite",
+        ),
+        CheckConstraint(
+            "(energy_zero_convention <> 'other' AND correction_convention <> 'other') "
+            "OR convention_note IS NOT NULL",
+            name="other_note",
         ),
     )
 
@@ -237,6 +364,12 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         back_populates="solve",
         cascade="all, delete-orphan",
     )
+    state_energies: Mapped[list["NetworkSolveStateEnergy"]] = relationship(
+        back_populates="solve", cascade="all, delete-orphan"
+    )
+    channel_barriers: Mapped[list["NetworkSolveChannelBarrier"]] = relationship(
+        back_populates="solve", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("tmin_k IS NULL OR tmin_k > 0", name="tmin_k_gt_0"),
@@ -298,6 +431,24 @@ class NetworkSolveEnergyTransfer(Base):
         ForeignKey("network_solve.id", deferrable=True, initially="IMMEDIATE"),
         nullable=False,
     )
+    state_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "network_state.id",
+            name="fk_network_solve_energy_transfer_state",
+            deferrable=True, initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
+    collider_species_entry_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "species_entry.id",
+            name="fk_network_solve_energy_transfer_collider",
+            deferrable=True, initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
 
     model: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     alpha0_cm_inv: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
@@ -306,6 +457,48 @@ class NetworkSolveEnergyTransfer(Base):
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     solve: Mapped["NetworkSolve"] = relationship(back_populates="energy_transfers")
+    state: Mapped["NetworkState"] = relationship()
+    collider_species_entry: Mapped["SpeciesEntry"] = relationship()
+
+    __table_args__ = (UniqueConstraint("solve_id", "state_id", "collider_species_entry_id", name="uq_network_solve_energy_transfer_scope"),)
+
+
+class NetworkSolveStateEnergy(Base):
+    """Solve-specific state energy with an explicit zero/correction convention."""
+
+    __tablename__ = "network_solve_state_energy"
+
+    solve_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("network_solve.id", deferrable=True, initially="IMMEDIATE"), primary_key=True
+    )
+    state_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("network_state.id", deferrable=True, initially="IMMEDIATE"), primary_key=True
+    )
+    energy_kj_mol: Mapped[float] = mapped_column(Double, nullable=False)
+    energy_zero_convention: Mapped[EnergyZeroConvention] = mapped_column(
+        SAEnum(EnergyZeroConvention, name="energy_zero_convention", create_type=False),
+        nullable=False,
+    )
+    correction_convention: Mapped[EnergyCorrectionConvention] = mapped_column(
+        SAEnum(EnergyCorrectionConvention, name="energy_correction_convention", create_type=False),
+        nullable=False,
+    )
+    convention_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_calculation_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"), nullable=True
+    )
+
+    solve: Mapped["NetworkSolve"] = relationship(back_populates="state_energies")
+    state: Mapped["NetworkState"] = relationship()
+    source_calculation: Mapped[Optional["Calculation"]] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(
+            "(energy_zero_convention <> 'other' AND correction_convention <> 'other') "
+            "OR convention_note IS NOT NULL",
+            name="other_note",
+        ),
+    )
 
 
 class NetworkSolveSourceCalculation(Base):

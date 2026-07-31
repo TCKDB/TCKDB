@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -15,11 +17,13 @@ from app.db.models.calculation import (
     CalculationSPResult,
 )
 from app.db.models.common import CalculationType
-from app.db.models.network import NetworkReaction, NetworkSpecies
+from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
     NetworkChannel,
+    NetworkChannelMicroReaction,
     NetworkSolve,
     NetworkSolveBathGas,
+    NetworkSolveChannelBarrier,
     NetworkSolveEnergyTransfer,
     NetworkSolveSourceCalculation,
     NetworkState,
@@ -28,23 +32,55 @@ from app.db.models.species import (
     ConformerGroup,
     ConformerObservation,
 )
-from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.db.models.statmech import Statmech, StatmechSourceCalculation
+from app.db.models.transition_state import (
+    TransitionState,
+    TransitionStateEntry,
+    TransitionStateValidationEvidence,
+)
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
+from app.services.scientific_read.networks import get_network, get_network_solve
 from app.workflows.network_pdep import persist_network_pdep_upload
 
 _XYZ_ETHYL = "3\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nH 2.0 1.0 0.0"
 _XYZ_O2 = "2\n\nO 0.0 0.0 0.0\nO 1.21 0.0 0.0"
 _XYZ_ETOO = "4\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nO 2.5 0.0 0.0\nO 3.7 0.0 0.0"
 _XYZ_TS = "4\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nO 2.2 0.0 0.0\nO 3.4 0.0 0.0"
+_XYZ_ETHENE = "2\n\nC 0.0 0.0 0.0\nC 1.33 0.0 0.0"
+_XYZ_HO2 = "2\n\nO 0.0 0.0 0.0\nO 1.33 0.0 0.0"
 _XYZ_AR = "1\n\nAr 0.0 0.0 0.0"
 
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT_DFT = {"method": "B3LYP", "basis": "6-31G(d)"}
 _LOT_CC = {"method": "CCSD(T)", "basis": "cc-pVTZ"}
 
+# Machine-token energy conventions (free text is no longer accepted).
+_CONVENTIONS = {
+    "energy_zero_convention": "entrance_channel",
+    "correction_convention": "electronic_plus_zpe",
+}
+
+# The elimination TS has four atoms (C, C, O, O). Passing IRC evidence must
+# account for every one of them on BOTH sides: the whole C2H5OO skeleton on
+# the reactant side, splitting into C2H4 (the two carbons) and HO2 (the two
+# oxygens) on the product side.
+_ELIM_REACTANT_MAP = {"reactant:1": [1, 2, 3, 4]}
+_ELIM_PRODUCT_MAP = {"product:1": [1, 2], "product:2": [3, 4]}
+
 
 def _full_payload(*, include_solve: bool = True) -> dict:
-    """Build a full unified PDep payload with conformers, calcs, TS, and solve."""
+    """Build a full unified PDep payload with conformers, calcs, TS, and solve.
+
+    Models the textbook C2H5 + O2 surface honestly:
+
+    - ``entrance -> well_RO2`` (and its reverse) is a **barrierless**
+      radical-radical association. There is no saddle point, so the path
+      declares ``transition_state_key: None`` and carries no barrier — the
+      earlier fixture's ``forward_barrier_kj_mol: 15.0`` was an invented
+      number for a reaction that has no barrier at all.
+    - ``well_RO2 -> exit`` is the concerted HO2 elimination to C2H4 + HO2,
+      which does have a genuine saddle point, IRC evidence, and a barrier.
+    """
     species_list = [
         {
             "key": "ethyl",
@@ -111,6 +147,48 @@ def _full_payload(*, include_solve: bool = True) -> dict:
             ],
         },
     ]
+    species_list.extend(
+        [
+            {
+                "key": "ethene",
+                "species_entry": {"smiles": "C=C", "charge": 0, "multiplicity": 1},
+                "conformers": [{
+                    "key": "ethene_conf1",
+                    "geometry": {"key": "ethene_geom", "xyz_text": _XYZ_ETHENE},
+                    "calculation": {
+                        "key": "ethene_opt", "type": "opt",
+                        "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+                    },
+                }],
+                "calculations": [
+                    {
+                        "key": "ethene_sp", "type": "sp", "geometry_key": "ethene_geom",
+                        "software_release": _SOFTWARE, "level_of_theory": _LOT_CC,
+                        "sp_electronic_energy_hartree": -78.4,
+                    },
+                ],
+            },
+            {
+                "key": "HO2",
+                "species_entry": {"smiles": "O[O]", "charge": 0, "multiplicity": 2},
+                "conformers": [{
+                    "key": "HO2_conf1",
+                    "geometry": {"key": "HO2_geom", "xyz_text": _XYZ_HO2},
+                    "calculation": {
+                        "key": "HO2_opt", "type": "opt",
+                        "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+                    },
+                }],
+                "calculations": [
+                    {
+                        "key": "HO2_sp", "type": "sp", "geometry_key": "HO2_geom",
+                        "software_release": _SOFTWARE, "level_of_theory": _LOT_CC,
+                        "sp_electronic_energy_hartree": -150.8,
+                    },
+                ],
+            },
+        ]
+    )
     if include_solve:
         species_list.append(
             {
@@ -130,38 +208,21 @@ def _full_payload(*, include_solve: bool = True) -> dict:
     payload = {
         "name": "ethyl + O2",
         "species": species_list,
-        "transition_states": [{
-            "key": "ts_assoc",
-            "micro_reaction_key": "rxn_assoc",
-            "charge": 0,
-            "multiplicity": 2,
-            "geometry": {"key": "ts_assoc_geom", "xyz_text": _XYZ_TS},
-            "calculation": {
-                "key": "ts_assoc_opt", "type": "opt",
-                "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
-                "opt_converged": True,
+        "transition_states": [_elimination_ts()],
+        "micro_reactions": [
+            {
+                "key": "rxn_assoc",
+                "reversible": True,
+                "reactants": [{"species_key": "ethyl"}, {"species_key": "O2"}],
+                "products": [{"species_key": "ethylperoxy"}],
             },
-            "calculations": [
-                {
-                    "key": "ts_assoc_freq", "type": "freq",
-                    "geometry_key": "ts_assoc_geom",
-                    "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
-                    "freq_n_imag": 1, "freq_imag_freq_cm1": -1500.0,
-                },
-                {
-                    "key": "ts_assoc_sp", "type": "sp",
-                    "geometry_key": "ts_assoc_geom",
-                    "software_release": _SOFTWARE, "level_of_theory": _LOT_CC,
-                    "sp_electronic_energy_hartree": -229.5,
-                },
-            ],
-        }],
-        "micro_reactions": [{
-            "key": "rxn_assoc",
-            "reversible": True,
-            "reactants": [{"species_key": "ethyl"}, {"species_key": "O2"}],
-            "products": [{"species_key": "ethylperoxy"}],
-        }],
+            {
+                "key": "rxn_ho2_elim",
+                "reversible": True,
+                "reactants": [{"species_key": "ethylperoxy"}],
+                "products": [{"species_key": "ethene"}, {"species_key": "HO2"}],
+            },
+        ],
         "states": [
             {
                 "key": "entrance",
@@ -177,10 +238,22 @@ def _full_payload(*, include_solve: bool = True) -> dict:
                 "label": "C2H5OO*",
                 "participants": [{"species_key": "ethylperoxy"}],
             },
+            {
+                "key": "exit",
+                "kind": "bimolecular",
+                "label": "C2H4 + HO2",
+                "participants": [
+                    {"species_key": "ethene"},
+                    {"species_key": "HO2"},
+                ],
+            },
         ],
         "channels": [
-            {"source_state_key": "entrance", "sink_state_key": "well_RO2", "kind": "association"},
-            {"source_state_key": "well_RO2", "sink_state_key": "entrance", "kind": "dissociation"},
+            # Barrierless association/dissociation: no saddle point exists, so
+            # the path declares none rather than inventing one.
+            {"key": "association_path", "source_state_key": "entrance", "sink_state_key": "well_RO2", "kind": "association", "microreaction_paths": [{"micro_reaction_key": "rxn_assoc"}]},
+            {"key": "dissociation_path", "source_state_key": "well_RO2", "sink_state_key": "entrance", "kind": "dissociation", "microreaction_paths": [{"micro_reaction_key": "rxn_assoc"}]},
+            {"key": "elimination_path", "source_state_key": "well_RO2", "sink_state_key": "exit", "kind": "dissociation", "microreaction_paths": [{"micro_reaction_key": "rxn_ho2_elim", "transition_state_key": "ts_elim"}]},
         ],
     }
 
@@ -193,86 +266,376 @@ def _full_payload(*, include_solve: bool = True) -> dict:
             "pmax_bar": 100,
             "grain_count": 250,
             "bath_gas": [{"species_key": "Ar", "mole_fraction": 1.0}],
-            "energy_transfer": {
+            "energy_transfer": [{
                 "model": "single_exponential_down",
                 "alpha0_cm_inv": 300,
                 "t_ref_k": 300,
-            },
+                "state_key": "well_RO2",
+                "collider_species_key": "Ar",
+            }],
+            "state_energies": [
+                {"state_key": "entrance", "energy_kj_mol": 0.0, **_CONVENTIONS, "source_calculation_key": "ethyl_sp"},
+                {"state_key": "well_RO2", "energy_kj_mol": -120.0, **_CONVENTIONS, "source_calculation_key": "etoo_sp"},
+                {"state_key": "exit", "energy_kj_mol": -60.0, **_CONVENTIONS, "source_calculation_key": "ethene_sp"},
+            ],
+            "channel_barriers": [
+                # Submerged: the elimination saddle point sits 15 kJ/mol BELOW
+                # the entrance channel, so the forward barrier is negative on
+                # this zero. That is physically routine and must be storable.
+                {"channel_key": "elimination_path", "micro_reaction_key": "rxn_ho2_elim", "transition_state_key": "ts_elim", "forward_barrier_kj_mol": 105.0, "reverse_barrier_kj_mol": 45.0, **_CONVENTIONS, "source_calculation_key": "ts_elim_sp"},
+            ],
             "source_calculations": [
                 {"calculation_key": "ethyl_sp", "role": "well_energy"},
                 {"calculation_key": "O2_sp", "role": "well_energy"},
                 {"calculation_key": "etoo_sp", "role": "well_energy"},
-                {"calculation_key": "ts_assoc_sp", "role": "barrier_energy"},
-                {"calculation_key": "ts_assoc_freq", "role": "barrier_freq"},
+                {"calculation_key": "ts_elim_sp", "role": "barrier_energy"},
+                {"calculation_key": "ts_elim_freq", "role": "barrier_freq"},
             ],
         }
 
     return payload
 
 
+def _elimination_ts(
+    *,
+    key: str = "ts_elim",
+    geometry_key: str = "ts_elim_geom",
+    prefix: str = "ts_elim",
+    imag_freq: float = -1500.0,
+    sp_hartree: float = -229.5,
+) -> dict:
+    """One concerted-HO2-elimination saddle point with complete IRC evidence."""
+    return {
+        "key": key,
+        "micro_reaction_key": "rxn_ho2_elim",
+        "charge": 0,
+        "multiplicity": 2,
+        "geometry": {"key": geometry_key, "xyz_text": _XYZ_TS},
+        "calculation": {
+            "key": f"{prefix}_opt", "type": "opt",
+            "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+            "opt_converged": True,
+        },
+        "calculations": [
+            {
+                "key": f"{prefix}_freq", "type": "freq",
+                "geometry_key": geometry_key,
+                "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+                "freq_n_imag": 1, "freq_imag_freq_cm1": imag_freq,
+            },
+            {
+                "key": f"{prefix}_sp", "type": "sp",
+                "geometry_key": geometry_key,
+                "software_release": _SOFTWARE, "level_of_theory": _LOT_CC,
+                "sp_electronic_energy_hartree": sp_hartree,
+            },
+            {
+                "key": f"{prefix}_irc", "type": "irc",
+                "geometry_key": geometry_key,
+                "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+            },
+        ],
+        "statmech": {
+            "statmech_treatment": "rrho",
+            "source_calculations": [{"calculation_key": f"{prefix}_freq", "role": "freq"}],
+        },
+        "validation_evidence": [
+            {
+                "kind": "irc",
+                "passed": True,
+                "rationale": "IRC descends to C2H5OO one way and C2H4 + HO2 the other.",
+                "source_calculation_key": f"{prefix}_irc",
+                "reactant_participant_mapping": _ELIM_REACTANT_MAP,
+                "product_participant_mapping": _ELIM_PRODUCT_MAP,
+            }
+        ],
+    }
+
+
+def _parallel_path_payload() -> dict:
+    """Two saddle points for ONE elementary step, over one channel.
+
+    ``network_channel_microreaction``'s primary key is
+    ``(channel, reaction_entry, transition_state_entry)`` precisely to allow
+    this: a single elementary reaction proceeding through two distinct
+    conformational transition states (syn/anti HO2 elimination). It is
+    modelled with ONE micro reaction, never two byte-identical ones — a
+    duplicate reaction would manufacture a second row in an identity table.
+    """
+    payload = deepcopy(_full_payload())
+    payload["transition_states"].append(
+        _elimination_ts(
+            key="ts_elim_anti",
+            geometry_key="ts_elim_anti_geom",
+            prefix="ts_elim_anti",
+            imag_freq=-1200.0,
+            sp_hartree=-229.45,
+        )
+    )
+    elimination = next(
+        channel for channel in payload["channels"] if channel["key"] == "elimination_path"
+    )
+    elimination["microreaction_paths"].append(
+        {"micro_reaction_key": "rxn_ho2_elim", "transition_state_key": "ts_elim_anti"}
+    )
+    payload["solve"]["channel_barriers"].append({
+        "channel_key": "elimination_path", "micro_reaction_key": "rxn_ho2_elim",
+        "transition_state_key": "ts_elim_anti",
+        "forward_barrier_kj_mol": 118.0, "reverse_barrier_kj_mol": 58.0,
+        **_CONVENTIONS, "source_calculation_key": "ts_elim_anti_sp",
+    })
+    # A second C2H5O2 well makes this a genuine multi-well network rather
+    # than merely a two-path elimination example.
+    payload["species"].append({
+        "key": "ethylperoxy_isomer", "species_entry": {"smiles": "C[CH]OO", "charge": 0, "multiplicity": 2},
+        "conformers": [{"key": "etoo_iso_conf", "geometry": {"key": "etoo_iso_geom", "xyz_text": _XYZ_ETOO}, "calculation": {"key": "etoo_iso_opt", "type": "opt", "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT}}],
+        "calculations": [{"key": "etoo_iso_sp", "type": "sp", "geometry_key": "etoo_iso_geom", "software_release": _SOFTWARE, "level_of_theory": _LOT_CC, "sp_electronic_energy_hartree": -229.08}],
+    })
+    payload["states"].append({"key": "well_iso", "kind": "well", "participants": [{"species_key": "ethylperoxy_isomer"}]})
+    payload["micro_reactions"].append({"key": "rxn_isomer", "reversible": True, "reactants": [{"species_key": "ethylperoxy"}], "products": [{"species_key": "ethylperoxy_isomer"}]})
+    payload["transition_states"].append({
+        "key": "ts_isomer", "micro_reaction_key": "rxn_isomer", "charge": 0, "multiplicity": 2,
+        "geometry": {"key": "ts_isomer_geom", "xyz_text": _XYZ_TS},
+        "calculation": {"key": "ts_isomer_opt", "type": "opt", "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT},
+        "calculations": [
+            {"key": "ts_isomer_freq", "type": "freq", "geometry_key": "ts_isomer_geom", "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT, "freq_n_imag": 1, "freq_imag_freq_cm1": -900.0},
+            {"key": "ts_isomer_sp", "type": "sp", "geometry_key": "ts_isomer_geom", "software_release": _SOFTWARE, "level_of_theory": _LOT_CC, "sp_electronic_energy_hartree": -229.4},
+            {"key": "ts_isomer_irc", "type": "irc", "geometry_key": "ts_isomer_geom", "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT},
+        ],
+        "statmech": {"statmech_treatment": "rrho", "source_calculations": [{"calculation_key": "ts_isomer_freq", "role": "freq"}]},
+        # A 1->1 isomerization: every TS atom belongs to the single reactant
+        # and, after the H shift, to the single product.
+        "validation_evidence": [{"kind": "irc", "passed": True, "rationale": "IRC connects the two C2H5O2 wells.", "source_calculation_key": "ts_isomer_irc", "reactant_participant_mapping": {"reactant:1": [1, 2, 3, 4]}, "product_participant_mapping": {"product:1": [1, 2, 3, 4]}}],
+    })
+    payload["channels"].append({"key": "isomerization_path", "source_state_key": "well_RO2", "sink_state_key": "well_iso", "kind": "isomerization", "microreaction_paths": [{"micro_reaction_key": "rxn_isomer", "transition_state_key": "ts_isomer"}]})
+    payload["solve"]["state_energies"].append({"state_key": "well_iso", "energy_kj_mol": -110.0, **_CONVENTIONS, "source_calculation_key": "etoo_iso_sp"})
+    payload["solve"]["channel_barriers"].append({"channel_key": "isomerization_path", "micro_reaction_key": "rxn_isomer", "transition_state_key": "ts_isomer", "forward_barrier_kj_mol": 25.0, "reverse_barrier_kj_mol": 35.0, **_CONVENTIONS, "source_calculation_key": "ts_isomer_sp"})
+    # Two wells now, so the (well, collider) cross product needs both.
+    payload["solve"]["energy_transfer"].append({
+        "model": "single_exponential_down", "alpha0_cm_inv": 280, "t_ref_k": 300,
+        "state_key": "well_iso", "collider_species_key": "Ar",
+    })
+    payload["solve"]["source_calculations"].extend([{"calculation_key": "etoo_iso_sp", "role": "well_energy"}, {"calculation_key": "ts_isomer_sp", "role": "barrier_energy"}, {"calculation_key": "ts_isomer_freq", "role": "barrier_freq"}])
+    return payload
+
+
+def test_parallel_path_upload_persists_ts_subject_and_distinct_barriers(db_engine) -> None:
+    """One elementary step retains two distinct saddle-point pathways.
+
+    Regression guard for the schema rule that used to forbid a second TS per
+    micro reaction: the only way to express parallel paths was to declare a
+    duplicate micro reaction with byte-identical stoichiometry, which injects
+    a duplicate row into an identity table. Here the two paths share ONE
+    reaction entry and differ only by transition state.
+    """
+    with Session(db_engine) as session, session.begin():
+        # Let the sequence assign the id: hard-coded ids do not advance the
+        # app_user sequence and collide with other files that insert without one.
+        actor = AppUser(username="parallel_path_tester")
+        session.add(actor)
+        session.flush()
+        network = persist_network_pdep_upload(
+            session, NetworkPDepUploadRequest(**_parallel_path_payload()), created_by=actor.id
+        )
+        elimination = session.scalars(
+            select(NetworkChannel).where(NetworkChannel.network_id == network.id, NetworkChannel.channel_key == "elimination_path")
+        ).one()
+        links = session.scalars(
+            select(NetworkChannelMicroReaction).where(NetworkChannelMicroReaction.channel_id == elimination.id)
+        ).all()
+        assert len(links) == 2
+        # ONE reaction identity, TWO transition states.
+        assert len({link.reaction_entry_id for link in links}) == 1
+        assert len({link.transition_state_entry_id for link in links}) == 2
+        solve = session.scalars(select(NetworkSolve).where(NetworkSolve.network_id == network.id)).one()
+        barriers = session.scalars(
+            select(NetworkSolveChannelBarrier).where(NetworkSolveChannelBarrier.solve_id == solve.id, NetworkSolveChannelBarrier.channel_id == elimination.id)
+        ).all()
+        assert len(barriers) == 2
+        assert {barrier.forward_barrier_kj_mol for barrier in barriers} == {105.0, 118.0}
+        wells = session.scalars(
+            select(NetworkState).where(NetworkState.network_id == network.id, NetworkState.kind == "well")
+        ).all()
+        assert len(wells) >= 2
+        ts_statmech = session.scalars(
+            select(Statmech).where(Statmech.transition_state_entry_id.in_({link.transition_state_entry_id for link in links}))
+        ).all()
+        assert len(ts_statmech) == 2
+        assert all(record.species_entry_id is None for record in ts_statmech)
+        assert all(
+            source.calculation.transition_state_entry_id == source.statmech.transition_state_entry_id
+            for source in session.scalars(
+                select(StatmechSourceCalculation).join(Statmech).where(Statmech.id.in_({record.id for record in ts_statmech}))
+            ).all()
+        )
+
+        # Public scientific reads preserve the macroscopic channel identity,
+        # every microscopic path, solve-local energies/ET, and path barriers.
+        network_read = get_network(
+            session, network_handle=network.public_ref, include=["states", "channels"]
+        )
+        assert len(network_read.record.states or []) == 4
+        elimination_read = next(
+            channel for channel in network_read.record.channels or []
+            if channel.channel_key == "elimination_path"
+        )
+        assert len(elimination_read.microreactions) == 2
+        assert len({path.reaction_entry_ref for path in elimination_read.microreactions}) == 1
+        assert len({path.transition_state_entry_ref for path in elimination_read.microreactions}) == 2
+        assert {path.path_kind for path in elimination_read.microreactions} == {"saddle_point"}
+
+        # The barrierless association channel round-trips as such.
+        association_read = next(
+            channel for channel in network_read.record.channels or []
+            if channel.channel_key == "association_path"
+        )
+        assert len(association_read.microreactions) == 1
+        assert association_read.microreactions[0].path_kind == "barrierless"
+        assert association_read.microreactions[0].transition_state_entry_ref is None
+
+        solve_read = get_network_solve(
+            session,
+            network_solve_handle=solve.public_ref,
+            include=["state_energies", "energy_transfer", "channel_barriers"],
+        )
+        assert len(solve_read.record.state_energies or []) == 4
+        # Both wells declare their own ⟨ΔE⟩down against the argon bath.
+        assert len(solve_read.record.energy_transfer or []) == 2
+        assert all(
+            row.state_composition_hash is not None
+            for row in solve_read.record.energy_transfer
+        )
+        barriers_read = solve_read.record.channel_barriers or []
+        assert len(barriers_read) == 3
+        assert {
+            (barrier.channel_key, barrier.forward_barrier_kj_mol, barrier.reverse_barrier_kj_mol)
+            for barrier in barriers_read
+        } == {
+            ("elimination_path", 105.0, 45.0),
+            ("elimination_path", 118.0, 58.0),
+            ("isomerization_path", 25.0, 35.0),
+        }
+        # Every barrier names the calculation it came from.
+        assert all(
+            barrier.source_calculation_ref is not None for barrier in barriers_read
+        )
+
+
 def test_full_end_to_end_upload(db_engine) -> None:
     """Full PDep upload creates all entities end-to-end."""
     with Session(db_engine) as session, session.begin():
-        session.add(AppUser(id=30, username="e2e_tester"))
+        actor = AppUser(username="e2e_tester")
+        session.add(actor)
         session.flush()
 
         request = NetworkPDepUploadRequest(**_full_payload())
-        network = persist_network_pdep_upload(session, request, created_by=30)
+        network = persist_network_pdep_upload(session, request, created_by=actor.id)
 
         # -- Network --
         assert network.id is not None
         assert network.name == "ethyl + O2"
 
-        # -- States: 2 --
+        # -- States: entrance + well_RO2 + exit --
         states = session.scalars(
             select(NetworkState).where(NetworkState.network_id == network.id)
         ).all()
-        assert len(states) == 2
+        assert len(states) == 3
 
-        # -- Channels: 2 --
+        # -- Channels: association, dissociation, HO2 elimination --
         channels = session.scalars(
             select(NetworkChannel).where(NetworkChannel.network_id == network.id)
         ).all()
-        assert len(channels) == 2
+        assert len(channels) == 3
 
-        # -- Micro reactions: 1 --
+        # -- Micro reactions: association + elimination --
         rxn_links = session.scalars(
             select(NetworkReaction).where(NetworkReaction.network_id == network.id)
         ).all()
-        assert len(rxn_links) == 1
+        assert len(rxn_links) == 2
 
-        # -- Conformers: 4 (ethyl, O2, ethylperoxy, Ar) --
+        # -- Conformers: ethyl, O2, ethylperoxy, ethene, HO2, Ar --
         conformers = session.scalars(select(ConformerObservation)).all()
-        assert len(conformers) >= 4
+        assert len(conformers) >= 6
 
-        # -- Calculations total: 4 opts + 3 sp + 1 freq (species-side)
-        #                        + 1 opt + 1 freq + 1 sp (TS-side) = 11
+        # -- Calculations: 6 opts + 5 sp + 1 freq (species-side)
+        #                  + 1 opt + 1 freq + 1 sp + 1 irc (TS-side) = 16
         all_calcs = session.scalars(select(Calculation)).all()
-        assert len(all_calcs) >= 11
+        assert len(all_calcs) >= 16
 
         # -- Calculation results --
         sp_results = session.scalars(select(CalculationSPResult)).all()
-        assert len(sp_results) >= 4  # ethyl, O2, etoo, ts_assoc
+        assert len(sp_results) >= 6  # ethyl, O2, etoo, ethene, HO2, ts_elim
 
         opt_results = session.scalars(select(CalculationOptResult)).all()
-        assert len(opt_results) >= 2  # ethyl (converged), ts_assoc (converged)
+        assert len(opt_results) >= 2  # ethyl (converged), ts_elim (converged)
 
         freq_results = session.scalars(select(CalculationFreqResult)).all()
-        assert len(freq_results) >= 2  # ethyl (n_imag=0), ts_assoc (n_imag=1)
+        assert len(freq_results) >= 2  # ethyl (n_imag=0), ts_elim (n_imag=1)
 
         # -- Geometry linkage --
         output_geoms = session.scalars(select(CalculationOutputGeometry)).all()
-        assert len(output_geoms) >= 11  # every calculation has a geometry link
+        assert len(output_geoms) >= 16  # every calculation has a geometry link
 
-        # -- Transition state --
-        ts_list = session.scalars(select(TransitionState)).all()
+        # -- Transition state: only the elimination step carries one --
+        elimination_entry_id = session.scalars(
+            select(NetworkChannelMicroReaction.transition_state_entry_id)
+            .join(NetworkChannel, NetworkChannel.id == NetworkChannelMicroReaction.channel_id)
+            .where(
+                NetworkChannel.network_id == network.id,
+                NetworkChannel.channel_key == "elimination_path",
+            )
+        ).one()
+        assert elimination_entry_id is not None
+        elimination_reaction_id = session.scalars(
+            select(NetworkChannelMicroReaction.reaction_entry_id)
+            .join(NetworkChannel, NetworkChannel.id == NetworkChannelMicroReaction.channel_id)
+            .where(
+                NetworkChannel.network_id == network.id,
+                NetworkChannel.channel_key == "elimination_path",
+            )
+        ).one()
+
+        # The barrierless association path stores a NULL transition state.
+        association_ts_ids = session.scalars(
+            select(NetworkChannelMicroReaction.transition_state_entry_id)
+            .join(NetworkChannel, NetworkChannel.id == NetworkChannelMicroReaction.channel_id)
+            .where(
+                NetworkChannel.network_id == network.id,
+                NetworkChannel.channel_key == "association_path",
+            )
+        ).all()
+        assert association_ts_ids == [None]
+
+        ts_list = session.scalars(
+            select(TransitionState).where(
+                TransitionState.reaction_entry_id == elimination_reaction_id
+            )
+        ).all()
         assert len(ts_list) == 1
-        assert ts_list[0].reaction_entry_id == rxn_links[0].reaction_entry_id
 
-        ts_entries = session.scalars(select(TransitionStateEntry)).all()
+        ts_entries = session.scalars(
+            select(TransitionStateEntry).join(TransitionState).where(
+                TransitionState.reaction_entry_id == elimination_reaction_id
+            )
+        ).all()
         assert len(ts_entries) == 1
+        assert ts_entries[0].id == elimination_entry_id
         assert ts_entries[0].charge == 0
         assert ts_entries[0].multiplicity == 2
+        evidence = session.scalars(
+            select(TransitionStateValidationEvidence).where(
+                TransitionStateValidationEvidence.transition_state_entry_id == ts_entries[0].id
+            )
+        ).all()
+        assert len(evidence) == 1
+        assert evidence[0].kind == "irc"
+        # Passing evidence accounts for every TS atom on both sides.
+        assert sorted(
+            i for atoms in evidence[0].reactant_participant_mapping.values() for i in atoms
+        ) == [1, 2, 3, 4]
+        assert sorted(
+            i for atoms in evidence[0].product_participant_mapping.values() for i in atoms
+        ) == [1, 2, 3, 4]
 
         # TS calculations belong to TS entry
         ts_calcs = session.scalars(
@@ -280,7 +643,7 @@ def test_full_end_to_end_upload(db_engine) -> None:
                 Calculation.transition_state_entry_id == ts_entries[0].id
             )
         ).all()
-        assert len(ts_calcs) == 3  # opt, freq, sp
+        assert len(ts_calcs) == 4  # opt, freq, sp, irc
 
         # -- Solve --
         solves = session.scalars(
@@ -451,15 +814,17 @@ def test_same_basin_species_conformers_keep_distinct_observations_and_calc_ancho
     ]
 
     with Session(db_engine) as session, session.begin():
-        session.add(AppUser(id=31, username="anchor_tester"))
+        actor = AppUser(username="anchor_tester")
+        session.add(actor)
         session.flush()
+        actor_id = actor.id
         request = NetworkPDepUploadRequest(**payload)
-        persist_network_pdep_upload(session, request, created_by=31)
+        persist_network_pdep_upload(session, request, created_by=actor_id)
 
         target_entry_id = session.execute(
             select(Calculation.species_entry_id)
             .where(
-                Calculation.created_by == 31,
+                Calculation.created_by == actor_id,
                 Calculation.type == CalculationType.opt,
                 Calculation.species_entry_id.is_not(None),
             )
@@ -475,7 +840,7 @@ def test_same_basin_species_conformers_keep_distinct_observations_and_calc_ancho
             )
             .where(
                 ConformerGroup.species_entry_id == target_entry_id,
-                ConformerObservation.created_by == 31,
+                ConformerObservation.created_by == actor_id,
             )
         ).all()
         assert len(ethyl_observations) == 2
@@ -487,7 +852,7 @@ def test_same_basin_species_conformers_keep_distinct_observations_and_calc_ancho
                 Calculation.conformer_observation_id.in_(observation_ids),
                 Calculation.type.in_([CalculationType.freq, CalculationType.sp]),
                 Calculation.species_entry_id == target_entry_id,
-                Calculation.created_by == 31,
+                Calculation.created_by == actor_id,
             )
         ).all()
         assert len(anchored_calcs) == 2
@@ -691,7 +1056,7 @@ def test_bundle_inline_results_and_geometry_links_preserved(db_engine) -> None:
         ).all()
         assert len(sp_rows) >= 3
 
-        # Freq results: ethyl_freq and ts_assoc_freq.
+        # Freq results: ethyl_freq and ts_elim_freq.
         freq_rows = session.scalars(
             select(CalculationFreqResult).where(
                 CalculationFreqResult.calculation_id.in_(new_calc_ids)
@@ -820,8 +1185,9 @@ def test_pdep_workflow_persists_and_reads_back_channel_kinetics(db_engine) -> No
 
     payload = _full_payload(include_solve=True)
     payload["solve"]["channel_kinetics"] = [
-        {
-            "source_state_key": "entrance",
+            {
+                "channel_key": "association_path",
+                "source_state_key": "entrance",
             "sink_state_key": "well_RO2",
             "model_kind": "chebyshev",
             "chebyshev": {
@@ -921,19 +1287,23 @@ def test_pdep_channel_kinetics_rejects_undefined_channel() -> None:
     payload = _full_payload(include_solve=True)
     # Drop the reverse (dissociation) channel so (well_RO2 -> entrance) is a
     # valid distinct-state pair that is NOT a declared channel. The remaining
-    # association channel still keeps the two states connected.
+    # association and elimination channels still keep every state connected.
     payload["channels"] = [
-        {
-            "source_state_key": "entrance",
-            "sink_state_key": "well_RO2",
-            "kind": "association",
-        }
+        channel
+        for channel in payload["channels"]
+        if channel["key"] != "dissociation_path"
     ]
     payload["solve"]["channel_kinetics"] = [
         {
             "source_state_key": "well_RO2",
             "sink_state_key": "entrance",
             "model_kind": "chebyshev",
+            # A Chebyshev surface is fit in reduced variables; without bounds
+            # it cannot be evaluated at any (T, P).
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "pmin_bar": 0.01,
+            "pmax_bar": 100.0,
             "chebyshev": {
                 "n_temperature": 2,
                 "n_pressure": 2,
@@ -954,6 +1324,7 @@ def test_pdep_channel_kinetics_rejects_duplicate_chebyshev_within_payload() -> N
         "source_state_key": "entrance",
         "sink_state_key": "well_RO2",
         "model_kind": "chebyshev",
+        "tmin_k": 300.0, "tmax_k": 2000.0, "pmin_bar": 0.01, "pmax_bar": 100.0,
         "chebyshev": {
             "n_temperature": 2,
             "n_pressure": 2,
@@ -1011,6 +1382,12 @@ def test_pdep_channel_kinetics_accepts_chebyshev_and_plog_on_one_channel() -> No
             "source_state_key": "entrance",
             "sink_state_key": "well_RO2",
             "model_kind": "chebyshev",
+            # A Chebyshev surface is fit in reduced variables; without bounds
+            # it cannot be evaluated at any (T, P).
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "pmin_bar": 0.01,
+            "pmax_bar": 100.0,
             "chebyshev": {
                 "n_temperature": 2,
                 "n_pressure": 2,
@@ -1028,6 +1405,38 @@ def test_pdep_channel_kinetics_accepts_chebyshev_and_plog_on_one_channel() -> No
     }
 
 
+def test_pdep_parallel_paths_require_stable_channel_identity() -> None:
+    """Parallel source/sink paths stay distinct and their fits are unambiguous."""
+    payload = _full_payload(include_solve=True)
+    elimination = next(
+        channel for channel in payload["channels"] if channel["key"] == "elimination_path"
+    )
+    alternate = deepcopy(elimination)
+    alternate["key"] = "elimination_path_alt"
+    payload["channels"].append(alternate)
+    payload["solve"]["channel_barriers"].append({
+        "channel_key": "elimination_path_alt", "micro_reaction_key": "rxn_ho2_elim",
+        "transition_state_key": "ts_elim", "forward_barrier_kj_mol": 105.0,
+        "reverse_barrier_kj_mol": 45.0,
+        **_CONVENTIONS,
+        "source_calculation_key": "ts_elim_sp",
+    })
+    payload["solve"]["channel_kinetics"] = [{
+        "channel_key": "elimination_path_alt", "model_kind": "chebyshev",
+        "tmin_k": 300.0, "tmax_k": 2000.0, "pmin_bar": 0.01, "pmax_bar": 100.0,
+        "chebyshev": {"n_temperature": 1, "n_pressure": 1, "coefficients": [[1.0]]},
+    }]
+    request = NetworkPDepUploadRequest(**payload)
+    assert request.solve.channel_kinetics[0].channel_key == "elimination_path_alt"
+
+
+def test_pdep_rejects_incomplete_solve_scientific_inputs() -> None:
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["state_energies"] = payload["solve"]["state_energies"][:1]
+    with pytest.raises(ValueError, match="exactly one energy"):
+        NetworkPDepUploadRequest(**payload)
+
+
 def test_pdep_channel_kinetics_rejects_non_finite_coefficient() -> None:
     """A NaN Chebyshev coefficient is rejected at the schema layer (not a
     500 at JSONB insert time)."""
@@ -1037,6 +1446,10 @@ def test_pdep_channel_kinetics_rejects_non_finite_coefficient() -> None:
             "source_state_key": "entrance",
             "sink_state_key": "well_RO2",
             "model_kind": "chebyshev",
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "pmin_bar": 0.01,
+            "pmax_bar": 100.0,
             "chebyshev": {
                 "n_temperature": 2,
                 "n_pressure": 2,
@@ -1109,6 +1522,12 @@ def test_pdep_channel_kinetics_rejects_chebyshev_with_plog_block() -> None:
             "source_state_key": "entrance",
             "sink_state_key": "well_RO2",
             "model_kind": "chebyshev",
+            # A Chebyshev surface is fit in reduced variables; without bounds
+            # it cannot be evaluated at any (T, P).
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "pmin_bar": 0.01,
+            "pmax_bar": 100.0,
             "chebyshev": {
                 "n_temperature": 2,
                 "n_pressure": 2,
@@ -1300,6 +1719,10 @@ def test_pdep_workflow_persists_mixed_chebyshev_and_plog_channel_kinetics(
             "source_state_key": "entrance",
             "sink_state_key": "well_RO2",
             "model_kind": "chebyshev",
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "pmin_bar": 0.01,
+            "pmax_bar": 100.0,
             "chebyshev": {
                 "n_temperature": n_t,
                 "n_pressure": n_p,
@@ -1383,6 +1806,7 @@ def test_pdep_species_statmech_persists_via_shared_seam(db_engine) -> None:
     # Attach statmech to the ethyl species, referencing its own freq calc.
     ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
     ethyl["statmech"] = {
+        "statmech_treatment": "rrho",
         "external_symmetry": 2,
         "optical_isomers": 2,
         "point_group": "C2",
@@ -1397,7 +1821,10 @@ def test_pdep_species_statmech_persists_via_shared_seam(db_engine) -> None:
         persist_network_pdep_upload(session, request, created_by=None)
 
         statmechs = session.scalars(
-            select(Statmech).where(Statmech.id > baseline_statmech_id)
+            select(Statmech).where(
+                Statmech.id > baseline_statmech_id,
+                Statmech.species_entry_id.is_not(None),
+            )
         ).all()
         assert len(statmechs) == 1
         sm = statmechs[0]
@@ -1431,11 +1858,13 @@ def test_pdep_species_statmech_rejects_cross_species_source_calculation() -> Non
     payload = _full_payload(include_solve=False)
     ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
     ethyl["statmech"] = {
+        "statmech_treatment": "rrho",
         "external_symmetry": 2,
         "optical_isomers": 2,
-        # ts_assoc_sp is a defined global calc key, but it belongs to a TS.
+        # ts_elim_sp is a defined global calc key, but it belongs to a TS.
         "source_calculations": [
-            {"calculation_key": "ts_assoc_sp", "role": "sp"},
+            {"calculation_key": "ethyl_freq", "role": "freq"},
+            {"calculation_key": "ts_elim_sp", "role": "sp"},
         ],
     }
     with pytest.raises(ValueError, match="not one of that species's own"):
@@ -1464,6 +1893,8 @@ def test_pdep_species_statmech_torsion_scan_persists(db_engine) -> None:
     payload = _payload_with_ethyl_scan()
     ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
     ethyl["statmech"] = {
+        "statmech_treatment": "rrho_1d",
+        "source_calculations": [{"calculation_key": "ethyl_freq", "role": "freq"}],
         "external_symmetry": 1,
         "optical_isomers": 1,
         "torsions": [
@@ -1484,7 +1915,10 @@ def test_pdep_species_statmech_torsion_scan_persists(db_engine) -> None:
         persist_network_pdep_upload(session, request, created_by=None)
 
         sm = session.scalars(
-            select(Statmech).where(Statmech.id > baseline_statmech_id)
+            select(Statmech).where(
+                Statmech.id > baseline_statmech_id,
+                Statmech.species_entry_id.is_not(None),
+            )
         ).one()
         torsions = session.scalars(
             select(StatmechTorsion).where(StatmechTorsion.statmech_id == sm.id)
@@ -1505,6 +1939,8 @@ def test_pdep_species_statmech_torsion_rejects_undefined_scan_key() -> None:
     payload = _payload_with_ethyl_scan()
     ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
     ethyl["statmech"] = {
+        "statmech_treatment": "rrho_1d",
+        "source_calculations": [{"calculation_key": "ethyl_freq", "role": "freq"}],
         "torsions": [
             {"torsion_index": 1, "source_scan_calculation_key": "no_such_scan"}
         ],
@@ -1519,6 +1955,8 @@ def test_pdep_species_statmech_torsion_rejects_non_scan_type_key() -> None:
     payload = _payload_with_ethyl_scan()
     ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
     ethyl["statmech"] = {
+        "statmech_treatment": "rrho_1d",
+        "source_calculations": [{"calculation_key": "ethyl_freq", "role": "freq"}],
         # ethyl_freq is one of ethyl's own calcs, but it is a freq, not a scan.
         "torsions": [
             {"torsion_index": 1, "source_scan_calculation_key": "ethyl_freq"}
@@ -1541,8 +1979,17 @@ def test_pdep_species_statmech_torsion_rejects_cross_species_scan_key() -> None:
             "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
         }
     )
+    o2["calculations"].append(
+        {
+            "key": "O2_freq", "type": "freq", "geometry_key": "O2_geom",
+            "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+            "freq_n_imag": 0,
+        }
+    )
     ethyl = next(sp for sp in payload["species"] if sp["key"] == "ethyl")
     ethyl["statmech"] = {
+        "statmech_treatment": "rrho_1d",
+        "source_calculations": [{"calculation_key": "ethyl_freq", "role": "freq"}],
         "torsions": [
             {"torsion_index": 1, "source_scan_calculation_key": "O2_scan"}
         ],
@@ -1570,6 +2017,13 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> N
         {
             "key": "O2_scan", "type": "scan", "geometry_key": "O2_geom",
             "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+        }
+    )
+    o2["calculations"].append(
+        {
+            "key": "O2_freq", "type": "freq", "geometry_key": "O2_geom",
+            "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
+            "freq_n_imag": 0,
         }
     )
 
@@ -1600,19 +2054,28 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> N
         foreign_entry_id = foreign_calc.species_entry_id
         assert foreign_entry_id != o2_scan.species_entry_id
 
+        foreign_freq = session.scalars(
+            select(Calculation).where(
+                Calculation.id > baseline_calc_id,
+                Calculation.type == CalculationType.freq,
+                Calculation.species_entry_id == foreign_entry_id,
+            )
+        ).one()
         statmech = StatmechInBundle(
+            statmech_treatment="rrho_1d",
+            source_calculations=[{"calculation_key": "foreign_freq", "role": "freq"}],
             torsions=[
                 {"torsion_index": 1, "source_scan_calculation_key": "O2_scan"}
             ],
         )
         # Feed the seam a calc-key map pointing at O2's scan calc while
         # claiming a different species entry owns the statmech.
-        with pytest.raises(ValueError, match="different species entry"):
+        with pytest.raises(ValueError, match="different subject"):
             _persist_statmech_block(
                 session,
                 statmech,
                 species_entry_id=foreign_entry_id,
-                calc_keys_to_id={"O2_scan": o2_scan},
+                calc_keys_to_id={"O2_scan": o2_scan, "foreign_freq": foreign_freq},
                 created_by=None,
             )
         # No torsion row was persisted for a foreign scan link.
@@ -1622,3 +2085,269 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> N
             )
         ).all()
         assert leaked == []
+
+
+@pytest.mark.parametrize(
+    ("mutate", "label"),
+    [
+        (lambda p: p["channels"][0].pop("microreaction_paths"), "missing channel path"),
+        (
+            lambda p: p["channels"][0]["microreaction_paths"][0].update(
+                {"micro_reaction_key": "missing_reaction"}
+            ),
+            "undefined channel reaction path",
+        ),
+        (lambda p: p["solve"].update({"channel_barriers": []}), "missing solve barriers"),
+        (
+            lambda p: p["solve"]["channel_barriers"][0].update(
+                {"transition_state_key": "missing_ts"}
+            ),
+            "mismatched barrier TS path",
+        ),
+        (
+            lambda p: p["solve"]["energy_transfer"][0].update({"state_key": "missing_state"}),
+            "undefined energy-transfer scope",
+        ),
+        (
+            lambda p: p["solve"]["state_energies"][0].update({"state_key": "missing_state"}),
+            "undefined state-energy state",
+        ),
+        (
+            lambda p: p["transition_states"][0]["validation_evidence"][0].update(
+                {"reactant_participant_mapping": {"reactant:3": [1]}}
+            ),
+            "out-of-bounds IRC participant mapping",
+        ),
+        (
+            # A map covering 2 of the TS's 4 atoms proves nothing about the
+            # other 2 and can never be passing evidence.
+            lambda p: p["transition_states"][0]["validation_evidence"][0].update(
+                {"reactant_participant_mapping": {"reactant:1": [1, 2]}}
+            ),
+            "partial IRC participant mapping",
+        ),
+        (
+            # Product side must cover the full TS atom set too.
+            lambda p: p["transition_states"][0]["validation_evidence"][0].update(
+                {"product_participant_mapping": {"product:1": [1, 2], "product:2": [3]}}
+            ),
+            "partial IRC product mapping",
+        ),
+        (
+            lambda p: p["transition_states"][0]["validation_evidence"][0].pop(
+                "product_participant_mapping"
+            ),
+            "one-sided IRC participant mapping",
+        ),
+        (
+            lambda p: p["solve"]["state_energies"][0].update(
+                {"energy_zero_convention": "banana"}
+            ),
+            "unknown energy-zero convention token",
+        ),
+        (
+            lambda p: p["solve"]["channel_barriers"][0].update(
+                {"correction_convention": "electronic-plus-zpe"}
+            ),
+            "free-text correction convention",
+        ),
+        (
+            # A five-well network with one well's Delta-E-down is not coverage.
+            lambda p: p["solve"].update({"energy_transfer": []}),
+            "missing energy-transfer coverage",
+        ),
+        (
+            # A barrierless path must not also declare a barrier.
+            lambda p: p["solve"]["channel_barriers"].append(
+                {
+                    "channel_key": "association_path",
+                    "micro_reaction_key": "rxn_assoc",
+                    "transition_state_key": "ts_elim",
+                    "forward_barrier_kj_mol": 15.0,
+                    "reverse_barrier_kj_mol": 135.0,
+                    **_CONVENTIONS,
+                }
+            ),
+            "barrier on a barrierless path",
+        ),
+    ],
+    ids=lambda case: case if isinstance(case, str) else None,
+)
+def test_pdep_strict_v2_schema_rejects_incomplete_path_and_evidence_matrix(
+    db_engine, mutate, label
+) -> None:
+    """Strict v2 rejects malformed path, solve-scope, and TS evidence input before writes."""
+    payload = _full_payload()
+    mutate(payload)
+    with Session(db_engine) as session, session.begin():
+        before = session.scalar(select(func.count()).select_from(Network))
+        with pytest.raises(ValueError):
+            NetworkPDepUploadRequest(**payload)
+        assert session.scalar(select(func.count()).select_from(Network)) == before, label
+
+
+# ---------------------------------------------------------------------------
+# Barrierless paths, optional IRC evidence, and machine-token conventions
+# ---------------------------------------------------------------------------
+
+
+def test_barrierless_channel_round_trips_without_a_transition_state(db_engine) -> None:
+    """A barrierless association persists with a NULL TS and no barrier row.
+
+    Radical-radical association has no saddle point. Before this, the only
+    way to deposit such a channel was to invent a transition state and a
+    barrier height for it.
+    """
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**_full_payload())
+        network = persist_network_pdep_upload(session, request)
+        session.flush()
+
+        association = session.scalars(
+            select(NetworkChannel).where(
+                NetworkChannel.network_id == network.id,
+                NetworkChannel.channel_key == "association_path",
+            )
+        ).one()
+        links = session.scalars(
+            select(NetworkChannelMicroReaction).where(
+                NetworkChannelMicroReaction.channel_id == association.id
+            )
+        ).all()
+        assert len(links) == 1
+        assert links[0].transition_state_entry_id is None
+
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+        barriers = session.scalars(
+            select(NetworkSolveChannelBarrier).where(
+                NetworkSolveChannelBarrier.solve_id == solve.id,
+                NetworkSolveChannelBarrier.channel_id == association.id,
+            )
+        ).all()
+        assert barriers == []
+
+        # And the read surface says so explicitly rather than by omission.
+        read = get_network(
+            session, network_handle=network.public_ref, include=["channels"]
+        )
+        association_read = next(
+            channel
+            for channel in read.record.channels or []
+            if channel.channel_key == "association_path"
+        )
+        assert association_read.microreactions[0].path_kind == "barrierless"
+        assert association_read.microreactions[0].transition_state_entry_ref is None
+
+
+def test_submerged_barrier_is_accepted(db_engine) -> None:
+    """A barrier below the declared zero is legitimate, not a validation error."""
+    payload = _full_payload()
+    payload["solve"]["channel_barriers"][0]["forward_barrier_kj_mol"] = -8.0
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**payload)
+        network = persist_network_pdep_upload(session, request)
+        session.flush()
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+        barrier = session.scalars(
+            select(NetworkSolveChannelBarrier).where(
+                NetworkSolveChannelBarrier.solve_id == solve.id
+            )
+        ).one()
+        assert barrier.forward_barrier_kj_mol == -8.0
+
+
+def test_non_finite_barrier_is_rejected() -> None:
+    payload = _full_payload()
+    payload["solve"]["channel_barriers"][0]["forward_barrier_kj_mol"] = float("nan")
+    with pytest.raises(ValueError, match="finite"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_transition_state_without_irc_evidence_succeeds_with_a_warning(
+    db_engine,
+) -> None:
+    """IRC evidence is recommended, not required — but its absence is stated."""
+    from tckdb_schemas.upload_warning import UploadWarning
+
+    payload = _full_payload()
+    payload["transition_states"][0]["validation_evidence"] = []
+
+    with _rolled_back_session(db_engine) as session:
+        warnings: list[UploadWarning] = []
+        request = NetworkPDepUploadRequest(**payload)
+        network = persist_network_pdep_upload(session, request, warnings=warnings)
+        session.flush()
+        assert network.id is not None
+        assert [w.code for w in warnings] == [
+            "transition_state_missing_irc_evidence"
+        ]
+        assert "ts_elim" in warnings[0].field
+
+
+def test_multiple_transition_states_per_micro_reaction_are_accepted() -> None:
+    """The schema no longer forbids what the database PK exists to allow."""
+    request = NetworkPDepUploadRequest(**_parallel_path_payload())
+    per_reaction = [
+        ts.micro_reaction_key for ts in request.transition_states
+    ]
+    assert per_reaction.count("rxn_ho2_elim") == 2
+    # And exactly one reaction identity carries them.
+    assert len({r.key for r in request.micro_reactions}) == len(request.micro_reactions)
+
+
+def test_energy_transfer_must_cover_every_well_collider_pair() -> None:
+    """One well's alpha0 does not describe a two-well network."""
+    payload = _parallel_path_payload()
+    payload["solve"]["energy_transfer"] = payload["solve"]["energy_transfer"][:1]
+    with pytest.raises(ValueError, match="energy_transfer must cover"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_other_convention_requires_a_note() -> None:
+    payload = _full_payload()
+    payload["solve"]["state_energies"][0]["energy_zero_convention"] = "other"
+    with pytest.raises(ValueError, match="convention_note is required"):
+        NetworkPDepUploadRequest(**payload)
+
+    payload = _full_payload()
+    payload["solve"]["state_energies"][0]["energy_zero_convention"] = "other"
+    payload["solve"]["state_energies"][0]["convention_note"] = (
+        "Zero at the C2H5OO well minimum."
+    )
+    assert NetworkPDepUploadRequest(**payload) is not None
+
+
+def test_network_chebyshev_requires_temperature_and_pressure_bounds() -> None:
+    """NB4: a Chebyshev surface with no bounds is not evaluable anywhere.
+
+    The coefficients are fit in reduced variables mapped from the fit's own
+    T/P bounds, so omitting them stores a surface that can never be read back
+    as a rate. The standalone kinetics path already enforced this; the network
+    path did not.
+    """
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "channel_key": "association_path",
+            "model_kind": "chebyshev",
+            "chebyshev": {
+                "n_temperature": 2,
+                "n_pressure": 2,
+                "coefficients": [[1.0, 2.0], [3.0, 4.0]],
+            },
+        }
+    ]
+    with pytest.raises(ValueError, match="requires finite T and P bounds"):
+        NetworkPDepUploadRequest(**payload)
+
+    # A partial set is rejected too, and the message names what is missing.
+    payload["solve"]["channel_kinetics"][0].update({"tmin_k": 300.0, "tmax_k": 2000.0})
+    with pytest.raises(ValueError, match=r"missing: \['pmin_bar', 'pmax_bar'\]"):
+        NetworkPDepUploadRequest(**payload)
+
+    payload["solve"]["channel_kinetics"][0].update({"pmin_bar": 0.01, "pmax_bar": 100.0})
+    assert NetworkPDepUploadRequest(**payload) is not None

@@ -15,9 +15,14 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     ArrheniusAUnits,
+    EnergyCorrectionConvention,
+    EnergyZeroConvention,
     KineticsDegeneracyConvention,
+    KineticsDegeneracyInterpretation,
     KineticsDirection,
+    KineticsEnsemblePolicy,
     KineticsModelKind,
+    KineticsStandardStateConvention,
     KineticsUncertaintyKind,
     PressureContext,
     RecordReviewStatus,
@@ -255,6 +260,46 @@ class ReactionPathDegeneracy(BaseModel):
     apply_to_rate_coefficient: bool | None = None
 
 
+class KineticsInterpretationAssignmentBlock(BaseModel):
+    """Exact statmech/conformer/TS interpretation used for one rate role."""
+
+    role: str
+    subject_key: str
+    statmech_ref: str
+    conformer_group_ref: str | None = None
+    conformer_selection_kind: str | None = None
+    assignment_scheme_ref: str | None = None
+    transition_state_entry_ref: str | None = None
+    ensemble_policy: KineticsEnsemblePolicy
+    standard_state_convention: KineticsStandardStateConvention
+    degeneracy_interpretation: KineticsDegeneracyInterpretation
+    convention_note: str | None = None
+
+
+class KineticsTunnelingApplicationBlock(BaseModel):
+    """Typed tunneling calculation inputs/results, never inferred from a note."""
+
+    model: str
+    #: Machine token naming the correction when ``model == "other"``.
+    model_identifier: str | None = None
+    transition_state_entry_ref: str
+    #: Calculation the energies/barriers below were read from.
+    source_calculation_ref: str | None = None
+    imaginary_frequency_cm1: float | None = None
+    frequency_sign_convention: str
+    reactant_energy_kj_mol: float | None = None
+    product_energy_kj_mol: float | None = None
+    forward_barrier_kj_mol: float | None = None
+    reverse_barrier_kj_mol: float | None = None
+    energy_zero_convention: EnergyZeroConvention | None = None
+    energy_correction_convention: EnergyCorrectionConvention | None = None
+    convention_note: str | None = None
+    result_artifact_calculation_ref: str | None = None
+    result_artifact_sha256: str | None = None
+    sct_path_integral_artifact_calculation_ref: str | None = None
+    sct_path_integral_artifact_sha256: str | None = None
+
+
 class KineticsProvenance(BaseModel):
     """Provenance block per Phase 2.2 — every key always present, ``null`` if absent.
 
@@ -316,6 +361,8 @@ class KineticsRecord(BaseModel):
     pressure_bar: float | None = None
     pressure_coverage: PressureCoverage | None = None
     reaction_path_degeneracy: ReactionPathDegeneracy | None = None
+    interpretation_assignments: list[KineticsInterpretationAssignmentBlock] | None = None
+    tunneling_application: KineticsTunnelingApplicationBlock | None = None
     plog_entries: list[PlogEntryBlock] | None = None
     chebyshev: ChebyshevBlock | None = None
     falloff: FalloffBlock | None = None

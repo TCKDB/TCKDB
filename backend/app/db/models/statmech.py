@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from app.db.models.software import SoftwareRelease
     from app.db.models.species import SpeciesEntry
     from app.db.models.thermo import Thermo
+    from app.db.models.transition_state import TransitionStateEntry
     from app.db.models.workflow import WorkflowToolRelease
 
 
@@ -54,10 +55,20 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
-    species_entry_id: Mapped[int] = mapped_column(
+    # A partition-function treatment belongs to exactly one physical subject.
+    # Most records describe a stable species, but canonical TST needs an
+    # equally first-class transition-state treatment; pretending a TS is a
+    # species makes its provenance scientifically false.
+    species_entry_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
-        nullable=False,
+        nullable=True,
+    )
+    transition_state_entry_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("transition_state_entry.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+        index=True,
     )
     scientific_origin: Mapped[ScientificOriginKind] = mapped_column(
         SAEnum(ScientificOriginKind, name="scientific_origin_kind"),
@@ -119,9 +130,10 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     optical_isomers: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    species_entry: Mapped["SpeciesEntry"] = relationship(
+    species_entry: Mapped[Optional["SpeciesEntry"]] = relationship(
         back_populates="statmech_records"
     )
+    transition_state_entry: Mapped[Optional["TransitionStateEntry"]] = relationship()
     literature: Mapped[Optional["Literature"]] = relationship()
     workflow_tool_release: Mapped[Optional["WorkflowToolRelease"]] = relationship(
         back_populates="statmech_records"
@@ -150,6 +162,10 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "(species_entry_id IS NULL) <> (transition_state_entry_id IS NULL)",
+            name="statmech_exactly_one_subject",
+        ),
         CheckConstraint(
             "external_symmetry IS NULL OR external_symmetry >= 1",
             name="external_symmetry_ge_1",

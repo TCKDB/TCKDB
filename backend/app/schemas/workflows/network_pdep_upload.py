@@ -29,6 +29,8 @@ from pydantic import Field, field_validator, model_validator
 from app.db.models.common import (
     ArrheniusAUnits,
     CalculationType,
+    EnergyCorrectionConvention,
+    EnergyZeroConvention,
     NetworkChannelKind,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
@@ -48,6 +50,10 @@ from app.schemas.reaction_family import find_canonical_reaction_family
 # Re-exported for backwards compatibility — ArtifactIn now lives in
 # app/schemas/fragments/artifact.py.
 __all__ = ("ArtifactIn",)
+from tckdb_schemas.fragments.ts_validation_evidence import (
+    TransitionStateValidationEvidenceIn,
+    validate_ts_evidence_set,
+)
 from tckdb_schemas.shared.calculation_in import (
     CalculationIn,
     GeometryIn,
@@ -185,6 +191,17 @@ class TransitionStateIn(SchemaBase):
     geometry: GeometryIn
     calculation: CalculationIn
     calculations: list[CalculationIn] = Field(default_factory=list)
+    statmech: StatmechInBundle | None = None
+    validation_evidence: list["TransitionStateValidationEvidenceIn"] = Field(
+        default_factory=list,
+        description=(
+            "Structured IRC evidence. Optional but strongly recommended: a "
+            "deposit without it succeeds and returns a "
+            "'transition_state_missing_irc_evidence' upload warning. "
+            "source_calculation_key resolves within this transition state's "
+            "calculation namespace and must name an irc-type calculation."
+        ),
+    )
     label: str | None = None
     note: str | None = None
 
@@ -330,15 +347,32 @@ class NetworkChannelIn(SchemaBase):
     :param kind: Channel classification.
     """
 
+    key: str = Field(min_length=1)
     source_state_key: str = Field(min_length=1)
     sink_state_key: str = Field(min_length=1)
     kind: NetworkChannelKind
+    microreaction_paths: list["NetworkChannelMicroReactionIn"] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_source_ne_sink(self) -> Self:
         if self.source_state_key == self.sink_state_key:
             raise ValueError("source_state_key and sink_state_key must differ.")
         return self
+
+
+class NetworkChannelMicroReactionIn(SchemaBase):
+    """One elementary reaction supporting a channel, and how it proceeds.
+
+    :param micro_reaction_key: Local key of the elementary step.
+    :param transition_state_key: Local key of the saddle point on this path.
+        Omit it (or send ``null``) for a barrierless or variational path —
+        radical-radical association and simple bond fission have no saddle
+        point, and they are ubiquitous in multi-well PDep networks. A
+        barrierless path carries no ``channel_barriers`` entry.
+    """
+
+    micro_reaction_key: str = Field(min_length=1)
+    transition_state_key: str | None = Field(default=None, min_length=1)
 
 
 # ---------------------------------------------------------------------------
@@ -367,8 +401,10 @@ class EnergyTransferIn(SchemaBase):
     :param note: Optional note.
     """
 
-    model: str | None = None
-    alpha0_cm_inv: float | None = None
+    state_key: str | None = None
+    collider_species_key: str | None = None
+    model: str = Field(min_length=1)
+    alpha0_cm_inv: float = Field(gt=0)
     t_exponent: float | None = None
     t_ref_k: float | None = Field(default=None, gt=0)
     note: str | None = None
@@ -377,6 +413,80 @@ class EnergyTransferIn(SchemaBase):
     def normalize_text(self) -> Self:
         self.model = normalize_optional_text(self.model)
         self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> Self:
+        if self.state_key is None or self.collider_species_key is None:
+            raise ValueError("energy_transfer requires an explicit state_key and collider_species_key; global transfer is scientifically ambiguous.")
+        return self
+
+
+class ConventionBlock(SchemaBase):
+    """Shared declaration of the energy zero and the corrections applied.
+
+    Both axes are machine tokens: free text made an energy unverifiable and
+    the repo's own producers had already drifted onto incompatible spellings.
+    ``other`` is the single escape hatch and always requires ``convention_note``.
+    """
+
+    energy_zero_convention: EnergyZeroConvention
+    correction_convention: EnergyCorrectionConvention
+    convention_note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_other_requires_note(self) -> Self:
+        self.convention_note = normalize_optional_text(self.convention_note)
+        if (
+            self.energy_zero_convention == EnergyZeroConvention.other
+            or self.correction_convention == EnergyCorrectionConvention.other
+        ) and self.convention_note is None:
+            raise ValueError(
+                "convention_note is required when an energy convention is 'other'."
+            )
+        return self
+
+
+class StateEnergyIn(ConventionBlock):
+    """One solve-state energy on a declared, reproducible energy zero."""
+
+    state_key: str = Field(min_length=1)
+    energy_kj_mol: float
+    source_calculation_key: str | None = None
+
+    @model_validator(mode="after")
+    def validate_energy_is_finite(self) -> Self:
+        if not math.isfinite(self.energy_kj_mol):
+            raise ValueError("energy_kj_mol must be finite.")
+        return self
+
+
+class ChannelBarrierIn(ConventionBlock):
+    """A solve barrier tied to one channel/reaction/TS path, never endpoints alone.
+
+    ``forward``/``reverse`` are oriented by the *channel* (source → sink), not
+    by the micro reaction's own written direction — the channel is the
+    directed object this barrier is keyed on.
+
+    Barriers are signed relative to ``energy_zero_convention``: a submerged
+    entrance barrier sits *below* the entrance channel and is legitimately
+    negative, so no positivity bound applies. Only non-finite values are
+    rejected. A barrierless path has no barrier and must not appear here.
+    """
+
+    channel_key: str = Field(min_length=1)
+    micro_reaction_key: str = Field(min_length=1)
+    transition_state_key: str = Field(min_length=1)
+    forward_barrier_kj_mol: float
+    reverse_barrier_kj_mol: float
+    source_calculation_key: str | None = None
+
+    @model_validator(mode="after")
+    def validate_barriers_are_finite(self) -> Self:
+        if not math.isfinite(self.forward_barrier_kj_mol) or not math.isfinite(
+            self.reverse_barrier_kj_mol
+        ):
+            raise ValueError("forward and reverse barriers must be finite.")
         return self
 
 
@@ -503,8 +613,11 @@ class NetworkKineticsIn(SchemaBase):
     :param note: Optional free-text note.
     """
 
-    source_state_key: str = Field(min_length=1)
-    sink_state_key: str = Field(min_length=1)
+    channel_key: str | None = Field(default=None, min_length=1)
+    # Deprecated compatibility selector. It is resolved only when endpoints
+    # identify exactly one channel; parallel paths must use channel_key.
+    source_state_key: str | None = Field(default=None, min_length=1)
+    sink_state_key: str | None = Field(default=None, min_length=1)
     model_kind: NetworkKineticsModelKind
 
     chebyshev: ChebyshevKineticsIn | None = None
@@ -527,7 +640,11 @@ class NetworkKineticsIn(SchemaBase):
 
     @model_validator(mode="after")
     def validate_source_ne_sink(self) -> Self:
-        if self.source_state_key == self.sink_state_key:
+        if self.channel_key is None and (self.source_state_key is None or self.sink_state_key is None):
+            raise ValueError("channel_key is required (or both legacy source_state_key and sink_state_key).")
+        if (self.source_state_key is None) != (self.sink_state_key is None):
+            raise ValueError("legacy source_state_key and sink_state_key must be supplied together.")
+        if self.source_state_key == self.sink_state_key and self.source_state_key is not None:
             raise ValueError("source_state_key and sink_state_key must differ.")
         return self
 
@@ -548,6 +665,29 @@ class NetworkKineticsIn(SchemaBase):
             if self.plog is not None:
                 raise ValueError(
                     "plog must be omitted when model_kind == 'chebyshev'."
+                )
+            # A Chebyshev surface is fit in REDUCED variables: the T and P
+            # axes are mapped onto [-1, 1] using the fit's own bounds. Without
+            # all four bounds the polynomial cannot be evaluated at any (T, P)
+            # at all, so the coefficients are unusable. The standalone kinetics
+            # path already enforces this in ``ChebyshevUpload.validate_grid``;
+            # the network path accepted a surface that could never be read
+            # back as a rate.
+            missing_bounds = [
+                name
+                for name, value in (
+                    ("tmin_k", self.tmin_k),
+                    ("tmax_k", self.tmax_k),
+                    ("pmin_bar", self.pmin_bar),
+                    ("pmax_bar", self.pmax_bar),
+                )
+                if value is None
+            ]
+            if missing_bounds:
+                raise ValueError(
+                    "Chebyshev network kinetics requires finite T and P bounds "
+                    "to map onto the fit's reduced variables; missing: "
+                    f"{missing_bounds}."
                 )
         elif self.model_kind == NetworkKineticsModelKind.plog:
             if self.plog is None:
@@ -630,8 +770,14 @@ class NetworkSolveIn(SchemaBase):
     workflow_tool_release: WorkflowToolReleaseRef | None = None
 
     bath_gas: list[BathGasIn] = Field(default_factory=list)
-    energy_transfer: EnergyTransferIn | None = None
-    source_calculations: list[SolveSourceCalculationIn] = Field(default_factory=list)
+    # Coverage of these two is enforced exactly by
+    # ``validate_mechanistic_channel_evidence`` against the wells and the
+    # saddle-point paths actually declared. A blanket ``min_length=1`` would
+    # instead forbid the legitimate all-barrierless network.
+    energy_transfer: list[EnergyTransferIn] = Field(default_factory=list)
+    state_energies: list[StateEnergyIn] = Field(min_length=1)
+    channel_barriers: list[ChannelBarrierIn] = Field(default_factory=list)
+    source_calculations: list[SolveSourceCalculationIn] = Field(min_length=1)
     channel_kinetics: list[NetworkKineticsIn] = Field(default_factory=list)
     note: str | None = None
 
@@ -655,6 +801,18 @@ class NetworkSolveIn(SchemaBase):
         keys = [bg.species_key for bg in self.bath_gas]
         if len(set(keys)) != len(keys):
             raise ValueError("Bath gas entries must reference distinct species_key values.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_bath_composition_and_state_energies(self) -> Self:
+        if not math.isclose(sum(bg.mole_fraction for bg in self.bath_gas), 1.0, rel_tol=0.0, abs_tol=1e-9):
+            raise ValueError("bath_gas mole fractions must sum to 1.0 within 1e-9.")
+        keys = [item.state_key for item in self.state_energies]
+        if len(keys) != len(set(keys)):
+            raise ValueError("state_energies must be unique by state_key.")
+        scopes = [(item.state_key, item.collider_species_key) for item in self.energy_transfer]
+        if len(scopes) != len(set(scopes)):
+            raise ValueError("energy_transfer entries must be unique by (state_key, collider_species_key).")
         return self
 
 
@@ -812,6 +970,40 @@ class NetworkPDepUploadRequest(SchemaBase):
                     f"Transition state '{ts.key}' references undefined "
                     f"micro_reaction_key '{ts.micro_reaction_key}'."
                 )
+            # IRC evidence is optional but recommended; a TS deposited without
+            # it succeeds and the workflow emits an upload warning. What is
+            # never accepted is *incomplete* evidence dressed up as passing.
+            ts_calculation_types = {
+                ts.calculation.key: ts.calculation.type,
+                **{calculation.key: calculation.type for calculation in ts.calculations},
+            }
+            for evidence in ts.validation_evidence:
+                # This payload HAS a calculation-key namespace, so evidence
+                # must name the irc calculation it came from.
+                if evidence.source_calculation_key is None:
+                    raise ValueError(
+                        f"Transition state '{ts.key}' validation evidence requires "
+                        f"source_calculation_key naming its irc calculation."
+                    )
+                calculation_type = ts_calculation_types.get(evidence.source_calculation_key)
+                if calculation_type is None:
+                    raise ValueError(
+                        f"Transition state '{ts.key}' validation evidence references "
+                        f"undefined calculation_key '{evidence.source_calculation_key}'."
+                    )
+                if calculation_type != CalculationType.irc:
+                    raise ValueError(
+                        f"Transition state '{ts.key}' irc validation evidence "
+                        f"requires an irc calculation."
+                    )
+            micro_reaction = next(item for item in self.micro_reactions if item.key == ts.micro_reaction_key)
+            validate_ts_evidence_set(
+                ts.validation_evidence,
+                subject_label=ts.key,
+                xyz_text=ts.geometry.xyz_text,
+                reactant_count=len(micro_reaction.reactants),
+                product_count=len(micro_reaction.products),
+            )
 
         # Calculation geometry_key references must point to defined geometries
         all_calcs: list[tuple[str, CalculationIn]] = []
@@ -890,37 +1082,27 @@ class NetworkPDepUploadRequest(SchemaBase):
 
             # Channel kinetics must reference defined states and a defined
             # channel (source, sink) pair.
-            channel_pairs = {
-                (ch.source_state_key, ch.sink_state_key) for ch in self.channels
-            }
+            channel_keys = {ch.key for ch in self.channels}
             for nk in self.solve.channel_kinetics:
-                if nk.source_state_key not in state_keys:
+                if nk.channel_key is None:
+                    matches = [ch.key for ch in self.channels if ch.source_state_key == nk.source_state_key and ch.sink_state_key == nk.sink_state_key]
+                    if len(matches) != 1:
+                        raise ValueError("channel_kinetics references undefined channel or ambiguous legacy endpoints; provide channel_key.")
+                    nk.channel_key = matches[0]
+                if nk.channel_key not in channel_keys:
                     raise ValueError(
-                        f"channel_kinetics references undefined source_state_key "
-                        f"'{nk.source_state_key}'."
-                    )
-                if nk.sink_state_key not in state_keys:
-                    raise ValueError(
-                        f"channel_kinetics references undefined sink_state_key "
-                        f"'{nk.sink_state_key}'."
-                    )
-                if (nk.source_state_key, nk.sink_state_key) not in channel_pairs:
-                    raise ValueError(
-                        f"channel_kinetics references undefined channel "
-                        f"({nk.source_state_key} -> {nk.sink_state_key}); "
-                        f"no matching entry in 'channels'."
+                        f"channel_kinetics references undefined channel_key "
+                        f"'{nk.channel_key}'."
                     )
 
         return self
 
     @model_validator(mode="after")
     def validate_unique_channels(self) -> Self:
-        """Ensure no duplicate (source, sink) channel pairs."""
-        pairs = [
-            (ch.source_state_key, ch.sink_state_key) for ch in self.channels
-        ]
-        if len(set(pairs)) != len(pairs):
-            raise ValueError("Channels must be unique by (source_state_key, sink_state_key).")
+        """Ensure channel identities are stable while allowing parallel paths."""
+        keys = [ch.key for ch in self.channels]
+        if len(set(keys)) != len(keys):
+            raise ValueError("Channels must be unique by key.")
         return self
 
     @model_validator(mode="after")
@@ -941,16 +1123,89 @@ class NetworkPDepUploadRequest(SchemaBase):
         if self.solve is None:
             return self
         triples = [
-            (nk.source_state_key, nk.sink_state_key, nk.model_kind)
+            (nk.channel_key, nk.model_kind)
             for nk in self.solve.channel_kinetics
         ]
         if len(set(triples)) != len(triples):
             raise ValueError(
                 "channel_kinetics entries must be unique by "
-                "(source_state_key, sink_state_key, model_kind) within one "
+                "(channel_key, model_kind) within one "
                 "payload; a channel may carry at most one entry per model_kind "
                 "(one chebyshev and/or one plog)."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_mechanistic_channel_evidence(self) -> Self:
+        reaction_keys = {item.key for item in self.micro_reactions}
+        ts_by_key = {item.key: item.micro_reaction_key for item in self.transition_states}
+        for channel in self.channels:
+            path_keys = [(path.micro_reaction_key, path.transition_state_key) for path in channel.microreaction_paths]
+            if len(path_keys) != len(set(path_keys)):
+                raise ValueError(f"channel '{channel.key}' microreaction_paths must be unique by reaction and TS.")
+            for reaction_key, ts_key in path_keys:
+                if reaction_key not in reaction_keys:
+                    raise ValueError(f"channel '{channel.key}' references undefined micro_reaction_key '{reaction_key}'.")
+                if ts_key is None:
+                    # Barrierless / variational path: no saddle point to check.
+                    continue
+                if ts_key not in ts_by_key:
+                    raise ValueError(f"channel '{channel.key}' references undefined transition_state_key '{ts_key}'.")
+                if ts_by_key[ts_key] != reaction_key:
+                    raise ValueError(f"channel '{channel.key}' TS '{ts_key}' does not belong to micro reaction '{reaction_key}'.")
+        if self.solve is not None:
+            state_keys = {state.key for state in self.states}
+            if {item.state_key for item in self.solve.state_energies} != state_keys:
+                raise ValueError("state_energies must provide exactly one energy for every network state.")
+            calc_keys = set(_collect_all_calculation_keys(self))
+            for energy in self.solve.state_energies:
+                if energy.source_calculation_key is not None and energy.source_calculation_key not in calc_keys:
+                    raise ValueError("state_energies references undefined source_calculation_key.")
+            species_keys = {sp.key for sp in self.species}
+            for et in self.solve.energy_transfer:
+                if et.state_key not in state_keys:
+                    raise ValueError("energy_transfer references undefined state_key.")
+                if et.collider_species_key not in species_keys:
+                    raise ValueError("energy_transfer references undefined collider_species_key.")
+            # Collisional energy transfer is a property of a (well, collider)
+            # pair: a five-well network with an argon bath needs five ⟨ΔE⟩down
+            # declarations, not one. Bimolecular/termolecular states are
+            # reservoirs in the master equation and carry no collisional
+            # stabilisation term, so only wells are required.
+            expected_transfer_scopes = {
+                (state.key, bath.species_key)
+                for state in self.states
+                if state.kind == "well"
+                for bath in self.solve.bath_gas
+            }
+            supplied_transfer_scopes = {
+                (item.state_key, item.collider_species_key)
+                for item in self.solve.energy_transfer
+            }
+            if supplied_transfer_scopes != expected_transfer_scopes:
+                missing = sorted(expected_transfer_scopes - supplied_transfer_scopes)
+                extra = sorted(supplied_transfer_scopes - expected_transfer_scopes)
+                raise ValueError(
+                    "energy_transfer must cover exactly one entry per (well state, "
+                    "bath-gas collider) pair. "
+                    f"Missing: {missing}. Unexpected: {extra}."
+                )
+            # Every saddle-point path needs a barrier; a barrierless path has
+            # none, and offering one would be a fabricated number.
+            expected_paths = {
+                (channel.key, path.micro_reaction_key, path.transition_state_key)
+                for channel in self.channels for path in channel.microreaction_paths
+                if path.transition_state_key is not None
+            }
+            supplied_paths = {(barrier.channel_key, barrier.micro_reaction_key, barrier.transition_state_key) for barrier in self.solve.channel_barriers}
+            if supplied_paths != expected_paths:
+                raise ValueError(
+                    "channel_barriers must provide exactly one barrier for every "
+                    "saddle-point channel path, and none for a barrierless path."
+                )
+            for barrier in self.solve.channel_barriers:
+                if barrier.source_calculation_key is not None and barrier.source_calculation_key not in calc_keys:
+                    raise ValueError("channel_barriers references undefined source_calculation_key.")
         return self
 
     @model_validator(mode="after")
@@ -1015,15 +1270,10 @@ class NetworkPDepUploadRequest(SchemaBase):
             )
         return self
 
-    @model_validator(mode="after")
-    def validate_one_ts_per_reaction(self) -> Self:
-        """MVP: at most one transition state per micro reaction."""
-        seen_rxn_keys: set[str] = set()
-        for ts in self.transition_states:
-            if ts.micro_reaction_key in seen_rxn_keys:
-                raise ValueError(
-                    f"Multiple transition states reference micro_reaction_key "
-                    f"'{ts.micro_reaction_key}'. MVP supports one TS per reaction."
-                )
-            seen_rxn_keys.add(ts.micro_reaction_key)
-        return self
+    # NOTE: there is deliberately NO "one TS per micro reaction" rule.
+    # ``network_channel_microreaction``'s identity is
+    # ``(channel, reaction_entry, transition_state_entry)`` precisely so that
+    # one elementary step may proceed through several distinct saddle points
+    # (e.g. syn/anti conformers of one elimination TS). Forbidding that here
+    # pushed producers into declaring duplicate micro reactions with identical
+    # stoichiometry, which manufactures duplicate rows in an identity table.

@@ -39,10 +39,13 @@ from app.schemas.workflows.transition_state_upload import (
 )
 from app.schemas.workflows.transport_upload import TransportUploadRequest
 from app.services.provenance_warnings import (
+    collect_kinetics_content_warnings,
     collect_kinetics_provenance_warnings,
+    collect_statmech_content_warnings,
     collect_statmech_provenance_warnings,
     collect_thermo_provenance_warnings,
     collect_transport_provenance_warnings,
+    statmech_has_rotational_structure,
 )
 from app.services.upload_reconciliation import (
     reconcile_species_entry,
@@ -295,6 +298,7 @@ def upload_kinetics(
         for w in ws:
             warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
     warnings.extend(collect_kinetics_provenance_warnings(request))
+    warnings.extend(collect_kinetics_content_warnings(request))
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.kinetics
     )
@@ -355,12 +359,20 @@ def upload_network_pdep(
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.network_pdep
     )
+    pdep_warnings: list[UploadWarning] = []
     network = persist_network_pdep_upload(
-        session, request, created_by=current_user.id, review_policy=sub.policy
+        session,
+        request,
+        created_by=current_user.id,
+        review_policy=sub.policy,
+        warnings=pdep_warnings,
     )
     solve_id = network.solves[0].id if network.solves else None
     result = NetworkPDepUploadResult(
-        id=network.id, submission_id=sub.submission_id, solve_id=solve_id
+        id=network.id,
+        submission_id=sub.submission_id,
+        solve_id=solve_id,
+        warnings=pdep_warnings,
     )
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
@@ -391,6 +403,15 @@ def upload_statmech(
         return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(collect_statmech_provenance_warnings(request))
+    warnings.extend(
+        collect_statmech_content_warnings(
+            scientific_origin=request.scientific_origin,
+            source_calculation_roles={
+                item.role.value for item in request.source_calculations
+            },
+            has_rotational_structure=statmech_has_rotational_structure(request),
+        )
+    )
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.statmech
     )
@@ -468,7 +489,11 @@ def upload_transition_state(
         session, created_by=current_user.id, kind=SubmissionKind.transition_state
     )
     ts_entry = persist_transition_state_upload(
-        session, request, created_by=current_user.id, review_policy=sub.policy
+        session,
+        request,
+        created_by=current_user.id,
+        review_policy=sub.policy,
+        warnings=warnings,
     )
     result = TransitionStateUploadResult(
         id=ts_entry.id,

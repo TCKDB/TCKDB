@@ -21,6 +21,7 @@ from rdkit.Chem import AllChem, inchi
 from sqlalchemy.orm import Session
 
 from app.chemistry.species import canonical_species_identity
+from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.services.species_resolution import resolve_species, resolve_species_entry
 
@@ -126,10 +127,10 @@ def test_cis_and_trans_diazene_resolve_to_distinct_entries(db_engine) -> None:
     trans_xyz = _xyz_from_smiles(r"[H]/N=N/[H]")
     with _rolled_back_session(db_engine) as session:
         cis_entry = resolve_species_entry(
-            session, _identity("N=N", multiplicity=1), xyz_text=cis_xyz
+            session, _identity("N=N", multiplicity=1), geometry=GeometryPayload(xyz_text=cis_xyz)
         )
         trans_entry = resolve_species_entry(
-            session, _identity("N=N", multiplicity=1), xyz_text=trans_xyz
+            session, _identity("N=N", multiplicity=1), geometry=GeometryPayload(xyz_text=trans_xyz)
         )
         session.flush()
 
@@ -142,7 +143,7 @@ def test_cis_and_trans_diazene_resolve_to_distinct_entries(db_engine) -> None:
 
         # Re-resolving the same geometry must dedup back onto the same entry.
         cis_again = resolve_species_entry(
-            session, _identity("N=N", multiplicity=1), xyz_text=cis_xyz
+            session, _identity("N=N", multiplicity=1), geometry=GeometryPayload(xyz_text=cis_xyz)
         )
         assert cis_again.id == cis_entry.id
 

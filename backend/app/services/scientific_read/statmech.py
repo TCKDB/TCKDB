@@ -29,6 +29,7 @@ from app.db.models.common import (
 from app.db.models.energy_correction import FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
+from app.db.models.reaction import ReactionEntry
 from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import ConformerGroup, Species, SpeciesEntry
@@ -39,6 +40,7 @@ from app.db.models.statmech import (
     StatmechTorsion,
     StatmechTorsionDefinition,
 )
+from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
@@ -63,6 +65,7 @@ from app.schemas.reads.scientific_statmech import (
     StatmechSpeciesContext,
     StatmechTorsionCoordinateSummary,
     StatmechTorsionSummary,
+    StatmechTransitionStateContext,
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
@@ -248,7 +251,19 @@ def build_statmech_record(
     the same shape as the detail endpoint. Caller passes the resolved
     include set (post-`validate_includes`, post-Phase-D).
     """
-    species_context = _build_species_context(session, sm.species_entry_id)
+    # A statmech row has exactly one subject. Attributing a TS-owned record to
+    # an empty species stand-in fabricated a species context that does not
+    # exist; leave ``species`` genuinely None and describe the TS instead.
+    species_context = (
+        _build_species_context(session, sm.species_entry_id)
+        if sm.species_entry_id is not None
+        else None
+    )
+    transition_state_context = (
+        _build_transition_state_context(session, sm.transition_state_entry_id)
+        if sm.transition_state_entry_id is not None
+        else None
+    )
     fsf_summary = _build_fsf_summary(session, sm.frequency_scale_factor_id)
     fsf_value = fsf_summary.value if fsf_summary is not None else None
 
@@ -259,7 +274,10 @@ def build_statmech_record(
     source_rows = _load_source_rows(session, sm.id)
     torsion_rows = _load_torsion_rows(session, sm.id)
     electronic_level_rows = _load_electronic_level_rows(session, sm.id)
-    has_conformer_context = bool(
+    # Conformer groups hang off a species entry, so a TS-owned statmech has no
+    # conformer context by construction — asking with a NULL id would always
+    # have returned false anyway, but stating it makes the intent explicit.
+    has_conformer_context = sm.species_entry_id is not None and bool(
         session.scalar(
             select(
                 exists().where(
@@ -328,8 +346,10 @@ def build_statmech_record(
 
     conformers_block: list[StatmechConformerContextItem] | None = None
     if "conformers" in includes:
-        conformers_block = _build_conformer_context(
-            session, sm.species_entry_id
+        conformers_block = (
+            _build_conformer_context(session, sm.species_entry_id)
+            if sm.species_entry_id is not None
+            else []
         )
 
     review_block: list[StatmechReviewEntry] | None = None
@@ -346,6 +366,7 @@ def build_statmech_record(
     return ScientificStatmechRecord(
         statmech=core,
         species=species_context,
+        transition_state=transition_state_context,
         frequency_scale_factor=fsf_summary,
         software_release=sw_summary,
         workflow_tool_release=wf_summary,
@@ -431,6 +452,44 @@ def _exists_review_for(
 # ---------------------------------------------------------------------------
 # Species context
 # ---------------------------------------------------------------------------
+
+
+def _build_transition_state_context(
+    session: Session, transition_state_entry_id: int
+) -> StatmechTransitionStateContext | None:
+    """Attribute a TS-owned statmech to the saddle point it describes."""
+    row = session.execute(
+        select(
+            TransitionStateEntry.id.label("entry_id"),
+            TransitionStateEntry.public_ref.label("entry_ref"),
+            TransitionStateEntry.charge.label("charge"),
+            TransitionStateEntry.multiplicity.label("multiplicity"),
+            TransitionStateEntry.unmapped_smiles.label("unmapped_smiles"),
+            TransitionState.id.label("transition_state_id"),
+            TransitionState.public_ref.label("transition_state_ref"),
+            ReactionEntry.id.label("reaction_entry_id"),
+            ReactionEntry.public_ref.label("reaction_entry_ref"),
+        )
+        .join(
+            TransitionState,
+            TransitionState.id == TransitionStateEntry.transition_state_id,
+        )
+        .outerjoin(ReactionEntry, ReactionEntry.id == TransitionState.reaction_entry_id)
+        .where(TransitionStateEntry.id == transition_state_entry_id)
+    ).one_or_none()
+    if row is None:  # pragma: no cover — FK guarantees existence
+        return None
+    return StatmechTransitionStateContext(
+        transition_state_id=row.transition_state_id,
+        transition_state_ref=row.transition_state_ref,
+        transition_state_entry_id=row.entry_id,
+        transition_state_entry_ref=row.entry_ref,
+        charge=row.charge,
+        multiplicity=row.multiplicity,
+        unmapped_smiles=row.unmapped_smiles,
+        reaction_entry_id=row.reaction_entry_id,
+        reaction_entry_ref=row.reaction_entry_ref,
+    )
 
 
 def _build_species_context(

@@ -141,6 +141,26 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=True,
     )
     term_symbol: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    #: Canonical, atom-resolved isotope key — the canonical SMILES of the
+    #: isotope-labelled identity molecule (e.g. ``[2H]C([2H])([2H])O``).
+    #: ``NULL`` means every atom is at its most abundant natural isotope,
+    #: which is the stable all-standard key: it does not depend on RDKit
+    #: canonicalization, so pre-existing entries keep their identity exactly.
+    #: Derived server-side by
+    #: :func:`app.chemistry.species.canonical_isotope_key`; never accepted
+    #: from an uploader.
+    isotope_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    #: DEPRECATED free-text isotopologue annotation. It used to participate
+    #: in ``uq_species_entry_species_id``, which let a producer mint two
+    #: species identities that differed only by an arbitrary string with no
+    #: atom-resolved isotope content anywhere in the schema. It is no longer
+    #: part of identity, is no longer accepted on any upload/Create/Update
+    #: schema, and is never written by the application. The column is
+    #: retained (rather than dropped) purely so that a self-hosted or lab
+    #: deployment that already stored annotations here does not lose them to
+    #: a migration; ``isotope_key`` supersedes it.
     isotopologue_label: Mapped[Optional[str]] = mapped_column(
         String(64),
         nullable=True,
@@ -188,7 +208,7 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
             "electronic_state_kind",
             "electronic_state_label",
             "term_symbol",
-            "isotopologue_label",
+            "isotope_key",
             name="uq_species_entry_species_id",
             postgresql_nulls_not_distinct=True,
         ),

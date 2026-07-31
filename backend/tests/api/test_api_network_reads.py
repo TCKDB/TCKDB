@@ -119,26 +119,9 @@ def _pdep_payload(name: str = "ethyl + O2") -> dict:
                 }],
             },
         ],
-        "transition_states": [{
-            "key": "ts_assoc",
-            "micro_reaction_key": "rxn_assoc",
-            "charge": 0,
-            "multiplicity": 2,
-            "geometry": {"key": "ts_assoc_geom", "xyz_text": _XYZ_TS},
-            "calculation": {
-                "key": "ts_assoc_opt", "type": "opt",
-                "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT,
-                "opt_converged": True,
-            },
-            "calculations": [
-                {
-                    "key": "ts_assoc_sp", "type": "sp",
-                    "geometry_key": "ts_assoc_geom",
-                    "software_release": _SOFTWARE, "level_of_theory": _LOT_CC,
-                    "sp_electronic_energy_hartree": -229.5,
-                },
-            ],
-        }],
+        # C2H5 + O2 -> C2H5OO is a barrierless radical-radical association:
+        # there is no saddle point, so the channel path declares none and the
+        # solve carries no barrier for it.
         "micro_reactions": [{
             "key": "rxn_assoc",
             "reversible": True,
@@ -162,9 +145,13 @@ def _pdep_payload(name: str = "ethyl + O2") -> dict:
         ],
         "channels": [
             {
+                "key": "association_path",
                 "source_state_key": "entrance",
                 "sink_state_key": "well_RO2",
                 "kind": "association",
+                "microreaction_paths": [
+                    {"micro_reaction_key": "rxn_assoc"}
+                ],
             },
         ],
         "solve": {
@@ -175,14 +162,33 @@ def _pdep_payload(name: str = "ethyl + O2") -> dict:
             "pmax_bar": 100,
             "grain_count": 250,
             "bath_gas": [{"species_key": "Ar", "mole_fraction": 1.0}],
-            "energy_transfer": {
+            "energy_transfer": [{
                 "model": "single_exponential_down",
                 "alpha0_cm_inv": 300,
                 "t_ref_k": 300,
-            },
+                "state_key": "well_RO2",
+                "collider_species_key": "Ar",
+            }],
+            "state_energies": [
+                {
+                    "state_key": "entrance",
+                    "energy_kj_mol": 0.0,
+                    "energy_zero_convention": "entrance_channel",
+                    "correction_convention": "electronic_plus_zpe",
+                    "source_calculation_key": "ethyl_sp",
+                },
+                {
+                    "state_key": "well_RO2",
+                    "energy_kj_mol": -120.0,
+                    "energy_zero_convention": "entrance_channel",
+                    "correction_convention": "electronic_plus_zpe",
+                    "source_calculation_key": "etoo_sp",
+                },
+            ],
+            "channel_barriers": [],
             "source_calculations": [
                 {"calculation_key": "ethyl_sp", "role": "well_energy"},
-                {"calculation_key": "ts_assoc_sp", "role": "barrier_energy"},
+                {"calculation_key": "etoo_sp", "role": "well_energy"},
             ],
         },
     }
@@ -820,20 +826,29 @@ class TestEnergyTransferValidity:
         assert et is not None
         assert et["model"] == "single_exponential_down"
 
-    def test_multiple_energy_transfer_rows_raises_500(self, client, db_session):
+    def test_multiple_energy_transfer_rows_are_preserved(self, client, db_session):
         network_id, solve_id = _upload_pdep_network(client)
-        # Add a second row, making the solve malformed.
+        # A solve may have multiple scoped energy-transfer models.
+        existing = db_session.scalar(
+            select(NetworkSolveEnergyTransfer)
+            .where(NetworkSolveEnergyTransfer.solve_id == solve_id)
+        )
+        assert existing is not None
+        channel = db_session.scalar(
+            select(NetworkChannel).where(NetworkChannel.network_id == network_id)
+        )
+        assert channel is not None
         db_session.add(NetworkSolveEnergyTransfer(
             solve_id=solve_id,
+            state_id=channel.source_state_id,
+            collider_species_entry_id=existing.collider_species_entry_id,
             model="exponential_down",
             alpha0_cm_inv=250.0,
         ))
         db_session.flush()
 
         resp = client.get(f"/api/v1/networks/{network_id}/solves/{solve_id}")
-        assert resp.status_code == 500
-        detail = resp.json()["detail"]
-        assert str(solve_id) not in detail
-        assert "Invalid network_solve" in detail
-        assert "expected at most one energy transfer row" in detail
-        assert "found 2" in detail
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["energy_transfer"] is None  # deprecated singular alias
+        assert len(body["energy_transfers"]) == 2

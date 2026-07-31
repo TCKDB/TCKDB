@@ -52,6 +52,11 @@ def _kinetics_upload() -> dict:
         },
         "scientific_origin": "computed",
         "model_kind": "modified_arrhenius",
+        # A declared functional form has to carry its coefficient: without a
+        # pre-exponential factor there is no rate coefficient to import.
+        "a": 1.23e12,
+        "a_units": "cm3_mol_s",
+        "n": 0.0,
     }
 
 
