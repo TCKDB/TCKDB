@@ -1519,7 +1519,115 @@ Notes:
   mutable current flag
 - this axis is independent of human record-review status and trust badges
 
-## 11. Important Integrity Rules
+## 11. Curated Release Layer
+
+Five tables that answer "what is *the* TCKDB value?" without writing to the
+science. See `docs/specs/dataset_release_and_profiles.md` and
+`docs/adr/0007-curated-selections-are-a-release-overlay-not-a-column.md`.
+
+### 11.1 `curation_policy`
+
+Identity table. A named, versioned expert selection rubric, deduped on
+`(name, version)`.
+
+- `name`
+- `version`
+- `description`
+- `criteria_json`
+- `public_ref` (`cpol_...`)
+- `created_by`
+- `created_at`
+
+Notes:
+
+- a policy revision is a **new row**; re-registering an existing
+  `(name, version)` with different content is rejected, because a published
+  release states which policy version governed it
+- distinct from the read-time `SelectionPolicy` enum, which ranks candidates
+  from record data alone and persists nothing
+
+### 11.2 `dataset_release`
+
+Curation table. The citable unit.
+
+- `tag` (unique, e.g. `2026.07.0`)
+- `title`, `description`
+- `status` (`draft` | `published` | `withdrawn`)
+- `curation_policy_id`
+- `data_license`, `code_license`
+- `citation_text`, `contact`, `changelog_entry`
+- `doi` (nullable; recorded after a deposit, never minted)
+- `published_at`, `withdrawn_at`, `withdrawn_reason`
+- `public_ref` (`rel_...`)
+
+Notes:
+
+- the data license (the scientific corpus) and the code license are separate
+  fields and normally differ
+- a withdrawn release keeps its row and manifest so an outstanding citation
+  never dangles
+
+### 11.3 `release_selection`
+
+Curation table, **append-only**. One attributed decision.
+
+- `dataset_release_id`, `curation_policy_id`
+- `record_type` / `record_id` — the selected candidate
+- `subject_type` / `subject_id` — what it was selected *for*
+- `action` (`select` | `supersede` | `withdraw`)
+- `supersedes_selection_id` (unique)
+- `rationale` (non-blank)
+- `selected_by`, `created_at`
+- `public_ref` (`rsel_...`)
+
+Notes:
+
+- selectable record types are `thermo`, `statmech`, `transport`, `kinetics`,
+  `network_solve`, `transition_state_entry` (CHECK-constrained)
+- a database trigger rejects `UPDATE` and `DELETE`; revising a decision inserts
+  a row naming the one it replaces
+- `supersedes_selection_id` is unique, so supersession chains stay linear
+- there is deliberately **no** `is_current` column; what stands is computed as
+  head-of-chain-and-not-withdrawn
+
+### 11.4 `release_manifest`
+
+Result table, immutable. Exactly one per release.
+
+- `dataset_release_id` (unique)
+- `manifest_schema` (`tckdb.dataset_release.v1`), `profile` (always `curated`)
+- `alembic_revision`, `backend_version`, `schemas_package_version`,
+  `review_policy_version`, `curation_policy_id`, `recovery_archive_schema`
+- `data_license`, `code_license`, `citation_text` (snapshotted)
+- `content_sha256`
+- `selected_record_count`, `candidate_record_count`
+- `generated_at`, `created_by`
+- `public_ref` (`rman_...`)
+
+Notes:
+
+- `content_sha256` covers the canonical serialization of a manifest document
+  that is **rendered** from these rows rather than stored, so re-rendering
+  detects drift
+- a database trigger rejects `UPDATE` and `DELETE`
+
+### 11.5 `release_artifact`
+
+Result table, immutable. One checksummed file per manifest.
+
+- `release_manifest_id`, `path` (unique together)
+- `kind` (`selected_records` | `candidate_records` | `review_history` |
+  `selection_ledger`)
+- `media_type`, `sha256`, `byte_count`, `record_count`
+
+Notes:
+
+- a release ships its selections **and** the candidates and review history they
+  were chosen from
+- content is regenerated deterministically and re-checked against `sha256` on
+  every download; a mismatch is a 409, never a silent serve
+
+## 12. Important Integrity Rules
 
 - `calculation` ownership is exclusive between species-entry and transition-state-entry paths
 - `transition_state_selection` must point to an entry under the same transition state
@@ -1533,8 +1641,10 @@ Notes:
 - network solve and network kinetics tables enforce positive and ordered temperature/pressure ranges
 - applied energy corrections enforce exactly one target and exactly one provenance source
 - reproducibility assessments preserve their hashed context and cannot be updated or deleted
+- `release_selection`, `release_manifest` and `release_artifact` are append-only at the database level; superseding a selection inserts a row rather than editing one
+- a `release_selection` must name a candidate that actually belongs to the subject it claims to be about
 
-## 12. Current Semantic Model
+## 13. Current Semantic Model
 
 - `species` is graph identity; `species_entry` is resolved scientific meaning
 - `chem_reaction` is graph identity; `reaction_entry` is a concrete curated/uploaded entry
@@ -1544,3 +1654,4 @@ Notes:
 - `statmech`, `thermo`, `transport`, `kinetics`, `network`, and `applied_energy_correction` are scientific product layers built on top of identity and provenance tables
 - `submission`, `submission_audit_event`, and `submission_record_link` are the moderation/publication layer for all contributed records
 - `record_reproducibility_assessment` is an append-only curation projection of reproducibility evidence, separate from approval and trust
+- `curation_policy`, `dataset_release`, `release_selection`, `release_manifest` and `release_artifact` are the curated-release overlay: an attributed, append-only selection among coexisting candidates plus the immutable checksummed manifest that makes it citable — none of them writes to a scientific product table

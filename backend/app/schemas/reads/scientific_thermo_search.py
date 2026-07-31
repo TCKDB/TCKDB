@@ -39,6 +39,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads.scientific_common import (
     CollapseMode,
     Pagination,
+    ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
 )
@@ -132,7 +133,7 @@ class ThermoSearchRecord(BaseModel):
     thermo: ThermoRecord
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]

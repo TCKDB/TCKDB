@@ -36,6 +36,7 @@ from app.schemas.reads.scientific_common import (
     LiteratureSummary,
     Pagination,
     PathSearchSummary,
+    ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
     SCFStabilitySummary,
@@ -375,7 +376,7 @@ class KineticsRecord(BaseModel):
     assessments: PublicAssessmentSummary | None = None
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]

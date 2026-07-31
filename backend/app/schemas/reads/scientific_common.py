@@ -15,11 +15,42 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.db.models.common import RecordReviewStatus
+from app.db.models.common import ProfileRecommendation, ReadProfile, RecordReviewStatus
 
 # ---------------------------------------------------------------------------
 # Request-side enums and shared knobs
 # ---------------------------------------------------------------------------
+
+
+class ProfiledRequestEcho(BaseModel):
+    """Base class for every ``/scientific/*`` response's ``request`` echo.
+
+    Every scientific response envelope carries a ``request`` block, and every
+    such block subclasses this, so the resolved read profile is part of the
+    published OpenAPI contract on **all** endpoints rather than something a
+    consumer has to hope was applied.
+
+    The values are stamped at the response boundary from the profile resolved
+    once per request (``app/api/routes/scientific/_response.py``), not copied
+    field-by-field at ~63 service construction sites — the defaults below are
+    the correct answer for any caller who did not opt in, and they are also
+    what unit tests that build a response object directly will see.
+
+    ``profile``                 which contract the response answers under.
+    ``profile_recommendation``  whether TCKDB endorses these records. Never
+                                inferred from ``profile`` alone: a curated
+                                read of a database with no published release
+                                still reports ``none``.
+    ``profile_release_ref``     the dataset release backing a curated read,
+                                when one exists.
+
+    All three are machine tokens. The prose explanation lives in
+    ``backend/docs/specs/dataset_release_and_profiles.md``, never in the value.
+    """
+
+    profile: ReadProfile = ReadProfile.exploratory
+    profile_recommendation: ProfileRecommendation = ProfileRecommendation.none
+    profile_release_ref: str | None = None
 
 
 class CollapseMode(str, Enum):

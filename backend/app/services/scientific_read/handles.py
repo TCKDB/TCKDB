@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
+from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.energy_correction import (
     EnergyCorrectionScheme,
     FrequencyScaleFactor,
@@ -37,6 +38,7 @@ from app.db.models.literature import Literature
 from app.db.models.network import Network
 from app.db.models.network_pdep import NetworkKinetics, NetworkSolve
 from app.db.models.reaction import ChemReaction, ReactionEntry
+from app.db.models.record_review import RecordReview
 from app.db.models.species import (
     ConformerGroup,
     ConformerObservation,
@@ -46,6 +48,7 @@ from app.db.models.species import (
 from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
+from app.schemas.reads.scientific_common import REVIEW_RANK
 from app.services.public_refs import PREFIXES
 
 logger = logging.getLogger(__name__)
@@ -111,6 +114,145 @@ def prefix_for(model_cls: type) -> str:
 # ---------------------------------------------------------------------------
 
 
+
+# ---------------------------------------------------------------------------
+# Curated-profile floor on detail-by-ref reads
+# ---------------------------------------------------------------------------
+
+
+#: ORM class → review vocabulary term, for handles that address a record the
+#: endpoint then *returns*.
+#:
+#: Two exclusions, both deliberate.
+#:
+#: **Structure, vocabulary and provenance** — geometry, level of theory,
+#: literature, frequency scale factors, energy-correction schemes — carry no
+#: ``record_review`` row and make no reviewable claim of their own. Gating them
+#: would make ``profile=curated`` 404 on the level of theory that a curated
+#: record cites. The requirement attaches to the claim a record makes, not to
+#: its type.
+#:
+#: **Scoping parents** — ``species``, ``species_entry``, ``chem_reaction``,
+#: ``reaction_entry`` — are absent even though they *are* reviewable. Their
+#: handles appear as the path parameter of subresource reads
+#: (``/species-entries/{ref}/thermo``), where they say *which* records to look
+#: under, not what is returned. Gating them would hide an approved thermo
+#: behind an identity row that merely had not been reviewed yet — and on a
+#: corpus where everything starts ``under_review``, it would 404 the entire
+#: curated surface. The floor for those reads is applied where it belongs, to
+#: the products themselves, by ``visible_statuses``.
+_REVIEWABLE_HANDLE_TYPES: dict[type, SubmissionRecordType] = {
+    Calculation: SubmissionRecordType.calculation,
+    Statmech: SubmissionRecordType.statmech,
+    Transport: SubmissionRecordType.transport,
+    ConformerGroup: SubmissionRecordType.conformer_group,
+    ConformerObservation: SubmissionRecordType.conformer_observation,
+    TransitionState: SubmissionRecordType.transition_state,
+    TransitionStateEntry: SubmissionRecordType.transition_state_entry,
+    Network: SubmissionRecordType.network,
+    NetworkSolve: SubmissionRecordType.network_solve,
+}
+
+
+#: ORM class → ``(fk column, parent ORM class)`` for records whose review state
+#: lives on a *parent*.
+#:
+#: ``network_kinetics`` is a returned record with its own detail endpoint, but
+#: it has no ``record_review`` row in principle: a set of k(T,P) coefficients is
+#: reviewed as part of the ``network_solve`` that produced it, never on its own.
+#: Left out of the map entirely it sailed through the curated floor — a
+#: never-reviewed ``network_kinetics`` returned 200 with an
+#: ``approved_floor_only`` echo while its own parent correctly 404'd. That echo
+#: is documented as "every record shown is at or above the approved review
+#: floor", so the response was making a false machine-readable claim. It is the
+#: narrow, non-endorsing member of the same class of false claim that made the
+#: earlier profile bug blocking.
+_PARENT_DERIVED_HANDLE_TYPES: dict[type, tuple[str, type]] = {
+    NetworkKinetics: ("solve_id", NetworkSolve),
+}
+
+
+def _resolve_review_target(
+    session: Session, model_cls: type, row_id: int
+) -> tuple[SubmissionRecordType, int] | None:
+    """The ``(record_type, record_id)`` whose review governs this handle.
+
+    Returns ``None`` for handles the curated floor does not gate at all.
+    """
+    record_type = _REVIEWABLE_HANDLE_TYPES.get(model_cls)
+    if record_type is not None:
+        return record_type, row_id
+
+    derived = _PARENT_DERIVED_HANDLE_TYPES.get(model_cls)
+    if derived is None:
+        return None
+    fk_column, parent_cls = derived
+    parent_id = session.scalar(
+        select(getattr(model_cls, fk_column)).where(model_cls.id == row_id)
+    )
+    if parent_id is None:
+        # An orphan child cannot inherit approval, so it is not part of the
+        # curated surface either.
+        return _REVIEWABLE_HANDLE_TYPES[parent_cls], -1
+    return _REVIEWABLE_HANDLE_TYPES[parent_cls], parent_id
+
+
+def _enforce_curated_floor(
+    session: Session, model_cls: type, row_id: int, kind_label: str
+) -> None:
+    """Under ``profile=curated``, hide a record below the approval floor.
+
+    Search endpoints get the floor from ``visible_statuses``, but roughly half
+    the read services never call it — every detail-by-ref read resolves a
+    handle and returns the row directly. Without this, ``profile=curated``
+    happily returned never-reviewed statmech and transport records while
+    echoing a curated contract, which is precisely the false claim the profile
+    exists to prevent.
+
+    This is the one function every detail-by-ref read passes through, so the
+    floor cannot be forgotten by an endpoint. Records whose review state lives
+    on a parent are gated by that parent — see
+    :data:`_PARENT_DERIVED_HANDLE_TYPES`.
+
+    The response is the same 404 ``handle_not_found`` an unknown ref produces.
+    That is deliberate and matches the existing posture elsewhere in this
+    module: under the curated contract the record is simply not part of the
+    addressable surface, and a distinguishable "exists but is not approved"
+    would leak review state to anonymous callers.
+
+    :raises NotFoundError: the record is below the curated review floor.
+    """
+    from app.services.scientific_read.profile import current_read_profile
+
+    floor = current_read_profile().review_floor
+    if floor is None:
+        return
+    target = _resolve_review_target(session, model_cls, row_id)
+    if target is None:
+        return
+    record_type, record_id = target
+
+    review = session.scalars(
+        select(RecordReview).where(
+            RecordReview.record_type == record_type,
+            RecordReview.record_id == record_id,
+        )
+    ).first()
+    status = review.status if review is not None else RecordReviewStatus.not_reviewed
+    if REVIEW_RANK[status] <= REVIEW_RANK[floor]:
+        return
+
+    logger.info(
+        "path_handle_below_curated_floor kind=%s row_id=%d status=%s",
+        kind_label,
+        row_id,
+        status.value,
+    )
+    raise NotFoundError(
+        f"{kind_label} not found", code="handle_not_found"
+    )
+
+
 def resolve_path_handle(
     session: Session,
     model_cls: type,
@@ -159,6 +301,7 @@ def resolve_path_handle(
             raise NotFoundError(
                 f"{kind_label} not found", code="handle_not_found"
             )
+        _enforce_curated_floor(session, model_cls, row_id, kind_label)
         return row_id
 
     # kind == "ref"
@@ -184,6 +327,7 @@ def resolve_path_handle(
             f"{kind_label} not found ({kind_label}_ref={ref!r})",
             code="handle_not_found",
         )
+    _enforce_curated_floor(session, model_cls, row_id, kind_label)
     return row_id
 
 

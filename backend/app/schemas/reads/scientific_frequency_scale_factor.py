@@ -26,6 +26,7 @@ from app.db.models.common import FrequencyScaleKind
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
+    ProfiledRequestEcho,
     ReviewStatusSummary,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
@@ -36,7 +37,7 @@ from app.schemas.reads.scientific_common import (
 # ---------------------------------------------------------------------------
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed include list, post-validation and post-policy."""
 
     include: list[str] = Field(default_factory=list)

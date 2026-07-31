@@ -65,9 +65,17 @@ Selection that exists today is **conformer-level only** — `ConformerSelection`
 `preferred_for_kinetics`) elects *which conformer* is preferred for deriving a
 product. It does **not** elect one product record over another.
 
-Product-level curated selection (a curator pinning a benchmark or
-display-default product among coexisting candidates) is **not implemented**.
-Clients must not assume one product record is authoritative.
+Product-level curated selection is now implemented — but **as an overlay, not
+as a column**. A curator's pick lives in `release_selection`, an append-only
+curation table that names the policy version, the curator, the candidate, the
+rationale and the release, and never writes to `thermo` / `statmech` /
+`transport` / `kinetics`. See
+[`dataset_release_and_profiles.md`](dataset_release_and_profiles.md).
+
+Clients must still not assume one product record is authoritative *from the
+record alone*. Authority is a property of a published dataset release, is
+addressed through `/api/v1/scientific/releases/*` or `?profile=curated`, and is
+always accompanied by the full candidate set it was chosen from.
 
 ## Read contract
 
@@ -127,11 +135,46 @@ thermo. See `backend/app/services/scientific_read/thermo.py`
 (`get_species_thermo`, `_build_provenance`) and
 `backend/tests/services/scientific_read/test_get_species_thermo.py::test_statmech_fallback_pick_is_deterministic_with_multiple_statmech`.
 
-## Open design question
+## Resolved: product-level curated selection (Stage 3)
 
-Whether to add an explicit **product-level** curated-selection mechanism (e.g. a
-`species_product_selection` table keyed by `(species_entry_id, product_type,
-product_id, selection_kind, selection_policy)`, or read-time-only named
-policies) is deferred pending a concrete consumer (curation UI / review
-workflow). It is intentionally not built here, to avoid introducing
-preferred/selected semantics into the deployed schema without a driver.
+The open question above — whether to add an explicit product-level
+curated-selection mechanism — is **resolved**. The driver arrived: a community
+user needs to be able to cite "the TCKDB value", and a deterministic read-time
+heuristic is not an expert recommendation.
+
+The shape chosen is *not* the `species_product_selection` table sketched here.
+Keying a selection on `(species_entry_id, product_type, product_id, ...)` with
+mutable rows would have reintroduced preferred/selected semantics as editable
+state. Instead:
+
+- selections live in `release_selection`, scoped to a **named, versioned
+  dataset release**, so "the TCKDB value" is always "the TCKDB value *as of
+  release 2026.07.0*" — a citable, unchanging claim rather than a moving one;
+- rows are **append-only** (database trigger + UNIQUE supersession chain);
+  revising a decision inserts a row and the previous rationale stays readable;
+- the target is addressed by the same loose `(record_type, record_id)` pointer
+  `record_review` uses, so no product table gains a column;
+- every release publishes the candidates *and* the review history behind its
+  selections, so the recommendation can be checked and disputed without
+  privileged access.
+
+The read-time `SelectionPolicy` enum is unchanged and still persists nothing.
+`benchmark_reference` / `curator_pick` remain absent from it, for the same
+reason as before: they are stored curator decisions, and they are now expressed
+as release selections rather than as read knobs.
+
+Full contract: [`dataset_release_and_profiles.md`](dataset_release_and_profiles.md).
+
+## Read profiles
+
+The per-species read contract now also depends on `?profile=`:
+
+- `profile=exploratory` (**default**) — unchanged from everything above: all
+  candidates, no TCKDB recommendation, explicitly labelled as such in the
+  response's `request.profile_recommendation`.
+- `profile=curated` — the review floor rises to `approved`, and the response
+  reports the dataset release backing it (or honestly reports
+  `recommendation: none` when no release has been published yet).
+
+The resolved profile is echoed in every scientific response and every dataset
+manifest.

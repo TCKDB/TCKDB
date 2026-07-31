@@ -25,6 +25,7 @@ from app.schemas.reads.scientific_calculation import (
 )
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
+    ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
 )
@@ -341,7 +342,7 @@ class ReviewRecordEntry(BaseModel):
     reviewed_at: datetime | None = None
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     include: list[str]

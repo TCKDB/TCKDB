@@ -24,6 +24,7 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads.scientific_common import (
     Pagination,
+    ProfiledRequestEcho,
     ReviewStatusSummary,
 )
 from app.schemas.reads.scientific_network import (
@@ -99,7 +100,7 @@ class NetworkSearchRequest(BaseModel):
     limit: int = 50
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     filter: dict[str, Any]
     sort: str
     include: list[str] = Field(default_factory=list)

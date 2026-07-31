@@ -161,6 +161,9 @@ def export_chemkin(
     manifest = record_set.manifest()
     manifest["gaps"] = [g.to_dict() for g in result.gaps]
     manifest["counts"]["gaps"] = len(result.gaps)
+    # ``record_set.manifest()`` already carries the resolved read-profile echo,
+    # so the zipped manifest.json states its contract exactly like every other
+    # TCKDB manifest and response.
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:

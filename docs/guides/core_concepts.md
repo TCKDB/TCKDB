@@ -193,3 +193,34 @@ if present.
   (the `RecordReviewStatus` enum). Read endpoints
   default to filtering by `min_review_status`, so anonymous readers
   see curated data unless they explicitly opt into raw drafts.
+
+### Read profiles: `exploratory` vs `curated`
+
+Every `/api/v1/scientific/*` read answers under an explicit profile,
+echoed in the response's `request` block.
+
+- **`exploratory`** (the default) — every visible candidate, with its
+  review state. TCKDB makes **no recommendation**; you are reading the
+  archive. `request.profile_recommendation` says `none`.
+- **`curated`** — records at or above the `approved` review floor,
+  reported alongside the dataset release backing them.
+
+### `dataset_release` and `release_selection`
+
+- **`dataset_release`** is a *citable* snapshot of curated values: a tag
+  (`2026.07.0`), an immutable SHA-256-checksummed manifest, licenses, a
+  citation string, and a DOI once one has actually been deposited.
+- **`release_selection`** is one attributed, append-only decision inside
+  a release: which candidate a named curator chose for a subject, under
+  which policy version, and why. It points at the scientific record and
+  never modifies it, so the underlying candidates stay equally
+  retrievable. Changing a decision appends a superseding row rather than
+  editing the original.
+- **`curation_policy`** is the named, versioned rubric a selection cites.
+  It is the persisted counterpart to the read-time `selection_policy`
+  knob, which ranks candidates deterministically and persists nothing.
+
+A release publishes its selections *and* the full candidate set and
+review history behind them, so a reader can disagree with a TCKDB
+recommendation without privileged access. See
+[`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md).

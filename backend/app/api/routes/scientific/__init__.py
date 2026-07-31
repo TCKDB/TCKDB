@@ -27,11 +27,13 @@ Sub-routers:
                               /scientific/transition-states/{ref_or_id}
     transition_states.tse_router
                             → /scientific/transition-state-entries/{ref_or_id}
+    releases.router         → /scientific/releases (+ /{handle}/manifest,
+                              /selections, /artifacts/{path})
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.routes.scientific import (
     artifacts,
@@ -48,6 +50,7 @@ from app.api.routes.scientific import (
     networks,
     provenance,
     reactions,
+    releases,
     species,
     species_calculations_search,
     species_subresources,
@@ -58,8 +61,13 @@ from app.api.routes.scientific import (
     transition_states,
     transport,
 )
+from app.api.routes.scientific._profile import resolve_profile_dependency
 
-scientific_router = APIRouter()
+# The ``?profile=`` dependency is attached to the whole router, not to
+# individual operations, so that *every* scientific endpoint declares and
+# honours the curated/exploratory contract. A profile that only some
+# endpoints support is worse than none: it teaches consumers to trust it.
+scientific_router = APIRouter(dependencies=[Depends(resolve_profile_dependency)])
 # Register the RDKit-backed structure search router before the
 # identity-search router so that /species/structure-search resolves
 # before any future generic /species/{handle} catch-all that might be
@@ -100,5 +108,8 @@ scientific_router.include_router(corrections.fsf_router)
 scientific_router.include_router(corrections.ecs_router)
 scientific_router.include_router(artifacts.router)
 scientific_router.include_router(export.router)
+# Citable dataset releases. Registered last so the ``/releases`` prefix
+# cannot shadow an earlier, more specific route.
+scientific_router.include_router(releases.router)
 
 __all__ = ["scientific_router"]

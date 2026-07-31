@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.api.config import settings as default_settings
+from app.services.scientific_read.profile import stamp_read_profile
 
 # ---------------------------------------------------------------------------
 # Stripping rules
@@ -187,7 +188,15 @@ def apply_internal_ids_visibility(
 
     Routes call this at the return boundary; services do not need to
     know about it.
+
+    This is also the single seam where the request's resolved **read
+    profile** is stamped into the ``request`` echo (see
+    :func:`app.services.scientific_read.profile.stamp_read_profile`). Every
+    enveloped scientific route passes through here — directly or via
+    ``prepare_assessment_response`` — so putting the stamp anywhere else
+    would leave endpoints that silently report the default profile.
     """
+    stamp_read_profile(payload)
     resolved_includes = _extract_resolved_includes(payload)
     if should_include_internal_ids(
         resolved_includes, settings_obj=settings_obj

@@ -32,6 +32,7 @@ from app.schemas.reads.scientific_common import (
     default_visible_statuses,
     status_at_or_above,
 )
+from app.services.scientific_read.profile import current_read_profile
 
 if TYPE_CHECKING:
     pass
@@ -230,14 +231,31 @@ def visible_statuses(
     threshold (D7, shallow). Rejected and deprecated statuses are excluded
     unless their respective opt-in flag is set; ``min_review_status`` further
     restricts the set to statuses at or above the threshold.
+
+    **Read-profile floor.** This is the one function every scientific read
+    service calls to decide what is visible, which makes it the single place
+    the ``curated`` profile can be applied without an endpoint being able to
+    forget it. Under ``profile=curated`` the floor is raised to ``approved``
+    and the ``include_rejected`` / ``include_deprecated`` opt-ins are
+    overridden — "show me what TCKDB stands behind, but also include the
+    rejected records" is not a coherent request, and honouring it would let a
+    caller cite a rejected record under the curated banner.
+
+    The floor only ever *narrows*: a caller who passes a stricter
+    ``min_review_status`` than the profile requires keeps their stricter
+    value. Outside a scientific HTTP request the profile is ``exploratory``,
+    so this function behaves exactly as it did before Stage 3.
     """
+    profile_floor = current_read_profile().review_floor
+
     base = default_visible_statuses(
-        include_rejected=include_rejected,
-        include_deprecated=include_deprecated,
+        include_rejected=include_rejected and profile_floor is None,
+        include_deprecated=include_deprecated and profile_floor is None,
     )
-    if min_review_status is None:
-        return base
-    return base & status_at_or_above(min_review_status)
+    thresholds = [s for s in (min_review_status, profile_floor) if s is not None]
+    for threshold in thresholds:
+        base = base & status_at_or_above(threshold)
+    return base
 
 
 def fetch_review_badges(

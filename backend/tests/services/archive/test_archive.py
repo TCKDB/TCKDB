@@ -737,3 +737,34 @@ def test_archive_round_trip_preserves_stage2_pdep_and_kinetics_evidence(
     assert evidence.kind == "irc"
     assert evidence.passed is True
     assert evidence.reactant_participant_mapping == {"reactant:1": [1, 2]}
+
+
+def test_binary_codec_round_trips_frozen_release_artifact_bytes() -> None:
+    """``release_artifact.content`` is the only LargeBinary column in the archive.
+
+    A published release's citable bytes live in the database, so a restore that
+    silently dropped or corrupted them would restore a database whose releases
+    no longer resolve. Base64 is tagged (``$bytes``) exactly like ``$float`` so
+    a byte string can never be confused with a text column that happens to hold
+    base64.
+    """
+    from sqlalchemy.sql.sqltypes import LargeBinary
+
+    payload = b'{"record_ref":"thm_abc"}\n\xf0\x9f\x94\xac\x00\xff'
+    encoded = archive_core._encode_value(payload, LargeBinary())
+    assert set(encoded) == {"$bytes"}
+    assert archive_core._decode_value(encoded, LargeBinary()) == payload
+
+    with pytest.raises(Exception):
+        archive_core._decode_value({"$bytes": "not base64!!"}, LargeBinary())
+    with pytest.raises(Exception):
+        archive_core._decode_value("bare string", LargeBinary())
+
+
+def test_release_artifact_content_is_archived_not_silently_dropped() -> None:
+    """Registry-level guard: the bytes column must be inside the archive scope."""
+    from app.services.archive.registry import included_column_names
+
+    table = Base.metadata.tables["release_artifact"]
+    assert "content" in included_column_names(table)
+    assert archive_core._supports_type(table.c.content.type)

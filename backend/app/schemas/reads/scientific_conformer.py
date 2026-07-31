@@ -39,6 +39,7 @@ from app.schemas.reads.scientific_calculation import (
 )
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
+    ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
     SoftwareReleaseSummary,
@@ -62,7 +63,7 @@ class ConformerObservationDetailRequest(BaseModel):
     include: list[str] = Field(default_factory=list)
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed include list, post-validation and post-policy."""
 
     include: list[str] = Field(default_factory=list)

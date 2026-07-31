@@ -73,3 +73,32 @@ V1 has no merge or upsert mode and exposes no bypass for the target guard.
 
 The module is admin/CLI infrastructure only. It is not exposed by the public
 scientific API.
+
+
+## Known scaling characteristic: frozen release bytes are inlined
+
+`release_artifact.content` holds the frozen bytes of a published dataset
+release (see
+[`dataset_release_and_profiles.md`](dataset_release_and_profiles.md)). It is the
+archive's only `LargeBinary` column, and it is encoded inline in `rows.ndjson`
+via the tagged `$bytes` codec — base64, alongside every other column value —
+rather than through the `blobs/` sidecar used for calculation-artifact bytes.
+
+This is correct and lossless: an export → wipe → restore cycle returns
+byte-exact artifact content, and the restored database still passes
+`verify_release`. The `$bytes` tag mirrors `$float`, so a byte string can never
+be confused with a text column that happens to hold base64, and no existing
+column's encoding changed.
+
+The trade-off is size and shape: base64 inflates the payload by roughly 4/3,
+and one release occupies a **single NDJSON line**. That is fine while releases
+are small and keeps the archive's row-and-hash model uniform — one code path,
+one integrity story.
+
+**Revisit when:** the first release large enough that a single line in
+`rows.ndjson` is uncomfortable to stream, diff, or hold in memory — in practice
+artifacts in the tens of MB, or the point at which archive write/restore memory
+becomes a concern. The fix is to move release bytes to the existing `blobs/`
+sidecar, which already has the streaming and per-blob integrity machinery.
+Doing it before there is a release that needs it buys nothing and adds a second
+storage path to keep correct.

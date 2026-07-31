@@ -20,7 +20,13 @@ def prepare_assessment_response(
     *,
     attach_assessments: AssessmentAttacher,
 ) -> Any:
-    """Attach requested assessments, then apply public-field visibility."""
+    """Attach requested assessments, then apply public-field visibility.
+
+    The resolved read profile is stamped inside
+    :func:`app.services.scientific_read.internal_ids.apply_internal_ids_visibility`,
+    which is the one function every enveloped scientific route passes through
+    — see :func:`app.services.scientific_read.profile.stamp_read_profile`.
+    """
 
     if "assessments" in set(payload.request.include):
         attach_assessments(session, payload)

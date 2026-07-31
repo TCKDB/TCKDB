@@ -35,7 +35,12 @@ name = "tckdb-backend"
 version = "0.1.0"
 description = "FastAPI backend for the TCKDB scientific database (thermochemistry / kinetics with provenance)."
 requires-python = ">=3.13"
-license = { text = "TBD — see repository root" }
+# The repository ships an MIT LICENSE at its root; this metadata states the
+# same thing so a wheel built from here is not silently unlicensed. Note that
+# the *code* license (MIT) and a curated *dataset release*'s data license are
+# separate fields and may differ — see CHANGELOG.md and
+# backend/docs/specs/dataset_release_and_profiles.md.
+license = "MIT"
 keywords = [
     "tckdb",
     "thermochemistry",
@@ -43,9 +48,19 @@ keywords = [
     "computational-chemistry",
     "fastapi",
 ]
+# Maturity policy is stated once, in CHANGELOG.md ("Maturity and version
+# policy"), and mirrored here. The backend is Alpha while the HTTP read
+# contracts and database schema are still advancing; `tckdb-client` is Beta
+# because it is a thin, well-tested wrapper over a contract that is itself
+# still moving. That asymmetry is deliberate, not drift.
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: FastAPI",
+    "Intended Audience :: Science/Research",
+    # License is expressed via the ``license`` field above; the
+    # ``License :: OSI Approved :: MIT License`` classifier is deprecated in
+    # PEP 639 / setuptools 77+ and is intentionally not listed here. This
+    # matches clients/python/pyproject.toml.
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Chemistry",

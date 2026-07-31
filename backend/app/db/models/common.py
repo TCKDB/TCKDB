@@ -990,3 +990,120 @@ class MachineReviewCuratorTaskState(str, Enum):
     @property
     def is_terminal(self) -> bool:
         return self in self.terminal_states()
+
+
+# ---------------------------------------------------------------------------
+# Curated product / dataset-release semantics (Stage 3)
+# ---------------------------------------------------------------------------
+
+
+class ReadProfile(str, Enum):
+    """Which contract a scientific read (or a dataset manifest) answers under.
+
+    ``exploratory`` is the **default** on every read surface. That is a
+    deliberate product decision, not an oversight: on a pre-curation corpus a
+    curated default returns an empty result set and reads as a broken
+    database. The miscitation risk is mitigated instead by *always* echoing
+    the resolved profile (see :class:`ProfileRecommendation`), never by
+    silently narrowing what a caller sees.
+
+    ``exploratory``  every visible candidate, with its review/trust state.
+                     TCKDB makes **no recommendation** about which candidate
+                     is right; the caller is looking at the archive.
+    ``curated``      only records at or above the ``approved`` review floor.
+                     Records are **not** annotated with the release selection
+                     that names them — no such per-record annotation exists —
+                     so the accompanying
+                     :class:`ProfileRecommendation` is ``approved_floor_only``
+                     on the general read surface. An attributed selection is
+                     served by ``/api/v1/scientific/releases/*``, which is
+                     where the endorsement actually lives.
+
+    Values are machine tokens so clients branch on them; the human-readable
+    explanation belongs in documentation, never in the token.
+    """
+
+    exploratory = "exploratory"
+    curated = "curated"
+
+
+class ProfileRecommendation(str, Enum):
+    """Whether the records in a response carry a TCKDB recommendation.
+
+    Echoed alongside :class:`ReadProfile` so a consumer never has to infer
+    the epistemic status of a payload from the profile token alone. The three
+    values are deliberately distinct claims, and none of them is derivable
+    from :class:`ReadProfile` alone.
+
+    ``none``                    the records are candidates. TCKDB is not
+                                telling you which one to use.
+    ``approved_floor_only``     every record shown is at or above the
+                                ``approved`` review floor, and **nothing more
+                                is claimed**. No attributed
+                                ``release_selection`` stands behind these
+                                specific records; a human reviewer accepted
+                                them, which is not the same as TCKDB
+                                recommending them over their siblings.
+    ``tckdb_curated_release``   these records *are* the ones an attributed,
+                                append-only ``release_selection`` names, in a
+                                published release. Only the
+                                ``/scientific/releases/*`` endpoints emit
+                                this, because only they serve records that
+                                were resolved *through* a selection.
+    """
+
+    none = "none"
+    approved_floor_only = "approved_floor_only"
+    tckdb_curated_release = "tckdb_curated_release"
+
+
+class DatasetReleaseStatus(str, Enum):
+    """Lifecycle of a citable dataset release.
+
+    ``draft``      being assembled; selections may still be appended and no
+                   manifest has been frozen. Not served under the curated
+                   profile and not citable.
+    ``published``  the manifest is frozen and checksummed. The release is
+                   citable and its bytes are reproducible.
+    ``withdrawn``  the release was published and later retracted. The row and
+                   its manifest are **kept** (a citation must never dangle);
+                   the status tells a consumer not to rely on it.
+    """
+
+    draft = "draft"
+    published = "published"
+    withdrawn = "withdrawn"
+
+
+class ReleaseSelectionAction(str, Enum):
+    """What one append-only ``release_selection`` row asserts.
+
+    Selections are never edited. Changing a curator's mind means appending a
+    new row that points at the row it replaces, exactly as
+    :class:`app.db.models.scientific_record_supersession.ScientificRecordSupersession`
+    does for accepted science.
+
+    ``select``     first attributed selection of a candidate record.
+    ``supersede``  replaces an earlier selection with a different candidate.
+    ``withdraw``   retires an earlier selection with no replacement (the
+                   release then makes no recommendation for that subject).
+    """
+
+    select = "select"
+    supersede = "supersede"
+    withdraw = "withdraw"
+
+
+class ReleaseArtifactKind(str, Enum):
+    """Role of one checksummed file inside a dataset-release manifest.
+
+    A release deliberately ships the selection *and* everything needed to
+    disagree with it — the candidates that were not selected and the review
+    history behind them. Shipping only ``selected_records`` would reproduce
+    the very problem the curated profile exists to solve.
+    """
+
+    selected_records = "selected_records"
+    candidate_records = "candidate_records"
+    review_history = "review_history"
+    selection_ledger = "selection_ledger"

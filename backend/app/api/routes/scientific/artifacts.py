@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     ArtifactKind,
@@ -39,13 +40,18 @@ from app.services.scientific_read.artifacts_search import search_artifacts
 from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
+from app.services.scientific_read.profile import current_read_profile
 
 router = APIRouter(prefix="/artifacts")
 
 # Query-string keys allowed alongside POST. None in v0 — POST search
 # requires every filter/include/pagination knob to live in the JSON body
 # (same convention as the other scientific search endpoints).
-_POST_ALLOWED_QS_KEYS: set[str] = set()
+# The router-level ``?profile=`` dependency puts these two keys on every
+# scientific operation, POSTs included, so they must be allowed through the
+# "search fields belong in the body" guard. Everything else is still
+# rejected rather than silently ignored.
+_POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
 @router.get("/search", response_model=ScientificArtifactSearchResponse)
@@ -223,5 +229,9 @@ def download_approved_artifact(
             "ETag": f'"{sha256}"',
             "X-Content-SHA256": sha256,
             "X-Content-Type-Options": "nosniff",
+            # Raw bytes carry no JSON envelope, so the resolved read
+            # profile is echoed as a header rather than being silently
+            # dropped on the one scientific endpoint that returns binary.
+            "X-TCKDB-Read-Profile": current_read_profile().profile.value,
         },
     )

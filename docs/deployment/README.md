@@ -102,3 +102,4 @@ This is the rule the rest of this directory follows.
 - DR-0022 — Auth and Roles v1 — auth model used by every deployment
 - DR-0023 — Local/Offline and Hosted Submission Model — same-schema commitment
 - [Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md) — operator runbook for `alembic upgrade` on a real database (bootstrap, upgrade, backup, rollback, public-ref backfill)
+- [Cutting a citable dataset release](../../backend/docs/deployment/cutting_a_dataset_release.md) — curator runbook for publishing a curated, checksummed dataset: policy, selections, publish, verify, and the manual Zenodo/DOI step (TCKDB never mints a DOI itself)

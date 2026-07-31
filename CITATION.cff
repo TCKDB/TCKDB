@@ -1,0 +1,45 @@
+# Citation metadata for the TCKDB software.
+#
+# This file describes how to cite the *software*. A curated scientific
+# *dataset release* is a separate, independently citable artifact with its own
+# immutable, checksummed manifest served at
+#   GET /api/v1/scientific/releases/{tag}/manifest
+# and its own citation string in `dataset_release.citation_text`. Cite the
+# dataset when you use TCKDB's numbers; cite the software when you use or
+# extend the code. See backend/docs/specs/dataset_release_and_profiles.md.
+#
+# `doi:` is intentionally absent. TCKDB does not mint DOIs speculatively — a
+# DOI is not retractable, and the corpus is not yet published. The procedure
+# for minting one when a paper tag is cut is documented in
+# backend/docs/deployment/cutting_a_dataset_release.md.
+cff-version: 1.2.0
+title: "TCKDB — Thermochemical and Kinetics Database"
+message: >-
+  If you use this software, please cite it using the metadata in this file.
+  If you use data obtained from a TCKDB instance, please additionally cite
+  the specific dataset release (tag and manifest checksum) you queried.
+type: software
+authors:
+  - family-names: Pieters
+    given-names: Calvin
+  - family-names: Grinberg Dana
+    given-names: Alon
+    affiliation: "Technion – Israel Institute of Technology"
+repository-code: "https://github.com/TCKDB/TCKDB"
+abstract: >-
+  A provenance-rich, workflow-tool-agnostic database and HTTP API for
+  computational and experimental chemistry data: species, reactions,
+  transition states, geometries, calculations, statistical mechanics,
+  thermochemistry, kinetics, transport, pressure-dependent networks, raw
+  artifacts, and review state. Scientific records are append-only; curation
+  is an overlay that never mutates the underlying values. Reads are served
+  under an explicit exploratory (all candidates, no recommendation) or
+  curated (approved records plus an attributed release selection) profile.
+keywords:
+  - thermochemistry
+  - chemical kinetics
+  - computational chemistry
+  - scientific database
+  - provenance
+  - data curation
+license: MIT

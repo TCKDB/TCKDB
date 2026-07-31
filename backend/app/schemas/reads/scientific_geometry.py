@@ -14,7 +14,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.scientific_common import (
+    CollapseMode,
+    ProfiledRequestEcho,
+)
 
 
 class GeometryReadRequest(BaseModel):
@@ -29,7 +32,7 @@ class GeometryReadRequest(BaseModel):
     include: list[str] = Field(default_factory=list)
 
 
-class RequestEcho(BaseModel):
+class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query for the geometry detail endpoint.
 
     The endpoint has no scientific filters, so ``filter`` is always

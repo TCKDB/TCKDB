@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_structure_search import (
     ScientificSpeciesStructureSearchRequest,
@@ -42,7 +43,11 @@ router = APIRouter(prefix="/species")
 # POST bodies own every filter/include/pagination knob. Mirrors the
 # convention enforced by the other scientific search endpoints (artifacts,
 # reactions, calculations, ...).
-_POST_ALLOWED_QS_KEYS: set[str] = set()
+# The router-level ``?profile=`` dependency puts these two keys on every
+# scientific operation, POSTs included, so they must be allowed through the
+# "search fields belong in the body" guard. Everything else is still
+# rejected rather than silently ignored.
+_POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
 @router.get(
