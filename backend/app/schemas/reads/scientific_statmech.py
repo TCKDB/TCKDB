@@ -127,6 +127,26 @@ class StatmechSpeciesContext(BaseModel):
     multiplicity: int | None = None
 
 
+class StatmechTransitionStateContext(BaseModel):
+    """Lightweight TS/TS-entry pointer for a TS-owned statmech record.
+
+    A statmech row describes exactly one subject: a species entry OR a
+    transition-state entry. For a TS-owned record ``species`` is ``None`` and
+    this block carries the attribution instead — the record is never dressed
+    up with an empty species stand-in.
+    """
+
+    transition_state_id: int | None = None
+    transition_state_ref: str
+    transition_state_entry_id: int | None = None
+    transition_state_entry_ref: str
+    charge: int | None = None
+    multiplicity: int | None = None
+    unmapped_smiles: str | None = None
+    reaction_entry_id: int | None = None
+    reaction_entry_ref: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Frequency scale factor + source-calc + torsion + conformer-context summaries
 # ---------------------------------------------------------------------------
@@ -338,7 +358,10 @@ class ScientificStatmechRecord(BaseModel):
     """
 
     statmech: StatmechCoreBlock
-    species: StatmechSpeciesContext
+    # Exactly one of these is populated — the DB enforces the same XOR via
+    # ``statmech_exactly_one_subject``.
+    species: StatmechSpeciesContext | None = None
+    transition_state: StatmechTransitionStateContext | None = None
     frequency_scale_factor: StatmechFrequencyScaleFactorSummary | None = None
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None

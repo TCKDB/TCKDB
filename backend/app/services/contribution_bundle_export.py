@@ -457,9 +457,14 @@ def _reaction_family_payload(chem_reaction: ChemReaction) -> dict[str, Any]:
 
 def _species_entry_payload(species_entry: SpeciesEntry) -> dict[str, Any]:
     species = species_entry.species
+    # `species.smiles` is isotope-blind by construction (isotopologues share a
+    # species row), so an isotopically substituted entry must round-trip via
+    # its atom-resolved `isotope_key`, which *is* a canonical isotopic SMILES
+    # for the same graph. Exporting `species.smiles` here would silently
+    # export CD3OH as CH3OH.
     payload: dict[str, Any] = {
         "molecule_kind": species.kind.value,
-        "smiles": species.smiles,
+        "smiles": species_entry.isotope_key or species.smiles,
         "charge": species.charge,
         "multiplicity": species.multiplicity,
         "species_entry_kind": species_entry.kind.value,
@@ -476,8 +481,11 @@ def _species_entry_payload(species_entry: SpeciesEntry) -> dict[str, Any]:
         payload["term_symbol_raw"] = species_entry.term_symbol_raw
     if species_entry.term_symbol is not None:
         payload["term_symbol"] = species_entry.term_symbol
-    if species_entry.isotopologue_label is not None:
-        payload["isotopologue_label"] = species_entry.isotopologue_label
+    # `isotopologue_label` is deliberately NOT exported: it is a deprecated,
+    # non-identity legacy annotation and is no longer accepted by any upload
+    # schema, so emitting it would produce a bundle that fails re-import.
+    # The isotope content it used to gesture at is carried exactly by the
+    # isotope labels now present in `smiles` above.
     return payload
 
 

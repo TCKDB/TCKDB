@@ -26,7 +26,7 @@ Two complementary behaviors are expected and live elsewhere:
 
 from __future__ import annotations
 
-from app.db.models.common import ScientificOriginKind
+from app.db.models.common import ScientificOriginKind, TunnelingModel
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
@@ -44,6 +44,17 @@ W_MISSING_LEVEL_OF_THEORY_PROVENANCE = "missing_level_of_theory_provenance"
 W_MISSING_FREQUENCY_SCALE_FACTOR_PROVENANCE = (
     "missing_frequency_scale_factor_provenance"
 )
+
+# Scientific-evidence gaps that are reported rather than rejected. Each names
+# evidence a *computed* record would normally carry but which a legitimate
+# depositor may genuinely not have: a monatomic species has no frequencies, a
+# rate read out of a mechanism file has no partition functions in this
+# database, and a paper reporting "Eckart tunneling" ships no barrier heights.
+W_MISSING_STATMECH_SOURCE_CALCULATIONS = "missing_statmech_source_calculations"
+W_MISSING_STATMECH_FREQUENCY_SOURCE = "missing_statmech_frequency_source"
+W_MISSING_KINETICS_INTERPRETATIONS = "missing_kinetics_interpretation_assignments"
+W_MISSING_TUNNELING_APPLICATION = "missing_tunneling_application_evidence"
+W_MISSING_TS_INTERPRETATION = "missing_kinetics_transition_state_interpretation"
 
 
 # Origins for which computational provenance (software + workflow tool)
@@ -171,6 +182,79 @@ def collect_transport_provenance_warnings(
     return []
 
 
+def collect_statmech_content_warnings(
+    *,
+    scientific_origin: ScientificOriginKind,
+    source_calculation_roles: set[str],
+    has_rotational_structure: bool = False,
+    field: str = "statmech",
+) -> list[UploadWarning]:
+    """Report absent supporting evidence on a computed statmech record.
+
+    Request-type agnostic so the standalone statmech route and the nested
+    bundle/network seams report the same gaps in the same shape.
+
+    Neither gap is an error. An experimental, literature or imported statmech
+    has no calculation at all, and rejecting a computed one would lose the
+    record rather than improve it. Where a rate coefficient actually *depends*
+    on the partition function, the kinetics interpretation seam enforces the
+    source link as a hard requirement instead.
+
+    :param has_rotational_structure: True when the record itself shows the
+        subject has internal structure — any rotational constant, or declared
+        torsions. A monatomic species has neither, and its partition function
+        is analytic with no vibrational modes, so a missing ``freq`` source is
+        expected there and warning about it would fire on every atom in every
+        deposit. Scoping to polyatomics keeps the signal honest without that
+        noise.
+    """
+    if scientific_origin not in _COMPUTATIONAL_ORIGINS:
+        return []
+    if not source_calculation_roles:
+        return [
+            UploadWarning(
+                field=f"{field}.source_calculations",
+                code=W_MISSING_STATMECH_SOURCE_CALCULATIONS,
+                message=(
+                    "No source calculations were linked to this computed statmech "
+                    "record, so the partition-function interpretation cannot be "
+                    "traced back to the calculations it was derived from."
+                ),
+            )
+        ]
+    if has_rotational_structure and "freq" not in source_calculation_roles:
+        return [
+            UploadWarning(
+                field=f"{field}.source_calculations",
+                code=W_MISSING_STATMECH_FREQUENCY_SOURCE,
+                message=(
+                    "This computed statmech describes a species with rotational "
+                    "structure, so its partition function uses vibrational modes, "
+                    "but no source calculation with role='freq' was linked. The "
+                    "frequencies behind this record are untraceable."
+                ),
+            )
+        ]
+    return []
+
+
+def statmech_has_rotational_structure(statmech) -> bool:
+    """True when a statmech payload shows its subject is not a single atom.
+
+    Uses only evidence the record itself carries: a rotational constant or a
+    declared torsion. Both are absent for a monatomic species and present for
+    essentially any real polyatomic deposit. Deliberately conservative — a
+    polyatomic that reports neither simply produces no signal, which is the
+    right bias for a warning.
+    """
+    return (
+        getattr(statmech, "rotational_constant_a_cm1", None) is not None
+        or getattr(statmech, "rotational_constant_b_cm1", None) is not None
+        or getattr(statmech, "rotational_constant_c_cm1", None) is not None
+        or bool(getattr(statmech, "torsions", ()))
+    )
+
+
 def collect_statmech_provenance_warnings(
     request: StatmechUploadRequest,
 ) -> list[UploadWarning]:
@@ -216,4 +300,83 @@ def collect_kinetics_provenance_warnings(
             warnings.append(_level_of_theory_warning())
     elif request.literature is None:
         warnings.append(_literature_warning())
+    return warnings
+
+
+def collect_kinetics_content_warnings(
+    request: KineticsUploadRequest,
+) -> list[UploadWarning]:
+    """Report scientific evidence a rate could carry but does not.
+
+    Separate from the provenance collector because these describe *scientific
+    content* rather than the provenance fragments attached to it. Neither gap
+    is an error:
+
+    * ``scientific_origin='computed'`` says the number came from a
+      calculation, not that the calculation's partition functions live here.
+      A rate read out of a CHEMKIN mechanism or an Arkane TST result
+      deposited without its statmech legitimately carries no assignments.
+    * ``tunneling_model`` is a reported label. A paper stating "Eckart
+      tunneling was applied" ships no imaginary frequency and no barriers.
+    """
+    warnings: list[UploadWarning] = []
+    if (
+        request.scientific_origin in _COMPUTATIONAL_ORIGINS
+        and not request.interpretation_assignments
+    ):
+        warnings.append(
+            UploadWarning(
+                field="interpretation_assignments",
+                code=W_MISSING_KINETICS_INTERPRETATIONS,
+                message=(
+                    "No statmech interpretation assignments were supplied, so this "
+                    "computed rate does not record which partition functions in "
+                    "this database it was built from."
+                ),
+            )
+        )
+    # An interpretation set that names reactants and products but no
+    # transition state describes a TST rate with no Q-double-dagger. Requiring
+    # it would be wrong — a rate whose parameterization comes from a
+    # master-equation fit has no single dividing surface to point at, which is
+    # exactly what ``network_kinetics_ref`` declares — but for everything else
+    # (including variational TST, which still evaluates Q at the variational
+    # dividing surface) the omission is a real gap worth naming.
+    subjects = {
+        "transition_state" if item.role == "transition_state" else item.role
+        for item in request.interpretation_assignments
+    }
+    if (
+        request.interpretation_assignments
+        and "transition_state" not in subjects
+        and request.network_kinetics_ref is None
+    ):
+        warnings.append(
+            UploadWarning(
+                field="interpretation_assignments",
+                code=W_MISSING_TS_INTERPRETATION,
+                message=(
+                    "The interpretation set names reactant and product partition "
+                    "functions but no transition state, so the rate's activated "
+                    "complex is unaccounted for. Expected for a rate fitted from a "
+                    "master-equation solve; otherwise supply the "
+                    "role='transition_state' assignment."
+                ),
+            )
+        )
+    if (
+        request.tunneling_model not in (None, TunnelingModel.none)
+        and request.tunneling_application is None
+    ):
+        warnings.append(
+            UploadWarning(
+                field="tunneling_application",
+                code=W_MISSING_TUNNELING_APPLICATION,
+                message=(
+                    f"tunneling_model='{request.tunneling_model.value}' is declared "
+                    "with no typed tunneling_application evidence, so the correction "
+                    "is recorded as a reported attribute and cannot be replayed."
+                ),
+            )
+        )
     return warnings

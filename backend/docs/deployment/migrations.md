@@ -206,16 +206,74 @@ Operator notes:
 
 ---
 
-## Network / PDep exception
+## Network / PDep exception (RETIRED)
 
-While no real production network or PDep data exists, schema work on the `network*` and PDep tables is allowed to be more flexible than the default rule. See the dedicated section in `.claude/rules/migration-rules.md` for what that means; the operator-side implications are:
+This exception is retired. Real `network_*` rows now live on the deployed database, so every `network*` and PDep table follows the default already-deployed-table rule: a new revision per change, both `upgrade()` and `downgrade()` implemented, and a backfill design for any non-nullable addition. See `.claude/rules/migration-rules.md`.
 
-- A `network*` revision is still a normal Alembic revision and is applied through the steps above.
-- It may include changes that would be unacceptable for an already-deployed table (e.g., tightening a nullable column to NOT NULL without a backfill, renaming a column without a column-copy step).
-- The exception is **table-scoped**. A revision that touches both a `network*` table and a deployed table must respect the stricter rule for the deployed table.
-- The exception ends the moment real network data lands in any long-lived DB. At that point, network tables become "already-deployed" and rejoin the default rule.
+---
 
-If you are reviewing a `network*` migration and unsure whether the exception still applies, check whether any long-lived DB (lab, hosted, operator-managed self-host) has rows in the relevant table.
+## Stage 2 PDep re-upload (revision `c1d2e3f4a5b6`)
+
+`c1d2e3f4a5b6` **refuses to run** against a database that still holds pre-v2 pressure-dependent network rows, and says so with a `RuntimeError` before any DDL is applied. This is deliberate, not a bug to work around.
+
+**Why it refuses.** The v2 contract requires two things that v1 rows do not carry and that cannot be reconstructed from what was stored:
+
+- `network_solve_energy_transfer` gains `state_id` and `collider_species_entry_id` (both NOT NULL). A v1 row recorded one unscoped ⟨ΔE⟩down with no record of which well or which collider it described.
+- `network_channel` gains `channel_key`, the producer-visible identity that lets parallel mechanistic pathways share the same macroscopic endpoints. v1 channels have no such key.
+
+Guessing either value during ingestion would fabricate scientific provenance. The contract is therefore **refuse and re-upload**, not backfill.
+
+**Detecting the condition ahead of time:**
+
+```bash
+psql "$DATABASE_URL" -c "
+  SELECT (SELECT count(*) FROM network_solve_energy_transfer) AS energy_transfer_rows,
+         (SELECT count(*) FROM network_channel)               AS channel_rows,
+         (SELECT count(*) FROM network)                       AS networks;"
+```
+
+If both counts are zero, `alembic upgrade head` proceeds normally and nothing below applies.
+
+**If rows exist, in order:**
+
+1. **Back up.** Follow "Back up before touching anything" above. Do not skip this — step 3 deletes rows.
+2. **Export what is there, and locate its source.** The stored rows are not sufficient to rebuild the network; the original Arkane / master-equation run directory is. Capture both:
+   ```bash
+   curl -sH "Authorization: Bearer $TCKDB_API_KEY" \
+     "$TCKDB_URL/api/v1/scientific/networks?limit=200" > networks.json
+   curl -sH "Authorization: Bearer $TCKDB_API_KEY" \
+     "$TCKDB_URL/api/v1/scientific/network-solves/<ref>?include=all" > solve-<ref>.json
+   ```
+   Confirm you can still reach the run directory each network was built from before continuing.
+3. **Delete the legacy network graph**, child-first so no FK is violated:
+   ```sql
+   BEGIN;
+   DELETE FROM network_kinetics_point       WHERE network_kinetics_id IN (SELECT id FROM network_kinetics);
+   DELETE FROM network_kinetics_plog        WHERE network_kinetics_id IN (SELECT id FROM network_kinetics);
+   DELETE FROM network_kinetics_chebyshev   WHERE network_kinetics_id IN (SELECT id FROM network_kinetics);
+   UPDATE kinetics SET network_kinetics_id = NULL WHERE network_kinetics_id IS NOT NULL;
+   DELETE FROM network_kinetics;
+   DELETE FROM network_solve_energy_transfer;
+   DELETE FROM network_solve_bath_gas;
+   DELETE FROM network_solve_source_calculation;
+   DELETE FROM network_solve;
+   DELETE FROM network_channel;
+   DELETE FROM network_state_participant;
+   DELETE FROM network_state;
+   DELETE FROM network_reaction;
+   DELETE FROM network_species;
+   DELETE FROM network;
+   COMMIT;
+   ```
+   Species, calculations, transition states and statmech rows are **not** deleted — they are shared identity/result rows and the re-upload will resolve to the existing ones.
+4. **Migrate.** `alembic upgrade head` now runs to completion.
+5. **Re-upload** each network through `POST /api/v1/uploads/networks/pdep` with a v2 payload regenerated from its source run (for Arkane runs, `backend/scripts/pdep_ingestion` emits one). Each payload must carry per-channel `microreaction_paths`, per-path `channel_barriers`, and `(state_key, collider_species_key)`-scoped `energy_transfer`.
+6. **Verify** that the re-uploaded network count matches the export, and that `network_channel.channel_key` is non-null everywhere:
+   ```sql
+   SELECT count(*) FROM network_channel WHERE channel_key IS NULL;  -- expect 0
+   ```
+
+**Downgrading** `c1d2e3f4a5b6` refuses symmetrically when either a TS-owned `statmech` row exists (the prior schema has no truthful subject for it) or two channels share `(network_id, source_state_id, sink_state_id)` (the prior schema made that triple unique). Resolve those rows before rolling back.
 
 ---
 

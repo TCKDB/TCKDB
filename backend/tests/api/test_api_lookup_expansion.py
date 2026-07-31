@@ -58,7 +58,6 @@ def _pdep_payload(name: str = "net-lookup") -> dict:
     xyz_ethyl = "3\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nH 2.0 1.0 0.0"
     xyz_o2 = "2\n\nO 0.0 0.0 0.0\nO 1.21 0.0 0.0"
     xyz_etoo = "4\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nO 2.5 0.0 0.0\nO 3.7 0.0 0.0"
-    xyz_ts = "4\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nO 2.2 0.0 0.0\nO 3.4 0.0 0.0"
     xyz_ar = "1\n\nAr 0.0 0.0 0.0"
     software = {"name": "Gaussian", "version": "16"}
     lot = {"method": "B3LYP", "basis": "6-31G(d)"}
@@ -77,6 +76,11 @@ def _pdep_payload(name: str = "net-lookup") -> dict:
                         "software_release": software, "level_of_theory": lot,
                     },
                 }],
+                "calculations": [{
+                    "key": "ethyl_sp", "type": "sp", "geometry_key": "ethyl_geom",
+                    "software_release": software, "level_of_theory": lot,
+                    "sp_electronic_energy_hartree": -79.8,
+                }],
             },
             {
                 "key": "O2",
@@ -89,6 +93,11 @@ def _pdep_payload(name: str = "net-lookup") -> dict:
                         "software_release": software, "level_of_theory": lot,
                     },
                 }],
+                "calculations": [{
+                    "key": "O2_sp", "type": "sp", "geometry_key": "O2_geom",
+                    "software_release": software, "level_of_theory": lot,
+                    "sp_electronic_energy_hartree": -150.2,
+                }],
             },
             {
                 "key": "ethylperoxy",
@@ -100,6 +109,11 @@ def _pdep_payload(name: str = "net-lookup") -> dict:
                         "key": "etoo_opt", "type": "opt",
                         "software_release": software, "level_of_theory": lot,
                     },
+                }],
+                "calculations": [{
+                    "key": "etoo_sp", "type": "sp", "geometry_key": "etoo_geom",
+                    "software_release": software, "level_of_theory": lot,
+                    "sp_electronic_energy_hartree": -229.1,
                 }],
             },
             {
@@ -115,17 +129,6 @@ def _pdep_payload(name: str = "net-lookup") -> dict:
                 }],
             },
         ],
-        "transition_states": [{
-            "key": "ts_assoc",
-            "micro_reaction_key": "rxn_assoc",
-            "charge": 0, "multiplicity": 2,
-            "geometry": {"key": "ts_assoc_geom", "xyz_text": xyz_ts},
-            "calculation": {
-                "key": "ts_assoc_opt", "type": "opt",
-                "software_release": software, "level_of_theory": lot,
-                "opt_converged": True,
-            },
-        }],
         "micro_reactions": [{
             "key": "rxn_assoc", "reversible": True,
             "reactants": [{"species_key": "ethyl"}, {"species_key": "O2"}],
@@ -138,9 +141,12 @@ def _pdep_payload(name: str = "net-lookup") -> dict:
              "participants": [{"species_key": "ethylperoxy"}]},
         ],
         "channels": [{
+            "key": "association_path",
             "source_state_key": "entrance",
             "sink_state_key": "well_RO2",
             "kind": "association",
+            # Barrierless radical-radical association: no saddle point.
+            "microreaction_paths": [{"micro_reaction_key": "rxn_assoc"}],
         }],
         "solve": {
             "me_method": "reservoir_state",
@@ -148,8 +154,26 @@ def _pdep_payload(name: str = "net-lookup") -> dict:
             "pmin_bar": 0.01, "pmax_bar": 100,
             "grain_count": 250,
             "bath_gas": [{"species_key": "Ar", "mole_fraction": 1.0}],
-            "energy_transfer": {"model": "single_exponential_down",
-                                "alpha0_cm_inv": 300, "t_ref_k": 300},
+            "energy_transfer": [{
+                "state_key": "well_RO2", "collider_species_key": "Ar",
+                "model": "single_exponential_down",
+                "alpha0_cm_inv": 300, "t_ref_k": 300,
+            }],
+            "state_energies": [
+                {"state_key": "entrance", "energy_kj_mol": 0.0,
+                 "energy_zero_convention": "entrance_channel",
+                 "correction_convention": "electronic_only",
+                 "source_calculation_key": "ethyl_sp"},
+                {"state_key": "well_RO2", "energy_kj_mol": -120.0,
+                 "energy_zero_convention": "entrance_channel",
+                 "correction_convention": "electronic_only",
+                 "source_calculation_key": "etoo_sp"},
+            ],
+            "source_calculations": [
+                {"calculation_key": "ethyl_sp", "role": "well_energy"},
+                {"calculation_key": "O2_sp", "role": "well_energy"},
+                {"calculation_key": "etoo_sp", "role": "well_energy"},
+            ],
         },
     }
 

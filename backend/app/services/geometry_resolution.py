@@ -21,9 +21,21 @@ def geometry_create_from_payload(payload: GeometryPayload) -> GeometryCreate:
     """
 
     parsed = parse_xyz(payload)
-    geom_hash = hashlib.sha256(parsed.canonical_xyz_text.encode("utf-8")).hexdigest()
+    # `hash_text` is the canonical XYZ text plus an isotope suffix that is
+    # present only when the geometry is isotopically substituted, so hashes of
+    # ordinary geometries are unchanged while two identically-positioned but
+    # differently-labelled geometries no longer collide.
+    geom_hash = hashlib.sha256(parsed.hash_text.encode("utf-8")).hexdigest()
+    isotope_by_index = dict(parsed.isotopes)
     atoms = [
-        GeometryAtomBase(atom_index=index, element=element, x=x, y=y, z=z)
+        GeometryAtomBase(
+            atom_index=index,
+            element=element,
+            x=x,
+            y=y,
+            z=z,
+            isotope_mass_number=isotope_by_index.get(index),
+        )
         for index, (element, x, y, z) in enumerate(parsed.atoms, start=1)
     ]
     return GeometryCreate(
@@ -68,6 +80,7 @@ def resolve_geometry_payload(session: Session, payload: GeometryPayload) -> Geom
                             x=atom.x,
                             y=atom.y,
                             z=atom.z,
+                            isotope_mass_number=atom.isotope_mass_number,
                         )
                     )
 

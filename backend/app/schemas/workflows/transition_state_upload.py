@@ -11,6 +11,10 @@ resolves the geometry, and persists calculations.
 from typing import Self
 
 from pydantic import Field, field_validator, model_validator
+from tckdb_schemas.fragments.ts_validation_evidence import (
+    TransitionStateValidationEvidenceIn,
+    validate_ts_evidence_set,
+)
 
 from app.db.models.common import CalculationType
 from app.schemas.common import SchemaBase
@@ -126,6 +130,18 @@ class TransitionStateUploadRequest(SchemaBase):
     additional_calculations: list[CalculationWithResultsPayload] = Field(
         default_factory=list
     )
+    validation_evidence: list[TransitionStateValidationEvidenceIn] = Field(
+        default_factory=list,
+        description=(
+            "Structured IRC evidence that this saddle point connects the "
+            "declared reactants and products. Optional but strongly "
+            "recommended: a deposit without it succeeds and returns a "
+            "'transition_state_missing_irc_evidence' upload warning. "
+            "This payload has no calculation-key namespace, so evidence binds "
+            "to the upload's single 'irc' additional calculation; "
+            "source_calculation_key must be omitted."
+        ),
+    )
 
     label: str | None = None
     note: str | None = None
@@ -144,6 +160,50 @@ class TransitionStateUploadRequest(SchemaBase):
                 f"primary_opt must have type 'opt', "
                 f"got '{self.primary_opt.type.value}'."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_validation_evidence(self) -> Self:
+        """Bind IRC evidence to this upload's single ``irc`` calculation.
+
+        There are no bundle-local calculation keys here, so the locator is the
+        calculation itself: evidence is only depositable alongside exactly one
+        ``irc`` additional calculation. That is not a limitation invented
+        here — ``transition_state_validation_evidence`` stores a single
+        ``reconstruction_calculation_id``, so one evidence record can only ever
+        name one calculation.
+        """
+        if not self.validation_evidence:
+            return self
+
+        for record in self.validation_evidence:
+            if record.source_calculation_key is not None:
+                raise ValueError(
+                    "source_calculation_key is not accepted on a standalone "
+                    "transition-state upload: it has no calculation-key "
+                    "namespace, and evidence binds to the upload's single "
+                    "'irc' additional calculation."
+                )
+
+        irc_calculations = [
+            calc
+            for calc in self.additional_calculations
+            if calc.type == CalculationType.irc
+        ]
+        if len(irc_calculations) != 1:
+            raise ValueError(
+                "validation_evidence requires exactly one additional "
+                f"calculation of type 'irc' to bind to; found "
+                f"{len(irc_calculations)}."
+            )
+
+        validate_ts_evidence_set(
+            self.validation_evidence,
+            subject_label=self.label or "transition state",
+            xyz_text=self.geometry.xyz_text,
+            reactant_count=len(self.reaction.reactants),
+            product_count=len(self.reaction.products),
+        )
         return self
 
     @model_validator(mode="after")

@@ -114,7 +114,21 @@ def _resolve_test_db_name() -> str:
     return f"tckdb_test_{os.getpid()}"
 
 
+_TEST_DATABASE_NAME = re.compile(r"^tckdb_test(?:_[A-Za-z0-9_]+)?$")
+
+
+def _validate_test_db_name(db_name: str) -> str:
+    """Permit destructive fixture setup only for isolated test databases."""
+    if not _TEST_DATABASE_NAME.fullmatch(db_name):
+        raise ValueError(
+            "DB_TEST_NAME must match isolated test-database pattern "
+            "'tckdb_test' or 'tckdb_test_<alnum_or_underscore>'."
+        )
+    return db_name
+
+
 def _recreate_test_database(db_name: str) -> None:
+    db_name = _validate_test_db_name(db_name)
     admin_url = _database_url("postgres")
     engine = create_engine(admin_url, future=True, isolation_level="AUTOCOMMIT")
 
@@ -131,6 +145,27 @@ def _recreate_test_database(db_name: str) -> None:
             )
             connection.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
             connection.execute(text(f'CREATE DATABASE "{db_name}"'))
+    finally:
+        engine.dispose()
+
+
+def _drop_test_database(db_name: str) -> None:
+    """Remove the per-run database after pytest releases pooled connections."""
+    db_name = _validate_test_db_name(db_name)
+    admin_url = _database_url("postgres")
+    engine = create_engine(admin_url, future=True, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as connection:
+            connection.execute(
+                text("""
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE datname = :db_name
+                      AND pid <> pg_backend_pid()
+                """),
+                {"db_name": db_name},
+            )
+            connection.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
     finally:
         engine.dispose()
 
@@ -158,6 +193,7 @@ def db_engine():
         yield engine
     finally:
         engine.dispose()
+        _drop_test_database(db_name)
 
 
 @pytest.fixture

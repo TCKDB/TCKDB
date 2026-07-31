@@ -15,6 +15,7 @@ from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import CalculationQuality, CalculationType
 from tckdb_schemas.fragments.artifact import ArtifactIn
 from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
+from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.calculation import (
     CalculationParameterObservation,
     CalculationWithResultsPayload,
@@ -192,12 +193,21 @@ class GeometryIn(SchemaBase):
 
     :param key: Globally unique local key for this geometry.
     :param xyz_text: Raw XYZ text block.
+    :param isotopes: Optional atom-resolved isotope labelling, mapping a
+        1-based XYZ atom index to that atom's isotope mass number. See
+        :class:`tckdb_schemas.fragments.geometry.GeometryPayload`.
     """
 
     key: str = Field(min_length=1)
     xyz_text: str = Field(min_length=1)
+    isotopes: dict[int, int] | None = None
 
     @field_validator("xyz_text")
     @classmethod
     def strip_xyz(cls, value: str) -> str:
         return value.strip()
+
+    def to_payload(self) -> "GeometryPayload":
+        """Return the key-less geometry payload the resolution services take."""
+
+        return GeometryPayload(xyz_text=self.xyz_text, isotopes=self.isotopes)

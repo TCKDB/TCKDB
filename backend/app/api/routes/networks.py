@@ -28,6 +28,7 @@ from app.db.models.network_pdep import (
     NetworkSolveBathGas,
     NetworkSolveEnergyTransfer,
     NetworkSolveSourceCalculation,
+    NetworkSolveStateEnergy,
     NetworkState,
     NetworkStateParticipant,
 )
@@ -50,6 +51,7 @@ from app.schemas.reads.network import (
     NetworkSolveEnergyTransferRead,
     NetworkSolveListItemRead,
     NetworkSolveSourceCalculationRead,
+    NetworkSolveStateEnergyRead,
     NetworkSpeciesLinkRead,
     NetworkStateParticipantRead,
     NetworkStateRead,
@@ -543,18 +545,16 @@ def get_network_solve(
         .where(NetworkSolveEnergyTransfer.solve_id == solve_id)
         .order_by(NetworkSolveEnergyTransfer.id)
     ).all()
-    if len(energy_transfer_rows) > 1:
-        msg = (
-            f"Invalid network_solve: expected at most one energy transfer row, "
-            f"found {len(energy_transfer_rows)}"
-        )
-        logger.error("%s (network_solve.id=%s)", msg, solve_id)
-        raise DataIntegrityError(msg)
     energy_transfer = (
         NetworkSolveEnergyTransferRead.model_validate(energy_transfer_rows[0])
-        if energy_transfer_rows
+        if len(energy_transfer_rows) == 1
         else None
     )
+    state_energies = session.scalars(
+        select(NetworkSolveStateEnergy)
+        .where(NetworkSolveStateEnergy.solve_id == solve_id)
+        .order_by(NetworkSolveStateEnergy.state_id)
+    ).all()
 
     source_calcs = session.scalars(
         select(NetworkSolveSourceCalculation)
@@ -598,6 +598,14 @@ def get_network_solve(
         ),
         bath_gases=[NetworkSolveBathGasRead.model_validate(bg) for bg in bath_gases],
         energy_transfer=energy_transfer,
+        energy_transfers=[
+            NetworkSolveEnergyTransferRead.model_validate(row)
+            for row in energy_transfer_rows
+        ],
+        state_energies=[
+            NetworkSolveStateEnergyRead.model_validate(row)
+            for row in state_energies
+        ],
         source_calculations=[
             NetworkSolveSourceCalculationRead.model_validate(sc) for sc in source_calcs
         ],

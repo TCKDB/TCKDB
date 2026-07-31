@@ -198,6 +198,13 @@ def _species_block(
                 "sp_electronic_energy_hartree": -40.5,
             }
         )
+    block["calculations"].append(
+        {
+            "key": f"{key}-freq", "type": "freq", "geometry_key": f"{key}-geom",
+            "software_release": _SOFTWARE_GAUSSIAN, "level_of_theory": _LOT_DFT,
+            "freq_n_imag": 0,
+        }
+    )
     if include_thermo:
         block["thermo"] = {
             "h298_kj_mol": -10.0,
@@ -283,7 +290,7 @@ def test_computed_reaction_calculation_environment_persists_dedups_and_is_option
         session.flush()
         payload = _minimal_payload()
         payload["species"][0]["conformers"][0]["calculation"]["execution_environment"] = _execution_environment()
-        payload["species"][0]["calculations"][0]["execution_environment"] = _execution_environment()
+        payload["species"][0]["calculations"][1]["execution_environment"] = _execution_environment()
         request = ComputedReactionUploadRequest(**payload)
         persist_computed_reaction_upload(session, request, created_by=50_199)
         calculations = session.scalars(select(Calculation).where(Calculation.created_by == 50_199)).all()
@@ -929,6 +936,7 @@ def test_frequency_scale_factor_resolution_on_statmech(db_engine) -> None:
         "is_linear": False,
         "external_symmetry": 6,
         "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
         "freq_scale_factor": {
             "level_of_theory": _LOT_DFT,
             "scale_kind": "fundamental",
@@ -973,6 +981,7 @@ def test_statmech_point_group_persists_on_species_block(db_engine) -> None:
         "external_symmetry": 6,
         "point_group": "D3h",
         "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
     }
 
     with _isolated_session(db_engine) as session:
@@ -994,6 +1003,7 @@ def test_statmech_optical_isomers_persists_on_species_block(db_engine) -> None:
         "external_symmetry": 6,
         "optical_isomers": 2,
         "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
     }
 
     with _isolated_session(db_engine) as session:
@@ -1015,6 +1025,7 @@ def test_statmech_optical_isomers_defaults_null_when_omitted(db_engine) -> None:
         "is_linear": False,
         "external_symmetry": 6,
         "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
     }
 
     with _isolated_session(db_engine) as session:
@@ -1040,8 +1051,9 @@ def test_reaction_participant_thermo_links_to_own_statmech(db_engine) -> None:
         payload["species"][idx]["statmech"] = {
             "is_linear": False,
             "external_symmetry": 3,
-            "point_group": "C1",
             "statmech_treatment": "rrho",
+            "source_calculations": [{"calculation_key": f"{'ch3' if idx == 0 else 'ch4'}-freq", "role": "freq"}],
+            "point_group": "C1",
         }
 
     with _isolated_session(db_engine) as session:
@@ -1097,15 +1109,17 @@ def test_reaction_non_computed_thermo_not_linked_to_statmech(db_engine) -> None:
     payload["species"][0]["statmech"] = {
         "is_linear": False,
         "external_symmetry": 3,
-        "point_group": "C1",
         "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
+        "point_group": "C1",
     }
     # ch4 (index 2): computed thermo (default) + a statmech → control, links.
     payload["species"][2]["statmech"] = {
         "is_linear": False,
         "external_symmetry": 12,
-        "point_group": "Td",
         "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch4-freq", "role": "freq"}],
+        "point_group": "Td",
     }
 
     with _isolated_session(db_engine) as session:
@@ -1157,8 +1171,9 @@ def test_statmech_source_calculations_persist_for_species_owned_calcs(db_engine)
         "external_symmetry": 6,
         "point_group": "D3h",
         "statmech_treatment": "rrho",
-        "source_calculations": [
-            {"calculation_key": "ch3-opt", "role": "opt"},
+            "source_calculations": [
+                {"calculation_key": "ch3-freq", "role": "freq"},
+                {"calculation_key": "ch3-opt", "role": "opt"},
             {"calculation_key": "ch3-sp", "role": "sp"},
         ],
     }
@@ -1177,7 +1192,7 @@ def test_statmech_source_calculations_persist_for_species_owned_calcs(db_engine)
                 StatmechSourceCalculation.statmech_id == statmech.id
             )
         ).all()
-        assert len(links) == 2
+        assert len(links) == 3
 
         # Each link points at a calc owned by this species entry, with
         # the producer-declared role preserved.
@@ -1191,6 +1206,7 @@ def test_statmech_source_calculations_persist_for_species_owned_calcs(db_engine)
         assert roles_to_calc_types == {
             StatmechCalculationRole.opt: CalculationType.opt,
             StatmechCalculationRole.sp: CalculationType.sp,
+            StatmechCalculationRole.freq: CalculationType.freq,
         }
 
 
@@ -1224,8 +1240,9 @@ def test_statmech_source_calculation_referencing_sibling_species_rejects_with_ot
     payload["species"][0]["statmech"] = {
         "is_linear": False,
         "statmech_treatment": "rrho",
-        "source_calculations": [
-            # ch3 statmech referencing h's SP calc
+            "source_calculations": [
+                {"calculation_key": "ch3-freq", "role": "freq"},
+                # ch3 statmech referencing h's SP calc
             {"calculation_key": "h-sp", "role": "sp"},
         ],
     }
@@ -1246,8 +1263,9 @@ def test_statmech_source_calculation_undefined_key_rejects_at_schema_layer() -> 
     payload["species"][0]["statmech"] = {
         "is_linear": False,
         "statmech_treatment": "rrho",
-        "source_calculations": [
-            {"calculation_key": "does-not-exist", "role": "sp"},
+            "source_calculations": [
+                {"calculation_key": "ch3-freq", "role": "freq"},
+                {"calculation_key": "does-not-exist", "role": "sp"},
         ],
     }
     import pytest
@@ -1263,6 +1281,7 @@ def test_statmech_without_new_fields_remains_valid(db_engine) -> None:
         "is_linear": False,
         "external_symmetry": 6,
         "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
     }
 
     with _isolated_session(db_engine) as session:
@@ -1279,7 +1298,8 @@ def test_statmech_without_new_fields_remains_valid(db_engine) -> None:
                 StatmechSourceCalculation.statmech_id == statmech.id
             )
         ).all()
-        assert links == []
+        assert len(links) == 1
+        assert links[0].role.value == "freq"
 
 
 # ---------------------------------------------------------------------------
@@ -1310,6 +1330,7 @@ def test_reaction_statmech_torsion_with_one_coordinate_persists(db_engine) -> No
     payload["species"][2]["statmech"] = {
         "is_linear": False,
         "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch4-freq", "role": "freq"}],
         "torsions": [
             {
                 "torsion_index": 1,
@@ -1370,6 +1391,8 @@ def test_reaction_statmech_torsion_without_coordinates_writes_no_definitions(
     payload = _minimal_payload()
     payload["species"][2]["statmech"] = {
         "is_linear": False,
+        "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch4-freq", "role": "freq"}],
         "torsions": [{"torsion_index": 1, "symmetry_number": 3}],
     }
     with _isolated_session(db_engine) as session:
@@ -1397,6 +1420,8 @@ def test_reaction_statmech_torsion_scan_key_missing_rejected() -> None:
     payload = _minimal_payload()
     payload["species"][2]["statmech"] = {
         "is_linear": False,
+        "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch4-freq", "role": "freq"}],
         "torsions": [
             {"torsion_index": 1, "source_scan_calculation_key": "ghost"}
         ],
@@ -1409,6 +1434,8 @@ def test_reaction_statmech_torsion_scan_key_must_be_scan_type() -> None:
     payload = _minimal_payload()
     payload["species"][2]["statmech"] = {
         "is_linear": False,
+        "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch4-freq", "role": "freq"}],
         "torsions": [
             # ts-freq is type=freq, not scan
             {"torsion_index": 1, "source_scan_calculation_key": "ch4-sp"}
@@ -1422,6 +1449,8 @@ def test_reaction_statmech_torsion_coords_length_must_match_dimension() -> None:
     payload = _minimal_payload()
     payload["species"][2]["statmech"] = {
         "is_linear": False,
+        "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch4-freq", "role": "freq"}],
         "torsions": [
             {
                 "torsion_index": 1,
@@ -1446,6 +1475,8 @@ def test_reaction_statmech_torsion_duplicate_coordinate_index_rejected() -> None
     payload = _minimal_payload()
     payload["species"][2]["statmech"] = {
         "is_linear": False,
+        "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch4-freq", "role": "freq"}],
         "torsions": [
             {
                 "torsion_index": 1,
@@ -1629,6 +1660,8 @@ def test_reaction_torsion_resolves_to_scan_calc_with_scan_result(
     }
     payload["species"][2]["statmech"] = {
         "is_linear": False,
+        "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch4-freq", "role": "freq"}],
         "torsions": [
             {
                 "torsion_index": 1,
@@ -2168,7 +2201,7 @@ def test_freq_role_rejects_species_owned_freq(db_engine) -> None:
     # Add a species-owned freq calc on CH4.
     payload["species"][2]["calculations"].append(
         {
-            "key": "ch4-freq",
+                "key": "ch4-kinetics-freq",
             "type": "freq",
             "geometry_key": "ch4-geom",
             "software_release": _SOFTWARE_GAUSSIAN,
@@ -2177,7 +2210,7 @@ def test_freq_role_rejects_species_owned_freq(db_engine) -> None:
         }
     )
     payload["kinetics"][0]["source_calculations"] = [
-        {"calculation_key": "ch4-freq", "role": "freq"},
+            {"calculation_key": "ch4-kinetics-freq", "role": "freq"},
     ]
     import pytest
 
@@ -2337,7 +2370,7 @@ def test_loose_roles_accept_any_calc_type_and_owner(db_engine) -> None:
     # Attach a species-owned freq for master_equation linking.
     payload["species"][0]["calculations"].append(
         {
-            "key": "ch3-freq",
+                "key": "ch3-master-freq",
             "type": "freq",
             "geometry_key": "ch3-geom",
             "software_release": _SOFTWARE_GAUSSIAN,
@@ -2347,7 +2380,7 @@ def test_loose_roles_accept_any_calc_type_and_owner(db_engine) -> None:
     )
     payload["kinetics"][0]["source_calculations"] = [
         {"calculation_key": "ch3-opt", "role": "fit_source"},
-        {"calculation_key": "ch3-freq", "role": "master_equation"},
+            {"calculation_key": "ch3-master-freq", "role": "master_equation"},
     ]
 
     with _isolated_session(db_engine) as session:
@@ -3495,3 +3528,77 @@ def test_computed_reaction_persists_explicit_degeneracy_convention(db_engine) ->
 def test_bundle_kinetics_defaults_degeneracy_convention_to_unknown() -> None:
     kinetics = BundleKineticsIn(**_bundle_kinetics_kwargs(degeneracy=2.0))
     assert kinetics.degeneracy_convention.value == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# NB7: IRC validation evidence is depositable through the bundle too
+# ---------------------------------------------------------------------------
+
+
+def _payload_with_ts_evidence(**evidence_overrides) -> dict:
+    """`_payload_with_ts_irc()` plus passing IRC evidence on the TS.
+
+    The 5-atom CH3 + H -> CH4 saddle point: reactant:1 is the methyl (C and
+    three H), reactant:2 the incoming H atom, product:1 the whole methane.
+    """
+    payload = _payload_with_ts_irc()
+    evidence: dict = {
+        "kind": "irc",
+        "passed": True,
+        "rationale": "IRC descends to CH3 + H one way and CH4 the other.",
+        "source_calculation_key": "ts-irc",
+        "reactant_participant_mapping": {
+            "reactant:1": [1, 2, 3, 4],
+            "reactant:2": [5],
+        },
+        "product_participant_mapping": {"product:1": [1, 2, 3, 4, 5]},
+    }
+    evidence.update(evidence_overrides)
+    payload["transition_state"]["validation_evidence"] = [evidence]
+    return payload
+
+
+def test_bundle_transition_state_persists_irc_evidence(db_engine) -> None:
+    from app.db.models.transition_state import TransitionStateValidationEvidence
+    from app.services.scientific_read.transition_states import (
+        _build_validation_descriptor,
+    )
+
+    # Rolled back: this bundle persists species/conformers that other workflow
+    # tests count without qualification.
+    with _isolated_session(db_engine) as session:
+        outcome = persist_computed_reaction_upload(
+            session,
+            ComputedReactionUploadRequest(**_payload_with_ts_evidence()),
+        )
+        session.flush()
+        ts_entry_id = outcome["transition_state_entry_id"]
+        assert ts_entry_id is not None
+
+        rows = session.scalars(
+            select(TransitionStateValidationEvidence).where(
+                TransitionStateValidationEvidence.transition_state_entry_id
+                == ts_entry_id
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].passed is True
+        linked = session.get(Calculation, rows[0].reconstruction_calculation_id)
+        assert linked.type == CalculationType.irc
+        assert _build_validation_descriptor(session, ts_entry_id).irc == "present"
+
+
+def test_bundle_ts_evidence_must_name_an_irc_calculation() -> None:
+    with pytest.raises(ValueError, match="requires an irc calculation"):
+        ComputedReactionUploadRequest(
+            **_payload_with_ts_evidence(source_calculation_key="ts-freq")
+        )
+
+
+def test_bundle_ts_evidence_enforces_full_atom_coverage() -> None:
+    with pytest.raises(ValueError, match="cover every one of the 5 TS atoms"):
+        ComputedReactionUploadRequest(
+            **_payload_with_ts_evidence(
+                product_participant_mapping={"product:1": [1, 2, 3]}
+            )
+        )

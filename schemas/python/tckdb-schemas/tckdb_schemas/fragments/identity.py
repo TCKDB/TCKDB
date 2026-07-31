@@ -34,7 +34,6 @@ _IDENTITY_TEXT_FIELDS = (
     "electronic_state_label",
     "term_symbol_raw",
     "term_symbol",
-    "isotopologue_label",
 )
 
 
@@ -57,7 +56,12 @@ class SpeciesIdentityPayload(SchemaBase):
     """Reusable upload fragment for graph identity resolution.
 
     :param molecule_kind: High-level species kind. Current workflows assume molecules.
-    :param smiles: Input graph identity SMILES string.
+    :param smiles: Input graph identity SMILES string. Isotopic substitution is
+        expressed with standard SMILES isotope notation (``[2H]``, ``[13C]``,
+        ``[18O]``) and is atom-resolved: ``[2H]CO`` and ``[2H]OC`` are
+        different molecules. Isotope labels do **not** fork the species-level
+        graph identity — they resolve a distinct ``species_entry`` under one
+        shared ``species``.
     :param charge: Expected formal charge for the uploaded identity.
     :param multiplicity: Expected spin multiplicity for the uploaded identity.
     """
@@ -87,7 +91,13 @@ class SpeciesEntryIdentityPayload(
     :param electronic_state_label: Optional state label such as ``X`` or ``A``.
     :param term_symbol_raw: Optional raw uploaded term symbol.
     :param term_symbol: Optional canonicalized term symbol.
-    :param isotopologue_label: Optional isotopologue label.
+
+    Isotopic resolution is *not* a field on this payload. It is derived
+    server-side from the atom-resolved isotope labels in ``smiles`` (see
+    ``SpeciesIdentityPayload.smiles``). The former free-text
+    ``isotopologue_label`` has been removed: an arbitrary string could mint
+    two species identities that no scientific content distinguished, and a
+    derived key may never be accepted from an uploader.
     """
 
     species_entry_kind: StationaryPointKind = StationaryPointKind.minimum
@@ -101,4 +111,3 @@ class SpeciesEntryIdentityPayload(
 
     term_symbol_raw: str | None = Field(default=None, max_length=64)
     term_symbol: str | None = Field(default=None, max_length=64)
-    isotopologue_label: str | None = Field(default=None, max_length=64)

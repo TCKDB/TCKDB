@@ -49,7 +49,13 @@ from .arkane_pdep_parser import (
     parse_supporting_information,
     resolve_log_path,
 )
-from .units import atm_to_bar, ea_to_kj_mol, j_mol_to_hartree, kcal_mol_to_cm_inv
+from .units import (
+    HARTREE_TO_KJ_MOL,
+    atm_to_bar,
+    ea_to_kj_mol,
+    j_mol_to_hartree,
+    kcal_mol_to_cm_inv,
+)
 
 # Arkane declares the ESS per level-of-theory as a lowercase token
 # (``software="gaussian"``). Canonicalise that token to a software_release ref
@@ -568,6 +574,10 @@ def build_network_pdep_payload(
     # Transition states (TS1-TS4 full ab-initio; TS5/TS6 -> no TS row)
     # ------------------------------------------------------------------
     transition_states: list[dict] = []
+    # TS electronic energies (hartree) and their SP calc keys, needed to build
+    # per-path solve barriers on the same energy zero as the state energies.
+    ts_sp_hartree: dict[str, float] = {}
+    ts_sp_key_by_ts: dict[str, str] = {}
     for i, rxn in enumerate(inp.reactions):
         if i not in rxn_key_by_index:
             continue
@@ -652,6 +662,11 @@ def build_network_pdep_payload(
                 "label": ts_label,
             }
         )
+        if info.electronic_energy_j_mol is not None:
+            ts_sp_hartree[ts_label.lower()] = j_mol_to_hartree(
+                info.electronic_energy_j_mol
+            )
+            ts_sp_key_by_ts[ts_label.lower()] = ts_sp_key
         gap.ts_built.append(ts_label)
 
     # ------------------------------------------------------------------
@@ -686,6 +701,100 @@ def build_network_pdep_payload(
         return state_key_by_multiset.get(_multiset_key(labels))
 
     # ------------------------------------------------------------------
+    # Solve state energies (computed here because the channel barriers below
+    # must be expressed on the SAME declared zero)
+    # ------------------------------------------------------------------
+    sp_energy_hartree: dict[str, float] = {}
+    for species in species_payloads:
+        for calculation in species.get("calculations", []):
+            value = calculation.get("sp_electronic_energy_hartree")
+            if value is not None:
+                sp_energy_hartree[species["key"]] = float(value)
+                break
+    raw_state_energies: list[tuple[dict, float, str]] = []
+    for state in states:
+        hartree = 0.0
+        source_key: str | None = None
+        for participant in state["participants"]:
+            label = participant["species_key"]
+            if label not in sp_energy_hartree or label not in species_sp_key:
+                raise ValueError(
+                    f"Cannot construct solve state energy for {state['key']!r}: "
+                    f"missing SP energy for species {label!r}."
+                )
+            hartree += participant.get("stoichiometry", 1) * sp_energy_hartree[label]
+            source_key = source_key or species_sp_key[label]
+        assert source_key is not None  # states require at least one participant
+        raw_state_energies.append((state, hartree, source_key))
+
+    # Arkane's parsed payload gives electronic SP energies. Declare the lowest
+    # state as the zero and record that these are NOT silently promoted to
+    # ZPE/thermal values.
+    zero_hartree = (
+        min(value for _state, value, _source in raw_state_energies)
+        if raw_state_energies
+        else 0.0
+    )
+    _CONVENTIONS = {
+        "energy_zero_convention": "lowest_state",
+        "correction_convention": "electronic_only",
+    }
+    state_energies = [
+        {
+            "state_key": state["key"],
+            "energy_kj_mol": (value - zero_hartree) * HARTREE_TO_KJ_MOL,
+            **_CONVENTIONS,
+            "source_calculation_key": source_key,
+        }
+        for state, value, source_key in raw_state_energies
+    ]
+    state_energy_kj_mol = {
+        entry["state_key"]: entry["energy_kj_mol"] for entry in state_energies
+    }
+
+    # ------------------------------------------------------------------
+    # Micro-reaction → state-pair index, used to attribute each macroscopic
+    # channel to the elementary step(s) and saddle point(s) that support it.
+    # ------------------------------------------------------------------
+    rxn_endpoints: dict[str, tuple[str | None, str | None]] = {}
+    for rxn_payload in micro_reactions:
+        reactant_labels = [p["species_key"] for p in rxn_payload["reactants"]]
+        product_labels = [p["species_key"] for p in rxn_payload["products"]]
+        rxn_endpoints[rxn_payload["key"]] = (
+            _lookup_state(reactant_labels),
+            _lookup_state(product_labels),
+        )
+    ts_keys_by_rxn: dict[str, list[str]] = {}
+    for ts_payload in transition_states:
+        ts_keys_by_rxn.setdefault(ts_payload["micro_reaction_key"], []).append(
+            ts_payload["key"]
+        )
+
+    def _paths_for_channel(src: str, snk: str) -> list[dict]:
+        """Every elementary step connecting these two states, with its TS.
+
+        A reversible elementary step supports the channel in either
+        orientation, so both are matched. A step with no ab-initio saddle
+        point yields a barrierless path rather than being dropped: the
+        pathway is real even when the geometry is not in this run.
+        """
+        paths: list[dict] = []
+        for rxn_key, (reactant_state, product_state) in rxn_endpoints.items():
+            if {reactant_state, product_state} != {src, snk}:
+                continue
+            ts_keys = ts_keys_by_rxn.get(rxn_key, [])
+            if not ts_keys:
+                paths.append(
+                    {"micro_reaction_key": rxn_key, "transition_state_key": None}
+                )
+                continue
+            for ts_key in ts_keys:
+                paths.append(
+                    {"micro_reaction_key": rxn_key, "transition_state_key": ts_key}
+                )
+        return paths
+
+    # ------------------------------------------------------------------
     # Channels + channel_kinetics (one per fitted pdepreaction)
     # ------------------------------------------------------------------
     _KIND = {
@@ -696,6 +805,7 @@ def build_network_pdep_payload(
     }
     channels: list[dict] = []
     channel_kinetics: list[dict] = []
+    channel_barriers: list[dict] = []
     seen_channel_pairs: set[tuple[str, str]] = set()
 
     for fit in run.fits:
@@ -710,14 +820,54 @@ def build_network_pdep_payload(
         if pair in seen_channel_pairs:
             gap.channels_duplicate.append(pair)
             continue
+        paths = _paths_for_channel(src, snk)
+        if not paths:
+            # A phenomenological fit with no elementary step behind it cannot
+            # be attributed; name it instead of emitting an unsupported channel.
+            gap.channels_unmapped.append(
+                ("+".join(fit.reactants), "+".join(fit.products))
+            )
+            continue
         seen_channel_pairs.add(pair)
         pmin_bar, pmax_bar = _fit_bounds_bar_kelvin(fit)  # honours atm/bar; K
         kind = _KIND.get((state_kind[src], state_kind[snk]), "isomerization")
+        channel_key = f"channel_{len(channels) + 1}"
         channels.append(
-            {"source_state_key": src, "sink_state_key": snk, "kind": kind}
+            {
+                "key": channel_key,
+                "source_state_key": src,
+                "sink_state_key": snk,
+                "kind": kind,
+                "microreaction_paths": paths,
+            }
         )
+        # Barriers are oriented by the channel (source → sink) and measured
+        # from the same declared zero as the state energies. A barrierless
+        # path has no saddle point and therefore carries no barrier row.
+        for path in paths:
+            ts_key = path["transition_state_key"]
+            if ts_key is None:
+                continue
+            if ts_key not in ts_sp_hartree:
+                raise ValueError(
+                    f"Cannot construct a channel barrier for TS {ts_key!r}: no "
+                    "single-point electronic energy was parsed for it."
+                )
+            ts_kj_mol = (ts_sp_hartree[ts_key] - zero_hartree) * HARTREE_TO_KJ_MOL
+            channel_barriers.append(
+                {
+                    "channel_key": channel_key,
+                    "micro_reaction_key": path["micro_reaction_key"],
+                    "transition_state_key": ts_key,
+                    "forward_barrier_kj_mol": ts_kj_mol - state_energy_kj_mol[src],
+                    "reverse_barrier_kj_mol": ts_kj_mol - state_energy_kj_mol[snk],
+                    **_CONVENTIONS,
+                    "source_calculation_key": ts_sp_key_by_ts[ts_key],
+                }
+            )
         channel_kinetics.append(
             {
+                "channel_key": channel_key,
                 "source_state_key": src,
                 "sink_state_key": snk,
                 "model_kind": "chebyshev",
@@ -776,14 +926,29 @@ def build_network_pdep_payload(
     if bath:
         solve["bath_gas"] = bath
 
+    # Arkane declares one energy-transfer model for the network; the master
+    # equation applies it to every collisionally-stabilised well against every
+    # bath component. Make that cross product explicit rather than depositing a
+    # single unscoped ⟨ΔE⟩down that says nothing about which well it describes.
     if inp.energy_transfer:
         et = inp.energy_transfer
-        solve["energy_transfer"] = {
-            "model": et.model,
-            "alpha0_cm_inv": et.alpha0_cm_inv,
-            "t_exponent": et.t_exponent,
-            "t_ref_k": et.t_ref_k,
-        }
+        solve["energy_transfer"] = [
+            {
+                "state_key": state["key"],
+                "collider_species_key": bath_component["species_key"],
+                "model": et.model,
+                "alpha0_cm_inv": et.alpha0_cm_inv,
+                "t_exponent": et.t_exponent,
+                "t_ref_k": et.t_ref_k,
+                "note": (
+                    "Expanded from the run's single declared "
+                    "energyTransferModel, which applies to every well."
+                ),
+            }
+            for state in states
+            if state["kind"] == "well"
+            for bath_component in bath
+        ]
 
     # Source calculations: species sp -> well_energy, freq -> well_freq;
     # TS sp -> barrier_energy, freq -> barrier_freq.
@@ -804,6 +969,11 @@ def build_network_pdep_payload(
                 )
     if source_calcs:
         solve["source_calculations"] = source_calcs
+
+    if state_energies:
+        solve["state_energies"] = state_energies
+    if channel_barriers:
+        solve["channel_barriers"] = channel_barriers
 
     network_name = inp.network_label or "pdep_network"
     request_dict = {
@@ -843,7 +1013,9 @@ def _plog_pressure_to_bar(value: float, units: str) -> float:
     raise ValueError(f"Unexpected PLOG pressure units {units!r} (expected bar or atm).")
 
 
-def _plog_channel_kinetics_entry(fit: PlogFit, src: str, snk: str) -> dict:
+def _plog_channel_kinetics_entry(
+    fit: PlogFit, src: str, snk: str, *, channel_key: str
+) -> dict:
     """Build one ``model_kind=plog`` channel_kinetics dict from a parsed fit."""
     entries: list[dict] = []
     for e in fit.entries:
@@ -868,6 +1040,7 @@ def _plog_channel_kinetics_entry(fit: PlogFit, src: str, snk: str) -> dict:
         )
     (rate_units,) = rate_unit_tokens
     entry: dict = {
+        "channel_key": channel_key,
         "source_state_key": src,
         "sink_state_key": snk,
         "model_kind": "plog",
@@ -953,7 +1126,19 @@ def build_dual_form_payload(
             gap.channels_duplicate.append((src, snk))
             continue
         plog_pairs.add((src, snk))
-        plog_kinetics.append(_plog_channel_kinetics_entry(fit, src, snk))
+        channel_key = next(
+            (
+                channel["key"]
+                for channel in request_dict["channels"]
+                if channel["source_state_key"] == src and channel["sink_state_key"] == snk
+            ),
+            None,
+        )
+        if channel_key is None:
+            continue
+        plog_kinetics.append(
+            _plog_channel_kinetics_entry(fit, src, snk, channel_key=channel_key)
+        )
 
     # --- Topology-match check: same network or STOP ---
     if unmapped or plog_pairs != cheb_pairs:

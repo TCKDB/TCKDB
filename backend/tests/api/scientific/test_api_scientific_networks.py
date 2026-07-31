@@ -36,6 +36,8 @@ from tests.services.scientific_read._factories import (
     make_reaction_entry,
     make_species,
     make_species_entry,
+    make_transition_state,
+    make_transition_state_entry,
     next_inchi_key,
     set_review,
 )
@@ -1226,10 +1228,12 @@ def test_solve_detail_include_bath_gas(client, db_session):
 def test_solve_detail_include_energy_transfer(client, db_session):
     from app.db.models.network_pdep import NetworkSolveEnergyTransfer
 
-    fx = _make_simple_network(db_session, with_solve=True)
+    fx = _make_simple_network(db_session, with_channel=True, with_solve=True)
     db_session.add(
         NetworkSolveEnergyTransfer(
             solve_id=fx["solve"].id,
+            state_id=fx["state_a"].id,
+            collider_species_entry_id=fx["species_entry"].id,
             model="exponential_down",
             alpha0_cm_inv=300.0,
             t_exponent=0.85,
@@ -1248,6 +1252,97 @@ def test_solve_detail_include_energy_transfer(client, db_session):
     assert et[0]["alpha0_cm_inv"] == 300.0
     assert et[0]["t_exponent"] == 0.85
     assert et[0]["t_ref_k"] == 300.0
+
+
+def test_solve_detail_reads_scoped_energy_transfer_and_state_energies(
+    client, db_session
+):
+    """A PDep solve can carry more than one state/collider-scoped ET row."""
+    from app.db.models.network_pdep import (
+        NetworkSolveEnergyTransfer,
+        NetworkSolveStateEnergy,
+    )
+
+    fx = _make_simple_network(db_session, with_channel=True, with_solve=True)
+    collider = make_species_entry(
+        db_session,
+        make_species(db_session, inchi_key=next_inchi_key("COL")),
+    )
+    db_session.add_all([
+        NetworkSolveEnergyTransfer(
+            solve_id=fx["solve"].id,
+            state_id=fx["state_b"].id,
+            collider_species_entry_id=collider.id,
+            model="state_exponential_down",
+            alpha0_cm_inv=250.0,
+        ),
+        NetworkSolveEnergyTransfer(
+            solve_id=fx["solve"].id,
+            state_id=fx["state_a"].id,
+            collider_species_entry_id=collider.id,
+            model="state_collider_exponential_down",
+            alpha0_cm_inv=400.0,
+        ),
+        NetworkSolveStateEnergy(
+            solve_id=fx["solve"].id,
+            state_id=fx["state_a"].id,
+            energy_kj_mol=12.5,
+            energy_zero_convention="lowest_state",
+            correction_convention="electronic_plus_zpe",
+        ),
+    ])
+    db_session.flush()
+
+    body = client.get(
+        _solve_url(
+            fx["solve"].public_ref,
+            include="energy_transfer,state_energies",
+        )
+    ).json()
+    record = body["record"]
+    assert record["evidence_summary"]["energy_transfer_count"] == 2
+    assert record["evidence_summary"]["state_energy_count"] == 1
+    scoped = record["energy_transfer"]
+    assert len(scoped) == 2
+    assert scoped[1]["state_composition_hash"] == fx["state_a"].composition_hash
+    assert scoped[1]["collider_species_entry_ref"] == collider.public_ref
+    state_energy = record["state_energies"]
+    assert state_energy == [{
+        "state_composition_hash": fx["state_a"].composition_hash,
+        "energy_kj_mol": 12.5,
+        "energy_zero_convention": "lowest_state",
+        "correction_convention": "electronic_plus_zpe",
+        "convention_note": None,
+        "source_calculation_ref": None,
+    }]
+
+
+def test_network_channels_expose_channel_key_and_microreaction_refs(client, db_session):
+    from app.db.models.network_pdep import NetworkChannelMicroReaction
+
+    fx = _make_simple_network(
+        db_session, with_reaction=True, with_channel=True
+    )
+    fx["channel"].channel_key = "isom_path_1"
+    ts = make_transition_state(db_session, reaction_entry=fx["reaction_entry"])
+    tse = make_transition_state_entry(db_session, transition_state=ts)
+    db_session.add(NetworkChannelMicroReaction(
+        channel_id=fx["channel"].id,
+        reaction_entry_id=fx["reaction_entry"].id,
+        transition_state_entry_id=tse.id,
+    ))
+    db_session.flush()
+
+    body = client.get(
+        _detail_url(fx["network"].public_ref, include="channels")
+    ).json()
+    channel = body["record"]["channels"][0]
+    assert channel["channel_key"] == "isom_path_1"
+    assert channel["microreactions"] == [{
+        "reaction_entry_ref": fx["reaction_entry"].public_ref,
+        "transition_state_entry_ref": tse.public_ref,
+        "path_kind": "saddle_point",
+    }]
 
 
 def test_solve_detail_include_source_calculations(client, db_session):
@@ -1616,11 +1711,13 @@ def test_solve_search_by_has_energy_transfer_true_and_false(
 ):
     from app.db.models.network_pdep import NetworkSolveEnergyTransfer
 
-    fx_a = _make_simple_network(db_session, with_solve=True)
+    fx_a = _make_simple_network(db_session, with_channel=True, with_solve=True)
     fx_b = _make_simple_network(db_session, with_solve=True)
     db_session.add(
         NetworkSolveEnergyTransfer(
             solve_id=fx_a["solve"].id,
+            state_id=fx_a["state_a"].id,
+            collider_species_entry_id=fx_a["species_entry"].id,
             model="exponential_down",
             alpha0_cm_inv=300.0,
         )
@@ -1976,10 +2073,13 @@ def test_solve_search_include_bath_gas_on_records(client, db_session):
 def test_solve_search_include_energy_transfer_on_records(client, db_session):
     from app.db.models.network_pdep import NetworkSolveEnergyTransfer
 
-    fx = _make_simple_network(db_session, with_solve=True)
+    fx = _make_simple_network(db_session, with_channel=True, with_solve=True)
     db_session.add(
         NetworkSolveEnergyTransfer(
-            solve_id=fx["solve"].id, model="exponential_down"
+            solve_id=fx["solve"].id,
+            state_id=fx["state_a"].id,
+            collider_species_entry_id=fx["species_entry"].id,
+            model="exponential_down",
         )
     )
     db_session.flush()

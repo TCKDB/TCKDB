@@ -1,0 +1,2147 @@
+{
+  "generated_from": "backend/tests/api/golden/openapi.json",
+  "generation_command": "conda run -n tckdb_env python backend/scripts/generate_stage0_endpoint_parity.py",
+  "operation_count": 214,
+  "rows": [
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_curator_tasks_api_v1_admin_machine_review_curator_tasks_get",
+      "path": "/api/v1/admin/machine-review/curator-tasks",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "build_curator_tasks_for_submission_endpoint_api_v1_admin_machine_review_curator_tasks_build_for_submission__submission_id__post",
+      "path": "/api/v1/admin/machine-review/curator-tasks/build-for-submission/{submission_id}",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_curator_task_api_v1_admin_machine_review_curator_tasks__task_id__get",
+      "path": "/api/v1/admin/machine-review/curator-tasks/{task_id}",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "assign_curator_task_endpoint_api_v1_admin_machine_review_curator_tasks__task_id__assign_post",
+      "path": "/api/v1/admin/machine-review/curator-tasks/{task_id}/assign",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "reopen_curator_task_endpoint_api_v1_admin_machine_review_curator_tasks__task_id__reopen_post",
+      "path": "/api/v1/admin/machine-review/curator-tasks/{task_id}/reopen",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "resolve_curator_task_endpoint_api_v1_admin_machine_review_curator_tasks__task_id__resolve_post",
+      "path": "/api/v1/admin/machine-review/curator-tasks/{task_id}/resolve",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "start_curator_task_review_endpoint_api_v1_admin_machine_review_curator_tasks__task_id__start_review_post",
+      "path": "/api/v1/admin/machine-review/curator-tasks/{task_id}/start-review",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "run_fake_machine_review_for_record_api_v1_admin_machine_review_records__record_type___record_id__run_fake_post",
+      "path": "/api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "inspect_submission_machine_review_api_v1_admin_submissions__submission_id__machine_review_inspection_get",
+      "path": "/api/v1/admin/submissions/{submission_id}/machine-review-inspection",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "PATCH",
+      "operation_id": "change_user_role_api_v1_admin_users__user_id__role_patch",
+      "path": "/api/v1/admin/users/{user_id}/role",
+      "surface": "other API",
+      "tags": "admin",
+      "typed_client": "request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_applied_energy_corrections_api_v1_applied_energy_corrections_get",
+      "path": "/api/v1/applied-energy-corrections",
+      "surface": "other API",
+      "tags": "applied-energy-corrections",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_applied_energy_correction_api_v1_applied_energy_corrections__correction_id__get",
+      "path": "/api/v1/applied-energy-corrections/{correction_id}",
+      "surface": "other API",
+      "tags": "applied-energy-corrections",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_keys_api_v1_auth_api_keys_get",
+      "path": "/api/v1/auth/api-keys",
+      "surface": "other API",
+      "tags": "auth",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "create_key_api_v1_auth_api_keys_post",
+      "path": "/api/v1/auth/api-keys",
+      "surface": "other API",
+      "tags": "auth",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "DELETE",
+      "operation_id": "revoke_key_api_v1_auth_api_keys__key_id__delete",
+      "path": "/api/v1/auth/api-keys/{key_id}",
+      "surface": "other API",
+      "tags": "auth",
+      "typed_client": "request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "login_api_v1_auth_login_post",
+      "path": "/api/v1/auth/login",
+      "surface": "other API",
+      "tags": "auth",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "logout_api_v1_auth_logout_post",
+      "path": "/api/v1/auth/logout",
+      "surface": "other API",
+      "tags": "auth",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "me_api_v1_auth_me_get",
+      "path": "/api/v1/auth/me",
+      "surface": "other API",
+      "tags": "auth",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "register_api_v1_auth_register_post",
+      "path": "/api/v1/auth/register",
+      "surface": "other API",
+      "tags": "auth",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "dry_run_bundle_api_v1_bundles_dry_run_post",
+      "path": "/api/v1/bundles/dry-run",
+      "surface": "bundle ingestion v0 (thermo/kinetics only)",
+      "tags": "bundles",
+      "typed_client": "bundle_dry_run"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "submit_bundle_api_v1_bundles_submit_post",
+      "path": "/api/v1/bundles/submit",
+      "surface": "bundle ingestion v0 (thermo/kinetics only)",
+      "tags": "bundles",
+      "typed_client": "bundle_submit"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_calculations_api_v1_calculations_get",
+      "path": "/api/v1/calculations",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_calculation_api_v1_calculations__calculation_id__get",
+      "path": "/api/v1/calculations/{calculation_id}",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_artifacts_api_v1_calculations__calculation_id__artifacts_get",
+      "path": "/api/v1/calculations/{calculation_id}/artifacts",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "upload_calculation_artifacts_api_v1_calculations__calculation_id__artifacts_post",
+      "path": "/api/v1/calculations/{calculation_id}/artifacts",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_constraints_api_v1_calculations__calculation_id__constraints_get",
+      "path": "/api/v1/calculations/{calculation_id}/constraints",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_dependencies_api_v1_calculations__calculation_id__dependencies_get",
+      "path": "/api/v1/calculations/{calculation_id}/dependencies",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_freq_result_api_v1_calculations__calculation_id__freq_result_get",
+      "path": "/api/v1/calculations/{calculation_id}/freq-result",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_geometry_validation_api_v1_calculations__calculation_id__geometry_validation_get",
+      "path": "/api/v1/calculations/{calculation_id}/geometry-validation",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_input_geometries_api_v1_calculations__calculation_id__input_geometries_get",
+      "path": "/api/v1/calculations/{calculation_id}/input-geometries",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_irc_points_api_v1_calculations__calculation_id__irc_points_get",
+      "path": "/api/v1/calculations/{calculation_id}/irc-points",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_irc_result_api_v1_calculations__calculation_id__irc_result_get",
+      "path": "/api/v1/calculations/{calculation_id}/irc-result",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_opt_result_api_v1_calculations__calculation_id__opt_result_get",
+      "path": "/api/v1/calculations/{calculation_id}/opt-result",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_output_geometries_api_v1_calculations__calculation_id__output_geometries_get",
+      "path": "/api/v1/calculations/{calculation_id}/output-geometries",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_parameters_api_v1_calculations__calculation_id__parameters_get",
+      "path": "/api/v1/calculations/{calculation_id}/parameters",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_path_search_points_api_v1_calculations__calculation_id__path_search_points_get",
+      "path": "/api/v1/calculations/{calculation_id}/path-search-points",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_path_search_result_api_v1_calculations__calculation_id__path_search_result_get",
+      "path": "/api/v1/calculations/{calculation_id}/path-search-result",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_scan_coordinates_api_v1_calculations__calculation_id__scan_coordinates_get",
+      "path": "/api/v1/calculations/{calculation_id}/scan-coordinates",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_scan_points_api_v1_calculations__calculation_id__scan_points_get",
+      "path": "/api/v1/calculations/{calculation_id}/scan-points",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_scan_result_api_v1_calculations__calculation_id__scan_result_get",
+      "path": "/api/v1/calculations/{calculation_id}/scan-result",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_scf_stability_api_v1_calculations__calculation_id__scf_stability_get",
+      "path": "/api/v1/calculations/{calculation_id}/scf-stability",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_sp_result_api_v1_calculations__calculation_id__sp_result_get",
+      "path": "/api/v1/calculations/{calculation_id}/sp-result",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_wavefunction_diagnostic_api_v1_calculations__calculation_id__wavefunction_diagnostic_get",
+      "path": "/api/v1/calculations/{calculation_id}/wavefunction-diagnostic",
+      "surface": "other API",
+      "tags": "calculations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_conformer_groups_api_v1_conformer_groups_get",
+      "path": "/api/v1/conformer-groups",
+      "surface": "other API",
+      "tags": "conformer-groups",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "create_conformer_group_selection_api_v1_conformer_groups__conformer_group_id__selections_post",
+      "path": "/api/v1/conformer-groups/{conformer_group_id}/selections",
+      "surface": "other API",
+      "tags": "conformer-groups",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_conformer_group_api_v1_conformer_groups__group_id__get",
+      "path": "/api/v1/conformer-groups/{group_id}",
+      "surface": "other API",
+      "tags": "conformer-groups",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_conformer_group_selections_api_v1_conformer_groups__group_id__selections_get",
+      "path": "/api/v1/conformer-groups/{group_id}/selections",
+      "surface": "other API",
+      "tags": "conformer-groups",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_conformer_observations_api_v1_conformer_observations_get",
+      "path": "/api/v1/conformer-observations",
+      "surface": "other API",
+      "tags": "conformer-observations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_conformer_observation_api_v1_conformer_observations__observation_id__get",
+      "path": "/api/v1/conformer-observations/{observation_id}",
+      "surface": "other API",
+      "tags": "conformer-observations",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "evaluate_reproducibility_api_v1_curation_reproducibility_assessments__record_type___record_id__evaluate_post",
+      "path": "/api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/evaluate",
+      "surface": "other API",
+      "tags": "curation",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "read_latest_reproducibility_assessment_api_v1_curation_reproducibility_assessments__record_type___record_id__latest_get",
+      "path": "/api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/latest",
+      "surface": "other API",
+      "tags": "curation",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "admin/curator",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "create_scientific_record_supersession_api_v1_curation_scientific_record_supersessions_post",
+      "path": "/api/v1/curation/scientific-record-supersessions",
+      "surface": "other API",
+      "tags": "curation",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_energy_correction_schemes_api_v1_energy_correction_schemes_get",
+      "path": "/api/v1/energy-correction-schemes",
+      "surface": "other API",
+      "tags": "energy-correction-schemes",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_energy_correction_scheme_api_v1_energy_correction_schemes__scheme_id__get",
+      "path": "/api/v1/energy-correction-schemes/{scheme_id}",
+      "surface": "other API",
+      "tags": "energy-correction-schemes",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_frequency_scale_factors_api_v1_frequency_scale_factors_get",
+      "path": "/api/v1/frequency-scale-factors",
+      "surface": "other API",
+      "tags": "frequency-scale-factors",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_frequency_scale_factor_api_v1_frequency_scale_factors__fsf_id__get",
+      "path": "/api/v1/frequency-scale-factors/{fsf_id}",
+      "surface": "other API",
+      "tags": "frequency-scale-factors",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_geometries_api_v1_geometries_get",
+      "path": "/api/v1/geometries",
+      "surface": "other API",
+      "tags": "geometries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_geometry_api_v1_geometries__geometry_id__get",
+      "path": "/api/v1/geometries/{geometry_id}",
+      "surface": "other API",
+      "tags": "geometries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "health_api_v1_health_get",
+      "path": "/api/v1/health",
+      "surface": "other API",
+      "tags": "health",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "enqueue_computed_reaction_api_v1_jobs_computed_reaction_post",
+      "path": "/api/v1/jobs/computed-reaction",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "enqueue_conformer_api_v1_jobs_conformer_post",
+      "path": "/api/v1/jobs/conformer",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "enqueue_kinetics_api_v1_jobs_kinetics_post",
+      "path": "/api/v1/jobs/kinetics",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "enqueue_network_api_v1_jobs_network_post",
+      "path": "/api/v1/jobs/network",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "enqueue_network_pdep_api_v1_jobs_network_pdep_post",
+      "path": "/api/v1/jobs/network/pdep",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "enqueue_reaction_api_v1_jobs_reaction_post",
+      "path": "/api/v1/jobs/reaction",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "enqueue_thermo_api_v1_jobs_thermo_post",
+      "path": "/api/v1/jobs/thermo",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "enqueue_transition_state_api_v1_jobs_transition_state_post",
+      "path": "/api/v1/jobs/transition-state",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "enqueue_transport_api_v1_jobs_transport_post",
+      "path": "/api/v1/jobs/transport",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated (authorization gate incomplete)",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_job_status_api_v1_jobs__job_id__get",
+      "path": "/api/v1/jobs/{job_id}",
+      "surface": "async ingestion",
+      "tags": "jobs",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_kinetics_api_v1_kinetics_get",
+      "path": "/api/v1/kinetics",
+      "surface": "other API",
+      "tags": "kinetics",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_kinetics_api_v1_kinetics__kinetics_id__get",
+      "path": "/api/v1/kinetics/{kinetics_id}",
+      "surface": "other API",
+      "tags": "kinetics",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_levels_of_theory_api_v1_levels_of_theory_get",
+      "path": "/api/v1/levels-of-theory",
+      "surface": "other API",
+      "tags": "levels-of-theory",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_level_of_theory_api_v1_levels_of_theory__lot_id__get",
+      "path": "/api/v1/levels-of-theory/{lot_id}",
+      "surface": "other API",
+      "tags": "levels-of-theory",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_literature_api_v1_literature_get",
+      "path": "/api/v1/literature",
+      "surface": "other API",
+      "tags": "literature",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_literature_api_v1_literature__literature_id__get",
+      "path": "/api/v1/literature/{literature_id}",
+      "surface": "other API",
+      "tags": "literature",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_calculations_api_v1_lookup_calculations_get",
+      "path": "/api/v1/lookup/calculations",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_geometry_api_v1_lookup_geometry_get",
+      "path": "/api/v1/lookup/geometry",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_kinetics_api_v1_lookup_kinetics_get",
+      "path": "/api/v1/lookup/kinetics",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_network_api_v1_lookup_network_get",
+      "path": "/api/v1/lookup/network",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_reaction_api_v1_lookup_reaction_get",
+      "path": "/api/v1/lookup/reaction",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_reaction_kinetics_api_v1_lookup_reaction_kinetics_get",
+      "path": "/api/v1/lookup/reaction-kinetics",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_species_api_v1_lookup_species_get",
+      "path": "/api/v1/lookup/species",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_species_calculation_api_v1_lookup_species_calculation_get",
+      "path": "/api/v1/lookup/species-calculation",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_statmech_api_v1_lookup_statmech_get",
+      "path": "/api/v1/lookup/statmech",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_thermo_api_v1_lookup_thermo_get",
+      "path": "/api/v1/lookup/thermo",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "lookup_transport_api_v1_lookup_transport_get",
+      "path": "/api/v1/lookup/transport",
+      "surface": "other API",
+      "tags": "lookup",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_meta_api_v1_meta_get",
+      "path": "/api/v1/meta",
+      "surface": "other API",
+      "tags": "meta",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_networks_api_v1_networks_get",
+      "path": "/api/v1/networks",
+      "surface": "other API",
+      "tags": "networks",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_network_api_v1_networks__network_id__get",
+      "path": "/api/v1/networks/{network_id}",
+      "surface": "other API",
+      "tags": "networks",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_channel_kinetics_api_v1_networks__network_id__channels__channel_id__kinetics_get",
+      "path": "/api/v1/networks/{network_id}/channels/{channel_id}/kinetics",
+      "surface": "other API",
+      "tags": "networks",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_network_solves_api_v1_networks__network_id__solves_get",
+      "path": "/api/v1/networks/{network_id}/solves",
+      "surface": "other API",
+      "tags": "networks",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_network_solve_api_v1_networks__network_id__solves__solve_id__get",
+      "path": "/api/v1/networks/{network_id}/solves/{solve_id}",
+      "surface": "other API",
+      "tags": "networks",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_reaction_entry_api_v1_reaction_entries__entry_id__get",
+      "path": "/api/v1/reaction-entries/{entry_id}",
+      "surface": "other API",
+      "tags": "reaction-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_kinetics_for_entry_api_v1_reaction_entries__entry_id__kinetics_get",
+      "path": "/api/v1/reaction-entries/{entry_id}/kinetics",
+      "surface": "other API",
+      "tags": "reaction-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_transition_states_for_entry_api_v1_reaction_entries__entry_id__transition_states_get",
+      "path": "/api/v1/reaction-entries/{entry_id}/transition-states",
+      "surface": "other API",
+      "tags": "reaction-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_reactions_api_v1_reactions_get",
+      "path": "/api/v1/reactions",
+      "surface": "other API",
+      "tags": "reactions",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_reaction_api_v1_reactions__reaction_id__get",
+      "path": "/api/v1/reactions/{reaction_id}",
+      "surface": "other API",
+      "tags": "reactions",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "readyz_api_v1_readyz_get",
+      "path": "/api/v1/readyz",
+      "surface": "other API",
+      "tags": "health",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_reviews_api_v1_record_reviews_get",
+      "path": "/api/v1/record-reviews",
+      "surface": "other API",
+      "tags": "record-reviews",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "read_review_api_v1_record_reviews__record_type___record_id__get",
+      "path": "/api/v1/record-reviews/{record_type}/{record_id}",
+      "surface": "other API",
+      "tags": "record-reviews",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "PATCH",
+      "operation_id": "set_status_api_v1_record_reviews__record_type___record_id__patch",
+      "path": "/api/v1/record-reviews/{record_type}/{record_id}",
+      "surface": "other API",
+      "tags": "record-reviews",
+      "typed_client": "request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "artifacts_search_get_api_v1_scientific_artifacts_search_get",
+      "path": "/api/v1/scientific/artifacts/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_artifacts, iter_artifacts"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "artifacts_search_post_api_v1_scientific_artifacts_search_post",
+      "path": "/api/v1/scientific/artifacts/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_artifacts, iter_artifacts"
+    },
+    {
+      "audience": "authenticated",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "download_approved_artifact_api_v1_scientific_artifacts__sha256__download_get",
+      "path": "/api/v1/scientific/artifacts/{sha256}/download",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "scientific_calculations_search_get_api_v1_scientific_calculations_search_get",
+      "path": "/api/v1/scientific/calculations/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_calculations"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "scientific_calculations_search_post_api_v1_scientific_calculations_search_post",
+      "path": "/api/v1/scientific/calculations/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_calculations"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "scientific_calculation_detail_api_v1_scientific_calculations__calculation_ref_or_id__get",
+      "path": "/api/v1/scientific/calculations/{calculation_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_calculation"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_calculation_irc_api_v1_scientific_calculations__calculation_ref_or_id__irc_get",
+      "path": "/api/v1/scientific/calculations/{calculation_ref_or_id}/irc",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_calculation_path_search_api_v1_scientific_calculations__calculation_ref_or_id__path_search_get",
+      "path": "/api/v1/scientific/calculations/{calculation_ref_or_id}/path-search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_calculation_scan_api_v1_scientific_calculations__calculation_ref_or_id__scan_get",
+      "path": "/api/v1/scientific/calculations/{calculation_ref_or_id}/scan",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_conformer_group_detail_api_v1_scientific_conformer_groups__conformer_group_ref_or_id__get",
+      "path": "/api/v1/scientific/conformer-groups/{conformer_group_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_conformer_observation_detail_api_v1_scientific_conformer_observations__conformer_observation_ref_or_id__get",
+      "path": "/api/v1/scientific/conformer-observations/{conformer_observation_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_conformers_search_get_api_v1_scientific_conformers_search_get",
+      "path": "/api/v1/scientific/conformers/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "scientific_conformers_search_post_api_v1_scientific_conformers_search_post",
+      "path": "/api/v1/scientific/conformers/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_energy_correction_scheme_search_get_api_v1_scientific_energy_correction_schemes_search_get",
+      "path": "/api/v1/scientific/energy-correction-schemes/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "scientific_energy_correction_scheme_search_post_api_v1_scientific_energy_correction_schemes_search_post",
+      "path": "/api/v1/scientific/energy-correction-schemes/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_energy_correction_scheme_detail_api_v1_scientific_energy_correction_schemes__energy_correction_scheme_ref_or_id__get",
+      "path": "/api/v1/scientific/energy-correction-schemes/{energy_correction_scheme_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "curator/admin",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "export_chemkin_api_v1_scientific_export_chemkin_post",
+      "path": "/api/v1/scientific/export/chemkin",
+      "surface": "export",
+      "tags": "scientific",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "curator/admin",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "export_ml_reactions_api_v1_scientific_export_ml_reactions_ndjson_get",
+      "path": "/api/v1/scientific/export/ml/reactions.ndjson",
+      "surface": "export",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "curator/admin",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "export_ml_species_api_v1_scientific_export_ml_species_ndjson_get",
+      "path": "/api/v1/scientific/export/ml/species.ndjson",
+      "surface": "export",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "curator/admin",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "export_ndjson_api_v1_scientific_export_ndjson_get",
+      "path": "/api/v1/scientific/export/ndjson",
+      "surface": "export",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_frequency_scale_factor_search_get_api_v1_scientific_frequency_scale_factors_search_get",
+      "path": "/api/v1/scientific/frequency-scale-factors/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "scientific_frequency_scale_factor_search_post_api_v1_scientific_frequency_scale_factors_search_post",
+      "path": "/api/v1/scientific/frequency-scale-factors/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_frequency_scale_factor_detail_api_v1_scientific_frequency_scale_factors__frequency_scale_factor_ref_or_id__get",
+      "path": "/api/v1/scientific/frequency-scale-factors/{frequency_scale_factor_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "scientific_geometry_detail_api_v1_scientific_geometries__geometry_handle__get",
+      "path": "/api/v1/scientific/geometries/{geometry_handle}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_geometry"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "kinetics_search_get_api_v1_scientific_kinetics_search_get",
+      "path": "/api/v1/scientific/kinetics/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_kinetics, iter_kinetics"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "kinetics_search_post_api_v1_scientific_kinetics_search_post",
+      "path": "/api/v1/scientific/kinetics/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_kinetics, iter_kinetics"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_literature_detail_api_v1_scientific_literature__literature_ref_or_id__get",
+      "path": "/api/v1/scientific/literature/{literature_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_literature_records_api_v1_scientific_literature__literature_ref_or_id__records_get",
+      "path": "/api/v1/scientific/literature/{literature_ref_or_id}/records",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_basis_sets_api_v1_scientific_meta_basis_sets_get",
+      "path": "/api/v1/scientific/meta/basis-sets",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_methods_api_v1_scientific_meta_methods_get",
+      "path": "/api/v1/scientific/meta/methods",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_reaction_families_api_v1_scientific_meta_reaction_families_get",
+      "path": "/api/v1/scientific/meta/reaction-families",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_software_api_v1_scientific_meta_software_get",
+      "path": "/api/v1/scientific/meta/software",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "scientific_network_kinetics_search_get_api_v1_scientific_network_kinetics_search_get",
+      "path": "/api/v1/scientific/network-kinetics/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_network_kinetics, iter_network_kinetics"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "scientific_network_kinetics_search_post_api_v1_scientific_network_kinetics_search_post",
+      "path": "/api/v1/scientific/network-kinetics/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_network_kinetics, iter_network_kinetics"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_network_kinetics_detail_api_v1_scientific_network_kinetics__network_kinetics_ref_or_id__get",
+      "path": "/api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "scientific_network_solves_search_get_api_v1_scientific_network_solves_search_get",
+      "path": "/api/v1/scientific/network-solves/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_network_solves, iter_network_solves"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "scientific_network_solves_search_post_api_v1_scientific_network_solves_search_post",
+      "path": "/api/v1/scientific/network-solves/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_network_solves, iter_network_solves"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "scientific_network_solve_detail_api_v1_scientific_network_solves__network_solve_ref_or_id__get",
+      "path": "/api/v1/scientific/network-solves/{network_solve_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_network_solve"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "scientific_networks_search_get_api_v1_scientific_networks_search_get",
+      "path": "/api/v1/scientific/networks/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_networks, iter_networks"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "scientific_networks_search_post_api_v1_scientific_networks_search_post",
+      "path": "/api/v1/scientific/networks/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_networks, iter_networks"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_network_detail_api_v1_scientific_networks__network_ref_or_id__get",
+      "path": "/api/v1/scientific/networks/{network_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "reaction_full_api_v1_scientific_reaction_entries__reaction_entry_id__full_get",
+      "path": "/api/v1/scientific/reaction-entries/{reaction_entry_id}/full",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_reaction_full"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "reaction_kinetics_api_v1_scientific_reaction_entries__reaction_entry_id__kinetics_get",
+      "path": "/api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_reaction_kinetics"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "reaction_search_get_api_v1_scientific_reactions_search_get",
+      "path": "/api/v1/scientific/reactions/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_reactions, iter_reactions"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "reaction_search_post_api_v1_scientific_reactions_search_post",
+      "path": "/api/v1/scientific/reactions/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_reactions, iter_reactions"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "species_calculations_search_get_api_v1_scientific_species_calculations_search_get",
+      "path": "/api/v1/scientific/species-calculations/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_species_calculations, iter_species_calculations"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "species_calculations_search_post_api_v1_scientific_species_calculations_search_post",
+      "path": "/api/v1/scientific/species-calculations/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_species_calculations, iter_species_calculations"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "species_statmech_api_v1_scientific_species_entries__species_entry_id__statmech_get",
+      "path": "/api/v1/scientific/species-entries/{species_entry_id}/statmech",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "species_thermo_api_v1_scientific_species_entries__species_entry_id__thermo_get",
+      "path": "/api/v1/scientific/species-entries/{species_entry_id}/thermo",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_species_thermo"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "species_transport_api_v1_scientific_species_entries__species_entry_id__transport_get",
+      "path": "/api/v1/scientific/species-entries/{species_entry_id}/transport",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "species_search_api_v1_scientific_species_search_get",
+      "path": "/api/v1/scientific/species/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_species, iter_species"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "species_structure_search_get_api_v1_scientific_species_structure_search_get",
+      "path": "/api/v1/scientific/species/structure-search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "species_structure_search_post_api_v1_scientific_species_structure_search_post",
+      "path": "/api/v1/scientific/species/structure-search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "scientific_statmech_search_get_api_v1_scientific_statmech_search_get",
+      "path": "/api/v1/scientific/statmech/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_statmech, iter_statmech"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "scientific_statmech_search_post_api_v1_scientific_statmech_search_post",
+      "path": "/api/v1/scientific/statmech/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_statmech, iter_statmech"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_statmech_detail_api_v1_scientific_statmech__statmech_ref_or_id__get",
+      "path": "/api/v1/scientific/statmech/{statmech_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "thermo_search_get_api_v1_scientific_thermo_search_get",
+      "path": "/api/v1/scientific/thermo/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_thermo, iter_thermo"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "thermo_search_post_api_v1_scientific_thermo_search_post",
+      "path": "/api/v1/scientific/thermo/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_thermo, iter_thermo"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_transition_state_entry_detail_api_v1_scientific_transition_state_entries__transition_state_entry_ref_or_id__get",
+      "path": "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_transition_states_search_get_api_v1_scientific_transition_states_search_get",
+      "path": "/api/v1/scientific/transition-states/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "scientific_transition_states_search_post_api_v1_scientific_transition_states_search_post",
+      "path": "/api/v1/scientific/transition-states/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_transition_state_detail_api_v1_scientific_transition_states__transition_state_ref_or_id__get",
+      "path": "/api/v1/scientific/transition-states/{transition_state_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "GET",
+      "operation_id": "scientific_transport_search_get_api_v1_scientific_transport_search_get",
+      "path": "/api/v1/scientific/transport/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_transport, iter_transport"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "scientific_transport_search_post_api_v1_scientific_transport_search_post",
+      "path": "/api/v1/scientific/transport/search",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "search_transport, iter_transport"
+    },
+    {
+      "audience": "anonymous public",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "scientific_transport_detail_api_v1_scientific_transport__transport_ref_or_id__get",
+      "path": "/api/v1/scientific/transport/{transport_ref_or_id}",
+      "surface": "query",
+      "tags": "scientific",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_software_api_v1_software_get",
+      "path": "/api/v1/software",
+      "surface": "other API",
+      "tags": "software",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_software_releases_api_v1_software_releases_get",
+      "path": "/api/v1/software-releases",
+      "surface": "other API",
+      "tags": "software-releases",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_software_release_api_v1_software_releases__release_id__get",
+      "path": "/api/v1/software-releases/{release_id}",
+      "surface": "other API",
+      "tags": "software-releases",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_software_api_v1_software__software_id__get",
+      "path": "/api/v1/software/{software_id}",
+      "surface": "other API",
+      "tags": "software",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_species_api_v1_species_get",
+      "path": "/api/v1/species",
+      "surface": "other API",
+      "tags": "species",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_species_entry_api_v1_species_entries__entry_id__get",
+      "path": "/api/v1/species-entries/{entry_id}",
+      "surface": "other API",
+      "tags": "species-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_conformer_groups_for_entry_api_v1_species_entries__entry_id__conformer_groups_get",
+      "path": "/api/v1/species-entries/{entry_id}/conformer-groups",
+      "surface": "other API",
+      "tags": "species-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_lowest_sp_conformer_observation_for_entry_api_v1_species_entries__entry_id__conformer_observations_lowest_sp_get",
+      "path": "/api/v1/species-entries/{entry_id}/conformer-observations/lowest-sp",
+      "surface": "other API",
+      "tags": "species-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_conformers_for_entry_api_v1_species_entries__entry_id__conformers_get",
+      "path": "/api/v1/species-entries/{entry_id}/conformers",
+      "surface": "other API",
+      "tags": "species-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_statmech_for_entry_api_v1_species_entries__entry_id__statmech_get",
+      "path": "/api/v1/species-entries/{entry_id}/statmech",
+      "surface": "other API",
+      "tags": "species-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_thermo_for_entry_api_v1_species_entries__entry_id__thermo_get",
+      "path": "/api/v1/species-entries/{entry_id}/thermo",
+      "surface": "other API",
+      "tags": "species-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_transport_for_entry_api_v1_species_entries__entry_id__transport_get",
+      "path": "/api/v1/species-entries/{entry_id}/transport",
+      "surface": "other API",
+      "tags": "species-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_species_entry_reviews_endpoint_api_v1_species_entries__species_entry_id__reviews_get",
+      "path": "/api/v1/species-entries/{species_entry_id}/reviews",
+      "surface": "other API",
+      "tags": "species-entries",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "create_species_entry_review_endpoint_api_v1_species_entries__species_entry_id__reviews_post",
+      "path": "/api/v1/species-entries/{species_entry_id}/reviews",
+      "surface": "other API",
+      "tags": "species-entries",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_species_api_v1_species__species_id__get",
+      "path": "/api/v1/species/{species_id}",
+      "surface": "other API",
+      "tags": "species",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_statmech_api_v1_statmech_get",
+      "path": "/api/v1/statmech",
+      "surface": "other API",
+      "tags": "statmech",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_statmech_api_v1_statmech__statmech_id__get",
+      "path": "/api/v1/statmech/{statmech_id}",
+      "surface": "other API",
+      "tags": "statmech",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_for_review_api_v1_submissions_for_review_get",
+      "path": "/api/v1/submissions/for-review",
+      "surface": "other API",
+      "tags": "submissions",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_mine_api_v1_submissions_mine_get",
+      "path": "/api/v1/submissions/mine",
+      "surface": "other API",
+      "tags": "submissions",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "read_submission_api_v1_submissions__submission_id__get",
+      "path": "/api/v1/submissions/{submission_id}",
+      "surface": "other API",
+      "tags": "submissions",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "read_ai_review_summary_api_v1_submissions__submission_id__ai_review_summary_get",
+      "path": "/api/v1/submissions/{submission_id}/ai-review-summary",
+      "surface": "other API",
+      "tags": "submissions",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "approve_api_v1_submissions__submission_id__approve_post",
+      "path": "/api/v1/submissions/{submission_id}/approve",
+      "surface": "other API",
+      "tags": "submissions",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "read_audit_events_api_v1_submissions__submission_id__audit_events_get",
+      "path": "/api/v1/submissions/{submission_id}/audit-events",
+      "surface": "other API",
+      "tags": "submissions",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "read_record_links_api_v1_submissions__submission_id__record_links_get",
+      "path": "/api/v1/submissions/{submission_id}/record-links",
+      "surface": "other API",
+      "tags": "submissions",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "reject_api_v1_submissions__submission_id__reject_post",
+      "path": "/api/v1/submissions/{submission_id}/reject",
+      "surface": "other API",
+      "tags": "submissions",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "authenticated / role-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "POST",
+      "operation_id": "supersede_api_v1_submissions__submission_id__supersede_post",
+      "path": "/api/v1/submissions/{submission_id}/supersede",
+      "surface": "other API",
+      "tags": "submissions",
+      "typed_client": "post_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_thermo_api_v1_thermo_get",
+      "path": "/api/v1/thermo",
+      "surface": "other API",
+      "tags": "thermo",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_thermo_api_v1_thermo__thermo_id__get",
+      "path": "/api/v1/thermo/{thermo_id}",
+      "surface": "other API",
+      "tags": "thermo",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_transition_states_api_v1_transition_states_get",
+      "path": "/api/v1/transition-states",
+      "surface": "other API",
+      "tags": "transition-states",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_transition_state_entry_api_v1_transition_states_entries__entry_id__get",
+      "path": "/api/v1/transition-states/entries/{entry_id}",
+      "surface": "other API",
+      "tags": "transition-states",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_transition_state_api_v1_transition_states__ts_id__get",
+      "path": "/api/v1/transition-states/{ts_id}",
+      "surface": "other API",
+      "tags": "transition-states",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_transport_api_v1_transport_get",
+      "path": "/api/v1/transport",
+      "surface": "other API",
+      "tags": "transport",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_transport_api_v1_transport__transport_id__get",
+      "path": "/api/v1/transport/{transport_id}",
+      "surface": "other API",
+      "tags": "transport",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_computed_reaction_api_v1_uploads_computed_reaction_post",
+      "path": "/api/v1/uploads/computed-reaction",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_computed_species_api_v1_uploads_computed_species_post",
+      "path": "/api/v1/uploads/computed-species",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_conformer_api_v1_uploads_conformers_post",
+      "path": "/api/v1/uploads/conformers",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_kinetics_api_v1_uploads_kinetics_post",
+      "path": "/api/v1/uploads/kinetics",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_network_api_v1_uploads_networks_post",
+      "path": "/api/v1/uploads/networks",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_network_pdep_api_v1_uploads_networks_pdep_post",
+      "path": "/api/v1/uploads/networks/pdep",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_reaction_api_v1_uploads_reactions_post",
+      "path": "/api/v1/uploads/reactions",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_statmech_api_v1_uploads_statmech_post",
+      "path": "/api/v1/uploads/statmech",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_thermo_api_v1_uploads_thermo_post",
+      "path": "/api/v1/uploads/thermo",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_transition_state_api_v1_uploads_transition_states_post",
+      "path": "/api/v1/uploads/transition-states",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "authenticated contributor",
+      "client_coverage": "typed convenience",
+      "method": "POST",
+      "operation_id": "upload_transport_api_v1_uploads_transport_post",
+      "path": "/api/v1/uploads/transport",
+      "surface": "sync ingestion",
+      "tags": "uploads",
+      "typed_client": "upload (kind dispatch)"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_workflow_tool_releases_api_v1_workflow_tool_releases_get",
+      "path": "/api/v1/workflow-tool-releases",
+      "surface": "other API",
+      "tags": "workflow-tool-releases",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_workflow_tool_release_api_v1_workflow_tool_releases__workflow_tool_release_id__get",
+      "path": "/api/v1/workflow-tool-releases/{workflow_tool_release_id}",
+      "surface": "other API",
+      "tags": "workflow-tool-releases",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "list_workflow_tools_api_v1_workflow_tools_get",
+      "path": "/api/v1/workflow-tools",
+      "surface": "other API",
+      "tags": "workflow-tools",
+      "typed_client": "get_json / request_json"
+    },
+    {
+      "audience": "deployment/configuration dependent or endpoint-specific",
+      "client_coverage": "raw HTTP helper only",
+      "method": "GET",
+      "operation_id": "get_workflow_tool_api_v1_workflow_tools__workflow_tool_id__get",
+      "path": "/api/v1/workflow-tools/{workflow_tool_id}",
+      "surface": "other API",
+      "tags": "workflow-tools",
+      "typed_client": "get_json / request_json"
+    }
+  ]
+}

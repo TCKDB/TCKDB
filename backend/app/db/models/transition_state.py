@@ -11,6 +11,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
@@ -89,6 +90,9 @@ class TransitionStateEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
         back_populates="transition_state_entry",
         foreign_keys="Calculation.transition_state_entry_id",
     )
+    validation_evidence: Mapped[list["TransitionStateValidationEvidence"]] = relationship(
+        back_populates="transition_state_entry", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("multiplicity >= 1", name="multiplicity_ge_1"),
@@ -136,5 +140,35 @@ class TransitionStateSelection(Base, TimestampMixin, CreatedByMixin):
             "transition_state_id",
             "selection_kind",
             name="uq_transition_state_selection_transition_state_id",
+        ),
+    )
+
+
+class TransitionStateValidationEvidence(Base, TimestampMixin, CreatedByMixin):
+    """Structured IRC validation result for one TS candidate.
+
+    Normal-mode-displacement ("nmd") evidence is deliberately absent: reading
+    an imaginary mode's displacement vectors is a producer-side heuristic, not
+    a database record, and TCKDB stores only the reconstructed-path evidence
+    an IRC calculation actually produces.
+    """
+
+    __tablename__ = "transition_state_validation_evidence"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    transition_state_entry_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("transition_state_entry.id", name="fk_ts_validation_evidence_ts_entry", deferrable=True, initially="IMMEDIATE"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    passed: Mapped[bool] = mapped_column(nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    reconstruction_calculation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("calculation.id", name="fk_ts_validation_evidence_reconstruction_calc", deferrable=True, initially="IMMEDIATE"), nullable=False)
+    # Canonical participant -> atom-index mappings. JSON keeps the evidence
+    # machine-readable; a free-text mapping cannot be validated or replayed.
+    reactant_participant_mapping: Mapped[Optional[dict[str, list[int]]]] = mapped_column(JSONB, nullable=True)
+    product_participant_mapping: Mapped[Optional[dict[str, list[int]]]] = mapped_column(JSONB, nullable=True)
+    transition_state_entry: Mapped["TransitionStateEntry"] = relationship(back_populates="validation_evidence")
+    reconstruction_calculation: Mapped["Calculation"] = relationship()
+    __table_args__ = (
+        CheckConstraint("kind IN ('irc')", name="ts_validation_kind"),
+        UniqueConstraint(
+            "transition_state_entry_id", "kind", name="uq_ts_validation_evidence_kind"
         ),
     )

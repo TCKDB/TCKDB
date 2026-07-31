@@ -1,19 +1,21 @@
 """Worker-layer tests for the async upload job queue.
 
-These tests exercise ``app.workers.upload_worker`` directly — claim
-ordering, retry behavior, terminal failure, and dispatch routing — without
-going through the API layer and without exercising any real workflow.
-Workflow entry points are monkeypatched so each test stays focused on
-worker state transitions and dispatch routing.
+These tests exercise worker claims, recovery, fencing, dispatch, and both
+stubbed and real workflow persistence against the PostgreSQL-backed queue.
 """
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Iterator
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.workers.upload_worker as upload_worker
@@ -44,7 +46,11 @@ def worker_db(db_engine, monkeypatch) -> Iterator[Session]:
         session.close()
         with Session(db_engine) as cleanup:
             with cleanup.begin():
-                cleanup.execute(text("DELETE FROM upload_job"))
+                cleanup.execute(
+                    text(
+                        "DELETE FROM upload_job WHERE NOT EXISTS (SELECT 1 FROM submission WHERE submission.upload_job_id = upload_job.id)"
+                    )
+                )
 
 
 def _insert_job(
@@ -91,6 +97,7 @@ def test_claim_one_job_returns_oldest_queued(worker_db):
         assert claimed.status == UploadJobStatus.processing
         assert claimed.started_at is not None
         assert claimed.attempts == 1
+        upload_worker._release_execution_lock(worker_db, str(claimed.id))
 
     with worker_db.begin():
         worker_db.expire_all()
@@ -127,6 +134,43 @@ def test_claim_one_job_skips_non_queued_jobs(worker_db):
         assert claimed is not None
         assert claimed.id == queued_id
         assert claimed.status == UploadJobStatus.processing
+        upload_worker._release_execution_lock(worker_db, str(claimed.id))
+
+
+def test_claim_one_job_recovers_expired_lease_exactly_once(worker_db, monkeypatch):
+    """A worker killed immediately after claim leaves recoverable, not duplicate work."""
+    now = datetime(2026, 4, 20, 12, 0, 0)
+    monkeypatch.setattr(upload_worker, "_utcnow", lambda: now)
+    calls: list[str] = []
+
+    def handler(session, job, review_policy=None):
+        calls.append(job.id)
+        return {"id": 91}
+
+    monkeypatch.setitem(upload_worker._DISPATCH, UploadJobKind.thermo, handler)
+    with worker_db.begin():
+        job = _insert_job(worker_db, kind=UploadJobKind.thermo)
+        job_id = job.id
+        claimed = upload_worker._claim_one_job(worker_db)
+        assert claimed is not None
+        assert claimed.id == job_id
+        # Simulate process death after the claim transaction committed: its
+        # session-scoped lock vanishes with the dead connection.
+        upload_worker._release_execution_lock(worker_db, str(claimed.id))
+
+    monkeypatch.setattr(upload_worker, "_utcnow", lambda: now + upload_worker._LEASE_DURATION + timedelta(seconds=1))
+    assert upload_worker._process_one_cycle() is True
+    assert calls == [job_id]
+    assert upload_worker._process_one_cycle() is False
+    assert calls == [job_id]
+
+    with worker_db.begin():
+        worker_db.expire_all()
+        persisted = worker_db.get(UploadJob, job_id)
+        assert persisted.status == UploadJobStatus.complete
+        assert persisted.attempts == 2
+        assert persisted.lease_expires_at is None
+        assert persisted.heartbeat_at is not None
 
 
 def test_claim_one_job_skips_attempts_exhausted_queued(worker_db):
@@ -146,11 +190,122 @@ def test_claim_one_job_skips_attempts_exhausted_queued(worker_db):
         claimed = upload_worker._claim_one_job(worker_db)
         assert claimed is not None
         assert claimed.id == fresh_id
+        upload_worker._release_execution_lock(worker_db, str(claimed.id))
 
 
 def test_claim_one_job_returns_none_when_queue_empty(worker_db):
     with worker_db.begin():
         assert upload_worker._claim_one_job(worker_db) is None
+
+
+def test_claim_skips_fenced_job_without_mutation_and_claims_next(worker_db, db_engine):
+    """A live executor fence must be checked before claim state changes."""
+    base = datetime(2026, 4, 20, 12, 0, 0)
+    with worker_db.begin():
+        fenced = _insert_job(worker_db, created_at=base - timedelta(minutes=1))
+        eligible = _insert_job(worker_db, created_at=base)
+        fenced_id, eligible_id = fenced.id, eligible.id
+        before = (fenced.status, fenced.attempts, fenced.lease_expires_at, fenced.heartbeat_at)
+
+    with db_engine.connect() as owner_connection:
+        owner = Session(bind=owner_connection, expire_on_commit=False)
+        try:
+            with owner.begin():
+                assert upload_worker._try_execution_lock(owner, str(fenced_id))
+
+            with worker_db.begin():
+                claimed = upload_worker._claim_one_job(worker_db)
+                assert claimed is not None
+                assert claimed.id == eligible_id
+                # Direct claim tests must release the returned session lock.
+                upload_worker._release_execution_lock(worker_db, str(claimed.id))
+
+            with worker_db.begin():
+                worker_db.expire_all()
+                unchanged = worker_db.get(UploadJob, fenced_id)
+                assert (
+                    unchanged.status,
+                    unchanged.attempts,
+                    unchanged.lease_expires_at,
+                    unchanged.heartbeat_at,
+                ) == before
+        finally:
+            with owner.begin():
+                upload_worker._release_execution_lock(owner, str(fenced_id))
+            owner.close()
+
+
+def test_reaper_skips_fenced_final_attempt_then_terminalizes_after_release(
+    worker_db,
+    db_engine,
+    monkeypatch,
+    _api_test_user,
+):
+    """The expiry reaper shares the executor fence and cannot race its submission."""
+    from app.db.models.common import SubmissionStatus
+    from app.db.models.submission import Submission
+    from app.services.upload_submission import open_job_submission
+
+    now = datetime(2026, 4, 20, 12, 0, 0)
+    monkeypatch.setattr(upload_worker, "_utcnow", lambda: now)
+    with worker_db.begin():
+        job = _insert_job(
+            worker_db,
+            status=UploadJobStatus.processing,
+            attempts=3,
+            max_attempts=3,
+        )
+        job.created_by = _api_test_user
+        job.lease_expires_at = now - timedelta(seconds=1)
+        job.heartbeat_at = now - timedelta(minutes=1)
+        submission = open_job_submission(
+            worker_db,
+            created_by=_api_test_user,
+            job_kind=job.kind,
+            upload_job_id=str(job.id),
+        )
+        job_id, submission_id = job.id, submission.id
+
+    with db_engine.connect() as owner_connection:
+        owner = Session(bind=owner_connection, expire_on_commit=False)
+        try:
+            with owner.begin():
+                assert upload_worker._try_execution_lock(owner, str(job_id))
+
+            with worker_db.begin():
+                assert upload_worker._fail_expired_exhausted_jobs(worker_db) == 0
+
+            with worker_db.begin():
+                worker_db.expire_all()
+                persisted = worker_db.get(UploadJob, job_id)
+                assert persisted.status is UploadJobStatus.processing
+                assert persisted.lease_expires_at == now - timedelta(seconds=1)
+                assert worker_db.get(Submission, submission_id).status is SubmissionStatus.pending
+
+            with owner.begin():
+                upload_worker._release_execution_lock(owner, str(job_id))
+
+            with worker_db.begin():
+                assert upload_worker._fail_expired_exhausted_jobs(worker_db) == 1
+
+            with worker_db.begin():
+                worker_db.expire_all()
+                persisted = worker_db.get(UploadJob, job_id)
+                assert persisted.status is UploadJobStatus.failed
+                assert persisted.lease_expires_at is None
+                assert worker_db.get(Submission, submission_id).status is SubmissionStatus.failed
+        finally:
+            owner.close()
+            with worker_db.begin():
+                worker_db.execute(
+                    text("DELETE FROM submission_audit_event WHERE submission_id = :sid"),
+                    {"sid": submission_id},
+                )
+                worker_db.execute(
+                    text("DELETE FROM submission_record_link WHERE submission_id = :sid"),
+                    {"sid": submission_id},
+                )
+                worker_db.execute(text("DELETE FROM submission WHERE id = :sid"), {"sid": submission_id})
 
 
 # ---------------------------------------------------------------------------
@@ -183,13 +338,65 @@ def test_process_one_cycle_marks_job_complete_on_success(worker_db, monkeypatch)
         assert persisted.attempts == 1
 
 
+def test_processing_job_receives_periodic_heartbeat(worker_db, monkeypatch):
+    """A slow handler renews its lease from a second worker-session."""
+    original = upload_worker._heartbeat_job
+    heartbeats: list[str] = []
+    monkeypatch.setattr(upload_worker, "_HEARTBEAT_INTERVAL", 0.01)
+
+    def recording_heartbeat(session, job):
+        heartbeats.append(job.id)
+        original(session, job)
+
+    def slow_handler(session, job, review_policy=None):
+        time.sleep(0.04)
+        return {"id": 8}
+
+    monkeypatch.setattr(upload_worker, "_heartbeat_job", recording_heartbeat)
+    monkeypatch.setitem(upload_worker._DISPATCH, UploadJobKind.thermo, slow_handler)
+    with worker_db.begin():
+        _insert_job(worker_db, kind=UploadJobKind.thermo)
+
+    assert upload_worker._process_one_cycle() is True
+    assert heartbeats
+
+
+def test_execution_advisory_lock_fences_a_second_worker(worker_db):
+    """An expired lease cannot make two workers execute one scientific write."""
+    with worker_db.begin():
+        job = _insert_job(worker_db, kind=UploadJobKind.thermo)
+        job_id = job.id
+
+    assert upload_worker._try_execution_lock(worker_db, job_id) is True
+    contender = Session(bind=worker_db.get_bind(), expire_on_commit=False)
+    try:
+        assert upload_worker._try_execution_lock(contender, job_id) is False
+    finally:
+        upload_worker._release_execution_lock(worker_db, job_id)
+        contender.close()
+
+
+def test_reaper_terminalizes_exhausted_queued_job(worker_db):
+    with worker_db.begin():
+        job = _insert_job(worker_db, attempts=3, max_attempts=3)
+        job_id = job.id
+
+    assert upload_worker._process_one_cycle() is True
+    with worker_db.begin():
+        worker_db.expire_all()
+        persisted = worker_db.get(UploadJob, job_id)
+        assert persisted.status == UploadJobStatus.failed
+        assert persisted.completed_at is not None
+
+
 # ---------------------------------------------------------------------------
 # Retry with attempts remaining
 # ---------------------------------------------------------------------------
 
 
 def test_process_one_cycle_requeues_on_failure_when_attempts_remain(
-    worker_db, monkeypatch,
+    worker_db,
+    monkeypatch,
 ):
     def failing_handler(session, job, review_policy=None):
         raise ValueError("boom")
@@ -226,7 +433,8 @@ def test_process_one_cycle_requeues_on_failure_when_attempts_remain(
 
 
 def test_process_one_cycle_marks_failed_when_attempts_exhausted(
-    worker_db, monkeypatch,
+    worker_db,
+    monkeypatch,
 ):
     def failing_handler(session, job, review_policy=None):
         raise RuntimeError("kaboom")
@@ -356,7 +564,8 @@ def test_transport_has_registered_dispatch_handler():
 
 
 def test_worker_dispatches_transport_job_to_transport_handler(
-    worker_db, monkeypatch,
+    worker_db,
+    monkeypatch,
 ):
     """A queued transport job is claimed and routed to the transport handler,
     not to any other kind's handler.
@@ -368,9 +577,7 @@ def test_worker_dispatches_transport_job_to_transport_handler(
         return {"type": "transport", "id": 999, "species_entry_id": 1}
 
     def wrong_handler(session, job, review_policy=None):  # pragma: no cover — must not be called
-        raise AssertionError(
-            f"transport job was misrouted to handler for {job.kind!r}"
-        )
+        raise AssertionError(f"transport job was misrouted to handler for {job.kind!r}")
 
     stub_dispatch = dict.fromkeys(UploadJobKind, wrong_handler)
     stub_dispatch[UploadJobKind.transport] = stub_transport
@@ -396,7 +603,8 @@ def test_worker_dispatches_transport_job_to_transport_handler(
 
 
 def test_run_transport_handler_persists_transport_via_canonical_workflow(
-    db_session, _api_test_user,
+    db_session,
+    _api_test_user,
 ):
     """The ``_run_transport`` handler goes through the canonical transport
     workflow (``persist_transport_upload``), persists a Transport row scoped
@@ -417,9 +625,7 @@ def test_run_transport_handler_persists_transport_via_canonical_workflow(
         created_by=_api_test_user,
     )
 
-    result = upload_worker._run_transport(
-        db_session, job, upload_worker.ReviewPolicy()
-    )
+    result = upload_worker._run_transport(db_session, job, upload_worker.ReviewPolicy())
 
     assert result["type"] == "transport"
     assert "id" in result
@@ -434,11 +640,14 @@ def test_transport_job_is_requeued_on_transient_failure(worker_db, monkeypatch):
     """A failing transport handler below max_attempts must leave the job
     back in ``queued`` with attempts incremented, not prematurely failed.
     """
+
     def flaky_handler(session, job, review_policy=None):
         raise ValueError("transient transport failure")
 
     monkeypatch.setitem(
-        upload_worker._DISPATCH, UploadJobKind.transport, flaky_handler,
+        upload_worker._DISPATCH,
+        UploadJobKind.transport,
+        flaky_handler,
     )
 
     with worker_db.begin():
@@ -463,16 +672,20 @@ def test_transport_job_is_requeued_on_transient_failure(worker_db, monkeypatch):
 
 
 def test_transport_job_is_marked_failed_when_attempts_exhausted(
-    worker_db, monkeypatch,
+    worker_db,
+    monkeypatch,
 ):
     """After ``max_attempts`` failures a transport job must terminate in
     ``failed`` with the error populated and no successful result.
     """
+
     def always_failing(session, job, review_policy=None):
         raise RuntimeError("permanent transport failure")
 
     monkeypatch.setitem(
-        upload_worker._DISPATCH, UploadJobKind.transport, always_failing,
+        upload_worker._DISPATCH,
+        UploadJobKind.transport,
+        always_failing,
     )
 
     with worker_db.begin():
@@ -512,7 +725,8 @@ def _thermo_job_payload() -> dict:
 
 
 def test_run_one_job_links_records_and_initializes_under_review(
-    db_session, _api_test_user,
+    db_session,
+    _api_test_user,
 ):
     """A worker success persists records under review, links them to the
     job's submission, and appends an ``ingestion_succeeded`` audit event.
@@ -557,9 +771,7 @@ def test_run_one_job_links_records_and_initializes_under_review(
 
     # Records are linked to the submission.
     links = db_session.scalars(
-        select(SubmissionRecordLink).where(
-            SubmissionRecordLink.submission_id == submission.id
-        )
+        select(SubmissionRecordLink).where(SubmissionRecordLink.submission_id == submission.id)
     ).all()
     assert links, "worker success should create submission_record_link rows"
 
@@ -578,16 +790,147 @@ def test_run_one_job_links_records_and_initializes_under_review(
     kinds = {
         e.event_kind
         for e in db_session.scalars(
-            select(SubmissionAuditEvent).where(
-                SubmissionAuditEvent.submission_id == submission.id
-            )
+            select(SubmissionAuditEvent).where(SubmissionAuditEvent.submission_id == submission.id)
         ).all()
     }
     assert SubmissionAuditEventKind.ingestion_succeeded in kinds
 
 
+def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, db_engine, _api_test_user):
+    """A separately running worker claims, is terminated, then recovers once."""
+    from app.db.models.species import Species, SpeciesEntry
+    from app.db.models.thermo import Thermo
+    from app.services.upload_submission import open_job_submission
+
+    with worker_db.begin():
+        before = worker_db.scalar(select(func.count()).select_from(Thermo)) or 0
+        existing_species_entry_id = worker_db.scalar(
+            select(SpeciesEntry.id)
+            .join(Species)
+            .where(
+                Species.smiles == "[H]",
+                Species.charge == 0,
+                Species.multiplicity == 2,
+            )
+        )
+        job = _insert_job(worker_db, kind=UploadJobKind.thermo, payload=_thermo_job_payload())
+        job.created_by = _api_test_user
+        submission = open_job_submission(
+            worker_db, created_by=_api_test_user, job_kind=job.kind, upload_job_id=str(job.id)
+        )
+        job_id = job.id
+        submission_id = submission.id
+
+    child_env = os.environ.copy()
+    child_env.update(
+        {
+            "DB_NAME": db_engine.url.database,
+            "DB_USER": "tckdb",
+            "DB_PASSWORD": "tckdb",
+            "DB_HOST": "127.0.0.1",
+            "DB_PORT": "5432",
+        }
+    )
+    child = None
+    try:
+        child = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "from app.api.deps import SessionLocal; from app.workers.upload_worker import _claim_one_job; import time; s=SessionLocal(); s.begin(); j=_claim_one_job(s); s.commit(); time.sleep(60)",
+            ],
+            cwd=str(Path(__file__).resolve().parents[2]),
+            env=child_env,
+        )
+        for _ in range(200):
+            with worker_db.begin():
+                worker_db.expire_all()
+                if worker_db.get(UploadJob, job_id).status is UploadJobStatus.processing:
+                    break
+            time.sleep(0.05)
+        else:
+            pytest.fail("child worker did not commit its claim")
+        child.terminate()
+        child.wait(timeout=10)
+        with worker_db.begin():
+            worker_db.get(UploadJob, job_id).lease_expires_at = datetime(2000, 1, 1)
+
+        assert upload_worker._process_one_cycle() is True
+        assert upload_worker._process_one_cycle() is False
+        with worker_db.begin():
+            worker_db.expire_all()
+            persisted = worker_db.get(UploadJob, job_id)
+            assert persisted.status is UploadJobStatus.complete
+            assert (worker_db.scalar(select(func.count()).select_from(Thermo)) or 0) == before + 1
+    finally:
+        if child is not None and child.poll() is None:
+            child.kill()
+            child.wait()
+        with Session(db_engine) as cleanup, cleanup.begin():
+            # This test commits a real workflow to exercise crash recovery.
+            # Its teardown is the sole test-only exception to append-only
+            # audit history, confined to this transaction and these row ids.
+            cleanup.execute(text("SET LOCAL session_replication_role = replica"))
+            persisted = cleanup.get(UploadJob, job_id)
+            thermo_id = persisted.result["id"] if persisted and persisted.result else None
+            species_entry_id = persisted.result.get("species_entry_id") if persisted and persisted.result else None
+            if thermo_id is not None:
+                cleanup.execute(
+                    text(
+                        "DELETE FROM record_review_event WHERE record_review_id IN (SELECT id FROM record_review WHERE record_type = 'thermo' AND record_id = :thermo_id)"
+                    ),
+                    {"thermo_id": thermo_id},
+                )
+                cleanup.execute(
+                    text("DELETE FROM record_review WHERE record_type = 'thermo' AND record_id = :thermo_id"),
+                    {"thermo_id": thermo_id},
+                )
+                cleanup.execute(
+                    text("DELETE FROM thermo_source_calculation WHERE thermo_id = :thermo_id"), {"thermo_id": thermo_id}
+                )
+                cleanup.execute(text("DELETE FROM thermo_point WHERE thermo_id = :thermo_id"), {"thermo_id": thermo_id})
+                cleanup.execute(
+                    text("DELETE FROM thermo_nasa9_interval WHERE thermo_id = :thermo_id"), {"thermo_id": thermo_id}
+                )
+                cleanup.execute(text("DELETE FROM thermo_nasa WHERE thermo_id = :thermo_id"), {"thermo_id": thermo_id})
+                cleanup.execute(
+                    text("DELETE FROM thermo_wilhoit WHERE thermo_id = :thermo_id"), {"thermo_id": thermo_id}
+                )
+                cleanup.execute(text("DELETE FROM thermo WHERE id = :thermo_id"), {"thermo_id": thermo_id})
+            cleanup.execute(
+                text("DELETE FROM submission_audit_event WHERE submission_id = :submission_id"),
+                {"submission_id": submission_id},
+            )
+            cleanup.execute(
+                text("DELETE FROM submission_record_link WHERE submission_id = :submission_id"),
+                {"submission_id": submission_id},
+            )
+            cleanup.execute(text("DELETE FROM submission WHERE id = :submission_id"), {"submission_id": submission_id})
+            cleanup.execute(text("DELETE FROM upload_job WHERE id = :job_id"), {"job_id": job_id})
+            if species_entry_id is not None and existing_species_entry_id is None:
+                species_id = cleanup.scalar(
+                    text("SELECT species_id FROM species_entry WHERE id = :species_entry_id"),
+                    {"species_entry_id": species_entry_id},
+                )
+                cleanup.execute(
+                    text("DELETE FROM species_entry WHERE id = :species_entry_id"),
+                    {"species_entry_id": species_entry_id},
+                )
+                if species_id is not None:
+                    cleanup.execute(
+                        text(
+                            "DELETE FROM species WHERE id = :species_id "
+                            "AND NOT EXISTS (SELECT 1 FROM species_entry "
+                            "WHERE species_entry.species_id = species.id)"
+                        ),
+                        {"species_id": species_id},
+                    )
+
+
 def test_terminal_worker_failure_records_durable_ingestion_failed(
-    worker_db, monkeypatch, _api_test_user,
+    worker_db,
+    monkeypatch,
+    _api_test_user,
 ):
     """When a job exhausts retries, the worker durably marks its submission
     ``failed`` and appends an ``ingestion_failed`` audit event — with no
@@ -602,9 +945,7 @@ def test_terminal_worker_failure_records_durable_ingestion_failed(
     def failing_handler(session, job, review_policy=None):
         raise RuntimeError("kaboom-before-persistence")
 
-    monkeypatch.setitem(
-        upload_worker._DISPATCH, UploadJobKind.thermo, failing_handler
-    )
+    monkeypatch.setitem(upload_worker._DISPATCH, UploadJobKind.thermo, failing_handler)
 
     with worker_db.begin():
         job = _insert_job(
@@ -635,9 +976,7 @@ def test_terminal_worker_failure_records_durable_ingestion_failed(
             kinds = {
                 e.event_kind
                 for e in worker_db.scalars(
-                    select(SubmissionAuditEvent).where(
-                        SubmissionAuditEvent.submission_id == submission_id
-                    )
+                    select(SubmissionAuditEvent).where(SubmissionAuditEvent.submission_id == submission_id)
                 ).all()
             }
             assert SubmissionAuditEventKind.ingestion_failed in kinds

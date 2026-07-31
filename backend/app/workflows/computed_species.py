@@ -71,6 +71,10 @@ from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.provenance_warnings import (
+    collect_statmech_content_warnings,
+    statmech_has_rotational_structure,
+)
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -273,9 +277,11 @@ def persist_computed_species_upload(
         session,
         request.species_entry,
         created_by=created_by,
-        xyz_text=(
-            request.conformers[0].geometry.xyz_text if request.conformers else None
-        ),
+        # The first conformer's geometry supplies 3D stereo perception; every
+        # conformer's geometry is cross-checked against the isotope labels
+        # declared in the SMILES.
+        geometry=(request.conformers[0].geometry if request.conformers else None),
+        additional_geometries=[conf.geometry for conf in request.conformers[1:]],
     )
 
     # Step 3: per conformer, resolve geometry + group + observation.
@@ -530,7 +536,9 @@ def persist_computed_species_upload(
     # shas across all calcs in the bundle so a post-step-6 failure can
     # delete them.
     bundle_stored_shas: list[str] = []
-    sp_energy_warnings: list[UploadWarning] = []
+    # Non-blocking gaps surfaced on the upload response: single-point
+    # energy reconciliation, and absent statmech evidence.
+    upload_warnings: list[UploadWarning] = []
     try:
         for outcome in conformer_outcomes:
             for calc_in, calc_row in (
@@ -566,7 +574,7 @@ def persist_computed_species_upload(
                         session, calc_row, art_in
                     )
                     if sp_warning is not None:
-                        sp_energy_warnings.append(sp_warning)
+                        upload_warnings.append(sp_warning)
                     # Input geometries for this calc were attached in an
                     # earlier pass, so the Hessian can bind to them here.
                     try_extract_hessian_from_artifact_upload(
@@ -587,6 +595,7 @@ def persist_computed_species_upload(
             species_entry_id=species_entry.id,
             calc_keys_to_id=calc_keys_to_id,
             created_by=created_by,
+            warnings=upload_warnings,
         )
 
         # Link a bundle-created COMPUTED thermo to the statmech it was
@@ -666,7 +675,7 @@ def persist_computed_species_upload(
         conformers=conformer_outcomes,
         thermo=thermo_row,
         statmech=statmech_row,
-        warnings=sp_energy_warnings,
+        warnings=upload_warnings,
     )
 
 
@@ -802,11 +811,13 @@ def _persist_statmech_block(
     session: Session,
     statmech: StatmechInBundle | None,
     *,
-    species_entry_id: int,
+    species_entry_id: int | None = None,
+    transition_state_entry_id: int | None = None,
     calc_keys_to_id: dict[str, Calculation],
     created_by: int | None,
+    warnings: list[UploadWarning] | None = None,
 ) -> Statmech | None:
-    """Persist an optional statmech block.
+    """Persist an optional statmech block for exactly one species or TS subject.
 
     Shared seam consumed by both the computed-species bundle workflow and
     the pressure-dependent network workflow. The frequency scale factor is
@@ -818,6 +829,8 @@ def _persist_statmech_block(
     """
     if statmech is None:
         return None
+    if (species_entry_id is None) == (transition_state_entry_id is None):
+        raise ValueError("statmech persistence requires exactly one species or transition-state subject.")
 
     s: StatmechInBundle = statmech
 
@@ -846,6 +859,7 @@ def _persist_statmech_block(
 
     statmech = Statmech(
         species_entry_id=species_entry_id,
+        transition_state_entry_id=transition_state_entry_id,
         scientific_origin=s.scientific_origin,
         literature_id=literature.id if literature is not None else None,
         software_release_id=(
@@ -871,13 +885,24 @@ def _persist_statmech_block(
     session.add(statmech)
     session.flush()
 
+    if warnings is not None:
+        warnings.extend(
+            collect_statmech_content_warnings(
+                scientific_origin=s.scientific_origin,
+                source_calculation_roles={item.role.value for item in s.source_calculations},
+                has_rotational_structure=statmech_has_rotational_structure(s),
+            )
+        )
+
     for sc in s.source_calculations:
         calc_row = calc_keys_to_id[sc.calculation_key]
-        if calc_row.species_entry_id != species_entry_id:
+        if (
+            (species_entry_id is not None and calc_row.species_entry_id != species_entry_id)
+            or (transition_state_entry_id is not None and calc_row.transition_state_entry_id != transition_state_entry_id)
+        ):
             raise ValueError(
                 f"statmech.source_calculations calculation_key="
-                f"'{sc.calculation_key}': refers to a calculation owned "
-                f"by a different species entry."
+                f"'{sc.calculation_key}': refers to a calculation owned by a different subject."
             )
         session.add(
             StatmechSourceCalculation(
@@ -891,11 +916,14 @@ def _persist_statmech_block(
         scan_calc_id: int | None = None
         if torsion_in.source_scan_calculation_key is not None:
             scan_calc_row = calc_keys_to_id[torsion_in.source_scan_calculation_key]
-            if scan_calc_row.species_entry_id != species_entry_id:
+            if (
+                (species_entry_id is not None and scan_calc_row.species_entry_id != species_entry_id)
+                or (transition_state_entry_id is not None and scan_calc_row.transition_state_entry_id != transition_state_entry_id)
+            ):
                 raise ValueError(
                     f"statmech.torsions source_scan_calculation_key="
                     f"'{torsion_in.source_scan_calculation_key}': refers to a "
-                    f"calculation owned by a different species entry."
+                    f"calculation owned by a different subject."
                 )
             scan_calc_id = scan_calc_row.id
 

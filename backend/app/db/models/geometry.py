@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import CHAR, BigInteger, CheckConstraint, ForeignKey, Integer, Text
+from sqlalchemy import (
+    CHAR,
+    BigInteger,
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+    SmallInteger,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, PublicRefMixin, TimestampMixin
@@ -55,6 +63,24 @@ class GeometryAtom(Base):
     y: Mapped[float] = mapped_column(nullable=False)
     z: Mapped[float] = mapped_column(nullable=False)
 
+    #: Isotope mass number for this nucleus. ``NULL`` means the atom is at
+    #: the element's most abundant natural isotope — it is *not* "unknown".
+    #: Every geometry deposited before atom-resolved isotope support is by
+    #: definition an ordinary isotopologue, so no backfill is required.
+    #: This column is what makes isotope-specific frequencies, rotational
+    #: constants, ZPE and Hessian reuse reconstructible: it is the per-atom
+    #: mass that a downstream normal-mode analysis needs.
+    isotope_mass_number: Mapped[Optional[int]] = mapped_column(
+        SmallInteger,
+        nullable=True,
+    )
+
     geometry: Mapped[Geometry] = relationship(back_populates="atoms")
 
-    __table_args__ = (CheckConstraint("atom_index >= 1", name="atom_index_ge_1"),)
+    __table_args__ = (
+        CheckConstraint("atom_index >= 1", name="atom_index_ge_1"),
+        CheckConstraint(
+            "isotope_mass_number IS NULL OR isotope_mass_number >= 1",
+            name="isotope_mass_number_ge_1",
+        ),
+    )

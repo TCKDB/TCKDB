@@ -357,8 +357,8 @@ def test_fixture_builds_valid_request() -> None:
     assert len(solve.channel_kinetics) == 1
 
     # Energy-transfer parameters survived the nested-paren parse.
-    et = solve.energy_transfer
-    assert et is not None
+    assert len(solve.energy_transfer) == 1
+    et = solve.energy_transfer[0]
     assert et.alpha0_cm_inv == 175.0
     assert et.t_ref_k == 298.0
     assert et.t_exponent == 0.52

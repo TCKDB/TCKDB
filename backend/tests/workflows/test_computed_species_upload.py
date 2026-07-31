@@ -113,10 +113,16 @@ def _hydrogen_bundle(**overrides) -> ComputedSpeciesUploadRequest:
                 "key": "c0",
                 "geometry": dict(_H_GEOM),
                 "primary_calculation": _calc("opt0", calc_type="opt"),
+                "additional_calculations": [_calc("freq0", calc_type="freq")],
             }
         ],
     }
     base.update(overrides)
+    if statmech := base.get("statmech"):
+        statmech.setdefault("statmech_treatment", "rrho")
+        statmech.setdefault(
+            "source_calculations", [{"calculation_key": "freq0", "role": "freq"}]
+        )
     return ComputedSpeciesUploadRequest(**base)
 
 
@@ -960,6 +966,7 @@ def _bundle_multi_conformer_thermo_statmech() -> ComputedSpeciesUploadRequest:
             ],
         },
         statmech={
+            "statmech_treatment": "rrho",
             "external_symmetry": 6,
             "point_group": "D3h",
             "is_linear": False,
@@ -1792,7 +1799,7 @@ def _ethane_bundle_with_scan(**overrides) -> dict:
     Atom indices used by torsion coordinate definitions therefore stay
     within 1..8, matching what ARC produces.
     """
-    return {
+    payload = {
         "species_entry": {"smiles": "CC", "charge": 0, "multiplicity": 1},
         "conformers": [
             {
@@ -1819,6 +1826,12 @@ def _ethane_bundle_with_scan(**overrides) -> dict:
         ],
         **overrides,
     }
+    if statmech := payload.get("statmech"):
+        statmech.setdefault("statmech_treatment", "rrho")
+        statmech.setdefault(
+            "source_calculations", [{"calculation_key": "freq0", "role": "freq"}]
+        )
+    return payload
 
 
 def test_species_statmech_torsion_with_one_coordinate_persists(db_engine) -> None:
@@ -2266,6 +2279,8 @@ def test_bundle_torsion_resolves_to_scan_calc_with_scan_result(db_engine) -> Non
     }
     payload["statmech"] = {
         "is_linear": False,
+        "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "freq0", "role": "freq"}],
         "torsions": [
             {
                 "torsion_index": 1,
@@ -3510,3 +3525,62 @@ def test_repeated_component_param_upload_is_idempotent(db_engine) -> None:
             ("atom_corr", "C", -0.001),
             ("bond_corr_length", "C-H", 0.04),
         }
+
+
+# ---------------------------------------------------------------------------
+# NB2: every conformer geometry is isotope-checked, not just the first
+# ---------------------------------------------------------------------------
+
+
+def _deuterated_methyl_request(second_conformer_isotopes: dict[int, int] | None):
+    """CH2D radical: identity declares one deuteron, conformer 2 may not."""
+
+    def _conf(index: int, isotopes: dict[int, int] | None) -> dict:
+        geometry: dict = {
+            "xyz_text": (
+                "4\nmethyl\n"
+                "C 0.0 0.0 0.0\n"
+                "H 1.0 0.0 0.0\n"
+                "H -0.5 0.866 0.0\n"
+                f"H -0.5 -0.866 {0.001 * index}"
+            )
+        }
+        if isotopes is not None:
+            geometry["isotopes"] = isotopes
+        return {
+            "key": f"c{index}",
+            "geometry": geometry,
+            "primary_calculation": _calc(f"opt{index}", calc_type="opt"),
+        }
+
+    return ComputedSpeciesUploadRequest(
+        species_entry={"smiles": "[CH2][2H]", "charge": 0, "multiplicity": 2},
+        conformers=[
+            _conf(0, {2: 2}),
+            _conf(1, second_conformer_isotopes),
+        ],
+    )
+
+
+def test_every_conformer_geometry_is_isotope_checked(db_engine) -> None:
+    """A later conformer cannot smuggle in an all-protium geometry.
+
+    Only ``conformers[0]`` used to be cross-checked, so a deuterated entry
+    could store all-protium masses for conformers 2..N. A normal-mode
+    analysis reading those geometries would compute a different molecule
+    from the one the identity names.
+    """
+    with Session(db_engine) as session, session.begin():
+        with pytest.raises(ValueError, match="does not match"):
+            persist_computed_species_upload(
+                session, _deuterated_methyl_request(second_conformer_isotopes=None)
+            )
+
+
+def test_consistently_labelled_conformers_still_upload(db_engine) -> None:
+    """Regression guard: matching labels on every conformer still succeed."""
+    with Session(db_engine) as session, session.begin():
+        outcome = persist_computed_species_upload(
+            session, _deuterated_methyl_request(second_conformer_isotopes={2: 2})
+        )
+        assert len(outcome.conformers) == 2

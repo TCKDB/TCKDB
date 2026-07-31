@@ -40,14 +40,17 @@ from app.db.models.literature import Literature
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
     NetworkChannel,
+    NetworkChannelMicroReaction,
     NetworkKinetics,
     NetworkKineticsChebyshev,
     NetworkKineticsPlog,
     NetworkKineticsPoint,
     NetworkSolve,
     NetworkSolveBathGas,
+    NetworkSolveChannelBarrier,
     NetworkSolveEnergyTransfer,
     NetworkSolveSourceCalculation,
+    NetworkSolveStateEnergy,
     NetworkState,
     NetworkStateParticipant,
 )
@@ -55,6 +58,7 @@ from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
+from app.db.models.transition_state import TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
@@ -66,6 +70,7 @@ from app.schemas.reads.scientific_common import (
 from app.schemas.reads.scientific_network import (
     AvailableNetworkSections,
     AvailableNetworkSolveSections,
+    NetworkChannelMicroreactionSummary,
     NetworkChannelSummary,
     NetworkContextSummary,
     NetworkCoreBlock,
@@ -74,9 +79,11 @@ from app.schemas.reads.scientific_network import (
     NetworkReactionSummary,
     NetworkReviewEntry,
     NetworkSolveBathGasSummary,
+    NetworkSolveChannelBarrierSummary,
     NetworkSolveCoreBlock,
     NetworkSolveEnergyTransferSummary,
     NetworkSolveEvidenceSummary,
+    NetworkSolveStateEnergySummary,
     NetworkSolveSummary,
     NetworkSourceCalculationSummary,
     NetworkSpeciesSummary,
@@ -567,6 +574,43 @@ def _build_channels(
     ).all()
     if not rows:
         return []
+    # Outer-joined: a barrierless/variational path has no transition state
+    # entry, and dropping those rows would silently hide a real pathway.
+    microreaction_rows = session.execute(
+        select(
+            NetworkChannelMicroReaction.channel_id,
+            ReactionEntry.public_ref.label("reaction_entry_ref"),
+            TransitionStateEntry.public_ref.label("transition_state_entry_ref"),
+        )
+        .join(
+            ReactionEntry,
+            ReactionEntry.id == NetworkChannelMicroReaction.reaction_entry_id,
+        )
+        .outerjoin(
+            TransitionStateEntry,
+            TransitionStateEntry.id
+            == NetworkChannelMicroReaction.transition_state_entry_id,
+        )
+        .where(NetworkChannelMicroReaction.channel_id.in_([r.id for r in rows]))
+        .order_by(
+            NetworkChannelMicroReaction.channel_id.asc(),
+            NetworkChannelMicroReaction.reaction_entry_id.asc(),
+            NetworkChannelMicroReaction.transition_state_entry_id.asc(),
+        )
+    ).all()
+    microreactions_by_channel: dict[int, list[NetworkChannelMicroreactionSummary]] = {}
+    for row in microreaction_rows:
+        microreactions_by_channel.setdefault(row.channel_id, []).append(
+            NetworkChannelMicroreactionSummary(
+                reaction_entry_ref=row.reaction_entry_ref,
+                transition_state_entry_ref=row.transition_state_entry_ref,
+                path_kind=(
+                    "saddle_point"
+                    if row.transition_state_entry_ref is not None
+                    else "barrierless"
+                ),
+            )
+        )
     state_ids = {r.source_state_id for r in rows} | {
         r.sink_state_id for r in rows
     }
@@ -588,6 +632,7 @@ def _build_channels(
     return [
         NetworkChannelSummary(
             network_channel_id=r.id,
+            channel_key=r.channel_key,
             kind=r.kind,
             source_state_id=r.source_state_id,
             sink_state_id=r.sink_state_id,
@@ -598,6 +643,7 @@ def _build_channels(
                 r.sink_state_id, ""
             ),
             has_kinetics=bool(kinetics_by_channel.get(r.id, False)),
+            microreactions=microreactions_by_channel.get(r.id, []),
         )
         for r in rows
     ]
@@ -1009,6 +1055,8 @@ __all__ = [
 _SOLVE_LEGAL_INCLUDE_TOKENS: set[str] = {
     "bath_gas",
     "energy_transfer",
+    "state_energies",
+    "channel_barriers",
     "source_calculations",
     "kinetics",
     "review",
@@ -1097,6 +1145,14 @@ def build_network_solve_record(
         NetworkSolveEnergyTransfer,
         NetworkSolveEnergyTransfer.solve_id == s.id,
     )
+    state_energy_count = _count(
+        session,
+        NetworkSolveStateEnergy,
+        NetworkSolveStateEnergy.solve_id == s.id,
+    )
+    channel_barrier_count = _count(
+        session, NetworkSolveChannelBarrier, NetworkSolveChannelBarrier.solve_id == s.id
+    )
     source_calculation_count = _count(
         session,
         NetworkSolveSourceCalculation,
@@ -1133,6 +1189,7 @@ def build_network_solve_record(
     evidence = NetworkSolveEvidenceSummary(
         bath_gas_count=bath_gas_count,
         energy_transfer_count=energy_transfer_count,
+        state_energy_count=state_energy_count,
         source_calculation_count=source_calculation_count,
         kinetics_count=kinetics_count,
         has_chebyshev=has_cheb,
@@ -1142,6 +1199,8 @@ def build_network_solve_record(
     available = AvailableNetworkSolveSections(
         has_bath_gas=bath_gas_count > 0,
         has_energy_transfer=energy_transfer_count > 0,
+        has_state_energies=state_energy_count > 0,
+        has_channel_barriers=channel_barrier_count > 0,
         has_source_calculations=source_calculation_count > 0,
         has_kinetics=kinetics_count > 0,
         has_review=_exists_review_for(
@@ -1156,6 +1215,14 @@ def build_network_solve_record(
     et_block: list[NetworkSolveEnergyTransferSummary] | None = None
     if "energy_transfer" in includes:
         et_block = _build_energy_transfer_for_solve(session, s.id)
+
+    state_energy_block: list[NetworkSolveStateEnergySummary] | None = None
+    if "state_energies" in includes:
+        state_energy_block = _build_state_energies_for_solve(session, s.id)
+
+    channel_barrier_block: list[NetworkSolveChannelBarrierSummary] | None = None
+    if "channel_barriers" in includes:
+        channel_barrier_block = _build_channel_barriers_for_solve(session, s.id)
 
     sources_block: list[NetworkSourceCalculationSummary] | None = None
     if "source_calculations" in includes:
@@ -1179,6 +1246,8 @@ def build_network_solve_record(
         available_sections=available,
         bath_gas=bath_gas_block,
         energy_transfer=et_block,
+        state_energies=state_energy_block,
+        channel_barriers=channel_barrier_block,
         source_calculations=sources_block,
         kinetics=kinetics_block,
         review_history=review_block,
@@ -1216,21 +1285,99 @@ def _build_bath_gas_for_solve(
 def _build_energy_transfer_for_solve(
     session: Session, solve_id: int
 ) -> list[NetworkSolveEnergyTransferSummary]:
-    rows = session.scalars(
-        select(NetworkSolveEnergyTransfer)
+    rows = session.execute(
+        select(
+            NetworkSolveEnergyTransfer,
+            NetworkState.composition_hash.label("state_composition_hash"),
+            SpeciesEntry.public_ref.label("collider_species_entry_ref"),
+        )
+        .outerjoin(
+            NetworkState,
+            NetworkState.id == NetworkSolveEnergyTransfer.state_id,
+        )
+        .outerjoin(
+            SpeciesEntry,
+            SpeciesEntry.id == NetworkSolveEnergyTransfer.collider_species_entry_id,
+        )
         .where(NetworkSolveEnergyTransfer.solve_id == solve_id)
         .order_by(NetworkSolveEnergyTransfer.id.asc())
     ).all()
     return [
         NetworkSolveEnergyTransferSummary(
-            energy_transfer_id=r.id,
-            model=r.model,
-            alpha0_cm_inv=r.alpha0_cm_inv,
-            t_exponent=r.t_exponent,
-            t_ref_k=r.t_ref_k,
-            note=r.note,
+            energy_transfer_id=row.NetworkSolveEnergyTransfer.id,
+            state_composition_hash=row.state_composition_hash,
+            collider_species_entry_ref=row.collider_species_entry_ref,
+            model=row.NetworkSolveEnergyTransfer.model,
+            alpha0_cm_inv=row.NetworkSolveEnergyTransfer.alpha0_cm_inv,
+            t_exponent=row.NetworkSolveEnergyTransfer.t_exponent,
+            t_ref_k=row.NetworkSolveEnergyTransfer.t_ref_k,
+            note=row.NetworkSolveEnergyTransfer.note,
         )
-        for r in rows
+        for row in rows
+    ]
+
+
+def _build_state_energies_for_solve(
+    session: Session, solve_id: int
+) -> list[NetworkSolveStateEnergySummary]:
+    rows = session.execute(
+        select(
+            NetworkSolveStateEnergy,
+            NetworkState.composition_hash.label("state_composition_hash"),
+            Calculation.public_ref.label("source_calculation_ref"),
+        )
+        .join(NetworkState, NetworkState.id == NetworkSolveStateEnergy.state_id)
+        .outerjoin(
+            Calculation,
+            Calculation.id == NetworkSolveStateEnergy.source_calculation_id,
+        )
+        .where(NetworkSolveStateEnergy.solve_id == solve_id)
+        .order_by(NetworkState.composition_hash.asc())
+    ).all()
+    return [
+        NetworkSolveStateEnergySummary(
+            state_composition_hash=row.state_composition_hash,
+            energy_kj_mol=row.NetworkSolveStateEnergy.energy_kj_mol,
+            energy_zero_convention=row.NetworkSolveStateEnergy.energy_zero_convention,
+            correction_convention=row.NetworkSolveStateEnergy.correction_convention,
+            convention_note=row.NetworkSolveStateEnergy.convention_note,
+            source_calculation_ref=row.source_calculation_ref,
+        )
+        for row in rows
+    ]
+
+
+def _build_channel_barriers_for_solve(
+    session: Session, solve_id: int
+) -> list[NetworkSolveChannelBarrierSummary]:
+    rows = session.execute(
+        select(
+            NetworkSolveChannelBarrier,
+            NetworkChannel.channel_key,
+            ReactionEntry.public_ref.label("reaction_entry_ref"),
+            TransitionStateEntry.public_ref.label("transition_state_entry_ref"),
+            Calculation.public_ref.label("source_calculation_ref"),
+        )
+        .join(NetworkChannel, NetworkChannel.id == NetworkSolveChannelBarrier.channel_id)
+        .join(ReactionEntry, ReactionEntry.id == NetworkSolveChannelBarrier.reaction_entry_id)
+        .join(TransitionStateEntry, TransitionStateEntry.id == NetworkSolveChannelBarrier.transition_state_entry_id)
+        .outerjoin(Calculation, Calculation.id == NetworkSolveChannelBarrier.source_calculation_id)
+        .where(NetworkSolveChannelBarrier.solve_id == solve_id)
+        .order_by(NetworkChannel.channel_key, ReactionEntry.public_ref, TransitionStateEntry.public_ref)
+    ).all()
+    return [
+        NetworkSolveChannelBarrierSummary(
+            channel_key=row.channel_key,
+            reaction_entry_ref=row.reaction_entry_ref,
+            transition_state_entry_ref=row.transition_state_entry_ref,
+            forward_barrier_kj_mol=row.NetworkSolveChannelBarrier.forward_barrier_kj_mol,
+            reverse_barrier_kj_mol=row.NetworkSolveChannelBarrier.reverse_barrier_kj_mol,
+            energy_zero_convention=row.NetworkSolveChannelBarrier.energy_zero_convention,
+            correction_convention=row.NetworkSolveChannelBarrier.correction_convention,
+            convention_note=row.NetworkSolveChannelBarrier.convention_note,
+            source_calculation_ref=row.source_calculation_ref,
+        )
+        for row in rows
     ]
 
 

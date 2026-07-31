@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
@@ -143,10 +144,28 @@ def make_species(
     multiplicity: int = 1,
     kind: MoleculeKind = MoleculeKind.molecule,
 ) -> Species:
-    """Create a Species row. ``smiles`` defaults to a unique value."""
+    """Resolve a test Species by its production graph-identity key.
+
+    ``Species.public_ref`` is content-addressed, and production enforces the
+    same ``(smiles, charge, multiplicity)`` identity.  Shared test databases
+    can therefore already contain ordinary colliders such as water or argon;
+    return that row instead of trying to manufacture a duplicate with a fake
+    InChI key.
+    """
+    resolved_smiles = smiles if smiles is not None else unique_smiles()
+    existing = session.scalar(
+        select(Species).where(
+            Species.kind == kind,
+            Species.smiles == resolved_smiles,
+            Species.charge == charge,
+            Species.multiplicity == multiplicity,
+        )
+    )
+    if existing is not None:
+        return existing
     species = Species(
         kind=kind,
-        smiles=smiles if smiles is not None else unique_smiles(),
+        smiles=resolved_smiles,
         inchi_key=inchi_key or next_inchi_key(),
         charge=charge,
         multiplicity=multiplicity,
@@ -1431,7 +1450,15 @@ def make_network_channel(
     source_state,
     sink_state,
     kind,
+    channel_key: str | None = None,
 ):
+    """Create a NetworkChannel.
+
+    ``channel_key`` is NOT NULL in the schema — it is the producer-visible
+    identity that lets parallel mechanistic paths share endpoints — so a
+    unique default is derived from the endpoints when the caller does not
+    care which key it gets.
+    """
     from app.db.models.network_pdep import NetworkChannel
 
     row = NetworkChannel(
@@ -1439,6 +1466,11 @@ def make_network_channel(
         source_state_id=source_state.id,
         sink_state_id=sink_state.id,
         kind=kind,
+        channel_key=(
+            channel_key
+            if channel_key is not None
+            else f"channel_{source_state.id}_{sink_state.id}"
+        ),
     )
     session.add(row)
     session.flush()

@@ -1,20 +1,26 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from rdkit import Chem
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 
+from app.chemistry.geometry import parse_xyz
 from app.chemistry.species import (
+    canonical_isotope_key,
     canonical_species_identity,
     classify_stereo_kind,
     derive_stereo_label_from_3d,
     derive_unmapped_smiles,
     identity_mol_from_smiles,
+    isotope_substitutions,
 )
 from app.db.models.common import StereoKind
 from app.db.models.species import Species, SpeciesEntry
+from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 
 
@@ -78,28 +84,120 @@ def resolve_species(
     return species
 
 
+def assert_geometry_isotopes_match_identity(
+    payload: SpeciesEntryIdentityPayload,
+    geometry: GeometryPayload,
+) -> None:
+    """Reject a deposit whose geometry and identity disagree about isotopes.
+
+    The species entry's isotope identity comes from the SMILES; the per-atom
+    masses that a normal-mode analysis needs come from the geometry. If those
+    two disagree, one of them is wrong and there is no defensible way to pick
+    a winner — a CD3OH identity attached to an all-protium geometry would
+    produce frequencies for a molecule nobody deposited.
+
+    Only the *multiset* of substitutions is compared.
+
+    **Known limitation — isotopomers are NOT distinguished.** The check counts
+    how many atoms of each element carry which mass number; it does not check
+    *which* atoms. An identity of ``[2H]OC`` (CH3-OD) therefore ACCEPTS a
+    geometry that labels a methyl hydrogen instead (CH2D-OH): both carry one
+    deuterium, so the multisets agree. Those are different molecules with
+    different zero-point energies, and nothing downstream will notice.
+
+    This is a false *acceptance*, not a false rejection: the check never
+    rejects a correctly-labelled deposit. Closing it needs an atom-level
+    correspondence between the SMILES graph and the XYZ ordering, which this
+    repository does not have — 3D bond perception fails silently on exactly
+    the strained and radical cases where it would matter most, so guessing a
+    mapping would trade a visible gap for an invisible one.
+
+    **Authority for masses.** Where the two disagree in a way this check
+    cannot see, the *geometry* is authoritative for per-atom masses: a
+    normal-mode analysis reads them from ``geometry.isotopes``, and
+    ``geometry_atom`` stores them per atom index. The SMILES is authoritative
+    only for *identity* — it decides which ``species_entry`` the deposit
+    resolves to via ``isotope_key``. A consumer that needs position-resolved
+    isotope labelling must read the geometry, never the SMILES.
+
+    The multiset check remains exact for the errors that actually occur in
+    practice: wrong count, wrong element, or isotopes declared on one side
+    only.
+
+    :param payload: Upload-facing resolved identity payload.
+    :param geometry: Upload-facing geometry payload deposited alongside it.
+    :raises ValueError: If the isotope substitutions disagree.
+    """
+
+    from_smiles = isotope_substitutions(payload.smiles)
+    from_geometry = parse_xyz(geometry).isotope_substitutions()
+    if from_smiles == from_geometry:
+        return
+
+    def _render(counts: dict[tuple[str, int], int]) -> str:
+        if not counts:
+            return "none (all standard isotopes)"
+        return ", ".join(
+            f"{mass_number}{element}x{count}"
+            for (element, mass_number), count in sorted(counts.items())
+        )
+
+    raise ValueError(
+        "Isotope substitution declared in species_entry.smiles does not match "
+        "the uploaded geometry. "
+        f"smiles={_render(from_smiles)}; geometry.isotopes={_render(from_geometry)}. "
+        "Declare the same substitution on both: use SMILES isotope notation "
+        "(e.g. [2H]) for identity and geometry.isotopes for the per-atom masses."
+    )
+
+
 def resolve_species_entry(
     session: Session,
     payload: SpeciesEntryIdentityPayload,
     *,
     created_by: int | None = None,
-    xyz_text: str | None = None,
+    geometry: GeometryPayload | None = None,
+    additional_geometries: Sequence[GeometryPayload] = (),
 ) -> SpeciesEntry:
     """Resolve or create a species-entry row from upload identity data.
+
+    Isotopic resolution is atom-resolved and derived, never uploaded: the
+    entry's ``isotope_key`` is computed from the isotope labels carried by
+    ``payload.smiles`` (see
+    :func:`app.chemistry.species.canonical_isotope_key`). Two deposits that
+    differ only in deuteration therefore resolve to different entries under
+    one shared species, and two all-standard deposits dedupe onto one entry.
 
     :param session: Active SQLAlchemy session.
     :param payload: Upload-facing resolved identity payload.
     :param created_by: Optional application user id for new rows.
+    :param geometry: Optional geometry deposited with this entry. When given,
+        it supplies 3D stereo perception and is cross-checked against the
+        identity's isotope labels.
+    :param additional_geometries: Any further geometries deposited under this
+        same entry (the second and later conformers). They are isotope-checked
+        too but never used for stereo perception. Checking only the first
+        conformer let a deuterated entry store all-protium geometries for
+        every other conformer.
     :returns: Existing or newly created ``SpeciesEntry`` row.
-    :raises ValueError: If the underlying species identity cannot be canonicalized.
+    :raises ValueError: If the underlying species identity cannot be
+        canonicalized, or the geometry contradicts the declared isotopes.
     """
+
+    if geometry is not None:
+        assert_geometry_isotopes_match_identity(payload, geometry)
+    for extra_geometry in additional_geometries:
+        assert_geometry_isotopes_match_identity(payload, extra_geometry)
 
     species = resolve_species(session, payload)
 
     # Derive R/S or E/Z label from 3D geometry when available
+    xyz_text = geometry.xyz_text if geometry is not None else None
     stereo_label = payload.stereo_label
     if stereo_label is None and species.stereo_kind != StereoKind.achiral and xyz_text:
         stereo_label = derive_stereo_label_from_3d(payload.smiles, xyz_text)
+
+    isotope_key = canonical_isotope_key(payload.smiles)
 
     species_entry = session.scalar(
         select(SpeciesEntry).where(
@@ -112,10 +210,7 @@ def resolve_species_entry(
                 payload.electronic_state_label,
             ),
             null_safe_equals(SpeciesEntry.term_symbol, payload.term_symbol),
-            null_safe_equals(
-                SpeciesEntry.isotopologue_label,
-                payload.isotopologue_label,
-            ),
+            null_safe_equals(SpeciesEntry.isotope_key, isotope_key),
         )
     )
     if species_entry is None:
@@ -140,7 +235,7 @@ def resolve_species_entry(
                     electronic_state_label=payload.electronic_state_label,
                     term_symbol_raw=payload.term_symbol_raw,
                     term_symbol=payload.term_symbol,
-                    isotopologue_label=payload.isotopologue_label,
+                    isotope_key=isotope_key,
                     created_by=created_by,
                 )
                 session.add(species_entry)
@@ -157,10 +252,7 @@ def resolve_species_entry(
                         payload.electronic_state_label,
                     ),
                     null_safe_equals(SpeciesEntry.term_symbol, payload.term_symbol),
-                    null_safe_equals(
-                        SpeciesEntry.isotopologue_label,
-                        payload.isotopologue_label,
-                    ),
+                    null_safe_equals(SpeciesEntry.isotope_key, isotope_key),
                 )
             )
 

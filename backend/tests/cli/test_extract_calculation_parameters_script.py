@@ -18,6 +18,7 @@ import hashlib
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from tckdb_schemas.software import normalize_software_name
 
 from app.db.models.calculation import (
     Calculation,
@@ -130,11 +131,16 @@ def _seed_calc(
 
     # Resolve / create software_release so the bridge can dispatch by
     # DB-linked software name without falling back to text sniffing.
+    # Look the row up under the SAME canonical name the resolver stores.
+    # A raw ``.lower()`` misses the alias-canonicalised row (e.g. "Gaussian")
+    # that an earlier committed test may already have created, and the insert
+    # then collides on software's content-derived public_ref.
+    canonical_name = normalize_software_name(software_name)
     software = db_session.scalar(
-        select(Software).where(Software.name == software_name.lower())
+        select(Software).where(Software.name == canonical_name)
     )
     if software is None:
-        software = Software(name=software_name.lower())
+        software = Software(name=canonical_name)
         db_session.add(software)
         db_session.flush()
     # Use a unique revision per call so multiple seeds in one test do

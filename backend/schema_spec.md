@@ -76,7 +76,8 @@ Fields:
 - `electronic_state_label`
 - `term_symbol_raw`
 - `term_symbol`
-- `isotopologue_label`
+- `isotope_key`
+- `isotopologue_label` (deprecated)
 - `created_at`
 - `created_by`
 
@@ -84,7 +85,15 @@ Notes:
 
 - `species_entry` stores one resolved stereochemical, electronic-state, or isotopic form of a species
 - `species_id` is indexed
-- dedupe is enforced on `(species_id, stereo_label, electronic_state_kind, electronic_state_label, term_symbol, isotopologue_label)`
+- dedupe is enforced on `(species_id, stereo_label, electronic_state_kind, electronic_state_label, term_symbol, isotope_key)`
+- `isotope_key` is the canonical SMILES of the isotope-labelled identity
+  molecule (e.g. `[2H]C([2H])([2H])O`), derived server-side from the isotope
+  labels in the uploaded SMILES. `NULL` means every atom is at its most
+  abundant natural isotope, and is the stable all-standard key
+- `isotopologue_label` is deprecated: it is no longer part of identity, is not
+  accepted on any upload/Create/Update schema, and is never written by the
+  application. It is retained only so deployments that already stored
+  annotations there do not lose them
 
 ### 3.3 Geometry
 
@@ -104,6 +113,7 @@ Notes:
 - `x`
 - `y`
 - `z`
+- `isotope_mass_number`
 
 Notes:
 
@@ -111,6 +121,14 @@ Notes:
 - `natoms >= 1`
 - `geometry_atom` uses a composite primary key on `(atom_index, geometry_id)`
 - `geometry_atom.atom_index >= 1`
+- `geometry_atom.isotope_mass_number` is the nuclide for that atom. `NULL`
+  means the element's most abundant natural isotope — not "unknown" — so no
+  backfill of pre-existing geometries is required. It is the per-atom mass a
+  downstream normal-mode analysis needs
+- `geom_hash` covers the isotope labelling: the hashed canonical text gains an
+  `ISOTOPES` suffix only when a substitution is present, so hashes of ordinary
+  geometries are unchanged while two identically-positioned but differently
+  labelled geometries do not dedupe onto one another
 
 ### 3.4 Literature and Authors
 
@@ -1014,6 +1032,40 @@ Notes:
 - `calc_scan_point_coordinate_value` has composite references back to both `calc_scan_coordinate` and `calc_scan_point`
 
 ## 8. Scientific Product Tables
+
+### 8.0 PDep scientific-integrity additions
+
+`network_channel.channel_key` is the stable pathway identity within a network.
+Endpoint pairs are deliberately not unique: two distinct mechanisms can connect
+the same macroscopic source and sink. `network_channel_microreaction` records
+the elementary reaction evidence for each channel and may name its specific
+`transition_state_entry`.
+
+Each `network_solve_state_energy` row gives one state energy in fixed
+`energy_kj_mol`, with mandatory `energy_zero_convention` and
+`correction_convention`, and may cite its source calculation. A complete
+uploaded solve supplies exactly one such row for every network state.
+`network_solve_bath_gas` is a normalized composition (mole fractions sum to
+one), while `network_solve_energy_transfer` may be scoped to both a state and
+a collider species; this prevents a single generic collision model from being
+mistaken for a state-specific parameterization.
+
+Atom-resolved isotope identity **is** represented. Producers express isotopic
+substitution with standard SMILES isotope notation (`[2H]`, `[13C]`, `[18O]`)
+in the species-entry identity, and with `geometry.isotopes` (a 1-based XYZ atom
+index → mass number map) for the per-atom nuclides. The server derives
+`species_entry.isotope_key` — the canonical SMILES of the isotope-labelled
+molecule — and stores the per-atom nuclides in
+`geometry_atom.isotope_mass_number`. The key is atom-resolved rather than
+formula-level, so isotopomers (`[2H]CO` vs `[2H]OC`) are distinct identities,
+as their frequencies, rotational constants and ZPE require. Isotopologues share
+one `species` row: they share a molecular graph and a potential energy surface,
+and differ only in nuclear mass. When both a geometry and an identity are
+deposited together, their isotope substitutions are cross-checked and a
+mismatch is rejected rather than reconciled by guessing.
+
+The former free-text `isotopologue_label` is deprecated and no longer
+participates in identity.
 
 ### 8.1 Statmech
 

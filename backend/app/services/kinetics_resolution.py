@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.chemistry.units import convert_ea_to_kj_mol
@@ -179,14 +180,15 @@ def resolve_kinetics_upload(
     )
 
     network_kinetics_id: int | None = None
-    if request.existing_network_kinetics_id is not None:
-        network_kinetics = session.get(
-            NetworkKinetics, request.existing_network_kinetics_id
+    if request.network_kinetics_ref is not None:
+        network_kinetics = session.scalar(
+            select(NetworkKinetics).where(
+                NetworkKinetics.public_ref == request.network_kinetics_ref
+            )
         )
         if network_kinetics is None:
             raise ValueError(
-                "existing_network_kinetics_id does not reference an existing "
-                "network_kinetics row."
+                "network_kinetics_ref does not reference an existing network_kinetics row."
             )
         network_kinetics_id = network_kinetics.id
 

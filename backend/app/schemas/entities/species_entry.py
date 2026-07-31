@@ -29,11 +29,16 @@ class SpeciesEntryBase(SpeciesEntryIdentityValidatorMixin, BaseModel):
 
     term_symbol_raw: str | None = Field(default=None, max_length=64)
     term_symbol: str | None = Field(default=None, max_length=64)
-    isotopologue_label: str | None = Field(default=None, max_length=64)
 
 
 class SpeciesEntryCreate(SpeciesEntryBase, SchemaBase):
-    pass
+    """Create shape for a species entry.
+
+    ``isotope_key`` is deliberately absent: it is a *derived* identity key
+    computed by :func:`app.chemistry.species.canonical_isotope_key` from the
+    atom-resolved isotope labels in the uploaded SMILES. Derived keys are
+    never accepted from a client.
+    """
 
 
 class SpeciesEntryUpdate(SpeciesEntryIdentityValidatorMixin, SchemaBase):
@@ -49,7 +54,6 @@ class SpeciesEntryUpdate(SpeciesEntryIdentityValidatorMixin, SchemaBase):
 
     term_symbol_raw: str | None = Field(default=None, max_length=64)
     term_symbol: str | None = Field(default=None, max_length=64)
-    isotopologue_label: str | None = Field(default=None, max_length=64)
 
 
 class SpeciesEntryConformerSummaryRead(BaseModel):
@@ -64,4 +68,13 @@ class SpeciesEntryConformerSummaryRead(BaseModel):
 
 
 class SpeciesEntryRead(SpeciesEntryBase, TimestampedCreatedByReadSchema):
+    """Read shape for a species entry.
+
+    ``isotope_key`` is exposed on reads (clients need to see which
+    isotopologue/isotopomer an entry is) but never on writes. It is the
+    canonical SMILES of the isotope-labelled molecule, or ``None`` when
+    every atom is at its most abundant natural isotope.
+    """
+
+    isotope_key: str | None = None
     conformer_summary: SpeciesEntryConformerSummaryRead | None = None

@@ -93,6 +93,7 @@ class NetworkChannelRead(ORMBaseSchema):
     source_state_id: int
     sink_state_id: int
     kind: NetworkChannelKind
+    channel_key: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -114,11 +115,24 @@ class NetworkSolveEnergyTransferRead(ORMBaseSchema):
 
     id: int
     solve_id: int
+    state_id: int | None = None
+    collider_species_entry_id: int | None = None
     model: str | None = None
     alpha0_cm_inv: float | None = None
     t_exponent: float | None = None
     t_ref_k: float | None = None
     note: str | None = None
+
+
+class NetworkSolveStateEnergyRead(ORMBaseSchema):
+    """One explicit state energy used by a master-equation solve."""
+
+    solve_id: int
+    state_id: int
+    energy_kj_mol: float
+    energy_zero_convention: str
+    correction_convention: str
+    source_calculation_id: int | None = None
 
 
 class NetworkSolveSourceCalculationRead(ORMBaseSchema):
@@ -218,7 +232,11 @@ class NetworkSolveDetailRead(_NetworkSolveBase):
     workflow_tool_release: WorkflowToolReleaseRead | None = None
 
     bath_gases: list[NetworkSolveBathGasRead] = Field(default_factory=list)
+    # Deprecated compatibility alias: populated only when exactly one row
+    # exists. New clients must consume the plural, scoped collection.
     energy_transfer: NetworkSolveEnergyTransferRead | None = None
+    energy_transfers: list[NetworkSolveEnergyTransferRead] = Field(default_factory=list)
+    state_energies: list[NetworkSolveStateEnergyRead] = Field(default_factory=list)
     source_calculations: list[NetworkSolveSourceCalculationRead] = Field(
         default_factory=list
     )

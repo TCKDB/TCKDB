@@ -55,6 +55,15 @@ def _transport_payload(**overrides) -> dict:
     return base
 
 
+def _freq_calc_payload() -> dict:
+    return {
+        "type": "freq",
+        "software_release": dict(_SOFTWARE),
+        "level_of_theory": dict(_LOT),
+        "freq_result": {"n_imag": 0, "zpe_hartree": 0.021},
+    }
+
+
 def _statmech_payload(**overrides) -> dict:
     base: dict = {
         "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
@@ -148,6 +157,10 @@ class TestProvenanceProvidedPersists:
             software_release=dict(_SOFTWARE),
             workflow_tool_release=dict(_WTR),
             freq_scale_factor=dict(_FSF),
+            # An RRHO methanol partition function is derived from a frequency
+            # calculation; naming it is what makes the record reproducible.
+            calculations=[{"key": "freq1", "calculation": _freq_calc_payload()}],
+            source_calculations=[{"calculation_key": "freq1", "role": "freq"}],
         )
         resp = client.post("/api/v1/uploads/statmech", json=payload)
         assert resp.status_code == 201, resp.text
@@ -211,10 +224,13 @@ class TestProvenanceProvidedPersists:
         resp = client.post("/api/v1/uploads/kinetics", json=payload)
         assert resp.status_code == 201, resp.text
         data = resp.json()
-        # Species-entry reconciliation may emit layer-1 warnings, but
-        # none of those should be missing-provenance codes.
+        # Species-entry reconciliation may emit layer-1 warnings. No
+        # missing-*provenance* code should appear. The one remaining gap is a
+        # content gap, not a provenance one: this rate names no statmech
+        # interpretation assignments, which is exactly how a rate imported
+        # from a mechanism file looks, and is reported rather than rejected.
         missing = {c for c in _codes(data) if c.startswith("missing_")}
-        assert missing == set()
+        assert missing == {"missing_kinetics_interpretation_assignments"}
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +274,7 @@ class TestProvenanceMissingEmitsWarnings:
             "missing_software_release_provenance",
             "missing_workflow_tool_provenance",
             "missing_frequency_scale_factor_provenance",
+            "missing_statmech_source_calculations",
         }
 
     def test_kinetics_missing_all_provenance_emits_warnings(
@@ -274,6 +291,7 @@ class TestProvenanceMissingEmitsWarnings:
             "missing_software_release_provenance",
             "missing_workflow_tool_provenance",
             "missing_level_of_theory_provenance",
+            "missing_kinetics_interpretation_assignments",
         }
 
     def test_warning_shape_matches_shared_pattern(

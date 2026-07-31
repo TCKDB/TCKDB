@@ -13,6 +13,9 @@ class GeometryAtomBase(BaseModel):
     x: float
     y: float
     z: float
+    #: Isotope mass number for this nucleus; ``None`` means the element's
+    #: most abundant natural isotope.
+    isotope_mass_number: int | None = Field(default=None, ge=1)
 
 
 class GeometryAtomRead(GeometryAtomBase, ORMBaseSchema):

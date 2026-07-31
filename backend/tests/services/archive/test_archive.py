@@ -511,3 +511,229 @@ def test_restore_rejects_excluded_operational_rows(db_session) -> None:
 
     with pytest.raises(ArchiveNotEmptyError, match="'upload_job'"):
         restore_archive(db_session, io.BytesIO(archive_file.getvalue()))
+
+
+def test_archive_round_trip_preserves_stage2_pdep_and_kinetics_evidence(
+    db_session, monkeypatch
+) -> None:
+    """The Stage 2 scientific tables must survive a backup/restore cycle.
+
+    Barriers, solve-state energies, channel path identity, interpretation
+    assignments, tunneling evidence and TS validation evidence are the most
+    scientifically load-bearing rows added by Stage 2. If the registry does not
+    classify them they are silently absent from every archive, which would
+    invalidate the project's restore-tested-backup claim.
+    """
+    from app.db.models.common import (
+        EnergyCorrectionConvention,
+        EnergyZeroConvention,
+        KineticsDegeneracyInterpretation,
+        KineticsEnsemblePolicy,
+        KineticsStandardStateConvention,
+        NetworkChannelKind,
+        NetworkStateKind,
+    )
+    from app.db.models.kinetics import (
+        KineticsInterpretationAssignment,
+        KineticsTunnelingApplication,
+    )
+    from app.db.models.network_pdep import (
+        NetworkChannelMicroReaction,
+        NetworkSolveChannelBarrier,
+        NetworkSolveStateEnergy,
+    )
+    from app.db.models.transition_state import TransitionStateValidationEvidence
+    from tests.services.scientific_read._factories import (
+        make_chem_reaction,
+        make_kinetics,
+        make_network,
+        make_network_channel,
+        make_network_solve,
+        make_network_state,
+        make_reaction_entry,
+        make_statmech,
+        make_transition_state,
+        make_transition_state_entry,
+    )
+
+    reactant = make_species(db_session, smiles="[CH3]", inchi_key=next_inchi_key("ARCS2A"))
+    product = make_species(db_session, smiles="CO", inchi_key=next_inchi_key("ARCS2B"))
+    reactant_entry = make_species_entry(db_session, reactant)
+    product_entry = make_species_entry(db_session, product)
+    chem = make_chem_reaction(db_session, reactants=[reactant], products=[product])
+    reaction_entry = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[reactant_entry],
+        product_entries=[product_entry],
+    )
+    ts_entry = make_transition_state_entry(
+        db_session,
+        transition_state=make_transition_state(db_session, reaction_entry=reaction_entry),
+    )
+    irc_calc = make_calculation(
+        db_session, type=CalculationType.irc, transition_state_entry_id=ts_entry.id
+    )
+    statmech = make_statmech(db_session, species_entry=reactant_entry)
+    kinetics = make_kinetics(db_session, reaction_entry=reaction_entry)
+
+    network = make_network(db_session, name="archive stage2 network")
+    state_a = make_network_state(
+        db_session, network=network, kind=NetworkStateKind.well, composition_hash="a" * 64
+    )
+    state_b = make_network_state(
+        db_session,
+        network=network,
+        kind=NetworkStateKind.bimolecular,
+        composition_hash="b" * 64,
+    )
+    channel = make_network_channel(
+        db_session,
+        network=network,
+        source_state=state_a,
+        sink_state=state_b,
+        kind=NetworkChannelKind.dissociation,
+    )
+    channel.channel_key = "archive_path_1"
+    solve = make_network_solve(db_session, network=network)
+    db_session.flush()
+
+    db_session.add_all(
+        [
+            NetworkChannelMicroReaction(
+                channel_id=channel.id,
+                reaction_entry_id=reaction_entry.id,
+                transition_state_entry_id=ts_entry.id,
+            ),
+            # A barrierless path: the NULL transition state must survive too.
+            NetworkChannelMicroReaction(
+                channel_id=channel.id,
+                reaction_entry_id=reaction_entry.id,
+                transition_state_entry_id=None,
+            ),
+            NetworkSolveStateEnergy(
+                solve_id=solve.id,
+                state_id=state_a.id,
+                energy_kj_mol=-123.456789012345,
+                energy_zero_convention=EnergyZeroConvention.entrance_channel,
+                correction_convention=EnergyCorrectionConvention.electronic_plus_zpe,
+            ),
+            NetworkSolveChannelBarrier(
+                solve_id=solve.id,
+                channel_id=channel.id,
+                reaction_entry_id=reaction_entry.id,
+                transition_state_entry_id=ts_entry.id,
+                # Submerged: signed barriers must survive byte-exact.
+                forward_barrier_kj_mol=-8.125,
+                reverse_barrier_kj_mol=137.03125,
+                energy_zero_convention=EnergyZeroConvention.entrance_channel,
+                correction_convention=EnergyCorrectionConvention.electronic_plus_zpe,
+            ),
+            KineticsInterpretationAssignment(
+                kinetics_id=kinetics.id,
+                subject_key="reactant:1",
+                role="reactant",
+                statmech_id=statmech.id,
+                ensemble_policy=KineticsEnsemblePolicy.single_structure,
+                standard_state_convention=KineticsStandardStateConvention.ideal_gas_1_bar,
+                degeneracy_interpretation=(
+                    KineticsDegeneracyInterpretation.reaction_path_degeneracy
+                ),
+            ),
+            KineticsTunnelingApplication(
+                kinetics_id=kinetics.id,
+                model="eckart",
+                transition_state_entry_id=ts_entry.id,
+                imaginary_frequency_cm1=-1234.5,
+                forward_barrier_kj_mol=42.5,
+                reverse_barrier_kj_mol=91.25,
+                energy_zero_convention=EnergyZeroConvention.separated_reactants,
+                energy_correction_convention=EnergyCorrectionConvention.electronic_plus_zpe,
+            ),
+            TransitionStateValidationEvidence(
+                transition_state_entry_id=ts_entry.id,
+                kind="irc",
+                passed=True,
+                rationale="IRC connects the declared endpoints",
+                reconstruction_calculation_id=irc_calc.id,
+                reactant_participant_mapping={"reactant:1": [1, 2]},
+                product_participant_mapping={"product:1": [1, 2]},
+            ),
+        ]
+    )
+    db_session.flush()
+
+    original = {
+        "kinetics_id": kinetics.id,
+        "solve_id": solve.id,
+        "channel_id": channel.id,
+        "ts_entry_id": ts_entry.id,
+        "reaction_entry_id": reaction_entry.id,
+        "state_a_id": state_a.id,
+        "forward_hex": (-8.125).hex(),
+        "energy_hex": (-123.456789012345).hex(),
+    }
+
+    monkeypatch.setattr(
+        archive_core, "load_artifact_bytes", lambda sha256, *, expected_bytes=None: b""
+    )
+    buffer = io.BytesIO()
+    write_archive(db_session, buffer)
+    archive_bytes = buffer.getvalue()
+
+    monkeypatch.setattr(archive_core, "store_artifact", lambda content, sha256: "s3://x")
+    _empty_archive_tables(db_session)
+    restore_archive(db_session, io.BytesIO(archive_bytes))
+
+    paths = db_session.scalars(
+        select(NetworkChannelMicroReaction).where(
+            NetworkChannelMicroReaction.channel_id == original["channel_id"]
+        )
+    ).all()
+    assert len(paths) == 2
+    assert {path.transition_state_entry_id for path in paths} == {
+        original["ts_entry_id"],
+        None,
+    }
+
+    barrier = db_session.scalars(
+        select(NetworkSolveChannelBarrier).where(
+            NetworkSolveChannelBarrier.solve_id == original["solve_id"]
+        )
+    ).one()
+    assert barrier.forward_barrier_kj_mol.hex() == original["forward_hex"]
+    assert barrier.energy_zero_convention is EnergyZeroConvention.entrance_channel
+    assert barrier.correction_convention is EnergyCorrectionConvention.electronic_plus_zpe
+
+    state_energy = db_session.scalars(
+        select(NetworkSolveStateEnergy).where(
+            NetworkSolveStateEnergy.solve_id == original["solve_id"]
+        )
+    ).one()
+    assert state_energy.energy_kj_mol.hex() == original["energy_hex"]
+
+    assignment = db_session.scalars(
+        select(KineticsInterpretationAssignment).where(
+            KineticsInterpretationAssignment.kinetics_id == original["kinetics_id"]
+        )
+    ).one()
+    assert assignment.subject_key == "reactant:1"
+    assert assignment.ensemble_policy is KineticsEnsemblePolicy.single_structure
+
+    tunneling = db_session.scalars(
+        select(KineticsTunnelingApplication).where(
+            KineticsTunnelingApplication.kinetics_id == original["kinetics_id"]
+        )
+    ).one()
+    assert tunneling.imaginary_frequency_cm1 == -1234.5
+    assert tunneling.forward_barrier_kj_mol == 42.5
+
+    evidence = db_session.scalars(
+        select(TransitionStateValidationEvidence).where(
+            TransitionStateValidationEvidence.transition_state_entry_id
+            == original["ts_entry_id"]
+        )
+    ).one()
+    assert evidence.kind == "irc"
+    assert evidence.passed is True
+    assert evidence.reactant_participant_mapping == {"reactant:1": [1, 2]}

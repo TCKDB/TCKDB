@@ -111,12 +111,14 @@ def _ai_review_summary_from_event(event) -> SubmissionAIReviewSummaryRead:
 @router.get("/mine", response_model=list[SubmissionRead])
 def list_mine(
     statuses: list[SubmissionStatus] | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ) -> list[SubmissionRead]:
     """List submissions created by the calling user, newest first."""
     rows = list_my_submissions(
-        session, user_id=current_user.id, statuses=statuses
+        session, user_id=current_user.id, statuses=statuses, offset=offset, limit=limit
     )
     return [SubmissionRead.model_validate(r) for r in rows]
 
@@ -124,11 +126,13 @@ def list_mine(
 @router.get("/for-review", response_model=list[SubmissionRead])
 def list_for_review(
     statuses: list[SubmissionStatus] | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_db),
     _curator: AppUser = Depends(require_curator_or_admin),
 ) -> list[SubmissionRead]:
     """List submissions awaiting curator review (curator/admin only)."""
-    rows = list_submissions_for_review(session, statuses=statuses)
+    rows = list_submissions_for_review(session, statuses=statuses, offset=offset, limit=limit)
     return [SubmissionRead.model_validate(r) for r in rows]
 
 
@@ -155,13 +159,15 @@ def read_submission(
 )
 def read_audit_events(
     submission_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ) -> list[SubmissionAuditEventRead]:
     """Return the append-only audit trail for a submission, oldest first."""
     submission = get_submission(session, submission_id)
     _require_view_permission(submission, current_user)
-    events = list_audit_events(session, submission_id=submission_id)
+    events = list_audit_events(session, submission_id=submission_id, offset=offset, limit=limit)
     return [SubmissionAuditEventRead.model_validate(e) for e in events]
 
 
@@ -191,13 +197,15 @@ def read_ai_review_summary(
 )
 def read_record_links(
     submission_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ) -> list[SubmissionRecordLinkRead]:
     """Return scientific record links produced by this submission."""
     submission = get_submission(session, submission_id)
     _require_view_permission(submission, current_user)
-    links = list_record_links(session, submission_id=submission_id)
+    links = list_record_links(session, submission_id=submission_id, offset=offset, limit=limit)
     return [SubmissionRecordLinkRead.model_validate(link) for link in links]
 
 

@@ -111,6 +111,14 @@ enum EnergyCorrectionApplicationRole {
   custom
 }
 
+enum EnergyCorrectionConvention {
+  electronic_only
+  electronic_plus_zpe
+  atom_and_bond_corrected
+  thermal_enthalpy_298k
+  other
+}
+
 enum EnergyCorrectionSchemeKind {
   atom_energy
   atom_hf
@@ -126,6 +134,14 @@ enum EnergyUnit {
   hartree
   kj_mol
   kcal_mol
+}
+
+enum EnergyZeroConvention {
+  lowest_state
+  entrance_channel
+  separated_reactants
+  absolute
+  other
 }
 
 enum FrequencyScaleKind {
@@ -175,10 +191,26 @@ enum KineticsDegeneracyConvention {
   unknown
 }
 
+enum KineticsDegeneracyInterpretation {
+  external_symmetry_number
+  reaction_path_degeneracy
+  symmetry_number_and_path_degeneracy
+  no_symmetry_treatment
+  other
+}
+
 enum KineticsDirection {
   forward
   reverse
   net
+}
+
+enum KineticsEnsemblePolicy {
+  single_structure
+  lowest_energy_conformer
+  boltzmann_weighted_conformers
+  multi_structural_torsional
+  other
 }
 
 enum KineticsModelKind {
@@ -190,6 +222,14 @@ enum KineticsModelKind {
   sri
   plog
   chebyshev
+}
+
+enum KineticsStandardStateConvention {
+  ideal_gas_1_bar
+  ideal_gas_1_atm
+  concentration_1_mol_cm3
+  concentration_1_mol_l
+  other
 }
 
 enum KineticsUncertaintyKind {
@@ -1503,6 +1543,7 @@ Table geometry_atom {
   x double [not null]
   y double [not null]
   z double [not null]
+  isotope_mass_number int
 
   indexes {
     (atom_index, geometry_id) [pk]
@@ -1510,6 +1551,7 @@ Table geometry_atom {
 
   checks {
     `atom_index >= 1` [name: 'ck_geometry_atom_atom_index_ge_1']
+    `isotope_mass_number IS NULL OR isotope_mass_number >= 1` [name: 'ck_geometry_atom_isotope_mass_number_ge_1']
   }
 
   Note: 'Stores per-atom coordinates for a geometry row.'
@@ -1664,6 +1706,30 @@ Table kinetics_falloff {
   Note: 'Pressure-dependent falloff parameters for a kinetics record (DR-0032).'
 }
 
+Table kinetics_interpretation_assignment {
+  kinetics_id bigint [not null, ref: > kinetics.id]
+  subject_key text [not null]
+  role text [not null]
+  statmech_id bigint [not null, ref: > statmech.id]
+  conformer_selection_id bigint [ref: > conformer_selection.id]
+  transition_state_entry_id bigint [ref: > transition_state_entry.id]
+  ensemble_policy KineticsEnsemblePolicy [not null]
+  standard_state_convention KineticsStandardStateConvention [not null]
+  degeneracy_interpretation KineticsDegeneracyInterpretation [not null]
+  convention_note text
+
+  indexes {
+    (kinetics_id, subject_key) [pk]
+  }
+
+  checks {
+    `(ensemble_policy <> 'other' AND standard_state_convention <> 'other' AND degeneracy_interpretation <> 'other') OR convention_note IS NOT NULL` [name: 'ck_kinetics_interpretation_assignment_other_note']
+    `(role = 'transition_state' AND subject_key = 'transition_state' AND transition_state_entry_id IS NOT NULL AND conformer_selection_id IS NULL) OR (role IN ('reactant', 'product') AND subject_key ~ ('^' || role || ':[0-9]+$') AND transition_state_entry_id IS NULL)` [name: 'ck_kinetics_interpretation_assignment_subject_shape']
+  }
+
+  Note: 'Exact statistical-mechanics/conformer interpretation used for a rate role.'
+}
+
 Table kinetics_plog {
   id bigint [pk, not null]
   kinetics_id bigint [not null, ref: > kinetics.id]
@@ -1713,6 +1779,34 @@ Table kinetics_third_body_efficiency {
   }
 
   Note: 'Per-collider third-body efficiency for a falloff/third-body reaction.'
+}
+
+Table kinetics_tunneling_application {
+  kinetics_id bigint [pk, not null, ref: > kinetics.id]
+  model text [not null]
+  model_identifier text
+  transition_state_entry_id bigint [not null, ref: > transition_state_entry.id]
+  source_calculation_id bigint [ref: > calculation.id]
+  imaginary_frequency_cm1 double
+  frequency_sign_convention text [not null, default: 'negative_imaginary_cm1']
+  reactant_energy_kj_mol double
+  product_energy_kj_mol double
+  forward_barrier_kj_mol double
+  reverse_barrier_kj_mol double
+  energy_zero_convention EnergyZeroConvention
+  energy_correction_convention EnergyCorrectionConvention
+  convention_note text
+  result_artifact_id bigint [ref: > calculation_artifact.id]
+  sct_path_integral_artifact_id bigint [ref: > calculation_artifact.id]
+
+  checks {
+    `imaginary_frequency_cm1 IS NULL OR imaginary_frequency_cm1 < 0` [name: 'ck_kinetics_tunneling_application_imaginary_negative']
+    `model IN ('none', 'wigner', 'eckart', 'sct', 'other')` [name: 'ck_kinetics_tunneling_application_model_enum']
+    `(energy_zero_convention IS DISTINCT FROM 'other' AND energy_correction_convention IS DISTINCT FROM 'other') OR convention_note IS NOT NULL` [name: 'ck_kinetics_tunneling_application_other_note']
+    `model <> 'other' OR (model_identifier IS NOT NULL AND result_artifact_id IS NOT NULL)` [name: 'ck_kinetics_tunneling_application_other_replayable']
+  }
+
+  Note: 'Typed reproducibility evidence for a tunneling correction applied to a rate.'
 }
 
 Table level_of_theory {
@@ -1888,9 +1982,10 @@ Table network_channel {
   source_state_id bigint [not null, ref: > network_state.id]
   sink_state_id bigint [not null, ref: > network_state.id]
   kind NetworkChannelKind [not null]
+  channel_key text [not null]
 
   indexes {
-    (network_id, source_state_id, sink_state_id) [unique, name: 'uq_network_channel_network_id']
+    (network_id, channel_key) [unique, name: 'uq_network_channel_key']
   }
 
   checks {
@@ -1898,6 +1993,20 @@ Table network_channel {
   }
 
   Note: 'A directed phenomenological channel between two network states.'
+}
+
+Table network_channel_microreaction {
+  id bigint [pk, not null]
+  channel_id bigint [not null, ref: > network_channel.id]
+  reaction_entry_id bigint [not null, ref: > reaction_entry.id]
+  transition_state_entry_id bigint [ref: > transition_state_entry.id]
+
+  indexes {
+    (channel_id, reaction_entry_id) [unique, name: 'uq_network_channel_microreaction_barrierless']
+    (channel_id, reaction_entry_id, transition_state_entry_id) [unique, name: 'uq_network_channel_microreaction_path']
+  }
+
+  Note: 'Mechanistic evidence explicitly associating a channel with an elementary step/TS.'
 }
 
 Table network_kinetics {
@@ -2051,14 +2160,44 @@ Table network_solve_bath_gas {
   Note: 'Bath gas composition for one network solve.'
 }
 
+Table network_solve_channel_barrier {
+  solve_id bigint [not null, ref: > network_solve.id]
+  channel_id bigint [not null, ref: > network_channel.id]
+  reaction_entry_id bigint [not null, ref: > reaction_entry.id]
+  transition_state_entry_id bigint [not null, ref: > transition_state_entry.id]
+  forward_barrier_kj_mol double [not null]
+  reverse_barrier_kj_mol double [not null]
+  energy_zero_convention EnergyZeroConvention [not null]
+  correction_convention EnergyCorrectionConvention [not null]
+  convention_note text
+  source_calculation_id bigint [ref: > calculation.id]
+
+  indexes {
+    (channel_id, reaction_entry_id, solve_id, transition_state_entry_id) [pk]
+  }
+
+  checks {
+    `forward_barrier_kj_mol <> 'NaN'::double precision AND reverse_barrier_kj_mol <> 'NaN'::double precision` [name: 'ck_network_solve_channel_barrier_barriers_finite']
+    `(energy_zero_convention <> 'other' AND correction_convention <> 'other') OR convention_note IS NOT NULL` [name: 'ck_network_solve_channel_barrier_other_note']
+  }
+
+  Note: 'Solve input barrier for one explicitly identified microscopic path.'
+}
+
 Table network_solve_energy_transfer {
   id bigint [pk, not null]
   solve_id bigint [not null, ref: > network_solve.id]
+  state_id bigint [not null, ref: > network_state.id]
+  collider_species_entry_id bigint [not null, ref: > species_entry.id]
   model text
   alpha0_cm_inv double
   t_exponent double
   t_ref_k double
   note text
+
+  indexes {
+    (solve_id, state_id, collider_species_entry_id) [unique, name: 'uq_network_solve_energy_transfer_scope']
+  }
 
   Note: 'Energy transfer model parameters for one network solve.'
 }
@@ -2073,6 +2212,26 @@ Table network_solve_source_calculation {
   }
 
   Note: 'Links a network solve to supporting calculations by role.'
+}
+
+Table network_solve_state_energy {
+  solve_id bigint [not null, ref: > network_solve.id]
+  state_id bigint [not null, ref: > network_state.id]
+  energy_kj_mol double [not null]
+  energy_zero_convention EnergyZeroConvention [not null]
+  correction_convention EnergyCorrectionConvention [not null]
+  convention_note text
+  source_calculation_id bigint [ref: > calculation.id]
+
+  indexes {
+    (solve_id, state_id) [pk]
+  }
+
+  checks {
+    `(energy_zero_convention <> 'other' AND correction_convention <> 'other') OR convention_note IS NOT NULL` [name: 'ck_network_solve_state_energy_other_note']
+  }
+
+  Note: 'Solve-specific state energy with an explicit zero/correction convention.'
 }
 
 Table network_species {
@@ -2387,6 +2546,7 @@ Table species_entry {
   electronic_state_label string
   term_symbol_raw string
   term_symbol string
+  isotope_key text
   isotopologue_label string
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
@@ -2395,7 +2555,7 @@ Table species_entry {
   indexes {
     public_ref [unique, name: 'ix_species_entry_public_ref']
     species_id [name: 'ix_species_entry_species_id']
-    (species_id, stereo_label, electronic_state_kind, electronic_state_label, term_symbol, isotopologue_label) [unique, name: 'uq_species_entry_species_id']
+    (species_id, stereo_label, electronic_state_kind, electronic_state_label, term_symbol, isotope_key) [unique, name: 'uq_species_entry_species_id']
   }
 
   Note: 'Store one stereochemically, electronically, or isotopically resolved species form.'
@@ -2418,7 +2578,8 @@ Table species_entry_review {
 
 Table statmech {
   id bigint [pk, not null]
-  species_entry_id bigint [not null, ref: > species_entry.id]
+  species_entry_id bigint [ref: > species_entry.id]
+  transition_state_entry_id bigint [ref: > transition_state_entry.id]
   scientific_origin ScientificOriginKind [not null]
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
@@ -2442,6 +2603,7 @@ Table statmech {
   indexes {
     literature_id [name: 'ix_statmech_literature_id']
     public_ref [unique, name: 'ix_statmech_public_ref']
+    transition_state_entry_id [name: 'ix_statmech_transition_state_entry_id']
   }
 
   checks {
@@ -2450,6 +2612,7 @@ Table statmech {
     `rotational_constant_a_cm1 IS NULL OR rotational_constant_a_cm1 > 0` [name: 'ck_statmech_rotational_constant_a_cm1_positive']
     `rotational_constant_b_cm1 IS NULL OR rotational_constant_b_cm1 > 0` [name: 'ck_statmech_rotational_constant_b_cm1_positive']
     `rotational_constant_c_cm1 IS NULL OR rotational_constant_c_cm1 > 0` [name: 'ck_statmech_rotational_constant_c_cm1_positive']
+    `(species_entry_id IS NULL) <> (transition_state_entry_id IS NULL)` [name: 'ck_statmech_statmech_exactly_one_subject']
   }
 
   Note: 'Statistical mechanics interpretation layer for a species entry.'
@@ -2830,6 +2993,29 @@ Table transition_state_selection {
   Note: 'Store explicit workflow, curation, or UI selections for transition states.'
 }
 
+Table transition_state_validation_evidence {
+  id bigint [pk, not null]
+  transition_state_entry_id bigint [not null, ref: > transition_state_entry.id]
+  kind text [not null]
+  passed boolean [not null]
+  rationale text [not null]
+  reconstruction_calculation_id bigint [not null, ref: > calculation.id]
+  reactant_participant_mapping jsonb
+  product_participant_mapping jsonb
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+
+  indexes {
+    (transition_state_entry_id, kind) [unique, name: 'uq_ts_validation_evidence_kind']
+  }
+
+  checks {
+    `kind IN ('irc')` [name: 'ck_transition_state_validation_evidence_ts_validation_kind']
+  }
+
+  Note: 'Structured IRC validation result for one TS candidate.'
+}
+
 Table transport {
   id bigint [pk, not null]
   species_entry_id bigint [not null, ref: > species_entry.id]
@@ -2883,6 +3069,8 @@ Table upload_job {
   created_at timestamp [not null, default: 'now']
   started_at timestamp
   completed_at timestamp
+  lease_expires_at timestamp
+  heartbeat_at timestamp
   result jsonb
   error text
   attempts int [not null, default: '0']
@@ -2890,6 +3078,7 @@ Table upload_job {
 
   indexes {
     (status, created_at) [name: 'ix_upload_job_status_created_at']
+    (status, lease_expires_at) [name: 'ix_upload_job_status_lease_expires_at']
   }
 
   Note: 'Async upload job queue backed by PostgreSQL.'
