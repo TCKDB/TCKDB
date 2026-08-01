@@ -11,7 +11,7 @@ criteria. Stage 0 is an acceptance gate, not work moved to later stages.
 | 0 — freeze the contract and baseline | Generated endpoint/client/ingestion/query/export parity matrices; supported/experimental labels; representative staging corpus; deployment inventory and restore-tested backup; manuscript claim-to-test/release evidence matrix | **PASS — versioned baseline** | **Every public claim and product journey has an owner, test, and versioned artifact.** The evidence is assembled below; these artifacts enter version control in this baseline change. Re-run and bind them when cutting a future release candidate. |
 | 1 — ingestion reliability and security | Worker lease/heartbeat/retry/reclaim; job authorization/idempotency; async parity; submission pagination; test-DB cleanup | **PASS — versioned implementation** | Kill-after-claim recovery is exactly once; cross-user job reads fail; retried enqueue returns same job; no duplicate science. |
 | 2 — scientific integrity blockers | Kinetics/statmech validation; PDep pathway/state identity; bath/energy-transfer normalization; rate interpretation, TS validation, isotope boundary | **PASS — versioned implementation** | Multi-well/multi-pathway records round-trip without ambiguity; incomplete records fail before persistence. |
-| 3 — curated product and release semantics | Curated/exploratory profiles; attributed append-only selections; immutable manifest/checksums; version/license/citation metadata | Open | A user can cite and reproduce the exact selected dataset while retrieving candidates and review history. |
+| 3 — curated product and release semantics | Curated/exploratory profiles; attributed append-only selections; immutable manifest/checksums; version/license/citation metadata | **PASS — versioned implementation** | A user can cite and reproduce the exact selected dataset while retrieving candidates and review history. |
 | 4 — query and client validation | Catalog benchmark/plans; bounded analytics or numeric filters; release-watermarked traversal; client parity and safe retries | Open | Published SLOs hold on representative corpus and every documented journey has a tested Python-client example. |
 | 5 — production operations | Expected-head readiness; DB/object backup/restore; metrics/alerts; rate limits; immutable arm64 image smoke test | Open | Restore drill passes, worker crash self-heals, schema drift blocks readiness, Pi is reproducible from tagged release. |
 | 6 — paper release | Corrected claims; primary-source comparison; SI; frozen code/data DOI; executable figures/tables; traceability evidence | Open | Every quantitative/comparative statement points to a cited source, public artifact, or executable test at paper tag. |
@@ -189,6 +189,59 @@ correspondence, which requires 3D bond perception that fails silently on hard
 cases. And the always-present typed evidence descriptor covers IRC but not
 tunneling or interpretation assignments, so a default kinetics read cannot
 distinguish absent tunneling evidence from an unrequested include.
+
+## Stage 3 implementation evidence recorded 2026-08-01
+
+Commit `d3a99ec`, PR #68, migration `e3f4a5b6c7d8` (five brand-new tables,
+nothing pre-existing altered). Failed independent review once, on five blocking
+findings, then passed with the reviewer re-running each of its own repros.
+
+- **Selection is an overlay that never touches the science.** No `is_best`,
+  `is_selected`, `is_current` or `preferred` column exists anywhere; what stands
+  is head-of-chain-and-not-withdrawn, computed from an append-only ledger. A
+  full write audit found no write to any scientific table, and triggers reject
+  `UPDATE`, `DELETE`, direct `TRUNCATE` and parent `TRUNCATE ... CASCADE` on the
+  ledger and on frozen manifests and artifacts.
+- **Only approved records may be selected**, re-checked at publication. This is
+  what makes the pre-existing accepted-science immutability trigger actually
+  cover a released value; before the fix a release could recommend a
+  never-reviewed record whose value was then editable after publication.
+- **Releases are frozen at publication.** The first implementation rendered
+  artifacts from the live database at read time, so a single ordinary upload
+  turned every citable download into a 409 and the manifest into
+  `verified: false`. On a corpus that is entirely under review, that window was
+  effectively zero. Artifact bytes and the manifest document are now stored once
+  and served forever; whether the live corpus still agrees is a separate,
+  explicitly non-fatal divergence report.
+- **The manifest is rebuildable from the manifest row alone.** Attaching the
+  DOI -- the release runbook's own final step -- previously broke the digest
+  permanently, so the integrity signal read `true` only for releases nobody had
+  deposited. Release and policy claims are now snapshotted at freeze.
+- **Artifacts are interpretable offline**: selected records, the candidates that
+  were *not* selected, the review history and the selection ledger, carrying
+  SMILES, InChIKey, charge, multiplicity, level of theory and software. The
+  first implementation stripped every foreign key without substitution, so a
+  Zenodo deposit would have stated heats of formation for an opaque public ref.
+- **Endorsement is only claimed where it can be backed.** Release endpoints
+  report release backing; the general curated surface reports `approved_floor_only`
+  and nothing more. Release-scoped filtering of the ~40 general searches is
+  deliberately not implemented -- a filter behaving differently per endpoint
+  would be worse than none -- so `?release=` is refused with a 422 naming the
+  endpoint that does answer the question, rather than accepted and ignored.
+- **Verification:** 862 non-scientific API tests; 1,433 scientific API tests;
+  2,691 service/schema/importer/client-contract/integration/db tests; 746
+  workflow and tooling tests; 84 release tests; `ruff check` clean;
+  `alembic check` showing only the two known pre-existing RDKit index artifacts;
+  a fresh disposable-database upgrade/downgrade/re-upgrade cycle; and CI green
+  on the first attempt. The only failure remains the pre-existing
+  `execution_environment_manifest` identifier-length case.
+
+Recorded operational boundaries, in `backend/docs/specs/dataset_release_and_profiles.md`
+§7a with revisit triggers: frozen release bytes are inlined base64 in the
+recovery archive rather than using the `blobs/` sidecar (~4/3 inflation); and
+`ALTER TABLE ... DISABLE TRIGGER` remains available to an owning role, a gap
+that exists only where the prescribed three-role deployment split has not been
+applied.
 
 ## Process finding recorded 2026-07-31
 
