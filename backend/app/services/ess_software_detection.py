@@ -28,7 +28,12 @@ _GAUSSIAN_MARKERS = re.compile(
 # wrong answer. Reject, don't guess.
 _ORCA_MARKERS = re.compile(
     r"\*\s*O\s+R\s+C\s+A\s*\*"  # the ASCII-art banner, asterisk-anchored
-    r"|\bORCA\b",  # any header line naming ORCA (version, citation, footer)
+    r"|\bORCA\b"  # any header line naming ORCA (version, citation, footer)
+    # ORCA's version line carries a ``-  RELEASE  -`` suffix. That pairing is an
+    # ORCA convention and is kept, unlike the bare ``Program Version X.Y.Z`` it
+    # replaced -- a phrase many programs print, which made ORCA (the last
+    # branch) a catch-all for every unrecognised log.
+    r"|Program\s+Version\s+[\d.]+\s*-+\s*RELEASE",
     re.IGNORECASE,
 )
 _MOLPRO_MARKERS = re.compile(r"PROGRAM SYSTEM MOLPRO", re.IGNORECASE)
