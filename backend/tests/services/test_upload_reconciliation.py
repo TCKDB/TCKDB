@@ -48,12 +48,14 @@ def _identity(
     )
 
 
-def _freq_calc(n_imag: int) -> CalculationWithResultsPayload:
+def _freq_calc(
+    n_imag: int, imag_freq_cm1: float | None = None
+) -> CalculationWithResultsPayload:
     return CalculationWithResultsPayload(
         type=CalculationType.freq,
         level_of_theory={"method": "b3lyp", "basis": "def2-svp"},
         software_release={"name": "gaussian", "version": "16"},
-        freq_result=FreqResultPayload(n_imag=n_imag),
+        freq_result=FreqResultPayload(n_imag=n_imag, imag_freq_cm1=imag_freq_cm1),
     )
 
 
@@ -114,39 +116,75 @@ class TestReconcileSpeciesEntry:
         )
         assert warnings == []
 
-    def test_n_imag_one_minimum_produces_two_warnings(self) -> None:
-        warnings = reconcile_species_entry(_identity(), freq_n_imag=1)
-        codes = {w.code for w in warnings}
-        assert W_N_IMAG_CONTRADICTS_MINIMUM in codes
-        assert W_N_IMAG_SUGGESTS_TS in codes
-        assert len(warnings) == 2
+    def test_n_imag_one_minimum_produces_no_warning(self) -> None:
+        """A declared minimum with an imaginary mode blocks, so it is not
+        re-derived here: ADR 0008 gives the blocking tier sole ownership
+        of a fact it refuses, and the schema tier already rejected the
+        payload with a 422 before any route body ran."""
+        assert reconcile_species_entry(_identity(), freq_n_imag=1) == []
 
-    def test_n_imag_one_vdw_complex_produces_two_warnings(self) -> None:
+    def test_n_imag_two_minimum_produces_no_warning(self) -> None:
+        assert reconcile_species_entry(_identity(), freq_n_imag=2) == []
+
+    def test_n_imag_one_vdw_complex_warns(self) -> None:
+        """A van der Waals complex is formally a minimum but its soft
+        intermolecular modes make a small imaginary mode a plausible
+        Hessian artifact, so it is recorded and flagged, not refused."""
         warnings = reconcile_species_entry(
             _identity(kind=StationaryPointKind.vdw_complex),
             freq_n_imag=1,
         )
         codes = {w.code for w in warnings}
+        assert codes == {W_N_IMAG_CONTRADICTS_MINIMUM}
+
+    def test_n_imag_one_stiff_vdw_complex_also_suggests_ts(self) -> None:
+        """An imaginary mode at or above the threshold is far too stiff to
+        be an intermolecular mode, so it is unlikely to be grid noise."""
+        warnings = reconcile_species_entry(
+            _identity(kind=StationaryPointKind.vdw_complex),
+            freq_n_imag=1,
+            freq_imag_freq_cm1=-1200.0,
+        )
+        codes = {w.code for w in warnings}
         assert W_N_IMAG_CONTRADICTS_MINIMUM in codes
         assert W_N_IMAG_SUGGESTS_TS in codes
 
-    def test_n_imag_two_produces_higher_order_warning(self) -> None:
-        warnings = reconcile_species_entry(_identity(), freq_n_imag=2)
+    def test_n_imag_one_soft_vdw_complex_does_not_suggest_ts(self) -> None:
+        warnings = reconcile_species_entry(
+            _identity(kind=StationaryPointKind.vdw_complex),
+            freq_n_imag=1,
+            freq_imag_freq_cm1=-30.0,
+        )
+        codes = {w.code for w in warnings}
+        assert W_N_IMAG_SUGGESTS_TS not in codes
+
+    def test_n_imag_two_vdw_complex_produces_higher_order_warning(self) -> None:
+        warnings = reconcile_species_entry(
+            _identity(kind=StationaryPointKind.vdw_complex), freq_n_imag=2
+        )
         assert len(warnings) == 1
         assert warnings[0].code == W_N_IMAG_HIGHER_ORDER_SADDLE
-        assert "2 imaginary frequencies" in warnings[0].message
+        assert "2 imaginary modes" in warnings[0].message
 
-    def test_n_imag_three_produces_higher_order_warning(self) -> None:
-        warnings = reconcile_species_entry(_identity(), freq_n_imag=3)
+    def test_n_imag_three_vdw_complex_produces_higher_order_warning(self) -> None:
+        warnings = reconcile_species_entry(
+            _identity(kind=StationaryPointKind.vdw_complex), freq_n_imag=3
+        )
         assert len(warnings) == 1
         assert warnings[0].code == W_N_IMAG_HIGHER_ORDER_SADDLE
 
     def test_warning_field_is_species_entry_kind(self) -> None:
-        warnings = reconcile_species_entry(_identity(), freq_n_imag=1)
+        warnings = reconcile_species_entry(
+            _identity(kind=StationaryPointKind.vdw_complex), freq_n_imag=1
+        )
+        assert warnings
         assert all(w.field == "species_entry_kind" for w in warnings)
 
     def test_warning_messages_are_nonempty(self) -> None:
-        warnings = reconcile_species_entry(_identity(), freq_n_imag=1)
+        warnings = reconcile_species_entry(
+            _identity(kind=StationaryPointKind.vdw_complex), freq_n_imag=1
+        )
+        assert warnings
         assert all(w.message for w in warnings)
 
 
@@ -247,14 +285,34 @@ class TestReconcileSpeciesEntryFull:
         codes = {w.code for w in warnings}
         assert W_ELECTRONIC_STATE_CONTRADICTS_METHOD in codes
 
-    def test_n_imag_one_still_produces_layer1_warnings(self) -> None:
+    def test_n_imag_one_vdw_complex_still_produces_layer1_warnings(self) -> None:
         """Layer 1 n_imag warnings fire even in full reconciliation."""
+        warnings = reconcile_species_entry_full(
+            _identity(kind=StationaryPointKind.vdw_complex),
+            primary_calc=_freq_calc(1),
+        )
+        codes = {w.code for w in warnings}
+        assert W_N_IMAG_CONTRADICTS_MINIMUM in codes
+
+    def test_n_imag_one_minimum_produces_no_layer1_warning(self) -> None:
+        """The blocking tier owns this contradiction; the warning tier
+        does not re-derive it."""
         warnings = reconcile_species_entry_full(
             _identity(),
             primary_calc=_freq_calc(1),
         )
         codes = {w.code for w in warnings}
-        assert W_N_IMAG_CONTRADICTS_MINIMUM in codes
+        assert W_N_IMAG_CONTRADICTS_MINIMUM not in codes
+        assert W_N_IMAG_SUGGESTS_TS not in codes
+
+    def test_layer1_reads_magnitude_off_the_same_freq_result(self) -> None:
+        """The count and the magnitude must come from one calculation."""
+        warnings = reconcile_species_entry_full(
+            _identity(kind=StationaryPointKind.vdw_complex),
+            primary_calc=_opt_calc(),
+            additional_calcs=[_freq_calc(1, imag_freq_cm1=-1200.0)],
+        )
+        codes = {w.code for w in warnings}
         assert W_N_IMAG_SUGGESTS_TS in codes
 
     def test_term_symbol_not_derived_without_closed_shell_evidence(self) -> None:

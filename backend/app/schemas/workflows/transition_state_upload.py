@@ -15,6 +15,11 @@ from tckdb_schemas.fragments.ts_validation_evidence import (
     TransitionStateValidationEvidenceIn,
     validate_ts_evidence_set,
 )
+from tckdb_schemas.stationary_point import (
+    StationaryPointFinding,
+    evaluate_transition_state_frequency,
+    raise_for_blocking_findings,
+)
 
 from app.db.models.common import CalculationType
 from app.schemas.common import SchemaBase
@@ -215,4 +220,40 @@ class TransitionStateUploadRequest(SchemaBase):
                     f"allowed. Expected one of: "
                     f"{', '.join(t.value for t in sorted(_ALLOWED_ADDITIONAL_TYPES, key=lambda t: t.value))}."
                 )
+        return self
+
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Judge this saddle point against its own frequency evidence.
+
+        The whole payload is one transition state, so every frequency
+        result in it describes that saddle point — there is no species
+        entry here whose zero-imaginary-mode expectation could be
+        confused with the TS's one.
+        """
+        findings: list[StationaryPointFinding] = []
+        for label, calc in [
+            ("primary_opt", self.primary_opt),
+            *(
+                (f"additional_calculations[{i}]", c)
+                for i, c in enumerate(self.additional_calculations)
+            ),
+        ]:
+            if calc.freq_result is None:
+                continue
+            findings.extend(
+                evaluate_transition_state_frequency(
+                    calc.freq_result.n_imag,
+                    calc.freq_result.imag_freq_cm1,
+                    location=f"{label}.freq_result",
+                )
+            )
+        return findings
+
+    @model_validator(mode="after")
+    def validate_n_imag_is_one(self) -> Self:
+        """Refuse frequency evidence that is not a first-order saddle point.
+
+        Definitional, therefore blocking (ADR 0008).
+        """
+        raise_for_blocking_findings(self.stationary_point_findings())
         return self

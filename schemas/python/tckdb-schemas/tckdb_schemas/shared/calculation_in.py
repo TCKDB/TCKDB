@@ -107,6 +107,21 @@ class CalculationIn(SchemaBase):
     artifacts: list[ArtifactIn] = Field(default_factory=list)
 
 
+def freq_evidence(calc_in: "CalculationIn") -> tuple[int | None, float | None]:
+    """Return the ``(n_imag, imag_freq_cm1)`` this calculation will persist.
+
+    The flat ``freq_*`` fields are only translated into a result block by
+    :func:`calculation_in_to_with_results_payload` when ``type`` is
+    ``freq``; on any other type they are silently dropped. Consistency
+    checks must therefore read frequency evidence through this helper
+    rather than off the fields directly, so they judge exactly what the
+    database will hold.
+    """
+    if calc_in.type != CalculationType.freq:
+        return (None, None)
+    return (calc_in.freq_n_imag, calc_in.freq_imag_freq_cm1)
+
+
 def calculation_in_to_with_results_payload(
     calc_in: "CalculationIn",
 ) -> CalculationWithResultsPayload:

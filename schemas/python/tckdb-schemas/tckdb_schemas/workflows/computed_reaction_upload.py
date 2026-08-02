@@ -58,6 +58,13 @@ from tckdb_schemas.shared.calculation_in import (
     CalculationIn as _BaseCalculationIn,
     GeometryIn,
     calculation_in_to_with_results_payload as _base_calc_to_payload,
+    freq_evidence,
+)
+from tckdb_schemas.stationary_point import (
+    StationaryPointFinding,
+    evaluate_species_entry_frequency,
+    evaluate_transition_state_frequency,
+    raise_for_blocking_findings,
 )
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate
@@ -509,6 +516,53 @@ class BundleSpeciesIn(SchemaBase):
                 )
         return self
 
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Judge this species's declared kind against its own frequency evidence.
+
+        This sits on the *species* model rather than on the request
+        because the bundle also carries a transition state, whose single
+        imaginary mode is correct science; a request-level scan that
+        ignored which entity owns the frequency would wrongly reject it.
+        """
+        kind = self.species_entry.species_entry_kind
+        findings: list[StationaryPointFinding] = []
+        for conformer in self.conformers:
+            n_imag, imag_freq_cm1 = freq_evidence(conformer.calculation)
+            findings.extend(
+                evaluate_species_entry_frequency(
+                    kind,
+                    n_imag,
+                    imag_freq_cm1,
+                    location=(
+                        f"species['{self.key}'].conformers['{conformer.key}']"
+                        f".calculation"
+                    ),
+                )
+            )
+        for calc in self.calculations:
+            n_imag, imag_freq_cm1 = freq_evidence(calc)
+            findings.extend(
+                evaluate_species_entry_frequency(
+                    kind,
+                    n_imag,
+                    imag_freq_cm1,
+                    location=f"species['{self.key}'].calculations['{calc.key}']",
+                )
+            )
+        return findings
+
+    @model_validator(mode="after")
+    def validate_n_imag_matches_species_entry_kind(self) -> Self:
+        """Refuse frequency evidence that contradicts the declared kind.
+
+        Definitional, therefore blocking (ADR 0008). This model is the
+        earliest point at which one species entry's declared
+        stationary-point kind and that same entry's own frequency
+        evidence are both in hand.
+        """
+        raise_for_blocking_findings(self.stationary_point_findings())
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Reaction participants
@@ -595,6 +649,32 @@ class BundleTransitionStateIn(SchemaBase):
                 f"TS primary calculation must be type 'opt', "
                 f"got '{self.calculation.type.value}'."
             )
+        return self
+
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Judge this transition state against its own frequency evidence."""
+        findings: list[StationaryPointFinding] = []
+        for calc in (self.calculation, *self.calculations):
+            n_imag, imag_freq_cm1 = freq_evidence(calc)
+            findings.extend(
+                evaluate_transition_state_frequency(
+                    n_imag,
+                    imag_freq_cm1,
+                    location=f"transition_state.calculations['{calc.key}']",
+                )
+            )
+        return findings
+
+    @model_validator(mode="after")
+    def validate_n_imag_is_one(self) -> Self:
+        """Refuse frequency evidence that is not a first-order saddle point.
+
+        Definitional, therefore blocking (ADR 0008). A transition state
+        does not carry a ``stationary_point_kind`` — the entity is the
+        claim — so this model is where the declaration and the evidence
+        meet.
+        """
+        raise_for_blocking_findings(self.stationary_point_findings())
         return self
 
     @model_validator(mode="after")
@@ -868,6 +948,23 @@ class ComputedReactionUploadRequest(SchemaBase):
 
     # Kinetics fits (empty when Arkane fitting didn't complete)
     kinetics: list[BundleKineticsIn] = Field(default_factory=list)
+
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Collect every entity's stationary-point findings in this bundle.
+
+        Each species judges its own frequency evidence against its own
+        declared kind, and the transition state judges its own — so the
+        transition state's single imaginary mode never counts against a
+        species and vice versa. The blocking half already fired from the
+        nested models' validators by the time this is callable; the route
+        layer calls it to harvest the warning half.
+        """
+        findings: list[StationaryPointFinding] = []
+        for species in self.species:
+            findings.extend(species.stationary_point_findings())
+        if self.transition_state is not None:
+            findings.extend(self.transition_state.stationary_point_findings())
+        return findings
 
     @model_validator(mode="after")
     def validate_ts_validation_evidence(self) -> Self:
