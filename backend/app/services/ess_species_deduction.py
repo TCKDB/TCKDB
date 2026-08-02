@@ -162,34 +162,22 @@ def deduce_term_symbol(result: ESSResult) -> Deduction | None:
     )
 
 
-def deduce_charge_multiplicity(
-    result: ESSResult,
-) -> list[Deduction]:
-    """Cross-check charge/multiplicity from ESS output."""
-    deductions = []
-    if result.meta.charge is not None:
-        deductions.append(
-            Deduction(
-                field="charge",
-                value=result.meta.charge,
-                source=f"{result.meta.software_name}.header",
-                confidence="definitive",
-            )
-        )
-    if result.meta.multiplicity is not None:
-        deductions.append(
-            Deduction(
-                field="multiplicity",
-                value=result.meta.multiplicity,
-                source=f"{result.meta.software_name}.header",
-                confidence="definitive",
-            )
-        )
-    return deductions
-
-
 def deduce_all(result: ESSResult) -> list[Deduction]:
-    """Run all deductions and return the full list."""
+    """Run all deductions and return the full list.
+
+    Charge and multiplicity are deliberately *not* deduced here. On the
+    upload path ``ESSJobMeta.charge`` / ``.multiplicity`` are populated
+    from the very payload a deduction would be compared against (see
+    ``build_ess_result_from_upload``), so any such "deduction" would
+    restate the declaration while labelling its provenance as the ESS
+    header. The genuine declaration-versus-log check lives in
+    :mod:`app.services.charge_multiplicity_reconciliation`, which reads
+    the charge and multiplicity actually parsed from the uploaded output
+    log. ``deduce_term_symbol`` still reads ``meta.multiplicity``, and
+    that is sound: it derives a term symbol from the declared
+    multiplicity and symmetry and compares it against the *declared*
+    term symbol, which are two independent fields.
+    """
     deductions: list[Deduction] = []
 
     for fn in (
@@ -201,5 +189,4 @@ def deduce_all(result: ESSResult) -> list[Deduction]:
         if d is not None:
             deductions.append(d)
 
-    deductions.extend(deduce_charge_multiplicity(result))
     return deductions
