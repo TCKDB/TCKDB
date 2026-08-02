@@ -285,6 +285,12 @@ class NetworkSolveCalculationRole(str, Enum):
     fit_source = "fit_source"
 
 
+class NetworkKineticsModelKind(str, Enum):
+    chebyshev = "chebyshev"
+    plog = "plog"
+    tabulated = "tabulated"
+
+
 class EnergyCorrectionSchemeKind(str, Enum):
     atom_energy = "atom_energy"
     atom_hf = "atom_hf"
@@ -345,6 +351,45 @@ class EnergyUnit(str, Enum):
     kcal_mol = "kcal_mol"
 
 
+class TemperatureUnit(str, Enum):
+    kelvin = "kelvin"
+
+
+class PressureUnit(str, Enum):
+    bar = "bar"
+    atm = "atm"
+
+
+class EnergyZeroConvention(str, Enum):
+    """Where the zero of an energy scale sits.
+
+    A PDep network reports well and barrier energies on *some* scale; without
+    the convention the numbers are unusable, so uploads must state it rather
+    than let the reader guess.
+    """
+
+    lowest_state = "lowest_state"
+    entrance_channel = "entrance_channel"
+    separated_reactants = "separated_reactants"
+    absolute = "absolute"
+    other = "other"
+
+
+class EnergyCorrectionConvention(str, Enum):
+    """Which corrections are already folded into a reported energy.
+
+    Distinct from :class:`EnergyZeroConvention`: the zero says where the scale
+    starts, this says what has already been added on top of the bare
+    electronic energy.
+    """
+
+    electronic_only = "electronic_only"
+    electronic_plus_zpe = "electronic_plus_zpe"
+    atom_and_bond_corrected = "atom_and_bond_corrected"
+    thermal_enthalpy_298k = "thermal_enthalpy_298k"
+    other = "other"
+
+
 __all__ = (
     "ActivationEnergyUnits",
     "AppliedCorrectionComponentKind",
@@ -357,8 +402,10 @@ __all__ = (
     "ConstraintKind",
     "CoordinateUnit",
     "EnergyCorrectionApplicationRole",
+    "EnergyCorrectionConvention",
     "EnergyCorrectionSchemeKind",
     "EnergyUnit",
+    "EnergyZeroConvention",
     "FrequencyScaleKind",
     "IRCDirection",
     "KineticsCalculationRole",
@@ -370,8 +417,10 @@ __all__ = (
     "MeliusBacComponentKind",
     "MoleculeKind",
     "NetworkChannelKind",
+    "NetworkKineticsModelKind",
     "NetworkSolveCalculationRole",
     "PathSearchMethod",
+    "PressureUnit",
     "RigidRotorKind",
     "SCFStabilityStatus",
     "ScientificOriginKind",
@@ -380,6 +429,7 @@ __all__ = (
     "StatmechTreatmentKind",
     "StationaryPointKind",
     "StereoKind",
+    "TemperatureUnit",
     "ThermoCalculationRole",
     "TorsionTreatmentKind",
 )
