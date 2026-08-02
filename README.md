@@ -28,6 +28,15 @@ Documentation website: <https://calvinp0.github.io/tckdbv2/>
 
 ## Start here
 
+**Just want to see what's in it?** Open
+[`examples/clients/explore_tckdb.ipynb`](examples/clients/explore_tckdb.ipynb) —
+a read-only tour of the live hosted instance at <https://tckdb.homecalvin.com>.
+It needs no account, no API key and no local database, and it renders on GitHub
+with its outputs already filled in, so you can read it without running anything.
+It looks up species, pulls their thermodynamics, evaluates the stored NASA
+polynomials back into Cp(T)/H(T)/S(T), checks them against NIST-JANAF values, and
+shows the calculations and trust evidence behind each number.
+
 Choose the path that matches what you are trying to do:
 
 - To read the full documentation website, open
@@ -262,6 +271,9 @@ cp backend/.env.example backend/.env
 #    Path A — conda + pip (recommended; conda-forge RDKit):
 mamba env create -n tckdb_env -f backend/environment.yml
 conda activate tckdb_env
+#    tckdb-schemas is first-party (in this repo, not on PyPI) and the
+#    backend imports it at module level, so install it before the backend:
+pip install -e schemas/python/tckdb-schemas
 cd backend && pip install -e ".[dev]" && cd ..
 #
 #    Path B — pure pip / uv (lockfile-driven, no conda):
