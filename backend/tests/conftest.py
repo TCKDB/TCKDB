@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import socket
 import subprocess
+import warnings
 from pathlib import Path
 from typing import Iterator
 
@@ -127,6 +129,120 @@ def _validate_test_db_name(db_name: str) -> str:
     return db_name
 
 
+# ---------------------------------------------------------------------------
+# Ownership marker
+#
+# Every database this fixture creates is stamped with a comment recording the
+# host and pid of the pytest process that created it.  The marker is what makes
+# the startup sweep safe: it lets the sweep reclaim *only* databases this
+# harness is responsible for, and lets it tell a genuinely abandoned database
+# apart from one a concurrently-starting pytest run has just created but not
+# yet connected to.  Databases without a marker are never swept.
+# ---------------------------------------------------------------------------
+
+_MARKER_PREFIX = "tckdb-test-harness"
+_MARKER_PATTERN = re.compile(rf"^{re.escape(_MARKER_PREFIX)} host=(\S+) pid=(\d+)$")
+
+
+def _safe_host() -> str:
+    """Hostname reduced to characters safe inside a SQL string literal."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", socket.gethostname()) or "unknown"
+
+
+def _ownership_marker() -> str:
+    return f"{_MARKER_PREFIX} host={_safe_host()} pid={os.getpid()}"
+
+
+def _pid_is_running(pid: int) -> bool:
+    """True if a process with this pid currently exists on this host."""
+    if pid <= 0:
+        return True  # Unparseable/implausible — treat as live and skip.
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # Exists, owned by another user.
+    except OSError:
+        return True
+    return True
+
+
+def _marker_is_reclaimable(marker: str | None) -> bool:
+    """Only reclaim databases stamped by *this host* whose creator pid is gone.
+
+    A missing or foreign marker means the database was not created by this
+    harness (or was created on a different host, where we cannot reason about
+    pids at all) — in both cases the conservative answer is "leave it alone".
+    """
+    if not marker:
+        return False
+    match = _MARKER_PATTERN.match(marker.strip())
+    if match is None:
+        return False
+    host, pid = match.group(1), match.group(2)
+    if host != _safe_host():
+        return False
+    return not _pid_is_running(int(pid))
+
+
+def _sweep_stale_test_databases(current_db_name: str) -> None:
+    """Drop databases this harness created but never got to drop.
+
+    The fixture's ``finally`` handles every in-process failure path; this
+    sweep exists only for the paths no Python code can cover — ``SIGKILL``,
+    an OOM kill, a power loss.  It is deliberately paranoid:
+
+    * only databases carrying this harness's ownership marker are eligible;
+    * only markers written by *this host* with a creator pid that is no
+      longer running;
+    * only names matching the isolated-test-database pattern;
+    * never the database this session is about to use;
+    * the ``DROP`` is issued *without* terminating backends, so if a
+      connection appears in the race window Postgres refuses and we skip —
+      the server, not this code, is the final arbiter of "in use".
+
+    Best-effort throughout: a sweep failure must never fail a test session.
+    Set ``TCKDB_TEST_DB_SWEEP=0`` to disable.
+    """
+    if os.environ.get("TCKDB_TEST_DB_SWEEP", "1") == "0":
+        return
+
+    engine = create_engine(_database_url("postgres"), future=True, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as connection:
+            candidates = connection.execute(
+                text(r"""
+                    SELECT d.datname,
+                           shobj_description(d.oid, 'pg_database') AS marker
+                    FROM pg_database d
+                    WHERE d.datname LIKE 'tckdb\_test%'
+                      AND NOT d.datistemplate
+                      AND NOT EXISTS (
+                          SELECT 1 FROM pg_stat_activity a WHERE a.datname = d.datname
+                      )
+                """)
+            ).all()
+
+            for datname, marker in candidates:
+                if datname == current_db_name:
+                    continue
+                if not _TEST_DATABASE_NAME.fullmatch(datname):
+                    continue
+                if not _marker_is_reclaimable(marker):
+                    continue
+                try:
+                    # No pg_terminate_backend here: a database that acquired a
+                    # connection since the query above must survive.
+                    connection.execute(text(f'DROP DATABASE IF EXISTS "{datname}"'))
+                except Exception:
+                    continue
+    except Exception:
+        return
+    finally:
+        engine.dispose()
+
+
 def _recreate_test_database(db_name: str) -> None:
     db_name = _validate_test_db_name(db_name)
     admin_url = _database_url("postgres")
@@ -145,6 +261,11 @@ def _recreate_test_database(db_name: str) -> None:
             )
             connection.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
             connection.execute(text(f'CREATE DATABASE "{db_name}"'))
+            # Stamp ownership immediately so an abandoned database is always
+            # identifiable, even if the process dies on the very next line.
+            connection.execute(
+                text(f"COMMENT ON DATABASE \"{db_name}\" IS '{_ownership_marker()}'")
+            )
     finally:
         engine.dispose()
 
@@ -177,23 +298,56 @@ def db_engine():
     # export CLI smoke test) inherit the same database without needing
     # their own resolution logic.
     os.environ["DB_TEST_NAME"] = db_name
-    _recreate_test_database(db_name)
+    _sweep_stale_test_databases(db_name)
 
-    subprocess.run(
-        ["conda", "run", "-n", "tckdb_env", "alembic", "upgrade", "head"],
-        cwd=REPO_ROOT,
-        env=_db_env(db_name),
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-    engine = create_engine(_database_url(db_name), future=True)
+    engine = None
+    # Creation and migration live *inside* the ``try`` so ``finally`` covers
+    # every in-process failure path, not just a clean session exit: a failed
+    # ``alembic upgrade``, a failed ``create_engine``, and any exception
+    # (collection error, KeyboardInterrupt) thrown into this generator.
+    # Previously these ran before the ``try`` and each one leaked a fully
+    # migrated database under a name that is never reused.
+    body_failed = False
     try:
+        _recreate_test_database(db_name)
+        subprocess.run(
+            ["conda", "run", "-n", "tckdb_env", "alembic", "upgrade", "head"],
+            cwd=REPO_ROOT,
+            env=_db_env(db_name),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        engine = create_engine(_database_url(db_name), future=True)
         yield engine
+    except BaseException:
+        body_failed = True
+        raise
     finally:
-        engine.dispose()
-        _drop_test_database(db_name)
+        # Cleanup must never mask why the body failed. Python replaces a
+        # propagating exception with anything raised from ``finally``, so a
+        # secondary "could not drop" error would bury the failed
+        # ``alembic upgrade`` that is the thing worth reading. Now that
+        # migrations run inside the ``try``, that path is reachable.
+        #
+        # A cleanup failure is still a leak, so it is never swallowed
+        # silently: when the body succeeded it propagates as before, and when
+        # the body failed it is downgraded to a warning so both survive.
+        for cleanup in (
+            lambda: engine.dispose() if engine is not None else None,
+            lambda: _drop_test_database(db_name),
+        ):
+            try:
+                cleanup()
+            except Exception as cleanup_error:
+                if not body_failed:
+                    raise
+                warnings.warn(
+                    f"test-database cleanup failed for {db_name!r} while another error was "
+                    f"propagating; the database may have leaked: {cleanup_error!r}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
 
 @pytest.fixture
