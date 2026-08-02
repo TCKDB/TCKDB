@@ -442,6 +442,57 @@
         "title": "AdminSubmissionMachineReviewInspectionResponse",
         "type": "object"
       },
+      "AnalyticsRequestEcho": {
+        "description": "Echo of the parsed request, plus the resolved read profile.",
+        "properties": {
+          "filter": {
+            "additionalProperties": true,
+            "title": "Filter",
+            "type": "object"
+          },
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Include",
+            "type": "array"
+          },
+          "pagination_mode": {
+            "title": "Pagination Mode",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "sort": {
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filter",
+          "sort",
+          "pagination_mode"
+        ],
+        "title": "AnalyticsRequestEcho",
+        "type": "object"
+      },
       "ApiKeyCreateRequest": {
         "properties": {
           "label": {
@@ -2763,6 +2814,264 @@
           "calculation"
         ],
         "title": "BundleTransitionStateIn",
+        "type": "object"
+      },
+      "CalculationAnalyticsRecord": {
+        "description": "One calculation row, flattened to its quantitative columns.",
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "calculation_id": {
+            "title": "Calculation Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "calculation_ref": {
+            "title": "Calculation Ref",
+            "type": "string"
+          },
+          "calculation_type": {
+            "$ref": "#/components/schemas/CalculationType"
+          },
+          "converged": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converged"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "d1_diagnostic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "D1 Diagnostic"
+          },
+          "electronic_energy_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic Energy Hartree"
+          },
+          "final_energy_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Energy Hartree"
+          },
+          "imag_freq_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imag Freq Cm1"
+          },
+          "level_of_theory_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Of Theory Ref"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "n_imag": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Imag"
+          },
+          "quality": {
+            "$ref": "#/components/schemas/CalculationQuality"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "s_squared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S Squared"
+          },
+          "s_squared_expected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S Squared Expected"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
+          },
+          "t1_diagnostic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T1 Diagnostic"
+          },
+          "zpe_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zpe Hartree"
+          }
+        },
+        "required": [
+          "calculation_ref",
+          "calculation_type",
+          "quality",
+          "review_status"
+        ],
+        "title": "CalculationAnalyticsRecord",
+        "type": "object"
+      },
+      "CalculationAnalyticsResponse": {
+        "description": "Response envelope for ``/scientific/analytics/calculations``.",
+        "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/CalculationAnalyticsRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AnalyticsRequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records",
+          "pagination"
+        ],
+        "title": "CalculationAnalyticsResponse",
         "type": "object"
       },
       "CalculationArtifactRead": {
@@ -15532,6 +15841,298 @@
           "attempts"
         ],
         "title": "JobStatusResponse",
+        "type": "object"
+      },
+      "KineticsAnalyticsRecord": {
+        "description": "One kinetics row, flattened to its quantitative columns.",
+        "properties": {
+          "a": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A"
+          },
+          "a_uncertainty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A Uncertainty"
+          },
+          "a_uncertainty_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsUncertaintyKind-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "a_units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrheniusAUnits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "degeneracy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Degeneracy"
+          },
+          "degeneracy_convention": {
+            "$ref": "#/components/schemas/KineticsDegeneracyConvention"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsDirection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ea_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ea Kj Mol"
+          },
+          "ea_uncertainty_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ea Uncertainty Kj Mol"
+          },
+          "has_literature": {
+            "title": "Has Literature",
+            "type": "boolean"
+          },
+          "has_statmech_provenance": {
+            "title": "Has Statmech Provenance",
+            "type": "boolean"
+          },
+          "has_transition_state_provenance": {
+            "title": "Has Transition State Provenance",
+            "type": "boolean"
+          },
+          "has_workflow_tool": {
+            "title": "Has Workflow Tool",
+            "type": "boolean"
+          },
+          "is_third_body": {
+            "title": "Is Third Body",
+            "type": "boolean"
+          },
+          "kinetics_id": {
+            "title": "Kinetics Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "kinetics_ref": {
+            "title": "Kinetics Ref",
+            "type": "string"
+          },
+          "model_kind": {
+            "$ref": "#/components/schemas/KineticsModelKind"
+          },
+          "n": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N"
+          },
+          "n_uncertainty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Uncertainty"
+          },
+          "pressure_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Bar"
+          },
+          "pressure_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PressureContext-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reaction_entry_id": {
+            "title": "Reaction Entry Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "reaction_entry_ref": {
+            "title": "Reaction Entry Ref",
+            "type": "string"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "scientific_origin": {
+            "$ref": "#/components/schemas/ScientificOriginKind"
+          },
+          "tmax_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmax K"
+          },
+          "tmin_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmin K"
+          },
+          "tunneling_model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TunnelingModel-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kinetics_ref",
+          "reaction_entry_ref",
+          "scientific_origin",
+          "model_kind",
+          "is_third_body",
+          "degeneracy_convention",
+          "has_literature",
+          "has_workflow_tool",
+          "has_transition_state_provenance",
+          "has_statmech_provenance",
+          "review_status"
+        ],
+        "title": "KineticsAnalyticsRecord",
+        "type": "object"
+      },
+      "KineticsAnalyticsResponse": {
+        "description": "Response envelope for ``/scientific/analytics/kinetics``.",
+        "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/KineticsAnalyticsRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AnalyticsRequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records",
+          "pagination"
+        ],
+        "title": "KineticsAnalyticsResponse",
         "type": "object"
       },
       "KineticsCalculationRole": {
@@ -33887,6 +34488,253 @@
         "title": "StationaryPointKind",
         "type": "string"
       },
+      "StatmechAnalyticsRecord": {
+        "description": "One statmech row, flattened to its quantitative columns.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "electronic_level_count": {
+            "title": "Electronic Level Count",
+            "type": "integer"
+          },
+          "external_symmetry": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Symmetry"
+          },
+          "has_frequency_scale_factor": {
+            "title": "Has Frequency Scale Factor",
+            "type": "boolean"
+          },
+          "is_linear": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Linear"
+          },
+          "optical_isomers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optical Isomers"
+          },
+          "point_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Point Group"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "rigid_rotor_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RigidRotorKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rotational_constant_a_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Constant A Cm1"
+          },
+          "rotational_constant_b_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Constant B Cm1"
+          },
+          "rotational_constant_c_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Constant C Cm1"
+          },
+          "scientific_origin": {
+            "$ref": "#/components/schemas/ScientificOriginKind"
+          },
+          "species_entry_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "species_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Ref"
+          },
+          "statmech_id": {
+            "title": "Statmech Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "statmech_ref": {
+            "title": "Statmech Ref",
+            "type": "string"
+          },
+          "statmech_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatmechTreatmentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "torsion_count": {
+            "title": "Torsion Count",
+            "type": "integer"
+          },
+          "transition_state_entry_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "transition_state_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Entry Ref"
+          }
+        },
+        "required": [
+          "statmech_ref",
+          "scientific_origin",
+          "has_frequency_scale_factor",
+          "torsion_count",
+          "electronic_level_count",
+          "review_status"
+        ],
+        "title": "StatmechAnalyticsRecord",
+        "type": "object"
+      },
+      "StatmechAnalyticsResponse": {
+        "description": "Response envelope for ``/scientific/analytics/statmech``.",
+        "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/StatmechAnalyticsRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AnalyticsRequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records",
+          "pagination"
+        ],
+        "title": "StatmechAnalyticsResponse",
+        "type": "object"
+      },
       "StatmechCalculationIn": {
         "additionalProperties": false,
         "description": "An inline supporting calculation declared within a statmech upload.\n\n:param key: Local string key used to reference this calculation from\n    ``source_calculations`` and torsion ``source_scan_calculation_key``\n    fields. Must be unique within the upload.\n:param calculation: Scientific content for the calculation. Resolved\n    and persisted by the workflow, scoped to the same species entry\n    as the statmech target.",
@@ -37211,6 +38059,239 @@
         ],
         "title": "TemperatureUnit",
         "type": "string"
+      },
+      "ThermoAnalyticsRecord": {
+        "description": "One thermo row, flattened to its quantitative columns.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "enthalpy_formation_0k_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Kj Mol"
+          },
+          "enthalpy_formation_0k_uncertainty_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
+          },
+          "h298_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H298 Kj Mol"
+          },
+          "h298_uncertainty_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H298 Uncertainty Kj Mol"
+          },
+          "has_literature": {
+            "title": "Has Literature",
+            "type": "boolean"
+          },
+          "has_statmech_provenance": {
+            "title": "Has Statmech Provenance",
+            "type": "boolean"
+          },
+          "has_workflow_tool": {
+            "title": "Has Workflow Tool",
+            "type": "boolean"
+          },
+          "model_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoModelKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference_pressure_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Pressure Bar"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "s298_j_mol_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S298 J Mol K"
+          },
+          "s298_uncertainty_j_mol_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S298 Uncertainty J Mol K"
+          },
+          "scientific_origin": {
+            "$ref": "#/components/schemas/ScientificOriginKind"
+          },
+          "species_entry_id": {
+            "title": "Species Entry Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          },
+          "thermo_id": {
+            "title": "Thermo Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "thermo_ref": {
+            "title": "Thermo Ref",
+            "type": "string"
+          },
+          "tmax_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmax K"
+          },
+          "tmin_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmin K"
+          }
+        },
+        "required": [
+          "thermo_ref",
+          "species_entry_ref",
+          "scientific_origin",
+          "has_literature",
+          "has_workflow_tool",
+          "has_statmech_provenance",
+          "review_status"
+        ],
+        "title": "ThermoAnalyticsRecord",
+        "type": "object"
+      },
+      "ThermoAnalyticsResponse": {
+        "description": "Response envelope for ``/scientific/analytics/thermo``.",
+        "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/ThermoAnalyticsRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AnalyticsRequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records",
+          "pagination"
+        ],
+        "title": "ThermoAnalyticsResponse",
+        "type": "object"
       },
       "ThermoCalculationIn": {
         "additionalProperties": false,
@@ -42573,6 +43654,32 @@
           "status"
         ],
         "title": "ValidationSummary",
+        "type": "object"
+      },
+      "WatermarkEcho": {
+        "description": "The snapshot bound in force for this traversal.\n\n``taken_at`` is when the traversal's snapshot was established — the\nmoment the first page was served, not the moment this page was. It is\ninformational: the authoritative bound travels inside the opaque cursor.\n\nThe bound itself is a record id and is therefore deliberately not echoed;\ninternal integer ids are hidden from public responses by policy, and the\ncaller never needs it.",
+        "properties": {
+          "release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Ref"
+          },
+          "taken_at": {
+            "format": "date-time",
+            "title": "Taken At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "taken_at"
+        ],
+        "title": "WatermarkEcho",
         "type": "object"
       },
       "WavefunctionDiagnosticPayload": {
@@ -55548,6 +56655,1941 @@
         "summary": "Withdraw",
         "tags": [
           "releases"
+        ]
+      }
+    },
+    "/api/v1/scientific/analytics/calculations": {
+      "get": {
+        "description": "Quantitative calculation search for dataset construction.",
+        "operationId": "calculation_analytics_api_v1_scientific_analytics_calculations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "calculation_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CalculationType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Calculation Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "electronic_energy_min_hartree",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Electronic Energy Min Hartree"
+            }
+          },
+          {
+            "in": "query",
+            "name": "electronic_energy_max_hartree",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Electronic Energy Max Hartree"
+            }
+          },
+          {
+            "in": "query",
+            "name": "zpe_min_hartree",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zpe Min Hartree"
+            }
+          },
+          {
+            "in": "query",
+            "name": "zpe_max_hartree",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zpe Max Hartree"
+            }
+          },
+          {
+            "in": "query",
+            "name": "n_imag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "N Imag"
+            }
+          },
+          {
+            "in": "query",
+            "name": "converged",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Converged"
+            }
+          },
+          {
+            "in": "query",
+            "name": "t1_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "T1 Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "t1_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "T1 Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "d1_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "D1 Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "d1_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "D1 Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "s_squared_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "S Squared Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "s_squared_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "S Squared Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lot_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lot Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "software",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Software"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalculationAnalyticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Calculation Analytics",
+        "tags": [
+          "scientific",
+          "scientific-analytics"
+        ]
+      }
+    },
+    "/api/v1/scientific/analytics/kinetics": {
+      "get": {
+        "description": "Quantitative kinetics search for dataset construction.",
+        "operationId": "kinetics_analytics_api_v1_scientific_analytics_kinetics_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scientific_origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScientificOriginKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scientific Origin"
+            }
+          },
+          {
+            "description": "Stored direction of the fit (DR-0036).",
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/KineticsDirection"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stored direction of the fit (DR-0036).",
+              "title": "Direction"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/KineticsModelKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tunneling_model",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/app__db__models__common__TunnelingModel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tunneling Model"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pressure_context",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/app__db__models__common__PressureContext"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pressure Context"
+            }
+          },
+          {
+            "in": "query",
+            "name": "degeneracy_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Degeneracy Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "degeneracy_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Degeneracy Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pressure_min_bar",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pressure Min Bar"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pressure_max_bar",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pressure Max Bar"
+            }
+          },
+          {
+            "in": "query",
+            "name": "a_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "A Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "a_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "A Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "n_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "N Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "n_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "N Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ea_min_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ea Min Kj Mol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ea_max_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ea Max Kj Mol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_uncertainty",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Uncertainty"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ea_uncertainty_min_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ea Uncertainty Min Kj Mol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ea_uncertainty_max_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ea Uncertainty Max Kj Mol"
+            }
+          },
+          {
+            "description": "Coverage filter: the record's own tmin_k must be at or below this. Records with no stated range do not match.",
+            "in": "query",
+            "name": "temperature_min_k",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Coverage filter: the record's own tmin_k must be at or below this. Records with no stated range do not match.",
+              "title": "Temperature Min K"
+            }
+          },
+          {
+            "description": "Coverage filter: the record's own tmax_k must be at or above this. Records with no stated range do not match.",
+            "in": "query",
+            "name": "temperature_max_k",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Coverage filter: the record's own tmax_k must be at or above this. Records with no stated range do not match.",
+              "title": "Temperature Max K"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_literature",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Literature"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_transition_state_provenance",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Transition State Provenance"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_statmech_provenance",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Statmech Provenance"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KineticsAnalyticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Kinetics Analytics",
+        "tags": [
+          "scientific",
+          "scientific-analytics"
+        ]
+      }
+    },
+    "/api/v1/scientific/analytics/statmech": {
+      "get": {
+        "description": "Quantitative statistical-mechanics search for dataset construction.",
+        "operationId": "statmech_analytics_api_v1_scientific_analytics_statmech_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scientific_origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScientificOriginKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scientific Origin"
+            }
+          },
+          {
+            "in": "query",
+            "name": "external_symmetry",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "External Symmetry"
+            }
+          },
+          {
+            "in": "query",
+            "name": "is_linear",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Linear"
+            }
+          },
+          {
+            "in": "query",
+            "name": "point_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Point Group"
+            }
+          },
+          {
+            "in": "query",
+            "name": "statmech_treatment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StatmechTreatmentKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Statmech Treatment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rigid_rotor_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RigidRotorKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rigid Rotor Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "optical_isomers",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Optical Isomers"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rotational_constant_a_min_cm1",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rotational Constant A Min Cm1"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rotational_constant_a_max_cm1",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rotational Constant A Max Cm1"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rotational_constant_b_min_cm1",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rotational Constant B Min Cm1"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rotational_constant_b_max_cm1",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rotational Constant B Max Cm1"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rotational_constant_c_min_cm1",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rotational Constant C Min Cm1"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rotational_constant_c_max_cm1",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rotational Constant C Max Cm1"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_frequency_scale_factor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Frequency Scale Factor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_torsions",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Torsions"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_electronic_levels",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Electronic Levels"
+            }
+          },
+          {
+            "in": "query",
+            "name": "electronic_level_count_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Electronic Level Count Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "electronic_level_count_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Electronic Level Count Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatmechAnalyticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Statmech Analytics",
+        "tags": [
+          "scientific",
+          "scientific-analytics"
+        ]
+      }
+    },
+    "/api/v1/scientific/analytics/thermo": {
+      "get": {
+        "description": "Quantitative thermochemistry search for dataset construction.",
+        "operationId": "thermo_analytics_api_v1_scientific_analytics_thermo_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scientific_origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScientificOriginKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scientific Origin"
+            }
+          },
+          {
+            "in": "query",
+            "name": "phase",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PhaseKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Phase"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ThermoModelKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reference_pressure_min_bar",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reference Pressure Min Bar"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reference_pressure_max_bar",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reference Pressure Max Bar"
+            }
+          },
+          {
+            "in": "query",
+            "name": "h298_min_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "H298 Min Kj Mol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "h298_max_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "H298 Max Kj Mol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "s298_min_j_mol_k",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "S298 Min J Mol K"
+            }
+          },
+          {
+            "in": "query",
+            "name": "s298_max_j_mol_k",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "S298 Max J Mol K"
+            }
+          },
+          {
+            "in": "query",
+            "name": "enthalpy_formation_0k_min_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Enthalpy Formation 0K Min Kj Mol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "enthalpy_formation_0k_max_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Enthalpy Formation 0K Max Kj Mol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_uncertainty",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Uncertainty"
+            }
+          },
+          {
+            "in": "query",
+            "name": "h298_uncertainty_min_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "H298 Uncertainty Min Kj Mol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "h298_uncertainty_max_kj_mol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "H298 Uncertainty Max Kj Mol"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_literature",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Literature"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_statmech_provenance",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Statmech Provenance"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThermoAnalyticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Thermo Analytics",
+        "tags": [
+          "scientific",
+          "scientific-analytics"
         ]
       }
     },

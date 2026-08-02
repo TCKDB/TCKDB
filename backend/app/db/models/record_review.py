@@ -116,6 +116,17 @@ class RecordReview(Base, TimestampMixin, CreatedByMixin):
             "status",
             "record_type",
         ),
+        # Every scientific read joins on (record_type, record_id) and then
+        # reads ``status``. The unique constraint above indexes the key but
+        # not the payload, so the join visited the heap once per candidate;
+        # including ``status`` makes it index-only. See revision
+        # a7c2e4f8b6d9 for the measured buffer counts.
+        Index(
+            "ix_record_review_record_lookup",
+            "record_type",
+            "record_id",
+            postgresql_include=["status"],
+        ),
         Index("ix_record_review_submission_id", "submission_id"),
         CheckConstraint(
             "(status NOT IN ('approved', 'rejected', 'deprecated')) "

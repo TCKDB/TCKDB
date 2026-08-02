@@ -1160,6 +1160,7 @@ Table calculation {
     software_release_id [name: 'ix_calculation_software_release_id']
     species_entry_id [name: 'ix_calculation_species_entry_id']
     transition_state_entry_id [name: 'ix_calculation_transition_state_entry_id']
+    (type, id) [name: 'ix_calculation_type_id']
     workflow_tool_release_id [name: 'ix_calculation_workflow_tool_release_id']
   }
 
@@ -2510,9 +2511,9 @@ Table record_review {
   created_by bigint [ref: > app_user.id]
 
   indexes {
+    (record_type, record_id) [name: 'ix_record_review_record_lookup']
     (status, record_type) [name: 'ix_record_review_status_record_type']
     submission_id [name: 'ix_record_review_submission_id']
-    (record_type, record_id) [unique, name: 'uq_record_review_record']
   }
 
   checks {
