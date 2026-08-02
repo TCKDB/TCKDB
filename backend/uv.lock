@@ -129,6 +129,33 @@ wheels = [
 ]
 
 [[package]]
+name = "cantera"
+version = "3.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "ruamel-yaml" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1e/f1/b68fa5512d77ed86b48b57f3a2cd947590a432f56fe9877a38d9fa3b4bd7/cantera-3.2.0.tar.gz", hash = "sha256:d811175e052251a7d2ea70f60fa19a5b8a61bf32d3b5565d2404b22ba57d8d41", size = 1623397, upload-time = "2025-11-18T01:14:18.94Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/e1/845b5b4bfd7f667c1a4e940ec8171244364db5322f03d6bdb76316c01550/cantera-3.2.0-cp313-cp313-macosx_10_15_x86_64.whl", hash = "sha256:b0476fa867c5c5fc47c224a008dbfd93c4eff5e387914a31c3beb6095aafe145", size = 6268379, upload-time = "2025-11-18T01:13:40.98Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/8d/28c14dc1e2e5a3a4cff2fac6b3302d4a6b9023a22ff3463bdbcb784cfb80/cantera-3.2.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:aad5e1e0855a05946bc86331d1782019bf2e72763414013177298cba56c50b4f", size = 5464248, upload-time = "2025-11-18T01:13:43.065Z" },
+    { url = "https://files.pythonhosted.org/packages/82/eb/7b7555fc5f6531e44079e0ba36e1b550f48689134878e4fbc7908e953ada/cantera-3.2.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:2678c9b9ac83b6ede7ebd7a5cc953abfd9702f9f6d5224cbde686954222fb198", size = 11835930, upload-time = "2025-11-18T01:13:45.233Z" },
+    { url = "https://files.pythonhosted.org/packages/af/4a/763ad5c301a552e7bd533ed25cc70150f6adfe67c6e73541ce8b8d7b00b0/cantera-3.2.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:52335f69b9fc6fe88d56ee5a11797c25798714f6ce1373597a3d8a26e1db4365", size = 19299408, upload-time = "2025-11-18T01:13:48.761Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/c4/2eb7115cb1a9a3e8d8f9f931e9c3031ebe6d43a2ee1a3bc454f5eacefa0c/cantera-3.2.0-cp313-cp313-win_amd64.whl", hash = "sha256:a16dcb6873b402e56e763d2017a86125ccc2f60f7234beddd5ec9c797ae8f768", size = 5294332, upload-time = "2025-11-18T01:13:51.871Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/9f/44c8315ef53fdfc03b4a4244fd3759b447790d1cd4c9345f7fd254b27e9b/cantera-3.2.0-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:0fcd3d62d8b1fd740ba149ae6a0b5a2673061336d31c60d526d0349826cd2793", size = 6270332, upload-time = "2025-11-18T01:13:54.368Z" },
+    { url = "https://files.pythonhosted.org/packages/c3/50/daec99f5a09f1f61696816fb42c8128b6ebf515855138a0e3f06cc6b59f5/cantera-3.2.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:63c2a3fb5856796eef1fe9b9b65ac688863e805ccdb0c9dee0ee6410d63c896b", size = 5471960, upload-time = "2025-11-18T01:13:56.322Z" },
+    { url = "https://files.pythonhosted.org/packages/88/c8/50d5a7489f10782aaaacdff147154fc6e445889c93609f4c936a0ceb8c38/cantera-3.2.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:fb9a60319b1a090a107fe7cdaa9ef235bad5a8fc6780f83176605de2ec2c09ba", size = 11856620, upload-time = "2025-11-18T01:13:58.773Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/bf/5a267a658e528f112fdc120bcdefb1692c12134454819c7bb6d5fc342cf8/cantera-3.2.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:01a92b2aa3db4b239ff4380c229283baf34f557afbb0409dc863d4204b88d0ff", size = 19307436, upload-time = "2025-11-18T01:14:02.074Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/07/da23437993f06e6251dddf2e3fa8cb8b12ded3955d034b25c925a74ad47e/cantera-3.2.0-cp314-cp314-win_amd64.whl", hash = "sha256:ab7743909ee95ae46b46c36c96f029a32b2f28f8528d175495ce4ecb76d34314", size = 5283229, upload-time = "2025-11-18T01:14:04.807Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/28/6c69120f444f8a06077fe74c6f1e64bc7c5952100fb81c9cc03bda9d42a0/cantera-3.2.0-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:a9125e99d93c1810341ae9389dd0bb5ae41f0e7d3a6d7392634d872914d3980a", size = 6354783, upload-time = "2025-11-18T01:14:07.208Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/5a/eddaa256814c74b1ee14b3a5c6189db22e9a6d7856e4223584faac82e6fe/cantera-3.2.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:e11a218359b6b21123f5f2701f72bacc17581f2acbbbdff121e723499d9cf591", size = 5594649, upload-time = "2025-11-18T01:14:10.028Z" },
+    { url = "https://files.pythonhosted.org/packages/39/ff/ea9e4a7e09ede234b1f8f987003cde62a9fa242f0157d1343a7ced3e37ca/cantera-3.2.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:fbdca971caa5df204cf077523fc6d7d9bbfed1cb40d7b3f2e48958088d9853c0", size = 11844365, upload-time = "2025-11-18T01:14:12.868Z" },
+    { url = "https://files.pythonhosted.org/packages/47/e9/9a44ca1002e2f5cf7432b8fda05c6721f4b6ca696ac76b8f37f8bc4d1ee6/cantera-3.2.0-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:45b13e4232efde00e279b56ef09225d88d54b06260afec27bac2631caa4c5786", size = 19290981, upload-time = "2025-11-18T01:14:16.474Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.4.22"
 source = { registry = "https://pypi.org/simple" }
@@ -282,6 +309,28 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/27/96/3acae5da0953be042c0b4dea6d6789d2f080701c77b88e44d5bd41b9219b/coverage-7.14.0-cp314-cp314t-win_amd64.whl", hash = "sha256:29943e552fdc08e082eb51400fb2f58e118a83b5542bd06531214e084399b644", size = 224680, upload-time = "2026-05-10T18:02:25.896Z" },
     { url = "https://files.pythonhosted.org/packages/93/3d/6ab5d2dd8325d838737c6f8d83d62eb6230e0d70b87b51b57bbfd08fa767/coverage-7.14.0-cp314-cp314t-win_arm64.whl", hash = "sha256:742a73ea621953b012f2c4c2219b512180dd84489acf5b1596b0aafc55b9100b", size = 222703, upload-time = "2026-05-10T18:02:27.822Z" },
     { url = "https://files.pythonhosted.org/packages/61/e8/cb8e80d6f9f55b99588625062822bf946cf03ed06315df4bd8397f5632a1/coverage-7.14.0-py3-none-any.whl", hash = "sha256:8de5b61163aee3d05c8a2beab6f47913df7981dad1baf82c414d99158c286ab1", size = 211764, upload-time = "2026-05-10T18:02:29.538Z" },
+]
+
+[[package]]
+name = "dnspython"
+version = "2.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8c/8b/57666417c0f90f08bcafa776861060426765fdb422eb10212086fb811d26/dnspython-2.8.0.tar.gz", hash = "sha256:181d3c6996452cb1189c4046c61599b84a5a86e099562ffde77d26984ff26d0f", size = 368251, upload-time = "2025-09-07T18:58:00.022Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/5a/18ad964b0086c6e62e2e7500f7edc89e3faa45033c71c1893d34eed2b2de/dnspython-2.8.0-py3-none-any.whl", hash = "sha256:01d9bbc4a2d76bf0db7c1f729812ded6d912bd318d3b1cf81d30c0f845dbf3af", size = 331094, upload-time = "2025-09-07T18:57:58.071Z" },
+]
+
+[[package]]
+name = "email-validator"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dnspython" },
+    { name = "idna" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f5/22/900cb125c76b7aaa450ce02fd727f452243f2e91a61af068b40adba60ea9/email_validator-2.3.0.tar.gz", hash = "sha256:9fc05c37f2f6cf439ff414f8fc46d917929974a82244c20eb10231ba60c54426", size = 51238, upload-time = "2025-08-26T13:09:06.831Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/15/545e2b6cf2e3be84bc1ed85613edd75b8aea69807a71c26f4ca6a9258e82/email_validator-2.3.0-py3-none-any.whl", hash = "sha256:80f13f623413e6b197ae73bb10bf4eb0908faf509ad8362c5edeb0be7fd450b4", size = 35604, upload-time = "2025-08-26T13:09:05.858Z" },
 ]
 
 [[package]]
@@ -923,6 +972,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-randomly"
+version = "4.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/27/b3/36192dacc0f470ac2cc516f73e01739c9a48a8224f76beada4f85e1c8a89/pytest_randomly-4.1.0.tar.gz", hash = "sha256:47f1d9746c3bc3efabd53ae1ebfb8bb385cf3d4df4b505b6d58d9c97a3dfe70f", size = 14302, upload-time = "2026-04-20T13:01:51.831Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/db/2df9a1fca597a273f957a559c20c2d95d629928384507b2afa43ba6909d1/pytest_randomly-4.1.0-py3-none-any.whl", hash = "sha256:f55e89e53367b090c0c053697d7f9d77595543d0e0516c93978b50c0f6b252f9", size = 8353, upload-time = "2026-04-20T13:01:50.382Z" },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -1108,6 +1169,15 @@ wheels = [
 ]
 
 [[package]]
+name = "ruamel-yaml"
+version = "0.19.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/3b/ebda527b56beb90cb7652cb1c7e4f91f48649fbcd8d2eb2fb6e77cd3329b/ruamel_yaml-0.19.1.tar.gz", hash = "sha256:53eb66cd27849eff968ebf8f0bf61f46cdac2da1d1f3576dd4ccee9b25c31993", size = 142709, upload-time = "2026-01-02T16:50:31.84Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/0c/51f6841f1d84f404f92463fc2b1ba0da357ca1e3db6b7fbda26956c3b82a/ruamel_yaml-0.19.1-py3-none-any.whl", hash = "sha256:27592957fedf6e0b62f281e96effd28043345e0e66001f97683aa9a40c667c93", size = 118102, upload-time = "2026-01-02T16:50:29.201Z" },
+]
+
+[[package]]
 name = "ruff"
 version = "0.15.12"
 source = { registry = "https://pypi.org/simple" }
@@ -1221,16 +1291,21 @@ dependencies = [
     { name = "pyyaml" },
     { name = "requests" },
     { name = "sqlalchemy" },
+    { name = "tckdb-schemas" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
+chemkin = [
+    { name = "cantera" },
+]
 dev = [
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "pytest-randomly" },
     { name = "ruff" },
 ]
 rdkit = [
@@ -1241,6 +1316,7 @@ rdkit = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "boto3", specifier = ">=1.34" },
+    { name = "cantera", marker = "extra == 'chemkin'", specifier = ">=3.0" },
     { name = "fastapi", specifier = ">=0.110" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "isbnlib2", specifier = ">=0.1" },
@@ -1252,15 +1328,34 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4" },
+    { name = "pytest-randomly", marker = "extra == 'dev'", specifier = ">=3.15" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rdkit", marker = "extra == 'rdkit'", specifier = ">=2024.3" },
     { name = "requests", specifier = ">=2.31" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "tckdb-schemas", editable = "../schemas/python/tckdb-schemas" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27" },
 ]
-provides-extras = ["dev", "rdkit"]
+provides-extras = ["dev", "rdkit", "chemkin"]
+
+[[package]]
+name = "tckdb-schemas"
+version = "0.14.0"
+source = { editable = "../schemas/python/tckdb-schemas" }
+dependencies = [
+    { name = "email-validator" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "email-validator", specifier = ">=2" },
+    { name = "pydantic", specifier = ">=2.6" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "typing-extensions"
