@@ -262,9 +262,13 @@ cp backend/.env.example backend/.env
 #    Path A — conda + pip (recommended; conda-forge RDKit):
 mamba env create -n tckdb_env -f backend/environment.yml
 conda activate tckdb_env
+#    tckdb-schemas is first-party (in this repo, not on PyPI) and the
+#    backend imports it at module level, so install it before the backend:
+pip install -e schemas/python/tckdb-schemas
 cd backend && pip install -e ".[dev]" && cd ..
 #
 #    Path B — pure pip / uv (lockfile-driven, no conda):
+#    uv resolves tckdb-schemas from the path in [tool.uv.sources].
 # cd backend && uv sync --extra dev --extra rdkit && cd ..
 
 # 3. Start Postgres+RDKit + MinIO and run migrations
