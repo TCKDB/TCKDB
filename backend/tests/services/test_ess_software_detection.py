@@ -66,7 +66,13 @@ class TestOrcaMarkerIsAnchoredOnTheName:
         "text",
         [
             "                 * O   R   C   A *",
+            # Version-independent by construction: the marker is the name, not
+            # the number, so any release matches and future ones will too.
+            "Program Version 4.2.1 -  RELEASE  -\nORCA",
             "Program Version 5.0.3 -  RELEASE  -\nORCA",
+            "Program Version 6.1.0 -  RELEASE  -\nORCA",
+            "ORCA 4.0.1",
+            "ORCA 5.0.4",
             "ORCA 6.0.0",
             "****ORCA TERMINATED NORMALLY****",
         ],
