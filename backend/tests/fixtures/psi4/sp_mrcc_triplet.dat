@@ -1,0 +1,170 @@
+
+    -----------------------------------------------------------------------
+          Psi4: An Open-Source Ab Initio Electronic Structure Package
+                               Psi4 1.9.1 release
+
+                         Git: Rev {} zzzzzzz 
+
+
+    D. G. A. Smith, L. A. Burns, A. C. Simmonett, R. M. Parrish,
+    M. C. Schieber, R. Galvelis, P. Kraus, H. Kruse, R. Di Remigio,
+    A. Alenaizan, A. M. James, S. Lehtola, J. P. Misiewicz, M. Scheurer,
+    R. A. Shaw, J. B. Schriber, Y. Xie, Z. L. Glick, D. A. Sirianni,
+    J. S. O'Brien, J. M. Waldrop, A. Kumar, E. G. Hohenstein,
+    B. P. Pritchard, B. R. Brooks, H. F. Schaefer III, A. Yu. Sokolov,
+    K. Patkowski, A. E. DePrince III, U. Bozkaya, R. A. King,
+    F. A. Evangelista, J. M. Turney, T. D. Crawford, C. D. Sherrill,
+    J. Chem. Phys. 152(18) 184108 (2020). https://doi.org/10.1063/5.0006002
+
+                            Additional Code Authors
+    E. T. Seidl, C. L. Janssen, E. F. Valeev, M. L. Leininger,
+    J. F. Gonthier, R. M. Richard, H. R. McAlexander, M. Saitow, X. Wang,
+    P. Verma, M. H. Lechner, A. Jiang, S. Behnle, A. G. Heide,
+    M. F. Herbst, and D. L. Poole
+
+             Previous Authors, Complete List of Code Contributors,
+                       and Citations for Specific Modules
+    https://github.com/psi4/psi4/blob/master/codemeta.json
+    https://github.com/psi4/psi4/graphs/contributors
+    http://psicode.org/psi4manual/master/introduction.html#citing-psifour
+
+    -----------------------------------------------------------------------
+
+
+    Psi4 started on: Tuesday, 07 January 2025 12:57AM
+
+    Process ID: 414528
+    Host:       n173.zeus.technion.ac.il
+    PSIDATADIR: /home/kaplan.kfir/psi4conda/share/psi4
+    Memory:     500.0 MiB
+    Threads:    30
+    
+  ==> Input File <==
+
+--------------------------------------------------------------------------
+memory 295000 mb
+
+molecule TS_4 {
+0 3
+O       0.00000000   -1.38863500    0.17427700
+O       0.00000000   -0.95108900   -1.03197800
+H       0.00000000   -0.39177700    0.77372600
+N      -0.00000000    0.93429900    0.92886100
+O      -0.00000000    1.38114400   -0.31935600
+H       0.84302700    1.18576200    1.44701800
+H      -0.84302700    1.18576200    1.44701800
+units angstrom
+}
+set {
+    basis aug-cc-pvtz
+    qc_module mrcc
+    reference uhf
+    freeze_core false
+    mrcc_restart 2
+}
+energy('ccsd(t)_l')--------------------------------------------------------------------------
+
+Parsed Psithon:
+import psi4
+from psi4 import *
+from psi4.core import *
+from psi4.driver.diatomic import anharmonicity
+from psi4.driver.gaussian_n import *
+from psi4.driver.frac import ip_fitting, frac_traverse
+from psi4.driver.aliases import *
+from psi4.driver.driver_cbs import *
+from psi4.driver.wrapper_database import database, db, DB_RGT, DB_RXN
+from psi4.driver.wrapper_autofrag import auto_fragments
+psi4_io = core.IOManager.shared_object()
+geometry("""
+0 1
+H 0 0 0
+H 0.74 0 0
+""","blank_molecule_psi4_yo")
+core.set_memory_bytes(295000000000)
+
+TS_4 = geometry("""
+0 3
+O       0.00000000   -1.38863500    0.17427700
+O       0.00000000   -0.95108900   -1.03197800
+H       0.00000000   -0.39177700    0.77372600
+N      -0.00000000    0.93429900    0.92886100
+O      -0.00000000    1.38114400   -0.31935600
+H       0.84302700    1.18576200    1.44701800
+H      -0.84302700    1.18576200    1.44701800
+units angstrom
+""","TS_4")
+core.IO.set_default_namespace("TS_4")
+core.set_global_option("BASIS", "aug-cc-pvtz")
+core.set_global_option("QC_MODULE", "mrcc")
+core.set_global_option("REFERENCE", "uhf")
+core.set_global_option("FREEZE_CORE", "false")
+core.set_global_option("MRCC_RESTART", 2)
+energy('ccsd(t)_l')
+---------------------------------------------------------------------------
+  Memory set to 274.740 GiB by Python driver.
+
+Scratch directory: /gtmp/897425.zeus-master/
+
+Method "ccsd(t)_l" has been regularized to "a-ccsd(t)" for QCVariables.
+Method "ccsd(t)_l" has been regularized to "a-ccsd(t)" for QCVariables.   => Libint2 <=
+
+    Primary   basis highest AM E, G, H:  5, 4, 3
+    Auxiliary basis highest AM E, G, H:  6, 5, 4
+    Onebody   basis highest AM E, G, H:  6, 5, 4
+    Solid Harmonics ordering:            Gaussian
+
+*** tstart() called on n173.zeus.technion.ac.il
+*** at Tue Jan  7 00:57:42 2025
+
+   => Loading Basis Set <=
+
+    Name: AUG-CC-PVTZ
+    Role: ORBITAL
+    Keyword: BASIS
+    atoms 1-2, 5 entry O          line   331 file /home/kaplan.kfir/psi4conda/share/psi4/basis/aug-cc-pvtz.gbs 
+    atoms 3, 6-7 entry H          line    40 file /home/kaplan.kfir/psi4conda/share/psi4/basis/aug-cc-pvtz.gbs 
+    atoms 4      entry N          line   285 file /home/kaplan.kfir/psi4conda/share/psi4/basis/aug-cc-pvtz.gbs 
+
+
+         ---------------------------------------------------------
+                                   SCF
+               by Justin Turney, Rob Parrish, Andy Simmonett
+                          and Daniel G. A. Smith
+                              UHF Reference
+                       30 Threads, 281333 MiB Core
+         ---------------------------------------------------------
+
+  ==> Geometry <==
+
+    Molecular point group: cs
+    Full point group: Cs
+
+    Geometry (in Angstrom), charge = 0, multiplicity = 3:
+
+       Center              X                  Y                   Z               Mass       
+    ------------   -----------------  -----------------  -----------------  -----------------
+         O            1.384726315507    -0.206941394784     0.000000000000    15.994914619570
+         O            0.947180315507     0.999313605216     0.000000000000    15.994914619570
+         H            0.387868315507    -0.806390394784     0.000000000000     1.007825032230
+         N           -0.938207684493    -0.961525394784     0.000000000000    14.003074004430
+         O           -1.385052684493     0.286691605216     0.000000000000    15.994914619570
+         H           -1.189670684493    -1.479682394784     0.843027000000     1.007825032230
+         H           -1.189670684493    -1.479682394784    -0.843027000000     1.007825032230
+
+  Running in cs symmetry.
+
+  Rotational constants: A =      0.54592  B =      0.17027  C =      0.13271 [cm^-1]
+  Rotational constants: A =  16366.22560  B =   5104.46852  C =   3978.68750 [MHz]
+  Nuclear repulsion =  126.146330605449961
+
+  Charge       = 0
+  Multiplicity = 3
+  Electrons    = 34
+  Nalpha       = 18
+  Nbeta        = 16
+
+  ==> Algorithm <==
+
+  SCF Algorithm Type is PK.
+  DIIS enabled.

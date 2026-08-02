@@ -1,0 +1,155 @@
+
+    -----------------------------------------------------------------------
+          Psi4: An Open-Source Ab Initio Electronic Structure Package
+                               Psi4 1.9.1 release
+
+                         Git: Rev {} zzzzzzz 
+
+
+    D. G. A. Smith, L. A. Burns, A. C. Simmonett, R. M. Parrish,
+    M. C. Schieber, R. Galvelis, P. Kraus, H. Kruse, R. Di Remigio,
+    A. Alenaizan, A. M. James, S. Lehtola, J. P. Misiewicz, M. Scheurer,
+    R. A. Shaw, J. B. Schriber, Y. Xie, Z. L. Glick, D. A. Sirianni,
+    J. S. O'Brien, J. M. Waldrop, A. Kumar, E. G. Hohenstein,
+    B. P. Pritchard, B. R. Brooks, H. F. Schaefer III, A. Yu. Sokolov,
+    K. Patkowski, A. E. DePrince III, U. Bozkaya, R. A. King,
+    F. A. Evangelista, J. M. Turney, T. D. Crawford, C. D. Sherrill,
+    J. Chem. Phys. 152(18) 184108 (2020). https://doi.org/10.1063/5.0006002
+
+                            Additional Code Authors
+    E. T. Seidl, C. L. Janssen, E. F. Valeev, M. L. Leininger,
+    J. F. Gonthier, R. M. Richard, H. R. McAlexander, M. Saitow, X. Wang,
+    P. Verma, M. H. Lechner, A. Jiang, S. Behnle, A. G. Heide,
+    M. F. Herbst, and D. L. Poole
+
+             Previous Authors, Complete List of Code Contributors,
+                       and Citations for Specific Modules
+    https://github.com/psi4/psi4/blob/master/codemeta.json
+    https://github.com/psi4/psi4/graphs/contributors
+    http://psicode.org/psi4manual/master/introduction.html#citing-psifour
+
+    -----------------------------------------------------------------------
+
+
+    Psi4 started on: Wednesday, 04 September 2024 02:00PM
+
+    Process ID: 2885695
+    Host:       n137
+    PSIDATADIR: /home/user/mambaforge/share/psi4
+    Memory:     500.0 MiB
+    Threads:    8
+    
+  ==> Input File <==
+
+--------------------------------------------------------------------------
+
+memory 300000 mb
+
+molecule NH2 {
+0 2
+N       0.00024300    0.42354500    0.00000000
+H      -0.80358900   -0.21131100   -0.00000000
+H       0.80334600   -0.21223300    0.00000000
+units angstrom
+}
+set {
+    basis cc-pvtz
+    mrcc_restart 2
+    qc_module mrcc
+    reference uhf
+}
+energy('ccsdt(q)')
+--------------------------------------------------------------------------
+
+Parsed Psithon:
+import psi4
+from psi4 import *
+from psi4.core import *
+from psi4.driver.diatomic import anharmonicity
+from psi4.driver.gaussian_n import *
+from psi4.driver.frac import ip_fitting, frac_traverse
+from psi4.driver.aliases import *
+from psi4.driver.driver_cbs import *
+from psi4.driver.wrapper_database import database, db, DB_RGT, DB_RXN
+from psi4.driver.wrapper_autofrag import auto_fragments
+psi4_io = core.IOManager.shared_object()
+geometry("""
+0 1
+H 0 0 0
+H 0.74 0 0
+""","blank_molecule_psi4_yo")
+
+core.set_memory_bytes(300000000000)
+
+NH2 = geometry("""
+0 2
+N       0.00024300    0.42354500    0.00000000
+H      -0.80358900   -0.21131100   -0.00000000
+H       0.80334600   -0.21223300    0.00000000
+units angstrom
+""","NH2")
+core.IO.set_default_namespace("NH2")
+core.set_global_option("BASIS", "cc-pvtz")
+core.set_global_option("MRCC_RESTART", 2)
+core.set_global_option("QC_MODULE", "mrcc")
+core.set_global_option("REFERENCE", "uhf")
+energy('ccsdt(q)')
+---------------------------------------------------------------------------
+  Memory set to 279.397 GiB by Python driver.
+
+Scratch directory: /gtmp/610247.zeus-master/
+   => Libint2 <=
+
+    Primary   basis highest AM E, G, H:  6, 6, 3
+    Auxiliary basis highest AM E, G, H:  7, 7, 4
+    Onebody   basis highest AM E, G, H:  -, -, -
+    Solid Harmonics ordering:            Gaussian
+
+*** tstart() called on n137
+*** at Wed Sep  4 14:00:35 2024
+
+   => Loading Basis Set <=
+
+    Name: CC-PVTZ
+    Role: ORBITAL
+    Keyword: BASIS
+    atoms 1   entry N          line   224 file /home/user/mambaforge/share/psi4/basis/cc-pvtz.gbs 
+    atoms 2-3 entry H          line    23 file /home/user/mambaforge/share/psi4/basis/cc-pvtz.gbs 
+
+
+         ---------------------------------------------------------
+                                   SCF
+               by Justin Turney, Rob Parrish, Andy Simmonett
+                          and Daniel G. A. Smith
+                              UHF Reference
+                        8 Threads, 286102 MiB Core
+         ---------------------------------------------------------
+
+  ==> Geometry <==
+
+    Molecular point group: cs
+    Full point group: Cs
+
+    Geometry (in Angstrom), charge = 0, multiplicity = 2:
+
+       Center              X                  Y                   Z               Mass       
+    ------------   -----------------  -----------------  -----------------  -----------------
+         N            0.000045865354     0.079942493952     0.000000000000    14.003074004430
+         H           -0.803786134646    -0.554913506048     0.000000000000     1.007825032230
+         H            0.803148865354    -0.555835506048     0.000000000000     1.007825032230
+
+  Running in cs symmetry.
+
+  Rotational constants: A =     23.70308  B =     12.95521  C =      8.37678 [cm^-1]
+  Rotational constants: A = 710600.49087  B = 388387.54190  C = 251129.55709 [MHz]
+  Nuclear repulsion =    7.562042448584871
+
+  Charge       = 0
+  Multiplicity = 2
+  Electrons    = 9
+  Nalpha       = 5
+  Nbeta        = 4
+
+  ==> Algorithm <==
+
+  SCF Algorithm Type is PK.

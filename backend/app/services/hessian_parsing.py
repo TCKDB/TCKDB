@@ -455,7 +455,10 @@ def parse_hessian_from_artifact(
         from app.services.gaussian_parameter_parser import parse_hessian
     elif software == "molpro":
         from app.services.molpro_parameter_parser import parse_hessian
-    else:  # orca output logs do not carry the matrix; it is in the .hess
+    else:
+        # ORCA output logs do not carry the matrix (it lives in the .hess,
+        # handled above), and Psi4 Hessian extraction is not wired. Either
+        # way there is nothing to parse, and nothing is guessed.
         return None
 
     result = parse_hessian(text)

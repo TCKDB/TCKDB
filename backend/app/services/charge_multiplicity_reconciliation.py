@@ -123,6 +123,23 @@ def _parse_orca(text: str) -> tuple[int | None, int | None]:
     return _unanimous(charges), _unanimous(mults)
 
 
+def _parse_psi4(text: str) -> tuple[int | None, int | None]:
+    """Psi4 declares the pair twice per geometry, in two different shapes.
+
+    Both are collected by the parser, and both must agree. A counterpoise
+    or SAPT job activates each fragment as its own molecule and prints a
+    header per fragment, so the first pair need not describe the whole
+    system — the unanimity check is what stops a fragment's values being
+    compared against the entry's.
+    """
+    from app.services.psi4_parameter_parser import parse_all_charge_multiplicity
+
+    found = parse_all_charge_multiplicity(text)
+    charges: list[int | None] = [c for c, _ in found]
+    mults: list[int | None] = [m for _, m in found]
+    return _unanimous(charges), _unanimous(mults)
+
+
 def _parse_molpro(text: str) -> tuple[int | None, int | None]:
     """Molpro states the spin, but never declares the charge outright.
 
@@ -153,7 +170,7 @@ def parse_charge_multiplicity_from_log(
     Picks the parser by sniffing the program banner in the log's *content*
     (not its filename), the same dispatch the single-point-energy path uses,
     so the two can never disagree about which program produced a given file.
-    Gaussian, ORCA and Molpro are wired.
+    Gaussian, ORCA, Molpro and Psi4 are wired.
 
     Returns ``None`` when the program is unrecognised or neither quantity
     could be read, so the caller treats the log as *unverifiable* rather
@@ -165,10 +182,19 @@ def parse_charge_multiplicity_from_log(
     if software is None:
         return None
 
+    # Exhaustive on purpose. A program without a wired parser must not fall
+    # through to another program's: Gaussian's charge/multiplicity pattern
+    # spans newlines and so coincidentally matches Psi4's SCF block, which
+    # would look like it worked while missing Psi4's geometry-header form
+    # entirely — and would report one confident pair for a log whose two
+    # forms disagree, the exact fabricated mismatch this module exists to
+    # avoid.
     if software == "molpro":
         charge, multiplicity = _parse_molpro(text)
     elif software == "orca":
         charge, multiplicity = _parse_orca(text)
+    elif software == "psi4":
+        charge, multiplicity = _parse_psi4(text)
     else:  # gaussian
         charge, multiplicity = _parse_gaussian(text)
 

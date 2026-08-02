@@ -274,3 +274,102 @@ class TestRejectRatherThanGuess:
             log_text=GAUSSIAN_TRIPLET,
         )
         assert _codes(outcome) == [W_MULTIPLICITY_MISMATCH]
+
+
+# ---------------------------------------------------------------------------
+# Psi4
+# ---------------------------------------------------------------------------
+
+
+class TestPsi4:
+    """Psi4 logs are re-read like any other wired program.
+
+    Real Psi4 output, truncated to the header region — see
+    ``tests/fixtures/psi4/README.md``. Psi4 declares the pair twice per
+    geometry (a ``Geometry (in Angstrom), charge = q, multiplicity = m:``
+    header and an indented ``Charge =`` / ``Multiplicity =`` SCF block) and
+    both are read.
+    """
+
+    @pytest.mark.parametrize(
+        ("fixture", "charge", "multiplicity"),
+        [
+            pytest.param("opt_freq_singlet.out", 0, 1, id="singlet"),
+            pytest.param("opt_freq_dft_ts_singlet.out", 0, 1, id="singlet_dft_ts"),
+            pytest.param("sp_nh2_doublet.dat", 0, 2, id="doublet"),
+            pytest.param("sp_mrcc_triplet.dat", 0, 3, id="triplet"),
+        ],
+    )
+    def test_reads_declared_values(self, fixture, charge, multiplicity):
+        parsed = parse_charge_multiplicity_from_log(_read("psi4", fixture))
+        assert parsed is not None
+        assert parsed.software == "psi4"
+        assert (parsed.charge, parsed.multiplicity) == (charge, multiplicity)
+
+    def test_agreement_is_silent(self):
+        outcome = reconcile_charge_multiplicity(
+            declared_charge=0,
+            declared_multiplicity=3,
+            log_text=_read("psi4", "sp_mrcc_triplet.dat"),
+        )
+        assert outcome.action is ChargeMultiplicityAction.confirmed
+        assert outcome.warnings == []
+
+    def test_genuine_mismatch_fires(self):
+        """Log says triplet, uploader declared a singlet."""
+        outcome = reconcile_charge_multiplicity(
+            declared_charge=0,
+            declared_multiplicity=1,
+            log_text=_read("psi4", "sp_mrcc_triplet.dat"),
+        )
+        assert outcome.action is ChargeMultiplicityAction.mismatch
+        assert _codes(outcome) == [W_MULTIPLICITY_MISMATCH]
+        assert outcome.log_multiplicity == 3
+        assert outcome.software == "psi4"
+
+    def test_truncated_log_is_unverifiable_not_a_mismatch(self):
+        """A run that died before printing the block tells us nothing.
+
+        Absence is not a contradiction: no warning may be emitted, however
+        wrong the declared values look.
+        """
+        log = _read("psi4", "io_error_truncated.out")
+        assert parse_charge_multiplicity_from_log(log) is None
+        outcome = reconcile_charge_multiplicity(
+            declared_charge=7, declared_multiplicity=9, log_text=log
+        )
+        assert outcome.action is ChargeMultiplicityAction.unverifiable
+        assert outcome.warnings == []
+        assert outcome.log_charge is None
+        assert outcome.log_multiplicity is None
+
+    def test_disagreeing_declarations_are_unknown(self):
+        """A counterpoise/SAPT job prints one header per fragment.
+
+        Psi4 must not inherit Gaussian's coincidental behaviour here: the
+        Gaussian pattern spans newlines and so matches Psi4's SCF block,
+        and on a self-contradictory log it would return a single confident
+        pair rather than declining.
+        """
+        log = (
+            "    Psi4: An Open-Source Ab Initio Electronic Structure Package\n"
+            "    Geometry (in Angstrom), charge = 0, multiplicity = 1:\n"
+            "    Geometry (in Angstrom), charge = 1, multiplicity = 2:\n"
+        )
+        assert parse_charge_multiplicity_from_log(log) is None
+        outcome = reconcile_charge_multiplicity(
+            declared_charge=0, declared_multiplicity=1, log_text=log
+        )
+        assert outcome.action is ChargeMultiplicityAction.unverifiable
+        assert outcome.warnings == []
+
+    def test_unphysical_multiplicity_discarded_charge_kept(self):
+        log = (
+            "    Psi4: An Open-Source Ab Initio Electronic Structure Package\n"
+            "  Charge       = 0\n"
+            "  Multiplicity = 0\n"
+        )
+        parsed = parse_charge_multiplicity_from_log(log)
+        assert parsed is not None
+        assert parsed.charge == 0
+        assert parsed.multiplicity is None

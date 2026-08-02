@@ -1,0 +1,112 @@
+
+    -----------------------------------------------------------------------
+          Psi4: An Open-Source Ab Initio Electronic Structure Package
+                               Psi4 1.3.2 release
+
+                         Git: Rev {HEAD} ecbda83 
+
+
+    R. M. Parrish, L. A. Burns, D. G. A. Smith, A. C. Simmonett,
+    A. E. DePrince III, E. G. Hohenstein, U. Bozkaya, A. Yu. Sokolov,
+    R. Di Remigio, R. M. Richard, J. F. Gonthier, A. M. James,
+    H. R. McAlexander, A. Kumar, M. Saitow, X. Wang, B. P. Pritchard,
+    P. Verma, H. F. Schaefer III, K. Patkowski, R. A. King, E. F. Valeev,
+    F. A. Evangelista, J. M. Turney, T. D. Crawford, and C. D. Sherrill,
+    J. Chem. Theory Comput. 13(7) pp 3185--3197 (2017).
+    (doi: 10.1021/acs.jctc.7b00174)
+
+
+                         Additional Contributions by
+    P. Kraus, H. Kruse, M. H. Lechner, M. C. Schieber, R. A. Shaw,
+    A. Alenaizan, R. Galvelis, Z. L. Glick, S. Lehtola, and J. P. Misiewicz
+
+    -----------------------------------------------------------------------
+
+
+    Psi4 started on: Sunday, 06 September 2020 04:11PM
+
+    Process ID: 10137
+    Host:       X1-ubuntu
+    PSIDATADIR: /home/dranasinghe/anaconda2/envs/rmgpy3_env/share/psi4
+    Memory:     500.0 MiB
+    Threads:    1
+    
+  ==> Input File <==
+
+--------------------------------------------------------------------------
+memory 1024 mb
+
+molecule mol {
+0 1
+O                 -1.02870815   -0.00797448    0.00000000
+H                 -0.06870815   -0.00797448    0.00000000
+H                 -1.34916274    0.89696135    0.00000000
+}
+set {
+  basis 6-31G(d_p)
+  geom_maxiter 50
+  print 3
+}
+
+e, wfn = optimize('scf', return_wfn=True)
+scf_e, wfn=frequencies('scf', return_wfn=True, dertype=1)
+wfn.hessian().print_out()
+
+--------------------------------------------------------------------------
+
+  Memory set to 976.562 MiB by Python driver.
+gradient() will perform analytic gradient computation.
+
+*** tstart() called on X1-ubuntu
+*** at Sun Sep  6 16:11:55 2020
+
+   => Loading Basis Set <=
+
+    Name: 6-31G(D_P)
+    Role: ORBITAL
+    Keyword: BASIS
+    atoms 1   entry O          line   149 file /home/dranasinghe/anaconda2/envs/rmgpy3_env/share/psi4/basis/6-31g_d_p_.gbs 
+    atoms 2-3 entry H          line    44 file /home/dranasinghe/anaconda2/envs/rmgpy3_env/share/psi4/basis/6-31g_d_p_.gbs 
+
+
+         ---------------------------------------------------------
+                                   SCF
+               by Justin Turney, Rob Parrish, Andy Simmonett
+                          and Daniel G. A. Smith
+                              RHF Reference
+                        1 Threads,    976 MiB Core
+         ---------------------------------------------------------
+
+  ==> Geometry <==
+
+    Molecular point group: c2v
+    Full point group: C2v
+
+    Geometry (in Angstrom), charge = 0, multiplicity = 1:
+
+       Center              X                  Y                   Z               Mass       
+    ------------   -----------------  -----------------  -----------------  -----------------
+         O           -0.000000000000     0.000000000000    -0.062007485347    15.994914619570
+         H            0.783975894634     0.000000000000     0.492051895015     1.007825032230
+         H           -0.783975894634    -0.000000000000     0.492051895015     1.007825032230
+
+           O
+              BASIS           6-31G(D_P)           ec2d227169b1af6c6a69bc8715bab79dbd7bb644
+           H
+              BASIS           6-31G(D_P)           902186d0f3205710946c2c15d2c68458d6f6cc2a
+           H
+              BASIS           6-31G(D_P)           902186d0f3205710946c2c15d2c68458d6f6cc2a
+
+  Running in c2v symmetry.
+
+  Rotational constants: A =     30.67709  B =     13.60742  C =      9.42623 [cm^-1]
+  Rotational constants: A = 919675.97593  B = 407940.33087  C = 282591.37824 [MHz]
+  Nuclear repulsion =    9.157116019082448
+
+  Charge       = 0
+  Multiplicity = 1
+  Electrons    = 10
+  Nalpha       = 5
+  Nbeta        = 5
+
+  ==> Algorithm <==

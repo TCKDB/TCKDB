@@ -75,6 +75,12 @@ def _resolve_software(
 
     DB-linked software identity wins; text sniffing is the fallback for
     calculations created without a ``software_release`` row.
+
+    Resolving a program is not a promise that a parser exists for it —
+    ``_run_parser`` is the single place that decides that, and raises for a
+    program it cannot parse. The allow-list below stays at the three
+    programs with a wired parameter parser so a mislabelled
+    ``software_release`` cannot override what the log itself says.
     """
 
     release = calculation.software_release
@@ -90,7 +96,7 @@ def _resolve_software(
     raise ParameterExtractionError(
         "Cannot determine ESS software for parameter extraction: "
         "calculation has no software_release and the artifact text "
-        "contains no recognised Gaussian/ORCA/Molpro markers."
+        "contains no recognised electronic-structure program banner."
     )
 
 
@@ -127,6 +133,14 @@ def _run_parser(software: SoftwareName, artifact_text: str) -> dict:
 
     Wraps any parser exception in :class:`ParameterExtractionError` so
     callers have a single failure mode to catch.
+
+    Dispatch is exhaustive on purpose. A recognised program with no wired
+    parameter parser raises rather than falling through to another
+    program's parser: feeding a Psi4 log to the ORCA parser would emit
+    parameter rows attributed to a run that never happened. The
+    opportunistic callers funnel through :func:`_extract_safe`, which
+    downgrades the raise to a logged skip, so the artifact upload still
+    succeeds.
     """
 
     try:
@@ -137,7 +151,14 @@ def _run_parser(software: SoftwareName, artifact_text: str) -> dict:
             return _parse_gaussian_text(artifact_text)
         if software == "molpro":
             return molpro_parameter_parser.parse_molpro_log(text=artifact_text)
-        return orca_parameter_parser.parse_orca_log(text=artifact_text)
+        if software == "orca":
+            return orca_parameter_parser.parse_orca_log(text=artifact_text)
+        raise ParameterExtractionError(
+            f"No parameter parser is wired for {software}; parameters were "
+            "not extracted. The artifact itself is stored unchanged."
+        )
+    except ParameterExtractionError:
+        raise
     except Exception as exc:
         raise ParameterExtractionError(
             f"{software} parser failed: {type(exc).__name__}: {exc}"
