@@ -88,6 +88,36 @@ class TestTransportUpload:
 
 
 class TestTransportUploadValidation:
+    def test_empty_transport_returns_422(self, client):
+        """A transport row with no transport property at all is definitionally
+        empty and must be refused at upload (ADR 0008: definitions block)."""
+        payload = _transport_payload()
+        for field in (
+            "sigma_angstrom",
+            "epsilon_over_k_k",
+            "dipole_debye",
+            "polarizability_angstrom3",
+            "rotational_relaxation",
+        ):
+            payload[field] = None
+        resp = client.post("/api/v1/uploads/transport", json=payload)
+        assert resp.status_code == 422
+        assert "at least one transport property" in resp.text
+
+    def test_single_property_transport_still_succeeds(self, client):
+        """Exactly one non-LJ property is enough content; the row is not empty."""
+        payload = _transport_payload(
+            species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
+            sigma_angstrom=None,
+            epsilon_over_k_k=None,
+            polarizability_angstrom3=None,
+            rotational_relaxation=None,
+            dipole_debye=1.85,
+        )
+        resp = client.post("/api/v1/uploads/transport", json=payload)
+        assert resp.status_code == 201
+        assert resp.json()["type"] == "transport"
+
     def test_partial_lj_pair_returns_422(self, client):
         payload = _transport_payload()
         payload["epsilon_over_k_k"] = None
