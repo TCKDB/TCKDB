@@ -14,6 +14,7 @@ chemistry semantics — those belong in producer-specific adapters.
 
 from __future__ import annotations
 
+import json as _json
 import time
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
@@ -32,14 +33,33 @@ from tckdb_client.errors import (
     TCKDBValidationError,
 )
 from tckdb_client.idempotency import validate_idempotency_key
-from tckdb_client.pagination import iter_paginated_records
+from tckdb_client.pagination import iter_keyset_records, iter_paginated_records
+from tckdb_client.retry import RetryPolicy
 from tckdb_client.scientific_types import (
     ArtifactRecord,
     ArtifactSearchResponse,
+    CalculationAnalyticsRecord,
+    CalculationAnalyticsResponse,
     CalculationDetailResponse,
     CalculationSearchResponse,
+    ConformerGroupDetailResponse,
+    ConformerObservationDetailResponse,
+    ConformerRecord,
+    ConformerSearchResponse,
+    EnergyCorrectionSchemeDetailResponse,
+    EnergyCorrectionSchemeRecord,
+    EnergyCorrectionSchemeSearchResponse,
+    FrequencyScaleFactorDetailResponse,
+    FrequencyScaleFactorRecord,
+    FrequencyScaleFactorSearchResponse,
+    JSONDict,
+    KineticsAnalyticsRecord,
+    KineticsAnalyticsResponse,
     KineticsRecord,
     KineticsSearchResponse,
+    LiteratureDetailResponse,
+    LiteratureLinkedRecord,
+    LiteratureRecordsResponse,
     NetworkKineticsRecord,
     NetworkKineticsSearchResponse,
     NetworkRecord,
@@ -53,11 +73,21 @@ from tckdb_client.scientific_types import (
     SpeciesCalculationsSearchResponse,
     SpeciesRecord,
     SpeciesSearchResponse,
+    SpeciesStructureRecord,
+    SpeciesStructureSearchResponse,
     SpeciesThermoResponse,
+    StatmechAnalyticsRecord,
+    StatmechAnalyticsResponse,
     StatmechRecord,
     StatmechSearchResponse,
+    ThermoAnalyticsRecord,
+    ThermoAnalyticsResponse,
     ThermoRecord,
     ThermoSearchResponse,
+    TransitionStateDetailResponse,
+    TransitionStateEntryDetailResponse,
+    TransitionStateEntryRecord,
+    TransitionStateSearchResponse,
     TransportRecord,
     TransportSearchResponse,
 )
@@ -208,6 +238,11 @@ class TCKDBClient:
         Optional ``httpx`` transport, primarily for tests
         (``httpx.MockTransport``). Production callers should leave this
         unset.
+    retry:
+        Optional :class:`~tckdb_client.retry.RetryPolicy`. Retrying is
+        **off** unless one is supplied: a replayed write that the server
+        already committed would duplicate a scientific record, so opting
+        in is the caller's decision, not a default.
     """
 
     def __init__(
@@ -217,12 +252,16 @@ class TCKDBClient:
         timeout: float = 30.0,
         *,
         transport: httpx.BaseTransport | None = None,
+        retry: RetryPolicy | None = None,
     ) -> None:
         if not isinstance(base_url, str) or not base_url:
             raise ValueError("base_url must be a non-empty string.")
+        if retry is not None and not isinstance(retry, RetryPolicy):
+            raise TypeError("retry must be a RetryPolicy instance or None.")
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._timeout = timeout
+        self._retry = retry
         self._client = httpx.Client(
             timeout=timeout,
             transport=transport,
@@ -336,6 +375,78 @@ class TCKDBClient:
         non-success responses raise the appropriate
         :class:`TCKDBHTTPError` subclass.
         """
+        response = self._send(
+            method,
+            path,
+            json=json,
+            params=params,
+            authenticated=authenticated,
+            idempotency_key=idempotency_key,
+            extra_headers=extra_headers,
+        )
+        return self._handle_response(response)
+
+    def _request_raw(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any = None,
+        params: Mapping[str, Any] | None = None,
+        accept: str = "application/octet-stream",
+        authenticated: bool = False,
+    ) -> bytes:
+        """Perform a request whose body is *not* JSON and return it verbatim.
+
+        Artifact downloads and the Chemkin export return opaque bytes.
+        Routing them through :meth:`request_json` would decode them as text
+        and corrupt anything that is not UTF-8, so they take this path —
+        the error mapping and retry behaviour are shared, only the success
+        branch differs.
+        """
+
+        response = self._send(
+            method,
+            path,
+            json=json,
+            params=params,
+            authenticated=authenticated,
+            extra_headers={"Accept": accept},
+        )
+        if response.is_success:
+            return response.content
+        parsed: Any = None
+        text: str | None = None
+        try:
+            parsed = response.json()
+        except ValueError:
+            text = response.text or None
+        raise self._build_http_error(
+            status_code=response.status_code,
+            parsed=parsed,
+            text=text,
+            headers=response.headers,
+        )
+
+    def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any,
+        params: Mapping[str, Any] | None,
+        authenticated: bool,
+        idempotency_key: str | None = None,
+        extra_headers: Mapping[str, str] | None = None,
+    ) -> httpx.Response:
+        """Issue the request, replaying it only when replay cannot duplicate work.
+
+        Returns the raw response — including error responses — so the two
+        callers can decode the body their own way. Transport failures still
+        raise :class:`TCKDBConnectionError`, because there is no response
+        to hand back.
+        """
+
         url = self._full_url(path)
         headers = self._build_headers(
             authenticated=authenticated,
@@ -343,20 +454,43 @@ class TCKDBClient:
             idempotency_key=idempotency_key,
             extra=extra_headers,
         )
-        try:
-            response = self._client.request(
-                method,
-                url,
-                json=json,
-                params=_clean_params(params) if params else None,
-                headers=headers,
-            )
-        except httpx.TimeoutException as exc:
-            raise TCKDBConnectionError(f"Request timed out: {exc}") from exc
-        except httpx.TransportError as exc:
-            raise TCKDBConnectionError(f"Network error: {exc}") from exc
+        cleaned = _clean_params(params) if params else None
+        policy = self._retry
+        eligible = policy is not None and policy.method_is_retryable(
+            method, has_idempotency_key=_carries_idempotency_key(headers)
+        )
+        max_attempts = policy.max_attempts if policy is not None and eligible else 1
 
-        return self._handle_response(response)
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                response = self._client.request(
+                    method, url, json=json, params=cleaned, headers=headers
+                )
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                if policy is None or not eligible or attempt >= max_attempts:
+                    if isinstance(exc, httpx.TimeoutException):
+                        raise TCKDBConnectionError(
+                            f"Request timed out: {exc}"
+                        ) from exc
+                    raise TCKDBConnectionError(f"Network error: {exc}") from exc
+                policy.sleep(policy.delay_for(attempt))
+                continue
+
+            if (
+                policy is None
+                or not eligible
+                or attempt >= max_attempts
+                or response.is_success
+                or not policy.status_is_retryable(response.status_code)
+                # A server asking for a longer pause than the caller
+                # budgeted is not a transient blip; surface it now rather
+                # than block for the maintenance window.
+                or policy.retry_after_exceeds_budget(response.headers)
+            ):
+                return response
+            policy.sleep(policy.delay_for(attempt, response.headers))
 
     def _handle_response(self, response: httpx.Response) -> TCKDBResponse:
         parsed: Any = None
@@ -435,6 +569,20 @@ class TCKDBClient:
             "GET", "/health", authenticated=False
         ).data
 
+    def readyz(self) -> Any:
+        """Readiness probe: ``/health`` says the process is up, this says
+        its dependencies (database, object store) answered."""
+        return self.request_json("GET", "/readyz", authenticated=False).data
+
+    def get_meta(self) -> Any:
+        """Deployment metadata — versions, limits, and enabled features.
+
+        Read this before assuming a capability exists: the same client
+        talks to hosted TCKDB and to self-hosted instances that may be
+        running an older build.
+        """
+        return self.request_json("GET", "/meta", authenticated=False).data
+
     def me(self) -> dict:
         """Return the authenticated user profile (``GET /auth/me``)."""
         return self.request_json("GET", "/auth/me").data
@@ -443,27 +591,34 @@ class TCKDBClient:
         return self.request_json("GET", path).data
 
     def get_calculation(
-        self, calculation_ref_or_id: str | int, *, include: list[str] | None = None
+        self,
+        calculation_ref_or_id: str | int,
+        *,
+        include: list[str] | None = None,
+        profile: str | None = None,
     ) -> CalculationDetailResponse:
         """Fetch one scientific calculation, optionally including its environment."""
         return self.request_json(
             "GET",
             f"/scientific/calculations/{calculation_ref_or_id}",
-            params={"include": include} if include is not None else None,
+            params={"include": include, "profile": profile},
             authenticated=False,
         ).data
 
     def search_calculations(
-        self, *, method_http: _ScientificSearchMethod = "POST", **filters: Any
+        self,
+        *,
+        profile: str | None = None,
+        method_http: _ScientificSearchMethod = "POST",
+        **filters: Any,
     ) -> CalculationSearchResponse:
         """Search scientific calculations; ``include`` may request execution_environment."""
-        if method_http.upper() == "GET":
-            return self.request_json(
-                "GET", "/scientific/calculations/search", params=filters, authenticated=False
-            ).data
-        return self.request_json(
-            "POST", "/scientific/calculations/search", json=filters, authenticated=False
-        ).data
+        return self._request_scientific_search(
+            "/scientific/calculations/search",
+            filters,
+            method_http=method_http,
+            profile=profile,
+        )
 
     def post_json(
         self,
@@ -950,6 +1105,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
     ) -> SpeciesSearchResponse:
         """``GET /scientific/species/search`` — discover species by identity.
 
@@ -976,6 +1132,7 @@ class TCKDBClient:
             "collapse": collapse,
             "offset": offset,
             "limit": limit,
+            "profile": profile,
         }
         return self.request_json(
             "GET",
@@ -1000,6 +1157,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method: str = "POST",
     ) -> ReactionSearchResponse:
         """``GET|POST /scientific/reactions/search`` — discover reaction entries.
@@ -1031,7 +1189,7 @@ class TCKDBClient:
             return self.request_json(
                 "GET",
                 "/scientific/reactions/search",
-                params=common,
+                params={**common, "profile": profile},
                 authenticated=False,
             ).data
         body = {k: v for k, v in common.items() if v is not None}
@@ -1039,6 +1197,7 @@ class TCKDBClient:
             "POST",
             "/scientific/reactions/search",
             json=body,
+            params={"profile": profile},
             authenticated=False,
         ).data
 
@@ -1061,6 +1220,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
     ) -> ReactionKineticsResponse:
         """``GET /scientific/reaction-entries/{reaction_entry_id}/kinetics``.
 
@@ -1089,6 +1249,7 @@ class TCKDBClient:
             "collapse": collapse,
             "offset": offset,
             "limit": limit,
+            "profile": profile,
         }
         return self.request_json(
             "GET", path, params=params, authenticated=False
@@ -1111,6 +1272,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
     ) -> SpeciesThermoResponse:
         """``GET /scientific/species-entries/{species_entry_id}/thermo``.
 
@@ -1135,6 +1297,7 @@ class TCKDBClient:
             "collapse": collapse,
             "offset": offset,
             "limit": limit,
+            "profile": profile,
         }
         return self.request_json(
             "GET", path, params=params, authenticated=False
@@ -1166,6 +1329,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method: str = "POST",
     ) -> ThermoSearchResponse:
         """``GET|POST /scientific/thermo/search`` — chemistry-first thermo search.
@@ -1206,13 +1370,14 @@ class TCKDBClient:
             return self.request_json(
                 "GET",
                 "/scientific/thermo/search",
-                params=body,
+                params={**body, "profile": profile},
                 authenticated=False,
             ).data
         return self.request_json(
             "POST",
             "/scientific/thermo/search",
             json={k: v for k, v in body.items() if v is not None},
+            params={"profile": profile},
             authenticated=False,
         ).data
 
@@ -1240,6 +1405,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method: str = "POST",
     ) -> KineticsSearchResponse:
         """``GET|POST /scientific/kinetics/search`` — chemistry-first kinetics search.
@@ -1278,13 +1444,14 @@ class TCKDBClient:
             return self.request_json(
                 "GET",
                 "/scientific/kinetics/search",
-                params=body,
+                params={**body, "profile": profile},
                 authenticated=False,
             ).data
         return self.request_json(
             "POST",
             "/scientific/kinetics/search",
             json={k: v for k, v in body.items() if v is not None},
+            params={"profile": profile},
             authenticated=False,
         ).data
 
@@ -1321,6 +1488,7 @@ class TCKDBClient:
         collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method_http: str = "POST",
     ) -> SpeciesCalculationsSearchResponse:
         """``GET|POST /scientific/species-calculations/search`` — chemistry-first
@@ -1372,13 +1540,14 @@ class TCKDBClient:
             return self.request_json(
                 "GET",
                 "/scientific/species-calculations/search",
-                params=body,
+                params={**body, "profile": profile},
                 authenticated=False,
             ).data
         return self.request_json(
             "POST",
             "/scientific/species-calculations/search",
             json={k: v for k, v in body.items() if v is not None},
+            params={"profile": profile},
             authenticated=False,
         ).data
 
@@ -1388,8 +1557,15 @@ class TCKDBClient:
         parameters: Mapping[str, Any],
         *,
         method_http: _ScientificSearchMethod,
+        profile: str | None = None,
     ) -> Any:
-        """Dispatch one scientific search through its GET or POST form."""
+        """Dispatch one scientific search through its GET or POST form.
+
+        ``profile`` rides the query string in **both** forms. The backend
+        resolves it from a router-level dependency that only reads the
+        query, so a profile smuggled into the JSON body would be silently
+        ignored and the answer would come back under the wrong contract.
+        """
 
         if not isinstance(method_http, str):
             raise ValueError("method_http must be 'GET' or 'POST'.")
@@ -1400,7 +1576,7 @@ class TCKDBClient:
             return self.request_json(
                 "GET",
                 path,
-                params=parameters,
+                params={**parameters, "profile": profile},
                 authenticated=False,
             ).data
         return self.request_json(
@@ -1411,6 +1587,7 @@ class TCKDBClient:
                 for key, value in parameters.items()
                 if value is not None
             },
+            params={"profile": profile},
             authenticated=False,
         ).data
 
@@ -1447,6 +1624,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
     ) -> NetworkSearchResponse:
         """Search pressure-dependence networks by chemistry and provenance."""
@@ -1487,6 +1665,7 @@ class TCKDBClient:
             "/scientific/networks/search",
             body,
             method_http=method_http,
+            profile=profile,
         )
 
     def search_network_kinetics(
@@ -1520,6 +1699,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
     ) -> NetworkKineticsSearchResponse:
         """Search PDep kinetics with stoichiometric source/sink filters."""
@@ -1558,6 +1738,7 @@ class TCKDBClient:
             "/scientific/network-kinetics/search",
             body,
             method_http=method_http,
+            profile=profile,
         )
 
     def search_network_solves(
@@ -1589,6 +1770,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
     ) -> NetworkSolveSearchResponse:
         """Search pressure-dependence network solves and their evidence."""
@@ -1625,6 +1807,7 @@ class TCKDBClient:
             "/scientific/network-solves/search",
             body,
             method_http=method_http,
+            profile=profile,
         )
 
     def search_statmech(
@@ -1652,6 +1835,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
     ) -> StatmechSearchResponse:
         """Search statmech records by species, model, evidence, or provenance."""
@@ -1684,6 +1868,7 @@ class TCKDBClient:
             "/scientific/statmech/search",
             body,
             method_http=method_http,
+            profile=profile,
         )
 
     def search_transport(
@@ -1710,6 +1895,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
     ) -> TransportSearchResponse:
         """Search transport records by species, parameters, or provenance."""
@@ -1741,6 +1927,7 @@ class TCKDBClient:
             "/scientific/transport/search",
             body,
             method_http=method_http,
+            profile=profile,
         )
 
     def search_artifacts(
@@ -1774,6 +1961,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
     ) -> ArtifactSearchResponse:
         """Search artifact metadata; raw artifact bodies are never returned."""
@@ -1812,7 +2000,636 @@ class TCKDBClient:
             "/scientific/artifacts/search",
             body,
             method_http=method_http,
+            profile=profile,
         )
+
+    def search_species_structures(
+        self,
+        *,
+        query_smiles: str | None = None,
+        query_smarts: str | None = None,
+        query_inchi: str | None = None,
+        query_inchi_key: str | None = None,
+        mode: str | None = None,
+        similarity_threshold: float | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+        method_http: _ScientificSearchMethod = "POST",
+    ) -> SpeciesStructureSearchResponse:
+        """Structure search: exact, substructure, or similarity.
+
+        Distinct from ``search_species``, which matches identity handles.
+        This one runs an RDKit query against the stored molecules, so
+        ``query_smarts='[CX4H3]'`` finds every methyl-bearing species
+        rather than requiring the caller to already know what it wants.
+        Defaults to POST because SMARTS is full of characters that
+        round-trip badly through a query string.
+        """
+
+        body = {
+            "query_smiles": query_smiles,
+            "query_smarts": query_smarts,
+            "query_inchi": query_inchi,
+            "query_inchi_key": query_inchi_key,
+            "mode": mode,
+            "similarity_threshold": similarity_threshold,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self._request_scientific_search(
+            "/scientific/species/structure-search",
+            body,
+            method_http=method_http,
+            profile=profile,
+        )
+
+    def search_conformers(
+        self,
+        *,
+        species_ref: str | None = None,
+        species_entry_ref: str | None = None,
+        conformer_group_ref: str | None = None,
+        conformer_observation_ref: str | None = None,
+        selection_kind: str | None = None,
+        has_selection: bool | None = None,
+        assignment_scheme_ref: str | None = None,
+        has_observations: bool | None = None,
+        has_calculations: bool | None = None,
+        has_geometries: bool | None = None,
+        has_opt: bool | None = None,
+        has_freq: bool | None = None,
+        has_sp: bool | None = None,
+        has_geometry_validation: bool | None = None,
+        has_scf_stability: bool | None = None,
+        scientific_origin: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+        method_http: _ScientificSearchMethod = "POST",
+    ) -> ConformerSearchResponse:
+        """Search conformer groups by species, evidence, or selection state."""
+
+        body = {
+            "species_ref": species_ref,
+            "species_entry_ref": species_entry_ref,
+            "conformer_group_ref": conformer_group_ref,
+            "conformer_observation_ref": conformer_observation_ref,
+            "selection_kind": selection_kind,
+            "has_selection": has_selection,
+            "assignment_scheme_ref": assignment_scheme_ref,
+            "has_observations": has_observations,
+            "has_calculations": has_calculations,
+            "has_geometries": has_geometries,
+            "has_opt": has_opt,
+            "has_freq": has_freq,
+            "has_sp": has_sp,
+            "has_geometry_validation": has_geometry_validation,
+            "has_scf_stability": has_scf_stability,
+            "scientific_origin": scientific_origin,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self._request_scientific_search(
+            "/scientific/conformers/search",
+            body,
+            method_http=method_http,
+            profile=profile,
+        )
+
+    def search_transition_states(
+        self,
+        *,
+        reaction_ref: str | None = None,
+        reaction_entry_ref: str | None = None,
+        transition_state_ref: str | None = None,
+        transition_state_entry_ref: str | None = None,
+        status: str | None = None,
+        charge: int | None = None,
+        multiplicity: int | None = None,
+        has_calculations: bool | None = None,
+        has_opt: bool | None = None,
+        has_freq: bool | None = None,
+        has_sp: bool | None = None,
+        has_irc: bool | None = None,
+        has_path_search: bool | None = None,
+        has_geometry_validation: bool | None = None,
+        has_scf_stability: bool | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+        method_http: _ScientificSearchMethod = "POST",
+    ) -> TransitionStateSearchResponse:
+        """Search transition-state *entries* by reaction and evidence.
+
+        Entry-grained rather than identity-grained: calculations, IRC
+        confirmation, and validation all attach to an entry, so a search
+        over identities could not answer "which TS actually has an IRC".
+        """
+
+        body = {
+            "reaction_ref": reaction_ref,
+            "reaction_entry_ref": reaction_entry_ref,
+            "transition_state_ref": transition_state_ref,
+            "transition_state_entry_ref": transition_state_entry_ref,
+            "status": status,
+            "charge": charge,
+            "multiplicity": multiplicity,
+            "has_calculations": has_calculations,
+            "has_opt": has_opt,
+            "has_freq": has_freq,
+            "has_sp": has_sp,
+            "has_irc": has_irc,
+            "has_path_search": has_path_search,
+            "has_geometry_validation": has_geometry_validation,
+            "has_scf_stability": has_scf_stability,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self._request_scientific_search(
+            "/scientific/transition-states/search",
+            body,
+            method_http=method_http,
+            profile=profile,
+        )
+
+    def search_energy_correction_schemes(
+        self,
+        *,
+        energy_correction_scheme_ref: str | None = None,
+        name: str | None = None,
+        version: str | None = None,
+        scheme_kind: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        literature_ref: str | None = None,
+        has_corrections: bool | None = None,
+        used_by_thermo: bool | None = None,
+        used_by_calculation: bool | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+        method_http: _ScientificSearchMethod = "POST",
+    ) -> EnergyCorrectionSchemeSearchResponse:
+        """Search the reference library of energy-correction schemes."""
+
+        body = {
+            "energy_correction_scheme_ref": energy_correction_scheme_ref,
+            "name": name,
+            "version": version,
+            "scheme_kind": scheme_kind,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "literature_ref": literature_ref,
+            "has_corrections": has_corrections,
+            "used_by_thermo": used_by_thermo,
+            "used_by_calculation": used_by_calculation,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self._request_scientific_search(
+            "/scientific/energy-correction-schemes/search",
+            body,
+            method_http=method_http,
+            profile=profile,
+        )
+
+    def search_frequency_scale_factors(
+        self,
+        *,
+        frequency_scale_factor_ref: str | None = None,
+        value: float | None = None,
+        value_min: float | None = None,
+        value_max: float | None = None,
+        scale_kind: str | None = None,
+        model_kind: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        literature_ref: str | None = None,
+        used_by_statmech: bool | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+        method_http: _ScientificSearchMethod = "POST",
+    ) -> FrequencyScaleFactorSearchResponse:
+        """Search the reference library of frequency scale factors."""
+
+        body = {
+            "frequency_scale_factor_ref": frequency_scale_factor_ref,
+            "value": value,
+            "value_min": value_min,
+            "value_max": value_max,
+            "scale_kind": scale_kind,
+            "model_kind": model_kind,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "literature_ref": literature_ref,
+            "used_by_statmech": used_by_statmech,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self._request_scientific_search(
+            "/scientific/frequency-scale-factors/search",
+            body,
+            method_http=method_http,
+            profile=profile,
+        )
+
+    # ------------------------------------------------------------------
+    # Analytics reads (/api/v1/scientific/analytics/*)
+    # ------------------------------------------------------------------
+    #
+    # Flat, numeric, one row per record — the surface for building a
+    # dataset rather than answering a chemistry question. GET only: every
+    # filter is a scalar and a cursor is a short token, so the POST twin
+    # the chemistry-first searches carry would add surface without
+    # answering a question.
+    #
+    # Each takes ``cursor`` and returns ``next_cursor``. Prefer the
+    # ``iter_*`` companions, which follow the cursor: offset paging over a
+    # live corpus can skip or duplicate rows without saying so.
+
+    def search_kinetics_analytics(
+        self,
+        *,
+        scientific_origin: str | None = None,
+        direction: str | None = None,
+        model_kind: str | None = None,
+        tunneling_model: str | None = None,
+        pressure_context: str | None = None,
+        degeneracy_min: float | None = None,
+        degeneracy_max: float | None = None,
+        pressure_min_bar: float | None = None,
+        pressure_max_bar: float | None = None,
+        a_min: float | None = None,
+        a_max: float | None = None,
+        n_min: float | None = None,
+        n_max: float | None = None,
+        ea_min_kj_mol: float | None = None,
+        ea_max_kj_mol: float | None = None,
+        has_uncertainty: bool | None = None,
+        ea_uncertainty_min_kj_mol: float | None = None,
+        ea_uncertainty_max_kj_mol: float | None = None,
+        temperature_min_k: float | None = None,
+        temperature_max_k: float | None = None,
+        has_literature: bool | None = None,
+        workflow_tool: str | None = None,
+        has_transition_state_provenance: bool | None = None,
+        has_statmech_provenance: bool | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        profile: str | None = None,
+    ) -> KineticsAnalyticsResponse:
+        """``GET /scientific/analytics/kinetics`` — flat kinetics rows.
+
+        ``temperature_min_k`` / ``temperature_max_k`` are *coverage*
+        filters: they select records whose own stated range spans the
+        window, and records with no stated range never match.
+        """
+
+        params = {
+            "scientific_origin": scientific_origin,
+            "direction": direction,
+            "model_kind": model_kind,
+            "tunneling_model": tunneling_model,
+            "pressure_context": pressure_context,
+            "degeneracy_min": degeneracy_min,
+            "degeneracy_max": degeneracy_max,
+            "pressure_min_bar": pressure_min_bar,
+            "pressure_max_bar": pressure_max_bar,
+            "a_min": a_min,
+            "a_max": a_max,
+            "n_min": n_min,
+            "n_max": n_max,
+            "ea_min_kj_mol": ea_min_kj_mol,
+            "ea_max_kj_mol": ea_max_kj_mol,
+            "has_uncertainty": has_uncertainty,
+            "ea_uncertainty_min_kj_mol": ea_uncertainty_min_kj_mol,
+            "ea_uncertainty_max_kj_mol": ea_uncertainty_max_kj_mol,
+            "temperature_min_k": temperature_min_k,
+            "temperature_max_k": temperature_max_k,
+            "has_literature": has_literature,
+            "workflow_tool": workflow_tool,
+            "has_transition_state_provenance": has_transition_state_provenance,
+            "has_statmech_provenance": has_statmech_provenance,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+            "cursor": cursor,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            "/scientific/analytics/kinetics",
+            params=params,
+            authenticated=False,
+        ).data
+
+    def search_thermo_analytics(
+        self,
+        *,
+        scientific_origin: str | None = None,
+        phase: str | None = None,
+        model_kind: str | None = None,
+        reference_pressure_min_bar: float | None = None,
+        reference_pressure_max_bar: float | None = None,
+        h298_min_kj_mol: float | None = None,
+        h298_max_kj_mol: float | None = None,
+        s298_min_j_mol_k: float | None = None,
+        s298_max_j_mol_k: float | None = None,
+        enthalpy_formation_0k_min_kj_mol: float | None = None,
+        enthalpy_formation_0k_max_kj_mol: float | None = None,
+        has_uncertainty: bool | None = None,
+        h298_uncertainty_min_kj_mol: float | None = None,
+        h298_uncertainty_max_kj_mol: float | None = None,
+        has_literature: bool | None = None,
+        workflow_tool: str | None = None,
+        has_statmech_provenance: bool | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        profile: str | None = None,
+    ) -> ThermoAnalyticsResponse:
+        """``GET /scientific/analytics/thermo`` — flat thermo rows."""
+
+        params = {
+            "scientific_origin": scientific_origin,
+            "phase": phase,
+            "model_kind": model_kind,
+            "reference_pressure_min_bar": reference_pressure_min_bar,
+            "reference_pressure_max_bar": reference_pressure_max_bar,
+            "h298_min_kj_mol": h298_min_kj_mol,
+            "h298_max_kj_mol": h298_max_kj_mol,
+            "s298_min_j_mol_k": s298_min_j_mol_k,
+            "s298_max_j_mol_k": s298_max_j_mol_k,
+            "enthalpy_formation_0k_min_kj_mol": enthalpy_formation_0k_min_kj_mol,
+            "enthalpy_formation_0k_max_kj_mol": enthalpy_formation_0k_max_kj_mol,
+            "has_uncertainty": has_uncertainty,
+            "h298_uncertainty_min_kj_mol": h298_uncertainty_min_kj_mol,
+            "h298_uncertainty_max_kj_mol": h298_uncertainty_max_kj_mol,
+            "has_literature": has_literature,
+            "workflow_tool": workflow_tool,
+            "has_statmech_provenance": has_statmech_provenance,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+            "cursor": cursor,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            "/scientific/analytics/thermo",
+            params=params,
+            authenticated=False,
+        ).data
+
+    def search_statmech_analytics(
+        self,
+        *,
+        scientific_origin: str | None = None,
+        external_symmetry: int | None = None,
+        is_linear: bool | None = None,
+        point_group: str | None = None,
+        statmech_treatment: str | None = None,
+        rigid_rotor_kind: str | None = None,
+        optical_isomers: int | None = None,
+        rotational_constant_a_min_cm1: float | None = None,
+        rotational_constant_a_max_cm1: float | None = None,
+        rotational_constant_b_min_cm1: float | None = None,
+        rotational_constant_b_max_cm1: float | None = None,
+        rotational_constant_c_min_cm1: float | None = None,
+        rotational_constant_c_max_cm1: float | None = None,
+        has_frequency_scale_factor: bool | None = None,
+        has_torsions: bool | None = None,
+        has_electronic_levels: bool | None = None,
+        electronic_level_count_min: int | None = None,
+        electronic_level_count_max: int | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        profile: str | None = None,
+    ) -> StatmechAnalyticsResponse:
+        """``GET /scientific/analytics/statmech`` — flat statmech rows.
+
+        ``external_symmetry`` and ``optical_isomers`` are exact matches:
+        they are small integers where a range would mostly express a
+        question nobody asks.
+        """
+
+        params = {
+            "scientific_origin": scientific_origin,
+            "external_symmetry": external_symmetry,
+            "is_linear": is_linear,
+            "point_group": point_group,
+            "statmech_treatment": statmech_treatment,
+            "rigid_rotor_kind": rigid_rotor_kind,
+            "optical_isomers": optical_isomers,
+            "rotational_constant_a_min_cm1": rotational_constant_a_min_cm1,
+            "rotational_constant_a_max_cm1": rotational_constant_a_max_cm1,
+            "rotational_constant_b_min_cm1": rotational_constant_b_min_cm1,
+            "rotational_constant_b_max_cm1": rotational_constant_b_max_cm1,
+            "rotational_constant_c_min_cm1": rotational_constant_c_min_cm1,
+            "rotational_constant_c_max_cm1": rotational_constant_c_max_cm1,
+            "has_frequency_scale_factor": has_frequency_scale_factor,
+            "has_torsions": has_torsions,
+            "has_electronic_levels": has_electronic_levels,
+            "electronic_level_count_min": electronic_level_count_min,
+            "electronic_level_count_max": electronic_level_count_max,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+            "cursor": cursor,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            "/scientific/analytics/statmech",
+            params=params,
+            authenticated=False,
+        ).data
+
+    def search_calculation_analytics(
+        self,
+        *,
+        calculation_type: str | None = None,
+        electronic_energy_min_hartree: float | None = None,
+        electronic_energy_max_hartree: float | None = None,
+        zpe_min_hartree: float | None = None,
+        zpe_max_hartree: float | None = None,
+        n_imag: int | None = None,
+        converged: bool | None = None,
+        t1_min: float | None = None,
+        t1_max: float | None = None,
+        d1_min: float | None = None,
+        d1_max: float | None = None,
+        s_squared_min: float | None = None,
+        s_squared_max: float | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        lot_ref: str | None = None,
+        software: str | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+        profile: str | None = None,
+    ) -> CalculationAnalyticsResponse:
+        """``GET /scientific/analytics/calculations`` — flat calculation rows.
+
+        The diagnostics filters (``t1_max``, ``d1_max``, ``s_squared_max``)
+        are the reason this endpoint exists: selecting a training set on
+        multireference character or spin contamination is not expressible
+        through the chemistry-first searches.
+        """
+
+        params = {
+            "calculation_type": calculation_type,
+            "electronic_energy_min_hartree": electronic_energy_min_hartree,
+            "electronic_energy_max_hartree": electronic_energy_max_hartree,
+            "zpe_min_hartree": zpe_min_hartree,
+            "zpe_max_hartree": zpe_max_hartree,
+            "n_imag": n_imag,
+            "converged": converged,
+            "t1_min": t1_min,
+            "t1_max": t1_max,
+            "d1_min": d1_min,
+            "d1_max": d1_max,
+            "s_squared_min": s_squared_min,
+            "s_squared_max": s_squared_max,
+            "method": method,
+            "basis": basis,
+            "lot_ref": lot_ref,
+            "software": software,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+            "cursor": cursor,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            "/scientific/analytics/calculations",
+            params=params,
+            authenticated=False,
+        ).data
 
     def iter_species(self, **parameters: Any) -> Iterator[SpeciesRecord]:
         """Lazily yield every species record matching ``search_species``."""
@@ -1875,6 +2692,91 @@ class TCKDBClient:
 
         return iter_paginated_records(self.search_artifacts, parameters)
 
+    def iter_species_structures(
+        self, **parameters: Any
+    ) -> Iterator[SpeciesStructureRecord]:
+        """Lazily yield every structure-search hit matching the filters."""
+
+        return iter_paginated_records(self.search_species_structures, parameters)
+
+    def iter_conformers(self, **parameters: Any) -> Iterator[ConformerRecord]:
+        """Lazily yield conformer groups matching the supplied filters."""
+
+        return iter_paginated_records(self.search_conformers, parameters)
+
+    def iter_transition_states(
+        self, **parameters: Any
+    ) -> Iterator[TransitionStateEntryRecord]:
+        """Lazily yield transition-state entries matching the filters."""
+
+        return iter_paginated_records(self.search_transition_states, parameters)
+
+    def iter_energy_correction_schemes(
+        self, **parameters: Any
+    ) -> Iterator[EnergyCorrectionSchemeRecord]:
+        """Lazily yield energy-correction schemes matching the filters."""
+
+        return iter_paginated_records(
+            self.search_energy_correction_schemes, parameters
+        )
+
+    def iter_frequency_scale_factors(
+        self, **parameters: Any
+    ) -> Iterator[FrequencyScaleFactorRecord]:
+        """Lazily yield frequency scale factors matching the filters."""
+
+        return iter_paginated_records(
+            self.search_frequency_scale_factors, parameters
+        )
+
+    def iter_literature_records(
+        self, literature_ref_or_id: int | str, **parameters: Any
+    ) -> Iterator[LiteratureLinkedRecord]:
+        """Lazily yield every record linked to one literature reference.
+
+        The reference is a path segment, not a filter, so it is bound here
+        and stays fixed across pages.
+        """
+
+        def fetch_page(**page_parameters: Any) -> Any:
+            return self.get_literature_records(
+                literature_ref_or_id, **page_parameters
+            )
+
+        return iter_paginated_records(fetch_page, parameters)
+
+    # Keyset iterators. These follow ``next_cursor`` rather than counting
+    # offsets, so a dataset build over a corpus that is still being written
+    # to neither skips nor duplicates rows.
+
+    def iter_kinetics_analytics(
+        self, **parameters: Any
+    ) -> Iterator[KineticsAnalyticsRecord]:
+        """Lazily yield kinetics analytics rows, traversing by cursor."""
+
+        return iter_keyset_records(self.search_kinetics_analytics, parameters)
+
+    def iter_thermo_analytics(
+        self, **parameters: Any
+    ) -> Iterator[ThermoAnalyticsRecord]:
+        """Lazily yield thermo analytics rows, traversing by cursor."""
+
+        return iter_keyset_records(self.search_thermo_analytics, parameters)
+
+    def iter_statmech_analytics(
+        self, **parameters: Any
+    ) -> Iterator[StatmechAnalyticsRecord]:
+        """Lazily yield statmech analytics rows, traversing by cursor."""
+
+        return iter_keyset_records(self.search_statmech_analytics, parameters)
+
+    def iter_calculation_analytics(
+        self, **parameters: Any
+    ) -> Iterator[CalculationAnalyticsRecord]:
+        """Lazily yield calculation analytics rows, traversing by cursor."""
+
+        return iter_keyset_records(self.search_calculation_analytics, parameters)
+
     def get_reaction_full(
         self,
         reaction_entry_id: int | str,
@@ -1884,6 +2786,7 @@ class TCKDBClient:
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
+        profile: str | None = None,
     ) -> Any:
         """``GET /scientific/reaction-entries/{reaction_entry_id}/full``.
 
@@ -1901,6 +2804,7 @@ class TCKDBClient:
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
+            "profile": profile,
         }
         return self.request_json(
             "GET", path, params=params, authenticated=False
@@ -1911,6 +2815,7 @@ class TCKDBClient:
         geometry_handle: int | str,
         *,
         include: list[str] | None = None,
+        profile: str | None = None,
     ) -> Any:
         """``GET /scientific/geometries/{geometry_handle}``.
 
@@ -1927,7 +2832,7 @@ class TCKDBClient:
         deployment allows it.
         """
         path = f"/scientific/geometries/{geometry_handle}"
-        params = {"include": include}
+        params = {"include": include, "profile": profile}
         return self.request_json(
             "GET", path, params=params, authenticated=False
         ).data
@@ -1937,6 +2842,7 @@ class TCKDBClient:
         network_solve_ref_or_id: int | str,
         *,
         include: list[str] | None = None,
+        profile: str | None = None,
     ) -> Any:
         """``GET /scientific/network-solves/{network_solve_ref_or_id}``.
 
@@ -1948,13 +2854,522 @@ class TCKDBClient:
 
         path = f"/scientific/network-solves/{network_solve_ref_or_id}"
         return self.request_json(
-            "GET", path, params={"include": include}, authenticated=False
+            "GET", path, params={"include": include, "profile": profile},
+            authenticated=False,
         ).data
+
+    def _get_scientific_detail(
+        self,
+        path: str,
+        *,
+        include: list[str] | None,
+        profile: str | None,
+    ) -> Any:
+        """Fetch one ``{request, review_summary, record}`` detail envelope."""
+
+        return self.request_json(
+            "GET",
+            path,
+            params={"include": include, "profile": profile},
+            authenticated=False,
+        ).data
+
+    def get_conformer_group(
+        self,
+        conformer_group_ref_or_id: int | str,
+        *,
+        include: list[str] | None = None,
+        profile: str | None = None,
+    ) -> ConformerGroupDetailResponse:
+        """``GET /scientific/conformer-groups/{ref_or_id}``.
+
+        ``include`` opens bounded sections — ``observations``,
+        ``selections``, ``calculations``, ``geometries``,
+        ``review_history`` — which are omitted by default because a group
+        can carry hundreds of observations.
+        """
+
+        return self._get_scientific_detail(
+            f"/scientific/conformer-groups/{conformer_group_ref_or_id}",
+            include=include,
+            profile=profile,
+        )
+
+    def get_conformer_observation(
+        self,
+        conformer_observation_ref_or_id: int | str,
+        *,
+        include: list[str] | None = None,
+        profile: str | None = None,
+    ) -> ConformerObservationDetailResponse:
+        """``GET /scientific/conformer-observations/{ref_or_id}``."""
+
+        return self._get_scientific_detail(
+            "/scientific/conformer-observations/"
+            f"{conformer_observation_ref_or_id}",
+            include=include,
+            profile=profile,
+        )
+
+    def get_transition_state(
+        self,
+        transition_state_ref_or_id: int | str,
+        *,
+        include: list[str] | None = None,
+        profile: str | None = None,
+    ) -> TransitionStateDetailResponse:
+        """``GET /scientific/transition-states/{ref_or_id}`` — one TS identity."""
+
+        return self._get_scientific_detail(
+            f"/scientific/transition-states/{transition_state_ref_or_id}",
+            include=include,
+            profile=profile,
+        )
+
+    def get_transition_state_entry(
+        self,
+        transition_state_entry_ref_or_id: int | str,
+        *,
+        include: list[str] | None = None,
+        profile: str | None = None,
+    ) -> TransitionStateEntryDetailResponse:
+        """``GET /scientific/transition-state-entries/{ref_or_id}``."""
+
+        return self._get_scientific_detail(
+            "/scientific/transition-state-entries/"
+            f"{transition_state_entry_ref_or_id}",
+            include=include,
+            profile=profile,
+        )
+
+    def get_energy_correction_scheme(
+        self,
+        energy_correction_scheme_ref_or_id: int | str,
+        *,
+        include: list[str] | None = None,
+        profile: str | None = None,
+    ) -> EnergyCorrectionSchemeDetailResponse:
+        """``GET /scientific/energy-correction-schemes/{ref_or_id}``."""
+
+        return self._get_scientific_detail(
+            "/scientific/energy-correction-schemes/"
+            f"{energy_correction_scheme_ref_or_id}",
+            include=include,
+            profile=profile,
+        )
+
+    def get_frequency_scale_factor(
+        self,
+        frequency_scale_factor_ref_or_id: int | str,
+        *,
+        include: list[str] | None = None,
+        profile: str | None = None,
+    ) -> FrequencyScaleFactorDetailResponse:
+        """``GET /scientific/frequency-scale-factors/{ref_or_id}``."""
+
+        return self._get_scientific_detail(
+            "/scientific/frequency-scale-factors/"
+            f"{frequency_scale_factor_ref_or_id}",
+            include=include,
+            profile=profile,
+        )
+
+    def get_literature(
+        self,
+        literature_ref_or_id: int | str,
+        *,
+        include: list[str] | None = None,
+        profile: str | None = None,
+    ) -> LiteratureDetailResponse:
+        """``GET /scientific/literature/{ref_or_id}`` — one reference."""
+
+        return self._get_scientific_detail(
+            f"/scientific/literature/{literature_ref_or_id}",
+            include=include,
+            profile=profile,
+        )
+
+    def get_literature_records(
+        self,
+        literature_ref_or_id: int | str,
+        *,
+        record_type: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+    ) -> LiteratureRecordsResponse:
+        """``GET /scientific/literature/{ref_or_id}/records``.
+
+        Every scientific record that cites, or was derived from, this
+        reference — the "what came out of this paper" read.
+        """
+
+        params = {
+            "record_type": record_type,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            f"/scientific/literature/{literature_ref_or_id}/records",
+            params=params,
+            authenticated=False,
+        ).data
+
+    def _get_calculation_points(
+        self,
+        calculation_ref_or_id: int | str,
+        suffix: str,
+        *,
+        include_geometries: bool | None,
+        include: list[str] | None,
+        sort: str | None,
+        offset: int | None,
+        limit: int | None,
+        profile: str | None,
+    ) -> Any:
+        """Fetch one point series hanging off a calculation."""
+
+        params = {
+            "include_geometries": include_geometries,
+            "include": include,
+            "sort": sort,
+            "offset": offset,
+            "limit": limit,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            f"/scientific/calculations/{calculation_ref_or_id}/{suffix}",
+            params=params,
+            authenticated=False,
+        ).data
+
+    def get_calculation_irc(
+        self,
+        calculation_ref_or_id: int | str,
+        *,
+        include_geometries: bool | None = None,
+        include: list[str] | None = None,
+        sort: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+    ) -> Any:
+        """``GET /scientific/calculations/{ref_or_id}/irc`` — the IRC path.
+
+        ``include_geometries=True`` attaches coordinates to every point,
+        which is what makes the response large; it is off by default.
+        """
+
+        return self._get_calculation_points(
+            calculation_ref_or_id,
+            "irc",
+            include_geometries=include_geometries,
+            include=include,
+            sort=sort,
+            offset=offset,
+            limit=limit,
+            profile=profile,
+        )
+
+    def get_calculation_scan(
+        self,
+        calculation_ref_or_id: int | str,
+        *,
+        include_geometries: bool | None = None,
+        include: list[str] | None = None,
+        sort: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+    ) -> Any:
+        """``GET /scientific/calculations/{ref_or_id}/scan`` — scan points."""
+
+        return self._get_calculation_points(
+            calculation_ref_or_id,
+            "scan",
+            include_geometries=include_geometries,
+            include=include,
+            sort=sort,
+            offset=offset,
+            limit=limit,
+            profile=profile,
+        )
+
+    def get_calculation_path_search(
+        self,
+        calculation_ref_or_id: int | str,
+        *,
+        include_geometries: bool | None = None,
+        include: list[str] | None = None,
+        sort: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+    ) -> Any:
+        """``GET /scientific/calculations/{ref_or_id}/path-search``."""
+
+        return self._get_calculation_points(
+            calculation_ref_or_id,
+            "path-search",
+            include_geometries=include_geometries,
+            include=include,
+            sort=sort,
+            offset=offset,
+            limit=limit,
+            profile=profile,
+        )
+
+    def download_artifact(
+        self, sha256: str, *, profile: str | None = None
+    ) -> bytes:
+        """``GET /scientific/artifacts/{sha256}/download`` — the raw file.
+
+        Returns the bytes untouched. Artifacts are content-addressed, so
+        the caller can verify what it received against the digest it
+        asked for. A file whose owning record is not approved answers
+        403 ``artifact_not_approved``.
+        """
+
+        digest = sha256.strip() if isinstance(sha256, str) else ""
+        if not digest:
+            raise ValueError("sha256 must be a non-empty content digest.")
+        return self._request_raw(
+            "GET",
+            f"/scientific/artifacts/{digest}/download",
+            params={"profile": profile},
+        )
+
+    # ------------------------------------------------------------------
+    # Vocabularies
+    # ------------------------------------------------------------------
+    #
+    # What this deployment actually holds, not what the schema permits.
+    # A caller filtering on ``method='wb97xd'`` wants to know whether any
+    # record uses that spelling before it gets an empty result set.
+
+    def get_meta_methods(self, *, profile: str | None = None) -> Any:
+        """``GET /scientific/meta/methods`` — methods present in the corpus."""
+
+        return self.request_json(
+            "GET",
+            "/scientific/meta/methods",
+            params={"profile": profile},
+            authenticated=False,
+        ).data
+
+    def get_meta_basis_sets(self, *, profile: str | None = None) -> Any:
+        """``GET /scientific/meta/basis-sets``."""
+
+        return self.request_json(
+            "GET",
+            "/scientific/meta/basis-sets",
+            params={"profile": profile},
+            authenticated=False,
+        ).data
+
+    def get_meta_software(self, *, profile: str | None = None) -> Any:
+        """``GET /scientific/meta/software``."""
+
+        return self.request_json(
+            "GET",
+            "/scientific/meta/software",
+            params={"profile": profile},
+            authenticated=False,
+        ).data
+
+    def get_meta_reaction_families(self, *, profile: str | None = None) -> Any:
+        """``GET /scientific/meta/reaction-families``."""
+
+        return self.request_json(
+            "GET",
+            "/scientific/meta/reaction-families",
+            params={"profile": profile},
+            authenticated=False,
+        ).data
+
+    # ------------------------------------------------------------------
+    # Bulk exports
+    # ------------------------------------------------------------------
+
+    def _export_ndjson(
+        self, path: str, params: Mapping[str, Any]
+    ) -> Iterator[JSONDict]:
+        """Issue an NDJSON export and parse it one object per line."""
+
+        payload = self._request_raw(
+            "GET", path, params=params, accept="application/x-ndjson"
+        )
+        return _iter_ndjson(payload.decode("utf-8"))
+
+    def export_ndjson(
+        self,
+        *,
+        reaction_ref: list[str] | str | None = None,
+        species_ref: list[str] | str | None = None,
+        reaction_family: str | None = None,
+        all: bool | None = None,
+        min_review_status: str | None = None,
+        collapse: str | None = None,
+        selection_policy: str | None = None,
+        profile: str | None = None,
+    ) -> Iterator[JSONDict]:
+        """``GET /scientific/export/ndjson`` — one JSON object per line.
+
+        Streams the composed scientific document for each seed record.
+        Returns an iterator so a large export does not have to be held in
+        memory all at once.
+        """
+
+        params = {
+            "reaction_ref": reaction_ref,
+            "species_ref": species_ref,
+            "reaction_family": reaction_family,
+            "all": all,
+            "min_review_status": min_review_status,
+            "collapse": collapse,
+            "selection_policy": selection_policy,
+            "profile": profile,
+        }
+        return self._export_ndjson("/scientific/export/ndjson", params)
+
+    def export_ml_species(
+        self,
+        *,
+        species_ref: list[str] | str | None = None,
+        all: bool | None = None,
+        min_review_status: str | None = None,
+        lot_ref: str | None = None,
+        element: list[str] | str | None = None,
+        include_hessian: bool | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        profile: str | None = None,
+    ) -> Iterator[JSONDict]:
+        """``GET /scientific/export/ml/species.ndjson`` — ML-shaped species rows.
+
+        ``include_hessian`` is off by default: a Hessian is O(3N x 3N)
+        floats per record and most consumers do not want it.
+        """
+
+        params = {
+            "species_ref": species_ref,
+            "all": all,
+            "min_review_status": min_review_status,
+            "lot_ref": lot_ref,
+            "element": element,
+            "include_hessian": include_hessian,
+            "limit": limit,
+            "offset": offset,
+            "profile": profile,
+        }
+        return self._export_ndjson(
+            "/scientific/export/ml/species.ndjson", params
+        )
+
+    def export_ml_reactions(
+        self,
+        *,
+        reaction_ref: list[str] | str | None = None,
+        reaction_family: str | None = None,
+        all: bool | None = None,
+        min_review_status: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        profile: str | None = None,
+    ) -> Iterator[JSONDict]:
+        """``GET /scientific/export/ml/reactions.ndjson``."""
+
+        params = {
+            "reaction_ref": reaction_ref,
+            "reaction_family": reaction_family,
+            "all": all,
+            "min_review_status": min_review_status,
+            "limit": limit,
+            "offset": offset,
+            "profile": profile,
+        }
+        return self._export_ndjson(
+            "/scientific/export/ml/reactions.ndjson", params
+        )
+
+    def export_chemkin(
+        self,
+        seed: Mapping[str, Any],
+        *,
+        min_review_status: str | None = None,
+        selection_policy: str | None = None,
+        energy_units: str | None = None,
+        include_transport: bool | None = None,
+        naming_policy: str | None = None,
+        profile: str | None = None,
+    ) -> bytes:
+        """``POST /scientific/export/chemkin`` — a Chemkin mechanism archive.
+
+        ``seed`` selects what goes in the mechanism (explicit refs, a
+        family, or everything); the remaining arguments control how it is
+        rendered. Returns the archive bytes.
+        """
+
+        if not isinstance(seed, Mapping):
+            raise TypeError(
+                "seed must be a mapping describing what to export, e.g. "
+                "{'reaction_refs': [...]} or {'all_reactions': True}."
+            )
+        body = {
+            "seed": dict(seed),
+            "min_review_status": min_review_status,
+            "selection_policy": selection_policy,
+            "energy_units": energy_units,
+            "include_transport": include_transport,
+            "naming_policy": naming_policy,
+        }
+        return self._request_raw(
+            "POST",
+            "/scientific/export/chemkin",
+            json={k: v for k, v in body.items() if v is not None},
+            params={"profile": profile},
+        )
 
 
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+
+def _carries_idempotency_key(headers: Mapping[str, str]) -> bool:
+    """``True`` when the outgoing headers carry a usable idempotency key.
+
+    A blank key is no key: the server cannot collapse a replay onto it, so
+    treating it as present would enable exactly the unsafe retry the policy
+    exists to prevent.
+    """
+
+    target = IDEMPOTENCY_HEADER.lower()
+    for name, value in headers.items():
+        if name.lower() == target:
+            return isinstance(value, str) and bool(value.strip())
+    return False
+
+
+def _iter_ndjson(payload: str) -> Iterator[JSONDict]:
+    """Parse one JSON object per line, ignoring blank separator lines."""
+
+    for line in payload.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        yield _json.loads(stripped)
 
 
 def _clean_params(params: Mapping[str, Any]) -> dict[str, Any]:
