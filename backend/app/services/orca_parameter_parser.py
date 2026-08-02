@@ -961,6 +961,32 @@ def parse_charge_multiplicity(text: str) -> dict | None:
     return None
 
 
+def parse_all_charge_multiplicity(text: str) -> list[tuple[int, int]]:
+    """Return *every* ``* xyz <charge> <mult>`` coordinate header in the input.
+
+    :func:`parse_charge_multiplicity` returns only the first header, which
+    is the right answer for parameter extraction. A compound job echoes one
+    header per ``$new_job`` step, and those steps may legitimately describe
+    different species, so a caller cross-checking the declared
+    charge/multiplicity against the log needs to see all of them and require
+    agreement before trusting the value — see
+    :mod:`app.services.charge_multiplicity_reconciliation`.
+    """
+    found: list[tuple[int, int]] = []
+    for line in _extract_input_block(text):
+        stripped = line.strip()
+        if stripped.startswith("*") and (
+            "xyz" in stripped.lower() or "int" in stripped.lower()
+        ):
+            parts = stripped.split()
+            if len(parts) >= 4:
+                try:
+                    found.append((int(parts[2]), int(parts[3])))
+                except ValueError:
+                    continue
+    return found
+
+
 # ---------------------------------------------------------------------------
 # Software version extraction
 # ---------------------------------------------------------------------------

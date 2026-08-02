@@ -80,6 +80,9 @@ from app.services.artifact_persistence import persist_artifact_batch
 from app.services.calculation_parameter_extraction import (
     try_extract_parameters_from_input_upload,
 )
+from app.services.charge_multiplicity_extraction import (
+    try_reconcile_charge_multiplicity_from_output_upload,
+)
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
@@ -675,6 +678,13 @@ def upload_calculation_artifacts(
         )
         if sp_warning is not None:
             warnings.append(sp_warning)
+        # Output logs also state the charge and spin multiplicity the run
+        # actually used; contradicting the declared identity is flagged.
+        warnings.extend(
+            try_reconcile_charge_multiplicity_from_output_upload(
+                calculation, art_in
+            )
+        )
         # Fill-when-absent: a freq log / ORCA .hess yields the Cartesian
         # force-constant matrix, bound to the calc's input geometry.
         try_extract_hessian_from_artifact_upload(session, calculation, art_in)
