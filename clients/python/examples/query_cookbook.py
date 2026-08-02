@@ -117,6 +117,24 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="calculation_type filter for the species-calculation recipes.",
     )
     parser.add_argument(
+        "--ea-min-kj-mol",
+        type=float,
+        default=0.0,
+        help="Lower activation-energy bound (kJ/mol) for the analytics recipe.",
+    )
+    parser.add_argument(
+        "--ea-max-kj-mol",
+        type=float,
+        default=250.0,
+        help="Upper activation-energy bound (kJ/mol) for the analytics recipe.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Page size for the analytics recipe (default: 50).",
+    )
+    parser.add_argument(
         "--recipe",
         default="all",
         help=(
@@ -668,6 +686,61 @@ def recipe_internal_ids(
     return response
 
 
+def recipe_analytics_dataset(
+    client: TCKDBClient, args: argparse.Namespace
+) -> dict | None:
+    """Q: Build a dataset from numeric criteria the searches can't express.
+
+    The chemistry-first searches answer "what do you have for this
+    molecule". This one answers "give me every kinetics record with an
+    activation energy in this window", which is the shape a fitting or
+    training job actually needs.
+
+    Note the ``iter_*`` companion below rather than paging by offset: the
+    corpus is written to while you read it, so offset paging can hand back
+    a row twice or skip one entirely, with nothing in the response saying
+    so. The cursor pins the traversal to a snapshot.
+    """
+    print(
+        f"\n=== Recipe 11: analytics dataset build ===\n"
+        f"  ea={args.ea_min_kj_mol:g}..{args.ea_max_kj_mol:g} kJ/mol"
+    )
+    response = client.search_kinetics_analytics(
+        ea_min_kj_mol=args.ea_min_kj_mol,
+        ea_max_kj_mol=args.ea_max_kj_mol,
+        min_review_status="approved",
+        limit=args.limit,
+    )
+    _dump_json(args, "analytics_dataset", response)
+    if not args.json:
+        records = response.get("records") or []
+        watermark = response.get("watermark") or {}
+        print(f"  page returned : {len(records)} row(s)")
+        print(f"  watermark     : {watermark.get('taken_at')}")
+        for rec in records[:3]:
+            print(
+                f"    {rec.get('kinetics_ref')}"
+                f" model={rec.get('model_kind')}"
+                f" Ea={rec.get('ea_kj_mol')} kJ/mol"
+                f" review={rec.get('review_status')}"
+            )
+        # The whole matching set, cursor-traversed, without holding it all
+        # in memory. Bounded here so the demo terminates on a large corpus.
+        total = 0
+        for _row in client.iter_kinetics_analytics(
+            ea_min_kj_mol=args.ea_min_kj_mol,
+            ea_max_kj_mol=args.ea_max_kj_mol,
+            min_review_status="approved",
+            limit=args.limit,
+        ):
+            total += 1
+            if total >= 500:
+                print("  (stopping the demo traversal at 500 rows)")
+                break
+        print(f"  cursor walk   : {total} row(s)")
+    return response
+
+
 # ---------------------------------------------------------------------------
 # Recipe registry + main
 # ---------------------------------------------------------------------------
@@ -684,6 +757,7 @@ RECIPES: dict[str, Callable[[TCKDBClient, argparse.Namespace], Any]] = {
     "geometry_download": recipe_geometry_download,
     "chained_followup": recipe_chained_followup,
     "internal_ids": recipe_internal_ids,
+    "analytics_dataset": recipe_analytics_dataset,
 }
 
 

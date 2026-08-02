@@ -189,6 +189,27 @@ and no notion of a "best" record. Trust posture, sort order, evidence
 completeness, and provenance shape are all decided by the backend per
 `docs/specs/read_api_mvp.md`.
 
+### Curated vs exploratory results: `profile=`
+
+Every scientific read takes an optional `profile=`. `profile="curated"`
+asks for the results TCKDB stands behind; `profile="exploratory"` (the
+default when you pass nothing) returns everything that matched. The
+answering profile comes back in `response["request"]["profile"]` —
+read that rather than assuming you got what you asked for, because a
+deployment with no curated selection answers exploratorily.
+
+```python
+kinetics = client.search_kinetics(reactants=["C[CH2]"], profile="curated")
+kinetics["request"]["profile"]                  # what actually answered
+kinetics["request"]["profile_recommendation"]   # what TCKDB recommends
+```
+
+There is deliberately **no** `release=` parameter on any method. Scoping
+a read to a published dataset release is done through the release's own
+path — `GET /scientific/releases/{handle}/selections` and its artifacts,
+reachable via `get_json()` — not through a query parameter. Supplying
+`?release=` to any other scientific endpoint is answered with a 422.
+
 **Recommended — chemistry-first search** (use these for hosted workflow
 tools that know identifiers, not entry ids):
 
