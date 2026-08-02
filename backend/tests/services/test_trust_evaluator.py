@@ -106,7 +106,10 @@ from app.services.trust import (
     label_from_completeness,
     select_rubric,
 )
-from app.services.trust.evaluator import temperature_range_is_definitionally_invalid
+from app.services.trust.evaluator import (
+    fitting_interval_is_definitionally_invalid,
+    validity_range_is_definitionally_invalid,
+)
 
 # ---------------------------------------------------------------------------
 # Local ORM helpers — direct inserts; rolled back at end of test
@@ -1143,12 +1146,21 @@ class TestComputedKineticsEvaluator:
         assert "temperature_range_valid" in result.not_applicable_checks
         assert result.hard_fail_reason is None
 
-    def test_invalid_temperature_range_hard_fails(self, db_session):
+    def test_single_temperature_range_is_not_hard_failed(self, db_session):
+        """A one-point validity range is a datum reported at a single temperature.
+
+        This test previously asserted the opposite. ``tmin == tmax`` is the only
+        definitionally-invalid range reachable end-to-end -- ``ck_*_tmin_le_tmax``
+        and ``ck_*_tmin_k_gt_0`` refuse inverted and non-positive ranges at the
+        database -- and it turns out not to be invalid at all: a rate constant
+        measured at 298 K has a one-point range, and both the upload schema and
+        the database already permit it. The definitional rule itself stays pinned
+        by ``TestTemperatureRangeDefinitionalPredicate``, which needs no database.
+        """
         kinetics = _make_kinetics(db_session, tmin_k=500.0, tmax_k=500.0)
         result = evaluate_computed_kinetics(db_session, kinetics.id)
-        assert result.label is EvidenceBadge.hard_failed
-        assert result.hard_fail_reason is HardFailReason.invalid_temperature_range
-        assert "temperature_range_valid" in result.missing_checks
+        assert result.label is not EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is not HardFailReason.invalid_temperature_range
 
     def test_hot_but_ordered_temperature_range_is_not_hard_failed(self, db_session):
         """Shock-tube / detonation / plasma ranges are correct science.
@@ -1463,12 +1475,21 @@ class TestComputedThermoEvaluator:
         assert "temperature_range_valid" in result.not_applicable_checks
         assert result.hard_fail_reason is None
 
-    def test_invalid_temperature_range_hard_fails(self, db_session):
+    def test_single_temperature_range_is_not_hard_failed(self, db_session):
+        """A one-point validity range is a datum reported at a single temperature.
+
+        This test previously asserted the opposite. ``tmin == tmax`` is the only
+        definitionally-invalid range reachable end-to-end -- ``ck_*_tmin_le_tmax``
+        and ``ck_*_tmin_k_gt_0`` refuse inverted and non-positive ranges at the
+        database -- and it turns out not to be invalid at all: a rate constant
+        measured at 298 K has a one-point range, and both the upload schema and
+        the database already permit it. The definitional rule itself stays pinned
+        by ``TestTemperatureRangeDefinitionalPredicate``, which needs no database.
+        """
         thermo = _make_thermo(db_session, scalar=True, tmin_k=500.0, tmax_k=500.0)
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert result.label is EvidenceBadge.hard_failed
-        assert result.hard_fail_reason is HardFailReason.invalid_temperature_range
-        assert "temperature_range_valid" in result.missing_checks
+        assert result.label is not EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is not HardFailReason.invalid_temperature_range
 
     def test_hot_but_ordered_temperature_range_is_not_hard_failed(self, db_session):
         """A range above the graded NASA-Glenn cap is hot, not wrong.
@@ -2154,14 +2175,33 @@ class TestTemperatureRangeDefinitionalPredicate:
         "tmin_k, tmax_k",
         [
             (2000.0, 300.0),  # inverted
-            (500.0, 500.0),  # degenerate (reachable through the DB)
             (0.0, 2000.0),  # non-positive lower bound
             (-10.0, 2000.0),  # negative lower bound
             (300.0, 0.0),  # non-positive upper bound
         ],
     )
     def test_definitionally_invalid_ranges_are_rejected(self, tmin_k, tmax_k):
-        assert temperature_range_is_definitionally_invalid(tmin_k, tmax_k) is True
+        assert validity_range_is_definitionally_invalid(tmin_k, tmax_k) is True
+        assert fitting_interval_is_definitionally_invalid(tmin_k, tmax_k) is True
+
+    def test_single_temperature_validity_range_is_accepted(self):
+        """``tmin == tmax`` is a datum reported at one temperature.
+
+        A rate constant measured at 298 K has a one-point validity range. The
+        upload schema (``tmin_k <= tmax_k``) and the database
+        (``ck_*_tmin_le_tmax``) both already permit it; before the split the
+        read tier was the sole dissenter and would have labelled such a record
+        ``hard_failed``.
+        """
+        assert validity_range_is_definitionally_invalid(298.15, 298.15) is False
+
+    def test_zero_width_fitting_interval_is_rejected(self):
+        """The same equality is degenerate for a polynomial piece.
+
+        A NASA segment spanning ``[T, T]`` covers no temperatures and cannot be
+        evaluated as a piece, which is precisely why the two predicates differ.
+        """
+        assert fitting_interval_is_definitionally_invalid(500.0, 500.0) is True
 
     @pytest.mark.parametrize(
         "tmin_k, tmax_k",
@@ -2178,4 +2218,5 @@ class TestTemperatureRangeDefinitionalPredicate:
         The upper bound is an expectation and lives in the graded rubric; it
         must not appear in the hard-fail predicate at any magnitude.
         """
-        assert temperature_range_is_definitionally_invalid(tmin_k, tmax_k) is False
+        assert validity_range_is_definitionally_invalid(tmin_k, tmax_k) is False
+        assert fitting_interval_is_definitionally_invalid(tmin_k, tmax_k) is False

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from app.services.ess_software_detection import detect_software_from_text
 
 _FIX = os.path.join(os.path.dirname(__file__), "..", "fixtures")
@@ -45,3 +47,40 @@ def test_detection_is_extension_independent() -> None:
     # Same ORCA bytes; the (ignored) filename does not affect the result.
     orca_text = _read("orca", "sp_dlpno_ccsdt_orca.out")
     assert detect_software_from_text(orca_text) == "orca"
+
+
+class TestOrcaMarkerIsAnchoredOnTheName:
+    """Every ORCA alternative must name ORCA; none may be a generic phrase.
+
+    ``Program Version X.Y.Z`` was previously an accepted ORCA marker. It is not
+    an ORCA fingerprint -- many programs print it -- and because ORCA is the
+    last branch, any non-Gaussian, non-Molpro log containing that phrase in its
+    first 8 kB was dispatched to the ORCA parser, which would then read charge,
+    multiplicity and energies out of a foreign format.
+
+    Misattribution is worse than silence: ``None`` makes the caller record
+    nothing, while the wrong program yields a confident wrong answer.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "                 * O   R   C   A *",
+            "Program Version 5.0.3 -  RELEASE  -\nORCA",
+            "ORCA 6.0.0",
+            "****ORCA TERMINATED NORMALLY****",
+        ],
+    )
+    def test_genuine_orca_logs_are_still_detected(self, text: str) -> None:
+        assert detect_software_from_text(text) == "orca"
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Some Code\nProgram Version 1.2.3\nnothing else",
+            "Psi4: An Open-Source Ab Initio Package\nProgram Version 1.9.1",
+            "Northwest Computational Chemistry\nProgram Version 7.0.2",
+        ],
+    )
+    def test_a_bare_version_line_is_not_orca(self, text: str) -> None:
+        assert detect_software_from_text(text) is None
