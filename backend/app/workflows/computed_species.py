@@ -60,6 +60,9 @@ from app.services.calculation_resolution import (
     resolve_workflow_tool_release_ref,
 )
 from app.services.calculation_scan_resolution import persist_calculation_scan
+from app.services.charge_multiplicity_extraction import (
+    try_reconcile_charge_multiplicity_from_output_upload,
+)
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
     create_applied_energy_correction,
@@ -575,6 +578,14 @@ def persist_computed_species_upload(
                     )
                     if sp_warning is not None:
                         upload_warnings.append(sp_warning)
+                    # Output logs also state the charge and spin
+                    # multiplicity the run actually used; a contradiction
+                    # with the declared identity is flagged for review.
+                    upload_warnings.extend(
+                        try_reconcile_charge_multiplicity_from_output_upload(
+                            calc_row, art_in
+                        )
+                    )
                     # Input geometries for this calc were attached in an
                     # earlier pass, so the Hessian can bind to them here.
                     try_extract_hessian_from_artifact_upload(

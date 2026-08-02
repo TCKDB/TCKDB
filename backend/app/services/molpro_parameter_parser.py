@@ -249,7 +249,37 @@ def parse_charge_multiplicity(text: str) -> dict | None:
     In both cases Molpro ``spin`` is ``2S`` (unpaired electrons), so
     ``multiplicity = spin + 1``.  Returns ``None`` if no ``wf`` line found.
     """
+    found = parse_all_charge_multiplicity(text)
+    if not found:
+        return None
+    # Return the historical two-key shape: ``charge_is_declared`` is an
+    # extra signal for the reconciliation path only and must not leak into
+    # the parameter-extraction payload this function has always produced.
+    first = found[0]
+    return {"charge": first["charge"], "multiplicity": first["multiplicity"]}
+
+
+def parse_all_charge_multiplicity(text: str) -> list[dict]:
+    """Return one entry per ``wf`` directive in the deck, in deck order.
+
+    :func:`parse_charge_multiplicity` reports only the first directive,
+    which is the right answer for parameter extraction. A multi-state MRCI
+    deck carries several ``wf`` lines that may declare different spins, so
+    a caller cross-checking the declared multiplicity against the log needs
+    all of them and requires agreement before trusting the value — see
+    :mod:`app.services.charge_multiplicity_reconciliation`.
+
+    Each entry additionally carries ``charge_is_declared``: ``True`` only
+    when the deck stated the charge outright. In the keyword form an
+    omitted ``charge=`` falls back to Molpro's neutral default and in the
+    positional form the charge is *derived* from the echoed geometry, so
+    neither is a value the log actually declared. The reconciliation path
+    treats those as unknown rather than inferring, while
+    ``parse_charge_multiplicity``'s long-standing ``charge`` value is
+    unchanged for parameter extraction.
+    """
     deck_lines = _extract_deck_lines(text)
+    found: list[dict] = []
 
     for line in deck_lines:
         if not _WF_KEYWORD_RE.search(line):
@@ -261,7 +291,12 @@ def parse_charge_multiplicity(text: str) -> dict | None:
             # Keyword form
             spin = int(spin_m.group(1))
             charge = int(charge_m.group(1)) if charge_m else 0
-            return {"charge": charge, "multiplicity": spin + 1}
+            found.append({
+                "charge": charge,
+                "multiplicity": spin + 1,
+                "charge_is_declared": charge_m is not None,
+            })
+            continue
 
         pos_m = _WF_POSITIONAL_RE.search(line)
         if pos_m is not None:
@@ -270,9 +305,13 @@ def parse_charge_multiplicity(text: str) -> dict | None:
             spin = int(pos_m.group(3))
             z_sum = _sum_atomic_numbers(deck_lines)
             charge = (z_sum - nelec) if z_sum is not None else None
-            return {"charge": charge, "multiplicity": spin + 1}
+            found.append({
+                "charge": charge,
+                "multiplicity": spin + 1,
+                "charge_is_declared": False,
+            })
 
-    return None
+    return found
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,10 @@ from app.schemas.fragments.calculation import CalculationWithResultsPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
+from app.services.charge_multiplicity_reconciliation import (
+    W_CHARGE_MISMATCH,
+    W_MULTIPLICITY_MISMATCH,
+)
 from app.services.ess_result import (
     ESSFreqResult,
     ESSJobMeta,
@@ -42,8 +46,20 @@ W_FREQ_PARSED_NO_MODES = "freq_parser_extracted_but_modes_missing"
 # Layer 2: deduction-based
 W_ELECTRONIC_STATE_CONTRADICTS_METHOD = "electronic_state_contradicts_method"
 W_TERM_SYMBOL_MISMATCH = "term_symbol_mismatch"
-W_CHARGE_MISMATCH = "charge_mismatch"
-W_MULTIPLICITY_MISMATCH = "multiplicity_mismatch"
+
+# Charge / multiplicity contradictions are detected against the *output log*
+# by :mod:`app.services.charge_multiplicity_reconciliation`, which owns
+# ``W_CHARGE_MISMATCH`` / ``W_MULTIPLICITY_MISMATCH`` (imported above so
+# there is one definition rather than a drifting copy).
+#
+# The Layer-2 deduction pass cannot detect these itself:
+# ``build_ess_result_from_upload`` populates ``ESSJobMeta.charge`` and
+# ``.multiplicity`` from the same payload that ``_reconcile_deduction`` then
+# compares them against, so the comparison is payload-versus-payload and is
+# always equal by construction. The meta fields are kept because
+# ``deduce_term_symbol`` genuinely needs the multiplicity; the charge and
+# multiplicity entries in the table below are therefore inert here, and the
+# log-based hook is what actually fires.
 
 
 # ---------------------------------------------------------------------------

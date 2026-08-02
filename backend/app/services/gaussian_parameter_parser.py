@@ -517,6 +517,26 @@ def parse_charge_multiplicity(text: str) -> tuple[int, int] | None:
     return None
 
 
+def parse_all_charge_multiplicity(text: str) -> list[tuple[int, int]]:
+    """Return *every* ``Charge = q Multiplicity = m`` declaration in the log.
+
+    :func:`parse_charge_multiplicity` deliberately returns only the first
+    match, which is the right answer for parameter extraction. Gaussian
+    however prints the pair once per fragment in a counterpoise job and
+    once per layer in an ONIOM job, so on those logs the first match
+    describes a *fragment* rather than the whole system.
+
+    Callers that cross-check the declared charge/multiplicity against the
+    log use this function instead and require the declarations to agree
+    before trusting them — see
+    :mod:`app.services.charge_multiplicity_reconciliation`.
+    """
+    return [
+        (int(m.group(1)), int(m.group(2)))
+        for m in _CHARGE_MULT_RE.finditer(text)
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Method / basis extraction from route line
 # ---------------------------------------------------------------------------
