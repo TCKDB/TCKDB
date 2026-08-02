@@ -1,6 +1,11 @@
 from typing import Self
 
 from pydantic import Field, model_validator
+from tckdb_schemas.stationary_point import (
+    StationaryPointFinding,
+    evaluate_species_entry_frequency,
+    raise_for_blocking_findings,
+)
 
 from app.db.models.common import (
     CalculationType,
@@ -173,4 +178,41 @@ class ConformerUploadRequest(SchemaBase):
                     f"allowed. Expected one of: "
                     f"{', '.join(t.value for t in sorted(_ALLOWED_ADDITIONAL_TYPES, key=lambda t: t.value))}."
                 )
+        return self
+
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Judge the declared kind against this upload's frequency evidence.
+
+        Every calculation here is scoped to the one species entry named
+        by ``species_entry``, so this payload is the earliest point at
+        which the declaration and the evidence are both in hand.
+        """
+        kind = self.species_entry.species_entry_kind
+        findings: list[StationaryPointFinding] = []
+        for label, calc in [
+            ("calculation", self.calculation),
+            *(
+                (f"additional_calculations[{i}]", c)
+                for i, c in enumerate(self.additional_calculations)
+            ),
+        ]:
+            if calc.freq_result is None:
+                continue
+            findings.extend(
+                evaluate_species_entry_frequency(
+                    kind,
+                    calc.freq_result.n_imag,
+                    calc.freq_result.imag_freq_cm1,
+                    location=f"{label}.freq_result",
+                )
+            )
+        return findings
+
+    @model_validator(mode="after")
+    def validate_n_imag_matches_species_entry_kind(self) -> Self:
+        """Refuse frequency evidence that contradicts the declared kind.
+
+        Definitional, therefore blocking (ADR 0008).
+        """
+        raise_for_blocking_findings(self.stationary_point_findings())
         return self

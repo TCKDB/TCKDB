@@ -59,6 +59,13 @@ from tckdb_schemas.shared.calculation_in import (
     CalculationIn,
     GeometryIn,
     calculation_in_to_with_results_payload,
+    freq_evidence,
+)
+from tckdb_schemas.stationary_point import (
+    StationaryPointFinding,
+    evaluate_species_entry_frequency,
+    evaluate_transition_state_frequency,
+    raise_for_blocking_findings,
 )
 from tckdb_schemas.workflows.computed_species_upload import StatmechInBundle
 
@@ -165,6 +172,51 @@ class NetworkSpeciesIn(SchemaBase):
                 )
         return self
 
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Judge this well's declared kind against its own frequency evidence.
+
+        A network well is a species entry like any other. Its transition
+        states live in separate ``TransitionStateIn`` blocks and are
+        judged there, which is why this sits on the species model rather
+        than on the request: a request-level scan would count the TS's
+        single imaginary mode against a well.
+        """
+        kind = self.species_entry.species_entry_kind
+        findings: list[StationaryPointFinding] = []
+        for conformer in self.conformers:
+            n_imag, imag_freq_cm1 = freq_evidence(conformer.calculation)
+            findings.extend(
+                evaluate_species_entry_frequency(
+                    kind,
+                    n_imag,
+                    imag_freq_cm1,
+                    location=(
+                        f"species['{self.key}'].conformers['{conformer.key}']"
+                        f".calculation['{conformer.calculation.key}']"
+                    ),
+                )
+            )
+        for calc in self.calculations:
+            n_imag, imag_freq_cm1 = freq_evidence(calc)
+            findings.extend(
+                evaluate_species_entry_frequency(
+                    kind,
+                    n_imag,
+                    imag_freq_cm1,
+                    location=f"species['{self.key}'].calculations['{calc.key}']",
+                )
+            )
+        return findings
+
+    @model_validator(mode="after")
+    def validate_n_imag_matches_species_entry_kind(self) -> Self:
+        """Refuse frequency evidence that contradicts the declared kind.
+
+        Definitional, therefore blocking (ADR 0008).
+        """
+        raise_for_blocking_findings(self.stationary_point_findings())
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Transition states
@@ -219,6 +271,32 @@ class TransitionStateIn(SchemaBase):
                 f"Transition state '{self.key}' primary calculation must be "
                 f"type 'opt', got '{self.calculation.type.value}'."
             )
+        return self
+
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Judge this saddle point against its own frequency evidence."""
+        findings: list[StationaryPointFinding] = []
+        for calc in (self.calculation, *self.calculations):
+            n_imag, imag_freq_cm1 = freq_evidence(calc)
+            findings.extend(
+                evaluate_transition_state_frequency(
+                    n_imag,
+                    imag_freq_cm1,
+                    location=(
+                        f"transition_states['{self.key}'].calculations"
+                        f"['{calc.key}']"
+                    ),
+                )
+            )
+        return findings
+
+    @model_validator(mode="after")
+    def validate_n_imag_is_one(self) -> Self:
+        """Refuse frequency evidence that is not a first-order saddle point.
+
+        Definitional, therefore blocking (ADR 0008).
+        """
+        raise_for_blocking_findings(self.stationary_point_findings())
         return self
 
 
@@ -926,6 +1004,22 @@ class NetworkPDepUploadRequest(SchemaBase):
     states: list[NetworkStateIn] = Field(min_length=1)
     channels: list[NetworkChannelIn] = Field(default_factory=list)
     solve: NetworkSolveIn | None = None
+
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Collect every entity's stationary-point findings in this network.
+
+        Each well judges its own frequency evidence against its own
+        declared kind, and each transition state judges its own, so a
+        saddle point's single imaginary mode is never counted against a
+        well. The blocking half already fired from the nested models'
+        validators; the route layer calls this to harvest the warnings.
+        """
+        findings: list[StationaryPointFinding] = []
+        for species in self.species:
+            findings.extend(species.stationary_point_findings())
+        for ts in self.transition_states:
+            findings.extend(ts.stationary_point_findings())
+        return findings
 
     @model_validator(mode="after")
     def normalize_text(self) -> Self:

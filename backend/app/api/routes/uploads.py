@@ -50,6 +50,7 @@ from app.services.provenance_warnings import (
 from app.services.upload_reconciliation import (
     reconcile_species_entry,
     reconcile_species_entry_full,
+    stationary_point_warnings,
 )
 from app.services.upload_submission import (
     audit_sync_upload_failure,
@@ -192,6 +193,13 @@ def upload_conformer(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
+    # ``reconcile_species_entry_full`` already runs the stationary-point
+    # check as part of its Layer-1 pass, so this route deliberately does
+    # *not* also call ``request.stationary_point_findings()`` — that would
+    # emit each finding twice under two different ``field`` paths. The
+    # other species routes do call it, because their
+    # ``reconcile_species_entry`` call has no frequency evidence to work
+    # from.
     warnings = reconcile_species_entry_full(
         request.species_entry,
         primary_calc=request.calculation,
@@ -359,7 +367,9 @@ def upload_network_pdep(
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.network_pdep
     )
-    pdep_warnings: list[UploadWarning] = []
+    pdep_warnings: list[UploadWarning] = stationary_point_warnings(
+        request.stationary_point_findings()
+    )
     network = persist_network_pdep_upload(
         session,
         request,
@@ -402,6 +412,7 @@ def upload_statmech(
     if (replay := idem.maybe_replay()) is not None:
         return replay
     warnings = reconcile_species_entry(request.species_entry)
+    warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     warnings.extend(collect_statmech_provenance_warnings(request))
     warnings.extend(
         collect_statmech_content_warnings(
@@ -444,6 +455,7 @@ def upload_thermo(
     if (replay := idem.maybe_replay()) is not None:
         return replay
     warnings = reconcile_species_entry(request.species_entry)
+    warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     warnings.extend(collect_thermo_provenance_warnings(request))
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.thermo
@@ -485,6 +497,7 @@ def upload_transition_state(
         ws = reconcile_species_entry(p.species_entry)
         for w in ws:
             warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
+    warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.transition_state
     )
@@ -529,6 +542,7 @@ def upload_transport(
     if (replay := idem.maybe_replay()) is not None:
         return replay
     warnings = reconcile_species_entry(request.species_entry)
+    warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     warnings.extend(collect_transport_provenance_warnings(request))
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.transport
@@ -564,6 +578,7 @@ def upload_computed_species(
     if (replay := idem.maybe_replay()) is not None:
         return replay
     warnings = reconcile_species_entry(request.species_entry)
+    warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.computed_species
     )
@@ -642,6 +657,13 @@ def upload_computed_reaction(
     result_dict = persist_computed_reaction_upload(
         session, request, created_by=current_user.id, review_policy=sub.policy
     )
+    # Stationary-point warnings are derived from the request, not the
+    # persisted rows, so they are merged on top of whatever the workflow
+    # reported rather than being produced inside it.
+    result_dict["warnings"] = [
+        *stationary_point_warnings(request.stationary_point_findings()),
+        *result_dict.get("warnings", []),
+    ]
     result = ComputedReactionUploadResult(
         **result_dict, submission_id=sub.submission_id
     )

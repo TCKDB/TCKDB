@@ -10,8 +10,23 @@ No database dependencies — pure functions only.
 
 from __future__ import annotations
 
+from tckdb_schemas.stationary_point import (
+    TS_IMAGINARY_FREQUENCY_MIN_CM1,
+    W_N_IMAG_CONTRADICTS_MINIMUM,
+    W_N_IMAG_HIGHER_ORDER_SADDLE,
+    W_N_IMAG_SUGGESTS_TS,
+    W_TS_IMAG_FREQ_TOO_SMALL,
+    W_TS_N_IMAG_NOT_ONE,
+    StationaryPointFinding,
+    evaluate_species_entry_frequency,
+    warning_findings,
+)
+
 from app.db.models.common import StationaryPointKind
-from app.schemas.fragments.calculation import CalculationWithResultsPayload
+from app.schemas.fragments.calculation import (
+    CalculationWithResultsPayload,
+    FreqResultPayload,
+)
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
@@ -27,10 +42,33 @@ from app.services.ess_species_deduction import Deduction, deduce_all
 # Warning codes
 # ---------------------------------------------------------------------------
 
-# Layer 1: freq-based
-W_N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
-W_N_IMAG_SUGGESTS_TS = "n_imag_suggests_transition_state"
-W_N_IMAG_HIGHER_ORDER_SADDLE = "n_imag_higher_order_saddle"
+# Layer 1: freq-based.
+#
+# The physics, the tier assignment, and the code strings are all owned by
+# :mod:`tckdb_schemas.stationary_point` (ADR 0008). They are re-exported
+# here so the warning tier and the blocking tier speak one vocabulary
+# rather than two drifting copies.
+#
+# Which of these can actually reach *this* module depends on the declared
+# kind, because the four rules split by kind:
+#
+# * ``minimum`` with any imaginary mode is refused at the schema tier, so
+#   ``W_N_IMAG_CONTRADICTS_MINIMUM`` never arrives here for a minimum.
+# * ``vdw_complex`` is formally a minimum too, but its intermolecular
+#   modes sit low enough that a small imaginary mode is usually Hessian
+#   grid noise rather than evidence. Refusing it would force an expensive
+#   re-run for a physically meaningless mode, so it is recorded and
+#   flagged — that is the only kind that reaches this module with an
+#   imaginary mode, carrying ``W_N_IMAG_CONTRADICTS_MINIMUM`` (one mode)
+#   or ``W_N_IMAG_HIGHER_ORDER_SADDLE`` (two or more).
+# * ``W_N_IMAG_SUGGESTS_TS`` is narrowed to the van der Waals case where
+#   the mode is too stiff to be noise — see its docstring in the owning
+#   module.
+# * The two transition-state codes are re-exported only; transition
+#   states are not species entries and never pass through
+#   ``reconcile_species_entry``.
+#
+# See ``__all__`` at the foot of this module for the re-exported set.
 
 # Layer 1b: parser fidelity. A freq calculation that declares a parser
 # (``parameters_parser_version`` is set) but provides no per-mode
@@ -60,6 +98,25 @@ W_TERM_SYMBOL_MISMATCH = "term_symbol_mismatch"
 # ---------------------------------------------------------------------------
 
 
+def extract_freq_result(
+    primary: CalculationWithResultsPayload,
+    additional: list[CalculationWithResultsPayload],
+) -> FreqResultPayload | None:
+    """Return the first freq result that actually reports ``n_imag``.
+
+    Both the imaginary-mode count and its magnitude are read off the same
+    result block, so they are extracted together — reading them from two
+    separate scans could pair a count from one calculation with a
+    magnitude from another.
+    """
+    if primary.freq_result is not None and primary.freq_result.n_imag is not None:
+        return primary.freq_result
+    for calc in additional:
+        if calc.freq_result is not None and calc.freq_result.n_imag is not None:
+            return calc.freq_result
+    return None
+
+
 def extract_freq_n_imag(
     primary: CalculationWithResultsPayload,
     additional: list[CalculationWithResultsPayload],
@@ -69,12 +126,8 @@ def extract_freq_n_imag(
     Returns the first non-None ``n_imag`` found, or ``None`` if no
     frequency result is present in any calculation.
     """
-    if primary.freq_result is not None and primary.freq_result.n_imag is not None:
-        return primary.freq_result.n_imag
-    for calc in additional:
-        if calc.freq_result is not None and calc.freq_result.n_imag is not None:
-            return calc.freq_result.n_imag
-    return None
+    freq_result = extract_freq_result(primary, additional)
+    return None if freq_result is None else freq_result.n_imag
 
 
 # ---------------------------------------------------------------------------
@@ -191,8 +244,14 @@ def _get_payload_value(
 # ---------------------------------------------------------------------------
 # Layer 1: direct n_imag checks (structural warnings)
 # ---------------------------------------------------------------------------
-
-_MINIMUM_KINDS = frozenset({StationaryPointKind.minimum, StationaryPointKind.vdw_complex})
+#
+# The local ``_MINIMUM_KINDS`` frozenset that used to live here is gone.
+# It held both ``minimum`` and ``vdw_complex``, which made the
+# ``if kind in _MINIMUM_KINDS`` guard vestigial — those were the only two
+# members of the enum, so it was always true. The two kinds now differ in
+# tier, and that split is expressed by dispatching on the kind in
+# :mod:`tckdb_schemas.stationary_point` rather than by a set that cannot
+# tell them apart.
 
 
 def check_freq_parser_fidelity(
@@ -234,49 +293,45 @@ def check_freq_parser_fidelity(
     return warnings
 
 
+def stationary_point_warnings(
+    findings: list[StationaryPointFinding],
+) -> list[UploadWarning]:
+    """Convert stationary-point findings into upload warnings.
+
+    Only the warning tier survives the conversion. Blocking findings are
+    dropped rather than reported twice: ADR 0008 gives the blocking tier
+    sole ownership of a fact it refuses, and the upload schemas already
+    turned those into a 422 before any route body ran. A blocking finding
+    reaching here would mean a payload got past its own validator, which
+    is a bug in the seam wiring, not something to annotate.
+    """
+    return [
+        UploadWarning(field=f.location, code=f.code, message=f.message)
+        for f in warning_findings(findings)
+    ]
+
+
 def _check_n_imag(
     kind: StationaryPointKind,
     n_imag: int,
+    imag_freq_cm1: float | None = None,
 ) -> list[UploadWarning]:
-    """Check consistency between stationary point kind and n_imag."""
-    warnings: list[UploadWarning] = []
+    """Warn where the declared kind and ``n_imag`` disagree non-fatally.
 
-    if n_imag == 0:
-        return warnings
+    Delegates the physics and the tier split to
+    :mod:`tckdb_schemas.stationary_point` so this path and the schema
+    tier cannot disagree about the same record. In practice that means
+    only ``vdw_complex`` produces anything here: a declared ``minimum``
+    with an imaginary mode was already refused.
 
-    if n_imag == 1:
-        if kind in _MINIMUM_KINDS:
-            warnings.append(UploadWarning(
-                field="species_entry_kind",
-                code=W_N_IMAG_CONTRADICTS_MINIMUM,
-                message=(
-                    f"Frequency analysis shows 1 imaginary frequency, "
-                    f"but species_entry_kind is '{kind.value}'. "
-                    f"A minimum should have 0 imaginary frequencies."
-                ),
-            ))
-        warnings.append(UploadWarning(
-            field="species_entry_kind",
-            code=W_N_IMAG_SUGGESTS_TS,
-            message=(
-                "Frequency analysis shows exactly 1 imaginary frequency, "
-                "which is the signature of a transition state. "
-                "If this is a TS, use the transition-state upload endpoint instead."
-            ),
-        ))
-        return warnings
-
-    # n_imag >= 2
-    warnings.append(UploadWarning(
-        field="species_entry_kind",
-        code=W_N_IMAG_HIGHER_ORDER_SADDLE,
-        message=(
-            f"Frequency analysis shows {n_imag} imaginary frequencies. "
-            f"This is a higher-order saddle point, not a valid minimum "
-            f"or transition state. The geometry may need re-optimization."
-        ),
-    ))
-    return warnings
+    ``field`` stays ``species_entry_kind`` because this entry point is
+    reached from routes that hand over a bare identity payload with no
+    per-calculation path to point at.
+    """
+    findings = evaluate_species_entry_frequency(
+        kind, n_imag, imag_freq_cm1, location="species_entry_kind"
+    )
+    return stationary_point_warnings(findings)
 
 
 # ---------------------------------------------------------------------------
@@ -325,15 +380,25 @@ def reconcile_species_entry(
     payload: SpeciesEntryIdentityPayload,
     *,
     freq_n_imag: int | None = None,
+    freq_imag_freq_cm1: float | None = None,
 ) -> list[UploadWarning]:
     """Layer 1: reconcile using only freq n_imag (no calculation context).
 
     Use :func:`reconcile_species_entry_full` when calculation and
     statmech data are available for richer deduction-based checks.
+
+    :param freq_imag_freq_cm1: Magnitude of the imaginary mode in cm⁻¹,
+        when the evidence reports one. Only consulted for
+        ``vdw_complex``, to tell a soft intermolecular artifact from a
+        mode too stiff to be anything but a reaction coordinate.
     """
     warnings: list[UploadWarning] = []
     if freq_n_imag is not None:
-        warnings.extend(_check_n_imag(payload.species_entry_kind, freq_n_imag))
+        warnings.extend(
+            _check_n_imag(
+                payload.species_entry_kind, freq_n_imag, freq_imag_freq_cm1
+            )
+        )
     return warnings
 
 
@@ -360,11 +425,17 @@ def reconcile_species_entry_full(
     additional = additional_calcs or []
 
     # Layer 1: structural n_imag checks
-    freq_n_imag = None
+    freq_result = None
     if primary_calc is not None:
-        freq_n_imag = extract_freq_n_imag(primary_calc, additional)
-    if freq_n_imag is not None:
-        warnings.extend(_check_n_imag(payload.species_entry_kind, freq_n_imag))
+        freq_result = extract_freq_result(primary_calc, additional)
+    if freq_result is not None and freq_result.n_imag is not None:
+        warnings.extend(
+            _check_n_imag(
+                payload.species_entry_kind,
+                freq_result.n_imag,
+                freq_result.imag_freq_cm1,
+            )
+        )
 
     # Layer 1b: parser-fidelity check across all freq-bearing calcs.
     if primary_calc is not None:
@@ -391,3 +462,26 @@ def reconcile_species_entry_full(
             warnings.append(w)
 
     return warnings
+
+
+# ``W_CHARGE_MISMATCH`` / ``W_MULTIPLICITY_MISMATCH`` are deliberately
+# absent: ``charge_multiplicity_reconciliation`` is their sole owner and
+# this module no longer imports them (#81).
+__all__ = [
+    "TS_IMAGINARY_FREQUENCY_MIN_CM1",
+    "W_ELECTRONIC_STATE_CONTRADICTS_METHOD",
+    "W_FREQ_PARSED_NO_MODES",
+    "W_N_IMAG_CONTRADICTS_MINIMUM",
+    "W_N_IMAG_HIGHER_ORDER_SADDLE",
+    "W_N_IMAG_SUGGESTS_TS",
+    "W_TERM_SYMBOL_MISMATCH",
+    "W_TS_IMAG_FREQ_TOO_SMALL",
+    "W_TS_N_IMAG_NOT_ONE",
+    "build_ess_result_from_upload",
+    "check_freq_parser_fidelity",
+    "extract_freq_n_imag",
+    "extract_freq_result",
+    "reconcile_species_entry",
+    "reconcile_species_entry_full",
+    "stationary_point_warnings",
+]

@@ -52,6 +52,11 @@ from tckdb_schemas.fragments.refs import (
 from tckdb_schemas.fragments.scan import CalculationScanResultCreate
 from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
+from tckdb_schemas.stationary_point import (
+    StationaryPointFinding,
+    evaluate_species_entry_frequency,
+    raise_for_blocking_findings,
+)
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate
 from tckdb_schemas.upload_warning import UploadWarning
 
@@ -641,6 +646,42 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                             f"calculation '{calc.key}' depends_on undefined "
                             f"calculation_key '{dep.parent_calculation_key}'."
                         )
+        return self
+
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Judge the bundle's declared kind against its own frequency evidence.
+
+        One bundle is one species entry, and every calculation in it is
+        scoped to that entry, so the request is the right owner here —
+        unlike the computed-reaction bundle, which also carries a
+        transition state and therefore judges per entity.
+        """
+        kind = self.species_entry.species_entry_kind
+        findings: list[StationaryPointFinding] = []
+        for conf in self.conformers:
+            for calc in (conf.primary_calculation, *conf.additional_calculations):
+                if calc.freq_result is None:
+                    continue
+                findings.extend(
+                    evaluate_species_entry_frequency(
+                        kind,
+                        calc.freq_result.n_imag,
+                        calc.freq_result.imag_freq_cm1,
+                        location=(
+                            f"conformers['{conf.key}'].calculations"
+                            f"['{calc.key}'].freq_result"
+                        ),
+                    )
+                )
+        return findings
+
+    @model_validator(mode="after")
+    def validate_n_imag_matches_species_entry_kind(self) -> Self:
+        """Refuse frequency evidence that contradicts the declared kind.
+
+        Definitional, therefore blocking (ADR 0008).
+        """
+        raise_for_blocking_findings(self.stationary_point_findings())
         return self
 
     @model_validator(mode="after")
