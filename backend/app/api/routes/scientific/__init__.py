@@ -29,6 +29,8 @@ Sub-routers:
                             → /scientific/transition-state-entries/{ref_or_id}
     releases.router         → /scientific/releases (+ /{handle}/manifest,
                               /selections, /artifacts/{path})
+    analytics.router        → /scientific/analytics/{kinetics,thermo,
+                              statmech,calculations}
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.api.routes.scientific import (
+    analytics,
     artifacts,
     calculation_paths,
     calculations,
@@ -108,6 +111,12 @@ scientific_router.include_router(corrections.fsf_router)
 scientific_router.include_router(corrections.ecs_router)
 scientific_router.include_router(artifacts.router)
 scientific_router.include_router(export.router)
+# Quantitative analytics reads. Their ``/analytics`` prefix collides with
+# nothing above, but they are registered after the transactional searches
+# so the OpenAPI document lists the chemistry-first surface first — that
+# is the one a consumer should reach for before dropping to numeric
+# filtering over the whole corpus.
+scientific_router.include_router(analytics.router)
 # Citable dataset releases. Registered last so the ``/releases`` prefix
 # cannot shadow an earlier, more specific route.
 scientific_router.include_router(releases.router)

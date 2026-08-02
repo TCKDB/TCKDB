@@ -1,4 +1,12 @@
-"""Safe lazy pagination for scientific search envelopes."""
+"""Safe lazy pagination for scientific search envelopes.
+
+Two traversals live here. :func:`iter_paginated_records` walks offsets and
+is what the transactional searches use. :func:`iter_keyset_records` follows
+the analytics surface's ``next_cursor`` instead, because offset paging over
+a corpus that is still being written to can skip or duplicate rows — a
+dataset built that way is not reproducible, and nothing in the response
+would tell the caller it happened.
+"""
 
 from __future__ import annotations
 
@@ -154,4 +162,106 @@ def iter_paginated_records(
         requested_offset = next_offset
 
 
-__all__ = ["iter_paginated_records"]
+def _keyset_page_records(page: object) -> list[Any]:
+    """Validate one keyset page and return its records."""
+
+    if not isinstance(page, Mapping):
+        raise TCKDBPaginationError("Malformed page: response must be an object.")
+    records = page.get("records")
+    pagination = page.get("pagination")
+    if not isinstance(records, list):
+        raise TCKDBPaginationError("Malformed page: 'records' must be a list.")
+    if not isinstance(pagination, Mapping):
+        raise TCKDBPaginationError("Malformed page: 'pagination' must be an object.")
+    page_limit = _integer_field(pagination, "limit")
+    returned = _integer_field(pagination, "returned")
+    if page_limit < 1 or returned < 0:
+        raise TCKDBPaginationError(
+            "Malformed pagination: returned must be non-negative and limit "
+            "must be positive."
+        )
+    if returned != len(records):
+        raise TCKDBPaginationError(
+            "Malformed pagination: returned does not match len(records)."
+        )
+    if returned > page_limit:
+        raise TCKDBPaginationError(
+            "Malformed pagination: returned exceeds the server page limit."
+        )
+    return records
+
+
+def iter_keyset_records(
+    fetch_page: Callable[..., Mapping[str, Any]],
+    parameters: Mapping[str, Any],
+) -> Iterator[RecordT]:
+    """Yield records by following the server's ``next_cursor``.
+
+    Two situations fall back to :func:`iter_paginated_records`, because a
+    cursor cannot express either of them:
+
+    * the caller pinned a starting ``offset`` — keyset traversal has no
+      notion of "start at row 100";
+    * the server does not publish ``next_cursor`` at all, i.e. it predates
+      the keyset contract. Truncating to one page there would silently hand
+      back a fraction of the result set.
+
+    Everything else is a protocol violation and raises
+    :class:`TCKDBPaginationError` rather than looping forever or returning
+    a set the caller cannot tell is incomplete.
+    """
+
+    stable_parameters = dict(parameters)
+    cursor = stable_parameters.pop("cursor", None)
+    if cursor is not None and not isinstance(cursor, str):
+        raise TCKDBPaginationError("Invalid iterator cursor: expected a string.")
+
+    offset = stable_parameters.get("offset")
+    if offset is not None and offset != 0:
+        yield from iter_paginated_records(fetch_page, stable_parameters)
+        return
+    stable_parameters.pop("offset", None)
+
+    seen_cursors: set[str] = set()
+    first_page = True
+    while True:
+        page = fetch_page(**stable_parameters, cursor=cursor)
+        records = _keyset_page_records(page)
+
+        if "next_cursor" not in page:
+            if first_page:
+                # A pre-keyset server. Restart from offset zero rather than
+                # yield this probe page twice.
+                yield from iter_paginated_records(fetch_page, stable_parameters)
+                return
+            raise TCKDBPaginationError(
+                "Malformed page: a keyset traversal received a page with no "
+                "'next_cursor'; the result set may be truncated."
+            )
+        first_page = False
+
+        next_cursor = page.get("next_cursor")
+        if next_cursor is not None and not isinstance(next_cursor, str):
+            raise TCKDBPaginationError(
+                "Malformed page: 'next_cursor' must be a string or null."
+            )
+        if next_cursor is not None and not records:
+            raise TCKDBPaginationError(
+                "Pagination did not advance: the server returned an empty page "
+                "with a next_cursor."
+            )
+
+        yield from cast(list[RecordT], records)
+
+        if next_cursor is None:
+            return
+        if next_cursor in seen_cursors:
+            raise TCKDBPaginationError(
+                "Pagination looped: the server repeated a cursor it had "
+                "already issued."
+            )
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
+
+
+__all__ = ["iter_keyset_records", "iter_paginated_records"]

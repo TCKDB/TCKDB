@@ -26,6 +26,10 @@ from tckdb_client.replay import (
     ReplaySummary,
     replay_bundle,
 )
+from tckdb_client.retry import (
+    DEFAULT_RETRY_STATUS_CODES,
+    RetryPolicy,
+)
 from tckdb_client.scientific_types import (
     ArtifactRecord,
     ArtifactSearchResponse,
@@ -103,6 +107,8 @@ __all__ = [
     "ReplayFailure",
     "ReplaySummary",
     "replay_bundle",
+    "DEFAULT_RETRY_STATUS_CODES",
+    "RetryPolicy",
     "ArtifactRecord",
     "ArtifactSearchResponse",
     "CalculationAvailableSections",

@@ -1,0 +1,133 @@
+{
+  "database": "tckdb_bench_s4",
+  "described_at": "2026-08-01T22:36:24",
+  "deviations": [
+    {
+      "built_ratio_per_species": 1.2,
+      "effect_on_representativeness": "absolute row count for this table is an assumption, not a measurement; relative query cost within the table is still exercised at the stated scale",
+      "production_ratio_per_species": null,
+      "reason": "not present in the measured production inventory; assumed slightly above one thermo record per species, mirroring the measured statmech ratio of 1.4",
+      "table": "thermo"
+    },
+    {
+      "built_ratio_per_species": 0.6,
+      "effect_on_representativeness": "absolute row count for this table is an assumption, not a measurement; relative query cost within the table is still exercised at the stated scale",
+      "production_ratio_per_species": null,
+      "reason": "not present in the measured production inventory; assumed roughly half of species carry transport data",
+      "table": "transport"
+    },
+    {
+      "built_ratio_per_species": 1.0,
+      "effect_on_representativeness": "absolute row count for this table is an assumption, not a measurement; relative query cost within the table is still exercised at the stated scale",
+      "production_ratio_per_species": null,
+      "reason": "not present in the measured production inventory; assumed one conformer group per species entry",
+      "table": "conformer_group"
+    },
+    {
+      "built_ratio_per_species": 0.3,
+      "effect_on_representativeness": "absolute row count for this table is an assumption, not a measurement; relative query cost within the table is still exercised at the stated scale",
+      "production_ratio_per_species": null,
+      "reason": "not present in the measured production inventory; derived from the measured kinetics ratio (0.273/species) on the assumption that most reaction entries carry one kinetics record",
+      "table": "reaction_entry"
+    },
+    {
+      "built_ratio_per_species": 112.38272727272728,
+      "effect_on_representativeness": "NOT representative for: geometry detail reads, total database size, and shared-buffer cache pressure. REMAINS representative for: every benchmarked search shape, none of which joins geometry_atom \u2014 species, reaction, structure, thermo, kinetics, statmech, calculation and analytics searches all read only identity, product, provenance and review tables",
+      "production_ratio_per_species": 749.2181818181818,
+      "reason": "building the full production ratio at 50000 species implies 37,460,909 rows; the corpus builds 5,619,136 (15%) by giving geometries to a random subset of species, at full atoms-per-geometry fidelity for those it does build",
+      "table": "geometry_atom"
+    }
+  ],
+  "measured_row_counts": {
+    "alembic_version": 1,
+    "app_user": 5,
+    "calc_freq_result": 59669,
+    "calc_opt_result": 59581,
+    "calc_sp_result": 119701,
+    "calc_spin_diagnostic": 83636,
+    "calc_wavefunction_diagnostic": 39900,
+    "calculation": 418182,
+    "calculation_artifact": 465455,
+    "calculation_output_geometry": 62727,
+    "calculation_parameter_vocab": 24,
+    "chem_reaction": 15000,
+    "conformer_assignment_scheme": 1,
+    "conformer_group": 50000,
+    "geometry": 62727,
+    "geometry_atom": 1637444,
+    "kinetics": 13636,
+    "level_of_theory": 10,
+    "literature": 400,
+    "reaction_entry": 15000,
+    "reaction_entry_structure_participant": 60105,
+    "reaction_family": 125,
+    "record_review": 386514,
+    "software": 6,
+    "software_release": 18,
+    "species": 50000,
+    "species_entry": 50909,
+    "statmech": 70000,
+    "statmech_electronic_level": 126190,
+    "thermo": 60000,
+    "transport": 30000,
+    "workflow_tool": 4,
+    "workflow_tool_release": 8
+  },
+  "measured_shortfalls": [
+    {
+      "built": 386514,
+      "fraction_of_plan": 0.3977,
+      "planned": 971818,
+      "reason": "record_review is UNIQUE(record_type, record_id) \u2014 at most one row per reviewable record. The measured production ratio of 19.44 reviews per species is spread over more reviewable record types than this corpus models; the corpus reviews only species_entry, calculation, statmech, thermo, kinetics and transport. EFFECT: review-badge joins and the curated-profile approval floor are exercised at full fidelity for those six record types (386,514 badge rows, 69,409 approved), which covers every benchmarked query shape. Review lookups for conformer, transition-state, network and artifact records are NOT exercised.",
+      "table": "record_review"
+    }
+  ],
+  "plan": {
+    "calculation": 418182,
+    "calculation_artifact": 465455,
+    "conformer_group": 50000,
+    "geometry_fraction": 0.15,
+    "kinetics": 13636,
+    "reaction_entry": 15000,
+    "record_review": 971818,
+    "seed": 20260801,
+    "species": 50000,
+    "species_entry": 50909,
+    "statmech": 70000,
+    "thermo": 60000,
+    "transport": 30000
+  },
+  "production_inventory": {
+    "calc_hessian": 77,
+    "calculation": 460,
+    "calculation_artifact": 512,
+    "geometry_atom": 41207,
+    "kinetics": 15,
+    "network": 2,
+    "network_channel": 42,
+    "record_review": 1069,
+    "species": 55,
+    "species_entry": 56,
+    "statmech": 77
+  },
+  "production_ratios_per_species": {
+    "calc_hessian": 1.4,
+    "calculation": 8.3636,
+    "calculation_artifact": 9.3091,
+    "geometry_atom": 749.2182,
+    "kinetics": 0.2727,
+    "network": 0.0364,
+    "network_channel": 0.7636,
+    "record_review": 19.4364,
+    "species": 1.0,
+    "species_entry": 1.0182,
+    "statmech": 1.4
+  },
+  "review_mix": {
+    "approved": 0.18,
+    "deprecated": 0.02,
+    "not_reviewed": 0.42,
+    "rejected": 0.04,
+    "under_review": 0.34
+  }
+}

@@ -310,6 +310,11 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
                 """,
             name="one_owner",
         ),
+        # The analytics filter pass selects only ``id`` for a given
+        # ``type``, always bounded by ``id <= watermark``. Both columns in
+        # the index make that scan index-only; see revision
+        # a7c2e4f8b6d9 for the measured plans.
+        Index("ix_calculation_type_id", "type", "id"),
     )
 
 

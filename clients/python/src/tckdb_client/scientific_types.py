@@ -69,6 +69,19 @@ class ScientificSearchResponse(TypedDict, Generic[RecordT]):
     pagination: Pagination
 
 
+class ScientificDetailResponse(TypedDict, Generic[RecordT]):
+    """One record, wrapped in the same envelope the searches return.
+
+    The detail reads deliberately echo ``request`` and ``review_summary``
+    too, so a caller that resolved a ref can read the answering profile
+    without a second round trip.
+    """
+
+    request: ScientificRequestEcho
+    review_summary: ReviewStatusSummary
+    record: RecordT
+
+
 class SpeciesRecord(TypedDict, total=False):
     species_ref: Required[str]
     canonical_smiles: Required[str]
@@ -398,6 +411,309 @@ class ArtifactRecord(TypedDict, total=False):
     owner: JSONDict | None
 
 
+class SpeciesStructureRecord(TypedDict, total=False):
+    """One RDKit structure-search hit, flat rather than nested.
+
+    Unlike the identity searches this row carries ``match``: which query
+    matched and, for similarity mode, how well. Without it a ranked result
+    set is indistinguishable from an unranked one.
+    """
+
+    species_ref: Required[str]
+    species_entry_ref: Required[str]
+    smiles: Required[str]
+    inchi_key: Required[str]
+    charge: Required[int]
+    multiplicity: Required[int]
+    species_entry_kind: Required[str]
+    electronic_state_kind: Required[str]
+    match: Required[JSONDict]
+    review: Required[JSONDict]
+    endpoint: Required[str]
+    species_id: int | None
+    species_entry_id: int | None
+
+
+class ConformerRecord(TypedDict, total=False):
+    """One conformer *group* — the unit both the search and detail return."""
+
+    conformer_group: Required[JSONDict]
+    species: Required[JSONDict]
+    observations_summary: Required[JSONDict]
+    evidence_summary: Required[JSONDict]
+    available_sections: Required[JSONDict]
+    selection_summary: list[JSONDict] | None
+    observations: list[JSONDict] | None
+    selections: list[JSONDict] | None
+    calculations: list[JSONDict] | None
+    geometries: list[JSONDict] | None
+    review_history: list[JSONDict] | None
+
+
+class ConformerObservationRecord(TypedDict, total=False):
+    """One observation, with the group and species it belongs to attached."""
+
+    conformer_observation: Required[JSONDict]
+    conformer_group: Required[JSONDict]
+    species: Required[JSONDict]
+    evidence_summary: Required[JSONDict]
+    available_sections: Required[JSONDict]
+    assignment_scheme: JSONDict | None
+    selections: list[JSONDict] | None
+    calculations: list[JSONDict] | None
+    geometries: list[JSONDict] | None
+    review_history: list[JSONDict] | None
+
+
+class TransitionStateEntryRecord(TypedDict, total=False):
+    """One TS *entry* — what the transition-state search returns.
+
+    An entry is a specific electronic/conformational realisation of the
+    transition state; the search is entry-grained because that is the
+    level at which calculations and validation attach.
+    """
+
+    transition_state_entry: Required[JSONDict]
+    transition_state: Required[JSONDict]
+    reaction: Required[JSONDict]
+    evidence_summary: Required[JSONDict]
+    validation: Required[JSONDict]
+    available_sections: Required[JSONDict]
+    calculations: list[JSONDict] | None
+    geometries: list[JSONDict] | None
+    review_history: list[JSONDict] | None
+    validation_evidence: list[JSONDict] | None
+    trust: JSONDict | None
+
+
+class TransitionStateRecord(TypedDict, total=False):
+    """One transition-state identity, with its entries summarised."""
+
+    transition_state: Required[JSONDict]
+    reaction: Required[JSONDict]
+    entries_summary: Required[JSONDict]
+    evidence_summary: Required[JSONDict]
+    available_sections: Required[JSONDict]
+    entries: list[JSONDict] | None
+    calculations: list[JSONDict] | None
+    geometries: list[JSONDict] | None
+    review_history: list[JSONDict] | None
+
+
+class EnergyCorrectionSchemeRecord(TypedDict, total=False):
+    energy_correction_scheme: Required[JSONDict]
+    evidence_summary: Required[JSONDict]
+    available_sections: Required[JSONDict]
+    level_of_theory: JSONDict | None
+    literature: JSONDict | None
+    corrections: list[JSONDict] | None
+    used_by: list[JSONDict] | None
+
+
+class FrequencyScaleFactorRecord(TypedDict, total=False):
+    frequency_scale_factor: Required[JSONDict]
+    evidence_summary: Required[JSONDict]
+    available_sections: Required[JSONDict]
+    level_of_theory: JSONDict | None
+    software_release: JSONDict | None
+    workflow_tool_release: JSONDict | None
+    literature: JSONDict | None
+    used_by: list[JSONDict] | None
+
+
+class LiteratureRecord(TypedDict, total=False):
+    literature: Required[JSONDict]
+    identifiers: Required[JSONDict]
+    record_counts: Required[JSONDict]
+    available_sections: Required[JSONDict]
+    authors: list[JSONDict] | None
+
+
+class LiteratureLinkedRecord(TypedDict, total=False):
+    """One scientific record that cites, or was derived from, a reference.
+
+    ``endpoint`` is the read path for the linked record, so a caller can
+    follow the citation without knowing how each record type is addressed.
+    """
+
+    record_type: Required[str]
+    record_ref: Required[str]
+    endpoint: Required[str]
+    record_id: int | None
+    relationship_kind: str
+    role: str | None
+    title: str | None
+    label: str | None
+    species_ref: str | None
+    species_entry_ref: str | None
+    reaction_ref: str | None
+    reaction_entry_ref: str | None
+    calculation_ref: str | None
+    network_ref: str | None
+    network_solve_ref: str | None
+    review: JSONDict | None
+    created_at: str | None
+
+
+# ---------------------------------------------------------------------------
+# Analytics
+# ---------------------------------------------------------------------------
+#
+# Flat rows, one scalar per column: the analytics surface exists to be
+# turned into a dataframe, so nothing here nests. Every row carries its own
+# ``review_status`` because a dataset built from these must be able to state
+# the curation floor it was drawn from.
+
+
+class AnalyticsRequestEcho(TypedDict, total=False):
+    filter: Required[JSONDict]
+    sort: Required[str]
+    pagination_mode: Required[str]
+    include: list[str]
+    profile: str
+    profile_recommendation: str
+    profile_release_ref: str | None
+
+
+class WatermarkEcho(TypedDict, total=False):
+    """When the answering snapshot was taken, and from which release."""
+
+    taken_at: Required[str]
+    release_ref: str | None
+
+
+class KineticsAnalyticsRecord(TypedDict, total=False):
+    kinetics_ref: Required[str]
+    reaction_entry_ref: Required[str]
+    scientific_origin: Required[str]
+    model_kind: Required[str]
+    is_third_body: Required[bool]
+    degeneracy_convention: Required[str]
+    has_literature: Required[bool]
+    has_workflow_tool: Required[bool]
+    has_transition_state_provenance: Required[bool]
+    has_statmech_provenance: Required[bool]
+    review_status: Required[str]
+    kinetics_id: int
+    reaction_entry_id: int
+    direction: str | None
+    a: float | None
+    a_units: str | None
+    n: float | None
+    ea_kj_mol: float | None
+    a_uncertainty: float | None
+    a_uncertainty_kind: str | None
+    n_uncertainty: float | None
+    ea_uncertainty_kj_mol: float | None
+    tmin_k: float | None
+    tmax_k: float | None
+    degeneracy: float | None
+    tunneling_model: str | None
+    pressure_context: str | None
+    pressure_bar: float | None
+    created_at: str | None
+
+
+class ThermoAnalyticsRecord(TypedDict, total=False):
+    thermo_ref: Required[str]
+    species_entry_ref: Required[str]
+    scientific_origin: Required[str]
+    has_literature: Required[bool]
+    has_workflow_tool: Required[bool]
+    has_statmech_provenance: Required[bool]
+    review_status: Required[str]
+    thermo_id: int
+    species_entry_id: int
+    model_kind: str | None
+    phase: str | None
+    reference_pressure_bar: float | None
+    h298_kj_mol: float | None
+    s298_j_mol_k: float | None
+    enthalpy_formation_0k_kj_mol: float | None
+    h298_uncertainty_kj_mol: float | None
+    s298_uncertainty_j_mol_k: float | None
+    enthalpy_formation_0k_uncertainty_kj_mol: float | None
+    tmin_k: float | None
+    tmax_k: float | None
+    created_at: str | None
+
+
+class StatmechAnalyticsRecord(TypedDict, total=False):
+    statmech_ref: Required[str]
+    scientific_origin: Required[str]
+    has_frequency_scale_factor: Required[bool]
+    torsion_count: Required[int]
+    electronic_level_count: Required[int]
+    review_status: Required[str]
+    statmech_id: int
+    #: Exactly one owner side is populated: statmech hangs off a species
+    #: entry or off a transition-state entry, never both.
+    species_entry_id: int | None
+    species_entry_ref: str | None
+    transition_state_entry_id: int | None
+    transition_state_entry_ref: str | None
+    external_symmetry: int | None
+    is_linear: bool | None
+    point_group: str | None
+    statmech_treatment: str | None
+    rigid_rotor_kind: str | None
+    optical_isomers: int | None
+    rotational_constant_a_cm1: float | None
+    rotational_constant_b_cm1: float | None
+    rotational_constant_c_cm1: float | None
+    created_at: str | None
+
+
+class CalculationAnalyticsRecord(TypedDict, total=False):
+    calculation_ref: Required[str]
+    calculation_type: Required[str]
+    quality: Required[str]
+    review_status: Required[str]
+    calculation_id: int
+    electronic_energy_hartree: float | None
+    final_energy_hartree: float | None
+    converged: bool | None
+    zpe_hartree: float | None
+    n_imag: int | None
+    imag_freq_cm1: float | None
+    t1_diagnostic: float | None
+    d1_diagnostic: float | None
+    s_squared: float | None
+    s_squared_expected: float | None
+    method: str | None
+    basis: str | None
+    level_of_theory_ref: str | None
+    software: str | None
+    software_version: str | None
+    created_at: str | None
+
+
+#: Any one of the four analytics row shapes.
+AnalyticsRecord: TypeAlias = (
+    KineticsAnalyticsRecord
+    | ThermoAnalyticsRecord
+    | StatmechAnalyticsRecord
+    | CalculationAnalyticsRecord
+)
+
+
+class AnalyticsResponse(TypedDict, Generic[RecordT], total=False):
+    """A search envelope that can also be traversed by keyset.
+
+    ``next_cursor`` and ``watermark`` are what distinguish this from
+    :class:`ScientificSearchResponse`: offset paging over a live corpus can
+    skip or duplicate rows, so a reproducible dataset build follows the
+    cursor and records the watermark it was taken at.
+    """
+
+    request: Required[AnalyticsRequestEcho]
+    review_summary: Required[ReviewStatusSummary]
+    records: Required[list[RecordT]]
+    pagination: Required[Pagination]
+    next_cursor: str | None
+    watermark: WatermarkEcho | None
+
+
 SpeciesSearchResponse: TypeAlias = ScientificSearchResponse[SpeciesRecord]
 ReactionSearchResponse: TypeAlias = ScientificSearchResponse[ReactionRecord]
 ThermoSearchResponse: TypeAlias = ScientificSearchResponse[ThermoSearchRecord]
@@ -428,31 +744,92 @@ NetworkKineticsSearchResponse: TypeAlias = ScientificSearchResponse[
 StatmechSearchResponse: TypeAlias = ScientificSearchResponse[StatmechRecord]
 TransportSearchResponse: TypeAlias = ScientificSearchResponse[TransportRecord]
 ArtifactSearchResponse: TypeAlias = ScientificSearchResponse[ArtifactRecord]
+SpeciesStructureSearchResponse: TypeAlias = ScientificSearchResponse[
+    SpeciesStructureRecord
+]
+ConformerSearchResponse: TypeAlias = ScientificSearchResponse[ConformerRecord]
+ConformerGroupDetailResponse: TypeAlias = ScientificDetailResponse[ConformerRecord]
+ConformerObservationDetailResponse: TypeAlias = ScientificDetailResponse[
+    ConformerObservationRecord
+]
+TransitionStateSearchResponse: TypeAlias = ScientificSearchResponse[
+    TransitionStateEntryRecord
+]
+TransitionStateDetailResponse: TypeAlias = ScientificDetailResponse[
+    TransitionStateRecord
+]
+TransitionStateEntryDetailResponse: TypeAlias = ScientificDetailResponse[
+    TransitionStateEntryRecord
+]
+EnergyCorrectionSchemeSearchResponse: TypeAlias = ScientificSearchResponse[
+    EnergyCorrectionSchemeRecord
+]
+EnergyCorrectionSchemeDetailResponse: TypeAlias = ScientificDetailResponse[
+    EnergyCorrectionSchemeRecord
+]
+FrequencyScaleFactorSearchResponse: TypeAlias = ScientificSearchResponse[
+    FrequencyScaleFactorRecord
+]
+FrequencyScaleFactorDetailResponse: TypeAlias = ScientificDetailResponse[
+    FrequencyScaleFactorRecord
+]
+LiteratureDetailResponse: TypeAlias = ScientificDetailResponse[LiteratureRecord]
+LiteratureRecordsResponse: TypeAlias = ScientificSearchResponse[
+    LiteratureLinkedRecord
+]
+KineticsAnalyticsResponse: TypeAlias = AnalyticsResponse[KineticsAnalyticsRecord]
+ThermoAnalyticsResponse: TypeAlias = AnalyticsResponse[ThermoAnalyticsRecord]
+StatmechAnalyticsResponse: TypeAlias = AnalyticsResponse[StatmechAnalyticsRecord]
+CalculationAnalyticsResponse: TypeAlias = AnalyticsResponse[
+    CalculationAnalyticsRecord
+]
 
 
 __all__ = [
+    "AnalyticsRecord",
+    "AnalyticsRequestEcho",
+    "AnalyticsResponse",
     "ArtifactRecord",
     "ArtifactSearchResponse",
+    "CalculationAnalyticsRecord",
+    "CalculationAnalyticsResponse",
     "CalculationAvailableSections",
     "CalculationDetailResponse",
     "CalculationRecord",
     "CalculationSearchResponse",
     "CondaExecutionRuntime",
+    "ConformerGroupDetailResponse",
+    "ConformerObservationDetailResponse",
+    "ConformerObservationRecord",
+    "ConformerRecord",
+    "ConformerSearchResponse",
     "ContainerExecutionRuntime",
+    "DescribedExecutionRuntime",
+    "EnergyCorrectionSchemeDetailResponse",
+    "EnergyCorrectionSchemeRecord",
+    "EnergyCorrectionSchemeSearchResponse",
     "ErrorEnvelope",
-    "ExecutionEnvironmentManifestRecord",
     "ExecutionEnvironmentClosureEntry",
     "ExecutionEnvironmentContentReference",
     "ExecutionEnvironmentExecutable",
+    "ExecutionEnvironmentManifestRecord",
     "ExecutionEnvironmentModuleDescription",
-    "DescribedExecutionRuntime",
     "ExecutionEnvironmentRuntime",
+    "FrequencyScaleFactorDetailResponse",
+    "FrequencyScaleFactorRecord",
+    "FrequencyScaleFactorSearchResponse",
     "HPCModuleExecutionRuntime",
     "JSONDict",
+    "KineticsAnalyticsRecord",
+    "KineticsAnalyticsResponse",
     "KineticsDetailRecord",
     "KineticsRecord",
     "KineticsSearchRecord",
     "KineticsSearchResponse",
+    "LiteratureDetailResponse",
+    "LiteratureLinkedRecord",
+    "LiteratureRecord",
+    "LiteratureRecordsResponse",
     "NetworkKineticsRecord",
     "NetworkKineticsSearchResponse",
     "NetworkRecord",
@@ -464,11 +841,12 @@ __all__ = [
     "NetworkStateSummary",
     "Pagination",
     "PublicAssessmentSummary",
-    "ReproducibilityAssessmentSummary",
     "ReactionKineticsResponse",
     "ReactionRecord",
     "ReactionSearchResponse",
+    "ReproducibilityAssessmentSummary",
     "ReviewStatusSummary",
+    "ScientificDetailResponse",
     "ScientificRequestEcho",
     "ScientificSearchResponse",
     "ScientificSoftwareReleaseIdentity",
@@ -476,14 +854,26 @@ __all__ = [
     "SpeciesCalculationsSearchResponse",
     "SpeciesRecord",
     "SpeciesSearchResponse",
+    "SpeciesStructureRecord",
+    "SpeciesStructureSearchResponse",
     "SpeciesThermoResponse",
+    "StatmechAnalyticsRecord",
+    "StatmechAnalyticsResponse",
     "StatmechRecord",
     "StatmechSearchResponse",
-    "ThermoRecord",
+    "ThermoAnalyticsRecord",
+    "ThermoAnalyticsResponse",
     "ThermoDetailRecord",
+    "ThermoRecord",
     "ThermoSearchRecord",
     "ThermoSearchResponse",
+    "TransitionStateDetailResponse",
+    "TransitionStateEntryDetailResponse",
+    "TransitionStateEntryRecord",
+    "TransitionStateRecord",
+    "TransitionStateSearchResponse",
     "TransportRecord",
     "TransportSearchResponse",
+    "WatermarkEcho",
     "WorkflowToolReleaseIdentity",
 ]
