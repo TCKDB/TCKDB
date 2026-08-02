@@ -223,6 +223,56 @@ test) inherit the same database. xdist is **not** wired up by
 default; this is forward-looking infrastructure that activates the
 moment a caller sets `PYTEST_XDIST_WORKER`.
 
+### Test-database cleanup and the startup sweep
+
+Because the fallback name embeds the pid, **no name is ever reused** —
+so any run that fails to drop its database leaks it permanently. Two
+mechanisms keep that from accumulating:
+
+1. **Fixture teardown.** `db_engine` performs database creation *and*
+   the `alembic upgrade` subprocess **inside** its `try`, so the
+   `finally` that drops the database covers every in-process failure
+   path — a failed migration, a failed `create_engine`, a collection
+   error or `KeyboardInterrupt` thrown into the fixture — not just a
+   clean session exit.
+2. **Startup sweep.** Nothing in Python can run after `SIGKILL`, an
+   OOM kill, or a power loss, so `_sweep_stale_test_databases` runs
+   once at session start to reclaim that residue. Every database the
+   fixture creates is stamped with a `COMMENT ON DATABASE` recording
+   the creating host and pid; the sweep drops a database **only** when
+   all of the following hold:
+
+   - it carries this harness's marker (databases created by anything
+     else — including orphans that predate the marker — are never
+     touched);
+   - the marker's host is this host and its pid is no longer running
+     (this is what stops a concurrently-starting pytest run from
+     having its freshly created database swept away before it
+     connects);
+   - `pg_stat_activity` reports no backend attached;
+   - the name matches the isolated-test-database pattern and is not
+     this session's own database.
+
+   The `DROP` is issued **without** `pg_terminate_backend`, so if a
+   connection appears in the race window Postgres refuses and the
+   sweep moves on. The sweep is best-effort and never fails a run.
+   Set `TCKDB_TEST_DB_SWEEP=0` to disable it.
+
+Regression coverage for both lives in
+[`tests/test_db_harness_lifecycle.py`](../tests/test_db_harness_lifecycle.py).
+
+If you need to audit what is on the server:
+
+```bash
+psql -h 127.0.0.1 -U tckdb -d postgres -c "
+  SELECT d.datname,
+         pg_size_pretty(pg_database_size(d.datname)) AS size,
+         shobj_description(d.oid, 'pg_database')     AS marker
+  FROM pg_database d
+  WHERE d.datname LIKE 'tckdb\_test%'
+  ORDER BY d.oid;"
+```
+
 ## Flaky / repro handling
 
 - Reproduce in isolation first (Tier 0/1). If it passes alone but
