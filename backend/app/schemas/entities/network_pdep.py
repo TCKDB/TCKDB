@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, model_validator
 from app.db.models.common import (
     ArrheniusAUnits,
     NetworkChannelKind,
+    NetworkChannelMechanism,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkStateKind,
@@ -124,13 +125,17 @@ class NetworkChannelBase(BaseModel):
     :param network_id: Owning network id.
     :param source_state_id: Source network-state id.
     :param sink_state_id: Sink network-state id.
-    :param kind: Channel classification.
+    :param kind: Macroscopic channel classification.
+    :param mechanism: Mechanistic attribution — ``elementary`` (the default,
+        backed by named ``network_channel_microreaction`` rows) or
+        ``well_skipping`` (chemically activated; no single elementary step).
     """
 
     network_id: int
     source_state_id: int
     sink_state_id: int
     kind: NetworkChannelKind
+    mechanism: NetworkChannelMechanism = NetworkChannelMechanism.elementary
 
     @model_validator(mode="after")
     def validate_source_ne_sink(self) -> Self:
@@ -147,6 +152,7 @@ class NetworkChannelUpdate(SchemaBase):
     """Patch schema for a network channel."""
 
     kind: NetworkChannelKind | None = None
+    mechanism: NetworkChannelMechanism | None = None
 
 
 class NetworkChannelRead(NetworkChannelBase, ORMBaseSchema):

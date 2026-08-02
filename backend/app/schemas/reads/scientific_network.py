@@ -35,6 +35,7 @@ from app.db.models.common import (
     EnergyCorrectionConvention,
     EnergyZeroConvention,
     NetworkChannelKind,
+    NetworkChannelMechanism,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkSpeciesRole,
@@ -154,11 +155,19 @@ class NetworkChannelSummary(BaseModel):
     ``network_state`` has no public_ref. Composition_hash is unique
     per ``(network_id, composition_hash)`` so it's a stable address
     within a network.
+
+    ``mechanism`` is always present and states, as a machine token, why
+    ``microreactions`` looks the way it does: an ``elementary`` channel names
+    its elementary step(s), a ``well_skipping`` one has none because a
+    chemically-activated pathway has no single elementary step behind it. A
+    caller never has to read an empty ``microreactions`` list and guess whether
+    the pathway is multi-step or the deposit was incomplete.
     """
 
     network_channel_id: int | None = None
     channel_key: str | None = None
     kind: NetworkChannelKind
+    mechanism: NetworkChannelMechanism
     source_state_composition_hash: str
     sink_state_composition_hash: str
     source_state_id: int | None = None

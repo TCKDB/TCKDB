@@ -267,11 +267,12 @@ If both counts are zero, `alembic upgrade head` proceeds normally and nothing be
    ```
    Species, calculations, transition states and statmech rows are **not** deleted — they are shared identity/result rows and the re-upload will resolve to the existing ones.
 4. **Migrate.** `alembic upgrade head` now runs to completion.
-5. **Re-upload** each network through `POST /api/v1/uploads/networks/pdep` with a v2 payload regenerated from its source run (for Arkane runs, `backend/scripts/pdep_ingestion` emits one). Each payload must carry per-channel `microreaction_paths`, per-path `channel_barriers`, and `(state_key, collider_species_key)`-scoped `energy_transfer`.
+5. **Re-upload** each network through `POST /api/v1/uploads/networks/pdep` with a v2 payload regenerated from its source run (for Arkane runs, `backend/scripts/pdep_ingestion` emits one). Each payload must carry per-path `channel_barriers`, `(state_key, collider_species_key)`-scoped `energy_transfer`, and, for every channel that is one elementary step, `microreaction_paths`. A chemically-activated **well-skipping** channel has no elementary step to name and instead declares `mechanism: "well_skipping"` with no paths (see `backend/docs/specs/pdep_upload_contract_v2.md`, "Well-skipping channels"). Omitting the paths *without* that declaration is still rejected.
 6. **Verify** that the re-uploaded network count matches the export, and that `network_channel.channel_key` is non-null everywhere:
    ```sql
    SELECT count(*) FROM network_channel WHERE channel_key IS NULL;  -- expect 0
    ```
+   The per-network **channel** count should match the export too: well-skipping channels are carried across, so a v1 network's phenomenological channels are all representable in v2. A shortfall means the producer dropped chemically-activated pathways rather than declaring them.
 
 **Downgrading** `c1d2e3f4a5b6` refuses symmetrically when either a TS-owned `statmech` row exists (the prior schema has no truthful subject for it) or two channels share `(network_id, source_state_id, sink_state_id)` (the prior schema made that triple unique). Resolve those rows before rolling back.
 

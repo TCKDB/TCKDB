@@ -2351,3 +2351,187 @@ def test_network_chebyshev_requires_temperature_and_pressure_bounds() -> None:
 
     payload["solve"]["channel_kinetics"][0].update({"pmin_bar": 0.01, "pmax_bar": 100.0})
     assert NetworkPDepUploadRequest(**payload) is not None
+
+
+# ---------------------------------------------------------------------------
+# Well-skipping (chemically-activated) channels
+# ---------------------------------------------------------------------------
+
+
+def _well_skipping_payload() -> dict:
+    """``_full_payload`` plus the chemically-activated entrance -> exit channel.
+
+    ``C2H5 + O2 -> C2H4 + HO2`` is the textbook well-skipping rate: the
+    reactants associate into energized ``C2H5OO*``, which eliminates HO2 before
+    it is collisionally stabilized. No single elementary step joins the
+    entrance and exit configurations, so the master equation's phenomenological
+    k(T,P) is the only thing that describes it.
+    """
+    payload = _full_payload(include_solve=True)
+    payload["channels"].append(
+        {
+            "key": "chemically_activated_path",
+            "source_state_key": "entrance",
+            "sink_state_key": "exit",
+            "kind": "exchange",
+            "mechanism": "well_skipping",
+        }
+    )
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "channel_key": "chemically_activated_path",
+            "model_kind": "chebyshev",
+            "chebyshev": {
+                "n_temperature": 2,
+                "n_pressure": 2,
+                "coefficients": [[7.0, 0.5], [-0.25, 0.125]],
+            },
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "pmin_bar": 0.01,
+            "pmax_bar": 100.0,
+            "rate_units": "cm3_mol_s",
+            "pressure_units": "bar",
+            "temperature_units": "kelvin",
+            "stores_log10_k": True,
+            "note": "chemically activated; no single elementary step",
+        }
+    ]
+    return payload
+
+
+def test_pathless_channel_without_a_declaration_is_still_rejected() -> None:
+    """Omitting the paths is an incomplete deposit, never an implicit claim.
+
+    This is the guarantee that keeps the well-skipping relaxation additive:
+    silence still fails, and it fails with a message naming the declaration the
+    producer would have to make.
+    """
+    payload = _full_payload()
+    payload["channels"][2].pop("microreaction_paths")
+    with pytest.raises(ValueError, match="must declare mechanism='well_skipping'"):
+        NetworkPDepUploadRequest(**payload)
+
+    # Explicitly empty is not a loophole either.
+    payload["channels"][2]["microreaction_paths"] = []
+    with pytest.raises(ValueError, match="must declare mechanism='well_skipping'"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_well_skipping_channel_must_not_supply_paths() -> None:
+    """If a single elementary step joins the endpoints, it is not well-skipping."""
+    payload = _well_skipping_payload()
+    payload["channels"][-1]["microreaction_paths"] = [
+        {"micro_reaction_key": "rxn_assoc"}
+    ]
+    with pytest.raises(ValueError, match="declares mechanism='well_skipping' but"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_well_skipping_rejected_when_an_elementary_step_joins_the_endpoints() -> None:
+    """A directly-connected pair must be attributed, not declared multi-step."""
+    payload = _full_payload()
+    # entrance -> well_RO2 IS rxn_assoc; calling it well-skipping hides evidence.
+    payload["channels"][0] = {
+        "key": "association_path",
+        "source_state_key": "entrance",
+        "sink_state_key": "well_RO2",
+        "kind": "association",
+        "mechanism": "well_skipping",
+    }
+    with pytest.raises(ValueError, match="directly connected by an elementary"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_well_skipping_rejected_without_a_well_intermediate() -> None:
+    """The intermediate must be an energized well, not a separated product set.
+
+    Flux that reaches a bimolecular configuration has separated; it is a
+    reservoir in the master equation, not an energized intermediate. Reclassify
+    the RO2 well as bimolecular and the declaration loses its backing.
+    """
+    payload = _well_skipping_payload()
+    payload["states"][1]["kind"] = "bimolecular"
+    # With no well states left, the (well, collider) transfer cross product is
+    # empty, so the transfer rows must go too.
+    payload["solve"]["energy_transfer"] = []
+    with pytest.raises(ValueError, match="through well states"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_well_skipping_channel_round_trips(db_engine) -> None:
+    """A declared chemically-activated channel uploads, persists, and reads back.
+
+    It stores zero ``network_channel_microreaction`` rows and zero barriers —
+    correctly, because it has no elementary step and no saddle point — while
+    still carrying the master equation's k(T,P). The stored ``mechanism`` is
+    what keeps that emptiness readable as a claim rather than as a gap.
+    """
+    from app.db.models.common import NetworkChannelMechanism
+    from app.db.models.network_pdep import NetworkKinetics
+
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**_well_skipping_payload())
+        network = persist_network_pdep_upload(session, request)
+        session.flush()
+
+        channel = session.scalars(
+            select(NetworkChannel).where(
+                NetworkChannel.network_id == network.id,
+                NetworkChannel.channel_key == "chemically_activated_path",
+            )
+        ).one()
+        assert channel.mechanism is NetworkChannelMechanism.well_skipping
+        assert (
+            session.scalars(
+                select(NetworkChannelMicroReaction).where(
+                    NetworkChannelMicroReaction.channel_id == channel.id
+                )
+            ).all()
+            == []
+        )
+
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+        assert (
+            session.scalars(
+                select(NetworkSolveChannelBarrier).where(
+                    NetworkSolveChannelBarrier.solve_id == solve.id,
+                    NetworkSolveChannelBarrier.channel_id == channel.id,
+                )
+            ).all()
+            == []
+        )
+        # The rate the master equation produced is what makes it worth storing.
+        kinetics = session.scalars(
+            select(NetworkKinetics).where(NetworkKinetics.channel_id == channel.id)
+        ).all()
+        assert len(kinetics) == 1
+
+        # Every elementary channel in the same payload is untouched.
+        elementary = session.scalars(
+            select(NetworkChannel).where(
+                NetworkChannel.network_id == network.id,
+                NetworkChannel.channel_key != "chemically_activated_path",
+            )
+        ).all()
+        assert len(elementary) == 3
+        assert all(
+            c.mechanism is NetworkChannelMechanism.elementary for c in elementary
+        )
+
+        # The read surface states the mechanism instead of leaving the caller
+        # to infer it from an empty microreaction list.
+        read = get_network(
+            session, network_handle=network.public_ref, include=["channels"]
+        )
+        by_key = {c.channel_key: c for c in read.record.channels or []}
+        activated = by_key["chemically_activated_path"]
+        assert activated.mechanism is NetworkChannelMechanism.well_skipping
+        assert activated.microreactions == []
+        assert activated.has_kinetics is True
+        assert (
+            by_key["elimination_path"].mechanism
+            is NetworkChannelMechanism.elementary
+        )

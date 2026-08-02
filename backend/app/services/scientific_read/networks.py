@@ -634,6 +634,7 @@ def _build_channels(
             network_channel_id=r.id,
             channel_key=r.channel_key,
             kind=r.kind,
+            mechanism=r.mechanism,
             source_state_id=r.source_state_id,
             sink_state_id=r.sink_state_id,
             source_state_composition_hash=state_hash_by_id.get(
