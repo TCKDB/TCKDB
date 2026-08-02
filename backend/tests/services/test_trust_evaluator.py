@@ -106,6 +106,7 @@ from app.services.trust import (
     label_from_completeness,
     select_rubric,
 )
+from app.services.trust.evaluator import temperature_range_is_definitionally_invalid
 
 # ---------------------------------------------------------------------------
 # Local ORM helpers — direct inserts; rolled back at end of test
@@ -1149,6 +1150,20 @@ class TestComputedKineticsEvaluator:
         assert result.hard_fail_reason is HardFailReason.invalid_temperature_range
         assert "temperature_range_valid" in result.missing_checks
 
+    def test_hot_but_ordered_temperature_range_is_not_hard_failed(self, db_session):
+        """Shock-tube / detonation / plasma ranges are correct science.
+
+        Per ADR 0008 the upper bound is an expectation, not a definition: it is
+        demoted to the graded ``temperature_range_valid`` check, which lowers
+        completeness without labelling the record ``hard_failed``.
+        """
+        kinetics = _make_kinetics(db_session, tmin_k=300.0, tmax_k=15_000.0)
+        result = evaluate_computed_kinetics(db_session, kinetics.id)
+        assert result.hard_fail_reason is None
+        assert result.label is not EvidenceBadge.hard_failed
+        # The expectation still fires, at the graded tier only.
+        assert "temperature_range_valid" in result.missing_checks
+
     def test_source_calculations_raise_evidence_completeness(self, db_session):
         sparse = _make_kinetics(db_session)
         rich = _make_kinetics(db_session)
@@ -1453,6 +1468,19 @@ class TestComputedThermoEvaluator:
         result = evaluate_computed_thermo(db_session, thermo.id)
         assert result.label is EvidenceBadge.hard_failed
         assert result.hard_fail_reason is HardFailReason.invalid_temperature_range
+        assert "temperature_range_valid" in result.missing_checks
+
+    def test_hot_but_ordered_temperature_range_is_not_hard_failed(self, db_session):
+        """A range above the graded NASA-Glenn cap is hot, not wrong.
+
+        Per ADR 0008 the upper bound is an expectation, not a definition; it is
+        demoted to the graded ``temperature_range_valid`` check.
+        """
+        thermo = _make_thermo(db_session, scalar=True, tmin_k=300.0, tmax_k=25_000.0)
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert result.hard_fail_reason is None
+        assert result.label is not EvidenceBadge.hard_failed
+        # The expectation still fires, at the graded tier only.
         assert "temperature_range_valid" in result.missing_checks
 
     def test_source_calculations_raise_evidence_completeness(self, db_session):
@@ -2103,3 +2131,51 @@ class TestComputedTransportEvaluator:
         assert result.rubric == "computed_transport"
         assert result.evidence_completeness >= 0.0
         assert result.is_certified is False
+
+
+# ---------------------------------------------------------------------------
+# 14. Temperature-range definitional predicate (ADR 0008)
+# ---------------------------------------------------------------------------
+
+
+class TestTemperatureRangeDefinitionalPredicate:
+    """The hard-fail tier asserts a definition, never an expectation.
+
+    These are pure-function tests on purpose. The ``thermo`` and ``kinetics``
+    tables carry ``ck_*_tmin_k_gt_0`` and ``ck_*_tmin_le_tmax`` CHECK
+    constraints, so a non-positive or inverted range cannot be inserted through
+    Postgres at all; ``tmin == tmax`` is the only definitional violation
+    reachable end-to-end (covered by
+    ``test_invalid_temperature_range_hard_fails`` above). The predicate is
+    tested directly so the definitional rule stays pinned regardless.
+    """
+
+    @pytest.mark.parametrize(
+        "tmin_k, tmax_k",
+        [
+            (2000.0, 300.0),  # inverted
+            (500.0, 500.0),  # degenerate (reachable through the DB)
+            (0.0, 2000.0),  # non-positive lower bound
+            (-10.0, 2000.0),  # negative lower bound
+            (300.0, 0.0),  # non-positive upper bound
+        ],
+    )
+    def test_definitionally_invalid_ranges_are_rejected(self, tmin_k, tmax_k):
+        assert temperature_range_is_definitionally_invalid(tmin_k, tmax_k) is True
+
+    @pytest.mark.parametrize(
+        "tmin_k, tmax_k",
+        [
+            (300.0, 2000.0),  # ordinary combustion range
+            (300.0, 15_000.0),  # shock tube / detonation
+            (300.0, 25_000.0),  # above the graded NASA-Glenn cap
+            (1000.0, 1.0e6),  # plasma
+        ],
+    )
+    def test_hot_but_ordered_ranges_are_accepted(self, tmin_k, tmax_k):
+        """An ordered, positive range is not wrong merely because it is hot.
+
+        The upper bound is an expectation and lives in the graded rubric; it
+        must not appear in the hard-fail predicate at any magnitude.
+        """
+        assert temperature_range_is_definitionally_invalid(tmin_k, tmax_k) is False
