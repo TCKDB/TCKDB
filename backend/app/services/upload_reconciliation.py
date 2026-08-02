@@ -15,10 +15,6 @@ from app.schemas.fragments.calculation import CalculationWithResultsPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
-from app.services.charge_multiplicity_reconciliation import (
-    W_CHARGE_MISMATCH,
-    W_MULTIPLICITY_MISMATCH,
-)
 from app.services.ess_result import (
     ESSFreqResult,
     ESSJobMeta,
@@ -48,18 +44,15 @@ W_ELECTRONIC_STATE_CONTRADICTS_METHOD = "electronic_state_contradicts_method"
 W_TERM_SYMBOL_MISMATCH = "term_symbol_mismatch"
 
 # Charge / multiplicity contradictions are detected against the *output log*
-# by :mod:`app.services.charge_multiplicity_reconciliation`, which owns
-# ``W_CHARGE_MISMATCH`` / ``W_MULTIPLICITY_MISMATCH`` (imported above so
-# there is one definition rather than a drifting copy).
+# by :mod:`app.services.charge_multiplicity_reconciliation`, which is their
+# sole owner (``W_CHARGE_MISMATCH`` / ``W_MULTIPLICITY_MISMATCH``).
 #
-# The Layer-2 deduction pass cannot detect these itself:
+# The Layer-2 deduction pass deliberately does not touch them:
 # ``build_ess_result_from_upload`` populates ``ESSJobMeta.charge`` and
-# ``.multiplicity`` from the same payload that ``_reconcile_deduction`` then
-# compares them against, so the comparison is payload-versus-payload and is
+# ``.multiplicity`` from the same payload ``_reconcile_deduction`` would
+# compare them against, so the comparison would be payload-versus-payload and
 # always equal by construction. The meta fields are kept because
-# ``deduce_term_symbol`` genuinely needs the multiplicity; the charge and
-# multiplicity entries in the table below are therefore inert here, and the
-# log-based hook is what actually fires.
+# ``deduce_term_symbol`` genuinely needs the multiplicity.
 
 
 # ---------------------------------------------------------------------------
@@ -168,8 +161,6 @@ _DEDUCTION_FIELD_MAP: dict[str, tuple[str, str]] = {
     "stationary_point_kind": ("species_entry_kind", "value"),
     "electronic_state_kind": ("electronic_state_kind", "value"),
     "term_symbol": ("term_symbol", None),
-    "charge": ("charge", None),
-    "multiplicity": ("multiplicity", None),
 }
 
 # Maps Deduction.field → warning code for contradictions
@@ -177,8 +168,6 @@ _DEDUCTION_WARNING_CODES: dict[str, str] = {
     "stationary_point_kind": W_N_IMAG_CONTRADICTS_MINIMUM,
     "electronic_state_kind": W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
     "term_symbol": W_TERM_SYMBOL_MISMATCH,
-    "charge": W_CHARGE_MISMATCH,
-    "multiplicity": W_MULTIPLICITY_MISMATCH,
 }
 
 
