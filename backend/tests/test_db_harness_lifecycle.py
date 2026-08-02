@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import warnings
 
 import conftest
 import pytest
@@ -265,3 +266,45 @@ def test_recreate_stamps_ownership_marker() -> None:
         assert f"pid={os.getpid()}" in marker
     finally:
         _force_drop(db_name)
+
+
+def test_cleanup_failure_does_not_mask_the_body_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed drop must not bury the failed ``alembic upgrade``.
+
+    Python replaces a propagating exception with anything raised from
+    ``finally``. Before migrations moved inside the ``try`` this path did not
+    exist; now it does, so a secondary "could not drop" error could hide the
+    migration failure that is the thing actually worth reading.
+
+    Against a fixture whose ``finally`` calls cleanup unguarded, this test
+    fails with ``RuntimeError`` instead of ``CalledProcessError``.
+    """
+    db_name = f"tckdb_test_mask_{os.getpid()}"
+    monkeypatch.setenv("DB_TEST_NAME", db_name)
+    monkeypatch.setenv("TCKDB_TEST_DB_SWEEP", "0")
+
+    monkeypatch.setattr(conftest, "_recreate_test_database", lambda _name: None)
+
+    def _failing_migration(*args: object, **kwargs: object) -> None:
+        raise subprocess.CalledProcessError(1, "alembic upgrade head")
+
+    def _failing_drop(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("could not reach postgres to drop")
+
+    monkeypatch.setattr(conftest.subprocess, "run", _failing_migration)
+    monkeypatch.setattr(conftest, "_drop_test_database", _failing_drop)
+
+    generator = conftest.db_engine.__wrapped__()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        # The migration error is what surfaces, not the cleanup error.
+        with pytest.raises(subprocess.CalledProcessError):
+            next(generator)
+
+    # The leak is still reported rather than silently swallowed.
+    assert any(
+        "cleanup failed" in str(w.message) and db_name in str(w.message)
+        for w in caught
+    ), f"cleanup failure was swallowed silently: {[str(w.message) for w in caught]}"

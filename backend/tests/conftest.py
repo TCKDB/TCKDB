@@ -5,6 +5,7 @@ import os
 import re
 import socket
 import subprocess
+import warnings
 from pathlib import Path
 from typing import Iterator
 
@@ -306,6 +307,7 @@ def db_engine():
     # (collection error, KeyboardInterrupt) thrown into this generator.
     # Previously these ran before the ``try`` and each one leaked a fully
     # migrated database under a name that is never reused.
+    body_failed = False
     try:
         _recreate_test_database(db_name)
         subprocess.run(
@@ -318,10 +320,34 @@ def db_engine():
         )
         engine = create_engine(_database_url(db_name), future=True)
         yield engine
+    except BaseException:
+        body_failed = True
+        raise
     finally:
-        if engine is not None:
-            engine.dispose()
-        _drop_test_database(db_name)
+        # Cleanup must never mask why the body failed. Python replaces a
+        # propagating exception with anything raised from ``finally``, so a
+        # secondary "could not drop" error would bury the failed
+        # ``alembic upgrade`` that is the thing worth reading. Now that
+        # migrations run inside the ``try``, that path is reachable.
+        #
+        # A cleanup failure is still a leak, so it is never swallowed
+        # silently: when the body succeeded it propagates as before, and when
+        # the body failed it is downgraded to a warning so both survive.
+        for cleanup in (
+            lambda: engine.dispose() if engine is not None else None,
+            lambda: _drop_test_database(db_name),
+        ):
+            try:
+                cleanup()
+            except Exception as cleanup_error:
+                if not body_failed:
+                    raise
+                warnings.warn(
+                    f"test-database cleanup failed for {db_name!r} while another error was "
+                    f"propagating; the database may have leaked: {cleanup_error!r}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
 
 @pytest.fixture
