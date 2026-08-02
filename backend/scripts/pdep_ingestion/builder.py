@@ -120,6 +120,7 @@ class GapReport:
     ts_built: list[str] = field(default_factory=list)
     ts_stub_no_geometry: list[str] = field(default_factory=list)
     channels_built: int = 0
+    channels_well_skipping: list[tuple[str, str]] = field(default_factory=list)
     channels_unmapped: list[tuple[str, str]] = field(default_factory=list)
     channels_duplicate: list[tuple[str, str]] = field(default_factory=list)
     pdep_non_chebyshev: list[tuple[str, str, str]] = field(default_factory=list)
@@ -794,6 +795,40 @@ def build_network_pdep_payload(
                 )
         return paths
 
+    # Undirected adjacency over the elementary steps that were actually parsed.
+    elementary_neighbours: dict[str, set[str]] = {}
+    for _rxn_key, (reactant_state, product_state) in rxn_endpoints.items():
+        if reactant_state is None or product_state is None:
+            continue
+        if reactant_state == product_state:
+            continue
+        elementary_neighbours.setdefault(reactant_state, set()).add(product_state)
+        elementary_neighbours.setdefault(product_state, set()).add(reactant_state)
+
+    def _well_skipping_supported(src: str, snk: str) -> bool:
+        """Is there a multi-step route from src to snk through energized wells?
+
+        Mirrors ``NetworkPDepUploadRequest.validate_well_skipping_channels``. A
+        bimolecular configuration is a reservoir in the master equation — flux
+        that reaches one has separated — so only wells may sit *between* the
+        endpoints. Without such a route the fit has no topological backing in
+        this run and stays unmapped rather than being asserted.
+        """
+        seen = {src}
+        frontier = [src]
+        while frontier:
+            nxt: list[str] = []
+            for node in frontier:
+                for neighbour in elementary_neighbours.get(node, ()):
+                    if neighbour == snk:
+                        return True
+                    if neighbour in seen or state_kind.get(neighbour) != "well":
+                        continue
+                    seen.add(neighbour)
+                    nxt.append(neighbour)
+            frontier = nxt
+        return False
+
     # ------------------------------------------------------------------
     # Channels + channel_kinetics (one per fitted pdepreaction)
     # ------------------------------------------------------------------
@@ -822,12 +857,23 @@ def build_network_pdep_payload(
             continue
         paths = _paths_for_channel(src, snk)
         if not paths:
-            # A phenomenological fit with no elementary step behind it cannot
-            # be attributed; name it instead of emitting an unsupported channel.
-            gap.channels_unmapped.append(
+            # No single elementary step joins these two configurations, yet the
+            # master equation produced a phenomenological k(T,P) for them. That
+            # is the definition of a chemically-activated / well-skipping
+            # channel: the flux runs through one or more energized wells before
+            # the products separate. Emit it as such rather than dropping it —
+            # dropping it discards exactly the rates that distinguish a PDep
+            # treatment from the high-pressure limit. The upload schema
+            # re-derives and checks the traversal, so this is a declaration the
+            # backend verifies, not one it takes on trust.
+            if not _well_skipping_supported(src, snk):
+                gap.channels_unmapped.append(
+                    ("+".join(fit.reactants), "+".join(fit.products))
+                )
+                continue
+            gap.channels_well_skipping.append(
                 ("+".join(fit.reactants), "+".join(fit.products))
             )
-            continue
         seen_channel_pairs.add(pair)
         pmin_bar, pmax_bar = _fit_bounds_bar_kelvin(fit)  # honours atm/bar; K
         kind = _KIND.get((state_kind[src], state_kind[snk]), "isomerization")
@@ -838,6 +884,7 @@ def build_network_pdep_payload(
                 "source_state_key": src,
                 "sink_state_key": snk,
                 "kind": kind,
+                "mechanism": "elementary" if paths else "well_skipping",
                 "microreaction_paths": paths,
             }
         )

@@ -550,6 +550,7 @@ def persist_network_pdep_upload(
             source_state_id=state_key_to_row[ch_in.source_state_key].id,
             sink_state_id=state_key_to_row[ch_in.sink_state_key].id,
             kind=ch_in.kind,
+            mechanism=ch_in.mechanism,
             channel_key=ch_in.key,
         )
         session.add(channel_row)

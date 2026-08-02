@@ -516,6 +516,37 @@ class NetworkChannelKind(str, Enum):
     exchange = "exchange"
 
 
+class NetworkChannelMechanism(str, Enum):
+    """How a phenomenological channel is mechanistically attributed.
+
+    Orthogonal to :class:`NetworkChannelKind`, which classifies the channel's
+    *macroscopic* reaction type (association, isomerization, ...). This axis
+    says what scientific evidence stands behind the channel.
+
+    ``elementary``
+        The channel is one elementary step, or several parallel elementary
+        steps, each named on ``network_channel_microreaction``. Every
+        saddle-point path carries a barrier.
+
+    ``well_skipping``
+        A chemically-activated / well-skipping channel: the reactants form an
+        energized intermediate that reacts onward before collisional
+        stabilization, so the phenomenological k(T,P) is produced by the
+        master equation and there is no single elementary step or saddle point
+        to attribute it to. Its backing is the network topology plus the ME
+        solve, and it therefore carries **zero**
+        ``network_channel_microreaction`` rows *by declaration*, never by
+        omission.
+
+    There is deliberately no ``unknown``/``other`` member. An escape hatch here
+    would be indistinguishable from "the producer did not supply the paths",
+    which is exactly the silent gap this discriminator exists to close.
+    """
+
+    elementary = "elementary"
+    well_skipping = "well_skipping"
+
+
 class NetworkKineticsModelKind(str, Enum):
     chebyshev = "chebyshev"
     plog = "plog"

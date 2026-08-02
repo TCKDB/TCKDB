@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.db.models.common import (
     ArrheniusAUnits,
     NetworkChannelKind,
+    NetworkChannelMechanism,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkSpeciesRole,
@@ -93,6 +94,10 @@ class NetworkChannelRead(ORMBaseSchema):
     source_state_id: int
     sink_state_id: int
     kind: NetworkChannelKind
+    # Always present: says whether this channel is one elementary step or a
+    # chemically-activated well-skipping pathway, so an empty microreaction
+    # set is never ambiguous.
+    mechanism: NetworkChannelMechanism
     channel_key: str | None = None
 
 

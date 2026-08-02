@@ -32,6 +32,7 @@ from app.db.models.common import (
     EnergyCorrectionConvention,
     EnergyZeroConvention,
     NetworkChannelKind,
+    NetworkChannelMechanism,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     PressureUnit,
@@ -344,19 +345,68 @@ class NetworkChannelIn(SchemaBase):
 
     :param source_state_key: Local key of the source state.
     :param sink_state_key: Local key of the sink state.
-    :param kind: Channel classification.
+    :param kind: Macroscopic channel classification (association, ...).
+    :param mechanism: Mechanistic attribution. Defaults to ``elementary``, so
+        an existing payload that names its ``microreaction_paths`` is
+        unaffected.
+    :param microreaction_paths: The elementary step(s) this channel is
+        attributed to.
+
+    The two classification axes are orthogonal. ``kind`` says what the channel
+    does macroscopically; ``mechanism`` says what evidence stands behind it:
+
+    - ``elementary`` (the default) requires at least one ``microreaction_path``.
+      Omitting the paths is an incomplete deposit, not a declaration, and is
+      rejected.
+    - ``well_skipping`` declares a chemically-activated channel whose flux
+      passes *through* one or more energized wells before the products separate
+      — ``NH2 + NH2 → H + N2H3`` proceeding via energized ``N2H4*`` is the
+      canonical case. There is no single elementary step or saddle point to
+      name, so ``microreaction_paths`` must be empty; the channel's backing is
+      the network topology plus the master-equation solve. Declaring it is not
+      taken on trust: ``NetworkPDepUploadRequest`` checks that the endpoints are
+      *not* joined by a single elementary step and *are* joined by a chain of
+      elementary steps whose intermediates are all wells.
     """
 
     key: str = Field(min_length=1)
     source_state_key: str = Field(min_length=1)
     sink_state_key: str = Field(min_length=1)
     kind: NetworkChannelKind
-    microreaction_paths: list["NetworkChannelMicroReactionIn"] = Field(min_length=1)
+    mechanism: NetworkChannelMechanism = NetworkChannelMechanism.elementary
+    microreaction_paths: list["NetworkChannelMicroReactionIn"] = Field(
+        default_factory=list
+    )
 
     @model_validator(mode="after")
     def validate_source_ne_sink(self) -> Self:
         if self.source_state_key == self.sink_state_key:
             raise ValueError("source_state_key and sink_state_key must differ.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_paths_match_mechanism(self) -> Self:
+        """Path cardinality is fixed by the declared mechanism, never optional.
+
+        This is what keeps the relaxation additive and non-silent: a channel
+        that supplies no paths is only ever accepted when it has *said* it is
+        well-skipping.
+        """
+        if self.mechanism == NetworkChannelMechanism.elementary:
+            if not self.microreaction_paths:
+                raise ValueError(
+                    f"channel '{self.key}' supplies no microreaction_paths. An "
+                    "elementary channel (the default) must name at least one "
+                    "elementary step; a channel with no elementary step behind "
+                    "it must declare mechanism='well_skipping' explicitly."
+                )
+        elif self.microreaction_paths:
+            raise ValueError(
+                f"channel '{self.key}' declares mechanism='well_skipping' but "
+                "supplies microreaction_paths. A well-skipping channel has no "
+                "single elementary step; if the endpoints are joined by one, "
+                "declare mechanism='elementary' and name it."
+            )
         return self
 
 
@@ -1206,6 +1256,113 @@ class NetworkPDepUploadRequest(SchemaBase):
             for barrier in self.solve.channel_barriers:
                 if barrier.source_calculation_key is not None and barrier.source_calculation_key not in calc_keys:
                     raise ValueError("channel_barriers references undefined source_calculation_key.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_well_skipping_channels(self) -> Self:
+        """A well-skipping declaration must be supported by the topology.
+
+        The scientific content of ``mechanism='well_skipping'`` is a claim
+        about the network: the endpoints are *not* directly connected by an
+        elementary step, and the flux reaches the sink by traversing one or
+        more energized wells. Both halves are checkable against the
+        ``micro_reactions`` and ``states`` already in this payload, so the
+        declaration is verified rather than trusted — the backend still
+        manufactures no evidence, it only reads the evidence the producer
+        supplied.
+
+        Bimolecular and termolecular configurations are reservoirs in the
+        master equation: flux that reaches one has separated into products.
+        Only a *well* can be an energized intermediate, so intermediates on the
+        path are required to be wells.
+        """
+        well_skipping = [
+            channel
+            for channel in self.channels
+            if channel.mechanism == NetworkChannelMechanism.well_skipping
+        ]
+        if not well_skipping:
+            return self
+
+        state_kind = {state.key: state.kind for state in self.states}
+        composition_to_state: dict[frozenset[tuple[str, int]], str] = {
+            frozenset(
+                (p.species_key, p.stoichiometry) for p in state.participants
+            ): state.key
+            for state in self.states
+        }
+
+        def _state_for(participants: list[MicroReactionParticipantUpload]) -> str | None:
+            counts: dict[str, int] = {}
+            for participant in participants:
+                counts[participant.species_key] = (
+                    counts.get(participant.species_key, 0) + 1
+                )
+            return composition_to_state.get(frozenset(counts.items()))
+
+        # Undirected adjacency of the *elementary* step graph over states. A
+        # micro reaction whose sides do not both name a declared state is not
+        # an edge of the macroscopic network.
+        elementary_edges: set[frozenset[str]] = set()
+        for reaction in self.micro_reactions:
+            reactant_state = _state_for(reaction.reactants)
+            product_state = _state_for(reaction.products)
+            if (
+                reactant_state is None
+                or product_state is None
+                or reactant_state == product_state
+            ):
+                continue
+            elementary_edges.add(frozenset((reactant_state, product_state)))
+
+        neighbours: dict[str, set[str]] = {state.key: set() for state in self.states}
+        for edge in elementary_edges:
+            left, right = tuple(edge)
+            neighbours[left].add(right)
+            neighbours[right].add(left)
+
+        for channel in well_skipping:
+            source = channel.source_state_key
+            sink = channel.sink_state_key
+            if source not in state_kind or sink not in state_kind:
+                # Undefined endpoints are reported by validate_key_references;
+                # do not mask that with a topology error.
+                continue
+            if frozenset((source, sink)) in elementary_edges:
+                raise ValueError(
+                    f"channel '{channel.key}' declares mechanism='well_skipping' "
+                    f"but '{source}' and '{sink}' are directly connected by an "
+                    "elementary micro reaction. Declare mechanism='elementary' "
+                    "and name that step."
+                )
+            # Breadth-first search that may only pass *through* wells; the
+            # source and the sink themselves may be of any kind.
+            seen = {source}
+            frontier = [source]
+            reached = False
+            while frontier and not reached:
+                nxt: list[str] = []
+                for node in frontier:
+                    for neighbour in neighbours[node]:
+                        if neighbour == sink:
+                            reached = True
+                            break
+                        if neighbour in seen or state_kind[neighbour] != "well":
+                            continue
+                        seen.add(neighbour)
+                        nxt.append(neighbour)
+                    if reached:
+                        break
+                frontier = nxt
+            if not reached:
+                raise ValueError(
+                    f"channel '{channel.key}' declares mechanism='well_skipping' "
+                    f"but no chain of elementary micro reactions runs from "
+                    f"'{source}' to '{sink}' through well states. A "
+                    "chemically-activated channel is backed by the network "
+                    "topology; without it there is no evidence for this "
+                    "channel at all."
+                )
         return self
 
     @model_validator(mode="after")
