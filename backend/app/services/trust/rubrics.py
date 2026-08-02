@@ -363,7 +363,16 @@ def _check_temperature_range_present(kinetics: Kinetics) -> EvidenceOutcome:
 
 
 def _check_temperature_range_valid(kinetics: Kinetics) -> EvidenceOutcome:
-    """Return passed when the populated temperature range is physically plausible."""
+    """Return passed when the populated temperature range is physically plausible.
+
+    This graded (``optional``) check is the *only* owner of the upper
+    temperature bound. Per ADR 0008 the cap is an expectation, not a
+    definition: shock-tube, detonation, plasma, and re-entry chemistry
+    legitimately exceed it, so exceeding it lowers evidence completeness and is
+    explained in ``missing_checks`` — it never hard-fails the record. The
+    evaluator's ``invalid_temperature_range`` hard fail asserts only the
+    definitional ``0 < tmin_k < tmax_k``.
+    """
     if kinetics.tmin_k is None or kinetics.tmax_k is None:
         return EvidenceOutcome.not_applicable
     return _bool_outcome(0 < kinetics.tmin_k < kinetics.tmax_k <= 10_000)
@@ -655,13 +664,21 @@ def _thermo_range_is_present(thermo: Thermo) -> bool:
 
 # Upper sanity bound for thermochemical temperature ranges. Set at the NASA
 # Glenn (Gordon & McBride) maximum of 20,000 K: canonical NASA-9 fits use a
-# 6,000-20,000 K high-temperature interval, and NASA-7 / top-level ranges never
-# legitimately exceed this. A tighter cap would hard-fail valid high-T data.
+# 6,000-20,000 K high-temperature interval.
+#
+# This bound is an *expectation*, not a definition (ADR 0008), so it lives only
+# in this graded rubric. Exceeding it lowers evidence completeness; it never
+# hard-fails. The evaluator asserts only the definitional 0 < low < high.
 _MAX_THERMO_TEMPERATURE_K = 20_000
 
 
 def _thermo_range_is_valid(thermo: Thermo) -> bool:
-    """Return True when all populated thermo temperature ranges are plausible."""
+    """Return True when all populated thermo temperature ranges are plausible.
+
+    "Plausible" includes the graded upper bound; see
+    ``_MAX_THERMO_TEMPERATURE_K``. Definitional validity (positive, ordered) is
+    asserted separately by the evaluator's hard-fail path.
+    """
     if thermo.tmin_k is not None or thermo.tmax_k is not None:
         if thermo.tmin_k is None or thermo.tmax_k is None:
             return False
@@ -1724,6 +1741,8 @@ COMPUTED_KINETICS_V1: EvidenceRubric = EvidenceRubric(
         EvidenceCheckSpec(
             name="temperature_range_valid",
             kind=EvidenceCheckKind.optional,
+            # Sole owner of the upper-bound *expectation* for kinetics: the
+            # evaluator hard-fails only the definitional 0 < tmin_k < tmax_k.
             explain="Temperature range should satisfy 0 < tmin_k < tmax_k <= 10000.",
             runner=_check_temperature_range_valid,
         ),
@@ -1889,7 +1908,9 @@ COMPUTED_THERMO_V1: EvidenceRubric = EvidenceRubric(
         EvidenceCheckSpec(
             name="temperature_range_valid",
             kind=EvidenceCheckKind.optional,
-            explain="Temperature ranges should satisfy 0 < low < high <= 10000.",
+            # Sole owner of the upper-bound *expectation* for thermo: the
+            # evaluator hard-fails only the definitional 0 < low < high.
+            explain="Temperature ranges should satisfy 0 < low < high <= 20000.",
             runner=_check_thermo_temperature_range_valid,
         ),
         EvidenceCheckSpec(
