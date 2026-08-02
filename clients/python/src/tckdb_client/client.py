@@ -14,7 +14,8 @@ chemistry semantics — those belong in producer-specific adapters.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+import time
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Mapping
@@ -117,6 +118,27 @@ UPLOAD_ENDPOINTS: dict[str, str] = {
     "computed_reaction": "/uploads/computed-reaction",
     "computed_species": "/uploads/computed-species",
 }
+
+# Async job enqueue endpoints, keyed by the backend's ``UploadJobKind``.
+# Deliberately not the same key set as ``UPLOAD_ENDPOINTS``: ``statmech`` and
+# ``computed_species`` have synchronous upload endpoints but no job route, so
+# enqueuing them must fail loudly rather than POST to a path that 404s.
+JOB_ENDPOINTS: dict[str, str] = {
+    "computed_reaction": "/jobs/computed-reaction",
+    "conformer": "/jobs/conformer",
+    "reaction": "/jobs/reaction",
+    "kinetics": "/jobs/kinetics",
+    "network": "/jobs/network",
+    "network_pdep": "/jobs/network/pdep",
+    "thermo": "/jobs/thermo",
+    "transition_state": "/jobs/transition-state",
+    "transport": "/jobs/transport",
+}
+
+# Mirrors the terminal members of the backend's ``UploadJobStatus``; the
+# non-terminal ones (``queued``, ``processing``) are what ``wait_for_job``
+# keeps polling through.
+TERMINAL_JOB_STATUSES: frozenset[str] = frozenset({"complete", "failed"})
 
 
 @dataclass(frozen=True)
@@ -566,6 +588,74 @@ class TCKDBClient:
         return self.post_json(
             UPLOAD_ENDPOINTS[kind], payload, idempotency_key=idempotency_key
         )
+
+    # ------------------------------------------------------------------
+    # Async job lifecycle
+    # ------------------------------------------------------------------
+
+    def enqueue_job(
+        self,
+        kind: str,
+        payload: Any,
+        *,
+        idempotency_key: str | None = None,
+    ) -> Any:
+        """Enqueue an upload as an async job and return the enqueue response.
+
+        ``kind`` accepts a short name from :data:`JOB_ENDPOINTS` or an explicit
+        path starting with ``/``. An unrecognised short name raises before any
+        request is issued -- a kind with no job route (``statmech``,
+        ``computed_species``) would otherwise POST to a path that 404s, and a
+        404 arriving after the payload has crossed the wire reads like a server
+        fault rather than a caller mistake.
+        """
+        if kind in JOB_ENDPOINTS:
+            path = JOB_ENDPOINTS[kind]
+        elif kind.startswith(("/", "http://", "https://")):
+            path = kind
+        else:
+            raise ValueError(
+                f"Unknown job kind: {kind!r}. Pass an explicit path starting "
+                f"with '/' or one of {sorted(JOB_ENDPOINTS)}."
+            )
+        return self.post_json(path, payload, idempotency_key=idempotency_key)
+
+    def get_job_status(self, job_id: str) -> Any:
+        """Fetch one job's current status document."""
+        if not job_id:
+            raise ValueError("job_id must be a non-empty string.")
+        return self.get_json(f"/jobs/{job_id}")
+
+    def wait_for_job(
+        self,
+        job_id: str,
+        *,
+        timeout: float | None = None,
+        poll_interval: float = 1.0,
+        sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> Any:
+        """Poll ``job_id`` until it reaches a terminal state, and return it.
+
+        A ``failed`` job is *returned*, not raised: failure is a legitimate
+        outcome the caller needs the error payload for, whereas never reaching
+        a terminal state is not, and raises ``TimeoutError``.
+
+        ``sleep`` and ``monotonic`` are injectable so the polling loop can be
+        tested without real time passing.
+        """
+        deadline = None if timeout is None else monotonic() + timeout
+        while True:
+            status_doc = self.get_job_status(job_id)
+            status = (status_doc or {}).get("status")
+            if status in TERMINAL_JOB_STATUSES:
+                return status_doc
+            if deadline is not None and monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Job {job_id!r} did not reach a terminal state within "
+                    f"{timeout}s (last status: {status!r})."
+                )
+            sleep(poll_interval)
 
     # ------------------------------------------------------------------
     # Artifact upload (second-phase)
