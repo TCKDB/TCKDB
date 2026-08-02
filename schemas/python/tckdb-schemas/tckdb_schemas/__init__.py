@@ -10,7 +10,10 @@ try:
     # shipped — anything negotiating the wire contract on
     # ``__version__`` would otherwise be told a number nobody maintains.
     # main carried a hand-written literal that had already drifted: it
-    # still read "0.14.0" after #82 bumped pyproject.toml to 0.15.0.
+    # still named the previous release after #82 bumped pyproject.toml.
+    # (Spelling that stale number here, even in a comment, would trip
+    # test_init_does_not_hard_code_a_version -- the guard scans the file
+    # for version literals rather than parsing assignments.)
     __version__ = _distribution_version("tckdb-schemas")
 except PackageNotFoundError:  # source tree that was never installed
     __version__ = "0+unknown"
