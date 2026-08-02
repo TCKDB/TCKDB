@@ -30,6 +30,7 @@ from __future__ import annotations
 import base64
 import hashlib
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -1108,11 +1109,61 @@ def _plog_channel_kinetics_entry(
     return entry
 
 
+def _validate_species_aliases(
+    aliases: Mapping[str, str],
+    *,
+    cheb_labels: set[str],
+    plog_labels: set[str],
+) -> None:
+    """Reject an alias map that cannot mean what the caller intended.
+
+    An alias merges two species labels, so a wrong one silently attaches a PLOG
+    fit to the wrong channel -- the exact failure the topology check exists to
+    prevent. Each rule below turns a silent misattachment into an error naming
+    the offending label:
+
+    * a target absent from the Chebyshev run is a typo that would otherwise
+      surface as a confusing topology mismatch;
+    * a source absent from the PLOG run means the caller's assumption about
+      that run is wrong (already renamed, or the wrong directory);
+    * an identity alias is a no-op and signals confusion about direction;
+    * two sources sharing one target would merge two distinct species into one
+      state, which no relabelling can justify.
+    """
+    # Checked first: an identity alias is a caller mistake whatever else is
+    # wrong with it, and "this is a no-op" diagnoses it better than the
+    # unknown-target error it would otherwise trip on.
+    identity = sorted(s for s, t in aliases.items() if s == t)
+    if identity:
+        raise ValueError(f"species_aliases maps these labels to themselves: {identity}.")
+    bad_targets = sorted({t for t in aliases.values() if t not in cheb_labels})
+    if bad_targets:
+        raise ValueError(
+            f"species_aliases targets absent from the Chebyshev run: {bad_targets}. "
+            f"Known Chebyshev species labels: {sorted(cheb_labels)}."
+        )
+    unused = sorted({s for s in aliases if s not in plog_labels})
+    if unused:
+        raise ValueError(
+            f"species_aliases sources absent from the PLOG run: {unused}. "
+            f"Known PLOG species labels: {sorted(plog_labels)}."
+        )
+    collisions = sorted(
+        t for t, n in Counter(aliases.values()).items() if n > 1
+    )
+    if collisions:
+        raise ValueError(
+            f"species_aliases maps several PLOG labels onto one Chebyshev label: "
+            f"{collisions}. That would merge distinct species into one state."
+        )
+
+
 def build_dual_form_payload(
     cheb_run_dir: Path,
     plog_run_dir: Path,
     *,
     include_artifacts: bool = False,
+    species_aliases: Mapping[str, str] | None = None,
 ) -> tuple[dict, GapReport]:
     """Build a dual-form request dict (Chebyshev + PLOG) from two Arkane runs.
 
@@ -1129,6 +1180,18 @@ def build_dual_form_payload(
     mapping the Chebyshev build uses) to a channel that the Chebyshev build
     produced, and the two channel sets must be identical. Any mismatch raises
     ``ValueError`` rather than silently dropping or misaligning a channel.
+
+    ``species_aliases`` reconciles the case where the two Arkane inputs name the
+    same species differently -- the hydrazine network labels isodiazene ``H2NN``
+    in its Chebyshev run and ``NH2N`` in its PLOG run while both point at the
+    same ``Data/NH2N.py`` and SMILES ``[N-]=[NH2+]``, which leaves 6 of 21
+    channels unmapped. Pass ``{"NH2N": "H2NN"}`` (PLOG label -> Chebyshev label)
+    instead of hand-editing the run directory, so the build stays reproducible
+    from the untouched sources.
+
+    This is a *label* reconciliation only. It asserts that two names denote the
+    same species; establishing that they do is the caller's responsibility, and
+    :func:`_validate_species_aliases` rejects the maps that cannot be right.
     """
     request_dict, gap = build_network_pdep_payload(
         cheb_run_dir, include_artifacts=include_artifacts
@@ -1146,22 +1209,34 @@ def build_dual_form_payload(
     # State lookup keyed by the multiset of participant species labels, rebuilt
     # from the Chebyshev payload's states so PLOG fits attach to the same keys.
     state_lookup: dict[tuple, str] = {}
+    cheb_labels: set[str] = set()
     for st in request_dict["states"]:
         labels: list[str] = []
         for p in st["participants"]:
             labels.extend([p["species_key"]] * int(p.get("stoichiometry", 1)))
+        cheb_labels.update(labels)
         state_lookup[_multiset_key(labels)] = st["key"]
 
     plog_fits = parse_pdep_arrhenius_reactions(
         (Path(plog_run_dir) / "output.py").read_text()
     )
 
+    aliases = dict(species_aliases or {})
+    if aliases:
+        plog_labels = {s for fit in plog_fits for s in fit.reactants + fit.products}
+        _validate_species_aliases(
+            aliases, cheb_labels=cheb_labels, plog_labels=plog_labels
+        )
+
+    def _aliased(labels: list[str]) -> tuple[tuple[str, int], ...]:
+        return _multiset_key([aliases.get(label, label) for label in labels])
+
     plog_kinetics: list[dict] = []
     plog_pairs: set[tuple[str, str]] = set()
     unmapped: list[tuple[str, str]] = []
     for fit in plog_fits:
-        src = state_lookup.get(_multiset_key(fit.reactants))
-        snk = state_lookup.get(_multiset_key(fit.products))
+        src = state_lookup.get(_aliased(fit.reactants))
+        snk = state_lookup.get(_aliased(fit.products))
         if src is None or snk is None or src == snk:
             unmapped.append(("+".join(fit.reactants), "+".join(fit.products)))
             continue
@@ -1210,16 +1285,21 @@ def build_dual_form_request(
     plog_run_dir: Path,
     *,
     include_artifacts: bool = False,
+    species_aliases: Mapping[str, str] | None = None,
 ):
     """Build a validated dual-form ``NetworkPDepUploadRequest`` from two runs.
 
-    See :func:`build_dual_form_payload`. The result carries both a Chebyshev
-    and a PLOG ``channel_kinetics`` entry per channel (2N total for N channels)
-    and validates against the relaxed
+    See :func:`build_dual_form_payload`, including the ``species_aliases``
+    contract. The result carries both a Chebyshev and a PLOG
+    ``channel_kinetics`` entry per channel (2N total for N channels) and
+    validates against the relaxed
     ``(source_state_key, sink_state_key, model_kind)`` uniqueness rule.
     """
     request_dict, _ = build_dual_form_payload(
-        cheb_run_dir, plog_run_dir, include_artifacts=include_artifacts
+        cheb_run_dir,
+        plog_run_dir,
+        include_artifacts=include_artifacts,
+        species_aliases=species_aliases,
     )
     from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 

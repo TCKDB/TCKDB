@@ -9,6 +9,7 @@ scientific evidence back.
 
 from __future__ import annotations
 
+import re
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -273,6 +274,77 @@ def test_dual_form_build_rejects_topology_mismatch(tmp_path) -> None:
     )
     with pytest.raises(ValueError, match="topology does not match"):
         build_dual_form_payload(FIXTURE_DIR, tmp_path)
+
+
+def _relabelled_plog_run(tmp_path: Path, old: str, new: str) -> Path:
+    """Copy the PLOG fixture with one species label renamed.
+
+    Reproduces the real hydrazine case: the two Arkane inputs name isodiazene
+    ``H2NN`` and ``NH2N`` while pointing at the same data file and SMILES.
+    """
+    run_dir = tmp_path / "plog_relabelled"
+    run_dir.mkdir()
+    text = (PLOG_FIXTURE_DIR / "output.py").read_text()
+    assert old in text, f"fixture does not contain {old!r}"
+    (run_dir / "output.py").write_text(re.sub(rf"\b{re.escape(old)}\b", new, text))
+    return run_dir
+
+
+def _plog_fingerprint(request) -> list[tuple]:
+    return sorted(
+        (nk.source_state_key, nk.sink_state_key, round(e.pressure_bar, 9),
+         float(e.a), round(e.n, 9), round(e.ea_kj_mol, 9))
+        for nk in request.solve.channel_kinetics
+        if nk.model_kind.value == "plog"
+        for e in nk.plog.entries
+    )
+
+
+def test_species_alias_recovers_a_relabelled_plog_run(tmp_path) -> None:
+    """A PLOG run that only *names* a species differently still maps.
+
+    The alias must be equivalent to having relabelled the run by hand: the
+    resulting PLOG fits are identical to those built from the unaltered
+    fixture, so nothing about the kinetics depends on the rename.
+    """
+    run_dir = _relabelled_plog_run(tmp_path, "H2NN", "NH2N")
+    aliased = build_dual_form_request(
+        FIXTURE_DIR, run_dir, species_aliases={"NH2N": "H2NN"}
+    )
+    baseline = build_dual_form_request(FIXTURE_DIR, PLOG_FIXTURE_DIR)
+    assert _plog_fingerprint(aliased) == _plog_fingerprint(baseline)
+    assert len(aliased.solve.channel_kinetics) == 2
+
+
+def test_a_relabelled_plog_run_without_an_alias_is_rejected(tmp_path) -> None:
+    """Without the alias the same run fails the topology check rather than
+    silently dropping the channel."""
+    run_dir = _relabelled_plog_run(tmp_path, "H2NN", "NH2N")
+    with pytest.raises(ValueError, match="topology does not match"):
+        build_dual_form_payload(FIXTURE_DIR, run_dir)
+
+
+@pytest.mark.parametrize(
+    "aliases, message",
+    [
+        ({"NH2N": "NOT_A_SPECIES"}, "targets absent from the Chebyshev run"),
+        ({"NEVER_APPEARS": "H2NN"}, "sources absent from the PLOG run"),
+        ({"NH2N": "NH2N"}, "maps these labels to themselves"),
+        ({"NH2N": "H2NN", "H2": "H2NN"}, "merge distinct species"),
+    ],
+)
+def test_species_alias_rejects_maps_that_cannot_be_right(
+    tmp_path, aliases, message
+) -> None:
+    """An alias merges labels, so a wrong one misattaches a fit silently.
+
+    Each rejected map is a distinct way of being wrong: a typo'd target, a
+    source the PLOG run never uses, a no-op, and two labels collapsed onto one
+    species.
+    """
+    run_dir = _relabelled_plog_run(tmp_path, "H2NN", "NH2N")
+    with pytest.raises(ValueError, match=message):
+        build_dual_form_payload(FIXTURE_DIR, run_dir, species_aliases=aliases)
 
 
 def test_dual_form_persist_two_kinetics_rows_per_channel(db_engine) -> None:
