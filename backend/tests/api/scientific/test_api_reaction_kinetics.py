@@ -311,7 +311,17 @@ def test_include_trust_source_calculations_score_higher(client, db_session):
     assert rich_score > sparse_score
 
 
-def test_include_trust_invalid_temperature_range_hard_failed(client, db_session):
+def test_include_trust_single_temperature_range_is_not_hard_failed(client, db_session):
+    """A one-point validity range is a datum reported at a single temperature.
+
+    This previously asserted ``hard_failed``. ``tmin == tmax`` is the only
+    definitional violation reachable through the database (``ck_*_tmin_le_tmax``
+    and ``ck_*_tmin_k_gt_0`` refuse inverted and non-positive ranges outright),
+    and it is not a violation at all: a rate constant measured at 298 K has a
+    one-point range, which the upload schema and the database already permit.
+    The definitional rule stays pinned by the DB-free predicate tests in
+    ``tests/services/test_trust_evaluator.py``.
+    """
     entry = _entry(db_session)
     make_kinetics(
         db_session,
@@ -326,8 +336,8 @@ def test_include_trust_invalid_temperature_range_hard_failed(client, db_session)
     ).json()
     evidence = body["records"][0]["trust"]["evidence"]
 
-    assert evidence["label"] == "hard_failed"
-    assert evidence["hard_fail_reason"] == "invalid_temperature_range"
+    assert evidence["label"] != "hard_failed"
+    assert evidence["hard_fail_reason"] != "invalid_temperature_range"
 
 
 def test_include_all_does_not_include_trust(client, db_session):

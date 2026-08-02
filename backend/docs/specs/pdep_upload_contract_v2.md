@@ -8,8 +8,12 @@ are rejected; the backend does not manufacture missing scientific evidence.
 
 ## What v2 requires
 
-- Every channel supplies explicit `microreaction_paths`. A path names a
-  `micro_reaction_key` and either the `transition_state_key` of the saddle
+- Every channel declares a `mechanism`, a machine token that says what evidence
+  stands behind it. It defaults to `elementary`, so a payload that names its
+  paths is unaffected. It is orthogonal to `kind`, which classifies the
+  channel's macroscopic reaction type.
+- An `elementary` channel supplies explicit `microreaction_paths`. A path names
+  a `micro_reaction_key` and either the `transition_state_key` of the saddle
   point it goes through, or nothing at all — omitting it declares the path
   **barrierless / variational**, which is the honest description of a
   radical-radical association or a simple bond fission. Distinct pathways may
@@ -17,6 +21,10 @@ are rejected; the backend does not manufacture missing scientific evidence.
   several distinct saddle points (e.g. syn/anti conformers of one TS); that is
   expressed with several paths on **one** micro reaction, never with duplicate
   micro reactions of identical stoichiometry.
+- A `well_skipping` channel supplies **no** paths, and says so. See
+  "Well-skipping channels" below. A channel that omits its paths *without*
+  declaring `mechanism: well_skipping` is still rejected: silence is never a
+  declaration.
 - A solve gives a state energy for every state, and one forward/reverse barrier
   for every *saddle-point* channel path. A barrierless path carries no barrier —
   offering one would be a fabricated number.
@@ -43,6 +51,58 @@ are rejected; the backend does not manufacture missing scientific evidence.
   actually produces.
 - TS partition functions are recorded as TS-owned `statmech` records, never as
   pseudo-species statmech.
+
+## Well-skipping channels
+
+A pressure-dependent network's most characteristic rates are the ones that no
+single elementary step produces. `NH2 + NH2` recombines into energized `N2H4*`,
+which dissociates to `H + N2H3` before collisional stabilization; the master
+equation returns one phenomenological k(T,P) for `NH2 + NH2 → H + N2H3` even
+though the pathway is two elementary steps through a well. These are the
+chemically-activated, or **well-skipping**, channels. They have no saddle point
+of their own, so requiring mechanistic attribution of every channel silently
+discarded them — for the hydrazine network, 15 of 21 channels, leaving only the
+6 that essentially reproduce the high-pressure limit.
+
+The DB never forbade them: `network_channel_microreaction` is a separate table
+and a channel with zero rows there has always been representable. The upload
+contract was the only thing in the way.
+
+v2 therefore accepts them, on three conditions:
+
+1. **Declared, never inferred.** The channel sets
+   `mechanism: "well_skipping"`. There is no `unknown` or `other` member on the
+   enum, because an escape hatch here would be indistinguishable from "the
+   producer omitted the paths".
+2. **No paths.** A well-skipping channel must supply an empty
+   `microreaction_paths`. If a single elementary step does join the endpoints,
+   the channel is elementary and must name it. It carries no `channel_barriers`
+   entry either, for the same reason a barrierless path carries none: there is
+   no barrier to state.
+3. **Verified against the topology.** The declaration is checked, not trusted.
+   `NetworkPDepUploadRequest.validate_well_skipping_channels` requires that the
+   endpoints are *not* directly connected by any declared micro reaction, and
+   *are* connected by a chain of declared micro reactions every intermediate of
+   which is a `well` state. Bimolecular and termolecular configurations are
+   reservoirs in the master equation — flux reaching one has separated into
+   products — so they cannot be intermediates on a single chemically-activated
+   channel. The backend still manufactures no evidence; it reads the network
+   topology the producer already supplied and confirms it supports the claim.
+
+`mechanism` is stored on `network_channel` (revision `d5b1a7c3e9f4`,
+`server_default 'elementary'`) rather than derived from an empty child
+collection, and is always present on the channel read surfaces. "This rate is a
+multi-step ME channel" is a scientific claim about the channel, not an absence
+of data, and a reader must be able to tell it apart from an incomplete deposit
+without consulting the contract version that wrote the row. The backfill is
+unambiguous: `c1d2e3f4a5b6` refuses to run unless `network_channel` is empty, so
+every row this revision can reach was written under v2, which required at least
+one path per channel.
+
+Deliberately **not** recorded: *which* wells a given well-skipping channel
+traverses. The master equation does not attribute its phenomenological flux to
+one route, so naming a route would be a fabricated attribution. The traversal is
+recoverable from the network topology, which is stored in full.
 
 ## Rollout
 

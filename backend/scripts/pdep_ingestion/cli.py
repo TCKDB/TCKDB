@@ -50,6 +50,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"torsions emitted for: {gap.torsions_emitted}", file=sys.stderr)
     print(f"micro_reactions: {gap.micro_reactions}", file=sys.stderr)
     print(f"channels built: {gap.channels_built}", file=sys.stderr)
+    print(
+        f"channels well-skipping ({len(gap.channels_well_skipping)}): "
+        f"{gap.channels_well_skipping}",
+        file=sys.stderr,
+    )
     if gap.channels_unmapped:
         print(f"channels unmapped: {gap.channels_unmapped}", file=sys.stderr)
     if gap.channels_duplicate:

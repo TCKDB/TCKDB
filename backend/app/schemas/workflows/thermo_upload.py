@@ -8,6 +8,10 @@ NASA polynomials), and attaches it to the resolved species entry.
 from typing import Self
 
 from pydantic import Field, model_validator
+from tckdb_schemas.stationary_point import (
+    StationaryPointFinding,
+    raise_for_blocking_findings,
+)
 
 from app.db.models.common import (
     PhaseKind,
@@ -33,6 +37,7 @@ from app.schemas.workflows.group_additivity_upload import (
     AppliedGroupAdditivityUploadPayload,
 )
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
+from app.schemas.workflows.stationary_point_seam import inline_calculation_findings
 
 
 class ThermoCalculationIn(SchemaBase):
@@ -232,6 +237,23 @@ class ThermoUploadRequest(SchemaBase):
         keys = [c.key for c in self.calculations]
         if len(set(keys)) != len(keys):
             raise ValueError("Thermo calculations must have unique keys.")
+        return self
+
+    def stationary_point_findings(self) -> list[StationaryPointFinding]:
+        """Judge the declared kind against this upload's inline frequency evidence."""
+        return inline_calculation_findings(
+            self.species_entry.species_entry_kind, list(self.calculations)
+        )
+
+    @model_validator(mode="after")
+    def validate_n_imag_matches_species_entry_kind(self) -> Self:
+        """Refuse inline frequency evidence that contradicts the declared kind.
+
+        Definitional, therefore blocking (ADR 0008). The inline
+        calculations are scoped to this upload's species entry, so the
+        declared kind and the parsed ``n_imag`` are both present here.
+        """
+        raise_for_blocking_findings(self.stationary_point_findings())
         return self
 
     @model_validator(mode="after")

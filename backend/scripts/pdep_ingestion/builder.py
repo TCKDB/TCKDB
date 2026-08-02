@@ -30,6 +30,7 @@ from __future__ import annotations
 import base64
 import hashlib
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -120,6 +121,7 @@ class GapReport:
     ts_built: list[str] = field(default_factory=list)
     ts_stub_no_geometry: list[str] = field(default_factory=list)
     channels_built: int = 0
+    channels_well_skipping: list[tuple[str, str]] = field(default_factory=list)
     channels_unmapped: list[tuple[str, str]] = field(default_factory=list)
     channels_duplicate: list[tuple[str, str]] = field(default_factory=list)
     pdep_non_chebyshev: list[tuple[str, str, str]] = field(default_factory=list)
@@ -794,6 +796,40 @@ def build_network_pdep_payload(
                 )
         return paths
 
+    # Undirected adjacency over the elementary steps that were actually parsed.
+    elementary_neighbours: dict[str, set[str]] = {}
+    for _rxn_key, (reactant_state, product_state) in rxn_endpoints.items():
+        if reactant_state is None or product_state is None:
+            continue
+        if reactant_state == product_state:
+            continue
+        elementary_neighbours.setdefault(reactant_state, set()).add(product_state)
+        elementary_neighbours.setdefault(product_state, set()).add(reactant_state)
+
+    def _well_skipping_supported(src: str, snk: str) -> bool:
+        """Is there a multi-step route from src to snk through energized wells?
+
+        Mirrors ``NetworkPDepUploadRequest.validate_well_skipping_channels``. A
+        bimolecular configuration is a reservoir in the master equation — flux
+        that reaches one has separated — so only wells may sit *between* the
+        endpoints. Without such a route the fit has no topological backing in
+        this run and stays unmapped rather than being asserted.
+        """
+        seen = {src}
+        frontier = [src]
+        while frontier:
+            nxt: list[str] = []
+            for node in frontier:
+                for neighbour in elementary_neighbours.get(node, ()):
+                    if neighbour == snk:
+                        return True
+                    if neighbour in seen or state_kind.get(neighbour) != "well":
+                        continue
+                    seen.add(neighbour)
+                    nxt.append(neighbour)
+            frontier = nxt
+        return False
+
     # ------------------------------------------------------------------
     # Channels + channel_kinetics (one per fitted pdepreaction)
     # ------------------------------------------------------------------
@@ -822,12 +858,23 @@ def build_network_pdep_payload(
             continue
         paths = _paths_for_channel(src, snk)
         if not paths:
-            # A phenomenological fit with no elementary step behind it cannot
-            # be attributed; name it instead of emitting an unsupported channel.
-            gap.channels_unmapped.append(
+            # No single elementary step joins these two configurations, yet the
+            # master equation produced a phenomenological k(T,P) for them. That
+            # is the definition of a chemically-activated / well-skipping
+            # channel: the flux runs through one or more energized wells before
+            # the products separate. Emit it as such rather than dropping it —
+            # dropping it discards exactly the rates that distinguish a PDep
+            # treatment from the high-pressure limit. The upload schema
+            # re-derives and checks the traversal, so this is a declaration the
+            # backend verifies, not one it takes on trust.
+            if not _well_skipping_supported(src, snk):
+                gap.channels_unmapped.append(
+                    ("+".join(fit.reactants), "+".join(fit.products))
+                )
+                continue
+            gap.channels_well_skipping.append(
                 ("+".join(fit.reactants), "+".join(fit.products))
             )
-            continue
         seen_channel_pairs.add(pair)
         pmin_bar, pmax_bar = _fit_bounds_bar_kelvin(fit)  # honours atm/bar; K
         kind = _KIND.get((state_kind[src], state_kind[snk]), "isomerization")
@@ -838,6 +885,7 @@ def build_network_pdep_payload(
                 "source_state_key": src,
                 "sink_state_key": snk,
                 "kind": kind,
+                "mechanism": "elementary" if paths else "well_skipping",
                 "microreaction_paths": paths,
             }
         )
@@ -1061,11 +1109,61 @@ def _plog_channel_kinetics_entry(
     return entry
 
 
+def _validate_species_aliases(
+    aliases: Mapping[str, str],
+    *,
+    cheb_labels: set[str],
+    plog_labels: set[str],
+) -> None:
+    """Reject an alias map that cannot mean what the caller intended.
+
+    An alias merges two species labels, so a wrong one silently attaches a PLOG
+    fit to the wrong channel -- the exact failure the topology check exists to
+    prevent. Each rule below turns a silent misattachment into an error naming
+    the offending label:
+
+    * a target absent from the Chebyshev run is a typo that would otherwise
+      surface as a confusing topology mismatch;
+    * a source absent from the PLOG run means the caller's assumption about
+      that run is wrong (already renamed, or the wrong directory);
+    * an identity alias is a no-op and signals confusion about direction;
+    * two sources sharing one target would merge two distinct species into one
+      state, which no relabelling can justify.
+    """
+    # Checked first: an identity alias is a caller mistake whatever else is
+    # wrong with it, and "this is a no-op" diagnoses it better than the
+    # unknown-target error it would otherwise trip on.
+    identity = sorted(s for s, t in aliases.items() if s == t)
+    if identity:
+        raise ValueError(f"species_aliases maps these labels to themselves: {identity}.")
+    bad_targets = sorted({t for t in aliases.values() if t not in cheb_labels})
+    if bad_targets:
+        raise ValueError(
+            f"species_aliases targets absent from the Chebyshev run: {bad_targets}. "
+            f"Known Chebyshev species labels: {sorted(cheb_labels)}."
+        )
+    unused = sorted({s for s in aliases if s not in plog_labels})
+    if unused:
+        raise ValueError(
+            f"species_aliases sources absent from the PLOG run: {unused}. "
+            f"Known PLOG species labels: {sorted(plog_labels)}."
+        )
+    collisions = sorted(
+        t for t, n in Counter(aliases.values()).items() if n > 1
+    )
+    if collisions:
+        raise ValueError(
+            f"species_aliases maps several PLOG labels onto one Chebyshev label: "
+            f"{collisions}. That would merge distinct species into one state."
+        )
+
+
 def build_dual_form_payload(
     cheb_run_dir: Path,
     plog_run_dir: Path,
     *,
     include_artifacts: bool = False,
+    species_aliases: Mapping[str, str] | None = None,
 ) -> tuple[dict, GapReport]:
     """Build a dual-form request dict (Chebyshev + PLOG) from two Arkane runs.
 
@@ -1082,6 +1180,18 @@ def build_dual_form_payload(
     mapping the Chebyshev build uses) to a channel that the Chebyshev build
     produced, and the two channel sets must be identical. Any mismatch raises
     ``ValueError`` rather than silently dropping or misaligning a channel.
+
+    ``species_aliases`` reconciles the case where the two Arkane inputs name the
+    same species differently -- the hydrazine network labels isodiazene ``H2NN``
+    in its Chebyshev run and ``NH2N`` in its PLOG run while both point at the
+    same ``Data/NH2N.py`` and SMILES ``[N-]=[NH2+]``, which leaves 6 of 21
+    channels unmapped. Pass ``{"NH2N": "H2NN"}`` (PLOG label -> Chebyshev label)
+    instead of hand-editing the run directory, so the build stays reproducible
+    from the untouched sources.
+
+    This is a *label* reconciliation only. It asserts that two names denote the
+    same species; establishing that they do is the caller's responsibility, and
+    :func:`_validate_species_aliases` rejects the maps that cannot be right.
     """
     request_dict, gap = build_network_pdep_payload(
         cheb_run_dir, include_artifacts=include_artifacts
@@ -1099,22 +1209,34 @@ def build_dual_form_payload(
     # State lookup keyed by the multiset of participant species labels, rebuilt
     # from the Chebyshev payload's states so PLOG fits attach to the same keys.
     state_lookup: dict[tuple, str] = {}
+    cheb_labels: set[str] = set()
     for st in request_dict["states"]:
         labels: list[str] = []
         for p in st["participants"]:
             labels.extend([p["species_key"]] * int(p.get("stoichiometry", 1)))
+        cheb_labels.update(labels)
         state_lookup[_multiset_key(labels)] = st["key"]
 
     plog_fits = parse_pdep_arrhenius_reactions(
         (Path(plog_run_dir) / "output.py").read_text()
     )
 
+    aliases = dict(species_aliases or {})
+    if aliases:
+        plog_labels = {s for fit in plog_fits for s in fit.reactants + fit.products}
+        _validate_species_aliases(
+            aliases, cheb_labels=cheb_labels, plog_labels=plog_labels
+        )
+
+    def _aliased(labels: list[str]) -> tuple[tuple[str, int], ...]:
+        return _multiset_key([aliases.get(label, label) for label in labels])
+
     plog_kinetics: list[dict] = []
     plog_pairs: set[tuple[str, str]] = set()
     unmapped: list[tuple[str, str]] = []
     for fit in plog_fits:
-        src = state_lookup.get(_multiset_key(fit.reactants))
-        snk = state_lookup.get(_multiset_key(fit.products))
+        src = state_lookup.get(_aliased(fit.reactants))
+        snk = state_lookup.get(_aliased(fit.products))
         if src is None or snk is None or src == snk:
             unmapped.append(("+".join(fit.reactants), "+".join(fit.products)))
             continue
@@ -1163,16 +1285,21 @@ def build_dual_form_request(
     plog_run_dir: Path,
     *,
     include_artifacts: bool = False,
+    species_aliases: Mapping[str, str] | None = None,
 ):
     """Build a validated dual-form ``NetworkPDepUploadRequest`` from two runs.
 
-    See :func:`build_dual_form_payload`. The result carries both a Chebyshev
-    and a PLOG ``channel_kinetics`` entry per channel (2N total for N channels)
-    and validates against the relaxed
+    See :func:`build_dual_form_payload`, including the ``species_aliases``
+    contract. The result carries both a Chebyshev and a PLOG
+    ``channel_kinetics`` entry per channel (2N total for N channels) and
+    validates against the relaxed
     ``(source_state_key, sink_state_key, model_kind)`` uniqueness rule.
     """
     request_dict, _ = build_dual_form_payload(
-        cheb_run_dir, plog_run_dir, include_artifacts=include_artifacts
+        cheb_run_dir,
+        plog_run_dir,
+        include_artifacts=include_artifacts,
+        species_aliases=species_aliases,
     )
     from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
 

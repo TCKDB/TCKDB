@@ -1,0 +1,120 @@
+
+    -----------------------------------------------------------------------
+          Psi4: An Open-Source Ab Initio Electronic Structure Package
+                               Psi4 1.3.2 release
+
+                         Git: Rev {HEAD} ecbda83 
+
+
+    R. M. Parrish, L. A. Burns, D. G. A. Smith, A. C. Simmonett,
+    A. E. DePrince III, E. G. Hohenstein, U. Bozkaya, A. Yu. Sokolov,
+    R. Di Remigio, R. M. Richard, J. F. Gonthier, A. M. James,
+    H. R. McAlexander, A. Kumar, M. Saitow, X. Wang, B. P. Pritchard,
+    P. Verma, H. F. Schaefer III, K. Patkowski, R. A. King, E. F. Valeev,
+    F. A. Evangelista, J. M. Turney, T. D. Crawford, and C. D. Sherrill,
+    J. Chem. Theory Comput. 13(7) pp 3185--3197 (2017).
+    (doi: 10.1021/acs.jctc.7b00174)
+
+
+                         Additional Contributions by
+    P. Kraus, H. Kruse, M. H. Lechner, M. C. Schieber, R. A. Shaw,
+    A. Alenaizan, R. Galvelis, Z. L. Glick, S. Lehtola, and J. P. Misiewicz
+
+    -----------------------------------------------------------------------
+
+
+    Psi4 started on: Sunday, 06 September 2020 04:01PM
+
+    Process ID: 10086
+    Host:       X1-ubuntu
+    PSIDATADIR: /home/dranasinghe/anaconda2/envs/rmgpy3_env/share/psi4
+    Memory:     500.0 MiB
+    Threads:    1
+    
+  ==> Input File <==
+
+--------------------------------------------------------------------------
+memory 1024 mb
+
+molecule mol {
+0 1
+O 0.00000000 0.00000000 0.00000000
+H 0.00000000 0.28053300 -0.90381100
+O 0.00000000 -1.39778000 0.00000000
+H 0.00000000 -1.67831300 -0.90381100
+
+}
+set {
+  scf_type DIRECT
+  basis 6-31G(d_p)
+  reference uks
+  opt_type ts
+  full_hess_every 0
+  geom_maxiter 50
+  print 3
+}
+
+optimize('b3lyp')
+scf_e, wfn=frequencies('b3lyp', return_wfn=True, dertype=1)
+wfn.hessian().print_out()
+
+--------------------------------------------------------------------------
+
+  Memory set to 976.562 MiB by Python driver.
+gradient() will perform analytic gradient computation.
+
+*** tstart() called on X1-ubuntu
+*** at Sun Sep  6 16:01:45 2020
+
+   => Loading Basis Set <=
+
+    Name: 6-31G(D_P)
+    Role: ORBITAL
+    Keyword: BASIS
+    atoms 1, 3 entry O          line   149 file /home/dranasinghe/anaconda2/envs/rmgpy3_env/share/psi4/basis/6-31g_d_p_.gbs 
+    atoms 2, 4 entry H          line    44 file /home/dranasinghe/anaconda2/envs/rmgpy3_env/share/psi4/basis/6-31g_d_p_.gbs 
+
+
+         ---------------------------------------------------------
+                                   SCF
+               by Justin Turney, Rob Parrish, Andy Simmonett
+                          and Daniel G. A. Smith
+                              UKS Reference
+                        1 Threads,    976 MiB Core
+         ---------------------------------------------------------
+
+  ==> Geometry <==
+
+    Molecular point group: c2v
+    Full point group: C2v
+
+    Geometry (in Angstrom), charge = 0, multiplicity = 1:
+
+       Center              X                  Y                   Z               Mass       
+    ------------   -----------------  -----------------  -----------------  -----------------
+         O           -0.000000000000     0.698890000000     0.053572739974    15.994914619570
+         H           -0.000000000000     0.979423000000    -0.850238260026     1.007825032230
+         O            0.000000000000    -0.698890000000     0.053572739974    15.994914619570
+         H            0.000000000000    -0.979423000000    -0.850238260026     1.007825032230
+
+           O
+              BASIS           6-31G(D_P)           ec2d227169b1af6c6a69bc8715bab79dbd7bb644
+           H
+              BASIS           6-31G(D_P)           902186d0f3205710946c2c15d2c68458d6f6cc2a
+           O
+              BASIS           6-31G(D_P)           ec2d227169b1af6c6a69bc8715bab79dbd7bb644
+           H
+              BASIS           6-31G(D_P)           902186d0f3205710946c2c15d2c68458d6f6cc2a
+
+  Running in c2v symmetry.
+
+  Rotational constants: A =     10.88336  B =      0.96006  C =      0.88224 [cm^-1]
+  Rotational constants: A = 326274.99817  B =  28781.93695  C =  26448.79031 [MHz]
+  Nuclear repulsion =   37.888114307181077
+
+  Charge       = 0
+  Multiplicity = 1
+  Electrons    = 18
+  Nalpha       = 9
+  Nbeta        = 9
+

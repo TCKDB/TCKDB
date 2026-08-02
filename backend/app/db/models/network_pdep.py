@@ -26,6 +26,7 @@ from app.db.models.common import (
     EnergyCorrectionConvention,
     EnergyZeroConvention,
     NetworkChannelKind,
+    NetworkChannelMechanism,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkStateKind,
@@ -143,6 +144,18 @@ class NetworkChannel(Base):
     kind: Mapped[NetworkChannelKind] = mapped_column(
         SAEnum(NetworkChannelKind, name="network_channel_kind"),
         nullable=False,
+    )
+    # Mechanistic attribution, orthogonal to ``kind``. ``elementary`` channels
+    # name their elementary step(s) on ``network_channel_microreaction``;
+    # ``well_skipping`` channels carry none, because a chemically-activated
+    # pathway has no single elementary step behind it. Storing the claim is
+    # what keeps "multi-step ME channel" distinguishable from "the producer
+    # omitted the paths" — a reader must never have to infer it from an empty
+    # child collection.
+    mechanism: Mapped[NetworkChannelMechanism] = mapped_column(
+        SAEnum(NetworkChannelMechanism, name="network_channel_mechanism"),
+        nullable=False,
+        server_default=NetworkChannelMechanism.elementary.value,
     )
     # A stable, producer-visible identity is required because distinct
     # mechanistic pathways may have the same macroscopic source and sink.

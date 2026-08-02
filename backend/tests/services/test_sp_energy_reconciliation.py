@@ -248,3 +248,58 @@ def test_gaussian_dft_mentioning_composite_in_title_still_extracts() -> None:
         " SCF Done:  E(UB3LYP) =  -76.123400  A.U. after 10 cycles\n"
     )
     assert parse_sp_energy_from_log(log) == -76.1234
+
+
+# ---------------------------------------------------------------------------
+# Psi4 is recognised by the sniffer but has no wired single-point parser
+# ---------------------------------------------------------------------------
+
+
+def _read_psi4(name: str) -> str:
+    path = os.path.join(_FIX, "psi4", name)
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+def test_psi4_log_yields_no_energy() -> None:
+    """A Psi4 log must return ``None``, not another program's answer.
+
+    ``detect_software_from_text`` now classifies Psi4, so this dispatch
+    could have let it fall through to the Gaussian branch. Choosing which
+    of a Psi4 log's many ``Total Energy`` lines is the job's answer is
+    method-dependent, so nothing is extracted at all.
+    """
+    for fixture in (
+        "sp_mrcc_triplet.dat",
+        "sp_nh2_doublet.dat",
+        "opt_freq_singlet.out",
+        "opt_freq_dft_ts_singlet.out",
+        "io_error_truncated.out",
+    ):
+        assert parse_sp_energy_from_log(_read_psi4(fixture)) is None, fixture
+
+
+def test_psi4_energy_is_unverifiable_never_a_mismatch() -> None:
+    """No energy read means the payload value stands, unchecked.
+
+    It must not be contradicted, and it must not be overwritten: absence of
+    a second opinion is not evidence against the first.
+    """
+    outcome = reconcile_sp_energy(
+        payload_energy_hartree=-123.456,
+        log_text=_read_psi4("sp_mrcc_triplet.dat"),
+    )
+    assert outcome.action is SpEnergyAction.unverifiable
+    assert outcome.warning is None
+    assert outcome.log_energy_hartree is None
+    assert outcome.resolved_energy_hartree == -123.456
+
+
+def test_psi4_log_never_fills_an_absent_energy() -> None:
+    """Nothing may be filled into ``calc_sp_result`` from a Psi4 log."""
+    outcome = reconcile_sp_energy(
+        payload_energy_hartree=None,
+        log_text=_read_psi4("sp_mrcc_triplet.dat"),
+    )
+    assert outcome.action is not SpEnergyAction.filled
+    assert outcome.resolved_energy_hartree is None

@@ -20052,7 +20052,7 @@
       },
       "NetworkChannelIn": {
         "additionalProperties": false,
-        "description": "A directed phenomenological channel between two network states.\n\n:param source_state_key: Local key of the source state.\n:param sink_state_key: Local key of the sink state.\n:param kind: Channel classification.",
+        "description": "A directed phenomenological channel between two network states.\n\n:param source_state_key: Local key of the source state.\n:param sink_state_key: Local key of the sink state.\n:param kind: Macroscopic channel classification (association, ...).\n:param mechanism: Mechanistic attribution. Defaults to ``elementary``, so\n    an existing payload that names its ``microreaction_paths`` is\n    unaffected.\n:param microreaction_paths: The elementary step(s) this channel is\n    attributed to.\n\nThe two classification axes are orthogonal. ``kind`` says what the channel\ndoes macroscopically; ``mechanism`` says what evidence stands behind it:\n\n- ``elementary`` (the default) requires at least one ``microreaction_path``.\n  Omitting the paths is an incomplete deposit, not a declaration, and is\n  rejected.\n- ``well_skipping`` declares a chemically-activated channel whose flux\n  passes *through* one or more energized wells before the products separate\n  — ``NH2 + NH2 → H + N2H3`` proceeding via energized ``N2H4*`` is the\n  canonical case. There is no single elementary step or saddle point to\n  name, so ``microreaction_paths`` must be empty; the channel's backing is\n  the network topology plus the master-equation solve. Declaring it is not\n  taken on trust: ``NetworkPDepUploadRequest`` checks that the endpoints are\n  *not* joined by a single elementary step and *are* joined by a chain of\n  elementary steps whose intermediates are all wells.",
         "properties": {
           "key": {
             "minLength": 1,
@@ -20062,11 +20062,14 @@
           "kind": {
             "$ref": "#/components/schemas/NetworkChannelKind"
           },
+          "mechanism": {
+            "$ref": "#/components/schemas/NetworkChannelMechanism",
+            "default": "elementary"
+          },
           "microreaction_paths": {
             "items": {
               "$ref": "#/components/schemas/NetworkChannelMicroReactionIn"
             },
-            "minItems": 1,
             "title": "Microreaction Paths",
             "type": "array"
           },
@@ -20085,8 +20088,7 @@
           "key",
           "source_state_key",
           "sink_state_key",
-          "kind",
-          "microreaction_paths"
+          "kind"
         ],
         "title": "NetworkChannelIn",
         "type": "object"
@@ -20100,6 +20102,15 @@
           "exchange"
         ],
         "title": "NetworkChannelKind",
+        "type": "string"
+      },
+      "NetworkChannelMechanism": {
+        "description": "How a phenomenological channel is mechanistically attributed.\n\nOrthogonal to :class:`NetworkChannelKind`, which classifies the channel's\n*macroscopic* reaction type (association, isomerization, ...). This axis\nsays what scientific evidence stands behind the channel.\n\n``elementary``\n    The channel is one elementary step, or several parallel elementary\n    steps, each named on ``network_channel_microreaction``. Every\n    saddle-point path carries a barrier.\n\n``well_skipping``\n    A chemically-activated / well-skipping channel: the reactants form an\n    energized intermediate that reacts onward before collisional\n    stabilization, so the phenomenological k(T,P) is produced by the\n    master equation and there is no single elementary step or saddle point\n    to attribute it to. Its backing is the network topology plus the ME\n    solve, and it therefore carries **zero**\n    ``network_channel_microreaction`` rows *by declaration*, never by\n    omission.\n\nThere is deliberately no ``unknown``/``other`` member. An escape hatch here\nwould be indistinguishable from \"the producer did not supply the paths\",\nwhich is exactly the silent gap this discriminator exists to close.",
+        "enum": [
+          "elementary",
+          "well_skipping"
+        ],
+        "title": "NetworkChannelMechanism",
         "type": "string"
       },
       "NetworkChannelMicroReactionIn": {
@@ -20185,6 +20196,9 @@
           "kind": {
             "$ref": "#/components/schemas/NetworkChannelKind"
           },
+          "mechanism": {
+            "$ref": "#/components/schemas/NetworkChannelMechanism"
+          },
           "network_id": {
             "title": "Network Id",
             "type": "integer"
@@ -20203,13 +20217,14 @@
           "network_id",
           "source_state_id",
           "sink_state_id",
-          "kind"
+          "kind",
+          "mechanism"
         ],
         "title": "NetworkChannelRead",
         "type": "object"
       },
       "NetworkChannelSummary": {
-        "description": "One ``network_channel`` row projected for ``include=channels``.\n\nSource/sink state pointers use the composition_hash because\n``network_state`` has no public_ref. Composition_hash is unique\nper ``(network_id, composition_hash)`` so it's a stable address\nwithin a network.",
+        "description": "One ``network_channel`` row projected for ``include=channels``.\n\nSource/sink state pointers use the composition_hash because\n``network_state`` has no public_ref. Composition_hash is unique\nper ``(network_id, composition_hash)`` so it's a stable address\nwithin a network.\n\n``mechanism`` is always present and states, as a machine token, why\n``microreactions`` looks the way it does: an ``elementary`` channel names\nits elementary step(s), a ``well_skipping`` one has none because a\nchemically-activated pathway has no single elementary step behind it. A\ncaller never has to read an empty ``microreactions`` list and guess whether\nthe pathway is multi-step or the deposit was incomplete.",
         "properties": {
           "channel_key": {
             "anyOf": [
@@ -20228,6 +20243,9 @@
           },
           "kind": {
             "$ref": "#/components/schemas/NetworkChannelKind"
+          },
+          "mechanism": {
+            "$ref": "#/components/schemas/NetworkChannelMechanism"
           },
           "microreactions": {
             "items": {
@@ -20283,6 +20301,7 @@
         },
         "required": [
           "kind",
+          "mechanism",
           "source_state_composition_hash",
           "sink_state_composition_hash",
           "has_kinetics"

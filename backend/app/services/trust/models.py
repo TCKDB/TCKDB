@@ -91,6 +91,42 @@ class HardFailReason(str, Enum):
     rubric output into the ``hard_failed`` family. Names are stable
     identifiers; ``explain`` strings in
     :class:`EvidenceEvaluation.hard_fail_reason` may be richer.
+
+    **Backstop reasons — do not delete these as "duplication."**
+
+    Six of these reasons re-derive a rule the upload tier already refuses:
+
+    =============================================  ==========================================================
+    Reason                                          Already refused at upload by
+    =============================================  ==========================================================
+    ``invalid_lj_pair``                             ``transport_upload.validate_lj_pair``
+    ``no_transport_property_present``               ``transport_upload.validate_has_scientific_content``
+    ``no_thermo_representation_present``            ``thermo_upload.validate_has_scientific_content``
+    ``invalid_external_symmetry``                   ``statmech_upload``: ``external_symmetry: Field(ge=1)``
+    ``invalid_torsion_dimension``                   ``statmech_upload``: ``dimension: Field(ge=1)``
+    ``multiplicity_invalid``                        ``transition_state_upload``: ``multiplicity: Field(ge=1)``
+    =============================================  ==========================================================
+
+    That looks like pointless duplication, and reading it that way invites
+    someone to delete the read-time half. It is not duplication. Under ADR 0008
+    the upload tier *owns* each of these rules; these reasons exist to catch
+    records that never went through the upload tier at all — archive restore,
+    data migrations, bulk importers, and direct SQL. That path is real: an
+    archive-restore defect was found in this repository recently, and a record
+    that entered that way has been validated by nothing.
+
+    The practical consequence for whoever reads a report: when one of these six
+    fires, it is **not a routine grading outcome**. Every path that can create
+    such a record through the API already rejects it, so the record is evidence
+    of a data-integrity problem — a restore, migration, or importer that wrote
+    a row the upload schema would have refused. Treat it as an incident to
+    trace back to its ingestion path, not as a record that merely scored badly.
+    (Contrast ``sparse``/``unsupported``, which mean exactly "incomplete but
+    true" and are expected in normal operation.)
+
+    Do not "reconcile" these away by deleting either half. If a rule here ever
+    diverges from its upload-tier owner, the upload tier is authoritative and
+    this one is the copy that must be corrected.
     """
 
     calculation_missing = "calculation_missing"
@@ -100,15 +136,14 @@ class HardFailReason(str, Enum):
     thermo_missing = "thermo_missing"
     transport_missing = "transport_missing"
     species_entry_missing = "species_entry_missing"
-    no_thermo_representation_present = "no_thermo_representation_present"
-    no_transport_property_present = "no_transport_property_present"
-    invalid_lj_pair = "invalid_lj_pair"
+    no_thermo_representation_present = "no_thermo_representation_present"  # backstop
+    no_transport_property_present = "no_transport_property_present"  # backstop
+    invalid_lj_pair = "invalid_lj_pair"  # backstop
     invalid_temperature_range = "invalid_temperature_range"
-    invalid_external_symmetry = "invalid_external_symmetry"
-    invalid_torsion_dimension = "invalid_torsion_dimension"
+    invalid_external_symmetry = "invalid_external_symmetry"  # backstop
+    invalid_torsion_dimension = "invalid_torsion_dimension"  # backstop
     geometry_validation_failed = "geometry_validation_failed"
     missing_required_identity = "missing_required_identity"
-    result_block_missing_when_successful = "result_block_missing_when_successful"
     source_calculation_hard_failed_for_required_role = (
         "source_calculation_hard_failed_for_required_role"
     )
@@ -116,7 +151,7 @@ class HardFailReason(str, Enum):
     transition_state_parent_missing = "transition_state_parent_missing"
     reaction_entry_missing = "reaction_entry_missing"
     ts_entry_status_rejected = "ts_entry_status_rejected"
-    multiplicity_invalid = "multiplicity_invalid"
+    multiplicity_invalid = "multiplicity_invalid"  # backstop
     all_source_calculations_hard_failed = "all_source_calculations_hard_failed"
     geometry_validation_failed_for_source_calculation = (
         "geometry_validation_failed_for_source_calculation"

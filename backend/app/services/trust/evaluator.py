@@ -97,6 +97,50 @@ def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]
     return None
 
 
+# Temperature bounds are checked by two predicates, not one, because ``tmin ==
+# tmax`` means different things depending on what the pair describes. See ADR 0008
+# (docs/adr/0008-validation-tiers-definitions-block-expectations-warn.md).
+#
+# Neither predicate carries an upper bound. ``invalid_temperature_range`` used to
+# fuse three claims into one condition -- ``0 < tmin`` and the ordering (both
+# definitional) plus ``tmax <= 10_000`` (an expectation, and a wrong one).
+# Shock-tube, detonation, plasma and re-entry chemistry legitimately exceed any cap
+# we could name, and ``hard_failed`` is a public quality signal, so the cap marked
+# correct high-temperature science as structurally broken. The cap is *demoted*,
+# not deleted: it survives as the graded ``temperature_range_valid`` check in
+# :mod:`app.services.trust.rubrics` (``EvidenceCheckKind.optional``), which lowers
+# completeness and explains itself under ``missing_checks`` without ever labelling
+# a record ``hard_failed``.
+
+def validity_range_is_definitionally_invalid(tmin_k: float, tmax_k: float) -> bool:
+    """Return True when a *validity range* is definitionally invalid.
+
+    A validity range says where a datum applies. ``tmin == tmax`` is legitimate
+    and common: a rate coefficient measured or computed at a single temperature
+    (``k(298 K)``) has a one-point range, and TCKDB accepts experimental records
+    (:class:`ScientificOriginKind.experimental`) where that is the normal shape.
+
+    So the only definitional violations are a non-positive temperature and an
+    inverted range. This matches the upload schema (``tmin_k <= tmax_k``) and the
+    database (``ck_*_tmin_le_tmax``), which both already permit equality — before
+    this split the read tier was the sole dissenter and would have labelled a
+    single-temperature datum ``hard_failed``.
+    """
+    return not (0 < tmin_k <= tmax_k)
+
+
+def fitting_interval_is_definitionally_invalid(t_low: float, t_high: float) -> bool:
+    """Return True when a *polynomial fitting interval* is definitionally invalid.
+
+    A fitting interval is the domain a polynomial piece is fitted over, so it
+    must have width: a NASA-7 segment or NASA-9 interval spanning ``[T, T]``
+    covers no temperatures and cannot be evaluated as a piece. Equality is
+    degenerate here, which is exactly why it is legitimate for a validity range
+    and not for this.
+    """
+    return not (0 < t_low < t_high)
+
+
 _KINETICS_REQUIRED_SOURCE_ROLES: frozenset[KineticsCalculationRole] = frozenset(
     {
         KineticsCalculationRole.reactant_energy,
@@ -125,7 +169,9 @@ def _detect_kinetics_hard_fail(kinetics: Kinetics) -> Optional[HardFailReason]:
         return HardFailReason.missing_required_identity
 
     if kinetics.tmin_k is not None and kinetics.tmax_k is not None:
-        if not (0 < kinetics.tmin_k < kinetics.tmax_k <= 10_000):
+        if validity_range_is_definitionally_invalid(
+            kinetics.tmin_k, kinetics.tmax_k
+        ):
             return HardFailReason.invalid_temperature_range
 
     for link in kinetics.source_calculations:
@@ -188,15 +234,13 @@ def _thermo_has_representation(thermo: Thermo) -> bool:
     )
 
 
-# Upper sanity bound for thermochemical temperature ranges (NASA Glenn maximum,
-# 20,000 K). Canonical NASA-9 fits use a 6,000-20,000 K high-temperature
-# interval; a tighter cap would hard-fail valid high-T data. Mirrors the same
-# constant in ``rubrics.py``.
-_MAX_THERMO_TEMPERATURE_K = 20_000
-
-
 def _thermo_temperature_range_invalid(thermo: Thermo) -> bool:
     """Return True when any populated thermo temperature range is invalid.
+
+    "Invalid" means *definitionally* invalid — non-positive, or out of order.
+    A hot range is not invalid; the upper bound is a graded expectation, not a
+    hard fail. See :func:`validity_range_is_definitionally_invalid` and
+    :func:`fitting_interval_is_definitionally_invalid`.
 
     NASA-9 interval bounds (NOT NULL) are validated alongside the top-level and
     NASA-7 ranges. Wilhoit has no intrinsic piecewise range, so it only
@@ -205,12 +249,12 @@ def _thermo_temperature_range_invalid(thermo: Thermo) -> bool:
     if thermo.tmin_k is not None or thermo.tmax_k is not None:
         if thermo.tmin_k is None or thermo.tmax_k is None:
             return True
-        if not (0 < thermo.tmin_k < thermo.tmax_k <= _MAX_THERMO_TEMPERATURE_K):
+        if validity_range_is_definitionally_invalid(thermo.tmin_k, thermo.tmax_k):
             return True
 
     for interval in thermo.nasa9_intervals:
-        if not (
-            0 < interval.t_min_k < interval.t_max_k <= _MAX_THERMO_TEMPERATURE_K
+        if fitting_interval_is_definitionally_invalid(
+            interval.t_min_k, interval.t_max_k
         ):
             return True
 
@@ -221,9 +265,10 @@ def _thermo_temperature_range_invalid(thermo: Thermo) -> bool:
         return False
     if nasa.t_low is None or nasa.t_mid is None or nasa.t_high is None:
         return True
-    return not (
-        0 < nasa.t_low < nasa.t_mid < nasa.t_high <= _MAX_THERMO_TEMPERATURE_K
-    )
+    # NASA-7 additionally requires the mid-point to lie strictly inside.
+    return fitting_interval_is_definitionally_invalid(
+        nasa.t_low, nasa.t_mid
+    ) or fitting_interval_is_definitionally_invalid(nasa.t_mid, nasa.t_high)
 
 
 def _detect_thermo_hard_fail(thermo: Thermo) -> Optional[HardFailReason]:

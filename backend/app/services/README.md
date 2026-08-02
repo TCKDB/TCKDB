@@ -16,6 +16,14 @@ these; services never call routes. ~39 top-level modules + 4 subpackages.
   `species_resolution.py`) to understand the pattern.
 - **`upload_submission.py`** — opens/closes submissions around every
   write; `upload_reconciliation.py` — non-blocking upload warnings.
+- **`*_extraction.py`** — best-effort hooks that re-read an uploaded ESS
+  artifact and cross-check it against what the submitter declared:
+  `sp_energy_extraction` (single-point energy),
+  `charge_multiplicity_extraction` (charge / spin multiplicity),
+  `hessian_extraction`, `calculation_parameter_extraction`. All are
+  banner-sniff dispatched per program, never fail an upload, and stay
+  silent when the log cannot be parsed — an absence is not a
+  contradiction (ADR 0008).
 - **`record_review.py`** — the human review state machine + `apply_review_policy()`.
 
 ## Subpackages (curation & reads)

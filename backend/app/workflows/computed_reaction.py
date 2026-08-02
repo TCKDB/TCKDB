@@ -53,6 +53,9 @@ from app.services.calculation_resolution import (
     resolve_workflow_tool_release_ref,
 )
 from app.services.calculation_scan_resolution import persist_calculation_scan
+from app.services.charge_multiplicity_extraction import (
+    try_reconcile_charge_multiplicity_from_output_upload,
+)
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
     create_applied_energy_correction,
@@ -146,6 +149,16 @@ def _persist_calculation(
         )
         if sp_warning is not None and sp_energy_warnings is not None:
             sp_energy_warnings.append(sp_warning)
+        # Output logs also state the charge and spin multiplicity the run
+        # actually used; a contradiction with the declared identity is
+        # flagged for review. (``sp_energy_warnings`` is the shared
+        # per-artifact warning accumulator, not single-point-energy only.)
+        if sp_energy_warnings is not None:
+            sp_energy_warnings.extend(
+                try_reconcile_charge_multiplicity_from_output_upload(
+                    calculation, artifact_in
+                )
+            )
 
     resolved_geom_id = geometry_id
     if calc_in.geometry_key is not None:

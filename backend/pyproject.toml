@@ -15,13 +15,20 @@
 #
 #   Conda + pip (recommended when RDKit-cartridge parity matters):
 #     mamba env create -n tckdb_env -f backend/environment.yml
+#     pip install -e schemas/python/tckdb-schemas   # first-party, not on PyPI
 #     cd backend && pip install -e ".[dev]"
-#     # RDKit comes from conda; skip the [rdkit] extra here.
+#     # RDKit and cantera come from conda; skip the [rdkit]/[chemkin] extras.
 #
 #   Pure pip / uv (lockfile-driven, container-friendly):
 #     cd backend
-#     uv sync --extra dev --extra rdkit
-#     # or: pip install -e ".[dev,rdkit]"
+#     uv sync --extra dev --extra rdkit     # resolves tckdb-schemas via
+#                                           # [tool.uv.sources] below
+#     # or, with pip: install schemas/python/tckdb-schemas first, then
+#     #   pip install -e ".[dev,rdkit]"
+#
+# The `tckdb-schemas` step is not optional: 34 modules under app/ import
+# it at module level. Omitting it was why both documented paths produced
+# an install that could not import the app.
 #
 # See docs/deployment/api_containerization_notes.md for the full
 # discussion.
@@ -88,6 +95,11 @@ dependencies = [
     # import path remains `import isbnlib` — see
     # app/services/literature_metadata.py.
     "isbnlib2>=0.1",
+    # 34 modules under app/ import this at module level, so the backend
+    # genuinely does not import without it. It lives in this repo rather
+    # than on PyPI, hence the [tool.uv.sources] entry below; for the
+    # conda+pip path install it first (see the header).
+    "tckdb-schemas>=0.10",
 ]
 
 [project.optional-dependencies]
@@ -98,6 +110,9 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pytest-cov>=4",
+    # Without this installed, "-p no:randomly" is silently accepted and does
+    # nothing -- reading like an ordering guarantee the suite never had.
+    "pytest-randomly>=3.15",
     "httpx>=0.27",
     "jsonschema>=4.22",
     "ruff>=0.4",
@@ -113,6 +128,14 @@ dev = [
 # choice, not an accidental transitive.
 rdkit = [
     "rdkit>=2024.3",
+]
+# Cantera is optional for the same reason, and more weakly coupled still:
+# `app/services/scientific_read/chemkin_serialize.py` imports it lazily
+# *inside* the function that needs it, so the app imports and runs fine
+# without it — only CHEMKIN serialization and its tests require it.
+# conda/mamba developers get it from environment.yml and do not need this.
+chemkin = [
+    "cantera>=3.0",
 ]
 
 # `tckdb-backend` is installed as `pip install -e .` from backend/.
@@ -226,3 +249,11 @@ no_implicit_optional = true
 module = "rdkit.*"
 follow_imports = "skip"
 follow_imports_for_stubs = true
+
+# `tckdb-schemas` is a first-party package that lives in this repository
+# rather than on PyPI, so a plain resolver cannot find it by name. uv is
+# told where it is; the conda+pip path installs it explicitly first (see
+# the header). Without this, `uv sync` resolves nothing for it and the
+# backend fails at import time on 34 modules.
+[tool.uv.sources]
+tckdb-schemas = { path = "../schemas/python/tckdb-schemas", editable = true }

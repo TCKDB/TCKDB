@@ -52,7 +52,13 @@ from __future__ import annotations
 from alembic import op
 
 revision = "a7c2e4f8b6d9"
-down_revision = "e3f4a5b6c7d8"
+# Re-parented from e3f4a5b6c7d8 onto d5b1a7c3e9f4 when main was merged in:
+# both had been cut from e3f4a5b6c7d8 in parallel, which left the tree with two
+# alembic heads and made ``upgrade head`` ambiguous. This revision has never
+# been applied to a deployed database (the Pi is at d5b1a7c3e9f4 and Stage 4
+# never merged), so re-parenting is safe; the two indexes it creates are
+# independent of everything d5b1a7c3e9f4 does.
+down_revision = "d5b1a7c3e9f4"
 branch_labels = None
 depends_on = None
 

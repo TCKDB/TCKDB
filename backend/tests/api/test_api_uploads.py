@@ -23,6 +23,60 @@ def _hydrogen_conformer_payload(label: str = "conf-a") -> dict:
     }
 
 
+_SOFTWARE = {"name": "Gaussian", "version": "16"}
+_LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
+
+
+def _freq_calc(*, n_imag: int, imag_freq_cm1: float | None = None) -> dict:
+    return {
+        "type": "freq",
+        "software_release": _SOFTWARE,
+        "level_of_theory": _LOT,
+        "freq_result": {"n_imag": n_imag, "imag_freq_cm1": imag_freq_cm1},
+    }
+
+
+def _transition_state_payload(
+    *,
+    n_imag: int | None = 1,
+    imag_freq_cm1: float | None = -1500.0,
+    label: str = "ts-a",
+) -> dict:
+    payload: dict = {
+        "reaction": {
+            "reversible": True,
+            "reactants": [
+                {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+                {"species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1}},
+            ],
+            "products": [
+                {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
+                {"species_entry": {"smiles": "[CH3]", "charge": 0, "multiplicity": 2}},
+            ],
+        },
+        "charge": 0,
+        "multiplicity": 2,
+        "geometry": {
+            "xyz_text": (
+                "3\nH-CH3 abstraction TS\n"
+                "H 0.0 0.0 0.0\nC 0.0 0.0 1.4\nH 0.0 0.0 -0.9"
+            ),
+        },
+        "primary_opt": {
+            "type": "opt",
+            "software_release": _SOFTWARE,
+            "level_of_theory": _LOT,
+        },
+        "additional_calculations": [],
+        "label": label,
+    }
+    if n_imag is not None:
+        payload["additional_calculations"] = [
+            _freq_calc(n_imag=n_imag, imag_freq_cm1=imag_freq_cm1)
+        ]
+    return payload
+
+
 def _reaction_payload() -> dict:
     return {
         "reversible": True,
@@ -64,6 +118,144 @@ class TestConformerUpload:
         del payload["geometry"]
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Imaginary-frequency validation tiers (ADR 0008)
+#
+# minimum + n_imag >= 1     -> block   (definition)
+# vdw_complex + n_imag >= 1 -> warn    (expectation: Hessian grid noise)
+# TS + n_imag != 1          -> block   (definition)
+# TS + |imag| < threshold   -> warn    (expectation: flat/variational)
+# ---------------------------------------------------------------------------
+
+
+class TestMinimumImaginaryModeBlocks:
+    def test_minimum_with_one_imaginary_mode_returns_422(self, client):
+        payload = _hydrogen_conformer_payload(label="conf-imag")
+        payload["additional_calculations"] = [_freq_calc(n_imag=1)]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 422
+        assert "n_imag_contradicts_minimum" in resp.text
+
+    def test_minimum_with_higher_order_saddle_returns_422(self, client):
+        payload = _hydrogen_conformer_payload(label="conf-saddle")
+        payload["additional_calculations"] = [_freq_calc(n_imag=2)]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 422
+        assert "n_imag_higher_order_saddle" in resp.text
+
+    def test_minimum_blocking_ignores_magnitude(self, client):
+        """ADR 0008 forbids a magnitude threshold on a blocking check, so a
+        tiny imaginary mode on a declared minimum is refused just the same."""
+        payload = _hydrogen_conformer_payload(label="conf-tiny-imag")
+        payload["additional_calculations"] = [
+            _freq_calc(n_imag=1, imag_freq_cm1=-3.0)
+        ]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 422
+
+    def test_zero_imaginary_modes_still_uploads(self, client):
+        payload = _hydrogen_conformer_payload(label="conf-real-min")
+        payload["additional_calculations"] = [_freq_calc(n_imag=0)]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["warnings"] == []
+
+    def test_no_frequency_evidence_is_unaffected(self, client):
+        """Absence is not contradiction — the base payload has no freq data."""
+        resp = client.post(
+            "/api/v1/uploads/conformers",
+            json=_hydrogen_conformer_payload(label="conf-no-freq"),
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["warnings"] == []
+
+
+class TestVdwComplexImaginaryModeWarns:
+    def test_vdw_complex_with_one_imaginary_mode_is_accepted(self, client):
+        payload = _hydrogen_conformer_payload(label="vdw-imag")
+        payload["species_entry"]["species_entry_kind"] = "vdw_complex"
+        payload["additional_calculations"] = [
+            _freq_calc(n_imag=1, imag_freq_cm1=-22.0)
+        ]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 201, resp.text
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "n_imag_contradicts_minimum" in codes
+        assert "n_imag_suggests_transition_state" not in codes
+
+    def test_vdw_complex_with_higher_order_saddle_is_accepted(self, client):
+        payload = _hydrogen_conformer_payload(label="vdw-saddle")
+        payload["species_entry"]["species_entry_kind"] = "vdw_complex"
+        payload["additional_calculations"] = [_freq_calc(n_imag=3)]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 201, resp.text
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "n_imag_higher_order_saddle" in codes
+
+    def test_stiff_vdw_mode_also_suggests_a_transition_state(self, client):
+        payload = _hydrogen_conformer_payload(label="vdw-stiff")
+        payload["species_entry"]["species_entry_kind"] = "vdw_complex"
+        payload["additional_calculations"] = [
+            _freq_calc(n_imag=1, imag_freq_cm1=-1200.0)
+        ]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 201, resp.text
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "n_imag_suggests_transition_state" in codes
+
+
+class TestTransitionStateImaginaryModeTiers:
+    def test_one_imaginary_mode_uploads_cleanly(self, client):
+        resp = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_transition_state_payload(label="ts-ok"),
+        )
+        assert resp.status_code == 201, resp.text
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "transition_state_imaginary_frequency_too_small" not in codes
+
+    def test_zero_imaginary_modes_returns_422(self, client):
+        resp = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_transition_state_payload(
+                n_imag=0, imag_freq_cm1=None, label="ts-min"
+            ),
+        )
+        assert resp.status_code == 422
+        assert "transition_state_n_imag_not_one" in resp.text
+
+    def test_two_imaginary_modes_returns_422(self, client):
+        resp = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_transition_state_payload(
+                n_imag=2, imag_freq_cm1=-900.0, label="ts-saddle"
+            ),
+        )
+        assert resp.status_code == 422
+        assert "transition_state_n_imag_not_one" in resp.text
+
+    def test_small_imaginary_mode_is_accepted_with_a_warning(self, client):
+        resp = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_transition_state_payload(
+                n_imag=1, imag_freq_cm1=-30.0, label="ts-soft"
+            ),
+        )
+        assert resp.status_code == 201, resp.text
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "transition_state_imaginary_frequency_too_small" in codes
+
+    def test_no_frequency_evidence_is_unaffected(self, client):
+        resp = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_transition_state_payload(n_imag=None, label="ts-no-freq"),
+        )
+        assert resp.status_code == 201, resp.text
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "transition_state_n_imag_not_one" not in codes
+        assert "transition_state_imaginary_frequency_too_small" not in codes
 
 
 # ---------------------------------------------------------------------------
