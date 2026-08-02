@@ -108,7 +108,6 @@ class HardFailReason(str, Enum):
     invalid_torsion_dimension = "invalid_torsion_dimension"
     geometry_validation_failed = "geometry_validation_failed"
     missing_required_identity = "missing_required_identity"
-    result_block_missing_when_successful = "result_block_missing_when_successful"
     source_calculation_hard_failed_for_required_role = (
         "source_calculation_hard_failed_for_required_role"
     )
