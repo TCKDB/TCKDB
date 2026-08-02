@@ -1,0 +1,100 @@
+-----------------------------------------------------------------------
+      Psi4: An Open-Source Ab Initio Electronic Structure Package
+                           Psi4 1.4a1.dev75 
+
+                     Git: Rev {master} 73351f5 
+
+
+R. M. Parrish, L. A. Burns, D. G. A. Smith, A. C. Simmonett,
+A. E. DePrince III, E. G. Hohenstein, U. Bozkaya, A. Yu. Sokolov,
+R. Di Remigio, R. M. Richard, J. F. Gonthier, A. M. James,
+H. R. McAlexander, A. Kumar, M. Saitow, X. Wang, B. P. Pritchard,
+P. Verma, H. F. Schaefer III, K. Patkowski, R. A. King, E. F. Valeev,
+F. A. Evangelista, J. M. Turney, T. D. Crawford, and C. D. Sherrill,
+J. Chem. Theory Comput. 13(7) pp 3185--3197 (2017).
+(doi: 10.1021/acs.jctc.7b00174)
+
+
+                     Additional Contributions by
+P. Kraus, H. Kruse, M. H. Lechner, M. C. Schieber, R. A. Shaw,
+A. Alenaizan, R. Galvelis, Z. L. Glick, S. Lehtola, and J. P. Misiewicz
+
+-----------------------------------------------------------------------
+
+
+Psi4 started on: Wednesday, 10 April 2019 02:48PM
+
+Process ID: 7130
+Host:       r11n32.lisa.surfsara.nl
+PSIDATADIR: /home/mparadiz/opt/psi4/share/psi4
+Memory:     500.0 MiB
+Threads:    15
+
+  ==> Input File <==
+
+--------------------------------------------------------------------------
+#! ADC/def-2SVP on BODIPY-Phe  
+
+molecule bodphe {
+0 1       
+N          0.07895        0.63049        2.21156
+N          0.40701       -1.77253        2.18386
+C          0.85975       -1.61894        0.87368
+C          1.93462       -2.51476        0.66009
+C          0.25153       -0.54266        0.07529
+C          0.60747        0.60802        0.92030
+C          1.47746        1.72071        0.77028
+C          1.38234        2.45311        1.95195
+C          2.07438       -3.24863        1.84094
+C          0.53652        1.71840        2.84134
+C          1.13424       -2.73093        2.77791
+H          2.76916       -4.06657        2.02914
+H          0.98002       -2.99119        3.82431
+H          2.46553       -2.64393       -0.28198
+H         -0.76107        1.52726       -1.36025
+C         -0.87740        0.55157       -1.84231
+C         -0.42668       -0.61486       -1.17553
+C         -0.59367       -1.86931       -1.81442
+H         -0.24902       -2.77578       -1.30769
+C         -1.18278       -1.94632       -3.07591
+H         -1.30041       -2.92327       -3.55316
+C         -1.60723       -0.78659       -3.74115
+H         -2.04665       -0.85123       -4.73942
+C         -1.45720        0.45654       -3.10859
+H         -1.78685        1.36634       -3.61791
+B         -0.55985       -0.69534        2.82439
+F         -0.40573       -0.68314        4.19154
+H          0.27433        1.92595        3.87885
+H          1.84952        3.41187        2.17639
+H          2.03049        1.96835       -0.13399
+F         -1.84936       -0.86321        2.39539
+symmetry c1    
+}
+
+
+set {
+reference rhf
+basis def2-svp
+freeze_core true
+guess auto 
+roots_per_irrep [2]   
+}
+
+ref_energy = -906.2735763050857258 
+adc_energy = energy('adc')
+--------------------------------------------------------------------------
+
+*** tstart() called on r11n32.lisa.surfsara.nl
+*** at Wed Apr 10 14:48:14 2019
+
+   => Loading Basis Set <=
+
+Name: DEF2-SVP
+Role: ORBITAL
+Keyword: BASIS
+atoms 1-2                          entry N          line   110 file /home/mparadiz/opt/psi4/share/psi4/basis/def2-svp.gbs 
+atoms 3-11, 16-18, 20, 22, 24      entry C          line    90 file /home/mparadiz/opt/psi4/share/psi4/basis/def2-svp.gbs 
+atoms 12-15, 19, 21, 23, 25, 28-30 entry H          line    15 file /home/mparadiz/opt/psi4/share/psi4/basis/def2-svp.gbs 
+atoms 26                           entry B          line    70 file /home/mparadiz/opt/psi4/share/psi4/basis/def2-svp.gbs 
+atoms 27, 31                       entry F          line   150 file /home/mparadiz/opt/psi4/share/psi4/basis/def2-svp.gbs 
+

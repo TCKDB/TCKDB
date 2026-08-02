@@ -148,6 +148,17 @@ class TestArtifactDispatch:
     def test_unknown_banner_returns_none(self):
         assert parse_hessian_from_artifact("random text\n", from_hess_file=False) is None
 
+    def test_psi4_log_returns_none(self):
+        """Psi4 is sniffed but has no wired Hessian parser.
+
+        The dispatch must decline it rather than hand a Psi4 log to the
+        Gaussian or Molpro matrix reader, which shares this module's
+        detection with the single-point-energy path.
+        """
+        for name in ("opt_freq_singlet.out", "opt_freq_dft_ts_singlet.out"):
+            text = (FIXTURES / "psi4" / name).read_text(errors="replace")
+            assert parse_hessian_from_artifact(text, from_hess_file=False) is None
+
     def test_empty_or_none_returns_none(self):
         assert parse_hessian_from_artifact("", from_hess_file=False) is None
         assert parse_hessian_from_artifact(None, from_hess_file=True) is None

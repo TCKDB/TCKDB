@@ -33,6 +33,7 @@ from app.schemas.fragments.calculation import (
 )
 from app.services.calculation_parameter_extraction import (
     ParameterExtractionError,
+    _extract_safe,
     extract_and_store_calculation_parameters,
 )
 from app.services.calculation_resolution import (
@@ -48,6 +49,7 @@ GAUSSIAN_LOG = FIXTURES_DIR / "gaussian" / "opt_g09.log"
 ORCA_LOG = FIXTURES_DIR / "orca" / "opt_orca.out"
 MOLPRO_LOG = FIXTURES_DIR / "molpro" / "ch4_closed_shell" / "input.out"
 MOLPRO_MRCI_LOG = FIXTURES_DIR / "molpro" / "mrci" / "hydrazine_closed" / "input.out"
+PSI4_LOG = FIXTURES_DIR / "psi4" / "opt_freq_singlet.out"
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +221,34 @@ def test_extraction_raises_when_software_unknown(db_engine) -> None:
             extract_and_store_calculation_parameters(
                 session, calc, "this text contains no recognised ESS markers"
             )
+
+
+def test_psi4_raises_instead_of_falling_through_to_orca(db_engine) -> None:
+    """Psi4 is sniffed, but has no parameter parser — so nothing is emitted.
+
+    ``_run_parser`` used to treat ORCA as its catch-all, so a newly
+    recognised program would have had its log fed to the ORCA parser and
+    stored parameter rows describing a run that never happened. The
+    dispatch is now exhaustive and raises instead.
+    """
+    text_data = PSI4_LOG.read_text(errors="replace")
+    with Session(db_engine) as session, session.begin():
+        calc = _make_calculation(session, software_name=None)
+        with pytest.raises(ParameterExtractionError, match="psi4"):
+            extract_and_store_calculation_parameters(session, calc, text_data)
+
+
+def test_psi4_extraction_failure_never_aborts_an_upload(db_engine) -> None:
+    """The opportunistic wrapper downgrades the raise to a logged skip.
+
+    An unsupported program must never fail an artifact upload.
+    """
+    text_data = PSI4_LOG.read_text(errors="replace")
+    with Session(db_engine) as session, session.begin():
+        calc = _make_calculation(session, software_name=None)
+        assert (
+            _extract_safe(session, calc, text_data, source="psi4 fixture") is None
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -86,6 +86,12 @@ def parse_sp_energy_from_log(text: str | None) -> float | None:
     energy (e.g. an unsupported Molpro MRCI-F12 or a Gaussian composite
     method), returns ``None`` so the caller treats it as *unverifiable*
     rather than guessing.
+
+    Psi4 is recognised by the sniffer but deliberately declines here. Its
+    logs carry many ``Total Energy`` lines and which one is the job's answer
+    is method-dependent, so there is no safe rule to apply; returning
+    ``None`` records nothing rather than risking a wrong number in
+    ``calc_sp_result``.
     """
     if not text:
         return None
@@ -95,12 +101,18 @@ def parse_sp_energy_from_log(text: str | None) -> float | None:
 
     # Local imports keep this module's own import surface to the dataclasses;
     # each parser is pure-text and free of DB dependencies.
+    #
+    # Dispatch is exhaustive on purpose: a program without a wired
+    # single-point parser must return ``None`` here, never fall through to
+    # another program's parser.
     if software == "molpro":
         from app.services.molpro_parameter_parser import parse_sp_energy
     elif software == "orca":
         from app.services.orca_parameter_parser import parse_sp_energy
-    else:  # gaussian
+    elif software == "gaussian":
         from app.services.gaussian_parameter_parser import parse_sp_energy
+    else:  # psi4 — no single-point energy extraction (see docstring)
+        return None
 
     energy = parse_sp_energy(text)
     # A non-finite parse (NaN/inf from a garbage or overflowed energy line)
