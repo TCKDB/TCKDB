@@ -1746,6 +1746,7 @@ class TCKDBClient:
         *,
         network_solve_ref: str | None = None,
         network_ref: str | None = None,
+        kind: str | None = None,
         solve_method: str | None = None,
         temperature_min: float | None = None,
         temperature_max: float | None = None,
@@ -1773,11 +1774,18 @@ class TCKDBClient:
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
     ) -> NetworkSolveSearchResponse:
-        """Search pressure-dependence network solves and their evidence."""
+        """Search pressure-dependence network solves and their evidence.
+
+        ``kind`` filters by origin: ``"computed"`` for solves whose
+        master-equation inputs this database holds, ``"reported"`` for k(T,P)
+        transcribed from a publication. Every solve record carries the same
+        token, so the distinction is also readable without filtering.
+        """
 
         body = {
             "network_solve_ref": network_solve_ref,
             "network_ref": network_ref,
+            "kind": kind,
             "solve_method": solve_method,
             "temperature_min": temperature_min,
             "temperature_max": temperature_max,

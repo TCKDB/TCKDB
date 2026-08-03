@@ -30,6 +30,7 @@ from app.db.models.common import (
     NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
+    NetworkSolveKind,
     NetworkStateKind,
     PressureUnit,
     TemperatureUnit,
@@ -309,7 +310,20 @@ class NetworkSolveChannelBarrier(Base):
 
 
 class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
-    """One master-equation solution for a reaction network."""
+    """The provenance envelope for one coherent set of k(T,P) on a network.
+
+    ``kind`` says what stands behind it: ``computed`` means the master
+    equation was solved here, and the ME settings and T/P envelope below
+    describe that run; ``reported`` means the rates were transcribed from the
+    publication named by ``literature_id``, and this database holds none of
+    the derivation.
+
+    The distinction is stored rather than inferred because every ME-specific
+    column here is nullable — before ADR 0010 ``network_id`` was the only NOT
+    NULL column, so a row could assert "master-equation solution" by table
+    membership alone while carrying no evidence of one. ``kind`` is what
+    turns that into a checkable claim.
+    """
 
     __tablename__ = "network_solve"
 
@@ -318,6 +332,16 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         BigInteger,
         ForeignKey("network.id", deferrable=True, initially="IMMEDIATE"),
         nullable=False,
+    )
+
+    # Whether the master equation was solved here or the rates were read out
+    # of a publication. A ``reported`` solve is not required to carry state
+    # energies, channel barriers or an energy-transfer model, and must name
+    # the literature it was transcribed from (ADR 0010).
+    kind: Mapped[NetworkSolveKind] = mapped_column(
+        SAEnum(NetworkSolveKind, name="network_solve_kind"),
+        nullable=False,
+        server_default=NetworkSolveKind.computed.value,
     )
 
     # Provenance triple
@@ -386,6 +410,14 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
 
     __table_args__ = (
+        # A ``reported`` solve's whole claim is "this paper says so", which is
+        # what pays for relaxing the coverage rules. With no literature it
+        # would assert rates carrying neither a derivation nor a source —
+        # weaker than either form this axis exists to admit.
+        CheckConstraint(
+            "kind <> 'reported' OR literature_id IS NOT NULL",
+            name="reported_requires_literature",
+        ),
         CheckConstraint("tmin_k IS NULL OR tmin_k > 0", name="tmin_k_gt_0"),
         CheckConstraint("tmax_k IS NULL OR tmax_k > 0", name="tmax_k_gt_0"),
         CheckConstraint(

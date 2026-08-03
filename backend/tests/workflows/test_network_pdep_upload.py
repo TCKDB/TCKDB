@@ -20,6 +20,7 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationType,
     NetworkEnergyTransferScope,
+    NetworkSolveKind,
 )
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
@@ -43,7 +44,10 @@ from app.db.models.transition_state import (
     TransitionStateValidationEvidence,
 )
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
-from app.services.provenance_warnings import W_NETWORK_WIDE_ENERGY_TRANSFER
+from app.services.provenance_warnings import (
+    W_NETWORK_WIDE_ENERGY_TRANSFER,
+    W_REPORTED_NETWORK_SOLVE,
+)
 from app.services.scientific_read.networks import get_network, get_network_solve
 from app.workflows.network_pdep import persist_network_pdep_upload
 
@@ -2834,3 +2838,306 @@ def test_well_skipping_channel_round_trips(db_engine) -> None:
             by_key["elimination_path"].mechanism
             is NetworkChannelMechanism.elementary
         )
+
+
+# ---------------------------------------------------------------------------
+# Reported (literature) pressure-dependent kinetics — ADR 0010
+# ---------------------------------------------------------------------------
+
+_REPORTED_LITERATURE = {
+    "doi": "10.1000/reported.pdep",
+    "title": "Pressure-dependent kinetics of C2H5 + O2",
+}
+
+_REPORTED_KINETICS = {
+    "channel_key": "association_path",
+    "source_state_key": "entrance",
+    "sink_state_key": "well_RO2",
+    "model_kind": "plog",
+    "plog": {
+        "entries": [
+            {
+                "entry_index": 1,
+                "pressure_bar": 0.01,
+                "a": 1.2e12,
+                "n": 0.4,
+                "ea_kj_mol": 5.0,
+            },
+            {
+                "entry_index": 2,
+                "pressure_bar": 1.0,
+                "a": 3.4e12,
+                "n": 0.2,
+                "ea_kj_mol": 4.0,
+            },
+        ]
+    },
+    "tmin_k": 300.0,
+    "tmax_k": 2000.0,
+    "pmin_bar": 0.01,
+    "pmax_bar": 1.0,
+    "rate_units": "cm3_mol_s",
+    "pressure_units": "bar",
+    "temperature_units": "kelvin",
+    "note": "Table 3 of the cited paper",
+}
+
+
+def _reported_payload(*, with_bath_gas: bool = False) -> dict:
+    """A PDep payload whose k(T,P) were transcribed out of a paper.
+
+    Deliberately carries *none* of the master-equation inputs: no state
+    energies, no channel barriers, no energy transfer, no bath gas, no source
+    calculations. That is the whole point — a depositor reading a
+    supplementary table has none of them, and before ADR 0010 this payload was
+    unrepresentable, so the data simply stayed out of the database.
+
+    The network topology is still required and still checked: a reported rate
+    has to attach to a channel that exists.
+
+    Dropping the bath gas also drops the Ar species, which the base fixture
+    declares *only* as a collider. The existing orphan-species rule still
+    applies to a reported payload, and that is the correct outcome: a paper
+    that does not state its bath gas gives you no reason to name one.
+    ``with_bath_gas=True`` keeps both, for the cases that check a reported
+    solve is still held to the rules for evidence it does supply.
+    """
+    payload = _full_payload(include_solve=True)
+    solve: dict = {
+        "kind": "reported",
+        "tmin_k": 300,
+        "tmax_k": 2000,
+        "pmin_bar": 0.01,
+        "pmax_bar": 1.0,
+        "literature": dict(_REPORTED_LITERATURE),
+        "channel_kinetics": [deepcopy(_REPORTED_KINETICS)],
+    }
+    if with_bath_gas:
+        solve["bath_gas"] = [{"species_key": "Ar", "mole_fraction": 1.0}]
+    else:
+        payload["species"] = [
+            sp for sp in payload["species"] if sp["key"] != "Ar"
+        ]
+    payload["solve"] = solve
+    return payload
+
+
+def test_reported_solve_is_accepted_without_master_equation_inputs() -> None:
+    """Published k(T,P) is depositable at all — the point of ADR 0010.
+
+    Every coverage rule the old contract applied to a solve asked for
+    something a paper's supplementary table does not contain. The result was
+    not a stricter database, it was an emptier one: literature
+    pressure-dependent kinetics could not be entered by any route.
+    """
+    request = NetworkPDepUploadRequest(**_reported_payload())
+    assert request.solve.kind is NetworkSolveKind.reported
+    assert request.solve.state_energies == []
+    assert request.solve.channel_barriers == []
+    assert request.solve.energy_transfer == []
+    assert request.solve.bath_gas == []
+    assert request.solve.source_calculations == []
+    assert len(request.solve.channel_kinetics) == 1
+
+
+def test_computed_is_the_default_solve_kind() -> None:
+    """Omitting ``kind`` keeps the stronger claim and the stricter rules.
+
+    The default matters in both directions: every payload written before this
+    axis existed stays valid and keeps meaning "solved here", and a producer
+    who has never heard of the axis cannot accidentally deposit the weaker
+    record.
+    """
+    payload = _full_payload()
+    assert "kind" not in payload["solve"]
+    request = NetworkPDepUploadRequest(**payload)
+    assert request.solve.kind is NetworkSolveKind.computed
+
+
+def test_reported_solve_without_literature_is_refused() -> None:
+    """A reported solve's entire warrant is the paper it cites.
+
+    Relaxing the master-equation coverage rules is only defensible because
+    something else stands behind the numbers. With no literature the record
+    would assert rates carrying neither a derivation nor a source, which is
+    weaker than either form this decision meant to admit, so it blocks.
+    """
+    payload = _reported_payload()
+    del payload["solve"]["literature"]
+    with pytest.raises(ValueError, match="a reported solve must supply literature"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_reported_solve_without_kinetics_is_refused() -> None:
+    """A record that reports nothing contradicts its own kind."""
+    payload = _reported_payload()
+    payload["solve"]["channel_kinetics"] = []
+    with pytest.raises(ValueError, match="must supply channel_kinetics"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_computed_solve_still_requires_every_coverage_rule() -> None:
+    """Nothing is relaxed for the preferred form.
+
+    Each of the three rules is dropped independently from an otherwise valid
+    computed payload. All three must still refuse it — a reported escape hatch
+    that quietly loosened the computed contract would make the two
+    indistinguishable, which is the failure ADR 0010 exists to avoid.
+    """
+    payload = _full_payload()
+    payload["solve"]["state_energies"] = payload["solve"]["state_energies"][:1]
+    with pytest.raises(ValueError, match="exactly one energy for every network state"):
+        NetworkPDepUploadRequest(**payload)
+
+    payload = _full_payload()
+    payload["solve"]["channel_barriers"] = []
+    with pytest.raises(ValueError, match="channel_barriers must provide"):
+        NetworkPDepUploadRequest(**payload)
+
+    payload = _full_payload()
+    payload["solve"]["energy_transfer"] = []
+    with pytest.raises(ValueError, match="energy_transfer must cover"):
+        NetworkPDepUploadRequest(**payload)
+
+    # And the two lists that stopped being ``min_length=1`` fields are still
+    # mandatory for a computed solve — the requirement moved, it did not go.
+    payload = _full_payload()
+    payload["solve"]["state_energies"] = []
+    with pytest.raises(ValueError, match="a computed solve must supply state_energies"):
+        NetworkPDepUploadRequest(**payload)
+
+    payload = _full_payload()
+    payload["solve"]["source_calculations"] = []
+    with pytest.raises(
+        ValueError, match="a computed solve must supply source_calculations"
+    ):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_reported_solve_still_validates_what_it_does_supply() -> None:
+    """Relaxed means not required, never unvalidated.
+
+    A reported solve that volunteers a bath-gas composition or a state energy
+    is held to the same referential and physical rules as a computed one. The
+    relaxation is about which evidence must be present, not about whether
+    present evidence is checked.
+    """
+    payload = _reported_payload(with_bath_gas=True)
+    payload["solve"]["bath_gas"][0]["mole_fraction"] = 0.5
+    with pytest.raises(ValueError, match="mole fractions must sum to 1.0"):
+        NetworkPDepUploadRequest(**payload)
+
+    # A complete one is fine, and proves the check ran rather than being
+    # skipped wholesale for reported solves.
+    request = NetworkPDepUploadRequest(**_reported_payload(with_bath_gas=True))
+    assert len(request.solve.bath_gas) == 1
+
+    payload = _reported_payload()
+    payload["solve"]["state_energies"] = [
+        {
+            "state_key": "well_RO2",
+            "energy_kj_mol": -120.0,
+            **_CONVENTIONS,
+            "source_calculation_key": "no_such_calculation",
+        }
+    ]
+    with pytest.raises(
+        ValueError, match="state_energies references undefined source_calculation_key"
+    ):
+        NetworkPDepUploadRequest(**payload)
+
+    # A partial set of state energies is accepted, though: for a reported
+    # solve the coverage rule does not apply, so "some of what the paper
+    # printed" is a legitimate deposit.
+    payload = _reported_payload()
+    payload["solve"]["state_energies"] = [
+        {"state_key": "well_RO2", "energy_kj_mol": -120.0, **_CONVENTIONS}
+    ]
+    request = NetworkPDepUploadRequest(**payload)
+    assert len(request.solve.state_energies) == 1
+
+
+def test_reported_solve_round_trips_and_warns(db_engine) -> None:
+    """The kind survives persistence and the read path, and is annotated.
+
+    Both halves are load-bearing. A reported record that could not be told
+    apart from a computed one on read would be worse than refusing the
+    deposit, and the warning is what tells a depositor that the record they
+    just made is one nobody can re-derive.
+    """
+    from app.db.models.network_pdep import NetworkKinetics
+
+    # Rolled back rather than committed: ``db_engine`` is session-scoped, and
+    # a leaked NetworkKinetics row breaks
+    # ``test_pdep_workflow_persists_and_reads_back_channel_kinetics``, which
+    # counts them across the whole table.
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**_reported_payload())
+        warnings: list[UploadWarning] = []
+        network = persist_network_pdep_upload(session, request, warnings=warnings)
+        session.flush()
+
+        assert W_REPORTED_NETWORK_SOLVE in {w.code for w in warnings}
+        warning = next(w for w in warnings if w.code == W_REPORTED_NETWORK_SOLVE)
+        assert warning.field == "solve.kind"
+        assert "transcribed" in warning.message
+
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+        assert solve.kind is NetworkSolveKind.reported
+        # The relaxation really did produce a solve with no ME inputs, and the
+        # required literature really is attached.
+        assert solve.literature_id is not None
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(NetworkSolveChannelBarrier)
+                .where(NetworkSolveChannelBarrier.solve_id == solve.id)
+            )
+            == 0
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(NetworkSolveEnergyTransfer)
+                .where(NetworkSolveEnergyTransfer.solve_id == solve.id)
+            )
+            == 0
+        )
+
+        # ...and the rates it exists to carry did persist.
+        kinetics = session.scalars(
+            select(NetworkKinetics).where(NetworkKinetics.solve_id == solve.id)
+        ).all()
+        assert len(kinetics) == 1
+
+        solve_read = get_network_solve(
+            session, network_solve_handle=solve.public_ref, include=[]
+        )
+        assert solve_read.record.network_solve.kind is NetworkSolveKind.reported
+
+
+def test_computed_solve_carries_no_reported_warning(db_engine) -> None:
+    """The preferred form stays unannotated.
+
+    Admitting the weaker record must not blur the two: a computed deposit
+    reads back as computed and carries no completeness warning about its
+    origin.
+    """
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**_full_payload())
+        warnings: list[UploadWarning] = []
+        network = persist_network_pdep_upload(session, request, warnings=warnings)
+        session.flush()
+
+        assert W_REPORTED_NETWORK_SOLVE not in {w.code for w in warnings}
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+        assert solve.kind is NetworkSolveKind.computed
+
+        solve_read = get_network_solve(
+            session, network_solve_handle=solve.public_ref, include=[]
+        )
+        assert solve_read.record.network_solve.kind is NetworkSolveKind.computed

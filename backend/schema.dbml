@@ -338,6 +338,11 @@ enum NetworkSolveCalculationRole {
   fit_source
 }
 
+enum NetworkSolveKind {
+  computed
+  reported
+}
+
 enum NetworkSpeciesRole {
   well
   reactant
@@ -2209,6 +2214,7 @@ Table network_reaction {
 Table network_solve {
   id bigint [pk, not null]
   network_id bigint [not null, ref: > network.id]
+  kind NetworkSolveKind [not null, default: 'computed']
   literature_id bigint [ref: > literature.id]
   software_release_id bigint [ref: > software_release.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
@@ -2236,12 +2242,13 @@ Table network_solve {
     `pmax_bar IS NULL OR pmax_bar > 0` [name: 'ck_network_solve_pmax_bar_gt_0']
     `pmin_bar IS NULL OR pmin_bar > 0` [name: 'ck_network_solve_pmin_bar_gt_0']
     `pmin_bar IS NULL OR pmax_bar IS NULL OR pmin_bar <= pmax_bar` [name: 'ck_network_solve_pmin_le_pmax']
+    `kind <> 'reported' OR literature_id IS NOT NULL` [name: 'ck_network_solve_reported_requires_literature']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_network_solve_tmax_k_gt_0']
     `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_network_solve_tmin_k_gt_0']
     `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k` [name: 'ck_network_solve_tmin_le_tmax']
   }
 
-  Note: 'One master-equation solution for a reaction network.'
+  Note: 'The provenance envelope for one coherent set of k(T,P) on a network.'
 }
 
 Table network_solve_bath_gas {

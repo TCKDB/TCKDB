@@ -65,6 +65,7 @@ from app.services.scientific_read.networks import (
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "network_solve_ref",
     "network_ref",
+    "kind",
     "solve_method",
     "temperature_min",
     "temperature_max",
@@ -231,6 +232,8 @@ def _apply_identity_filters(
 
 
 def _apply_scalar_filters(stmt, request: NetworkSolveSearchRequest):
+    if request.kind is not None:
+        stmt = stmt.where(NetworkSolve.kind == request.kind)
     if request.solve_method is not None:
         stmt = stmt.where(NetworkSolve.me_method == request.solve_method)
     return stmt

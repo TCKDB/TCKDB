@@ -25,7 +25,11 @@ from sqlalchemy.orm import Session
 
 from app.api.config import settings
 from app.api.errors import NotFoundError
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import (
+    NetworkSolveKind,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
 from app.db.models.network import Network
 from app.db.models.network_pdep import (
     NetworkChannel,
@@ -313,6 +317,9 @@ def _build_network_kinetics_record(
     solve_ctx = NetworkKineticsSolveContext(
         network_solve_id=solve.id if solve is not None else None,
         network_solve_ref=solve.public_ref if solve is not None else "",
+        # Says whether *these* rates were derived here or transcribed from a
+        # paper, without a second request to the solve surface (ADR 0010).
+        kind=solve.kind if solve is not None else NetworkSolveKind.computed,
         me_method=solve.me_method if solve is not None else None,
     )
     channel_ctx = NetworkKineticsChannelContext(

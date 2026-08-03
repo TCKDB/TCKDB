@@ -508,6 +508,35 @@ class NetworkStateKind(str, Enum):
     termolecular = "termolecular"
 
 
+class NetworkSolveKind(str, Enum):
+    """Where a network's phenomenological k(T,P) came from.
+
+    ``network_solve`` is the provenance envelope for one coherent set of
+    k(T,P): it carries the T/P range they are valid over and the literature /
+    software / workflow-tool triple they are attributed to. This axis says
+    what stands behind that attribution. Without it the database can only hold
+    rates whose master-equation inputs it also holds, which excludes every
+    rate ever read out of a paper's supplementary table. See ADR 0010.
+
+    ``computed``
+        The master equation was solved here and its inputs were deposited
+        with it: an energy for every network state, a barrier for every
+        saddle-point path, and a collisional energy-transfer model. The rates
+        can be re-derived, the fit can be checked, and the network can be
+        re-solved at other conditions. This is the preferred form.
+
+    ``reported``
+        The rates were transcribed from a publication, which is credited via
+        the required ``literature_id``. The master-equation inputs are not in
+        this database — usually because the paper never published them — so
+        none of the three things above is possible. The numbers are as
+        trustworthy as their source; what is missing is the derivation.
+    """
+
+    computed = "computed"
+    reported = "reported"
+
+
 class NetworkEnergyTransferScope(str, Enum):
     """What a collisional energy-transfer declaration was specified *over*.
 

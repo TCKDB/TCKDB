@@ -72,6 +72,7 @@ from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.provenance_warnings import (
     collect_network_energy_transfer_warnings,
+    collect_network_solve_kind_warnings,
 )
 from app.services.record_review import (
     RecordRef,
@@ -648,6 +649,7 @@ def persist_network_pdep_upload(
 
         solve = NetworkSolve(
             network_id=network.id,
+            kind=solve_in.kind,
             me_method=solve_in.me_method,
             interpolation_model=solve_in.interpolation_model,
             tmin_k=solve_in.tmin_k,
@@ -709,6 +711,7 @@ def persist_network_pdep_upload(
         warning_sink.extend(
             collect_network_energy_transfer_warnings(solve_in)
         )
+        warning_sink.extend(collect_network_solve_kind_warnings(solve_in))
 
         for energy_in in solve_in.state_energies:
             session.add(NetworkSolveStateEnergy(

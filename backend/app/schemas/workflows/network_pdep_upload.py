@@ -36,6 +36,7 @@ from app.db.models.common import (
     NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
+    NetworkSolveKind,
     PressureUnit,
     ScientificOriginKind,
     TemperatureUnit,
@@ -904,7 +905,14 @@ class NetworkSolveIn(SchemaBase):
     :param grain_size_cm_inv: Energy grain size in cm⁻¹.
     :param grain_count: Number of energy grains.
     :param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.
-    :param literature: Optional literature submission payload.
+    :param kind: Whether the master equation was solved here (``computed``,
+        the default and preferred form) or the k(T,P) were transcribed from a
+        publication (``reported``). A ``reported`` solve is not held to the
+        state-energy, channel-barrier or energy-transfer coverage rules — it
+        holds none of those inputs — and must supply ``literature`` instead.
+        See ADR 0010.
+    :param literature: Optional literature submission payload. Required when
+        ``kind='reported'``.
     :param software_release: Optional software provenance reference.
     :param workflow_tool_release: Optional workflow-tool provenance reference.
     :param bath_gas: Bath gas composition.
@@ -916,6 +924,8 @@ class NetworkSolveIn(SchemaBase):
         referencing its channel by ``(source_state_key, sink_state_key)``.
     :param note: Optional free-text note.
     """
+
+    kind: NetworkSolveKind = NetworkSolveKind.computed
 
     me_method: str | None = None
     interpolation_model: str | None = None
@@ -939,9 +949,13 @@ class NetworkSolveIn(SchemaBase):
     # saddle-point paths actually declared. A blanket ``min_length=1`` would
     # instead forbid the legitimate all-barrierless network.
     energy_transfer: list[EnergyTransferIn] = Field(default_factory=list)
-    state_energies: list[StateEnergyIn] = Field(min_length=1)
+    # ``state_energies`` and ``source_calculations`` are master-equation inputs
+    # and stay mandatory for a computed solve — enforced in
+    # ``validate_kind_requirements`` below rather than by ``min_length``, which
+    # cannot see ``kind``. A reported solve holds neither, by construction.
+    state_energies: list[StateEnergyIn] = Field(default_factory=list)
     channel_barriers: list[ChannelBarrierIn] = Field(default_factory=list)
-    source_calculations: list[SolveSourceCalculationIn] = Field(min_length=1)
+    source_calculations: list[SolveSourceCalculationIn] = Field(default_factory=list)
     channel_kinetics: list[NetworkKineticsIn] = Field(default_factory=list)
     note: str | None = None
 
@@ -968,9 +982,65 @@ class NetworkSolveIn(SchemaBase):
         return self
 
     @model_validator(mode="after")
+    def validate_kind_requirements(self) -> Self:
+        """Hold a computed solve to the master-equation inputs it must have.
+
+        These are the requirements ``min_length`` used to carry. They move
+        here because they apply to one member of ``kind`` and not the other: a
+        computed solve is a claim that the master equation was solved in this
+        database, and a solve with no state energies and no source
+        calculations does not support it. A reported solve makes no such
+        claim, so the same absence is the expected shape rather than a defect
+        (ADR 0010).
+
+        What a reported solve *must* have is the mirror image: the publication
+        it was transcribed from, and at least one k(T,P) — a record that
+        reports nothing contradicts its own kind. Both are definitional, so
+        both block under ADR 0008. The completeness limitation that *is* an
+        expectation rather than a definition — that nobody can re-derive these
+        rates — warns instead, in
+        ``collect_network_solve_kind_warnings``.
+        """
+        if self.kind is NetworkSolveKind.computed:
+            if not self.state_energies:
+                raise ValueError(
+                    "a computed solve must supply state_energies: solving the "
+                    "master equation requires an energy for every network "
+                    "state. If these rates were transcribed from a "
+                    "publication rather than solved here, declare "
+                    "kind='reported'."
+                )
+            if not self.source_calculations:
+                raise ValueError(
+                    "a computed solve must supply source_calculations naming "
+                    "the calculations it was built from. If these rates were "
+                    "transcribed from a publication rather than solved here, "
+                    "declare kind='reported'."
+                )
+            return self
+
+        if self.literature is None:
+            raise ValueError(
+                "a reported solve must supply literature: it is credited to a "
+                "publication, and without one it would assert rates carrying "
+                "neither a derivation nor a source."
+            )
+        if not self.channel_kinetics:
+            raise ValueError(
+                "a reported solve must supply channel_kinetics. Reporting "
+                "k(T,P) transcribed from a publication is the only thing it "
+                "is for; with none, nothing has been reported."
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_bath_composition_and_state_energies(self) -> Self:
-        if not math.isclose(sum(bg.mole_fraction for bg in self.bath_gas), 1.0, rel_tol=0.0, abs_tol=1e-9):
-            raise ValueError("bath_gas mole fractions must sum to 1.0 within 1e-9.")
+        # A reported solve need not name a bath gas — a paper often gives
+        # k(T,P) without stating the collider composition it was fitted in.
+        # If it does name one, the composition still has to be a composition.
+        if self.bath_gas or self.kind is NetworkSolveKind.computed:
+            if not math.isclose(sum(bg.mole_fraction for bg in self.bath_gas), 1.0, rel_tol=0.0, abs_tol=1e-9):
+                raise ValueError("bath_gas mole fractions must sum to 1.0 within 1e-9.")
         keys = [item.state_key for item in self.state_energies]
         if len(keys) != len(set(keys)):
             raise ValueError("state_energies must be unique by state_key.")
@@ -1353,15 +1423,18 @@ class NetworkPDepUploadRequest(SchemaBase):
                     raise ValueError(f"channel '{channel.key}' references undefined transition_state_key '{ts_key}'.")
                 if ts_by_key[ts_key] != reaction_key:
                     raise ValueError(f"channel '{channel.key}' TS '{ts_key}' does not belong to micro reaction '{reaction_key}'.")
+        state_keys = {state.key for state in self.states}
+        calc_keys = set(_collect_all_calculation_keys(self))
+        species_keys = {sp.key for sp in self.species}
+
         if self.solve is not None:
-            state_keys = {state.key for state in self.states}
-            if {item.state_key for item in self.solve.state_energies} != state_keys:
-                raise ValueError("state_energies must provide exactly one energy for every network state.")
-            calc_keys = set(_collect_all_calculation_keys(self))
+            # Referential integrity of whatever the payload *did* supply. This
+            # applies to both kinds: relaxed means not required, never
+            # unvalidated. A reported solve that volunteers a barrier still
+            # has to point it at a real path.
             for energy in self.solve.state_energies:
                 if energy.source_calculation_key is not None and energy.source_calculation_key not in calc_keys:
                     raise ValueError("state_energies references undefined source_calculation_key.")
-            species_keys = {sp.key for sp in self.species}
             for et in self.solve.energy_transfer:
                 if et.scope != NetworkEnergyTransferScope.per_well:
                     continue
@@ -1369,6 +1442,21 @@ class NetworkPDepUploadRequest(SchemaBase):
                     raise ValueError("energy_transfer references undefined state_key.")
                 if et.collider_species_key not in species_keys:
                     raise ValueError("energy_transfer references undefined collider_species_key.")
+            for barrier in self.solve.channel_barriers:
+                if barrier.source_calculation_key is not None and barrier.source_calculation_key not in calc_keys:
+                    raise ValueError("channel_barriers references undefined source_calculation_key.")
+
+        # The three coverage rules below check master-equation *inputs*
+        # against the network topology: an energy for every state, a ⟨ΔE⟩down
+        # for every well, a barrier for every saddle-point path. Nothing about
+        # them is relaxed for a solve run in this database. They are simply
+        # not applicable to one whose k(T,P) were transcribed from a
+        # publication: the depositor holds none of those inputs and the paper
+        # usually never published them, so demanding them refused the deposit
+        # outright instead of recording a weaker but honest record (ADR 0010).
+        if self.solve is not None and self.solve.kind is NetworkSolveKind.computed:
+            if {item.state_key for item in self.solve.state_energies} != state_keys:
+                raise ValueError("state_energies must provide exactly one energy for every network state.")
             # Collisional energy transfer is a property of a (well, collider)
             # pair, so a per-well declaration is held to that: a five-well
             # network with an argon bath needs five ⟨ΔE⟩down entries, not one.
@@ -1420,9 +1508,6 @@ class NetworkPDepUploadRequest(SchemaBase):
                     "channel_barriers must provide exactly one barrier for every "
                     "saddle-point channel path, and none for a barrierless path."
                 )
-            for barrier in self.solve.channel_barriers:
-                if barrier.source_calculation_key is not None and barrier.source_calculation_key not in calc_keys:
-                    raise ValueError("channel_barriers references undefined source_calculation_key.")
         return self
 
     @model_validator(mode="after")

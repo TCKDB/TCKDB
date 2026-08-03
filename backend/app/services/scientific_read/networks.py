@@ -32,6 +32,7 @@ from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     NetworkKineticsModelKind,
+    NetworkSolveKind,
     RecordReviewStatus,
     SubmissionRecordType,
 )
@@ -714,6 +715,7 @@ def _build_solves(
             NetworkSolveSummary(
                 network_solve_id=s.id,
                 network_solve_ref=s.public_ref,
+                kind=s.kind,
                 me_method=s.me_method,
                 interpolation_model=s.interpolation_model,
                 grain_size_cm_inv=s.grain_size_cm_inv,
@@ -753,14 +755,17 @@ def _build_kinetics(
     kinetics_ids = [r.id for r in rows]
     channel_ids = {r.channel_id for r in rows}
     channel_state_hashes = _channel_state_hashes(session, channel_ids)
-    # Solve ref lookup.
-    solve_ref_by_id = dict(
-        session.execute(
-            select(NetworkSolve.id, NetworkSolve.public_ref).where(
-                NetworkSolve.id.in_(solve_ids)
-            )
-        ).all()
-    )
+    # Solve ref + origin lookup. ``kind`` rides along on the query that was
+    # already fetching the ref, so a consumer reading rates off the network
+    # surface can tell a derived one from a transcribed one without also
+    # requesting ``include=solves`` (ADR 0010).
+    solve_rows = session.execute(
+        select(NetworkSolve.id, NetworkSolve.public_ref, NetworkSolve.kind).where(
+            NetworkSolve.id.in_(solve_ids)
+        )
+    ).all()
+    solve_ref_by_id = {row.id: row.public_ref for row in solve_rows}
+    solve_kind_by_id = {row.id: row.kind for row in solve_rows}
     # Cheb shapes.
     cheb_rows = session.execute(
         select(
@@ -814,6 +819,9 @@ def _build_kinetics(
                 network_channel_id=r.channel_id,
                 network_solve_id=r.solve_id,
                 network_solve_ref=solve_ref_by_id.get(r.solve_id),
+                network_solve_kind=solve_kind_by_id.get(
+                    r.solve_id, NetworkSolveKind.computed
+                ),
                 channel_source_composition_hash=src,
                 channel_sink_composition_hash=sink,
                 model_kind=r.model_kind,
@@ -1169,6 +1177,7 @@ def build_network_solve_record(
     core = NetworkSolveCoreBlock(
         network_solve_id=s.id,
         network_solve_ref=s.public_ref,
+        kind=s.kind,
         me_method=s.me_method,
         interpolation_model=s.interpolation_model,
         grain_size_cm_inv=s.grain_size_cm_inv,

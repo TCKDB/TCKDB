@@ -336,7 +336,7 @@ _register_search(
 _register_search(
     SearchTool(
         name="tckdb_network_solve_search",
-        description="Search network solve records by solve/network refs, conditions, kinetics flags, method, and review state.",
+        description="Search network solve records by solve/network refs, origin kind (computed vs literature-reported), conditions, kinetics flags, method, and review state.",
         method="POST",
         path="/scientific/network-solves/search",
         fields=COMMON_SEARCH_FIELDS
@@ -344,6 +344,7 @@ _register_search(
             {
                 "network_solve_ref",
                 "network_ref",
+                "kind",
                 "solve_method",
                 "temperature_min",
                 "temperature_max",

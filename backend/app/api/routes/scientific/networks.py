@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
-from app.db.models.common import NetworkKineticsModelKind, RecordReviewStatus
+from app.db.models.common import (
+    NetworkKineticsModelKind,
+    NetworkSolveKind,
+    RecordReviewStatus,
+)
 from app.schemas.reads.scientific_network import (
     ScientificNetworkDetailResponse,
     ScientificNetworkSolveDetailResponse,
@@ -189,6 +193,7 @@ def scientific_network_solves_search_get(
     session: Session = Depends(get_db),
     network_solve_ref: str | None = Query(None),
     network_ref: str | None = Query(None),
+    kind: NetworkSolveKind | None = Query(None),
     solve_method: str | None = Query(None),
     temperature_min: float | None = Query(None),
     temperature_max: float | None = Query(None),
@@ -219,13 +224,17 @@ def scientific_network_solves_search_get(
 
     AND-combines the supplied filters; at least one meaningful
     filter required. Explicit ``False`` bool filter values count as
-    meaningful. ``solve_method`` filters ``NetworkSolve.me_method``
-    (the master-equation algorithm); ``method`` / ``basis`` filter
-    through the source-calculation level-of-theory join.
+    meaningful. ``kind`` selects by origin — ``computed`` for rates this
+    database can re-derive, ``reported`` for rates transcribed from a
+    publication (ADR 0010). ``solve_method`` filters
+    ``NetworkSolve.me_method`` (the master-equation algorithm);
+    ``method`` / ``basis`` filter through the source-calculation
+    level-of-theory join.
     """
     request_obj = NetworkSolveSearchRequest(
         network_solve_ref=network_solve_ref,
         network_ref=network_ref,
+        kind=kind,
         solve_method=solve_method,
         temperature_min=temperature_min,
         temperature_max=temperature_max,
