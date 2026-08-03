@@ -39,20 +39,43 @@ and often should.
 
 Backfill design
 ---------------
-``server_default='computed'`` is a statement of fact about existing rows, not
-a guess. Before this revision the schema *only* admitted computed solves: a
-solve could not be written without state energies covering every network
-state, a barrier for every saddle-point path, and an energy-transfer model,
-because ``validate_mechanistic_channel_evidence`` refused anything else, and
-there was no way to express a reported one. Every stored row is therefore a
-master-equation solve by construction. The deployed hydrazine network on the
-Pi (network 4, ``net_o6bt63kjeyvhvxx26w6kdi433a``: one solve, 21 channels, 42
-kinetics rows, 2 energy-transfer rows) migrates to ``computed`` and keeps
-reading exactly as it did, and its 42 k(T,P) stay attributed to a derivation
-this database holds.
+``computed`` is a strong claim -- it says this database holds the derivation --
+so the backfill checks rather than assumes.
 
-The new check constraint cannot fail on the backfill for the same reason: it
-constrains only ``reported`` rows, and the backfill creates none.
+An earlier draft of this revision argued that ``server_default='computed'``
+was a statement of fact, because ``validate_mechanistic_channel_evidence``
+refused a solve without state energies, barriers and an energy-transfer model.
+**That argument is backwards-projected and does not hold.** Those rules, and
+the ``network_solve_state_energy`` / ``network_solve_channel_barrier`` tables
+themselves, arrived on 2026-07-31 in ``c1d2e3f4a5b6``. ``network_solve`` ships
+in the initial schema and the PDep write path landed on 2026-07-14, so for the
+whole life of the table before Stage 2 a solve carrying no master-equation
+inputs was not merely possible -- it was the ordinary shape. Reasoning from
+today's validator to yesterday's rows is exactly the circularity ADR 0010
+warns about: a validator on one write path was never a property of the record.
+
+What does protect a *real* deployment is ``c1d2e3f4a5b6._refuse_legacy_pdep_data``,
+which hard-refuses the Stage 2 upgrade while ``network_channel`` or
+``network_solve_energy_transfer`` hold any rows, forcing delete-and-re-upload
+under the v2 contract. But that gate counts only those two tables: a
+pre-Stage-2 solve on a network with no channels and no energy-transfer rows
+passes it untouched, and ``channels`` was ``default_factory=list`` in the
+pre-Stage-2 upload schema, so such a payload was accepted.
+
+So ``upgrade()`` asks the database instead. A solve with no state energies
+cannot be honestly labelled: ``computed`` would assert a derivation that is
+absent, and ``reported`` demands a literature link this revision cannot
+invent. Rather than mint a false claim, the upgrade refuses and names the
+rows, leaving a human to classify them -- the same stance
+``_refuse_legacy_pdep_data`` and this revision's own ``downgrade()`` take.
+
+The deployed hydrazine network on the Pi (network 4,
+``net_o6bt63kjeyvhvxx26w6kdi433a``) was verified to carry state energies and
+barriers for its single solve, so it passes the check and migrates to
+``computed`` unchanged.
+
+The new check constraint cannot fail on the backfill: it constrains only
+``reported`` rows, and the backfill creates none.
 
 The default is kept on the column so that an ORM client that does not know
 about this axis writes the stronger, more informative claim rather than
@@ -96,11 +119,42 @@ _REPORTED_REQUIRES_LITERATURE = "kind <> 'reported' OR literature_id IS NOT NULL
 def upgrade() -> None:
     """Add the origin token; every existing solve is a computed one."""
     bind = op.get_bind()
+
+    # Derive the backfill instead of asserting it. A solve holding no state
+    # energies cannot honestly take either token, so refuse and name it rather
+    # than stamp 'computed' on a row that has no derivation behind it. See the
+    # module docstring for why the old contract does not prove what it looks
+    # like it proves.
+    unbacked = bind.execute(
+        sa.text(
+            "SELECT s.id FROM network_solve s WHERE NOT EXISTS ("
+            "  SELECT 1 FROM network_solve_state_energy e WHERE e.solve_id = s.id"
+            ") ORDER BY s.id"
+        )
+    ).scalars().all()
+    if unbacked:
+        listed = ", ".join(str(i) for i in unbacked[:20])
+        more = "" if len(unbacked) <= 20 else f" (and {len(unbacked) - 20} more)"
+        raise RuntimeError(
+            f"{len(unbacked)} network_solve row(s) carry no state energies: "
+            f"{listed}{more}.\n"
+            "This revision labels every solve 'computed', which asserts that "
+            "this database holds the derivation. These rows do not support "
+            "that claim, and 'reported' is not available to them either -- it "
+            "requires a literature link this migration cannot invent.\n"
+            "Classify them first, then re-run:\n"
+            "  1. Inspect: SELECT id, network_id, me_method, literature_id "
+            "FROM network_solve WHERE id IN (...);\n"
+            "  2. If the master-equation inputs exist elsewhere, re-upload the "
+            "network under the current contract (see "
+            "backend/docs/deployment/migrations.md).\n"
+            "  3. If the rates came from a publication, attach the literature "
+            "and set kind='reported' by hand after this revision applies.\n"
+            "  4. If the rows are abandoned scaffolding, delete them."
+        )
+
     network_solve_kind.create(bind, checkfirst=True)
 
-    # Nothing but a master-equation solve was representable before this
-    # revision, so 'computed' is derived from the old contract rather than
-    # assumed about the data.
     op.add_column(
         "network_solve",
         sa.Column(
@@ -136,7 +190,7 @@ def downgrade() -> None:
             "Operator steps:\n"
             "  1. Back up the database.\n"
             "  2. Export the affected solves "
-            "(GET /scientific/network-solves?kind=reported).\n"
+            "(GET /api/v1/scientific/network-solves/search?kind=reported).\n"
             "  3. Delete the reported solves, and the network kinetics that "
             "hang off them.\n"
             "  4. Re-run the downgrade."

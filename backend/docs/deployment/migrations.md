@@ -311,7 +311,7 @@ SELECT count(*) FROM network_solve WHERE kind = 'reported' AND literature_id IS 
 
 **Depositing reported kinetics.** A `reported` solve supplies `literature` and at least one `channel_kinetics` entry, and may omit `state_energies`, `channel_barriers`, `energy_transfer`, `bath_gas` and `source_calculations`. The network topology is still required — a reported rate has to attach to a channel that exists — and anything the payload *does* supply is validated as strictly as on a computed solve. Every such upload returns the `reported_network_solve` warning; that is expected, not a defect.
 
-**Downgrading refuses** while any `reported` solve exists. The prior schema has no way to record that a set of rates was transcribed rather than derived, so dropping the column would present published numbers as this database's own master-equation output. Export the affected solves (`GET /scientific/network-solves?kind=reported`), delete them and the network kinetics hanging off them, then re-run the downgrade.
+**Downgrading refuses** while any `reported` solve exists. The prior schema has no way to record that a set of rates was transcribed rather than derived, so dropping the column would present published numbers as this database's own master-equation output. Export the affected solves (`GET /api/v1/scientific/network-solves/search?kind=reported`), delete them and the network kinetics hanging off them, then re-run the downgrade.
 
 ---
 
