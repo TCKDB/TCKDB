@@ -125,6 +125,8 @@ from app.services.scientific_read.sql_review import (
     join_review,
     review_rank_expr,
     review_status_expr,
+    status_from_sql,
+    summary_from_sql,
     visible_review_filter,
 )
 
@@ -310,7 +312,7 @@ def _run_page(
             watermark=watermark_echo,
         )
 
-    summary = _summary_from_sql(session, ranked)
+    summary = summary_from_sql(session, ranked)
 
     page_stmt = select(
         ranked.c.id, ranked.c.review_rank, ranked.c.review_status
@@ -328,7 +330,7 @@ def _run_page(
 
     ids = [int(row.id) for row in rows]
     statuses = {
-        int(row.id): _as_status(row.review_status) for row in rows
+        int(row.id): status_from_sql(row.review_status) for row in rows
     }
 
     next_cursor: str | None = None
@@ -353,35 +355,6 @@ def _run_page(
         next_cursor=next_cursor,
         watermark=watermark_echo,
     )
-
-
-def _as_status(value: Any) -> RecordReviewStatus:
-    """Coerce the SQL-side review status back to the enum."""
-    if isinstance(value, RecordReviewStatus):
-        return value
-    return RecordReviewStatus(str(value))
-
-
-def _summary_from_sql(session: Session, ranked) -> ReviewStatusSummary:
-    """Count review statuses over the *whole* filtered set in one aggregate.
-
-    The summary describes everything the filters matched, not the page, so it
-    cannot be derived from the page rows — and materializing the candidate set
-    to count it would give back exactly the property this surface exists to
-    have.
-    """
-    rows = session.execute(
-        select(ranked.c.review_status, func.count())
-        .select_from(ranked)
-        .group_by(ranked.c.review_status)
-    ).all()
-    summary = ReviewStatusSummary()
-    for status, count in rows:
-        key = status.value if hasattr(status, "value") else str(status)
-        if hasattr(summary, key):
-            setattr(summary, key, getattr(summary, key) + count)
-        summary.total += count
-    return summary
 
 
 def _echo(
