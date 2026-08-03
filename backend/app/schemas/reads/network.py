@@ -22,6 +22,7 @@ from app.db.models.common import (
     NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
+    NetworkSolveKind,
     NetworkSpeciesRole,
     NetworkStateKind,
     PressureUnit,
@@ -205,6 +206,9 @@ class _NetworkSolveBase(ORMBaseSchema):
     network_id: int
     created_at: datetime
     created_by: int | None = None
+
+    # Solved here, or transcribed from a publication (ADR 0010).
+    kind: NetworkSolveKind = NetworkSolveKind.computed
 
     literature_id: int | None = None
     software_release_id: int | None = None

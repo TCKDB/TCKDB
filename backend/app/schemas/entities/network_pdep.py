@@ -20,6 +20,7 @@ from app.db.models.common import (
     NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
+    NetworkSolveKind,
     NetworkStateKind,
     PressureUnit,
     TemperatureUnit,
@@ -287,6 +288,9 @@ class NetworkSolveBase(BaseModel):
     """Shared scalar fields for a master-equation solve.
 
     :param network_id: Owning network id.
+    :param kind: Whether the master equation was solved here (``computed``)
+        or the k(T,P) were transcribed from a publication (``reported``,
+        which requires ``literature_id``). See ADR 0010.
     :param literature_id: Optional linked literature row.
     :param software_release_id: Optional software provenance.
     :param workflow_tool_release_id: Optional workflow provenance.
@@ -303,6 +307,8 @@ class NetworkSolveBase(BaseModel):
     """
 
     network_id: int
+
+    kind: NetworkSolveKind = NetworkSolveKind.computed
 
     literature_id: int | None = None
     software_release_id: int | None = None

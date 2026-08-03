@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from app.db.models.common import (
     NetworkEnergyTransferScope,
+    NetworkSolveKind,
     ScientificOriginKind,
     TunnelingModel,
 )
@@ -60,6 +61,7 @@ W_MISSING_KINETICS_INTERPRETATIONS = "missing_kinetics_interpretation_assignment
 W_MISSING_TUNNELING_APPLICATION = "missing_tunneling_application_evidence"
 W_MISSING_TS_INTERPRETATION = "missing_kinetics_transition_state_interpretation"
 W_NETWORK_WIDE_ENERGY_TRANSFER = "network_wide_energy_transfer_scope"
+W_REPORTED_NETWORK_SOLVE = "reported_network_solve"
 
 
 # Origins for which computational provenance (software + workflow tool)
@@ -384,6 +386,56 @@ def collect_kinetics_content_warnings(
                 ),
             )
         )
+    return warnings
+
+
+def collect_network_solve_kind_warnings(solve) -> list[UploadWarning]:
+    """Report k(T,P) transcribed from a paper rather than solved here.
+
+    A ``reported`` solve carries rates but none of the master-equation inputs
+    behind them: no state energies, no channel barriers, no collisional
+    energy-transfer model. Three things a reader would ordinarily be able to
+    do with a pressure-dependent record are therefore impossible — the rates
+    cannot be re-derived, the fit cannot be checked against the underlying
+    microcanonical data, and the network cannot be re-solved at temperatures
+    or pressures outside the reported range. That is a real completeness
+    limitation and a consumer comparing two solves of the same network should
+    be told which one it is looking at.
+
+    It is not an error. Published k(T,P) is ordinary, citable science, and
+    under ADR 0008 a check that would fire on a correct result must not block.
+    Refusing the deposit — which is what the contract did before ADR 0010 —
+    did not make the data better, it only kept it out, and a record annotated
+    as reported is strictly more useful than no record at all.
+
+    The warning fires on the *kind*, not on the absence of any particular
+    input, because the absence is the declared shape rather than an omission.
+    A ``computed`` solve is silent here however sparse it is; its own coverage
+    rules already hold it to the full set.
+
+    :param solve: The ``NetworkSolveIn`` block of a PDep upload request.
+    """
+    warnings: list[UploadWarning] = []
+    if solve is None or solve.kind is not NetworkSolveKind.reported:
+        return warnings
+    warnings.append(
+        UploadWarning(
+            field="solve.kind",
+            code=W_REPORTED_NETWORK_SOLVE,
+            message=(
+                "These k(T,P) were transcribed from a publication, not "
+                "derived here. The master-equation inputs behind them — state "
+                "energies, channel barriers and the collisional "
+                "energy-transfer model — are not in this database, so the "
+                "rates cannot be re-derived, the fit cannot be checked, and "
+                "the network cannot be re-solved outside the reported "
+                "temperature and pressure range. The values are as "
+                "trustworthy as the cited source; what is missing is the "
+                "derivation. A computed solve is preferred where the "
+                "underlying master-equation run is available."
+            ),
+        )
+    )
     return warnings
 
 

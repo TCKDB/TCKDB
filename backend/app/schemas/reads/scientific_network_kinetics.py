@@ -25,6 +25,7 @@ from app.db.models.common import (
     ArrheniusAUnits,
     NetworkChannelKind,
     NetworkKineticsModelKind,
+    NetworkSolveKind,
     PressureUnit,
     TemperatureUnit,
 )
@@ -96,10 +97,19 @@ class NetworkKineticsNetworkContext(BaseModel):
 
 
 class NetworkKineticsSolveContext(BaseModel):
-    """Lightweight parent-solve pointer for a network-kinetics record."""
+    """Lightweight parent-solve pointer for a network-kinetics record.
+
+    ``kind`` is carried here rather than left to the solve detail endpoint
+    because it qualifies *these rates*: it says whether the k(T,P) in this
+    record were produced by a master equation this database holds, or
+    transcribed from a publication whose inputs it does not. A consumer
+    pulling rates should not have to make a second request to find that out
+    (ADR 0010).
+    """
 
     network_solve_id: int | None = None
     network_solve_ref: str
+    kind: NetworkSolveKind = NetworkSolveKind.computed
     me_method: str | None = None
 
 

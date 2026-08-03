@@ -39,6 +39,7 @@ from app.db.models.common import (
     NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
+    NetworkSolveKind,
     NetworkSpeciesRole,
     NetworkStateKind,
 )
@@ -213,6 +214,10 @@ class NetworkSolveSummary(BaseModel):
 
     network_solve_id: int | None = None
     network_solve_ref: str
+    # Whether the master equation was solved here or the rates were read out
+    # of a paper. A consumer comparing two solves of the same network needs
+    # this to tell "we computed it" from "a paper says so" (ADR 0010).
+    kind: NetworkSolveKind = NetworkSolveKind.computed
     me_method: str | None = None
     interpolation_model: str | None = None
     grain_size_cm_inv: float | None = None
@@ -380,6 +385,9 @@ class NetworkSolveCoreBlock(BaseModel):
 
     network_solve_id: int | None = None
     network_solve_ref: str
+    # See :class:`NetworkSolveSummary` — a reported record that read back
+    # indistinguishably from a computed one would be worse than no record.
+    kind: NetworkSolveKind = NetworkSolveKind.computed
     me_method: str | None = None
     interpolation_model: str | None = None
     grain_size_cm_inv: float | None = None

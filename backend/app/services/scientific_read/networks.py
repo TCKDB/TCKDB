@@ -714,6 +714,7 @@ def _build_solves(
             NetworkSolveSummary(
                 network_solve_id=s.id,
                 network_solve_ref=s.public_ref,
+                kind=s.kind,
                 me_method=s.me_method,
                 interpolation_model=s.interpolation_model,
                 grain_size_cm_inv=s.grain_size_cm_inv,
@@ -1169,6 +1170,7 @@ def build_network_solve_record(
     core = NetworkSolveCoreBlock(
         network_solve_id=s.id,
         network_solve_ref=s.public_ref,
+        kind=s.kind,
         me_method=s.me_method,
         interpolation_model=s.interpolation_model,
         grain_size_cm_inv=s.grain_size_cm_inv,
