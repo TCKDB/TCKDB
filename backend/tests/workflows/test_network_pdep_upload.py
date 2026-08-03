@@ -2307,6 +2307,75 @@ def test_energy_transfer_must_cover_every_well_collider_pair() -> None:
         NetworkPDepUploadRequest(**payload)
 
 
+def test_upload_schema_exposes_no_fk_ids_or_hashes() -> None:
+    """Upload payloads carry local keys and scientific content only.
+
+    Ported from the standalone wire-package copy of this schema when that copy
+    was deleted for drifting behind the server contract. The invariant is a
+    project rule, not a PDep detail: a depositor names things with their own
+    local keys and the workflow resolves them, so a database id or a derived
+    hash appearing in an upload schema means someone has to know our primary
+    keys to contribute.
+    """
+
+    def _nested_models(annotation) -> list:
+        found = []
+        stack = [annotation]
+        while stack:
+            current = stack.pop()
+            if isinstance(current, type) and hasattr(current, "model_fields"):
+                found.append(current)
+                continue
+            stack.extend(getattr(current, "__args__", ()) or ())
+        return found
+
+    def _walk(model_cls, seen: set) -> list[str]:
+        if model_cls in seen:
+            return []
+        seen.add(model_cls)
+        offenders: list[str] = []
+        for name, field in model_cls.model_fields.items():
+            if name.endswith("_hash") or name in {"id", "public_ref"}:
+                offenders.append(f"{model_cls.__name__}.{name}")
+            elif name.endswith("_id") and not name.endswith("_uuid"):
+                offenders.append(f"{model_cls.__name__}.{name}")
+            for sub in _nested_models(field.annotation):
+                offenders.extend(_walk(sub, seen))
+        return offenders
+
+    offenders = _walk(NetworkPDepUploadRequest, set())
+    # ``CalculationIn.literature_id`` is a pre-existing FK leak inherited from
+    # the shared calculation fragment; it is not introduced by this schema.
+    assert [o for o in offenders if o != "CalculationIn.literature_id"] == []
+
+
+def test_chebyshev_grid_dimensions_must_match_declared_orders() -> None:
+    """A coefficient grid that contradicts its own declared shape is unreadable.
+
+    Also ported from the deleted wire-package copy. ``n_temperature`` and
+    ``n_pressure`` are how a reader knows how to index the flat coefficient
+    grid, so a grid whose shape disagrees with them cannot be evaluated at any
+    (T, P) -- it is not merely suspect.
+    """
+    payload = _full_payload(include_solve=True)
+    payload["solve"]["channel_kinetics"] = [
+        {
+            "source_state_key": "entrance",
+            "sink_state_key": "well_RO2",
+            "model_kind": "chebyshev",
+            "tmin_k": 300.0, "tmax_k": 2000.0, "pmin_bar": 0.01, "pmax_bar": 100.0,
+            "chebyshev": {
+                # Declares a 2x3 grid but supplies 2x2 coefficients.
+                "n_temperature": 2,
+                "n_pressure": 3,
+                "coefficients": [[1.0, 2.0], [3.0, 4.0]],
+            },
+        }
+    ]
+    with pytest.raises(ValueError, match="n_pressure=3 columns"):
+        NetworkPDepUploadRequest(**payload)
+
+
 def test_other_convention_requires_a_note() -> None:
     payload = _full_payload()
     payload["solve"]["state_energies"][0]["energy_zero_convention"] = "other"
