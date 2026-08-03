@@ -10,7 +10,7 @@ that do nothing. See ``backend/docs/specs/scientific_calculation_reads.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, false, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError
@@ -669,15 +669,14 @@ _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
 }
 
 
-def _exists_for_calc(session: Session, model_cls, calculation_id: int) -> bool:
-    """Return True iff *model_cls* has at least one row for *calculation_id*."""
-    return bool(
-        session.scalar(
-            select(
-                exists().where(model_cls.calculation_id == calculation_id)
-            )
-        )
-    )
+def _exists_for_calc(model_cls, calculation_id: int):
+    """``EXISTS`` over *model_cls*'s rows for *calculation_id*.
+
+    An expression, not a query: the caller asks for a dozen of these at
+    once and wants them as columns of one statement, not as a dozen round
+    trips (see :func:`_build_provenance_and_sections`).
+    """
+    return exists().where(model_cls.calculation_id == calculation_id)
 
 
 def _build_provenance_and_sections(
@@ -687,84 +686,108 @@ def _build_provenance_and_sections(
 
     Both blocks pull from the same set of EXISTS-style probes plus a
     couple of cheap row fetches (validation outcome, scf stability,
-    convergence flag, submission link). Combined here so we issue the
-    EXISTS queries once.
+    convergence flag, submission link).
+
+    **One statement, not fifteen.** Every probe is a scalar over a single
+    calculation id, so they are asked for as columns of one ``SELECT``
+    rather than one statement each. That matters because
+    :func:`build_record` runs once per record: the calculations search
+    slices its page in three statements and then spent fifteen round trips
+    per record filling it in, which is where ``docs/benchmarks/README.md``'s
+    thousand-statement page came from. The probes are unchanged — same
+    predicates, same results — they are merely issued together.
     """
-    has_input_geometries = _exists_for_calc(
-        session, CalculationInputGeometry, calculation_id
-    )
-    has_output_geometries = _exists_for_calc(
-        session, CalculationOutputGeometry, calculation_id
-    )
-    has_constraints = _exists_for_calc(
-        session, CalculationConstraint, calculation_id
-    )
-    has_parameters = _exists_for_calc(
-        session, CalculationParameter, calculation_id
-    )
-    has_artifacts = _exists_for_calc(
-        session, CalculationArtifact, calculation_id
-    )
-    has_dependencies = bool(
-        session.scalar(
-            select(
-                exists().where(
-                    (
-                        CalculationDependency.parent_calculation_id
-                        == calculation_id
-                    )
-                    | (
-                        CalculationDependency.child_calculation_id
-                        == calculation_id
-                    )
-                )
-            )
-        )
-    )
-
     primary_table = _PRIMARY_RESULT_TABLE.get(calc.type)
-    has_results = (
-        _exists_for_calc(session, primary_table, calculation_id)
-        if primary_table is not None
-        else False
-    )
-    has_scan = _exists_for_calc(session, CalculationScanResult, calculation_id)
-    has_irc = _exists_for_calc(session, CalculationIRCResult, calculation_id)
-    has_path_search = _exists_for_calc(
-        session, CalculationPathSearchResult, calculation_id
-    )
-
-    validation_row = session.scalar(
-        select(CalculationGeometryValidation.validation_status).where(
-            CalculationGeometryValidation.calculation_id == calculation_id
+    probes = session.execute(
+        select(
+            _exists_for_calc(
+                CalculationInputGeometry, calculation_id
+            ).label("has_input_geometries"),
+            _exists_for_calc(
+                CalculationOutputGeometry, calculation_id
+            ).label("has_output_geometries"),
+            _exists_for_calc(CalculationConstraint, calculation_id).label(
+                "has_constraints"
+            ),
+            _exists_for_calc(CalculationParameter, calculation_id).label(
+                "has_parameters"
+            ),
+            _exists_for_calc(CalculationArtifact, calculation_id).label(
+                "has_artifacts"
+            ),
+            exists()
+            .where(
+                (CalculationDependency.parent_calculation_id == calculation_id)
+                | (CalculationDependency.child_calculation_id == calculation_id)
+            )
+            .label("has_dependencies"),
+            (
+                _exists_for_calc(primary_table, calculation_id)
+                if primary_table is not None
+                # This calculation type has no primary result table, so
+                # there is nothing to probe — but the column still has to
+                # be there for the row shape to be constant.
+                else false()
+            ).label("has_results"),
+            _exists_for_calc(CalculationScanResult, calculation_id).label(
+                "has_scan"
+            ),
+            _exists_for_calc(CalculationIRCResult, calculation_id).label(
+                "has_irc"
+            ),
+            _exists_for_calc(
+                CalculationPathSearchResult, calculation_id
+            ).label("has_path_search"),
+            _exists_for_calc(
+                CalculationWavefunctionDiagnostic, calculation_id
+            ).label("has_wavefunction_diagnostic"),
+            _exists_for_calc(CalculationSpinDiagnostic, calculation_id).label(
+                "has_spin_diagnostic"
+            ),
+            _exists_for_calc(CalculationFreqMode, calculation_id).label(
+                "has_freq_modes"
+            ),
+            # ``calculation_id`` is the primary key of both of these
+            # tables, so each subquery returns at most one row and is
+            # scalar by construction — no ``LIMIT`` needed to make it so.
+            select(CalculationGeometryValidation.validation_status)
+            .where(
+                CalculationGeometryValidation.calculation_id == calculation_id
+            )
+            .scalar_subquery()
+            .label("validation_status"),
+            select(CalculationSCFStability.status)
+            .where(CalculationSCFStability.calculation_id == calculation_id)
+            .scalar_subquery()
+            .label("scf_stability_status"),
         )
-    )
+    ).one()
+
+    has_input_geometries = probes.has_input_geometries
+    has_output_geometries = probes.has_output_geometries
+    has_constraints = probes.has_constraints
+    has_parameters = probes.has_parameters
+    has_artifacts = probes.has_artifacts
+    has_dependencies = probes.has_dependencies
+    has_results = probes.has_results
+    has_scan = probes.has_scan
+    has_irc = probes.has_irc
+    has_path_search = probes.has_path_search
+    has_wavefunction_diagnostic = probes.has_wavefunction_diagnostic
+    has_spin_diagnostic = probes.has_spin_diagnostic
+    has_freq_modes = probes.has_freq_modes
+
+    validation_row = probes.validation_status
     validation_status = (
         validation_row.value if validation_row is not None else "not_present"
     )
     has_geometry_validation = validation_row is not None
 
-    stability_row = session.scalar(
-        select(CalculationSCFStability.status).where(
-            CalculationSCFStability.calculation_id == calculation_id
-        )
-    )
+    stability_row = probes.scf_stability_status
     scf_stability_status = (
         stability_row.value if stability_row is not None else "not_present"
     )
     has_scf_stability = stability_row is not None
-
-    has_wavefunction_diagnostic = _exists_for_calc(
-        session, CalculationWavefunctionDiagnostic, calculation_id
-    )
-
-    has_spin_diagnostic = _exists_for_calc(
-        session, CalculationSpinDiagnostic, calculation_id
-    )
-
-    has_freq_modes = _exists_for_calc(
-        session, CalculationFreqMode, calculation_id
-    )
 
     converged = _load_converged_flag(session, calc, calculation_id)
 

@@ -30,8 +30,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import aliased
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
@@ -41,6 +42,8 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     SubmissionRecordType,
 )
+from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.record_review import RecordReview
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.reads.scientific_calculation_search import (
     CalculationsSearchRequest,
@@ -80,6 +83,32 @@ OVER_CAP = MAX_BADGE_IDS + 65
 
 #: The rank a record with no visible entry sorts at in ``search_species``.
 _NO_ENTRY_RANK = max(REVIEW_RANK.values()) + 1
+
+#: Explicit ``species_entry.id`` values for the entry-order fixture, chosen
+#: far above the sequence so nothing else in the test transaction collides
+#: with them.
+_ENTRY_ID_BASE = 9_000_000
+
+#: ``(id offset, stereo label)`` pairs for the entry-order fixture, and the
+#: reason the fixture is a table rather than a range. Both orders a plan can
+#: cheaply produce have to disagree with id order, or an unordered read comes
+#: back sorted by luck and the test cannot fail:
+#:
+#: * they are written to the heap in *this* order, so a sequential or bitmap
+#:   scan returns the ids shuffled;
+#: * their stereo labels ascend as their ids descend, so an index scan over
+#:   ``uq_species_entry_species_id`` — which is ``(species_id, stereo_label,
+#:   …)``, and is what the planner actually picks here — returns them
+#:   reversed.
+_ENTRY_ORDER_FIXTURE = (
+    (5, "stereo-c"),
+    (2, "stereo-f"),
+    (7, "stereo-a"),
+    (1, "stereo-g"),
+    (6, "stereo-b"),
+    (3, "stereo-e"),
+    (4, "stereo-d"),
+)
 
 #: Every review flavour a record can be in, including "no ``record_review``
 #: row at all" — the one an inner join would drop.
@@ -492,6 +521,208 @@ def test_calculations_search_tiebreak_is_id_descending(db_session):
 
     assert [r.calculation.calculation_id for r in response.records] == sorted(
         ids, reverse=True
+    )
+
+
+def test_species_entries_within_a_record_are_ordered_by_id(db_session):
+    """The ``entries`` list of a species record is ordered, not plan-ordered.
+
+    Before the entry load was scoped to the page it had no ``ORDER BY`` at
+    all, so the order of ``record.entries`` was whatever the plan happened to
+    produce. It is now ``species_entry.id`` ascending. That is a contract a
+    client can page against and diff against, and it is exactly the kind of
+    ``ORDER BY`` that looks redundant to a later reader — nothing else in the
+    suite notices if it goes, because on a fixture built by
+    :func:`make_species_entry` the heap order and the id order agree.
+
+    So this fixture makes them disagree, on both of the orders a plan can
+    produce for free — see :data:`_ENTRY_ORDER_FIXTURE`.
+    """
+    inchi_key = next_inchi_key("ENTORD")
+    species = make_species(db_session, smiles="[CH4:20]", inchi_key=inchi_key)
+
+    for offset, stereo_label in _ENTRY_ORDER_FIXTURE:
+        db_session.execute(
+            text(
+                "INSERT INTO species_entry (id, species_id, kind, "
+                "electronic_state_kind, stereo_label) "
+                "VALUES (:id, :species_id, 'minimum', 'ground', :label)"
+            ),
+            {
+                # Explicit ids, far above the sequence so nothing else in
+                # the transaction can collide with them.
+                "id": _ENTRY_ID_BASE + offset,
+                "species_id": species.id,
+                # ``uq_species_entry_species_id`` treats NULLs as equal, so
+                # the entries of one species must differ somewhere. The
+                # stereo label is the cheapest axis and is not filtered on.
+                "label": stereo_label,
+            },
+        )
+
+    physical_order = list(
+        db_session.scalars(
+            select(SpeciesEntry.id).where(SpeciesEntry.species_id == species.id)
+        )
+    )
+    assert physical_order != sorted(physical_order), (
+        "fixture no longer discriminates: the database returns these entries "
+        "in id order with no ORDER BY, so this test could not fail"
+    )
+
+    response = search_species(
+        db_session, SpeciesSearchRequest(inchi_key=inchi_key)
+    )
+
+    (record,) = response.records
+    assert [e.species_entry_id for e in record.entries] == sorted(
+        _ENTRY_ID_BASE + offset for offset, _ in _ENTRY_ORDER_FIXTURE
+    )
+
+
+# ---------------------------------------------------------------------------
+# The reported total
+# ---------------------------------------------------------------------------
+
+
+def _independent_visible_count(
+    session, *, method: str, visible: set[RecordReviewStatus]
+) -> int:
+    """``COUNT(*)`` over the set the search reports a ``total`` for.
+
+    This is the second aggregate the service deliberately does not issue.
+    Written out here in full, sharing nothing with ``summary_from_sql``,
+    because a count derived from the summary could not disagree with it.
+    """
+    review = aliased(RecordReview)
+    seen = review.status.in_(sorted(visible, key=lambda s: s.value))
+    if RecordReviewStatus.not_reviewed in visible:
+        # A calculation with no ``record_review`` row is ``not_reviewed``.
+        seen = or_(seen, review.status.is_(None))
+    return session.execute(
+        select(func.count())
+        .select_from(Calculation)
+        .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
+        .outerjoin(
+            review,
+            and_(
+                review.record_type == SubmissionRecordType.calculation,
+                review.record_id == Calculation.id,
+            ),
+        )
+        .where(
+            Calculation.type == CalculationType.sp,
+            LevelOfTheory.method == method,
+            # The default quality posture the search applies alongside the
+            # review gate; `include_rejected_quality` is left at its default.
+            Calculation.quality != CalculationQuality.rejected,
+            seen,
+        )
+    ).scalar_one()
+
+
+def _calculations_with_no_review_row(session, *, method: str) -> int:
+    review = aliased(RecordReview)
+    return session.execute(
+        select(func.count())
+        .select_from(Calculation)
+        .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
+        .outerjoin(
+            review,
+            and_(
+                review.record_type == SubmissionRecordType.calculation,
+                review.record_id == Calculation.id,
+            ),
+        )
+        .where(LevelOfTheory.method == method, review.id.is_(None))
+    ).scalar_one()
+
+
+@pytest.mark.parametrize(
+    ("min_review_status", "include_rejected", "include_deprecated"),
+    _TRUST_COMBINATIONS,
+)
+def test_calculations_search_total_equals_an_independent_count(
+    db_session, min_review_status, include_rejected, include_deprecated
+):
+    """``total`` comes from the summary aggregate — check it is the count.
+
+    ``summary_from_sql`` supplies ``calculations_search``'s ``total`` rather
+    than the service issuing a second ``COUNT`` over the same subquery, on
+    the argument that the per-status groups partition the filtered set
+    exactly: every row carries a status, so summing the groups counts every
+    row once and only once. That is true by construction — which is another
+    way of saying nothing had checked it.
+
+    So check it, against a count that shares no code with the summary, under
+    every trust posture the endpoint exposes, over a corpus that includes
+    calculations with no ``record_review`` row. Those rows are the ones a
+    divergence would be about: they exist in the filtered set only because
+    the join is an outer one and their status is coalesced.
+    """
+    lot = _mixed_calculation_corpus(db_session)
+    assert _calculations_with_no_review_row(db_session, method=lot.method), (
+        "fixture must contain calculations with no record_review row"
+    )
+    visible = visible_statuses(
+        min_review_status=min_review_status,
+        include_rejected=include_rejected,
+        include_deprecated=include_deprecated,
+    )
+    expected_total = _independent_visible_count(
+        db_session, method=lot.method, visible=visible
+    )
+
+    response = search_calculations(
+        db_session,
+        CalculationsSearchRequest(
+            calculation_type=CalculationType.sp,
+            method=lot.method,
+            min_review_status=min_review_status,
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            limit=1,  # the total must not describe the page
+        ),
+    )
+
+    assert response.review_summary.total == expected_total
+    assert response.pagination.total == expected_total
+
+
+@pytest.mark.parametrize(
+    ("min_review_status", "include_rejected", "include_deprecated"),
+    _TRUST_COMBINATIONS,
+)
+def test_review_summary_buckets_partition_the_reported_total(
+    db_session, min_review_status, include_rejected, include_deprecated
+):
+    """Every row counted in ``total`` also lands in a named status bucket.
+
+    This is the premise the previous test's arithmetic rests on, and it is
+    the one that can quietly stop holding. ``summary_from_sql`` adds a
+    group's count to ``total`` whether or not the group key names a bucket,
+    so a status that stopped being coalesced — rows with no ``record_review``
+    row grouping under SQL ``NULL`` — would still be counted in ``total``
+    while appearing in none of the five buckets. The totals would still add
+    up against a ``COUNT``; the summary would be wrong.
+    """
+    lot = _mixed_calculation_corpus(db_session)
+    response = search_calculations(
+        db_session,
+        CalculationsSearchRequest(
+            calculation_type=CalculationType.sp,
+            method=lot.method,
+            min_review_status=min_review_status,
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            limit=1,
+        ),
+    )
+
+    summary = response.review_summary
+    assert (
+        sum(getattr(summary, status.value) for status in RecordReviewStatus)
+        == summary.total
     )
 
 
