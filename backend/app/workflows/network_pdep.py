@@ -70,6 +70,9 @@ from app.services.calculation_resolution import (
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.provenance_warnings import (
+    collect_network_energy_transfer_warnings,
+)
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -194,9 +197,10 @@ def persist_network_pdep_upload(
     Handles the full pipeline: species + conformers + calculations,
     transition states, micro reactions, network topology, and solve.
 
-    :param warnings: Optional sink for non-blocking upload warnings (currently
-        transition states deposited without IRC validation evidence). Passed
-        as an out-parameter so the return type stays the created ``Network``.
+    :param warnings: Optional sink for non-blocking upload warnings (transition
+        states deposited without IRC validation evidence; a network-wide
+        ⟨ΔE⟩down declaration). Passed as an out-parameter so the return type
+        stays the created ``Network``.
     """
     warning_sink = warnings if warnings is not None else []
 
@@ -677,13 +681,24 @@ def persist_network_pdep_upload(
                 )
             )
 
-        # Energy transfer
+        # Energy transfer. A network-wide declaration carries no state and no
+        # collider by declaration; ``scope`` is what tells a later reader that
+        # the NULLs are the record, not a dropped field (ADR 0009).
         for et in solve_in.energy_transfer:
             session.add(
                 NetworkSolveEnergyTransfer(
                     solve_id=solve.id,
-                    state_id=state_key_to_row[et.state_key].id,
-                    collider_species_entry_id=species_key_to_entry[et.collider_species_key].id,
+                    scope=et.scope,
+                    state_id=(
+                        state_key_to_row[et.state_key].id
+                        if et.state_key is not None
+                        else None
+                    ),
+                    collider_species_entry_id=(
+                        species_key_to_entry[et.collider_species_key].id
+                        if et.collider_species_key is not None
+                        else None
+                    ),
                     model=et.model,
                     alpha0_cm_inv=et.alpha0_cm_inv,
                     t_exponent=et.t_exponent,
@@ -691,6 +706,9 @@ def persist_network_pdep_upload(
                     note=et.note,
                 )
             )
+        warning_sink.extend(
+            collect_network_energy_transfer_warnings(solve_in)
+        )
 
         for energy_in in solve_in.state_energies:
             session.add(NetworkSolveStateEnergy(

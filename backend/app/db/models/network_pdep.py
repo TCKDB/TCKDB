@@ -27,6 +27,7 @@ from app.db.models.common import (
     EnergyZeroConvention,
     NetworkChannelKind,
     NetworkChannelMechanism,
+    NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkStateKind,
@@ -434,7 +435,16 @@ class NetworkSolveBathGas(Base):
 
 
 class NetworkSolveEnergyTransfer(Base):
-    """Energy transfer model parameters for one network solve."""
+    """Energy transfer model parameters for one network solve.
+
+    ``scope`` says what the declaration was specified over. A ``per_well`` row
+    resolves both axes and carries ``state_id`` and
+    ``collider_species_entry_id``; a ``network_wide`` row carries neither,
+    because the producer declared one model for the whole network and the
+    well-resolved values simply do not exist. The check constraint keeps the
+    two shapes from blurring into each other, so a NULL ``state_id`` is always
+    an explained absence rather than a dropped field. See ADR 0009.
+    """
 
     __tablename__ = "network_solve_energy_transfer"
 
@@ -444,23 +454,28 @@ class NetworkSolveEnergyTransfer(Base):
         ForeignKey("network_solve.id", deferrable=True, initially="IMMEDIATE"),
         nullable=False,
     )
-    state_id: Mapped[int] = mapped_column(
+    scope: Mapped[NetworkEnergyTransferScope] = mapped_column(
+        SAEnum(NetworkEnergyTransferScope, name="network_energy_transfer_scope"),
+        nullable=False,
+        server_default=NetworkEnergyTransferScope.per_well.value,
+    )
+    state_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
             "network_state.id",
             name="fk_network_solve_energy_transfer_state",
             deferrable=True, initially="IMMEDIATE",
         ),
-        nullable=False,
+        nullable=True,
     )
-    collider_species_entry_id: Mapped[int] = mapped_column(
+    collider_species_entry_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
             "species_entry.id",
             name="fk_network_solve_energy_transfer_collider",
             deferrable=True, initially="IMMEDIATE",
         ),
-        nullable=False,
+        nullable=True,
     )
 
     model: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -470,10 +485,27 @@ class NetworkSolveEnergyTransfer(Base):
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     solve: Mapped["NetworkSolve"] = relationship(back_populates="energy_transfers")
-    state: Mapped["NetworkState"] = relationship()
-    collider_species_entry: Mapped["SpeciesEntry"] = relationship()
+    state: Mapped[Optional["NetworkState"]] = relationship()
+    collider_species_entry: Mapped[Optional["SpeciesEntry"]] = relationship()
 
-    __table_args__ = (UniqueConstraint("solve_id", "state_id", "collider_species_entry_id", name="uq_network_solve_energy_transfer_scope"),)
+    __table_args__ = (
+        UniqueConstraint("solve_id", "state_id", "collider_species_entry_id", name="uq_network_solve_energy_transfer_scope"),
+        CheckConstraint(
+            "(scope = 'per_well' AND state_id IS NOT NULL "
+            "AND collider_species_entry_id IS NOT NULL) OR "
+            "(scope = 'network_wide' AND state_id IS NULL "
+            "AND collider_species_entry_id IS NULL)",
+            name="scope_columns_agree",
+        ),
+        # ``uq_..._scope`` above cannot police the network-wide row: Postgres
+        # treats NULLs as distinct, so it would happily accept two of them.
+        Index(
+            "uq_network_solve_energy_transfer_network_wide",
+            "solve_id",
+            unique=True,
+            postgresql_where=text("scope = 'network_wide'"),
+        ),
+    )
 
 
 class NetworkSolveStateEnergy(Base):

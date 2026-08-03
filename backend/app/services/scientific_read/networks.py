@@ -1306,6 +1306,7 @@ def _build_energy_transfer_for_solve(
     return [
         NetworkSolveEnergyTransferSummary(
             energy_transfer_id=row.NetworkSolveEnergyTransfer.id,
+            scope=row.NetworkSolveEnergyTransfer.scope,
             state_composition_hash=row.state_composition_hash,
             collider_species_entry_ref=row.collider_species_entry_ref,
             model=row.NetworkSolveEnergyTransfer.model,

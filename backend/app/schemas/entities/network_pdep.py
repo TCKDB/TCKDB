@@ -17,6 +17,7 @@ from app.db.models.common import (
     ArrheniusAUnits,
     NetworkChannelKind,
     NetworkChannelMechanism,
+    NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkStateKind,
@@ -201,6 +202,9 @@ class NetworkSolveBathGasRead(NetworkSolveBathGasBase, ORMBaseSchema):
 class NetworkSolveEnergyTransferBase(BaseModel):
     """Shared fields for energy transfer model parameters.
 
+    :param scope: What the declaration was specified over — ``per_well``
+        (resolves a state and a collider) or ``network_wide`` (one model the
+        producer applied to the entire network). See ADR 0009.
     :param model: Energy transfer model name.
     :param alpha0_cm_inv: Average downward energy transfer at reference T.
     :param t_exponent: Temperature exponent.
@@ -208,6 +212,7 @@ class NetworkSolveEnergyTransferBase(BaseModel):
     :param note: Optional note.
     """
 
+    scope: NetworkEnergyTransferScope = NetworkEnergyTransferScope.per_well
     model: str | None = None
     alpha0_cm_inv: float | None = None
     t_exponent: float | None = None
@@ -222,6 +227,7 @@ class NetworkSolveEnergyTransferCreate(NetworkSolveEnergyTransferBase, SchemaBas
 class NetworkSolveEnergyTransferUpdate(SchemaBase):
     """Patch schema for energy transfer parameters."""
 
+    scope: NetworkEnergyTransferScope | None = None
     model: str | None = None
     alpha0_cm_inv: float | None = None
     t_exponent: float | None = None

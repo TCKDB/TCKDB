@@ -19,6 +19,7 @@ from app.db.models.common import (
     ArrheniusAUnits,
     NetworkChannelKind,
     NetworkChannelMechanism,
+    NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkSpeciesRole,
@@ -116,10 +117,17 @@ class NetworkSolveBathGasRead(ORMBaseSchema):
 
 
 class NetworkSolveEnergyTransferRead(ORMBaseSchema):
-    """Energy transfer model parameters for one solve."""
+    """Energy transfer model parameters for one solve.
+
+    ``scope`` says what the declaration was specified over, so a consumer can
+    tell a well-resolved ⟨ΔE⟩down from one model declared for the whole
+    network. On a ``network_wide`` row ``state_id`` and
+    ``collider_species_entry_id`` are null by declaration (ADR 0009).
+    """
 
     id: int
     solve_id: int
+    scope: NetworkEnergyTransferScope = NetworkEnergyTransferScope.per_well
     state_id: int | None = None
     collider_species_entry_id: int | None = None
     model: str | None = None

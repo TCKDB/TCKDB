@@ -26,7 +26,11 @@ Two complementary behaviors are expected and live elsewhere:
 
 from __future__ import annotations
 
-from app.db.models.common import ScientificOriginKind, TunnelingModel
+from app.db.models.common import (
+    NetworkEnergyTransferScope,
+    ScientificOriginKind,
+    TunnelingModel,
+)
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
@@ -55,6 +59,7 @@ W_MISSING_STATMECH_FREQUENCY_SOURCE = "missing_statmech_frequency_source"
 W_MISSING_KINETICS_INTERPRETATIONS = "missing_kinetics_interpretation_assignments"
 W_MISSING_TUNNELING_APPLICATION = "missing_tunneling_application_evidence"
 W_MISSING_TS_INTERPRETATION = "missing_kinetics_transition_state_interpretation"
+W_NETWORK_WIDE_ENERGY_TRANSFER = "network_wide_energy_transfer_scope"
 
 
 # Origins for which computational provenance (software + workflow tool)
@@ -376,6 +381,51 @@ def collect_kinetics_content_warnings(
                     f"tunneling_model='{request.tunneling_model.value}' is declared "
                     "with no typed tunneling_application evidence, so the correction "
                     "is recorded as a reported attribute and cannot be replayed."
+                ),
+            )
+        )
+    return warnings
+
+
+def collect_network_energy_transfer_warnings(solve) -> list[UploadWarning]:
+    """Report a ⟨ΔE⟩down declared for the whole network rather than per well.
+
+    Collisional energy transfer is a property of a (well, collider) pair, and
+    a network-wide declaration does not resolve it that far: every well in the
+    solve was relaxed with the same ⟨ΔE⟩down, and any well-to-well variation
+    was not determined. That is a real completeness limitation and a reader
+    comparing two solves should be told about it.
+
+    It is not an error. Arkane, RMG and MESS inputs routinely specify one
+    ``SingleExponentialDown`` for the entire network, and such results are
+    published as they stand. Under ADR 0008 the check could therefore fire on
+    a correct novel result, so it warns rather than blocks — and warning is
+    strictly better than the alternative the old contract forced, which was to
+    paste one number once per well and make the record *look* well-resolved.
+    See ADR 0009.
+
+    :param solve: The ``NetworkSolveIn`` block of a PDep upload request.
+    """
+    warnings: list[UploadWarning] = []
+    if solve is None:
+        return warnings
+    if any(
+        item.scope == NetworkEnergyTransferScope.network_wide
+        for item in solve.energy_transfer
+    ):
+        wells = "every collisionally stabilised well"
+        warnings.append(
+            UploadWarning(
+                field="solve.energy_transfer",
+                code=W_NETWORK_WIDE_ENERGY_TRANSFER,
+                message=(
+                    "Collisional energy transfer was declared once for the "
+                    f"whole network and applied to {wells} and to the bath "
+                    "gas as a whole. ⟨ΔE⟩down is a property of a (well, "
+                    "collider) pair, so this record does not resolve how it "
+                    "varies between wells; that variation was not determined "
+                    "by the run. Per-well declarations are preferred where "
+                    "the calculation supplies them."
                 ),
             )
         )
