@@ -81,6 +81,32 @@ OVER_CAP = MAX_BADGE_IDS + 65
 #: The rank a record with no visible entry sorts at in ``search_species``.
 _NO_ENTRY_RANK = max(REVIEW_RANK.values()) + 1
 
+#: Explicit ``species_entry.id`` values for the entry-order fixture, chosen
+#: far above the sequence so nothing else in the test transaction collides
+#: with them.
+_ENTRY_ID_BASE = 9_000_000
+
+#: ``(id offset, stereo label)`` pairs for the entry-order fixture, and the
+#: reason the fixture is a table rather than a range. Both orders a plan can
+#: cheaply produce have to disagree with id order, or an unordered read comes
+#: back sorted by luck and the test cannot fail:
+#:
+#: * they are written to the heap in *this* order, so a sequential or bitmap
+#:   scan returns the ids shuffled;
+#: * their stereo labels ascend as their ids descend, so an index scan over
+#:   ``uq_species_entry_species_id`` — which is ``(species_id, stereo_label,
+#:   …)``, and is what the planner actually picks here — returns them
+#:   reversed.
+_ENTRY_ORDER_FIXTURE = (
+    (5, "stereo-c"),
+    (2, "stereo-f"),
+    (7, "stereo-a"),
+    (1, "stereo-g"),
+    (6, "stereo-b"),
+    (3, "stereo-e"),
+    (4, "stereo-d"),
+)
+
 #: Every review flavour a record can be in, including "no ``record_review``
 #: row at all" — the one an inner join would drop.
 _REVIEW_FLAVOURS: tuple[RecordReviewStatus | None, ...] = (
@@ -492,6 +518,62 @@ def test_calculations_search_tiebreak_is_id_descending(db_session):
 
     assert [r.calculation.calculation_id for r in response.records] == sorted(
         ids, reverse=True
+    )
+
+
+def test_species_entries_within_a_record_are_ordered_by_id(db_session):
+    """The ``entries`` list of a species record is ordered, not plan-ordered.
+
+    Before the entry load was scoped to the page it had no ``ORDER BY`` at
+    all, so the order of ``record.entries`` was whatever the plan happened to
+    produce. It is now ``species_entry.id`` ascending. That is a contract a
+    client can page against and diff against, and it is exactly the kind of
+    ``ORDER BY`` that looks redundant to a later reader — nothing else in the
+    suite notices if it goes, because on a fixture built by
+    :func:`make_species_entry` the heap order and the id order agree.
+
+    So this fixture makes them disagree, on both of the orders a plan can
+    produce for free — see :data:`_ENTRY_ORDER_FIXTURE`.
+    """
+    inchi_key = next_inchi_key("ENTORD")
+    species = make_species(db_session, smiles="[CH4:20]", inchi_key=inchi_key)
+
+    for offset, stereo_label in _ENTRY_ORDER_FIXTURE:
+        db_session.execute(
+            text(
+                "INSERT INTO species_entry (id, species_id, kind, "
+                "electronic_state_kind, stereo_label) "
+                "VALUES (:id, :species_id, 'minimum', 'ground', :label)"
+            ),
+            {
+                # Explicit ids, far above the sequence so nothing else in
+                # the transaction can collide with them.
+                "id": _ENTRY_ID_BASE + offset,
+                "species_id": species.id,
+                # ``uq_species_entry_species_id`` treats NULLs as equal, so
+                # the entries of one species must differ somewhere. The
+                # stereo label is the cheapest axis and is not filtered on.
+                "label": stereo_label,
+            },
+        )
+
+    physical_order = list(
+        db_session.scalars(
+            select(SpeciesEntry.id).where(SpeciesEntry.species_id == species.id)
+        )
+    )
+    assert physical_order != sorted(physical_order), (
+        "fixture no longer discriminates: the database returns these entries "
+        "in id order with no ORDER BY, so this test could not fail"
+    )
+
+    response = search_species(
+        db_session, SpeciesSearchRequest(inchi_key=inchi_key)
+    )
+
+    (record,) = response.records
+    assert [e.species_entry_id for e in record.entries] == sorted(
+        _ENTRY_ID_BASE + offset for offset, _ in _ENTRY_ORDER_FIXTURE
     )
 
 
