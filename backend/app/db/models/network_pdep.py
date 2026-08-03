@@ -30,6 +30,7 @@ from app.db.models.common import (
     NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
+    NetworkSolveKind,
     NetworkStateKind,
     PressureUnit,
     TemperatureUnit,
@@ -320,6 +321,16 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=False,
     )
 
+    # Whether the master equation was solved here or the rates were read out
+    # of a publication. A ``reported`` solve is not required to carry state
+    # energies, channel barriers or an energy-transfer model, and must name
+    # the literature it was transcribed from (ADR 0010).
+    kind: Mapped[NetworkSolveKind] = mapped_column(
+        SAEnum(NetworkSolveKind, name="network_solve_kind"),
+        nullable=False,
+        server_default=NetworkSolveKind.computed.value,
+    )
+
     # Provenance triple
     literature_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
@@ -386,6 +397,13 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
 
     __table_args__ = (
+        # A ``reported`` solve's whole claim is "this paper says so"; with no
+        # literature it would assert rates carrying neither a derivation nor a
+        # source, which is strictly less than the computed form relaxes away.
+        CheckConstraint(
+            "kind <> 'reported' OR literature_id IS NOT NULL",
+            name="reported_requires_literature",
+        ),
         CheckConstraint("tmin_k IS NULL OR tmin_k > 0", name="tmin_k_gt_0"),
         CheckConstraint("tmax_k IS NULL OR tmax_k > 0", name="tmax_k_gt_0"),
         CheckConstraint(
