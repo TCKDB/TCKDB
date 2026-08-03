@@ -1,11 +1,29 @@
 """Service implementation for /api/v1/scientific/species/search.
 
 See docs/specs/read_api_mvp.md §Endpoint 1 for the contract.
+
+Where the work happens
+----------------------
+A species record is ranked by its *best visible entry*, so review
+visibility and ranking are properties of the ``species_entry`` set, not of
+``species``. Both are expressed in SQL (see
+:mod:`app.services.scientific_read.sql_review`) over one candidate-species
+subquery, and only the page is materialized: the per-entry badges,
+availability counts and ``include=`` section id lists are fetched for the
+species on the page, never for every match.
+
+The previous shape loaded every matching species, every one of their
+entries, and a review badge for each, before it could sort or slice. That
+is not just wasted work at catalog scale — the entry and badge loads render
+one bind parameter per id, and PostgreSQL's wire protocol caps a statement
+at 65,535 parameters, so a broad enough identifier match returned ``503
+database_unavailable`` instead of a page. ``backend/docs/benchmarks/README.md``
+has the measurement.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import Text, func, select
+from sqlalchemy import Text, and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import reject_unsupported_filters
@@ -39,7 +57,6 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -51,6 +68,13 @@ from app.services.scientific_read.handles import (
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
+)
+from app.services.scientific_read.sql_review import (
+    join_review,
+    review_rank_expr,
+    review_status_expr,
+    summary_from_sql,
+    visible_review_filter,
 )
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
@@ -65,6 +89,11 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
 _DEFAULT_SORT_ECHO = "review_rank,has_entries,created_at,id"
+
+#: The rank a species with no *visible* entry sorts at. Deliberately worse
+#: than every real review rank, so "has entries the caller may see" beats
+#: "has none" without needing a second sort key ahead of it.
+_NO_VISIBLE_ENTRY_RANK = max(REVIEW_RANK.values()) + 1
 
 
 def search_species(
@@ -133,141 +162,65 @@ def search_species(
             "formula, species_ref, species_entry_ref} is required."
         )
 
-    species_rows = _query_matching_species(
-        session,
-        request,
-        species_ref_id=species_ref_id,
-        species_entry_ref_id=species_entry_ref_id,
-    )
-    if not species_rows:
-        return _empty_response(request, includes, offset, limit)
-
-    species_id_to_entries = _query_filtered_entries(
-        session,
-        species_rows,
-        request,
-        species_entry_ref_id=species_entry_ref_id,
-    )
-
-    # Bulk badge fetch across all surviving entries.
-    all_entry_ids = [
-        entry.id
-        for entries in species_id_to_entries.values()
-        for entry in entries
-    ]
-    badges = fetch_review_badges(
-        session,
-        record_type=SubmissionRecordType.species_entry,
-        record_ids=all_entry_ids,
-    )
-
     visible = visible_statuses(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
 
-    # Apply review-status filter to entries; species drops out only if it has
-    # no surviving entries OR if min_review_status is set and no entry passes.
-    filtered_entries_per_species: dict[int, list[SpeciesEntry]] = {}
-    for species_id, entries in species_id_to_entries.items():
-        survivors = [e for e in entries if badges[e.id].status in visible]
-        if request.min_review_status is None and not survivors:
-            # No entries survived the default visibility filter — drop species
-            # only if min_review_status was unspecified and no entries exist.
-            # We still keep the species if it has entries (for has_entries=False).
-            survivors = []
-        filtered_entries_per_species[species_id] = survivors
+    # The identity filter, as a subquery rather than a materialized id list —
+    # the entry, count and ranking queries below all re-derive it in SQL, so
+    # a match of any size stays a match rather than becoming bind parameters.
+    candidates = _candidate_species_stmt(
+        request,
+        species_ref_id=species_ref_id,
+        species_entry_ref_id=species_entry_ref_id,
+    ).subquery("candidate_species")
 
-    # Drop species whose every entry was filtered out by min_review_status.
-    if request.min_review_status is not None:
-        filtered_entries_per_species = {
-            sid: entries
-            for sid, entries in filtered_entries_per_species.items()
-            if entries
-        }
+    # Pre-collapse total is the number of *species* matched, whether or not
+    # any of their entries survived the trust gate: a species with none is
+    # still a record, with an empty ``entries`` list.
+    pre_collapse_total = (
+        session.scalar(select(func.count()).select_from(candidates)) or 0
+    )
+    if pre_collapse_total == 0:
+        return _empty_response(request, includes, offset, limit)
 
-    # Build per-record availability counts and section payloads.
-    availability_per_entry = _compute_availability(
+    # Pre-collapse review summary across every surviving entry, not just the
+    # page's — one aggregate rather than one badge per candidate.
+    summary = summary_from_sql(
         session,
-        [e for entries in filtered_entries_per_species.values() for e in entries],
+        _visible_entry_rows(
+            candidates,
+            request,
+            visible,
+            species_entry_ref_id=species_entry_ref_id,
+        ),
     )
 
-    # Section ID payloads when include flags are set.
-    section_ids = _compute_section_ids(
-        session,
-        [e for entries in filtered_entries_per_species.values() for e in entries],
-        includes,
-    )
-
-    # Build response records.
-    records: list[SpeciesScientificRecord] = []
-    for species in species_rows:
-        entries = filtered_entries_per_species.get(species.id, [])
-        entry_records = [
-            _build_entry_record(entry, badges[entry.id], availability_per_entry[entry.id], section_ids.get(entry.id, {}))
-            for entry in entries
-        ]
-        records.append(
-            SpeciesScientificRecord(
-                species_id=species.id,
-                species_ref=species.public_ref,
-                canonical_smiles=species.smiles,
-                inchi_key=species.inchi_key,
-                formula=None,  # not stored on Species; future addition
-                charge=species.charge,
-                multiplicity=species.multiplicity,
-                entries=entry_records,
-            )
-        )
-
-    # Pre-collapse review summary across all surviving entries.
-    summary = review_summary(
-        badges[entry.id]
-        for entries in filtered_entries_per_species.values()
-        for entry in entries
-    )
-
-    # Sort: review_rank ASC (best entry's rank), has_entries DESC, created_at DESC, id DESC
-    def sort_key(rec: SpeciesScientificRecord) -> tuple:
-        if rec.entries:
-            best_rank = min(REVIEW_RANK[e.review.status] for e in rec.entries)
-            has_entries = 1
-        else:
-            best_rank = max(REVIEW_RANK.values()) + 1
-            has_entries = 0
-        return (best_rank, -has_entries, _negate_id(rec.species_id))
-
-    # Sort with created_at DESC handled separately by retrieving created_at.
-    species_created_at = {sp.id: sp.created_at for sp in species_rows}
-
-    def full_sort_key(rec: SpeciesScientificRecord) -> tuple:
-        if rec.entries:
-            best_rank = min(REVIEW_RANK[e.review.status] for e in rec.entries)
-            has_entries_int = 1
-        else:
-            best_rank = max(REVIEW_RANK.values()) + 1
-            has_entries_int = 0
-        # Negate descending fields by negation; for datetime, sort ascending
-        # by negated timestamp via tuple inversion.
-        created_at = species_created_at[rec.species_id]
-        return (
-            best_rank,
-            -has_entries_int,
-            -created_at.timestamp(),
-            -rec.species_id,
-        )
-
-    records.sort(key=full_sort_key)
-
-    pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
+    page_species_ids = _rank_and_slice_species(
+        session,
+        candidates,
+        request,
+        visible,
+        species_entry_ref_id=species_entry_ref_id,
+        offset=0 if collapse_first else offset,
+        limit=1 if collapse_first else limit,
+    )
+    if collapse_first:
+        # ``collapse=first`` keeps the single best record and *then* applies
+        # offset/limit to that one-element list, so any offset past it is
+        # an empty page. Mirrored here rather than folded into the SQL.
+        page_species_ids = page_species_ids[offset : offset + limit]
 
-    returned_records = slice_for_pagination(
-        records,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
+    returned_records = _build_page_records(
+        session,
+        page_species_ids,
+        request,
+        visible,
+        species_entry_ref_id=species_entry_ref_id,
+        includes=includes,
     )
 
     pagination = build_pagination(
@@ -297,18 +250,19 @@ def search_species(
 # ---------------------------------------------------------------------------
 
 
-def _negate_id(value: int) -> int:
-    return -value
-
-
-def _query_matching_species(
-    session: Session,
+def _candidate_species_stmt(
     request: SpeciesSearchRequest,
     *,
     species_ref_id: int | None = None,
     species_entry_ref_id: int | None = None,
-) -> list[Species]:
-    stmt = select(Species)
+):
+    """The identity filter as a ``SELECT id, created_at`` over ``species``.
+
+    Returns a statement, not rows: it is used as a subquery by the count,
+    the summary and the ranking, so the caller never holds the matching id
+    set in Python.
+    """
+    stmt = select(Species.id, Species.created_at)
     if request.smiles is not None:
         stmt = stmt.where(Species.smiles == request.smiles)
     if request.inchi_key is not None:
@@ -343,30 +297,268 @@ def _query_matching_species(
         # surrounding whitespace from client input.
         formula_expr = func.mol_formula(func.mol_from_smiles(Species.smiles)).cast(Text)
         stmt = stmt.where(formula_expr == request.formula.strip())
-    return session.scalars(stmt).all()
+    return stmt
 
 
-def _query_filtered_entries(
-    session: Session,
-    species_rows: list[Species],
+def _entry_filter_predicates(
+    request: SpeciesSearchRequest, species_entry_ref_id: int | None
+) -> list:
+    """The per-entry ``where`` terms, in one place for all three uses."""
+    predicates = []
+    if request.electronic_state_kind is not None:
+        predicates.append(
+            SpeciesEntry.electronic_state_kind == request.electronic_state_kind
+        )
+    if request.species_entry_kind is not None:
+        predicates.append(SpeciesEntry.kind == request.species_entry_kind)
+    if species_entry_ref_id is not None:
+        predicates.append(SpeciesEntry.id == species_entry_ref_id)
+    return predicates
+
+
+def _join_entries_and_reviews(
+    stmt,
+    candidates,
     request: SpeciesSearchRequest,
     *,
-    species_entry_ref_id: int | None = None,
-) -> dict[int, list[SpeciesEntry]]:
-    species_ids = [sp.id for sp in species_rows]
-    stmt = select(SpeciesEntry).where(SpeciesEntry.species_id.in_(species_ids))
-    if request.electronic_state_kind is not None:
-        stmt = stmt.where(SpeciesEntry.electronic_state_kind == request.electronic_state_kind)
-    if request.species_entry_kind is not None:
-        stmt = stmt.where(SpeciesEntry.kind == request.species_entry_kind)
-    if species_entry_ref_id is not None:
-        stmt = stmt.where(SpeciesEntry.id == species_entry_ref_id)
+    species_entry_ref_id: int | None,
+    outer: bool,
+):
+    """Join candidate species → their entries → each entry's review row.
 
-    entries = session.scalars(stmt).all()
-    grouped: dict[int, list[SpeciesEntry]] = {sid: [] for sid in species_ids}
+    The chain is deliberately **flat**: ``species`` joined to
+    ``species_entry`` joined to ``record_review``, with the per-entry filters
+    as join conditions, rather than a pre-filtered entry *subquery* joined to
+    the species set.
+
+    That is not a cosmetic preference. With the entry filters and the review
+    LEFT JOIN wrapped in a subquery, the planner is free to compile
+    ``species_entry.species_id = species.id`` into a join *filter* rather
+    than an index condition — the review outer join and its ``status IS
+    NULL`` branch block the pushdown — and then the inner side is re-scanned
+    in full once per candidate species. That plan was observed on a
+    statistics-free database (65,599 candidate species: over 15 minutes,
+    ``Join Filter: (species_entry.species_id = species.id)`` above a
+    full ``ix_species_entry_species_id`` scan). Keeping the chain flat leaves
+    the join key on a plain indexed column where the planner can reach it.
+
+    Statistics still matter more than shape — no formulation of this query
+    survives a table that has tens of thousands of rows and no ``ANALYZE``.
+    What the flat chain buys unconditionally is that the identity predicate
+    is evaluated once per statement instead of twice, which is what the
+    RDKit-backed ``formula=`` filter cares about: on the Stage 4 benchmark
+    corpus the broad formula search is 21.7 ms flat against 28.3 ms wrapped.
+
+    :param outer: ``True`` keeps species with no matching entry (the ranking
+        needs them — they are still records); ``False`` drops them (the
+        summary counts entries, not species).
+    :returns: ``(statement, review_alias)``.
+    """
+    entry_on = and_(
+        SpeciesEntry.species_id == candidates.c.id,
+        *_entry_filter_predicates(request, species_entry_ref_id),
+    )
+    from_clause = (
+        candidates.outerjoin(SpeciesEntry, entry_on)
+        if outer
+        else candidates.join(SpeciesEntry, entry_on)
+    )
+    return join_review(
+        stmt.select_from(from_clause),
+        SpeciesEntry.id,
+        SubmissionRecordType.species_entry,
+    )
+
+
+def _rank_and_slice_species(
+    session: Session,
+    candidates,
+    request: SpeciesSearchRequest,
+    visible: set,
+    *,
+    species_entry_ref_id: int | None,
+    offset: int,
+    limit: int,
+) -> list[int]:
+    """Order the candidate species and return one page of ids.
+
+    ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``, where
+    ``review_rank`` is the best rank among a species' *visible* entries and
+    :data:`_NO_VISIBLE_ENTRY_RANK` when it has none.
+
+    Visibility is a ``CASE`` inside the aggregate rather than a ``WHERE``.
+    A ``WHERE`` would drop species whose every entry is invisible, and those
+    species are still records — with an empty ``entries`` list. ``MIN``
+    ignores NULLs, so an invisible entry contributes nothing and a species
+    with no visible entry aggregates to NULL, which the ``COALESCE`` turns
+    into the sorts-last rank.
+
+    The ``SpeciesEntry.id IS NOT NULL`` guard is load-bearing: without it the
+    outer join's all-NULL row for an entry-less species would satisfy the
+    "no review row means not_reviewed" branch of the visibility predicate and
+    the species would rank as if it had a never-reviewed entry.
+
+    ``id`` desc is the tiebreak that makes this a total order; without it,
+    species sharing a ``created_at`` (every row inserted in one transaction
+    does) would page non-deterministically.
+    """
+    stmt, review = _join_entries_and_reviews(
+        select(candidates.c.id),
+        candidates,
+        request,
+        species_entry_ref_id=species_entry_ref_id,
+        outer=True,
+    )
+    visible_rank = case(
+        (
+            and_(
+                SpeciesEntry.id.is_not(None),
+                visible_review_filter(review, visible),
+            ),
+            review_rank_expr(review),
+        ),
+        else_=None,
+    )
+    best_rank = func.coalesce(func.min(visible_rank), _NO_VISIBLE_ENTRY_RANK)
+    has_entries = func.count(visible_rank) > 0
+    stmt = (
+        stmt.group_by(candidates.c.id, candidates.c.created_at)
+        .order_by(
+            best_rank.asc(),
+            has_entries.desc(),
+            candidates.c.created_at.desc(),
+            candidates.c.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(session.scalars(stmt))
+
+
+def _visible_entry_rows(
+    candidates,
+    request: SpeciesSearchRequest,
+    visible: set,
+    *,
+    species_entry_ref_id: int | None,
+):
+    """Subquery of every visible entry of every candidate species.
+
+    Feeds the pre-pagination :func:`summary_from_sql` aggregate. Referenced
+    exactly once, so PostgreSQL inlines it into the aggregate rather than
+    treating it as an optimization fence.
+    """
+    stmt, review = _join_entries_and_reviews(
+        select(SpeciesEntry.id),
+        candidates,
+        request,
+        species_entry_ref_id=species_entry_ref_id,
+        outer=False,
+    )
+    return (
+        stmt.add_columns(review_status_expr(review).label("review_status"))
+        .where(visible_review_filter(review, visible))
+        .subquery("visible_entries")
+    )
+
+
+def _load_page_entries(
+    session: Session,
+    page_species_ids: list[int],
+    request: SpeciesSearchRequest,
+    visible: set,
+    *,
+    species_entry_ref_id: int | None,
+) -> list[SpeciesEntry]:
+    """The visible entries of the page's species, in a stable order.
+
+    Scoped by the page's species ids — at most ``limit`` of them — so this is
+    the one place an ``IN`` list of ids is safe.
+    """
+    stmt = select(SpeciesEntry).where(
+        SpeciesEntry.species_id.in_(page_species_ids),
+        *_entry_filter_predicates(request, species_entry_ref_id),
+    )
+    stmt, review = join_review(
+        stmt, SpeciesEntry.id, SubmissionRecordType.species_entry
+    )
+    return list(
+        session.scalars(
+            stmt.where(visible_review_filter(review, visible)).order_by(
+                SpeciesEntry.id
+            )
+        )
+    )
+
+
+def _build_page_records(
+    session: Session,
+    page_species_ids: list[int],
+    request: SpeciesSearchRequest,
+    visible: set,
+    *,
+    species_entry_ref_id: int | None,
+    includes: set[str],
+) -> list[SpeciesScientificRecord]:
+    """Materialize one page: species, their visible entries, and the extras.
+
+    Every load below is bounded by the page — at most ``limit`` species and
+    their entries — which is the whole point of ranking in SQL first.
+    """
+    if not page_species_ids:
+        return []
+
+    species_by_id = {
+        species.id: species
+        for species in session.scalars(
+            select(Species).where(Species.id.in_(page_species_ids))
+        )
+    }
+    entries = _load_page_entries(
+        session,
+        page_species_ids,
+        request,
+        visible,
+        species_entry_ref_id=species_entry_ref_id,
+    )
+    entries_by_species: dict[int, list[SpeciesEntry]] = {
+        species_id: [] for species_id in page_species_ids
+    }
     for entry in entries:
-        grouped[entry.species_id].append(entry)
-    return grouped
+        entries_by_species[entry.species_id].append(entry)
+
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.species_entry,
+        record_ids=[entry.id for entry in entries],
+    )
+    availability_per_entry = _compute_availability(session, entries)
+    section_ids = _compute_section_ids(session, entries, includes)
+
+    records: list[SpeciesScientificRecord] = []
+    for species_id in page_species_ids:
+        species = species_by_id[species_id]
+        records.append(
+            SpeciesScientificRecord(
+                species_id=species.id,
+                species_ref=species.public_ref,
+                canonical_smiles=species.smiles,
+                inchi_key=species.inchi_key,
+                formula=None,  # not stored on Species; future addition
+                charge=species.charge,
+                multiplicity=species.multiplicity,
+                entries=[
+                    _build_entry_record(
+                        entry,
+                        badges[entry.id],
+                        availability_per_entry[entry.id],
+                        section_ids.get(entry.id, {}),
+                    )
+                    for entry in entries_by_species[species_id]
+                ],
+            )
+        )
+    return records
 
 
 def _compute_availability(
