@@ -2520,6 +2520,7 @@ Table record_review {
     (record_type, record_id) [name: 'ix_record_review_record_lookup']
     (status, record_type) [name: 'ix_record_review_status_record_type']
     submission_id [name: 'ix_record_review_submission_id']
+    (record_type, record_id) [unique, name: 'uq_record_review_record']
   }
 
   checks {

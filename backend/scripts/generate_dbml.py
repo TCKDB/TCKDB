@@ -247,11 +247,19 @@ def _render_indexes(table, pk_col_names: set[str]) -> list[str]:
         col_names = [c.name for c in constraint.columns]
         if set(col_names) == pk_col_names:
             continue
-        # Check if already covered by an index
-        existing_index_cols = {
-            frozenset(c.name for c in idx.columns) for idx in table.indexes
+        # Skip only if a *unique* index already renders this exact column set.
+        # Matching on columns alone loses the constraint: a non-unique index
+        # over the same columns is a lookup aid, not a uniqueness guarantee, so
+        # suppressing against one drops the guarantee from the document without
+        # dropping it from the database. That is what happened to
+        # ``uq_record_review_record`` once ``ix_record_review_record_lookup``
+        # was added over ``(record_type, record_id)``.
+        unique_index_cols = {
+            frozenset(c.name for c in idx.columns)
+            for idx in table.indexes
+            if idx.unique
         }
-        if frozenset(col_names) in existing_index_cols:
+        if frozenset(col_names) in unique_index_cols:
             continue
         if len(col_names) == 1:
             expr = col_names[0]
