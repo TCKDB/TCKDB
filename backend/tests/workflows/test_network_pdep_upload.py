@@ -3067,7 +3067,11 @@ def test_reported_solve_round_trips_and_warns(db_engine) -> None:
     """
     from app.db.models.network_pdep import NetworkKinetics
 
-    with Session(db_engine) as session, session.begin():
+    # Rolled back rather than committed: ``db_engine`` is session-scoped, and
+    # a leaked NetworkKinetics row breaks
+    # ``test_pdep_workflow_persists_and_reads_back_channel_kinetics``, which
+    # counts them across the whole table.
+    with _rolled_back_session(db_engine) as session:
         request = NetworkPDepUploadRequest(**_reported_payload())
         warnings: list[UploadWarning] = []
         network = persist_network_pdep_upload(session, request, warnings=warnings)
@@ -3121,7 +3125,7 @@ def test_computed_solve_carries_no_reported_warning(db_engine) -> None:
     reads back as computed and carries no completeness warning about its
     origin.
     """
-    with Session(db_engine) as session, session.begin():
+    with _rolled_back_session(db_engine) as session:
         request = NetworkPDepUploadRequest(**_full_payload())
         warnings: list[UploadWarning] = []
         network = persist_network_pdep_upload(session, request, warnings=warnings)

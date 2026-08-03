@@ -1423,22 +1423,11 @@ class NetworkPDepUploadRequest(SchemaBase):
                     raise ValueError(f"channel '{channel.key}' references undefined transition_state_key '{ts_key}'.")
                 if ts_by_key[ts_key] != reaction_key:
                     raise ValueError(f"channel '{channel.key}' TS '{ts_key}' does not belong to micro reaction '{reaction_key}'.")
-        # The three coverage rules below all check master-equation *inputs*
-        # against the network topology: an energy for every state, a barrier
-        # for every saddle-point path, a ⟨ΔE⟩down for every well. They are the
-        # right rules for a solve run in this database, and nothing about them
-        # is relaxed for one. They are simply not applicable to a solve whose
-        # k(T,P) were transcribed from a publication: the depositor holds none
-        # of those inputs, the paper usually never published them, and
-        # demanding them refused the deposit outright rather than recording a
-        # weaker but honest record (ADR 0010). Anything a reported solve
-        # *does* supply is still checked below — relaxed means not required,
-        # not unvalidated.
-        if self.solve is not None:
-            state_keys = {state.key for state in self.states}
-            calc_keys = set(_collect_all_calculation_keys(self))
-            species_keys = {sp.key for sp in self.species}
+        state_keys = {state.key for state in self.states}
+        calc_keys = set(_collect_all_calculation_keys(self))
+        species_keys = {sp.key for sp in self.species}
 
+        if self.solve is not None:
             # Referential integrity of whatever the payload *did* supply. This
             # applies to both kinds: relaxed means not required, never
             # unvalidated. A reported solve that volunteers a barrier still
