@@ -368,11 +368,22 @@ def search_calculations(
         record_ids=page_ids,
     )
 
+    # The page's rows in one statement, then indexed by id: ``IN`` does not
+    # preserve order, and the order is the ranked one computed above. Bounded
+    # by ``limit`` like the badge load beside it, so this is one of the places
+    # an ``IN`` list of ids is safe.
+    calcs_by_id = {
+        calc.id: calc
+        for calc in session.scalars(
+            select(Calculation).where(Calculation.id.in_(page_ids))
+        )
+    }
+
     # Materialize each page row via the shared record builder so search
     # records and detail records have identical shape.
     records: list[ScientificCalculationRecord] = []
     for cid in page_ids:
-        calc = session.get(Calculation, cid)
+        calc = calcs_by_id.get(cid)
         if calc is None:  # pragma: no cover — race with delete; skip
             continue
         records.append(
