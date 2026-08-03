@@ -296,6 +296,25 @@ SELECT count(*) FROM network_solve_energy_transfer
 
 ---
 
+## Network-solve origin (revision `c4d8f1b2a9e6`)
+
+Adds `network_solve.kind` (`computed` | `reported`) so that k(T,P) transcribed from a publication can be deposited without the master-equation inputs a solve run here must supply. See [ADR 0010](../../../docs/adr/0010-hold-literature-reported-pressure-dependent-kinetics.md).
+
+**Upgrading needs no operator action.** Before this revision the schema admitted nothing but a master-equation solve — every solve had to carry a state energy per network state, a barrier per saddle-point path and an energy-transfer model, and there was no way to express a transcribed one — so `server_default='computed'` states a fact about every existing row rather than guessing it. No row changes meaning and none needs a re-upload. The new check constraint cannot fail on the backfill, because it constrains only `reported` rows and the backfill creates none. Verify with:
+
+```sql
+SELECT kind, count(*) FROM network_solve GROUP BY kind;
+-- expect every pre-existing row under 'computed'
+SELECT count(*) FROM network_solve WHERE kind = 'reported' AND literature_id IS NULL;
+-- expect 0 (also enforced by ck_network_solve_reported_requires_literature)
+```
+
+**Depositing reported kinetics.** A `reported` solve supplies `literature` and at least one `channel_kinetics` entry, and may omit `state_energies`, `channel_barriers`, `energy_transfer`, `bath_gas` and `source_calculations`. The network topology is still required — a reported rate has to attach to a channel that exists — and anything the payload *does* supply is validated as strictly as on a computed solve. Every such upload returns the `reported_network_solve` warning; that is expected, not a defect.
+
+**Downgrading refuses** while any `reported` solve exists. The prior schema has no way to record that a set of rates was transcribed rather than derived, so dropping the column would present published numbers as this database's own master-equation output. Export the affected solves (`GET /scientific/network-solves?kind=reported`), delete them and the network kinetics hanging off them, then re-run the downgrade.
+
+---
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:

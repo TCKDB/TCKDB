@@ -21864,8 +21864,12 @@
         "type": "object"
       },
       "NetworkKineticsSolveContext": {
-        "description": "Lightweight parent-solve pointer for a network-kinetics record.",
+        "description": "Lightweight parent-solve pointer for a network-kinetics record.\n\n``kind`` is carried here rather than left to the solve detail endpoint\nbecause it qualifies *these rates*: it says whether the k(T,P) in this\nrecord were produced by a master equation this database holds, or\ntranscribed from a publication whose inputs it does not. A consumer\npulling rates should not have to make a second request to find that out\n(ADR 0010).",
         "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/NetworkSolveKind",
+            "default": "computed"
+          },
           "me_method": {
             "anyOf": [
               {
@@ -23074,6 +23078,10 @@
             ],
             "title": "Interpolation Model"
           },
+          "kind": {
+            "$ref": "#/components/schemas/NetworkSolveKind",
+            "default": "computed"
+          },
           "me_method": {
             "anyOf": [
               {
@@ -23258,6 +23266,10 @@
               }
             ],
             "title": "Interpolation Model"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NetworkSolveKind",
+            "default": "computed"
           },
           "kinetics": {
             "items": {
@@ -23673,7 +23685,7 @@
       },
       "NetworkSolveIn": {
         "additionalProperties": false,
-        "description": "Master-equation solve configuration and provenance.\n\n:param me_method: ME solution method.\n:param interpolation_model: Interpolation model for the ME solution.\n:param tmin_k: Minimum temperature in K for the ME solve.\n:param tmax_k: Maximum temperature in K for the ME solve.\n:param pmin_bar: Minimum pressure in bar for the ME solve.\n:param pmax_bar: Maximum pressure in bar for the ME solve.\n:param grain_size_cm_inv: Energy grain size in cm⁻¹.\n:param grain_count: Number of energy grains.\n:param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param bath_gas: Bath gas composition.\n:param energy_transfer: Energy transfer model parameters — either one\n    ``per_well`` entry per (well, bath collider) pair, or a single\n    ``network_wide`` entry.\n:param source_calculations: Calculations used in this solve, by local key and role.\n:param channel_kinetics: Fitted phenomenological k(T,P) for channels, each\n    referencing its channel by ``(source_state_key, sink_state_key)``.\n:param note: Optional free-text note.",
+        "description": "Master-equation solve configuration and provenance.\n\n:param me_method: ME solution method.\n:param interpolation_model: Interpolation model for the ME solution.\n:param tmin_k: Minimum temperature in K for the ME solve.\n:param tmax_k: Maximum temperature in K for the ME solve.\n:param pmin_bar: Minimum pressure in bar for the ME solve.\n:param pmax_bar: Maximum pressure in bar for the ME solve.\n:param grain_size_cm_inv: Energy grain size in cm⁻¹.\n:param grain_count: Number of energy grains.\n:param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.\n:param kind: Whether the master equation was solved here (``computed``,\n    the default and preferred form) or the k(T,P) were transcribed from a\n    publication (``reported``). A ``reported`` solve is not held to the\n    state-energy, channel-barrier or energy-transfer coverage rules — it\n    holds none of those inputs — and must supply ``literature`` instead.\n    See ADR 0010.\n:param literature: Optional literature submission payload. Required when\n    ``kind='reported'``.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param bath_gas: Bath gas composition.\n:param energy_transfer: Energy transfer model parameters — either one\n    ``per_well`` entry per (well, bath collider) pair, or a single\n    ``network_wide`` entry.\n:param source_calculations: Calculations used in this solve, by local key and role.\n:param channel_kinetics: Fitted phenomenological k(T,P) for channels, each\n    referencing its channel by ``(source_state_key, sink_state_key)``.\n:param note: Optional free-text note.",
         "properties": {
           "bath_gas": {
             "items": {
@@ -23748,6 +23760,10 @@
             ],
             "title": "Interpolation Model"
           },
+          "kind": {
+            "$ref": "#/components/schemas/NetworkSolveKind",
+            "default": "computed"
+          },
           "literature": {
             "anyOf": [
               {
@@ -23804,7 +23820,6 @@
             "items": {
               "$ref": "#/components/schemas/SolveSourceCalculationIn"
             },
-            "minItems": 1,
             "title": "Source Calculations",
             "type": "array"
           },
@@ -23812,7 +23827,6 @@
             "items": {
               "$ref": "#/components/schemas/StateEnergyIn"
             },
-            "minItems": 1,
             "title": "State Energies",
             "type": "array"
           },
@@ -23841,12 +23855,19 @@
           "tmin_k",
           "tmax_k",
           "pmin_bar",
-          "pmax_bar",
-          "state_energies",
-          "source_calculations"
+          "pmax_bar"
         ],
         "title": "NetworkSolveIn",
         "type": "object"
+      },
+      "NetworkSolveKind": {
+        "description": "Where a network's phenomenological k(T,P) came from.\n\n``network_solve`` is the provenance envelope for one coherent set of\nk(T,P): it carries the T/P range they are valid over and the literature /\nsoftware / workflow-tool triple they are attributed to. This axis says\nwhat stands behind that attribution. Without it the database can only hold\nrates whose master-equation inputs it also holds, which excludes every\nrate ever read out of a paper's supplementary table. See ADR 0010.\n\n``computed``\n    The master equation was solved here and its inputs were deposited\n    with it: an energy for every network state, a barrier for every\n    saddle-point path, and a collisional energy-transfer model. The rates\n    can be re-derived, the fit can be checked, and the network can be\n    re-solved at other conditions. This is the preferred form.\n\n``reported``\n    The rates were transcribed from a publication, which is credited via\n    the required ``literature_id``. The master-equation inputs are not in\n    this database — usually because the paper never published them — so\n    none of the three things above is possible. The numbers are as\n    trustworthy as their source; what is missing is the derivation.",
+        "enum": [
+          "computed",
+          "reported"
+        ],
+        "title": "NetworkSolveKind",
+        "type": "string"
       },
       "NetworkSolveListItemRead": {
         "description": "Lightweight summary for the per-network solve listing.",
@@ -23919,6 +23940,10 @@
               }
             ],
             "title": "Interpolation Model"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NetworkSolveKind",
+            "default": "computed"
           },
           "kinetics_count": {
             "default": 0,
@@ -24180,6 +24205,16 @@
             "default": false,
             "title": "Include Rejected",
             "type": "boolean"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkSolveKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "limit": {
             "default": 50,
@@ -24549,6 +24584,10 @@
               }
             ],
             "title": "Interpolation Model"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NetworkSolveKind",
+            "default": "computed"
           },
           "me_method": {
             "anyOf": [
@@ -64873,7 +64912,7 @@
     },
     "/api/v1/scientific/network-solves/search": {
       "get": {
-        "description": "MVP scientific network-solve search.\n\nAND-combines the supplied filters; at least one meaningful\nfilter required. Explicit ``False`` bool filter values count as\nmeaningful. ``solve_method`` filters ``NetworkSolve.me_method``\n(the master-equation algorithm); ``method`` / ``basis`` filter\nthrough the source-calculation level-of-theory join.",
+        "description": "MVP scientific network-solve search.\n\nAND-combines the supplied filters; at least one meaningful\nfilter required. Explicit ``False`` bool filter values count as\nmeaningful. ``kind`` selects by origin — ``computed`` for rates this\ndatabase can re-derive, ``reported`` for rates transcribed from a\npublication (ADR 0010). ``solve_method`` filters\n``NetworkSolve.me_method`` (the master-equation algorithm);\n``method`` / ``basis`` filter through the source-calculation\nlevel-of-theory join.",
         "operationId": "scientific_network_solves_search_get_api_v1_scientific_network_solves_search_get",
         "parameters": [
           {
@@ -64906,6 +64945,22 @@
                 }
               ],
               "title": "Network Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/NetworkSolveKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
             }
           },
           {

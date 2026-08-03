@@ -9,6 +9,7 @@ from app.db.models.common import (
     NetworkChannelKind,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
+    NetworkSolveKind,
     NetworkSpeciesRole,
     NetworkStateKind,
     RecordReviewStatus,
@@ -27,6 +28,7 @@ from tests.services.scientific_read._factories import (
     attach_network_state_participant,
     make_calculation,
     make_chem_reaction,
+    make_literature,
     make_lot,
     make_network,
     make_network_channel,
@@ -3840,3 +3842,108 @@ def test_nkin_search_default_does_not_inline_payloads(client, db_session):
     rec = body["records"][0]
     for key in ("coefficients", "plog", "points"):
         assert rec[key] is None
+
+
+# ===========================================================================
+# Network-solve origin kind (ADR 0010)
+# ===========================================================================
+
+
+def _make_reported_solve(db_session):
+    """A network whose solve holds k(T,P) transcribed from a publication."""
+    fx = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.plog
+    )
+    fx["solve"].kind = NetworkSolveKind.reported
+    fx["solve"].literature_id = make_literature(db_session).id
+    db_session.flush()
+    return fx
+
+
+def test_solve_detail_exposes_origin_kind(client, db_session):
+    """A reported record must not read back as a computed one.
+
+    This is the whole justification for admitting the weaker deposit: an
+    indistinguishable record would be worse than refusing it, because a
+    consumer would propagate rates as re-derivable that nobody can re-derive.
+    """
+    reported = _make_reported_solve(db_session)
+    computed = _make_simple_network(db_session, with_solve=True)
+
+    body = client.get(_solve_url(reported["solve"].public_ref)).json()
+    assert body["record"]["network_solve"]["kind"] == "reported"
+
+    body = client.get(_solve_url(computed["solve"].public_ref)).json()
+    assert body["record"]["network_solve"]["kind"] == "computed"
+
+
+def test_network_detail_solve_summary_exposes_origin_kind(client, db_session):
+    """The embedded solve projection carries it too.
+
+    A reader browsing a network's solves compares them there; sending them to
+    the standalone surface to find out which ones are transcribed would make
+    the distinction easy to miss.
+    """
+    fx = _make_reported_solve(db_session)
+    body = client.get(_detail_url(fx["network"].public_ref, include="solves")).json()
+    kinds = {s["kind"] for s in body["record"]["solves"]}
+    assert kinds == {"reported"}
+
+
+def test_network_kinetics_detail_exposes_parent_solve_kind(client, db_session):
+    """The rates themselves say which they are, without a second request.
+
+    ``kind`` qualifies these k(T,P): a consumer pulling a rate needs to know
+    whether this database holds the master equation behind it.
+    """
+    fx = _make_reported_solve(db_session)
+    body = client.get(
+        f"/api/v1/scientific/network-kinetics/{fx['kinetics'].public_ref}"
+    ).json()
+    assert body["record"]["solve"]["kind"] == "reported"
+
+    computed = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.plog
+    )
+    body = client.get(
+        f"/api/v1/scientific/network-kinetics/{computed['kinetics'].public_ref}"
+    ).json()
+    assert body["record"]["solve"]["kind"] == "computed"
+
+
+def test_solve_search_by_kind(client, db_session):
+    """Selecting on origin is what makes the distinction actionable.
+
+    A consumer that will only accept re-derivable rates filters on
+    ``computed``; an operator finding what blocks a c4d8f1b2a9e6 downgrade
+    filters on ``reported``.
+    """
+    reported = _make_reported_solve(db_session)
+    computed = _make_simple_network(db_session, with_solve=True)
+
+    body = client.get(_solve_search_url(kind="reported")).json()
+    refs = {r["network_solve"]["network_solve_ref"] for r in body["records"]}
+    assert reported["solve"].public_ref in refs
+    assert computed["solve"].public_ref not in refs
+    assert body["request"]["filter"]["kind"] == "reported"
+
+    body = client.get(_solve_search_url(kind="computed")).json()
+    refs = {r["network_solve"]["network_solve_ref"] for r in body["records"]}
+    assert computed["solve"].public_ref in refs
+    assert reported["solve"].public_ref not in refs
+
+
+def test_solve_search_kind_counts_as_a_filter(client, db_session):
+    """``kind`` alone satisfies the at-least-one-filter rule.
+
+    Otherwise the operator query the c4d8f1b2a9e6 downgrade message points at
+    would 422 rather than answering.
+    """
+    _make_reported_solve(db_session)
+    resp = client.get(_solve_search_url(kind="reported"))
+    assert resp.status_code == 200
+
+
+def test_solve_search_rejects_unknown_kind(client, db_session):
+    resp = client.get(_solve_search_url(kind="guessed"))
+    assert resp.status_code == 422
