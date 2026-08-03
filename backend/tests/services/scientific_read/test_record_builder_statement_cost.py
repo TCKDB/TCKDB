@@ -96,11 +96,20 @@ def test_a_search_page_costs_a_fixed_few_statements_per_record(db_session):
     small = _statements_for_page(db_session, method=lot.method, limit=_SMALL_PAGE)
     large = _statements_for_page(db_session, method=lot.method, limit=_LARGE_PAGE)
 
-    assert (large - small) == STATEMENTS_PER_RECORD * (
+    # ``<=``, not ``==``: STATEMENTS_PER_RECORD is a ceiling on this fixture's
+    # slope, not the universal per-record cost. A calculation carrying more
+    # provenance legitimately costs more -- adding a software release alone
+    # takes this fixture from 3 to 4 -- so an equality assertion fails on a
+    # fixture change that is not a regression, and, worse, fails on a genuine
+    # improvement: batching the owner block is the named way this number goes
+    # down, and equality would reject it. The regression this guards is a
+    # per-record fan-out that moves the slope by an order of magnitude, which
+    # a ceiling catches just as well.
+    assert (large - small) <= STATEMENTS_PER_RECORD * (
         _LARGE_PAGE - _SMALL_PAGE
     ), (
         f"{(large - small) / (_LARGE_PAGE - _SMALL_PAGE)} statements per "
-        f"record, expected {STATEMENTS_PER_RECORD} "
+        f"record, expected at most {STATEMENTS_PER_RECORD} "
         f"({small} statements for {_SMALL_PAGE} records, "
         f"{large} for {_LARGE_PAGE})"
     )

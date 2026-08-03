@@ -319,8 +319,12 @@ KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
 #: Defects this file previously published as measured-but-unfixed, and that
 #: have since been fixed. They stay on the page: a defect that is recorded
 #: while it is open and deleted the moment it closes leaves a reader unable to
-#: tell a problem that was solved from one that was never found. The numbers
-#: are in the results table above — this block is only the narrative.
+#: tell a problem that was solved from one that was never found.
+#:
+#: This block is the *only* place the before-fix figures appear. The results
+#: table above is regenerated from the current measurement pair, so it shows
+#: the post-fix statement count and nothing of what it replaced; the 1,060
+#: statements and the 21-to-6 marginal cost survive here or nowhere.
 RESOLVED_SINCE: tuple[dict[str, str], ...] = (
     {
         "shape": "calculation_search_by_lot",
