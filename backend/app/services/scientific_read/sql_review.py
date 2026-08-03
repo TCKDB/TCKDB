@@ -37,12 +37,12 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import Select, and_, case, func, literal, or_
-from sqlalchemy.orm import aliased
+from sqlalchemy import Select, and_, case, func, literal, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
-from app.schemas.reads.scientific_common import REVIEW_RANK
+from app.schemas.reads.scientific_common import REVIEW_RANK, ReviewStatusSummary
 
 #: Rank used for a record with no ``record_review`` row at all. It must agree
 #: with how the Python path treats a missing row — as ``not_reviewed`` — or a
@@ -130,10 +130,50 @@ def visible_review_filter(review, visible: Iterable[RecordReviewStatus]):
     return predicate
 
 
+def status_from_sql(value: Any) -> RecordReviewStatus:
+    """Coerce a SQL-side review status back to the enum.
+
+    ``review_status_expr`` may come back as the enum (psycopg resolves the
+    PostgreSQL enum) or as its string value, depending on whether the
+    ``COALESCE`` fell through to the literal. Callers want one type.
+    """
+    if isinstance(value, RecordReviewStatus):
+        return value
+    return RecordReviewStatus(str(value))
+
+
+def summary_from_sql(session: Session, ranked) -> ReviewStatusSummary:
+    """Count review statuses over the *whole* filtered set in one aggregate.
+
+    ``ranked`` is a subquery carrying a ``review_status`` column — normally
+    the one :func:`review_status_expr` produced.
+
+    The summary describes everything the filters matched, not the page, so it
+    cannot be derived from the page rows — and materializing the candidate set
+    to count it would give back exactly the property this module exists to
+    remove. ``total`` is the count of the filtered set, so a caller that needs
+    both can take it from here rather than issuing a second aggregate.
+    """
+    rows = session.execute(
+        select(ranked.c.review_status, func.count())
+        .select_from(ranked)
+        .group_by(ranked.c.review_status)
+    ).all()
+    summary = ReviewStatusSummary()
+    for status, count in rows:
+        key = status.value if hasattr(status, "value") else str(status)
+        if hasattr(summary, key):
+            setattr(summary, key, getattr(summary, key) + count)
+        summary.total += count
+    return summary
+
+
 __all__ = [
     "join_review",
     "review_alias",
     "review_rank_expr",
     "review_status_expr",
+    "status_from_sql",
+    "summary_from_sql",
     "visible_review_filter",
 ]

@@ -5,7 +5,7 @@ formula on the fly via the RDKit cartridge:
 
     mol_formula(mol_from_smiles(species.smiles))::text = :formula
 
-(see ``app/services/scientific_read/species.py::_query_matching_species``).
+(see ``app/services/scientific_read/species.py::_candidate_species_stmt``).
 Since ``species`` has no stored ``formula`` column, every ``formula=``
 request was a full sequential scan that re-parsed every row's SMILES. This
 revision adds a matching expression (functional) index so the planner can
