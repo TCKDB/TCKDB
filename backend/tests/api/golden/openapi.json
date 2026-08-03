@@ -21965,6 +21965,10 @@
             "title": "Network Solve Id",
             "x-tckdb-policy-hidden": true
           },
+          "network_solve_kind": {
+            "$ref": "#/components/schemas/NetworkSolveKind",
+            "default": "computed"
+          },
           "network_solve_ref": {
             "anyOf": [
               {

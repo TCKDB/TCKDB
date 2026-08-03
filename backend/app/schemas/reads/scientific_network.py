@@ -252,6 +252,10 @@ class NetworkKineticsSummary(BaseModel):
     network_channel_id: int | None = None
     network_solve_id: int | None = None
     network_solve_ref: str | None = None
+    # Named ``network_solve_kind`` rather than ``kind`` because ``model_kind``
+    # already occupies the unqualified sense here (Chebyshev vs PLOG). This is
+    # the parent solve's origin, not the rate's functional form.
+    network_solve_kind: NetworkSolveKind = NetworkSolveKind.computed
     channel_source_composition_hash: str
     channel_sink_composition_hash: str
     model_kind: NetworkKineticsModelKind

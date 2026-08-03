@@ -3895,6 +3895,26 @@ def test_network_detail_solve_summary_exposes_origin_kind(client, db_session):
     kinds = {s["kind"] for s in body["record"]["solves"]}
     assert kinds == {"reported"}
 
+    # The embedded kinetics projection carries it too. Without that, a
+    # consumer reading rates off this surface would have to request
+    # include=solves as well and join on network_solve_ref to find out
+    # whether the numbers are re-derivable.
+    body = client.get(_detail_url(fx["network"].public_ref, include="kinetics")).json()
+    assert body["record"]["kinetics"]
+    assert {k["network_solve_kind"] for k in body["record"]["kinetics"]} == {
+        "reported"
+    }
+
+    computed = _make_simple_network(
+        db_session, with_kinetics_kind=NetworkKineticsModelKind.plog
+    )
+    body = client.get(
+        _detail_url(computed["network"].public_ref, include="kinetics")
+    ).json()
+    assert {k["network_solve_kind"] for k in body["record"]["kinetics"]} == {
+        "computed"
+    }
+
 
 def test_network_kinetics_detail_exposes_parent_solve_kind(client, db_session):
     """The rates themselves say which they are, without a second request.
