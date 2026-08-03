@@ -3854,8 +3854,14 @@ def _make_reported_solve(db_session):
     fx = _make_simple_network(
         db_session, with_kinetics_kind=NetworkKineticsModelKind.plog
     )
+    # The literature row is created first and its id assigned in the same
+    # step as the kind: ``make_literature`` flushes, and a flush that carried
+    # ``kind='reported'`` without the citation would trip
+    # ``ck_network_solve_reported_requires_literature``. That the constraint
+    # bites here is the point of it.
+    literature = make_literature(db_session)
     fx["solve"].kind = NetworkSolveKind.reported
-    fx["solve"].literature_id = make_literature(db_session).id
+    fx["solve"].literature_id = literature.id
     db_session.flush()
     return fx
 
@@ -3900,7 +3906,7 @@ def test_network_kinetics_detail_exposes_parent_solve_kind(client, db_session):
     body = client.get(
         f"/api/v1/scientific/network-kinetics/{fx['kinetics'].public_ref}"
     ).json()
-    assert body["record"]["solve"]["kind"] == "reported"
+    assert body["record"]["network_solve"]["kind"] =="reported"
 
     computed = _make_simple_network(
         db_session, with_kinetics_kind=NetworkKineticsModelKind.plog
@@ -3908,7 +3914,7 @@ def test_network_kinetics_detail_exposes_parent_solve_kind(client, db_session):
     body = client.get(
         f"/api/v1/scientific/network-kinetics/{computed['kinetics'].public_ref}"
     ).json()
-    assert body["record"]["solve"]["kind"] == "computed"
+    assert body["record"]["network_solve"]["kind"] =="computed"
 
 
 def test_solve_search_by_kind(client, db_session):
