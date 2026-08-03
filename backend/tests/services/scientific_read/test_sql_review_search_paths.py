@@ -30,8 +30,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import aliased
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
@@ -41,6 +42,8 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     SubmissionRecordType,
 )
+from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.record_review import RecordReview
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.reads.scientific_calculation_search import (
     CalculationsSearchRequest,
@@ -574,6 +577,152 @@ def test_species_entries_within_a_record_are_ordered_by_id(db_session):
     (record,) = response.records
     assert [e.species_entry_id for e in record.entries] == sorted(
         _ENTRY_ID_BASE + offset for offset, _ in _ENTRY_ORDER_FIXTURE
+    )
+
+
+# ---------------------------------------------------------------------------
+# The reported total
+# ---------------------------------------------------------------------------
+
+
+def _independent_visible_count(
+    session, *, method: str, visible: set[RecordReviewStatus]
+) -> int:
+    """``COUNT(*)`` over the set the search reports a ``total`` for.
+
+    This is the second aggregate the service deliberately does not issue.
+    Written out here in full, sharing nothing with ``summary_from_sql``,
+    because a count derived from the summary could not disagree with it.
+    """
+    review = aliased(RecordReview)
+    seen = review.status.in_(sorted(visible, key=lambda s: s.value))
+    if RecordReviewStatus.not_reviewed in visible:
+        # A calculation with no ``record_review`` row is ``not_reviewed``.
+        seen = or_(seen, review.status.is_(None))
+    return session.execute(
+        select(func.count())
+        .select_from(Calculation)
+        .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
+        .outerjoin(
+            review,
+            and_(
+                review.record_type == SubmissionRecordType.calculation,
+                review.record_id == Calculation.id,
+            ),
+        )
+        .where(
+            Calculation.type == CalculationType.sp,
+            LevelOfTheory.method == method,
+            # The default quality posture the search applies alongside the
+            # review gate; `include_rejected_quality` is left at its default.
+            Calculation.quality != CalculationQuality.rejected,
+            seen,
+        )
+    ).scalar_one()
+
+
+def _calculations_with_no_review_row(session, *, method: str) -> int:
+    review = aliased(RecordReview)
+    return session.execute(
+        select(func.count())
+        .select_from(Calculation)
+        .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
+        .outerjoin(
+            review,
+            and_(
+                review.record_type == SubmissionRecordType.calculation,
+                review.record_id == Calculation.id,
+            ),
+        )
+        .where(LevelOfTheory.method == method, review.id.is_(None))
+    ).scalar_one()
+
+
+@pytest.mark.parametrize(
+    ("min_review_status", "include_rejected", "include_deprecated"),
+    _TRUST_COMBINATIONS,
+)
+def test_calculations_search_total_equals_an_independent_count(
+    db_session, min_review_status, include_rejected, include_deprecated
+):
+    """``total`` comes from the summary aggregate — check it is the count.
+
+    ``summary_from_sql`` supplies ``calculations_search``'s ``total`` rather
+    than the service issuing a second ``COUNT`` over the same subquery, on
+    the argument that the per-status groups partition the filtered set
+    exactly: every row carries a status, so summing the groups counts every
+    row once and only once. That is true by construction — which is another
+    way of saying nothing had checked it.
+
+    So check it, against a count that shares no code with the summary, under
+    every trust posture the endpoint exposes, over a corpus that includes
+    calculations with no ``record_review`` row. Those rows are the ones a
+    divergence would be about: they exist in the filtered set only because
+    the join is an outer one and their status is coalesced.
+    """
+    lot = _mixed_calculation_corpus(db_session)
+    assert _calculations_with_no_review_row(db_session, method=lot.method), (
+        "fixture must contain calculations with no record_review row"
+    )
+    visible = visible_statuses(
+        min_review_status=min_review_status,
+        include_rejected=include_rejected,
+        include_deprecated=include_deprecated,
+    )
+    expected_total = _independent_visible_count(
+        db_session, method=lot.method, visible=visible
+    )
+
+    response = search_calculations(
+        db_session,
+        CalculationsSearchRequest(
+            calculation_type=CalculationType.sp,
+            method=lot.method,
+            min_review_status=min_review_status,
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            limit=1,  # the total must not describe the page
+        ),
+    )
+
+    assert response.review_summary.total == expected_total
+    assert response.pagination.total == expected_total
+
+
+@pytest.mark.parametrize(
+    ("min_review_status", "include_rejected", "include_deprecated"),
+    _TRUST_COMBINATIONS,
+)
+def test_review_summary_buckets_partition_the_reported_total(
+    db_session, min_review_status, include_rejected, include_deprecated
+):
+    """Every row counted in ``total`` also lands in a named status bucket.
+
+    This is the premise the previous test's arithmetic rests on, and it is
+    the one that can quietly stop holding. ``summary_from_sql`` adds a
+    group's count to ``total`` whether or not the group key names a bucket,
+    so a status that stopped being coalesced — rows with no ``record_review``
+    row grouping under SQL ``NULL`` — would still be counted in ``total``
+    while appearing in none of the five buckets. The totals would still add
+    up against a ``COUNT``; the summary would be wrong.
+    """
+    lot = _mixed_calculation_corpus(db_session)
+    response = search_calculations(
+        db_session,
+        CalculationsSearchRequest(
+            calculation_type=CalculationType.sp,
+            method=lot.method,
+            min_review_status=min_review_status,
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            limit=1,
+        ),
+    )
+
+    summary = response.review_summary
+    assert (
+        sum(getattr(summary, status.value) for status in RecordReviewStatus)
+        == summary.total
     )
 
 
