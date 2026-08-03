@@ -9,16 +9,28 @@ Composition:
    refs; empty-result short-circuit when an unknown ref is supplied
    on a filter, matching Phase C semantics elsewhere).
 4. Build a SQL query joining ``calculation`` to its provenance tables
-   for the supplied scalar filters; emit only ``calculation.id`` so the
-   filter pass stays cheap.
-5. Bulk-load review badges for the candidate set; apply the visible-
-   statuses gate (default trust posture). Build the ``review_summary``
-   on this filtered, pre-pagination set.
-6. Sort deterministically in Python (review rank → quality rank →
-   created_at desc → id desc — ``evidence_completeness`` is deferred).
-7. Slice for pagination, then materialize each page row via the shared
-   :func:`build_record` helper so search and detail produce identical
-   record shapes for the same include set.
+   for the supplied scalar filters; emit only the columns the ranking
+   needs so the filter pass stays cheap.
+5. Gate, rank, order and slice **in SQL**, over that query as a
+   subquery: LEFT JOIN ``record_review``, apply the visible-statuses
+   gate (default trust posture), order by review rank → quality rank →
+   created_at desc → id desc (``evidence_completeness`` is deferred),
+   and take one page. The ``review_summary`` comes from a single
+   aggregate over the same filtered, pre-pagination set.
+6. Materialize each page row via the shared :func:`build_record` helper
+   so search and detail produce identical record shapes for the same
+   include set.
+
+Why steps 5 is SQL and not Python
+---------------------------------
+It used to load every candidate id and filter/sort them in Python. That
+is not merely slower at catalog scale, it is a hard failure: the badge
+bulk-load renders one bind parameter per candidate and PostgreSQL's wire
+protocol caps a statement at 65,535 parameters, so
+``calculation_type=sp`` over a large corpus returned ``503
+database_unavailable`` rather than a page. See
+:mod:`app.services.scientific_read.sql_review`, whose helpers this module
+uses, and ``backend/docs/benchmarks/README.md`` for the measurement.
 
 See ``backend/docs/specs/scientific_calculation_reads.md``.
 """
@@ -28,7 +40,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import and_, case, exists, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import (
@@ -68,9 +80,6 @@ from app.schemas.reads.scientific_calculation_search import (
     RequestEcho,
     ScientificCalculationsSearchResponse,
 )
-from app.schemas.reads.scientific_common import (
-    REVIEW_RANK,
-)
 from app.services.scientific_read.calculations import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
@@ -91,6 +100,13 @@ from app.services.scientific_read.handles import (
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
+)
+from app.services.scientific_read.sql_review import (
+    join_review,
+    review_rank_expr,
+    review_status_expr,
+    summary_from_sql,
+    visible_review_filter,
 )
 
 # Filter knobs that count as "meaningful" for the at-least-one-filter rule.
@@ -135,6 +151,23 @@ _QUALITY_RANK: dict[CalculationQuality, int] = {
     CalculationQuality.raw: 1,
     CalculationQuality.rejected: 2,
 }
+
+#: Rank for a quality value the mapping above does not name. Only reachable
+#: if a new ``CalculationQuality`` member is added without being ranked; it
+#: sorts last rather than raising, which is what the Python dict lookup
+#: could not do.
+_UNRANKED_QUALITY = max(_QUALITY_RANK.values()) + 1
+
+
+def _quality_rank_expr(quality_column):
+    """SQL ``quality_rank`` (lower is better) mirroring :data:`_QUALITY_RANK`."""
+    return case(
+        *(
+            (quality_column == quality, rank)
+            for quality, rank in _QUALITY_RANK.items()
+        ),
+        else_=_UNRANKED_QUALITY,
+    )
 
 
 # Per-calc-type primary result table — drives the ``has_result`` filter.
@@ -240,8 +273,10 @@ def search_calculations(
     if short_circuit:
         return _empty_response(request, includes, offset, limit)
 
-    # Build the filter query.
-    stmt = select(Calculation.id, Calculation.created_at)
+    # Build the filter query. ``quality`` rides along because the ranking
+    # needs it; carrying it here rather than re-reading it per page keeps
+    # the whole ordering expressible over one subquery.
+    stmt = select(Calculation.id, Calculation.created_at, Calculation.quality)
     stmt = _apply_owner_filters(
         stmt,
         species_entry_id=species_entry_id,
@@ -273,55 +308,65 @@ def search_calculations(
         # Caller asked for rejected-quality but didn't opt in — empty result.
         return _empty_response(request, includes, offset, limit)
 
-    rows = session.execute(stmt).all()
-    candidate_ids = [row.id for row in rows]
-    created_at_by_id = {row.id: row.created_at for row in rows}
-
-    if not candidate_ids:
-        return _empty_response(request, includes, offset, limit)
-
-    # Apply review-status visibility gate. Default trust posture excludes
+    # Apply the review-status visibility gate. Default trust posture excludes
     # rejected/deprecated unless explicitly opted in; min_review_status
     # narrows further (D5/D7).
-    badges = fetch_review_badges(
-        session,
-        record_type=SubmissionRecordType.calculation,
-        record_ids=candidate_ids,
-    )
     visible = visible_statuses(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
-    visible_ids = [
-        cid for cid in candidate_ids if badges[cid].status in visible
-    ]
-    if not visible_ids:
-        return _empty_response(request, includes, offset, limit)
+
+    # Everything from here to the page slice happens in the database. The
+    # LEFT JOIN is load-bearing: a calculation with no ``record_review`` row
+    # is ``not_reviewed`` and visible by default, and an inner join would
+    # drop every one of them.
+    candidates = stmt.subquery("candidates")
+    ranked_base = select(candidates.c.id, candidates.c.created_at)
+    ranked_base, review = join_review(
+        ranked_base, candidates.c.id, SubmissionRecordType.calculation
+    )
+    ranked = (
+        ranked_base.add_columns(
+            review_rank_expr(review).label("review_rank"),
+            review_status_expr(review).label("review_status"),
+            _quality_rank_expr(candidates.c.quality).label("quality_rank"),
+        )
+        .where(visible_review_filter(review, visible))
+        .subquery("visible_candidates")
+    )
 
     # Pre-pagination review summary (Phase 2.1: counts on the candidate set
-    # *after* filtering, before pagination).
-    summary = review_summary(badges[cid] for cid in visible_ids)
+    # *after* filtering, before pagination). Its ``total`` is the count of
+    # that same set, so no second aggregate is needed.
+    summary = summary_from_sql(session, ranked)
+    total = summary.total
+    if total == 0:
+        return _empty_response(request, includes, offset, limit)
 
-    # Load quality + created_at per visible id in one shot for sorting.
-    quality_rows = session.execute(
-        select(Calculation.id, Calculation.quality).where(
-            Calculation.id.in_(visible_ids)
-        )
-    ).all()
-    quality_by_id = {row.id: row.quality for row in quality_rows}
-
-    visible_ids.sort(
-        key=lambda cid: (
-            REVIEW_RANK[badges[cid].status],
-            _QUALITY_RANK[quality_by_id[cid]],
-            -created_at_by_id[cid].timestamp(),
-            -cid,
+    # ``id`` desc is the tiebreak that makes this a total order — without it
+    # two rows equal on rank, quality and created_at (every row inserted in
+    # one transaction shares ``created_at``) would page non-deterministically.
+    page_ids = list(
+        session.scalars(
+            select(ranked.c.id)
+            .order_by(
+                ranked.c.review_rank.asc(),
+                ranked.c.quality_rank.asc(),
+                ranked.c.created_at.desc(),
+                ranked.c.id.desc(),
+            )
+            .offset(offset)
+            .limit(limit)
         )
     )
 
-    total = len(visible_ids)
-    page_ids = visible_ids[offset : offset + limit]
+    # Badges for the page only — bounded by ``limit``, never by the match.
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids=page_ids,
+    )
 
     # Materialize each page row via the shared record builder so search
     # records and detail records have identical shape.
