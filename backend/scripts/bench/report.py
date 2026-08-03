@@ -301,26 +301,6 @@ KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
         ),
     },
     {
-        "shape": "calculation_search_by_lot",
-        "symptom": (
-            "1,060 SQL statements for a 50-record page, even though the hard "
-            "503 is fixed and the candidate set is now sliced in SQL."
-        ),
-        "cause": (
-            "The remaining statements are per-*page* work: the shared "
-            "`build_record` helper issues roughly 21 queries for each of the 50 "
-            "records it materializes. This is bounded by `limit`, so it does not "
-            "grow with corpus size."
-        ),
-        "why_not_fixed": (
-            "It is a bounded N+1, not a cliff — the cost is capped by the page "
-            "size at any corpus scale. Batching it means restructuring the "
-            "shared record builder used by both search and detail reads, which "
-            "is worth doing on its own evidence rather than folded into this "
-            "stage."
-        ),
-    },
-    {
         "shape": "structure_search_substructure",
         "symptom": "~550 ms for a substructure query matching 12,649 entries.",
         "cause": (
@@ -334,6 +314,68 @@ KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
         ),
     },
 )
+
+
+#: Defects this file previously published as measured-but-unfixed, and that
+#: have since been fixed. They stay on the page: a defect that is recorded
+#: while it is open and deleted the moment it closes leaves a reader unable to
+#: tell a problem that was solved from one that was never found. The numbers
+#: are in the results table above — this block is only the narrative.
+RESOLVED_SINCE: tuple[dict[str, str], ...] = (
+    {
+        "shape": "calculation_search_by_lot",
+        "symptom": (
+            "1,060 SQL statements for a 50-record page, even though the hard "
+            "503 was fixed and the candidate set was already sliced in SQL."
+        ),
+        "cause": (
+            "Per-*page* work: the shared `build_record` helper issued roughly "
+            "21 queries for each of the 50 records it materialized. Bounded by "
+            "`limit`, so it never grew with corpus size."
+        ),
+        "fix": (
+            "Two changes, neither of them the record-builder restructure this "
+            "entry once said would be needed. The fifteen single-column probes "
+            "behind `available_sections` and the evidence-provenance block are "
+            "one calculation id each, so they are now columns of one "
+            "`SELECT` instead of fifteen round trips — same predicates, same "
+            "results. And the search loaded the page's `calculation` rows one "
+            "`session.get` at a time; it now loads them in one statement and "
+            "indexes them by id. Marginal cost per record on this corpus: 21 "
+            "statements to 6. Guarded by "
+            "`backend/tests/services/scientific_read/"
+            "test_record_builder_statement_cost.py`, which pins the slope "
+            "rather than the total."
+        ),
+        "still_open": (
+            "Three statements per record remain — the owner block, the "
+            "combined probe and the submission link. Removing those does mean "
+            "handing the shared record builder prefetched data, and is still "
+            "worth doing on its own evidence rather than folded in here."
+        ),
+    },
+)
+
+
+def _resolved_block() -> list[str]:
+    lines = [
+        "## Measured defects that have since been fixed",
+        "",
+        "Recorded here rather than deleted, so a defect that was found and",
+        "solved stays distinguishable from one that was never found.",
+        "",
+    ]
+    for defect in RESOLVED_SINCE:
+        lines += [
+            f"### `{defect['shape']}`",
+            "",
+            f"- **Symptom:** {defect['symptom']}",
+            f"- **Cause:** {defect['cause']}",
+            f"- **Fix:** {defect['fix']}",
+            f"- **Still open:** {defect['still_open']}",
+            "",
+        ]
+    return lines
 
 
 def _unfixed_block() -> list[str]:
@@ -383,6 +425,7 @@ def build_report(before: dict, corpus: dict, after: dict | None) -> str:
     lines += _corpus_block(corpus)
     lines += _results_table(before, after)
     lines += _unfixed_block()
+    lines += _resolved_block()
     lines += _plans_block(after or before)
     return "\n".join(lines) + "\n"
 

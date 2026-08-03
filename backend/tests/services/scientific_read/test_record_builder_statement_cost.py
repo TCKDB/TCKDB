@@ -31,18 +31,23 @@ from tests.services.scientific_read._factories import (
     make_species_entry,
 )
 
-#: Statements ``build_record`` issues for one more record on a page, with the
-#: default (empty) include set — the shape ``calculation_search_by_lot``
-#: benchmarks. Measured, and it is exactly three:
+#: Statements ``build_record`` issues for one more record on a page of the
+#: fixture below: default (empty) include set, and a calculation carrying no
+#: software release, workflow tool, literature or submission link. Measured,
+#: and it is exactly three:
 #:
 #: 1. the owner block (``species_entry`` joined to ``species``);
 #: 2. the combined provenance/available-sections probe;
-#: 3. the submission link.
+#: 3. the submission-link lookup.
 #:
-#: Raising this number is a decision, not a detail: at ``limit=200`` each one
-#: is another two hundred round trips. Batching one of the three across the
-#: page — which means giving the shared record builder prefetched data — is
-#: how it goes down, not another per-record query.
+#: A fully-provenanced calculation costs a few more — on the Stage 4
+#: benchmark corpus the marginal cost is six, not three — so this is a floor
+#: on the real number, not the real number. That is the right thing to pin
+#: anyway: the regression this guards against is a *fan-out*, one builder
+#: quietly going back to a query per probe, which moves the floor by an order
+#: of magnitude and not by one or two. Batching a builder across the page —
+#: which means handing the shared record builder prefetched data — is how
+#: this goes down; another per-record query is how it goes up.
 STATEMENTS_PER_RECORD = 3
 
 _SMALL_PAGE = 10

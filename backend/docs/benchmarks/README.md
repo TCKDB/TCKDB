@@ -31,13 +31,13 @@ python scripts/bench/build_corpus.py --db tckdb_bench_s4 --drop
 | Architecture | `x86_64` |
 | Logical cores | 20 |
 | RAM | 62.6 GiB |
-| Kernel | 7.0.12-arch1-1 |
+| Kernel | 7.1.5-arch1-1 |
 | Python | 3.13.12 |
 | PostgreSQL | PostgreSQL 17.5 (Debian 17.5-1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit |
 | RDKit (Python) | 2025.09.6 |
 | RDKit cartridge | 4.7.0 |
 | SQLAlchemy | 2.0.46 |
-| Measured at | 2026-08-01T23:33:39 |
+| Measured at | 2026-08-03T16:36:07 |
 
 PostgreSQL tuning in force (server defaults unless noted):
 
@@ -179,24 +179,24 @@ issued — the diagnostic that distinguishes "needs an index" from
 
 | Shape | matched | p50 before | p50 after | p95 before | p95 after | sqlN before | sqlN after |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `species_search_by_smiles` | 1 | 11.1 | 14.3 | 14.2 | 15.6 | 8 | 11 |
-| `species_search_by_formula_broad` | 163 | 28.5 | 26.9 | 30.2 | 31.3 | 8 | 11 |
-| `species_search_by_formula_broad_include_all` | 163 | 39.5 | 33.0 | 170.6 | 33.9 | 12 | 15 |
-| `species_search_by_formula_deep_offset` | 163 | 25.6 | 22.3 | 26.7 | 26.5 | 8 | 11 |
-| `species_search_by_ref` | 1 | 11.0 | 14.6 | 12.7 | 17.0 | 9 | 12 |
-| `reaction_search_popular_participants` | 1 | 31.0 | 28.6 | 32.9 | 30.4 | 13 | 13 |
-| `reaction_search_rare_participants` | 1 | 8.4 | 7.8 | 8.7 | 9.3 | 13 | 13 |
-| `reaction_search_by_ref` | — | **HTTP 422** | 5.7 | **HTTP 422** | 8.2 | 0 | 11 |
-| `species_thermo_by_entry` | 1 | 11.8 | 9.7 | 15.2 | 13.8 | 13 | 13 |
-| `species_statmech_by_entry` | 2 | 11.8 | 10.1 | 14.0 | 13.5 | 23 | 23 |
-| `reaction_kinetics_by_entry` | 1 | 10.0 | 6.8 | 10.3 | 8.7 | 14 | 14 |
-| `thermo_search_broad` | 171 | 977.7 | 962.9 | 1,092.1 | 980.5 | 1,328 | 1,331 |
-| `kinetics_search_popular` | 0 | 31.7 | 29.6 | 33.1 | 170.1 | 15 | 15 |
-| `statmech_search_by_method` | 0 | 2.3 | 2.2 | 3.8 | 2.8 | 1 | 1 |
-| `species_calculations_search_broad` | 1,217 | 105.6 | 107.5 | 277.3 | 257.0 | 17 | 20 |
-| `calculation_search_by_lot` | — | **HTTP 503** | 346.6 | **HTTP 503** | 376.6 | 0 | 1,060 |
-| `structure_search_substructure` | 12,649 | 329.1 | 547.0 | 333.7 | 552.6 | 5 | 5 |
-| `structure_search_exact` | 2 | 5.2 | 3.6 | 7.6 | 6.2 | 5 | 5 |
+| `species_search_by_smiles` | 1 | 11.1 | 13.5 | 14.2 | 15.0 | 8 | 11 |
+| `species_search_by_formula_broad` | 163 | 28.5 | 23.1 | 30.2 | 29.1 | 8 | 11 |
+| `species_search_by_formula_broad_include_all` | 163 | 39.5 | 33.1 | 170.6 | 35.1 | 12 | 15 |
+| `species_search_by_formula_deep_offset` | 163 | 25.6 | 23.6 | 26.7 | 26.6 | 8 | 11 |
+| `species_search_by_ref` | 1 | 11.0 | 15.5 | 12.7 | 18.4 | 9 | 12 |
+| `reaction_search_popular_participants` | 1 | 31.0 | 30.5 | 32.9 | 36.7 | 13 | 13 |
+| `reaction_search_rare_participants` | 1 | 8.4 | 9.3 | 8.7 | 11.9 | 13 | 13 |
+| `reaction_search_by_ref` | — | **HTTP 422** | 8.9 | **HTTP 422** | 14.0 | 0 | 11 |
+| `species_thermo_by_entry` | 1 | 11.8 | 9.9 | 15.2 | 11.1 | 13 | 13 |
+| `species_statmech_by_entry` | 2 | 11.8 | 11.5 | 14.0 | 12.8 | 23 | 23 |
+| `reaction_kinetics_by_entry` | 1 | 10.0 | 8.1 | 10.3 | 9.8 | 14 | 14 |
+| `thermo_search_broad` | 171 | 977.7 | 1,057.0 | 1,092.1 | 1,104.0 | 1,328 | 1,331 |
+| `kinetics_search_popular` | 0 | 31.7 | 29.2 | 33.1 | 32.1 | 15 | 15 |
+| `statmech_search_by_method` | 0 | 2.3 | 2.3 | 3.8 | 3.0 | 1 | 1 |
+| `species_calculations_search_broad` | 1,217 | 105.6 | 111.0 | 277.3 | 256.6 | 17 | 20 |
+| `calculation_search_by_lot` | — | **HTTP 503** | 215.0 | **HTTP 503** | 225.4 | 0 | 310 |
+| `structure_search_substructure` | 12,649 | 329.1 | 542.0 | 333.7 | 552.6 | 5 | 5 |
+| `structure_search_exact` | 2 | 5.2 | 4.1 | 7.6 | 5.4 | 5 | 5 |
 
 ### Shapes carrying a warning
 
@@ -224,17 +224,23 @@ context.
 - **Cause:** `thermo_search` is a *composed* search: it walks every page of `species_search` to collect the complete candidate set, then calls the full `get_species_thermo` service once per surviving species entry, at roughly 14 SQL statements each. The cost is proportional to the number of matches, not to the page. `kinetics_search` has the same shape over `reaction_search`.
 - **Why not fixed:** Collapsing it would mean rewriting the composed searches as single SQL queries — a large change to the most intricate ranking logic in the read layer, with real regression risk to the D9 selection chain. The owner's Stage 4 direction was explicitly to add a bounded analytics surface for quantitative dataset construction rather than to keep growing the transactional searches, so the analytics endpoints are the supported path for this question. The defect is recorded here, measured, rather than left to be rediscovered.
 
-### `calculation_search_by_lot`
-
-- **Symptom:** 1,060 SQL statements for a 50-record page, even though the hard 503 is fixed and the candidate set is now sliced in SQL.
-- **Cause:** The remaining statements are per-*page* work: the shared `build_record` helper issues roughly 21 queries for each of the 50 records it materializes. This is bounded by `limit`, so it does not grow with corpus size.
-- **Why not fixed:** It is a bounded N+1, not a cliff — the cost is capped by the page size at any corpus scale. Batching it means restructuring the shared record builder used by both search and detail reads, which is worth doing on its own evidence rather than folded into this stage.
-
 ### `structure_search_substructure`
 
 - **Symptom:** ~550 ms for a substructure query matching 12,649 entries.
 - **Cause:** Not investigated in depth. The RDKit GiST index is used, but a substructure match over a large candidate set still rechecks many molecules.
 - **Why not fixed:** No plan-backed diagnosis was produced, so no fix and no index is proposed. Recorded as an open question rather than guessed at.
+
+## Measured defects that have since been fixed
+
+Recorded here rather than deleted, so a defect that was found and
+solved stays distinguishable from one that was never found.
+
+### `calculation_search_by_lot`
+
+- **Symptom:** 1,060 SQL statements for a 50-record page, even though the hard 503 was fixed and the candidate set was already sliced in SQL.
+- **Cause:** Per-*page* work: the shared `build_record` helper issued roughly 21 queries for each of the 50 records it materialized. Bounded by `limit`, so it never grew with corpus size.
+- **Fix:** Two changes, neither of them the record-builder restructure this entry once said would be needed. The fifteen single-column probes behind `available_sections` and the evidence-provenance block are one calculation id each, so they are now columns of one `SELECT` instead of fifteen round trips — same predicates, same results. And the search loaded the page's `calculation` rows one `session.get` at a time; it now loads them in one statement and indexes them by id. Marginal cost per record on this corpus: 21 statements to 6. Guarded by `backend/tests/services/scientific_read/test_record_builder_statement_cost.py`, which pins the slope rather than the total.
+- **Still open:** Three statements per record remain — the owner block, the combined probe and the submission link. Removing those does mean handing the shared record builder prefetched data, and is still worth doing on its own evidence rather than folded in here.
 
 ## Recorded query plans
 
@@ -243,293 +249,304 @@ issued, captured inside a rolled-back transaction.
 
 ### `species_search_by_smiles`
 
-Slowest statement: 3.0 ms of 7.2 ms total SQL across 11 statements.
-
-```sql
-SELECT thermo.species_entry_id FROM thermo WHERE thermo.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT)
-```
-
-```
-Seq Scan on thermo  (cost=0.00..2158.00 rows=4 width=8) (actual time=2.823..3.195 rows=2 loops=1)
-  Filter: (species_entry_id = ANY ('{1,50119}'::bigint[]))
-  Rows Removed by Filter: 59998
-  Buffers: shared hit=1408
-Planning:
-  Buffers: shared hit=155
-Planning Time: 0.322 ms
-Execution Time: 3.210 ms
-```
-
-### `species_search_by_formula_broad`
-
-Slowest statement: 5.9 ms of 23.9 ms total SQL across 11 statements.
-
-```sql
-SELECT statmech.species_entry_id FROM statmech WHERE statmech.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT, %(species_entry_id_1_3)s::BIGINT, %(species_entry_id_1_4)s::BIGINT, %(species_entry_id_1_5)s::BIGINT, %(species_entry_id_1_6)s::BIGINT, %(species_entry_id_1_7)s::BIGINT, %(species_entry_id_1_8)s::BIGINT, %(species_entry_id_1_9)s::BIGINT, %(species_entry_id_1_10)s::BIGINT, %(species_entry_id_1_11)s::BIGINT, %(species_entry_id_1_12)s::BIGINT, %(species_entry_id_1_13)s::BIGINT, %(species_entry_id_1_14)s::BIGINT, %(species_entry_id_1_15)s::BIGINT, %(species_entry_id_1_16)s::BIGINT, %(species_entry_id_1_17)s::BIGINT, %(species_entry_id_1_18)s::BIGINT, %(species_entry_id_1_19)s::BIGINT, %(species_entry_id_1_20)s::BIGINT, %(species_entry_id_1_21)s::BIGINT, %(species_entry_id_1_22)s::BIGINT, %(species_entry_id_1_23)s::BIGINT, %(species_entry_id_1_24)s::BIGINT, %(species_entry_id_1_25)s::BIGINT, %(species_entry_id_1_26)s::BIGINT, %(species_entry_id_1_27)s::BIGINT, %(species_entry_id_1_28)s::BIGINT, %(species_entry_id_1_29)s::BIGINT, %(species_entry_id_1_30)s::BIGINT, %(species_entry_id_1_31)s::BIGINT, %(species_entry_id_1_32)s::BIGINT, %(species_entry_id_1_33)s::BIGINT, %(species_entry_id_1_34)s::BIGINT, %(species_entry_id_1_35)s::BIGINT, %(species_entry_id_1_36)s::BIGINT, %(species_entry_id_1_37)s::BIGINT, %(species_entry_id_1_38)s::BIGINT, %(species_entry_id_1_39)s::BIGINT, %(species_entry_id_1_40)s::BIGINT, %(species_entry_id_1_41)s::BIGINT, %(species_entry_id_1_42)s::BIGINT, %(species_entry_id_1_43)s::BIGINT, %(species_entry_id_1_44)s::BIGINT, %(species_entry_id_1_45)s::BIGINT, %(species_entry_id_1_46)s::BIGINT, %(species_entry_id_1_47)s::BIGINT, %(species_entry_id_1_48)s::BIGINT, %(species_entry_id_1_49)s::BIGINT, %(species_entry_id_1_50)s::BIGINT, %(species_entry_id_1_51)s::BIGINT)
-```
-
-```
-Seq Scan on statmech  (cost=0.13..2458.13 rows=107 width=8) (actual time=0.101..3.736 rows=78 loops=1)
-  Filter: (species_entry_id = ANY ('{46681,46471,46040,45008,42301,39801,38967,34585,34377,29682,26611,26010,25778,22353,21811,19972,19838,19004,17376,17296,17108,14794,13611,11956,8449,8415,6158,2208,50042,49496,47905,47879,46039,45850,44688,43530,42357,40681,40265,40217,39192,37936,37512,37044,36951,33556,33289,33044,32201,31004,30543}'::bigint[]))
-  Rows Removed by Filter: 69922
-  Buffers: shared hit=1408
-Planning:
-  Buffers: shared hit=66
-Planning Time: 0.199 ms
-Execution Time: 3.746 ms
-```
-
-### `species_search_by_formula_broad_include_all`
-
-Slowest statement: 4.8 ms of 24.0 ms total SQL across 15 statements.
-
-```sql
-SELECT thermo.species_entry_id FROM thermo WHERE thermo.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT, %(species_entry_id_1_3)s::BIGINT, %(species_entry_id_1_4)s::BIGINT, %(species_entry_id_1_5)s::BIGINT, %(species_entry_id_1_6)s::BIGINT, %(species_entry_id_1_7)s::BIGINT, %(species_entry_id_1_8)s::BIGINT, %(species_entry_id_1_9)s::BIGINT, %(species_entry_id_1_10)s::BIGINT, %(species_entry_id_1_11)s::BIGINT, %(species_entry_id_1_12)s::BIGINT, %(species_entry_id_1_13)s::BIGINT, %(species_entry_id_1_14)s::BIGINT, %(species_entry_id_1_15)s::BIGINT, %(species_entry_id_1_16)s::BIGINT, %(species_entry_id_1_17)s::BIGINT, %(species_entry_id_1_18)s::BIGINT, %(species_entry_id_1_19)s::BIGINT, %(species_entry_id_1_20)s::BIGINT, %(species_entry_id_1_21)s::BIGINT, %(species_entry_id_1_22)s::BIGINT, %(species_entry_id_1_23)s::BIGINT, %(species_entry_id_1_24)s::BIGINT, %(species_entry_id_1_25)s::BIGINT, %(species_entry_id_1_26)s::BIGINT, %(species_entry_id_1_27)s::BIGINT, %(species_entry_id_1_28)s::BIGINT, %(species_entry_id_1_29)s::BIGINT, %(species_entry_id_1_30)s::BIGINT, %(species_entry_id_1_31)s::BIGINT, %(species_entry_id_1_32)s::BIGINT, %(species_entry_id_1_33)s::BIGINT, %(species_entry_id_1_34)s::BIGINT, %(species_entry_id_1_35)s::BIGINT, %(species_entry_id_1_36)s::BIGINT, %(species_entry_id_1_37)s::BIGINT, %(species_entry_id_1_38)s::BIGINT, %(species_entry_id_1_39)s::BIGINT, %(species_entry_id_1_40)s::BIGINT, %(species_entry_id_1_41)s::BIGINT, %(species_entry_id_1_42)s::BIGINT, %(species_entry_id_1_43)s::BIGINT, %(species_entry_id_1_44)s::BIGINT, %(species_entry_id_1_45)s::BIGINT, %(species_entry_id_1_46)s::BIGINT, %(species_entry_id_1_47)s::BIGINT, %(species_entry_id_1_48)s::BIGINT, %(species_entry_id_1_49)s::BIGINT, %(species_entry_id_1_50)s::BIGINT, %(species_entry_id_1_51)s::BIGINT)
-```
-
-```
-Seq Scan on thermo  (cost=0.13..2308.13 rows=97 width=8) (actual time=0.013..2.878 rows=70 loops=1)
-  Filter: (species_entry_id = ANY ('{46681,46471,46040,45008,42301,39801,38967,34585,34377,29682,26611,26010,25778,22353,21811,19972,19838,19004,17376,17296,17108,14794,13611,11956,8449,8415,6158,2208,50042,49496,47905,47879,46039,45850,44688,43530,42357,40681,40265,40217,39192,37936,37512,37044,36951,33556,33289,33044,32201,31004,30543}'::bigint[]))
-  Rows Removed by Filter: 59930
-  Buffers: shared hit=1408
-Planning Time: 0.060 ms
-Execution Time: 2.885 ms
-```
-
-### `species_search_by_formula_deep_offset`
-
-Slowest statement: 3.1 ms of 11.8 ms total SQL across 11 statements.
-
-```sql
-SELECT statmech.species_entry_id FROM statmech WHERE statmech.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT, %(species_entry_id_1_3)s::BIGINT, %(species_entry_id_1_4)s::BIGINT, %(species_entry_id_1_5)s::BIGINT, %(species_entry_id_1_6)s::BIGINT, %(species_entry_id_1_7)s::BIGINT, %(species_entry_id_1_8)s::BIGINT, %(species_entry_id_1_9)s::BIGINT, %(species_entry_id_1_10)s::BIGINT, %(species_entry_id_1_11)s::BIGINT, %(species_entry_id_1_12)s::BIGINT, %(species_entry_id_1_13)s::BIGINT, %(species_entry_id_1_14)s::BIGINT, %(species_entry_id_1_15)s::BIGINT, %(species_entry_id_1_16)s::BIGINT, %(species_entry_id_1_17)s::BIGINT, %(species_entry_id_1_18)s::BIGINT, %(species_entry_id_1_19)s::BIGINT, %(species_entry_id_1_20)s::BIGINT, %(species_entry_id_1_21)s::BIGINT, %(species_entry_id_1_22)s::BIGINT, %(species_entry_id_1_23)s::BIGINT, %(species_entry_id_1_24)s::BIGINT, %(species_entry_id_1_25)s::BIGINT, %(species_entry_id_1_26)s::BIGINT, %(species_entry_id_1_27)s::BIGINT, %(species_entry_id_1_28)s::BIGINT, %(species_entry_id_1_29)s::BIGINT, %(species_entry_id_1_30)s::BIGINT, %(species_entry_id_1_31)s::BIGINT, %(species_entry_id_1_32)s::BIGINT, %(species_entry_id_1_33)s::BIGINT, %(species_entry_id_1_34)s::BIGINT, %(species_entry_id_1_35)s::BIGINT, %(species_entry_id_1_36)s::BIGINT, %(species_entry_id_1_37)s::BIGINT, %(species_entry_id_1_38)s::BIGINT, %(species_entry_id_1_39)s::BIGINT, %(species_entry_id_1_40)s::BIGINT, %(species_entry_id_1_41)s::BIGINT, %(species_entry_id_1_42)s::BIGINT, %(species_entry_id_1_43)s::BIGINT, %(species_entry_id_1_44)s::BIGINT, %(species_entry_id_1_45)s::BIGINT, %(species_entry_id_1_46)s::BIGINT, %(species_entry_id_1_47)s::BIGINT, %(species_entry_id_1_48)s::BIGINT, %(species_entry_id_1_49)s::BIGINT, %(species_entry_id_1_50)s::BIGINT)
-```
-
-```
-Seq Scan on statmech  (cost=0.12..2458.12 rows=105 width=8) (actual time=0.181..3.648 rows=57 loops=1)
-  Filter: (species_entry_id = ANY ('{36792,36621,36491,36459,36202,35586,35474,35143,35004,32473,31760,31246,30186,29433,29295,28711,27634,27115,26460,24845,23225,22217,21773,19519,19444,19167,19102,17166,16626,15471,14938,14558,14081,11590,10748,10507,10279,9832,8874,8819,8525,8244,7104,6741,5805,5536,5084,4910,4021,3101}'::bigint[]))
-  Rows Removed by Filter: 69943
-  Buffers: shared hit=1408
-Planning Time: 0.069 ms
-Execution Time: 3.657 ms
-```
-
-### `species_search_by_ref`
-
-Slowest statement: 2.4 ms of 6.8 ms total SQL across 12 statements.
+Slowest statement: 2.5 ms of 6.7 ms total SQL across 11 statements.
 
 ```sql
 SELECT statmech.species_entry_id FROM statmech WHERE statmech.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT)
 ```
 
 ```
-Seq Scan on statmech  (cost=0.00..2283.00 rows=4 width=8) (actual time=0.656..2.266 rows=4 loops=1)
+Seq Scan on statmech  (cost=0.00..2283.00 rows=4 width=8) (actual time=1.509..4.051 rows=4 loops=1)
   Filter: (species_entry_id = ANY ('{1,50119}'::bigint[]))
   Rows Removed by Filter: 69996
   Buffers: shared hit=1408
-Planning Time: 0.026 ms
-Execution Time: 2.272 ms
+Planning:
+  Buffers: shared hit=155
+Planning Time: 0.317 ms
+Execution Time: 4.063 ms
+```
+
+### `species_search_by_formula_broad`
+
+Slowest statement: 3.5 ms of 12.8 ms total SQL across 11 statements.
+
+```sql
+SELECT statmech.species_entry_id FROM statmech WHERE statmech.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT, %(species_entry_id_1_3)s::BIGINT, %(species_entry_id_1_4)s::BIGINT, %(species_entry_id_1_5)s::BIGINT, %(species_entry_id_1_6)s::BIGINT, %(species_entry_id_1_7)s::BIGINT, %(species_entry_id_1_8)s::BIGINT, %(species_entry_id_1_9)s::BIGINT, %(species_entry_id_1_10)s::BIGINT, %(species_entry_id_1_11)s::BIGINT, %(species_entry_id_1_12)s::BIGINT, %(species_entry_id_1_13)s::BIGINT, %(species_entry_id_1_14)s::BIGINT, %(species_entry_id_1_15)s::BIGINT, %(species_entry_id_1_16)s::BIGINT, %(species_entry_id_1_17)s::BIGINT, %(species_entry_id_1_18)s::BIGINT, %(species_entry_id_1_19)s::BIGINT, %(species_entry_id_1_20)s::BIGINT, %(species_entry_id_1_21)s::BIGINT, %(species_entry_id_1_22)s::BIGINT, %(species_entry_id_1_23)s::BIGINT, %(species_entry_id_1_24)s::BIGINT, %(species_entry_id_1_25)s::BIGINT, %(species_entry_id_1_26)s::BIGINT, %(species_entry_id_1_27)s::BIGINT, %(species_entry_id_1_28)s::BIGINT, %(species_entry_id_1_29)s::BIGINT, %(species_entry_id_1_30)s::BIGINT, %(species_entry_id_1_31)s::BIGINT, %(species_entry_id_1_32)s::BIGINT, %(species_entry_id_1_33)s::BIGINT, %(species_entry_id_1_34)s::BIGINT, %(species_entry_id_1_35)s::BIGINT, %(species_entry_id_1_36)s::BIGINT, %(species_entry_id_1_37)s::BIGINT, %(species_entry_id_1_38)s::BIGINT, %(species_entry_id_1_39)s::BIGINT, %(species_entry_id_1_40)s::BIGINT, %(species_entry_id_1_41)s::BIGINT, %(species_entry_id_1_42)s::BIGINT, %(species_entry_id_1_43)s::BIGINT, %(species_entry_id_1_44)s::BIGINT, %(species_entry_id_1_45)s::BIGINT, %(species_entry_id_1_46)s::BIGINT, %(species_entry_id_1_47)s::BIGINT, %(species_entry_id_1_48)s::BIGINT, %(species_entry_id_1_49)s::BIGINT, %(species_entry_id_1_50)s::BIGINT, %(species_entry_id_1_51)s::BIGINT)
+```
+
+```
+Seq Scan on statmech  (cost=0.13..2458.13 rows=107 width=8) (actual time=0.068..3.314 rows=78 loops=1)
+  Filter: (species_entry_id = ANY ('{2208,6158,8415,8449,11956,13611,14794,17108,17296,17376,19004,19838,19972,21811,22353,25778,26010,26611,29682,30543,31004,32201,33044,33289,33556,34377,34585,36951,37044,37512,37936,38967,39192,39801,40217,40265,40681,42301,42357,43530,44688,45008,45850,46039,46040,46471,46681,47879,47905,49496,50042}'::bigint[]))
+  Rows Removed by Filter: 69922
+  Buffers: shared hit=1408
+Planning:
+  Buffers: shared hit=3
+Planning Time: 0.079 ms
+Execution Time: 3.320 ms
+```
+
+### `species_search_by_formula_broad_include_all`
+
+Slowest statement: 3.8 ms of 22.6 ms total SQL across 15 statements.
+
+```sql
+SELECT statmech.species_entry_id, statmech.id FROM statmech WHERE statmech.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT, %(species_entry_id_1_3)s::BIGINT, %(species_entry_id_1_4)s::BIGINT, %(species_entry_id_1_5)s::BIGINT, %(species_entry_id_1_6)s::BIGINT, %(species_entry_id_1_7)s::BIGINT, %(species_entry_id_1_8)s::BIGINT, %(species_entry_id_1_9)s::BIGINT, %(species_entry_id_1_10)s::BIGINT, %(species_entry_id_1_11)s::BIGINT, %(species_entry_id_1_12)s::BIGINT, %(species_entry_id_1_13)s::BIGINT, %(species_entry_id_1_14)s::BIGINT, %(species_entry_id_1_15)s::BIGINT, %(species_entry_id_1_16)s::BIGINT, %(species_entry_id_1_17)s::BIGINT, %(species_entry_id_1_18)s::BIGINT, %(species_entry_id_1_19)s::BIGINT, %(species_entry_id_1_20)s::BIGINT, %(species_entry_id_1_21)s::BIGINT, %(species_entry_id_1_22)s::BIGINT, %(species_entry_id_1_23)s::BIGINT, %(species_entry_id_1_24)s::BIGINT, %(species_entry_id_1_25)s::BIGINT, %(species_entry_id_1_26)s::BIGINT, %(species_entry_id_1_27)s::BIGINT, %(species_entry_id_1_28)s::BIGINT, %(species_entry_id_1_29)s::BIGINT, %(species_entry_id_1_30)s::BIGINT, %(species_entry_id_1_31)s::BIGINT, %(species_entry_id_1_32)s::BIGINT, %(species_entry_id_1_33)s::BIGINT, %(species_entry_id_1_34)s::BIGINT, %(species_entry_id_1_35)s::BIGINT, %(species_entry_id_1_36)s::BIGINT, %(species_entry_id_1_37)s::BIGINT, %(species_entry_id_1_38)s::BIGINT, %(species_entry_id_1_39)s::BIGINT, %(species_entry_id_1_40)s::BIGINT, %(species_entry_id_1_41)s::BIGINT, %(species_entry_id_1_42)s::BIGINT, %(species_entry_id_1_43)s::BIGINT, %(species_entry_id_1_44)s::BIGINT, %(species_entry_id_1_45)s::BIGINT, %(species_entry_id_1_46)s::BIGINT, %(species_entry_id_1_47)s::BIGINT, %(species_entry_id_1_48)s::BIGINT, %(species_entry_id_1_49)s::BIGINT, %(species_entry_id_1_50)s::BIGINT, %(species_entry_id_1_51)s::BIGINT)
+```
+
+```
+Seq Scan on statmech  (cost=0.13..2458.13 rows=107 width=16) (actual time=0.070..3.218 rows=78 loops=1)
+  Filter: (species_entry_id = ANY ('{2208,6158,8415,8449,11956,13611,14794,17108,17296,17376,19004,19838,19972,21811,22353,25778,26010,26611,29682,30543,31004,32201,33044,33289,33556,34377,34585,36951,37044,37512,37936,38967,39192,39801,40217,40265,40681,42301,42357,43530,44688,45008,45850,46039,46040,46471,46681,47879,47905,49496,50042}'::bigint[]))
+  Rows Removed by Filter: 69922
+  Buffers: shared hit=1408
+Planning:
+  Buffers: shared hit=3
+Planning Time: 0.094 ms
+Execution Time: 3.225 ms
+```
+
+### `species_search_by_formula_deep_offset`
+
+Slowest statement: 3.8 ms of 17.5 ms total SQL across 11 statements.
+
+```sql
+SELECT statmech.species_entry_id FROM statmech WHERE statmech.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT, %(species_entry_id_1_3)s::BIGINT, %(species_entry_id_1_4)s::BIGINT, %(species_entry_id_1_5)s::BIGINT, %(species_entry_id_1_6)s::BIGINT, %(species_entry_id_1_7)s::BIGINT, %(species_entry_id_1_8)s::BIGINT, %(species_entry_id_1_9)s::BIGINT, %(species_entry_id_1_10)s::BIGINT, %(species_entry_id_1_11)s::BIGINT, %(species_entry_id_1_12)s::BIGINT, %(species_entry_id_1_13)s::BIGINT, %(species_entry_id_1_14)s::BIGINT, %(species_entry_id_1_15)s::BIGINT, %(species_entry_id_1_16)s::BIGINT, %(species_entry_id_1_17)s::BIGINT, %(species_entry_id_1_18)s::BIGINT, %(species_entry_id_1_19)s::BIGINT, %(species_entry_id_1_20)s::BIGINT, %(species_entry_id_1_21)s::BIGINT, %(species_entry_id_1_22)s::BIGINT, %(species_entry_id_1_23)s::BIGINT, %(species_entry_id_1_24)s::BIGINT, %(species_entry_id_1_25)s::BIGINT, %(species_entry_id_1_26)s::BIGINT, %(species_entry_id_1_27)s::BIGINT, %(species_entry_id_1_28)s::BIGINT, %(species_entry_id_1_29)s::BIGINT, %(species_entry_id_1_30)s::BIGINT, %(species_entry_id_1_31)s::BIGINT, %(species_entry_id_1_32)s::BIGINT, %(species_entry_id_1_33)s::BIGINT, %(species_entry_id_1_34)s::BIGINT, %(species_entry_id_1_35)s::BIGINT, %(species_entry_id_1_36)s::BIGINT, %(species_entry_id_1_37)s::BIGINT, %(species_entry_id_1_38)s::BIGINT, %(species_entry_id_1_39)s::BIGINT, %(species_entry_id_1_40)s::BIGINT, %(species_entry_id_1_41)s::BIGINT, %(species_entry_id_1_42)s::BIGINT, %(species_entry_id_1_43)s::BIGINT, %(species_entry_id_1_44)s::BIGINT, %(species_entry_id_1_45)s::BIGINT, %(species_entry_id_1_46)s::BIGINT, %(species_entry_id_1_47)s::BIGINT, %(species_entry_id_1_48)s::BIGINT, %(species_entry_id_1_49)s::BIGINT, %(species_entry_id_1_50)s::BIGINT)
+```
+
+```
+Seq Scan on statmech  (cost=0.12..2458.12 rows=105 width=8) (actual time=0.194..4.735 rows=57 loops=1)
+  Filter: (species_entry_id = ANY ('{3101,4021,4910,5084,5536,5805,6741,7104,8244,8525,8819,8874,9832,10279,10507,10748,11590,14081,14558,14938,15471,16626,17166,19102,19167,19444,19519,21773,22217,23225,24845,26460,27115,27634,28711,29295,29433,30186,31246,31760,32473,35004,35143,35474,35586,36202,36459,36491,36621,36792}'::bigint[]))
+  Rows Removed by Filter: 69943
+  Buffers: shared hit=1408
+Planning Time: 0.091 ms
+Execution Time: 4.745 ms
+```
+
+### `species_search_by_ref`
+
+Slowest statement: 2.8 ms of 7.2 ms total SQL across 12 statements.
+
+```sql
+SELECT statmech.species_entry_id FROM statmech WHERE statmech.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT)
+```
+
+```
+Seq Scan on statmech  (cost=0.00..2283.00 rows=4 width=8) (actual time=0.673..2.339 rows=4 loops=1)
+  Filter: (species_entry_id = ANY ('{1,50119}'::bigint[]))
+  Rows Removed by Filter: 69996
+  Buffers: shared hit=1408
+Planning Time: 0.029 ms
+Execution Time: 2.345 ms
 ```
 
 ### `reaction_search_popular_participants`
 
-Slowest statement: 9.9 ms of 14.1 ms total SQL across 13 statements.
+Slowest statement: 10.5 ms of 14.6 ms total SQL across 13 statements.
 
 ```sql
 SELECT reaction_entry_structure_participant.reaction_entry_id, reaction_entry_structure_participant.role, species_entry.species_id FROM reaction_entry_structure_participant JOIN species_entry ON species_entry.id = reaction_entry_structure_participant.species_entry_id WHERE reaction_entry_structure_participant.reaction_entry_id IN (%(reaction_entry_id_1_1)s::BIGINT, %(reaction_entry_id_1_2)s::BIGINT, %(reaction_entry_id_1_3)s::BIGINT, %(reaction_entry_id_1_4)s::BIGINT, %(reaction_entry_id_1_5)s::BIGINT, %(reaction_entry_id_1_6)s::BIGINT, %(reaction_entry_id_1_7)s::BIGINT, %(reaction_entry_id_1_8)s::BIGINT, %(reaction_entry_id_1_9)s::BIGINT, %(reaction_entry_id_1_10)s::BIGINT, %(reaction_entry_id_1_11)s::BIGINT, %(reaction_entry_id_1_12)s::BIGINT, %(reaction_entry_id_1_13)s::BIGINT, %(reaction_entry_id_1_14)s::BIGINT, %(reaction_entry_id_1_15)s::BIGINT, %(reaction_entry_id_1_16)s::BIGINT, %(reaction_entry_id_1_17)s::BIGINT, %(reaction_entry_id_1_18)s::BIGINT, %(reaction_entry_id_1_19)s::BIGINT, %(reaction_entry_id_1_20)s::BIGINT, %(reaction_entry_id_1_21)s::BIGINT, %(reaction_entry_id_1_22)s::BIGINT, %(reaction_entry_id_1_23)s::BIGINT, %(reaction_entry_id_1_24)s::BIGINT, %(reaction_entry_id_1_25)s::BIGINT, %(reaction_entry_id_1_26)s::BIGINT, %(reaction_entry_id_1_27)s::BIGINT, %(reaction_entry_id_1_28)s::BIGINT, %(reaction_entry_id_1_29)s::BIGINT, %(reaction_entry_id_1_30)s::BIGINT, %(reaction_entry_id_1_31)s::BIGINT, %(reaction_entry_id_1_32)s::BIGINT, %(reaction_entry_id_1_33)s::BIGINT, %(reaction_entry_id_1_34)s::BIGINT, %(reaction_entry_id_1_35)s::BIGINT, %(reaction_entry_id_1_36)s::BIGINT, %(reaction_entry_id_1_37)s::BIGINT, %(reaction_entry_id_1_38)s::BIGINT, %(reaction_entry_id_1_39)s::BIGINT, %(reaction_entry_id_1_40)s::BIGINT, %(reaction_entry_id_1_41)s::BIGINT, %(reaction_entry_id_1_42)s::BIGINT, %(reaction_entry_id_1_43)s::BIGINT, %(reaction_entry_id_1_44)s::BIGINT, %(reaction_entry_id_1_45)s::BIGINT, %(reaction_entry_id_1_46)s::BIGINT, %(reaction_entry_id_
 ```
 
 ```
-Hash Join  (cost=4206.99..4834.38 rows=6093 width=20) (actual time=8.087..9.434 rows=6309 loops=1)
+Hash Join  (cost=4207.59..4835.54 rows=6125 width=20) (actual time=10.032..11.598 rows=6309 loops=1)
   Hash Cond: (reaction_entry_structure_participant.species_entry_id = species_entry.id)
   Buffers: shared hit=3643
-  ->  Bitmap Heap Scan on reaction_entry_structure_participant  (cost=341.54..952.94 rows=6093 width=20) (actual time=0.708..1.252 rows=6309 loops=1)
+  ->  Bitmap Heap Scan on reaction_entry_structure_participant  (cost=342.13..954.01 rows=6125 width=20) (actual time=0.793..1.405 rows=6309 loops=1)
         Recheck Cond: (reaction_entry_id = ANY ('{1,7,10,13,31,47,50,51,53,62,81,83,85,86,104,112,127,130,141,159,181,192,196,199,200,216,229,270,275,292,296,309,320,323,335,336,349,356,366,380,384,390,410,413,422,427,461,470,483,496,504,511,523,524,526,529,550,569,575,585,592,607,608,654,659,667,673,686,691,700,712,724,726,731,734,745,749,756,775,781,783,785,793,799,809,813,818,826,827,836,838,872,875,892,902,905,911,913,944,946,956,964,965,975,984,986,998,1002,1007,1014,1019,1024,1027,1044,1050,1053,1062,1071,1078,1104,1112,1141,1154,1155,1159,1165,1172,1173,1179,1192,1200,1211,1230,1237,1239,1242,1252,1264,1277,1299,1300,1305,1322,1339,1344,1355,1359,1365,1384,1389,1391,1400,1415,1426,1428,1434,1453,1468,1490,1491,1503,1511,1513,1525,1530,1539,1577,1580,1586,1587,1594,1627,1630,1636,1651,1653,1674,1681,1716,1755,1760,1771,1776,1779,1783,1792,1808,1818,1822,1837,1841,1852,1854,1885,1889,1890,1900,1908,1914,1915,1922,1923,1936,1942,1959,1966,1984,1988,1990,1998,2000,2001,2002,2004,2017,2029,2034,2037,2064,2069,2085,2102,2103,2112,2114,2137,2142,2152,2160,2185,2201,2207,2208,2212,2237,2242,2256,2262,2268,2276,2277,2306,2308,2321,2344,2359,2368,2371,2384,2391,2401,2402,2421,2423,2428,2430,2436,2440,2449,2454,2464,2484,2493,2499,2508,2513,2538,2549,2576,2579,2593,2595,2605,2609,2612,2616,2620,2625,2639,2663,2665,2712,2722,2723,2728,2746,2762,2764,2773,2797,2802,2804,2821,2839,2844,2853,2865,2869,2886,2893,2894,2917,2922,2923,2929,2949,2956,2961,2962,2968,2985,2987,2997,3006,3008,3022,3040,3047,3055,3060,3065,3071,3094,3097,3107,3110,3113,3115,3123,3129,3135,3144,3157,3164,3168,3183,3188,3198,3211,3216,3231,3262,3268,3292,3303,3306,3309,3343,3359,3362,3372,3378,3386,3403,3419,3429,3436,3452,3458,3459,3466,3470,3473,3476,3479,3485,3496,3497,3504,3511,3520,3548,3554,3557,3566,3585,3587,3594,3597,3602,3604,3612,3619,3620,3661,3668,3672,3689,3722,3736,3742,3751,3770,3773,3783,3803,3806,3809,3830,3831,3838,3841,3847,3850,3855,3860,3895,3909,3924,3925,3932,3934,3951,3968,3971,3972,4017,4020,4033,4035,4038,4057,4060,4079,4089,4093,4129,4130,4168,4171,4179,4180,4189,4196,4201,4202,4203,4227,4241,4247,4259,4264,4275,4281,4284,4285,4301,4302,4304,4310,4317,4324,4328,4329,4338,4341,4343,4353,4357,4358,4379,4382,4384,4388,4389,4405,4407,4411,4416,4428,4433,4434,4443,4469,4479,4482,4487,4489,4491,4492,4494,4497,4500,4505,4515,4518,4521,4538,4572,4579,4585,4598,4602,4619,4621,4623,4626,4627,4637,4643,4655,4667,4669,4682,4688,4692,4705,4706,4707,4710,4714,4726,4745,4748,4759,4760,4779,4800,4801,4806,4829,4831,4842,4848,4858,4862,4867,4882,4920,4921,4934,4966,4969,4974,4975,4981,4982,4992,5007,5028,5038,5052,5056,5063,5076,5088,5097,5153,5158,5171,5181,5185,5189,5197,5216,5236,5241,5243,5259,5264,5271,5278,5286,5292,5304,5307,5311,5313,5318,5331,5332,5340,5348,5352,5361,5362,5371,5372,5374,5381,5382,5400,5406,5417,5418,5421,5425,5443,5447,5466,5475,5478,5488,5489,5491,5494,5499,5501,5503,5505,5514,5516,5525,5533,5549,5562,5564,5572,5581,5584,5597,5602,5610,5617,5619,5633,5636,5645,5651,5664,5679,5709,5710,5726,5729,5741,5756,5757,5780,5796,5804,5811,5817,5819,5822,5823,5830,5837,5857,5874,5880,5895,5905,5919,5936,5941,5948,5952,5954,5955,5959,5971,6008,6012,6059,6060,6071,6080,6086,6100,6126,6177,6179,6193,6209,6217,6224,6226,6229,6240,6254,6256,6271,6274,6300,6321,6324,6340,6345,6375,6378,6397,6399,6411,6437,6456,6528,6531,6543,6550,6560,6564,6567,6579,6588,6613,6628,6633,6634,6637,6642,6643,6682,6685,6688,6706,6711,6719,6721,6728,6738,6747,6748,6749,6750,6760,6841,6848,6858,6870,6879,6887,6896,6904,6909,6915,6928,6938,6943,6944,6945,6964,6973,6975,6983,6988,6989,6990,6996,7001,7018,7030,7036,7044,7052,7057,7064,7074,7077,7093,7127,7140,7144,7173,7177,7179,7187,7188,7193,7201,7218,7222,7254,7258,7265,7270,7271,7273,7290,7314,7317,7319,7327,7340,7352,7365,7376,7378,7398,7399,7408,7410,7413,7423,7426,7457,7489,7492,7502,7514,7522,7545,7549,7551,7552,7561,7569,7586,7588,7595,7612,7614,7619,7625,7640,7652,7654,7680,7687,7740,7748,7758,7764,7772,7791,7792,7801,7805,7826,7832,7835,7840,7852,7880,7885,7889,7894,7895,7896,7912,7916,7918,7919,7921,7966,7970,7975,7989,8001,8010,8012,8015,8032,8086,8089,8099,8114,8120,8162,8171,8173,8181,8183,8195,8211,8214,8216,8245,8261,8272,8277,8284,8289,8299,8303,8331,8340,8343,8377,8379,8404,8405,8406,8434,8436,8442,8474,8478,8484,8487,8500,8501,8512,8513,8519,8522,8531,8550,8570,8571,8578,8581,8583,8602,8617,8618,8627,8631,8651,8657,8660,8702,8711,8718,8727,8734,8745,8754,8778,8791,8793,8797,8803,8807,8811,8828,8887,8888,8898,8899,8902,8912,8915,8920,8923,8940,8943,8948,8954,8973,8984,9005,9018,9021,9026,9036,9043,9044,9086,9104,9109,9116,9118,9127,9128,9140,9143,9156,9163,9180,9184,9193,9205,9209,9212,9214,9219,9222,9231,9244,9246,9247,9266,9271,9286,9295,9320,9324,9351,9356,9360,9364,9366,9368,9391,9404,9418,9422,9431,9446,9453,9456,9459,9470,9481,9499,9507,9512,9525,9526,9532,9541,9544,9547,9548,9549,9569,9575,9576,9582,9596,9598,9613,9618,9622,9630,9637,9657,9671,9693,9699,9717,9720,9722,9735,9743,9765,9771,9777,9783,9786,9793,9800,9813,9815,9833,9844,9857,9860,9861,9919,9930,9944,9963,9965,9967,10027,10029,10034,10035,10036,10083,10089,10158,10175,10179,10207,10212,10253,10257,10273,10278,10281,10288,10292,10305,10309,10348,10362,10364,10380,10419,10426,10434,10445,10453,10457,10478,10480,10485,10498,10502,10508,10512,10519,10526,10527,10529,10542,10550,10566,10567,10568,10569,10580,10588,10591,10617,10626,10640,10645,10650,10662,10686,10690,10693,10699,10706,10723,10744,10759,10761,10776,10777,10780,10785,10792,10856,10874,10877,10884,10896,10901,10907,10918,10929,10943,10955,10975,10980,10983,10984,10986,10994,11022,11025,11034,11041,11058,11075,11088,11089,11096,11108,11130,11148,11166,11169,11176,11188,11189,11223,11259,11283,11287,11288,11294,11305,11332,11355,11376,11382,11386,11387,11391,11397,11399,11409,11429,11432,11445,11447,11455,11457,11461,11463,11471,11485,11504,11509,11528,11532,11534,11563,11566,11580,11581,11586,11587,11593,11596,11616,11630,11633,11657,11659,11674,11684,11688,11695,11697,11708,11711,11713,11715,11717,11722,11723,11729,11758,11780,11781,11792,11793,11811,11816,11825,11841,11903,11908,11910,11912,11925,11926,11927,11929,11944,11954,11955,11959,11966,11976,11978,12001,12021,12052,12061,12077,12082,12084,12092,12094,12098,12100,12106,12116,12117,12119,12129,12142,12154,12155,12161,12168,12176,12178,12195,12203,12221,12226,12242,12243,12264,12277,12298,12300,12302,12304,12320,12327,12338,12348,12370,12377,12379,12382,12383,12384,12385,12398,12405,12408,12418,12442,12444,12464,12485,12486,12489,12491,12507,12535,12537,12552,12566,12567,12569,12578,12582,12586,12601,12624,12632,12634,12635,12649,12651,12658,12690,12700,12708,12726,12731,12742,12743,12760,12761,12770,12772,12778,12790,12793,12813,12817,12845,12864,12868,12874,12879,12899,12922,12937,12950,12960,12976,12995,13004,13008,13009,13014,13016,13035,13052,13065,13074,13079,13104,13105,13119,13164,13167,13168,13176,13185,13197,13205,13229,13244,13254,13274,13292,13297,13314,13331,13333,13350,13373,13375,13383,13388,13393,13403,13407,13412,13418,13429,13460,13480,13485,13497,13508,13524,13529,13542,13550,13554,13557,13588,13591,13611,13612,13645,13682,13687,13708,13712,13718,13719,13722,13761,13762,13785,13810,13830,13836,13840,13855,13874,13878,13901,13909,13912,13921,13931,13957,13969,13992,14002,14005,14012,14015,14017,14028,14031,14055,14080,14088,14093,14097,14102,14125,14144,14149,14160,14176,14199,14209,14216,14220,14222,14230,14234,14237,14249,14251,14269,14276,14282,14289,14293,14310,14319,14324,14345,14357,14359,14360,14364,14366,14371,14373,14385,14387,14403,14404,14406,14419,14434,14443,14449,14459,14467,14495,14502,14510,14524,14540,14544,14567,14578,14583,14592,14600,14617,14629,14632,14637,14649,14674,14680,14688,14695,14706,14716,14734,14741,14756,14772,14781,14791,14810,14825,14829,14830,14846,14873,14874,14879,14891,14909,14938,14950,14951,14957,14972,14993,14996}'::bigint[]))
         Heap Blocks: exact=475
         Buffers: shared hit=923
-        ->  Bitmap Index Scan on uq_reaction_entry_structure_participant_reaction_entry_id  (cost=0.00..336.25 rows=6093 width=0) (actual time=0.669..0.669 rows=6309 loops=1)
+        ->  Bitmap Index Scan on uq_reaction_entry_structure_participant_reaction_entry_id  (cost=0.00..336.83 rows=6125 width=0) (actual time=0.756..0.756 rows=6309 loops=1)
               Index Cond: (reaction_entry_id = ANY ('{1,7,10,13,31,47,50,51,53,62,81,83,85,86,104,112,127,130,141,159,181,192,196,199,200,216,229,270,275,292,296,309,320,323,335,336,349,356,366,380,384,390,410,413,422,427,461,470,483,496,504,511,523,524,526,529,550,569,575,585,592,607,608,654,659,667,673,686,691,700,712,724,726,731,734,745,749,756,775,781,783,785,793,799,809,813,818,826,827,836,838,872,875,892,902,905,911,913,944,946,956,964,965,975,984,986,998,1002,1007,1014,1019,1024,1027,1044,1050,1053,1062,1071,1078,1104,1112,1141,1154,1155,1159,1165,1172,1173,1179,1192,1200,1211,1230,1237,1239,1242,1252,1264,1277,1299,1300,1305,1322,1339,1344,1355,1359,1365,1384,1389,1391,1400,1415,1426,1428,1434,1453,1468,1490,1491,1503,1511,1513,1525,1530,1539,1577,1580,1586,1587,1594,1627,1630,1636,1651,1653,1674,1681,1716,1755,1760,1771,1776,1779,1783,1792,1808,1818,1822,1837,1841,1852,1854,1885,1889,1890,1900,1908,1914,1915,1922,1923,1936,1942,1959,1966,1984,1988,1990,1998,2000,2001,2002,2004,2017,2029,2034,2037,2064,2069,2085,2102,2103,2112,2114,2137,2142,2152,2160,2185,2201,2207,2208,2212,2237,2242,2256,2262,2268,2276,2277,2306,2308,2321,2344,2359,2368,2371,2384,2391,2401,2402,2421,2423,2428,2430,2436,2440,2449,2454,2464,2484,2493,2499,2508,2513,2538,2549,2576,2579,2593,2595,2605,2609,2612,2616,2620,2625,2639,2663,2665,2712,2722,2723,2728,2746,2762,2764,2773,2797,2802,2804,2821,2839,2844,2853,2865,2869,2886,2893,2894,2917,2922,2923,2929,2949,2956,2961,2962,2968,2985,2987,2997,3006,3008,3022,3040,3047,3055,3060,3065,3071,3094,3097,3107,3110,3113,3115,3123,3129,3135,3144,3157,3164,3168,3183,3188,3198,3211,3216,3231,3262,3268,3292,3303,3306,3309,3343,3359,3362,3372,3378,3386,3403,3419,3429,3436,3452,3458,3459,3466,3470,3473,3476,3479,3485,3496,3497,3504,3511,3520,3548,3554,3557,3566,3585,3587,3594,3597,3602,3604,3612,3619,3620,3661,3668,3672,3689,3722,3736,3742,3751,3770,3773,3783,3803,3806,3809,3830,3831,3838,3841,3847,3850,3855,3860,3895,3909,3924,3925,3932,3934,3951,3968,3971,3972,4017,4020,4033,4035,4038,4057,4060,4079,4089,4093,4129,4130,4168,4171,4179,4180,4189,4196,4201,4202,4203,4227,4241,4247,4259,4264,4275,4281,4284,4285,4301,4302,4304,4310,4317,4324,4328,4329,4338,4341,4343,4353,4357,4358,4379,4382,4384,4388,4389,4405,4407,4411,4416,4428,4433,4434,4443,4469,4479,4482,4487,4489,4491,4492,4494,4497,4500,4505,4515,4518,4521,4538,4572,4579,4585,4598,4602,4619,4621,4623,4626,4627,4637,4643,4655,4667,4669,4682,4688,4692,4705,4706,4707,4710,4714,4726,4745,4748,4759,4760,4779,4800,4801,4806,4829,4831,4842,4848,4858,4862,4867,4882,4920,4921,4934,4966,4969,4974,4975,4981,4982,4992,5007,5028,5038,5052,5056,5063,5076,5088,5097,5153,5158,5171,5181,5185,5189,5197,5216,5236,5241,5243,5259,5264,5271,5278,5286,5292,5304,5307,5311,5313,5318,5331,5332,5340,5348,5352,5361,5362,5371,5372,5374,5381,5382,5400,5406,5417,5418,5421,5425,5443,5447,5466,5475,5478,5488,5489,5491,5494,5499,5501,5503,5505,5514,5516,5525,5533,5549,5562,5564,5572,5581,5584,5597,5602,5610,5617,5619,5633,5636,5645,5651,5664,5679,5709,5710,5726,5729,5741,5756,5757,5780,5796,5804,5811,5817,5819,5822,5823,5830,5837,5857,5874,5880,5895,5905,5919,5936,5941,5948,5952,5954,5955,5959,5971,6008,6012,6059,6060,6071,6080,6086,6100,6126,6177,6179,6193,6209,6217,6224,6226,6229,6240,6254,6256,6271,6274,6300,6321,6324,6340,6345,6375,6378,6397,6399,6411,6437,6456,6528,6531,6543,6550,6560,6564,6567,6579,6588,6613,6628,6633,6634,6637,6642,6643,6682,6685,6688,6706,6711,6719,6721,6728,6738,6747,6748,6749,6750,6760,6841,6848,6858,6870,6879,6887,6896,6904,6909,6915,6928,6938,6943,6944,6945,6964,6973,6975,6983,6988,6989,6990,6996,7001,7018,7030,7036,7044,7052,7057,7064,7074,7077,7093,7127,7140,7144,7173,7177,7179,7187,7188,7193,7201,7218,7222,7254,7258,7265,7270,7271,7273,7290,7314,7317,7319,7327,7340,7352,7365,7376,7378,7398,7399,7408,7410,7413,7423,7426,7457,7489,7492,7502,7514,7522,7545,7549,7551,7552,7561,7569,7586,7588,7595,7612,7614,7619,7625,7640,7652,7654,7680,7687,7740,7748,7758,7764,7772,7791,7792,7801,7805,7826,7832,7835,7840,7852,7880,7885,7889,7894,7895,7896,7912,7916,7918,7919,7921,7966,7970,7975,7989,8001,8010,8012,8015,8032,8086,8089,8099,8114,8120,8162,8171,8173,8181,8183,8195,8211,8214,8216,8245,8261,8272,8277,8284,8289,8299,8303,8331,8340,8343,8377,8379,8404,8405,8406,8434,8436,8442,8474,8478,8484,8487,8500,8501,8512,8513,8519,8522,8531,8550,8570,8571,8578,8581,8583,8602,8617,8618,8627,8631,8651,8657,8660,8702,8711,8718,8727,8734,8745,8754,8778,8791,8793,8797,8803,8807,8811,8828,8887,8888,8898,8899,8902,8912,8915,8920,8923,8940,8943,8948,8954,8973,8984,9005,9018,9021,9026,9036,9043,9044,9086,9104,9109,9116,9118,9127,9128,9140,9143,9156,9163,9180,9184,9193,9205,9209,9212,9214,9219,9222,9231,9244,9246,9247,9266,9271,9286,9295,9320,9324,9351,9356,9360,9364,9366,9368,9391,9404,9418,9422,9431,9446,9453,9456,9459,9470,9481,9499,9507,9512,9525,9526,9532,9541,9544,9547,9548,9549,9569,9575,9576,9582,9596,9598,9613,9618,9622,9630,9637,9657,9671,9693,9699,9717,9720,9722,9735,9743,9765,9771,9777,9783,9786,9793,9800,9813,9815,9833,9844,9857,9860,9861,9919,9930,9944,9963,9965,9967,10027,10029,10034,10035,10036,10083,10089,10158,10175,10179,10207,10212,10253,10257,10273,10278,10281,10288,10292,10305,10309,10348,10362,10364,10380,10419,10426,10434,10445,10453,10457,10478,10480,10485,10498,10502,10508,10512,10519,10526,10527,10529,10542,10550,10566,10567,10568,10569,10580,10588,10591,10617,10626,10640,10645,10650,10662,10686,10690,10693,10699,10706,10723,10744,10759,10761,10776,10777,10780,10785,10792,10856,10874,10877,10884,10896,10901,10907,10918,10929,10943,10955,10975,10980,10983,10984,10986,10994,11022,11025,11034,11041,11058,11075,11088,11089,11096,11108,11130,11148,11166,11169,11176,11188,11189,11223,11259,11283,11287,11288,11294,11305,11332,11355,11376,11382,11386,11387,11391,11397,11399,11409,11429,11432,11445,11447,11455,11457,11461,11463,11471,11485,11504,11509,11528,11532,11534,11563,11566,11580,11581,11586,11587,11593,11596,11616,11630,11633,11657,11659,11674,11684,11688,11695,11697,11708,11711,11713,11715,11717,11722,11723,11729,11758,11780,11781,11792,11793,11811,11816,11825,11841,11903,11908,11910,11912,11925,11926,11927,11929,11944,11954,11955,11959,11966,11976,11978,12001,12021,12052,12061,12077,12082,12084,12092,12094,12098,12100,12106,12116,12117,12119,12129,12142,12154,12155,12161,12168,12176,12178,12195,12203,12221,12226,12242,12243,12264,12277,12298,12300,12302,12304,12320,12327,12338,12348,12370,12377,12379,12382,12383,12384,12385,12398,12405,12408,12418,12442,12444,12464,12485,12486,12489,12491,12507,12535,12537,12552,12566,12567,12569,12578,12582,12586,12601,12624,12632,12634,12635,12649,12651,12658,12690,12700,12708,12726,12731,12742,12743,12760,12761,12770,12772,12778,12790,12793,12813,12817,12845,12864,12868,12874,12879,12899,12922,12937,12950,12960,12976,12995,13004,13008,13009,13014,13016,13035,13052,13065,13074,13079,13104,13105,13119,13164,13167,13168,13176,13185,13197,13205,13229,13244,13254,13274,13292,13297,13314,13331,13333,13350,13373,13375,13383,13388,13393,13403,13407,13412,13418,13429,13460,13480,13485,13497,13508,13524,13529,13542,13550,13554,13557,13588,13591,13611,13612,13645,13682,13687,13708,13712,13718,13719,13722,13761,13762,13785,13810,13830,13836,13840,13855,13874,13878,13901,13909,13912,13921,13931,13957,13969,13992,14002,14005,14012,14015,14017,14028,14031,14055,14080,14088,14093,14097,14102,14125,14144,14149,14160,14176,14199,14209,14216,14220,14222,14230,14234,14237,14249,14251,14269,14276,14282,14289,14293,14310,14319,14324,14345,14357,14359,14360,14364,14366,14371,14373,14385,14387,14403,14404,14406,14419,14434,14443,14449,14459,14467,14495,14502,14510,14524,14540,14544,14567,14578,14583,14592,14600,14617,14629,14632,14637,14649,14674,14680,14688,14695,14706,14716,14734,14741,14756,14772,14781,14791,14810,14825,14829,14830,14846,14873,14874,14879,14891,14909,14938,14950,14951,14957,14972,14993,14996}'::bigint[]))
               Buffers: shared hit=448
-  ->  Hash  (cost=3229.09..3229.09 rows=50909 width=16) (actual time=7.241..7.241 rows=50909 loops=1)
+  ->  Hash  (cost=3229.09..3229.09 rows=50909 width=16) (actual time=9.103..9.103 rows=50909 loops=1)
         Buckets: 65536  Batches: 1  Memory Usage: 2899kB
         Buffers: shared hit=2720
-        ->  Seq Scan on species_entry  (cost=0.00..3229.09 rows=50909 width=16) (actual time=0.128..3.250 rows=50909 loops=1)
+        ->  Seq Scan on species_entry  (cost=0.00..3229.09 rows=50909 width=16) (actual time=0.633..4.699 rows=50909 loops=1)
               Buffers: shared hit=2720
 Planning:
   Buffers: shared hit=232
-Planning Time: 1.474 ms
-Execution Time: 9.589 ms
+Planning Time: 1.485 ms
+Execution Time: 11.765 ms
 ```
 
 ### `reaction_search_rare_participants`
 
-Slowest statement: 2.0 ms of 3.2 ms total SQL across 13 statements.
+Slowest statement: 2.1 ms of 3.4 ms total SQL across 13 statements.
 
 ```sql
 SELECT DISTINCT reaction_entry_structure_participant.reaction_entry_id FROM reaction_entry_structure_participant JOIN species_entry ON species_entry.id = reaction_entry_structure_participant.species_entry_id WHERE species_entry.species_id IN (%(species_id_1_1)s::BIGINT, %(species_id_1_2)s::BIGINT, %(species_id_1_3)s::BIGINT)
 ```
 
 ```
-Unique  (cost=1296.38..1296.40 rows=4 width=8) (actual time=3.896..3.900 rows=1 loops=1)
+Unique  (cost=1296.39..1296.41 rows=4 width=8) (actual time=3.955..3.958 rows=1 loops=1)
   Buffers: shared hit=532
-  ->  Sort  (cost=1296.38..1296.39 rows=4 width=8) (actual time=3.895..3.897 rows=3 loops=1)
+  ->  Sort  (cost=1296.39..1296.40 rows=4 width=8) (actual time=3.955..3.956 rows=3 loops=1)
         Sort Key: reaction_entry_structure_participant.reaction_entry_id
         Sort Method: quicksort  Memory: 25kB
         Buffers: shared hit=532
-        ->  Hash Join  (cost=17.50..1296.34 rows=4 width=8) (actual time=1.489..3.886 rows=3 loops=1)
+        ->  Hash Join  (cost=17.51..1296.35 rows=4 width=8) (actual time=1.522..3.947 rows=3 loops=1)
               Hash Cond: (reaction_entry_structure_participant.species_entry_id = species_entry.id)
               Buffers: shared hit=529
-              ->  Seq Scan on reaction_entry_structure_participant  (cost=0.00..1121.05 rows=60105 width=16) (actual time=0.001..1.664 rows=60105 loops=1)
+              ->  Seq Scan on reaction_entry_structure_participant  (cost=0.00..1121.05 rows=60105 width=16) (actual time=0.002..1.688 rows=60105 loops=1)
                     Buffers: shared hit=520
-              ->  Hash  (cost=17.47..17.47 rows=3 width=8) (actual time=0.012..0.014 rows=3 loops=1)
+              ->  Hash  (cost=17.48..17.48 rows=3 width=8) (actual time=0.009..0.009 rows=3 loops=1)
                     Buckets: 1024  Batches: 1  Memory Usage: 9kB
                     Buffers: shared hit=9
-                    ->  Index Scan using ix_species_entry_species_id on species_entry  (cost=0.29..17.47 rows=3 width=8) (actual time=0.008..0.012 rows=3 loops=1)
+                    ->  Index Scan using ix_species_entry_species_id on species_entry  (cost=0.29..17.48 rows=3 width=8) (actual time=0.004..0.008 rows=3 loops=1)
                           Index Cond: (species_id = ANY ('{46873,10474,21070}'::bigint[]))
                           Buffers: shared hit=9
 Planning:
   Buffers: shared hit=14
-Planning Time: 0.095 ms
-Execution Time: 3.910 ms
+Planning Time: 0.098 ms
+Execution Time: 3.973 ms
 ```
 
 ### `reaction_search_by_ref`
 
-Slowest statement: 0.5 ms of 1.1 ms total SQL across 11 statements.
+Slowest statement: 0.6 ms of 1.3 ms total SQL across 11 statements.
 
 ```sql
 SELECT kinetics.reaction_entry_id, count(kinetics.id) AS count_1 FROM kinetics WHERE kinetics.reaction_entry_id IN (%(reaction_entry_id_1_1)s::BIGINT) GROUP BY kinetics.reaction_entry_id
 ```
 
 ```
-GroupAggregate  (cost=0.00..529.46 rows=1 width=16) (actual time=0.384..0.384 rows=1 loops=1)
+GroupAggregate  (cost=0.00..529.46 rows=1 width=16) (actual time=0.436..0.436 rows=1 loops=1)
   Buffers: shared hit=359
-  ->  Seq Scan on kinetics  (cost=0.00..529.45 rows=1 width=16) (actual time=0.081..0.382 rows=1 loops=1)
+  ->  Seq Scan on kinetics  (cost=0.00..529.45 rows=1 width=16) (actual time=0.104..0.434 rows=1 loops=1)
         Filter: (reaction_entry_id = '1'::bigint)
         Rows Removed by Filter: 13635
         Buffers: shared hit=359
 Planning:
   Buffers: shared hit=69
-Planning Time: 0.101 ms
-Execution Time: 0.394 ms
+Planning Time: 0.179 ms
+Execution Time: 0.445 ms
 ```
 
 ### `species_thermo_by_entry`
 
-Slowest statement: 2.9 ms of 6.5 ms total SQL across 13 statements.
+Slowest statement: 2.1 ms of 4.8 ms total SQL across 13 statements.
 
 ```sql
 SELECT statmech.id FROM statmech WHERE statmech.species_entry_id = %(species_entry_id_1)s::BIGINT
 ```
 
 ```
-Seq Scan on statmech  (cost=0.00..2283.00 rows=2 width=8) (actual time=0.939..2.595 rows=2 loops=1)
+Seq Scan on statmech  (cost=0.00..2283.00 rows=2 width=8) (actual time=0.665..2.928 rows=2 loops=1)
   Filter: (species_entry_id = '1'::bigint)
   Rows Removed by Filter: 69998
   Buffers: shared hit=1408
-Planning:
-  Buffers: shared hit=3
-Planning Time: 0.051 ms
-Execution Time: 2.601 ms
+Planning Time: 0.039 ms
+Execution Time: 2.936 ms
 ```
 
 ### `species_statmech_by_entry`
 
-Slowest statement: 2.0 ms of 3.4 ms total SQL across 23 statements.
+Slowest statement: 2.7 ms of 4.4 ms total SQL across 23 statements.
 
 ```sql
 SELECT statmech.id, statmech.created_at FROM statmech WHERE statmech.species_entry_id = %(species_entry_id_1)s::BIGINT
 ```
 
 ```
-Seq Scan on statmech  (cost=0.00..2283.00 rows=2 width=16) (actual time=0.522..1.789 rows=2 loops=1)
+Seq Scan on statmech  (cost=0.00..2283.00 rows=2 width=16) (actual time=0.581..1.956 rows=2 loops=1)
   Filter: (species_entry_id = '1'::bigint)
   Rows Removed by Filter: 69998
   Buffers: shared hit=1408
 Planning:
   Buffers: shared hit=3
-Planning Time: 0.039 ms
-Execution Time: 1.794 ms
+Planning Time: 0.056 ms
+Execution Time: 1.962 ms
 ```
 
 ### `reaction_kinetics_by_entry`
 
-Slowest statement: 0.7 ms of 1.6 ms total SQL across 14 statements.
+Slowest statement: 0.6 ms of 2.1 ms total SQL across 14 statements.
 
 ```sql
 SELECT kinetics.id, kinetics.reaction_entry_id, kinetics.scientific_origin, kinetics.model_kind, kinetics.direction, kinetics.is_third_body, kinetics.literature_id, kinetics.workflow_tool_release_id, kinetics.software_release_id, kinetics.network_kinetics_id, kinetics.a, kinetics.a_units, kinetics.n, kinetics.ea_kj_mol, kinetics.a_uncertainty, kinetics.a_uncertainty_kind, kinetics.n_uncertainty, kinetics.ea_uncertainty_kj_mol, kinetics.tmin_k, kinetics.tmax_k, kinetics.degeneracy, kinetics.degeneracy_convention, kinetics.tunneling_model, kinetics.pressure_context, kinetics.pressure_bar, kinetics.note, kinetics.created_at, kinetics.created_by, kinetics.public_ref FROM kinetics WHERE kinetics.reaction_entry_id = %(reaction_entry_id_1)s::BIGINT
 ```
 
 ```
-Seq Scan on kinetics  (cost=0.00..529.45 rows=1 width=240) (actual time=0.101..0.397 rows=1 loops=1)
+Seq Scan on kinetics  (cost=0.00..529.45 rows=1 width=240) (actual time=0.193..0.764 rows=1 loops=1)
   Filter: (reaction_entry_id = '1'::bigint)
   Rows Removed by Filter: 13635
   Buffers: shared hit=359
 Planning:
   Buffers: shared hit=108
-Planning Time: 0.126 ms
-Execution Time: 0.420 ms
+Planning Time: 0.210 ms
+Execution Time: 0.801 ms
 ```
 
 ### `thermo_search_broad`
 
-Slowest statement: 6.3 ms of 686.4 ms total SQL across 1331 statements.
+Slowest statement: 4.8 ms of 688.1 ms total SQL across 1331 statements.
 
 ```sql
-SELECT thermo.id, thermo.species_entry_id, thermo.scientific_origin, thermo.model_kind, thermo.literature_id, thermo.workflow_tool_release_id, thermo.software_release_id, thermo.h298_kj_mol, thermo.s298_j_mol_k, thermo.h298_uncertainty_kj_mol, thermo.s298_uncertainty_j_mol_k, thermo.enthalpy_formation_0k_kj_mol, thermo.enthalpy_formation_0k_uncertainty_kj_mol, thermo.reference_pressure_bar, thermo.phase, thermo.tmin_k, thermo.tmax_k, thermo.statmech_id, thermo.note, thermo.created_at, thermo.created_by, thermo.public_ref FROM thermo WHERE thermo.species_entry_id = %(species_entry_id_1)s::BIGINT
+SELECT species_entry.id, species_entry.species_id, species_entry.kind, species_entry.mol, species_entry.unmapped_smiles, species_entry.stereo_label, species_entry.electronic_state_kind, species_entry.electronic_state_label, species_entry.term_symbol_raw, species_entry.term_symbol, species_entry.isotope_key, species_entry.isotopologue_label, species_entry.created_at, species_entry.created_by, species_entry.public_ref FROM species_entry LEFT OUTER JOIN record_review AS record_review_1 ON record_review_1.record_type = %(record_type_1)s AND record_review_1.record_id = species_entry.id WHERE species_entry.species_id IN (%(species_id_1_1)s::BIGINT, %(species_id_1_2)s::BIGINT, %(species_id_1_3)s::BIGINT, %(species_id_1_4)s::BIGINT, %(species_id_1_5)s::BIGINT, %(species_id_1_6)s::BIGINT, %(species_id_1_7)s::BIGINT, %(species_id_1_8)s::BIGINT, %(species_id_1_9)s::BIGINT, %(species_id_1_10)s::BIGINT, %(species_id_1_11)s::BIGINT, %(species_id_1_12)s::BIGINT, %(species_id_1_13)s::BIGINT, %(species_id_1_14)s::BIGINT, %(species_id_1_15)s::BIGINT, %(species_id_1_16)s::BIGINT, %(species_id_1_17)s::BIGINT, %(species_id_1_18)s::BIGINT, %(species_id_1_19)s::BIGINT, %(species_id_1_20)s::BIGINT, %(species_id_1_21)s::BIGINT, %(species_id_1_22)s::BIGINT, %(species_id_1_23)s::BIGINT, %(species_id_1_24)s::BIGINT, %(species_id_1_25)s::BIGINT, %(species_id_1_26)s::BIGINT, %(species_id_1_27)s::BIGINT, %(species_id_1_28)s::BIGINT, %(species_id_1_29)s::BIGINT, %(species_id_1_30)s::BIGINT, %(species_id_1_31)s::BIGINT, %(species_id_1_32)s::BIGINT, %(species_id_1_33)s::BIGINT, %(species_id_1_34)s::BIGINT, %(species_id_1_35)s::BIGINT, %(species_id_1_36)s::BIGINT, %(species_id_1_37)s::BIGINT, %(species_id_1_38)s::BIGINT, %(species_id_1_39)s::BIGINT, %(species_id_1_40)s::BIGINT, %(species_id_1_41)s::BIGINT, %(species_id_1_42)s::BIGINT, %(species_id_1_43)s::BIGINT, %(species_id_1_44)s::BIGINT, %(species_id_1_45)s::BIGINT, %(species_id_1_46)s::BIGINT, %(species_id_1_47)s::BIGINT, %(species_id_1_48)s::BI
 ```
 
 ```
-Seq Scan on thermo  (cost=0.00..2158.00 rows=2 width=211) (actual time=0.561..2.160 rows=2 loops=1)
-  Filter: (species_entry_id = '5777'::bigint)
-  Rows Removed by Filter: 59998
-  Buffers: shared hit=1408
+Sort  (cost=1139.86..1140.25 rows=157 width=574) (actual time=0.771..0.779 rows=154 loops=1)
+  Sort Key: species_entry.id
+  Sort Method: quicksort  Memory: 77kB
+  Buffers: shared hit=910
+  ->  Nested Loop Left Join  (cost=0.71..1134.13 rows=157 width=574) (actual time=0.037..0.716 rows=154 loops=1)
+        Filter: ((record_review_1.status = ANY ('{approved,not_reviewed,under_review}'::record_review_status[])) OR (record_review_1.status IS NULL))
+        Rows Removed by Filter: 10
+        Buffers: shared hit=907
+        ->  Index Scan using ix_species_entry_species_id on species_entry  (cost=0.29..401.94 rows=167 width=574) (actual time=0.022..0.351 rows=164 loops=1)
+              Index Cond: (species_id = ANY ('{46681,46471,46040,45008,42301,39801,38967,34585,34377,29682,26611,26010,25778,22353,21811,19972,19838,19004,17376,17296,17108,14794,13611,11956,8449,8415,6158,2208,49496,47905,47879,46039,45850,44688,43530,42357,40681,40265,40217,39192,37936,37512,37044,36951,33556,33289,33044,32201,31004,30543,30277,30068,28654,27046,25521,25313,25307,24483,21822,21311,18193,17575,15457,13370,11883,11133,10938,9833,9542,8291,7962,6310,5777,4538,4415,3644,3536,1476,48001,46386,45579,45478,44383,44243,43769,42722,41463,41303,41104,40342,39373,39133,38499,38229,37908,37706,37510,37372,36932,36833,36792,36621,36491,36459,36202,35586,35474,35143,35004,32473,31760,31246,30186,29433,29295,28711,27634,27115,26460,24845,23225,22217,21773,19519,19444,19167,19102,17166,16626,15471,14938,14558,14081,11590,10748,10507,10279,9832,8874,8819,8525,8244,7104,6741,5805,5536,5084,4910,4021,3101,2769,2197,2154,47447,46238,45161,42702,39789,25166,21963,13994,8667,5239}'::bigint[]))
+              Buffers: shared hit=414
+        ->  Index Only Scan using ix_record_review_record_lookup on record_review record_review_1  (cost=0.42..4.37 rows=1 width=12) (actual time=0.002..0.002 rows=1 loops=164)
+              Index Cond: ((record_type = 'species_entry'::submission_record_type) AND (record_id = species_entry.id))
+              Heap Fetches: 0
+              Buffers: shared hit=493
 Planning:
-  Buffers: shared hit=65
-Planning Time: 0.110 ms
-Execution Time: 2.174 ms
+  Buffers: shared hit=453
+Planning Time: 0.817 ms
+Execution Time: 0.808 ms
 ```
 
 ### `kinetics_search_popular`
 
-Slowest statement: 11.5 ms of 16.7 ms total SQL across 15 statements.
+Slowest statement: 11.1 ms of 16.9 ms total SQL across 15 statements.
 
 ```sql
 SELECT reaction_entry_structure_participant.reaction_entry_id, reaction_entry_structure_participant.role, species_entry.species_id FROM reaction_entry_structure_participant JOIN species_entry ON species_entry.id = reaction_entry_structure_participant.species_entry_id WHERE reaction_entry_structure_participant.reaction_entry_id IN (%(reaction_entry_id_1_1)s::BIGINT, %(reaction_entry_id_1_2)s::BIGINT, %(reaction_entry_id_1_3)s::BIGINT, %(reaction_entry_id_1_4)s::BIGINT, %(reaction_entry_id_1_5)s::BIGINT, %(reaction_entry_id_1_6)s::BIGINT, %(reaction_entry_id_1_7)s::BIGINT, %(reaction_entry_id_1_8)s::BIGINT, %(reaction_entry_id_1_9)s::BIGINT, %(reaction_entry_id_1_10)s::BIGINT, %(reaction_entry_id_1_11)s::BIGINT, %(reaction_entry_id_1_12)s::BIGINT, %(reaction_entry_id_1_13)s::BIGINT, %(reaction_entry_id_1_14)s::BIGINT, %(reaction_entry_id_1_15)s::BIGINT, %(reaction_entry_id_1_16)s::BIGINT, %(reaction_entry_id_1_17)s::BIGINT, %(reaction_entry_id_1_18)s::BIGINT, %(reaction_entry_id_1_19)s::BIGINT, %(reaction_entry_id_1_20)s::BIGINT, %(reaction_entry_id_1_21)s::BIGINT, %(reaction_entry_id_1_22)s::BIGINT, %(reaction_entry_id_1_23)s::BIGINT, %(reaction_entry_id_1_24)s::BIGINT, %(reaction_entry_id_1_25)s::BIGINT, %(reaction_entry_id_1_26)s::BIGINT, %(reaction_entry_id_1_27)s::BIGINT, %(reaction_entry_id_1_28)s::BIGINT, %(reaction_entry_id_1_29)s::BIGINT, %(reaction_entry_id_1_30)s::BIGINT, %(reaction_entry_id_1_31)s::BIGINT, %(reaction_entry_id_1_32)s::BIGINT, %(reaction_entry_id_1_33)s::BIGINT, %(reaction_entry_id_1_34)s::BIGINT, %(reaction_entry_id_1_35)s::BIGINT, %(reaction_entry_id_1_36)s::BIGINT, %(reaction_entry_id_1_37)s::BIGINT, %(reaction_entry_id_1_38)s::BIGINT, %(reaction_entry_id_1_39)s::BIGINT, %(reaction_entry_id_1_40)s::BIGINT, %(reaction_entry_id_1_41)s::BIGINT, %(reaction_entry_id_1_42)s::BIGINT, %(reaction_entry_id_1_43)s::BIGINT, %(reaction_entry_id_1_44)s::BIGINT, %(reaction_entry_id_1_45)s::BIGINT, %(reaction_entry_id_1_46)s::BIGINT, %(reaction_entry_id_
 ```
 
 ```
-Hash Join  (cost=4206.99..4834.38 rows=6093 width=20) (actual time=7.878..9.464 rows=6309 loops=1)
+Hash Join  (cost=4207.59..4835.54 rows=6125 width=20) (actual time=10.130..11.784 rows=6309 loops=1)
   Hash Cond: (reaction_entry_structure_participant.species_entry_id = species_entry.id)
   Buffers: shared hit=3643
-  ->  Bitmap Heap Scan on reaction_entry_structure_participant  (cost=341.54..952.94 rows=6093 width=20) (actual time=0.733..1.334 rows=6309 loops=1)
+  ->  Bitmap Heap Scan on reaction_entry_structure_participant  (cost=342.13..954.01 rows=6125 width=20) (actual time=1.177..1.827 rows=6309 loops=1)
         Recheck Cond: (reaction_entry_id = ANY ('{1,7,10,13,31,47,50,51,53,62,81,83,85,86,104,112,127,130,141,159,181,192,196,199,200,216,229,270,275,292,296,309,320,323,335,336,349,356,366,380,384,390,410,413,422,427,461,470,483,496,504,511,523,524,526,529,550,569,575,585,592,607,608,654,659,667,673,686,691,700,712,724,726,731,734,745,749,756,775,781,783,785,793,799,809,813,818,826,827,836,838,872,875,892,902,905,911,913,944,946,956,964,965,975,984,986,998,1002,1007,1014,1019,1024,1027,1044,1050,1053,1062,1071,1078,1104,1112,1141,1154,1155,1159,1165,1172,1173,1179,1192,1200,1211,1230,1237,1239,1242,1252,1264,1277,1299,1300,1305,1322,1339,1344,1355,1359,1365,1384,1389,1391,1400,1415,1426,1428,1434,1453,1468,1490,1491,1503,1511,1513,1525,1530,1539,1577,1580,1586,1587,1594,1627,1630,1636,1651,1653,1674,1681,1716,1755,1760,1771,1776,1779,1783,1792,1808,1818,1822,1837,1841,1852,1854,1885,1889,1890,1900,1908,1914,1915,1922,1923,1936,1942,1959,1966,1984,1988,1990,1998,2000,2001,2002,2004,2017,2029,2034,2037,2064,2069,2085,2102,2103,2112,2114,2137,2142,2152,2160,2185,2201,2207,2208,2212,2237,2242,2256,2262,2268,2276,2277,2306,2308,2321,2344,2359,2368,2371,2384,2391,2401,2402,2421,2423,2428,2430,2436,2440,2449,2454,2464,2484,2493,2499,2508,2513,2538,2549,2576,2579,2593,2595,2605,2609,2612,2616,2620,2625,2639,2663,2665,2712,2722,2723,2728,2746,2762,2764,2773,2797,2802,2804,2821,2839,2844,2853,2865,2869,2886,2893,2894,2917,2922,2923,2929,2949,2956,2961,2962,2968,2985,2987,2997,3006,3008,3022,3040,3047,3055,3060,3065,3071,3094,3097,3107,3110,3113,3115,3123,3129,3135,3144,3157,3164,3168,3183,3188,3198,3211,3216,3231,3262,3268,3292,3303,3306,3309,3343,3359,3362,3372,3378,3386,3403,3419,3429,3436,3452,3458,3459,3466,3470,3473,3476,3479,3485,3496,3497,3504,3511,3520,3548,3554,3557,3566,3585,3587,3594,3597,3602,3604,3612,3619,3620,3661,3668,3672,3689,3722,3736,3742,3751,3770,3773,3783,3803,3806,3809,3830,3831,3838,3841,3847,3850,3855,3860,3895,3909,3924,3925,3932,3934,3951,3968,3971,3972,4017,4020,4033,4035,4038,4057,4060,4079,4089,4093,4129,4130,4168,4171,4179,4180,4189,4196,4201,4202,4203,4227,4241,4247,4259,4264,4275,4281,4284,4285,4301,4302,4304,4310,4317,4324,4328,4329,4338,4341,4343,4353,4357,4358,4379,4382,4384,4388,4389,4405,4407,4411,4416,4428,4433,4434,4443,4469,4479,4482,4487,4489,4491,4492,4494,4497,4500,4505,4515,4518,4521,4538,4572,4579,4585,4598,4602,4619,4621,4623,4626,4627,4637,4643,4655,4667,4669,4682,4688,4692,4705,4706,4707,4710,4714,4726,4745,4748,4759,4760,4779,4800,4801,4806,4829,4831,4842,4848,4858,4862,4867,4882,4920,4921,4934,4966,4969,4974,4975,4981,4982,4992,5007,5028,5038,5052,5056,5063,5076,5088,5097,5153,5158,5171,5181,5185,5189,5197,5216,5236,5241,5243,5259,5264,5271,5278,5286,5292,5304,5307,5311,5313,5318,5331,5332,5340,5348,5352,5361,5362,5371,5372,5374,5381,5382,5400,5406,5417,5418,5421,5425,5443,5447,5466,5475,5478,5488,5489,5491,5494,5499,5501,5503,5505,5514,5516,5525,5533,5549,5562,5564,5572,5581,5584,5597,5602,5610,5617,5619,5633,5636,5645,5651,5664,5679,5709,5710,5726,5729,5741,5756,5757,5780,5796,5804,5811,5817,5819,5822,5823,5830,5837,5857,5874,5880,5895,5905,5919,5936,5941,5948,5952,5954,5955,5959,5971,6008,6012,6059,6060,6071,6080,6086,6100,6126,6177,6179,6193,6209,6217,6224,6226,6229,6240,6254,6256,6271,6274,6300,6321,6324,6340,6345,6375,6378,6397,6399,6411,6437,6456,6528,6531,6543,6550,6560,6564,6567,6579,6588,6613,6628,6633,6634,6637,6642,6643,6682,6685,6688,6706,6711,6719,6721,6728,6738,6747,6748,6749,6750,6760,6841,6848,6858,6870,6879,6887,6896,6904,6909,6915,6928,6938,6943,6944,6945,6964,6973,6975,6983,6988,6989,6990,6996,7001,7018,7030,7036,7044,7052,7057,7064,7074,7077,7093,7127,7140,7144,7173,7177,7179,7187,7188,7193,7201,7218,7222,7254,7258,7265,7270,7271,7273,7290,7314,7317,7319,7327,7340,7352,7365,7376,7378,7398,7399,7408,7410,7413,7423,7426,7457,7489,7492,7502,7514,7522,7545,7549,7551,7552,7561,7569,7586,7588,7595,7612,7614,7619,7625,7640,7652,7654,7680,7687,7740,7748,7758,7764,7772,7791,7792,7801,7805,7826,7832,7835,7840,7852,7880,7885,7889,7894,7895,7896,7912,7916,7918,7919,7921,7966,7970,7975,7989,8001,8010,8012,8015,8032,8086,8089,8099,8114,8120,8162,8171,8173,8181,8183,8195,8211,8214,8216,8245,8261,8272,8277,8284,8289,8299,8303,8331,8340,8343,8377,8379,8404,8405,8406,8434,8436,8442,8474,8478,8484,8487,8500,8501,8512,8513,8519,8522,8531,8550,8570,8571,8578,8581,8583,8602,8617,8618,8627,8631,8651,8657,8660,8702,8711,8718,8727,8734,8745,8754,8778,8791,8793,8797,8803,8807,8811,8828,8887,8888,8898,8899,8902,8912,8915,8920,8923,8940,8943,8948,8954,8973,8984,9005,9018,9021,9026,9036,9043,9044,9086,9104,9109,9116,9118,9127,9128,9140,9143,9156,9163,9180,9184,9193,9205,9209,9212,9214,9219,9222,9231,9244,9246,9247,9266,9271,9286,9295,9320,9324,9351,9356,9360,9364,9366,9368,9391,9404,9418,9422,9431,9446,9453,9456,9459,9470,9481,9499,9507,9512,9525,9526,9532,9541,9544,9547,9548,9549,9569,9575,9576,9582,9596,9598,9613,9618,9622,9630,9637,9657,9671,9693,9699,9717,9720,9722,9735,9743,9765,9771,9777,9783,9786,9793,9800,9813,9815,9833,9844,9857,9860,9861,9919,9930,9944,9963,9965,9967,10027,10029,10034,10035,10036,10083,10089,10158,10175,10179,10207,10212,10253,10257,10273,10278,10281,10288,10292,10305,10309,10348,10362,10364,10380,10419,10426,10434,10445,10453,10457,10478,10480,10485,10498,10502,10508,10512,10519,10526,10527,10529,10542,10550,10566,10567,10568,10569,10580,10588,10591,10617,10626,10640,10645,10650,10662,10686,10690,10693,10699,10706,10723,10744,10759,10761,10776,10777,10780,10785,10792,10856,10874,10877,10884,10896,10901,10907,10918,10929,10943,10955,10975,10980,10983,10984,10986,10994,11022,11025,11034,11041,11058,11075,11088,11089,11096,11108,11130,11148,11166,11169,11176,11188,11189,11223,11259,11283,11287,11288,11294,11305,11332,11355,11376,11382,11386,11387,11391,11397,11399,11409,11429,11432,11445,11447,11455,11457,11461,11463,11471,11485,11504,11509,11528,11532,11534,11563,11566,11580,11581,11586,11587,11593,11596,11616,11630,11633,11657,11659,11674,11684,11688,11695,11697,11708,11711,11713,11715,11717,11722,11723,11729,11758,11780,11781,11792,11793,11811,11816,11825,11841,11903,11908,11910,11912,11925,11926,11927,11929,11944,11954,11955,11959,11966,11976,11978,12001,12021,12052,12061,12077,12082,12084,12092,12094,12098,12100,12106,12116,12117,12119,12129,12142,12154,12155,12161,12168,12176,12178,12195,12203,12221,12226,12242,12243,12264,12277,12298,12300,12302,12304,12320,12327,12338,12348,12370,12377,12379,12382,12383,12384,12385,12398,12405,12408,12418,12442,12444,12464,12485,12486,12489,12491,12507,12535,12537,12552,12566,12567,12569,12578,12582,12586,12601,12624,12632,12634,12635,12649,12651,12658,12690,12700,12708,12726,12731,12742,12743,12760,12761,12770,12772,12778,12790,12793,12813,12817,12845,12864,12868,12874,12879,12899,12922,12937,12950,12960,12976,12995,13004,13008,13009,13014,13016,13035,13052,13065,13074,13079,13104,13105,13119,13164,13167,13168,13176,13185,13197,13205,13229,13244,13254,13274,13292,13297,13314,13331,13333,13350,13373,13375,13383,13388,13393,13403,13407,13412,13418,13429,13460,13480,13485,13497,13508,13524,13529,13542,13550,13554,13557,13588,13591,13611,13612,13645,13682,13687,13708,13712,13718,13719,13722,13761,13762,13785,13810,13830,13836,13840,13855,13874,13878,13901,13909,13912,13921,13931,13957,13969,13992,14002,14005,14012,14015,14017,14028,14031,14055,14080,14088,14093,14097,14102,14125,14144,14149,14160,14176,14199,14209,14216,14220,14222,14230,14234,14237,14249,14251,14269,14276,14282,14289,14293,14310,14319,14324,14345,14357,14359,14360,14364,14366,14371,14373,14385,14387,14403,14404,14406,14419,14434,14443,14449,14459,14467,14495,14502,14510,14524,14540,14544,14567,14578,14583,14592,14600,14617,14629,14632,14637,14649,14674,14680,14688,14695,14706,14716,14734,14741,14756,14772,14781,14791,14810,14825,14829,14830,14846,14873,14874,14879,14891,14909,14938,14950,14951,14957,14972,14993,14996}'::bigint[]))
         Heap Blocks: exact=475
         Buffers: shared hit=923
-        ->  Bitmap Index Scan on uq_reaction_entry_structure_participant_reaction_entry_id  (cost=0.00..336.25 rows=6093 width=0) (actual time=0.696..0.696 rows=6309 loops=1)
+        ->  Bitmap Index Scan on uq_reaction_entry_structure_participant_reaction_entry_id  (cost=0.00..336.83 rows=6125 width=0) (actual time=1.128..1.129 rows=6309 loops=1)
               Index Cond: (reaction_entry_id = ANY ('{1,7,10,13,31,47,50,51,53,62,81,83,85,86,104,112,127,130,141,159,181,192,196,199,200,216,229,270,275,292,296,309,320,323,335,336,349,356,366,380,384,390,410,413,422,427,461,470,483,496,504,511,523,524,526,529,550,569,575,585,592,607,608,654,659,667,673,686,691,700,712,724,726,731,734,745,749,756,775,781,783,785,793,799,809,813,818,826,827,836,838,872,875,892,902,905,911,913,944,946,956,964,965,975,984,986,998,1002,1007,1014,1019,1024,1027,1044,1050,1053,1062,1071,1078,1104,1112,1141,1154,1155,1159,1165,1172,1173,1179,1192,1200,1211,1230,1237,1239,1242,1252,1264,1277,1299,1300,1305,1322,1339,1344,1355,1359,1365,1384,1389,1391,1400,1415,1426,1428,1434,1453,1468,1490,1491,1503,1511,1513,1525,1530,1539,1577,1580,1586,1587,1594,1627,1630,1636,1651,1653,1674,1681,1716,1755,1760,1771,1776,1779,1783,1792,1808,1818,1822,1837,1841,1852,1854,1885,1889,1890,1900,1908,1914,1915,1922,1923,1936,1942,1959,1966,1984,1988,1990,1998,2000,2001,2002,2004,2017,2029,2034,2037,2064,2069,2085,2102,2103,2112,2114,2137,2142,2152,2160,2185,2201,2207,2208,2212,2237,2242,2256,2262,2268,2276,2277,2306,2308,2321,2344,2359,2368,2371,2384,2391,2401,2402,2421,2423,2428,2430,2436,2440,2449,2454,2464,2484,2493,2499,2508,2513,2538,2549,2576,2579,2593,2595,2605,2609,2612,2616,2620,2625,2639,2663,2665,2712,2722,2723,2728,2746,2762,2764,2773,2797,2802,2804,2821,2839,2844,2853,2865,2869,2886,2893,2894,2917,2922,2923,2929,2949,2956,2961,2962,2968,2985,2987,2997,3006,3008,3022,3040,3047,3055,3060,3065,3071,3094,3097,3107,3110,3113,3115,3123,3129,3135,3144,3157,3164,3168,3183,3188,3198,3211,3216,3231,3262,3268,3292,3303,3306,3309,3343,3359,3362,3372,3378,3386,3403,3419,3429,3436,3452,3458,3459,3466,3470,3473,3476,3479,3485,3496,3497,3504,3511,3520,3548,3554,3557,3566,3585,3587,3594,3597,3602,3604,3612,3619,3620,3661,3668,3672,3689,3722,3736,3742,3751,3770,3773,3783,3803,3806,3809,3830,3831,3838,3841,3847,3850,3855,3860,3895,3909,3924,3925,3932,3934,3951,3968,3971,3972,4017,4020,4033,4035,4038,4057,4060,4079,4089,4093,4129,4130,4168,4171,4179,4180,4189,4196,4201,4202,4203,4227,4241,4247,4259,4264,4275,4281,4284,4285,4301,4302,4304,4310,4317,4324,4328,4329,4338,4341,4343,4353,4357,4358,4379,4382,4384,4388,4389,4405,4407,4411,4416,4428,4433,4434,4443,4469,4479,4482,4487,4489,4491,4492,4494,4497,4500,4505,4515,4518,4521,4538,4572,4579,4585,4598,4602,4619,4621,4623,4626,4627,4637,4643,4655,4667,4669,4682,4688,4692,4705,4706,4707,4710,4714,4726,4745,4748,4759,4760,4779,4800,4801,4806,4829,4831,4842,4848,4858,4862,4867,4882,4920,4921,4934,4966,4969,4974,4975,4981,4982,4992,5007,5028,5038,5052,5056,5063,5076,5088,5097,5153,5158,5171,5181,5185,5189,5197,5216,5236,5241,5243,5259,5264,5271,5278,5286,5292,5304,5307,5311,5313,5318,5331,5332,5340,5348,5352,5361,5362,5371,5372,5374,5381,5382,5400,5406,5417,5418,5421,5425,5443,5447,5466,5475,5478,5488,5489,5491,5494,5499,5501,5503,5505,5514,5516,5525,5533,5549,5562,5564,5572,5581,5584,5597,5602,5610,5617,5619,5633,5636,5645,5651,5664,5679,5709,5710,5726,5729,5741,5756,5757,5780,5796,5804,5811,5817,5819,5822,5823,5830,5837,5857,5874,5880,5895,5905,5919,5936,5941,5948,5952,5954,5955,5959,5971,6008,6012,6059,6060,6071,6080,6086,6100,6126,6177,6179,6193,6209,6217,6224,6226,6229,6240,6254,6256,6271,6274,6300,6321,6324,6340,6345,6375,6378,6397,6399,6411,6437,6456,6528,6531,6543,6550,6560,6564,6567,6579,6588,6613,6628,6633,6634,6637,6642,6643,6682,6685,6688,6706,6711,6719,6721,6728,6738,6747,6748,6749,6750,6760,6841,6848,6858,6870,6879,6887,6896,6904,6909,6915,6928,6938,6943,6944,6945,6964,6973,6975,6983,6988,6989,6990,6996,7001,7018,7030,7036,7044,7052,7057,7064,7074,7077,7093,7127,7140,7144,7173,7177,7179,7187,7188,7193,7201,7218,7222,7254,7258,7265,7270,7271,7273,7290,7314,7317,7319,7327,7340,7352,7365,7376,7378,7398,7399,7408,7410,7413,7423,7426,7457,7489,7492,7502,7514,7522,7545,7549,7551,7552,7561,7569,7586,7588,7595,7612,7614,7619,7625,7640,7652,7654,7680,7687,7740,7748,7758,7764,7772,7791,7792,7801,7805,7826,7832,7835,7840,7852,7880,7885,7889,7894,7895,7896,7912,7916,7918,7919,7921,7966,7970,7975,7989,8001,8010,8012,8015,8032,8086,8089,8099,8114,8120,8162,8171,8173,8181,8183,8195,8211,8214,8216,8245,8261,8272,8277,8284,8289,8299,8303,8331,8340,8343,8377,8379,8404,8405,8406,8434,8436,8442,8474,8478,8484,8487,8500,8501,8512,8513,8519,8522,8531,8550,8570,8571,8578,8581,8583,8602,8617,8618,8627,8631,8651,8657,8660,8702,8711,8718,8727,8734,8745,8754,8778,8791,8793,8797,8803,8807,8811,8828,8887,8888,8898,8899,8902,8912,8915,8920,8923,8940,8943,8948,8954,8973,8984,9005,9018,9021,9026,9036,9043,9044,9086,9104,9109,9116,9118,9127,9128,9140,9143,9156,9163,9180,9184,9193,9205,9209,9212,9214,9219,9222,9231,9244,9246,9247,9266,9271,9286,9295,9320,9324,9351,9356,9360,9364,9366,9368,9391,9404,9418,9422,9431,9446,9453,9456,9459,9470,9481,9499,9507,9512,9525,9526,9532,9541,9544,9547,9548,9549,9569,9575,9576,9582,9596,9598,9613,9618,9622,9630,9637,9657,9671,9693,9699,9717,9720,9722,9735,9743,9765,9771,9777,9783,9786,9793,9800,9813,9815,9833,9844,9857,9860,9861,9919,9930,9944,9963,9965,9967,10027,10029,10034,10035,10036,10083,10089,10158,10175,10179,10207,10212,10253,10257,10273,10278,10281,10288,10292,10305,10309,10348,10362,10364,10380,10419,10426,10434,10445,10453,10457,10478,10480,10485,10498,10502,10508,10512,10519,10526,10527,10529,10542,10550,10566,10567,10568,10569,10580,10588,10591,10617,10626,10640,10645,10650,10662,10686,10690,10693,10699,10706,10723,10744,10759,10761,10776,10777,10780,10785,10792,10856,10874,10877,10884,10896,10901,10907,10918,10929,10943,10955,10975,10980,10983,10984,10986,10994,11022,11025,11034,11041,11058,11075,11088,11089,11096,11108,11130,11148,11166,11169,11176,11188,11189,11223,11259,11283,11287,11288,11294,11305,11332,11355,11376,11382,11386,11387,11391,11397,11399,11409,11429,11432,11445,11447,11455,11457,11461,11463,11471,11485,11504,11509,11528,11532,11534,11563,11566,11580,11581,11586,11587,11593,11596,11616,11630,11633,11657,11659,11674,11684,11688,11695,11697,11708,11711,11713,11715,11717,11722,11723,11729,11758,11780,11781,11792,11793,11811,11816,11825,11841,11903,11908,11910,11912,11925,11926,11927,11929,11944,11954,11955,11959,11966,11976,11978,12001,12021,12052,12061,12077,12082,12084,12092,12094,12098,12100,12106,12116,12117,12119,12129,12142,12154,12155,12161,12168,12176,12178,12195,12203,12221,12226,12242,12243,12264,12277,12298,12300,12302,12304,12320,12327,12338,12348,12370,12377,12379,12382,12383,12384,12385,12398,12405,12408,12418,12442,12444,12464,12485,12486,12489,12491,12507,12535,12537,12552,12566,12567,12569,12578,12582,12586,12601,12624,12632,12634,12635,12649,12651,12658,12690,12700,12708,12726,12731,12742,12743,12760,12761,12770,12772,12778,12790,12793,12813,12817,12845,12864,12868,12874,12879,12899,12922,12937,12950,12960,12976,12995,13004,13008,13009,13014,13016,13035,13052,13065,13074,13079,13104,13105,13119,13164,13167,13168,13176,13185,13197,13205,13229,13244,13254,13274,13292,13297,13314,13331,13333,13350,13373,13375,13383,13388,13393,13403,13407,13412,13418,13429,13460,13480,13485,13497,13508,13524,13529,13542,13550,13554,13557,13588,13591,13611,13612,13645,13682,13687,13708,13712,13718,13719,13722,13761,13762,13785,13810,13830,13836,13840,13855,13874,13878,13901,13909,13912,13921,13931,13957,13969,13992,14002,14005,14012,14015,14017,14028,14031,14055,14080,14088,14093,14097,14102,14125,14144,14149,14160,14176,14199,14209,14216,14220,14222,14230,14234,14237,14249,14251,14269,14276,14282,14289,14293,14310,14319,14324,14345,14357,14359,14360,14364,14366,14371,14373,14385,14387,14403,14404,14406,14419,14434,14443,14449,14459,14467,14495,14502,14510,14524,14540,14544,14567,14578,14583,14592,14600,14617,14629,14632,14637,14649,14674,14680,14688,14695,14706,14716,14734,14741,14756,14772,14781,14791,14810,14825,14829,14830,14846,14873,14874,14879,14891,14909,14938,14950,14951,14957,14972,14993,14996}'::bigint[]))
               Buffers: shared hit=448
-  ->  Hash  (cost=3229.09..3229.09 rows=50909 width=16) (actual time=7.001..7.002 rows=50909 loops=1)
+  ->  Hash  (cost=3229.09..3229.09 rows=50909 width=16) (actual time=8.765..8.765 rows=50909 loops=1)
         Buckets: 65536  Batches: 1  Memory Usage: 2899kB
         Buffers: shared hit=2720
-        ->  Seq Scan on species_entry  (cost=0.00..3229.09 rows=50909 width=16) (actual time=0.125..3.067 rows=50909 loops=1)
+        ->  Seq Scan on species_entry  (cost=0.00..3229.09 rows=50909 width=16) (actual time=0.259..4.222 rows=50909 loops=1)
               Buffers: shared hit=2720
 Planning:
-  Buffers: shared hit=6
-Planning Time: 1.276 ms
-Execution Time: 9.605 ms
+  Buffers: shared hit=57
+Planning Time: 1.937 ms
+Execution Time: 11.939 ms
 ```
 
 ### `statmech_search_by_method`
 
-Slowest statement: 0.1 ms of 0.1 ms total SQL across 1 statements.
+Slowest statement: 0.2 ms of 0.2 ms total SQL across 1 statements.
 
 ```sql
 SELECT statmech.id, statmech.created_at FROM statmech WHERE EXISTS (SELECT calculation.id FROM calculation JOIN statmech_source_calculation ON statmech_source_calculation.calculation_id = calculation.id JOIN level_of_theory ON level_of_theory.id = calculation.lot_id WHERE statmech_source_calculation.statmech_id = statmech.id AND level_of_theory.method = %(method_1)s::VARCHAR)
 ```
 
 ```
-Nested Loop  (cost=8.90..16.93 rows=1 width=16) (actual time=0.002..0.003 rows=0 loops=1)
-  ->  HashAggregate  (cost=8.61..8.62 rows=1 width=8) (actual time=0.002..0.003 rows=0 loops=1)
+Nested Loop  (cost=8.90..16.93 rows=1 width=16) (actual time=0.003..0.003 rows=0 loops=1)
+  ->  HashAggregate  (cost=8.61..8.62 rows=1 width=8) (actual time=0.003..0.003 rows=0 loops=1)
         Group Key: statmech_source_calculation.statmech_id
         Batches: 1  Memory Usage: 24kB
         ->  Nested Loop  (cost=0.56..8.61 rows=1 width=8) (actual time=0.002..0.002 rows=0 loops=1)
@@ -543,208 +560,210 @@ Nested Loop  (cost=8.90..16.93 rows=1 width=16) (actual time=0.002..0.003 rows=0
   ->  Index Scan using pk_statmech on statmech  (cost=0.29..8.31 rows=1 width=16) (never executed)
         Index Cond: (id = statmech_source_calculation.statmech_id)
 Planning:
-  Buffers: shared hit=279
-Planning Time: 0.375 ms
-Execution Time: 0.033 ms
+  Buffers: shared hit=365
+Planning Time: 0.459 ms
+Execution Time: 0.038 ms
 ```
 
 ### `species_calculations_search_broad`
 
-Slowest statement: 12.1 ms of 49.2 ms total SQL across 20 statements.
+Slowest statement: 12.3 ms of 51.0 ms total SQL across 20 statements.
 
 ```sql
 SELECT calculation.id, calculation.public_ref, calculation.type, calculation.quality, calculation.created_at, calculation.species_entry_id, calculation.lot_id, level_of_theory.public_ref AS public_ref_1, level_of_theory.method, level_of_theory.basis, level_of_theory.dispersion, level_of_theory.solvent, calculation.software_release_id, software_release.public_ref AS public_ref_2, software.name, software_release.version, calculation.workflow_tool_release_id, workflow_tool_release.public_ref AS public_ref_3, workflow_tool.name AS name_1, workflow_tool_release.version AS version_1, calculation.conformer_observation_id, calc_sp_result.electronic_energy_hartree, calc_opt_result.final_energy_hartree FROM calculation LEFT OUTER JOIN level_of_theory ON level_of_theory.id = calculation.lot_id LEFT OUTER JOIN software_release ON software_release.id = calculation.software_release_id LEFT OUTER JOIN software ON software.id = software_release.software_id LEFT OUTER JOIN workflow_tool_release ON workflow_tool_release.id = calculation.workflow_tool_release_id LEFT OUTER JOIN workflow_tool ON workflow_tool.id = workflow_tool_release.workflow_tool_id LEFT OUTER JOIN calc_sp_result ON calc_sp_result.calculation_id = calculation.id LEFT OUTER JOIN calc_opt_result ON calc_opt_result.calculation_id = calculation.id WHERE calculation.species_entry_id IN (%(species_entry_id_1_1)s::BIGINT, %(species_entry_id_1_2)s::BIGINT, %(species_entry_id_1_3)s::BIGINT, %(species_entry_id_1_4)s::BIGINT, %(species_entry_id_1_5)s::BIGINT, %(species_entry_id_1_6)s::BIGINT, %(species_entry_id_1_7)s::BIGINT, %(species_entry_id_1_8)s::BIGINT, %(species_entry_id_1_9)s::BIGINT, %(species_entry_id_1_10)s::BIGINT, %(species_entry_id_1_11)s::BIGINT, %(species_entry_id_1_12)s::BIGINT, %(species_entry_id_1_13)s::BIGINT, %(species_entry_id_1_14)s::BIGINT, %(species_entry_id_1_15)s::BIGINT, %(species_entry_id_1_16)s::BIGINT, %(species_entry_id_1_17)s::BIGINT, %(species_entry_id_1_18)s::BIGINT, %(species_entry_id_1_19)s
 ```
 
 ```
-Hash Left Join  (cost=5144.46..7526.60 rows=1358 width=309) (actual time=5.921..15.340 rows=1239 loops=1)
+Hash Left Join  (cost=5146.59..7528.78 rows=1360 width=309) (actual time=6.108..15.900 rows=1239 loops=1)
   Hash Cond: (workflow_tool_release.workflow_tool_id = workflow_tool.id)
   Buffers: shared hit=2642
-  ->  Hash Left Join  (cost=5143.37..7518.16 rows=1358 width=312) (actual time=5.909..15.201 rows=1239 loops=1)
+  ->  Hash Left Join  (cost=5145.50..7520.34 rows=1360 width=312) (actual time=6.098..15.747 rows=1239 loops=1)
         Hash Cond: (calculation.workflow_tool_release_id = workflow_tool_release.id)
         Buffers: shared hit=2641
-        ->  Hash Left Join  (cost=5142.19..7511.53 rows=1358 width=267) (actual time=5.895..15.062 rows=1239 loops=1)
+        ->  Hash Left Join  (cost=5144.32..7513.70 rows=1360 width=267) (actual time=6.086..15.598 rows=1239 loops=1)
               Hash Cond: (software_release.software_id = software.id)
               Buffers: shared hit=2640
-              ->  Hash Left Join  (cost=5141.06..7504.31 rows=1358 width=269) (actual time=5.882..14.934 rows=1239 loops=1)
+              ->  Hash Left Join  (cost=5143.19..7506.47 rows=1360 width=269) (actual time=6.070..15.460 rows=1239 loops=1)
                     Hash Cond: (calculation.software_release_id = software_release.id)
                     Buffers: shared hit=2639
-                    ->  Hash Left Join  (cost=5139.65..7498.51 rows=1358 width=224) (actual time=5.866..14.797 rows=1239 loops=1)
+                    ->  Hash Left Join  (cost=5141.78..7500.65 rows=1360 width=224) (actual time=6.057..15.285 rows=1239 loops=1)
                           Hash Cond: (calculation.lot_id = level_of_theory.id)
                           Buffers: shared hit=2638
-                          ->  Hash Right Join  (cost=5138.43..7492.21 rows=1358 width=112) (actual time=5.849..14.657 rows=1239 loops=1)
+                          ->  Hash Right Join  (cost=5140.56..7494.34 rows=1360 width=112) (actual time=6.031..15.128 rows=1239 loops=1)
                                 Hash Cond: (calc_sp_result.calculation_id = calculation.id)
                                 Buffers: shared hit=2637
-                                ->  Seq Scan on calc_sp_result  (cost=0.00..1901.01 rows=119701 width=16) (actual time=0.003..3.266 rows=119701 loops=1)
+                                ->  Seq Scan on calc_sp_result  (cost=0.00..1901.01 rows=119701 width=16) (actual time=0.003..3.467 rows=119701 loops=1)
                                       Buffers: shared hit=704
-                                ->  Hash  (cost=5121.45..5121.45 rows=1358 width=104) (actual time=5.778..5.780 rows=1239 loops=1)
+                                ->  Hash  (cost=5123.56..5123.56 rows=1360 width=104) (actual time=5.969..5.971 rows=1239 loops=1)
                                       Buckets: 2048  Batches: 1  Memory Usage: 173kB
                                       Buffers: shared hit=1933
-                                      ->  Hash Right Join  (cost=3985.24..5121.45 rows=1358 width=104) (actual time=1.244..5.595 rows=1239 loops=1)
+                                      ->  Hash Right Join  (cost=3987.35..5123.56 rows=1360 width=104) (actual time=1.607..5.798 rows=1239 loops=1)
                                             Hash Cond: (calc_opt_result.calculation_id = calculation.id)
                                             Buffers: shared hit=1933
-                                            ->  Seq Scan on calc_opt_result  (cost=0.00..979.81 rows=59581 width=16) (actual time=0.003..1.694 rows=59581 loops=1)
+                                            ->  Seq Scan on calc_opt_result  (cost=0.00..979.81 rows=59581 width=16) (actual time=0.004..1.631 rows=59581 loops=1)
                                                   Buffers: shared hit=384
-                                            ->  Hash  (cost=3968.27..3968.27 rows=1358 width=96) (actual time=1.214..1.215 rows=1239 loops=1)
+                                            ->  Hash  (cost=3970.35..3970.35 rows=1360 width=96) (actual time=1.574..1.575 rows=1239 loops=1)
                                                   Buckets: 2048  Batches: 1  Memory Usage: 171kB
                                                   Buffers: shared hit=1549
-                                                  ->  Bitmap Heap Scan on calculation  (cost=624.18..3968.27 rows=1358 width=96) (actual time=0.377..1.037 rows=1239 loops=1)
+                                                  ->  Bitmap Heap Scan on calculation  (cost=624.19..3970.35 rows=1360 width=96) (actual time=0.397..1.358 rows=1239 loops=1)
                                                         Recheck Cond: (species_entry_id = ANY ('{46681,46471,46040,45008,42301,39801,38967,34585,34377,29682,26611,26010,25778,22353,21811,19972,19838,19004,17376,17296,17108,14794,13611,11956,8449,8415,6158,2208,50042,49496,47905,47879,46039,45850,44688,43530,42357,40681,40265,40217,39192,37936,37512,37044,36951,33556,33289,33044,32201,31004,30543,30277,30068,28654,27046,25521,25313,25307,24483,21822,21311,18193,17575,15457,13370,11883,11133,10938,9833,9542,8291,7962,6310,5777,4538,4415,3644,3536,1476,48001,46386,45579,45478,44383,44243,43769,42722,41463,41303,41104,40342,39373,39133,38499,38229,37908,37706,37510,37372,36932,36833,36792,36621,36491,36459,36202,35586,35474,35143,35004,32473,31760,31246,30186,29433,29295,28711,27634,27115,26460,24845,23225,22217,21773,19519,19444,19167,19102,17166,16626,15471,14938,14558,14081,11590,10748,10507,10279,9832,8874,8819,8525,8244,7104,6741,5805,5536,5084,4910,4021,3101,2769,2197,2154}'::bigint[]))
                                                         Filter: (quality <> 'rejected'::calc_quality)
                                                         Heap Blocks: exact=1125
                                                         Buffers: shared hit=1549
-                                                        ->  Bitmap Index Scan on ix_calculation_species_entry_id  (cost=0.00..623.46 rows=1358 width=0) (actual time=0.295..0.295 rows=1239 loops=1)
+                                                        ->  Bitmap Index Scan on ix_calculation_species_entry_id  (cost=0.00..623.46 rows=1360 width=0) (actual time=0.307..0.307 rows=1239 loops=1)
                                                               Index Cond: (species_entry_id = ANY ('{46681,46471,46040,45008,42301,39801,38967,34585,34377,29682,26611,26010,25778,22353,21811,19972,19838,19004,17376,17296,17108,14794,13611,11956,8449,8415,6158,2208,50042,49496,47905,47879,46039,45850,44688,43530,42357,40681,40265,40217,39192,37936,37512,37044,36951,33556,33289,33044,32201,31004,30543,30277,30068,28654,27046,25521,25313,25307,24483,21822,21311,18193,17575,15457,13370,11883,11133,10938,9833,9542,8291,7962,6310,5777,4538,4415,3644,3536,1476,48001,46386,45579,45478,44383,44243,43769,42722,41463,41303,41104,40342,39373,39133,38499,38229,37908,37706,37510,37372,36932,36833,36792,36621,36491,36459,36202,35586,35474,35143,35004,32473,31760,31246,30186,29433,29295,28711,27634,27115,26460,24845,23225,22217,21773,19519,19444,19167,19102,17166,16626,15471,14938,14558,14081,11590,10748,10507,10279,9832,8874,8819,8525,8244,7104,6741,5805,5536,5084,4910,4021,3101,2769,2197,2154}'::bigint[]))
                                                               Buffers: shared hit=424
-                          ->  Hash  (cost=1.10..1.10 rows=10 width=120) (actual time=0.008..0.009 rows=10 loops=1)
+                          ->  Hash  (cost=1.10..1.10 rows=10 width=120) (actual time=0.008..0.008 rows=10 loops=1)
                                 Buckets: 1024  Batches: 1  Memory Usage: 9kB
                                 Buffers: shared hit=1
                                 ->  Seq Scan on level_of_theory  (cost=0.00..1.10 rows=10 width=120) (actual time=0.004..0.005 rows=10 loops=1)
                                       Buffers: shared hit=1
-                    ->  Hash  (cost=1.18..1.18 rows=18 width=53) (actual time=0.008..0.008 rows=18 loops=1)
+                    ->  Hash  (cost=1.18..1.18 rows=18 width=53) (actual time=0.006..0.006 rows=18 loops=1)
                           Buckets: 1024  Batches: 1  Memory Usage: 10kB
                           Buffers: shared hit=1
                           ->  Seq Scan on software_release  (cost=0.00..1.18 rows=18 width=53) (actual time=0.002..0.003 rows=18 loops=1)
                                 Buffers: shared hit=1
-              ->  Hash  (cost=1.06..1.06 rows=6 width=14) (actual time=0.005..0.007 rows=6 loops=1)
+              ->  Hash  (cost=1.06..1.06 rows=6 width=14) (actual time=0.009..0.009 rows=6 loops=1)
                     Buckets: 1024  Batches: 1  Memory Usage: 9kB
                     Buffers: shared hit=1
-                    ->  Seq Scan on software  (cost=0.00..1.06 rows=6 width=14) (actual time=0.003..0.003 rows=6 loops=1)
+                    ->  Seq Scan on software  (cost=0.00..1.06 rows=6 width=14) (actual time=0.007..0.007 rows=6 loops=1)
                           Buffers: shared hit=1
-        ->  Hash  (cost=1.08..1.08 rows=8 width=53) (actual time=0.004..0.004 rows=8 loops=1)
+        ->  Hash  (cost=1.08..1.08 rows=8 width=53) (actual time=0.004..0.005 rows=8 loops=1)
               Buckets: 1024  Batches: 1  Memory Usage: 9kB
               Buffers: shared hit=1
-              ->  Seq Scan on workflow_tool_release  (cost=0.00..1.08 rows=8 width=53) (actual time=0.001..0.002 rows=8 loops=1)
+              ->  Seq Scan on workflow_tool_release  (cost=0.00..1.08 rows=8 width=53) (actual time=0.002..0.003 rows=8 loops=1)
                     Buffers: shared hit=1
   ->  Hash  (cost=1.04..1.04 rows=4 width=13) (actual time=0.003..0.003 rows=4 loops=1)
         Buckets: 1024  Batches: 1  Memory Usage: 9kB
         Buffers: shared hit=1
-        ->  Seq Scan on workflow_tool  (cost=0.00..1.04 rows=4 width=13) (actual time=0.001..0.002 rows=4 loops=1)
+        ->  Seq Scan on workflow_tool  (cost=0.00..1.04 rows=4 width=13) (actual time=0.001..0.001 rows=4 loops=1)
               Buffers: shared hit=1
 Planning:
-  Buffers: shared hit=375 read=20
-Planning Time: 2.021 ms
-Execution Time: 15.412 ms
+  Buffers: shared hit=373 read=16
+Planning Time: 2.039 ms
+Execution Time: 15.970 ms
 ```
 
 ### `calculation_search_by_lot`
 
-Slowest statement: 41.7 ms of 176.8 ms total SQL across 1060 statements.
+Slowest statement: 42.1 ms of 105.6 ms total SQL across 310 statements.
 
 ```sql
 SELECT visible_candidates.id FROM (SELECT candidates.id AS id, candidates.created_at AS created_at, CASE WHEN (record_review_1.status = %(status_1)s) THEN %(param_1)s::INTEGER WHEN (record_review_1.status = %(status_2)s) THEN %(param_2)s::INTEGER WHEN (record_review_1.status = %(status_3)s) THEN %(param_3)s::INTEGER WHEN (record_review_1.status = %(status_4)s) THEN %(param_4)s::INTEGER WHEN (record_review_1.status = %(status_5)s) THEN %(param_5)s::INTEGER ELSE %(param_6)s::INTEGER END AS review_rank, coalesce(record_review_1.status, %(param_7)s) AS review_status, CASE WHEN (candidates.quality = %(quality_1)s) THEN %(param_8)s::INTEGER WHEN (candidates.quality = %(quality_2)s) THEN %(param_9)s::INTEGER WHEN (candidates.quality = %(quality_3)s) THEN %(param_10)s::INTEGER ELSE %(param_11)s::INTEGER END AS quality_rank FROM (SELECT calculation.id AS id, calculation.created_at AS created_at, calculation.quality AS quality FROM calculation WHERE calculation.type = %(type_1)s AND calculation.quality != %(quality_4)s) AS candidates LEFT OUTER JOIN record_review AS record_review_1 ON record_review_1.record_type = %(record_type_1)s AND record_review_1.record_id = candidates.id WHERE record_review_1.status IN (%(status_6_1)s, %(status_6_2)s, %(status_6_3)s) OR record_review_1.status IS NULL) AS visible_candidates ORDER BY visible_candidates.review_rank ASC, visible_candidates.quality_rank ASC, visible_candidates.created_at DESC, visible_candidates.id DESC LIMIT %(param_12)s::INTEGER OFFSET %(param_13)s::INTEGER
 ```
 
 ```
-Limit  (cost=19412.64..19418.47 rows=50 width=24) (actual time=36.724..38.415 rows=50 loops=1)
-  Buffers: shared hit=9926 read=710
-  ->  Gather Merge  (cost=19412.64..30569.55 rows=95624 width=24) (actual time=36.722..38.410 rows=50 loops=1)
+Limit  (cost=19368.68..19374.51 rows=50 width=24) (actual time=45.156..47.142 rows=50 loops=1)
+  Buffers: shared hit=10585 read=51
+  ->  Gather Merge  (cost=19368.68..30352.91 rows=94144 width=24) (actual time=45.155..47.139 rows=50 loops=1)
         Workers Planned: 2
         Workers Launched: 2
-        Buffers: shared hit=9926 read=710
-        ->  Sort  (cost=18412.61..18532.14 rows=47812 width=24) (actual time=26.613..26.618 rows=42 loops=3)
+        Buffers: shared hit=10585 read=51
+        ->  Sort  (cost=18368.65..18486.33 rows=47072 width=24) (actual time=32.178..32.181 rows=37 loops=3)
               Sort Key: (CASE WHEN (record_review_1.status = 'approved'::record_review_status) THEN 0 WHEN (record_review_1.status = 'under_review'::record_review_status) THEN 1 WHEN (record_review_1.status = 'not_reviewed'::record_review_status) THEN 2 WHEN (record_review_1.status = 'deprecated'::record_review_status) THEN 3 WHEN (record_review_1.status = 'rejected'::record_review_status) THEN 4 ELSE 2 END), (CASE WHEN (calculation.quality = 'curated'::calc_quality) THEN 0 WHEN (calculation.quality = 'raw'::calc_quality) THEN 1 WHEN (calculation.quality = 'rejected'::calc_quality) THEN 2 ELSE 3 END), calculation.created_at DESC, calculation.id DESC
               Sort Method: top-N heapsort  Memory: 30kB
-              Buffers: shared hit=9926 read=710
+              Buffers: shared hit=10585 read=51
               Worker 0:  Sort Method: top-N heapsort  Memory: 30kB
               Worker 1:  Sort Method: top-N heapsort  Memory: 30kB
-              ->  Parallel Hash Right Join  (cost=9774.50..16824.33 rows=47812 width=24) (actual time=11.917..24.145 rows=38980 loops=3)
+              ->  Parallel Hash Right Join  (cost=9766.95..16804.96 rows=47072 width=24) (actual time=13.415..29.650 rows=38980 loops=3)
                     Hash Cond: (record_review_1.record_id = calculation.id)
                     Filter: ((record_review_1.status = ANY ('{approved,not_reviewed,under_review}'::record_review_status[])) OR (record_review_1.status IS NULL))
                     Rows Removed by Filter: 920
-                    Buffers: shared hit=9824 read=710
-                    ->  Parallel Seq Scan on record_review record_review_1  (cost=0.00..5917.09 rows=67238 width=12) (actual time=0.399..3.947 rows=53990 loops=3)
+                    Buffers: shared hit=10483 read=51
+                    ->  Parallel Seq Scan on record_review record_review_1  (cost=0.00..5917.09 rows=68370 width=12) (actual time=0.532..4.894 rows=53990 loops=3)
                           Filter: (record_type = 'calculation'::submission_record_type)
                           Rows Removed by Filter: 74848
                           Buffers: shared hit=3904
-                    ->  Parallel Hash  (cost=9141.64..9141.64 rows=50629 width=20) (actual time=11.230..11.230 rows=39900 loops=3)
+                    ->  Parallel Hash  (cost=9141.64..9141.64 rows=50025 width=20) (actual time=12.604..12.604 rows=39900 loops=3)
                           Buckets: 131072  Batches: 1  Memory Usage: 7648kB
-                          Buffers: shared hit=5818 read=710
-                          ->  Parallel Seq Scan on calculation  (cost=0.00..9141.64 rows=50629 width=20) (actual time=0.012..7.264 rows=39900 loops=3)
+                          Buffers: shared hit=6477 read=51
+                          ->  Parallel Seq Scan on calculation  (cost=0.00..9141.64 rows=50025 width=20) (actual time=0.007..7.813 rows=39900 loops=3)
                                 Filter: ((quality <> 'rejected'::calc_quality) AND (type = 'sp'::calc_type))
                                 Rows Removed by Filter: 99494
-                                Buffers: shared hit=5818 read=710
+                                Buffers: shared hit=6477 read=51
 Planning:
-  Buffers: shared hit=147 read=10
-Planning Time: 0.337 ms
-Execution Time: 38.442 ms
+  Buffers: shared hit=51 read=1
+Planning Time: 0.246 ms
+Execution Time: 47.170 ms
 ```
 
 ### `structure_search_substructure`
 
-Slowest statement: 270.9 ms of 541.6 ms total SQL across 5 statements.
+Slowest statement: 271.0 ms of 541.0 ms total SQL across 5 statements.
 
 ```sql
 SELECT se.id AS species_entry_id, sp.id AS species_id, COALESCE(rr.status::text, 'not_reviewed') AS review_status FROM species_entry AS se JOIN species AS sp ON sp.id = se.species_id LEFT JOIN record_review AS rr ON rr.record_type = 'species_entry'::submission_record_type AND rr.record_id = se.id WHERE se.mol IS NOT NULL AND se.mol @> qmol_from_smarts(%(query_text)s) AND COALESCE(rr.status::text, 'not_reviewed') = ANY(%(visible_statuses)s) ORDER BY CASE COALESCE(rr.status::text, 'not_reviewed') WHEN 'approved' THEN 0 WHEN 'under_review' THEN 1 WHEN 'not_reviewed' THEN 2 WHEN 'deprecated' THEN 3 WHEN 'rejected' THEN 4 ELSE 5 END ASC, se.id DESC LIMIT %(row_limit)s OFFSET %(row_offset)s
 ```
 
 ```
-Limit  (cost=631.96..631.96 rows=1 width=52) (actual time=164.107..164.112 rows=50 loops=1)
-  Buffers: shared hit=83610
-  ->  Sort  (cost=631.96..631.96 rows=1 width=52) (actual time=164.107..164.109 rows=50 loops=1)
+Limit  (cost=431.96..431.96 rows=1 width=52) (actual time=167.411..167.415 rows=50 loops=1)
+  Buffers: shared hit=70134
+  ->  Sort  (cost=431.96..431.96 rows=1 width=52) (actual time=167.409..167.411 rows=50 loops=1)
         Sort Key: (CASE COALESCE((rr.status)::text, 'not_reviewed'::text) WHEN 'approved'::text THEN 0 WHEN 'under_review'::text THEN 1 WHEN 'not_reviewed'::text THEN 2 WHEN 'deprecated'::text THEN 3 WHEN 'rejected'::text THEN 4 ELSE 5 END), se.id DESC
         Sort Method: top-N heapsort  Memory: 31kB
-        Buffers: shared hit=83610
-        ->  Nested Loop  (cost=13.51..631.95 rows=1 width=52) (actual time=5.926..162.399 rows=12649 loops=1)
-              Buffers: shared hit=83610
-              ->  Nested Loop Left Join  (cost=13.22..628.01 rows=1 width=20) (actual time=5.921..152.855 rows=12649 loops=1)
-                    Filter: (COALESCE((rr.status)::text, 'not_reviewed'::text) = ANY ('{not_reviewed,under_review,approved}'::text[]))
+        Buffers: shared hit=70134
+        ->  Nested Loop  (cost=13.51..431.95 rows=1 width=52) (actual time=8.169..165.584 rows=12649 loops=1)
+              Buffers: shared hit=70134
+              ->  Nested Loop Left Join  (cost=13.22..428.01 rows=1 width=20) (actual time=8.164..155.593 rows=12649 loops=1)
+                    Filter: (COALESCE((rr.status)::text, 'not_reviewed'::text) = ANY ('{approved,not_reviewed,under_review}'::text[]))
                     Rows Removed by Filter: 840
-                    Buffers: shared hit=58311
-                    ->  Bitmap Heap Scan on species_entry se  (cost=12.80..196.49 rows=51 width=16) (actual time=5.904..135.489 rows=13489 loops=1)
+                    Buffers: shared hit=44835
+                    ->  Bitmap Heap Scan on species_entry se  (cost=12.80..196.49 rows=51 width=16) (actual time=8.138..141.025 rows=13489 loops=1)
                           Recheck Cond: ((mol IS NOT NULL) AND (mol @> 'C(=O)O'::qmol))
                           Rows Removed by Index Recheck: 16972
                           Heap Blocks: exact=2092
-                          Buffers: shared hit=4355
-                          ->  Bitmap Index Scan on ix_species_entry_mol_gist  (cost=0.00..12.79 rows=51 width=0) (actual time=5.707..5.707 rows=30461 loops=1)
+                          Buffers: shared hit=4367
+                          ->  Bitmap Index Scan on ix_species_entry_mol_gist  (cost=0.00..12.79 rows=51 width=0) (actual time=7.917..7.917 rows=30461 loops=1)
                                 Index Cond: ((mol IS NOT NULL) AND (mol @> 'C(=O)O'::qmol))
-                                Buffers: shared hit=2263
-                    ->  Index Scan using uq_record_review_record on record_review rr  (cost=0.42..8.44 rows=1 width=12) (actual time=0.001..0.001 rows=1 loops=13489)
+                                Buffers: shared hit=2275
+                    ->  Index Only Scan using ix_record_review_record_lookup on record_review rr  (cost=0.42..4.52 rows=1 width=12) (actual time=0.001..0.001 rows=1 loops=13489)
                           Index Cond: ((record_type = 'species_entry'::submission_record_type) AND (record_id = se.id))
-                          Buffers: shared hit=53956
+                          Heap Fetches: 0
+                          Buffers: shared hit=40468
               ->  Index Only Scan using pk_species on species sp  (cost=0.29..3.92 rows=1 width=8) (actual time=0.000..0.000 rows=1 loops=12649)
                     Index Cond: (id = se.species_id)
                     Heap Fetches: 0
                     Buffers: shared hit=25299
 Planning:
-  Buffers: shared hit=142 read=21
-Planning Time: 3.229 ms
-Execution Time: 164.210 ms
+  Buffers: shared hit=129 read=29
+Planning Time: 5.462 ms
+Execution Time: 167.535 ms
 ```
 
 ### `structure_search_exact`
 
-Slowest statement: 0.1 ms of 0.5 ms total SQL across 5 statements.
+Slowest statement: 0.2 ms of 0.8 ms total SQL across 5 statements.
 
 ```sql
 SELECT COALESCE(rr.status::text, 'not_reviewed') AS review_status, COUNT(*) AS cnt FROM species_entry AS se JOIN species AS sp ON sp.id = se.species_id LEFT JOIN record_review AS rr ON rr.record_type = 'species_entry'::submission_record_type AND rr.record_id = se.id WHERE sp.inchi_key = %(inchi_key)s AND COALESCE(rr.status::text, 'not_reviewed') = ANY(%(visible_statuses)s) GROUP BY COALESCE(rr.status::text, 'not_reviewed')
 ```
 
 ```
-GroupAggregate  (cost=17.68..17.71 rows=1 width=40) (actual time=0.028..0.029 rows=2 loops=1)
+GroupAggregate  (cost=17.42..17.45 rows=1 width=40) (actual time=0.033..0.034 rows=2 loops=1)
   Group Key: (COALESCE((rr.status)::text, 'not_reviewed'::text))
-  Buffers: shared hit=19
-  ->  Sort  (cost=17.68..17.69 rows=1 width=32) (actual time=0.026..0.027 rows=2 loops=1)
+  Buffers: shared hit=18
+  ->  Sort  (cost=17.42..17.43 rows=1 width=32) (actual time=0.030..0.031 rows=2 loops=1)
         Sort Key: (COALESCE((rr.status)::text, 'not_reviewed'::text))
         Sort Method: quicksort  Memory: 25kB
-        Buffers: shared hit=19
-        ->  Nested Loop Left Join  (cost=1.13..17.67 rows=1 width=32) (actual time=0.012..0.016 rows=2 loops=1)
-              Filter: (COALESCE((rr.status)::text, 'not_reviewed'::text) = ANY ('{not_reviewed,under_review,approved}'::text[]))
-              Buffers: shared hit=16
-              ->  Nested Loop  (cost=0.70..16.75 rows=1 width=8) (actual time=0.006..0.007 rows=2 loops=1)
+        Buffers: shared hit=18
+        ->  Nested Loop Left Join  (cost=1.13..17.41 rows=1 width=32) (actual time=0.016..0.021 rows=2 loops=1)
+              Filter: (COALESCE((rr.status)::text, 'not_reviewed'::text) = ANY ('{approved,not_reviewed,under_review}'::text[]))
+              Buffers: shared hit=15
+              ->  Nested Loop  (cost=0.70..16.75 rows=1 width=8) (actual time=0.009..0.011 rows=2 loops=1)
                     Buffers: shared hit=8
-                    ->  Index Scan using ix_species_inchi_key on species sp  (cost=0.41..8.43 rows=1 width=8) (actual time=0.003..0.004 rows=1 loops=1)
+                    ->  Index Scan using ix_species_inchi_key on species sp  (cost=0.41..8.43 rows=1 width=8) (actual time=0.005..0.005 rows=1 loops=1)
                           Index Cond: (inchi_key = 'XLYOFNOQVPJJNP-UHFFFAOYSA-N'::bpchar)
                           Buffers: shared hit=4
-                    ->  Index Scan using ix_species_entry_species_id on species_entry se  (cost=0.29..8.31 rows=1 width=16) (actual time=0.002..0.003 rows=2 loops=1)
+                    ->  Index Scan using ix_species_entry_species_id on species_entry se  (cost=0.29..8.31 rows=1 width=16) (actual time=0.003..0.004 rows=2 loops=1)
                           Index Cond: (species_id = sp.id)
                           Buffers: shared hit=4
-              ->  Index Scan using uq_record_review_record on record_review rr  (cost=0.42..0.90 rows=1 width=12) (actual time=0.003..0.003 rows=1 loops=2)
+              ->  Index Only Scan using ix_record_review_record_lookup on record_review rr  (cost=0.42..0.64 rows=1 width=12) (actual time=0.003..0.003 rows=1 loops=2)
                     Index Cond: ((record_type = 'species_entry'::submission_record_type) AND (record_id = se.id))
-                    Buffers: shared hit=8
+                    Heap Fetches: 0
+                    Buffers: shared hit=7
 Planning:
   Buffers: shared hit=31 read=3
-Planning Time: 0.229 ms
-Execution Time: 0.053 ms
+Planning Time: 0.306 ms
+Execution Time: 0.072 ms
 ```
 
