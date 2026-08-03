@@ -2426,6 +2426,32 @@ def test_network_wide_energy_transfer_is_accepted_without_per_well_coverage() ->
     assert entry.scope == NetworkEnergyTransferScope.network_wide
     assert entry.state_key is None
     assert entry.collider_species_key is None
+    # The declaration survives a serialize/validate round trip: a client that
+    # dumps and re-submits a payload must not silently lose the scope and land
+    # back on the per_well default.
+    revalidated = NetworkPDepUploadRequest.model_validate(
+        request.model_dump(mode="json")
+    )
+    assert (
+        revalidated.solve.energy_transfer[0].scope
+        == NetworkEnergyTransferScope.network_wide
+    )
+
+
+def test_per_well_is_the_default_energy_transfer_scope() -> None:
+    """Omitting ``scope`` keeps the preferred, more informative reading.
+
+    The default matters for compatibility in both directions: every payload
+    written before this axis existed stays valid and keeps meaning per-well,
+    and a producer who does not know about the axis cannot accidentally
+    deposit the weaker claim.
+    """
+    request = NetworkPDepUploadRequest(**_full_payload())
+    entry = request.solve.energy_transfer[0]
+    assert "scope" not in _full_payload()["solve"]["energy_transfer"][0]
+    assert entry.scope == NetworkEnergyTransferScope.per_well
+    assert entry.state_key == "well_RO2"
+    assert entry.collider_species_key == "Ar"
 
 
 def test_network_wide_energy_transfer_must_not_name_a_scope() -> None:
