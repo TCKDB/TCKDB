@@ -397,9 +397,10 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
 
     __table_args__ = (
-        # A ``reported`` solve's whole claim is "this paper says so"; with no
-        # literature it would assert rates carrying neither a derivation nor a
-        # source, which is strictly less than the computed form relaxes away.
+        # A ``reported`` solve's whole claim is "this paper says so", which is
+        # what pays for relaxing the coverage rules. With no literature it
+        # would assert rates carrying neither a derivation nor a source —
+        # weaker than either form this axis exists to admit.
         CheckConstraint(
             "kind <> 'reported' OR literature_id IS NOT NULL",
             name="reported_requires_literature",
