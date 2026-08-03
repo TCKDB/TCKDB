@@ -219,9 +219,9 @@ every route, workflow and worker imports. A second, unwired copy exists under
 | `ChebyshevKineticsIn.validate_grid_dimensions` | A network Chebyshev coefficient matrix that is not n_T × n_P, or that contains a non-finite coefficient | `.../network_pdep_upload.py:647` | Pydantic | definition | Pydantic | yes |
 | `PlogKineticsIn.validate_unique_pressure_index` | Two PLOG entries at the same (pressure, entry index) | `.../network_pdep_upload.py:709` | Pydantic | definition | Pydantic | yes |
 | `NetworkSolveIn.validate_bath_composition_and_state_energies` | Bath-gas mole fractions that do not sum to 1.0 (abs tol 1e-9), duplicate state energies, or duplicate (state, collider) energy-transfer scopes | `.../network_pdep_upload.py:935` | Pydantic | definition | Pydantic | yes (tolerance noted in [§6.3](#63-unclear)) |
-| `NetworkPDepUploadRequest.validate_mechanistic_channel_evidence` | Duplicate microreaction paths on a channel; a path naming a TS that belongs to a different microreaction; **and** three coverage rules — one state energy for every state, one ⟨ΔE⟩down entry for every (well, bath-gas collider) pair, one barrier for every saddle-point channel path and none for a barrierless one | `.../network_pdep_upload.py:1283` | Pydantic | mixed: definition + **absence** | split | **no** — see [§6.1](#61-tier-1-coverage-requirements-that-are-really-absence-1) |
+| `NetworkPDepUploadRequest.validate_mechanistic_channel_evidence` | Duplicate microreaction paths on a channel; a path naming a TS that belongs to a different microreaction; **and** three coverage rules — one state energy for every state, one ⟨ΔE⟩down entry for every (well, bath-gas collider) pair *unless the payload declares `scope='network_wide'`*, one barrier for every saddle-point channel path and none for a barrierless one | `.../network_pdep_upload.py:1283` | Pydantic | mixed: definition + **absence** | split | **partly** — the ⟨ΔE⟩down half is resolved by [ADR 0009](../adr/0009-record-what-energy-transfer-was-specified-over.md); the state-energy and barrier halves remain, see [§6.1](#61-tier-1-coverage-requirements-that-are-really-absence-1) |
 | `NetworkPDepUploadRequest.validate_well_skipping_channels` | A `mechanism='well_skipping'` declaration whose endpoints *are* directly connected by the topology, or that is otherwise unsupported by the network graph | `.../network_pdep_upload.py:1356` | Pydantic | contract | Pydantic | yes |
-| `EnergyTransferIn.validate_scope` | An energy-transfer entry with no state and no collider — a global ⟨ΔE⟩down is scientifically ambiguous about which well and which bath gas it describes | `.../network_pdep_upload.py:547` | Pydantic | definition | Pydantic | yes |
+| `EnergyTransferIn.validate_scope` | An energy-transfer entry whose declared `scope` and supplied keys disagree — a `per_well` entry naming no well or no collider, or a `network_wide` entry naming either. Reworked by [ADR 0009](../adr/0009-record-what-energy-transfer-was-specified-over.md): a network-wide ⟨ΔE⟩down is no longer refused, it is declared, stored and warned about. | `.../network_pdep_upload.py:547` | Pydantic | definition | Pydantic | yes |
 | `StateEnergyIn.validate_energy_is_finite` | A non-finite (NaN/inf) state energy | `.../network_pdep_upload.py:586` | Pydantic | definition | Pydantic | yes |
 | `ChannelBarrierIn.validate_barriers_are_finite` | A non-finite forward or reverse barrier | `.../network_pdep_upload.py:613` | Pydantic | definition | Pydantic | yes |
 | `NetworkChannelIn.validate_source_ne_sink` | A channel from a state to itself | `.../network_pdep_upload.py:460` | Pydantic | definition | Pydantic | yes |
@@ -584,10 +584,19 @@ grade whether a record could be *re-run*, not whether its science is right.
 
 | Check | Reasoning |
 |---|---|
-| `NetworkPDepUploadRequest.validate_mechanistic_channel_evidence` (`backend/app/schemas/workflows/network_pdep_upload.py:1283`) | The validator mixes two kinds of rule. The structural half is definitional and should keep blocking: duplicate microreaction paths (`:1287`), and a channel path whose TS belongs to a different microreaction (`:1298`). The **coverage** half — "one state energy for every state" (`:1302`), "one ⟨ΔE⟩down for every (well, bath-gas collider) pair" (`:1328`), "one barrier for every saddle-point path" (`:1343`) — refuses a payload for *missing evidence*, which the ADR assigns to the warning tier. A depositor archiving a network whose per-well ⟨ΔE⟩down values were never separately recorded (a single network-wide value is common practice in RMG/Arkane inputs) currently cannot deposit it at all. The "unexpected extra entry" direction of the same rule *is* a contract violation and can stay blocking. Proposal: split the validator, keep the structural half blocking, and demote the missing-coverage half to `UploadWarning`. |
+| `NetworkPDepUploadRequest.validate_mechanistic_channel_evidence` (`backend/app/schemas/workflows/network_pdep_upload.py:1283`) | The validator mixes two kinds of rule. The structural half is definitional and should keep blocking: duplicate microreaction paths (`:1287`), and a channel path whose TS belongs to a different microreaction (`:1298`). The **coverage** half — "one state energy for every state" (`:1302`), "one ⟨ΔE⟩down for every (well, bath-gas collider) pair", "one barrier for every saddle-point path" — refuses a payload for *missing evidence*, which the ADR assigns to the warning tier. The "unexpected extra entry" direction of the same rule *is* a contract violation and can stay blocking. Proposal: split the validator, keep the structural half blocking, and demote the missing-coverage half to `UploadWarning`. |
 
-This is the only surviving tier-1 disagreement. It was in the earlier draft and nothing since
-has touched it.
+**The ⟨ΔE⟩down third of this is now resolved**, by
+[ADR 0009](../adr/0009-record-what-energy-transfer-was-specified-over.md). The diagnosis above
+was right about the symptom and slightly wrong about the cure: the problem was not that the
+coverage rule blocked, but that the payload had no way to *say* a single network-wide value was
+what the run determined, so the only compliant response was to paste one number once per well.
+`EnergyTransferIn.scope` lets the producer declare it; the coverage rule still blocks a partial
+per-well set, and a network-wide declaration is accepted with the
+`network_wide_energy_transfer_scope` warning.
+
+The state-energy and channel-barrier coverage rules are untouched and remain the surviving
+tier-1 disagreement.
 
 ### 6.2 Two read-time labels whose fact is now owned by the blocking tier (2)
 
@@ -671,7 +680,7 @@ The draft written at `01d5570` listed fourteen rows where proposed ≠ current. 
 | §6.1 `W_N_IMAG_HIGHER_ORDER_SADDLE` → blocking | **Done by #82**, folded into the blocking message for `minimum` and into `W_TS_N_IMAG_NOT_ONE` for transition states; still warns for `vdw_complex`. |
 | §6.1 `W_CHARGE_MISMATCH` → blocking | **Superseded.** #77 gave the check a real log-derived comparand and #81 deleted the tautological deduction, so it can now fire; it is left at the warning tier because it is a comparison against a re-parse ([§6.3](#63-unclear)). |
 | §6.1 `W_MULTIPLICITY_MISMATCH` → blocking | Same as above. |
-| §6.2 split `validate_mechanistic_channel_evidence` | **Still open.** Carried forward unchanged as [§6.1](#61-tier-1-coverage-requirements-that-are-really-absence-1). |
+| §6.2 split `validate_mechanistic_channel_evidence` | **Partly done.** The ⟨ΔE⟩down coverage rule was resolved by [ADR 0009](../adr/0009-record-what-energy-transfer-was-specified-over.md) — not by demoting it, but by giving the payload a way to declare a network-wide scope, which is what the run actually determined. The state-energy and barrier coverage rules are carried forward in [§6.1](#61-tier-1-coverage-requirements-that-are-really-absence-1). |
 | §6.3 "`W_CHARGE_MISMATCH` and `W_MULTIPLICITY_MISMATCH` are unreachable; `deduce_charge_multiplicity` compares the payload against itself" | **Obsolete.** The analysis was correct for `01d5570`, and #81 acted on it by deleting `deduce_charge_multiplicity` outright. That function no longer exists; #77 had already built the log-based replacement. |
 | §1e "no upload-tier owner for an empty transport record" | **Fixed by #78** — `TransportUploadPayload.validate_has_scientific_content`, on the shared base so nested paths are covered. |
 | §6.4 `no_transport_property_present` → block at upload | **Fixed by #78**, as above; the read-time label stays as a backstop. |

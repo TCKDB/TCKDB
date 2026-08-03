@@ -1046,9 +1046,13 @@ Each `network_solve_state_energy` row gives one state energy in fixed
 `correction_convention`, and may cite its source calculation. A complete
 uploaded solve supplies exactly one such row for every network state.
 `network_solve_bath_gas` is a normalized composition (mole fractions sum to
-one), while `network_solve_energy_transfer` may be scoped to both a state and
-a collider species; this prevents a single generic collision model from being
-mistaken for a state-specific parameterization.
+one), while `network_solve_energy_transfer` declares its `scope`: a `per_well`
+row names both a state and a collider species, and a `network_wide` row names
+neither because the producer determined one ⟨ΔE⟩down for the entire network
+(the usual Arkane/RMG/MESS form). The token is what prevents a single generic
+collision model from being mistaken for a state-specific parameterization —
+and, equally, prevents the database forcing one value to be duplicated per
+well in order to be storable at all. See ADR 0009.
 
 Atom-resolved isotope identity **is** represented. Producers express isotopic
 substitution with standard SMILES isotope notation (`[2H]`, `[13C]`, `[18O]`)
@@ -1330,6 +1334,9 @@ Notes:
 
 - `id`
 - `solve_id`
+- `scope` (`per_well` | `network_wide`)
+- `state_id` (NULL iff `scope = 'network_wide'`)
+- `collider_species_entry_id` (NULL iff `scope = 'network_wide'`)
 - `model`
 - `alpha0_cm_inv`
 - `t_exponent`

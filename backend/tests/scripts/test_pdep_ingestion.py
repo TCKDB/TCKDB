@@ -25,7 +25,7 @@ from app.db.models.calculation import (
     CalculationFreqResult,
     CalculationSPResult,
 )
-from app.db.models.common import CalculationType
+from app.db.models.common import CalculationType, NetworkEnergyTransferScope
 from app.db.models.network import NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
     NetworkChannel,
@@ -434,6 +434,14 @@ def test_fixture_builds_valid_request() -> None:
     assert et.alpha0_cm_inv == 175.0
     assert et.t_ref_k == 298.0
     assert et.t_exponent == 0.52
+    # The Arkane run declared one energyTransferModel for the whole network,
+    # so the ingester deposits exactly that and names no well. It used to
+    # expand the value across the (well x collider) cross product to satisfy
+    # the old per-pair contract, which made one number look like several
+    # determinations (ADR 0009).
+    assert et.scope == NetworkEnergyTransferScope.network_wide
+    assert et.state_key is None
+    assert et.collider_species_key is None
 
 
 def test_fixture_emits_statmech_and_closes_gap() -> None:

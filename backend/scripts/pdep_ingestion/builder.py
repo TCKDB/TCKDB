@@ -974,28 +974,28 @@ def build_network_pdep_payload(
     if bath:
         solve["bath_gas"] = bath
 
-    # Arkane declares one energy-transfer model for the network; the master
-    # equation applies it to every collisionally-stabilised well against every
-    # bath component. Make that cross product explicit rather than depositing a
-    # single unscoped ⟨ΔE⟩down that says nothing about which well it describes.
+    # Arkane declares one energy-transfer model for the network and the master
+    # equation applies it to every collisionally-stabilised well. Deposit it as
+    # exactly that: one ``network_wide`` entry. This used to be expanded into
+    # the (well x bath component) cross product to satisfy the old per-pair
+    # contract, which copied a single number N times and made the record look
+    # as though N values had been determined. The scope token now says what the
+    # run actually specified, and the upload warns about the limitation instead
+    # of the payload fabricating specificity (ADR 0009).
     if inp.energy_transfer:
         et = inp.energy_transfer
         solve["energy_transfer"] = [
             {
-                "state_key": state["key"],
-                "collider_species_key": bath_component["species_key"],
+                "scope": "network_wide",
                 "model": et.model,
                 "alpha0_cm_inv": et.alpha0_cm_inv,
                 "t_exponent": et.t_exponent,
                 "t_ref_k": et.t_ref_k,
                 "note": (
-                    "Expanded from the run's single declared "
-                    "energyTransferModel, which applies to every well."
+                    "The run declared a single energyTransferModel for the "
+                    "whole network; no per-well value was determined."
                 ),
             }
-            for state in states
-            if state["kind"] == "well"
-            for bath_component in bath
         ]
 
     # Source calculations: species sp -> well_energy, freq -> well_freq;

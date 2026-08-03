@@ -36,6 +36,7 @@ from app.db.models.common import (
     EnergyZeroConvention,
     NetworkChannelKind,
     NetworkChannelMechanism,
+    NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     NetworkSpeciesRole,
@@ -414,9 +415,16 @@ class NetworkSolveEnergyTransferSummary(BaseModel):
     cm⁻¹ for an exponential-down model's α₀), ``t_exponent``
     (dimensionless power-law exponent on T/T_ref),
     ``t_ref_k`` (reference temperature in K), ``note``.
+
+    ``scope`` says what the declaration was specified over. On a
+    ``network_wide`` row ``state_composition_hash`` and
+    ``collider_species_entry_ref`` are null *by declaration* — the producer
+    determined one ⟨ΔE⟩down for the entire network — not because the fields
+    were dropped. See ADR 0009.
     """
 
     energy_transfer_id: int | None = None
+    scope: NetworkEnergyTransferScope = NetworkEnergyTransferScope.per_well
     state_composition_hash: str | None = None
     collider_species_entry_ref: str | None = None
     model: str | None = None

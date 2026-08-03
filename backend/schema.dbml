@@ -318,6 +318,11 @@ enum NetworkChannelMechanism {
   well_skipping
 }
 
+enum NetworkEnergyTransferScope {
+  per_well
+  network_wide
+}
+
 enum NetworkKineticsModelKind {
   chebyshev
   plog
@@ -2282,8 +2287,9 @@ Table network_solve_channel_barrier {
 Table network_solve_energy_transfer {
   id bigint [pk, not null]
   solve_id bigint [not null, ref: > network_solve.id]
-  state_id bigint [not null, ref: > network_state.id]
-  collider_species_entry_id bigint [not null, ref: > species_entry.id]
+  scope NetworkEnergyTransferScope [not null, default: 'per_well']
+  state_id bigint [ref: > network_state.id]
+  collider_species_entry_id bigint [ref: > species_entry.id]
   model text
   alpha0_cm_inv double
   t_exponent double
@@ -2291,7 +2297,12 @@ Table network_solve_energy_transfer {
   note text
 
   indexes {
+    solve_id [unique, name: 'uq_network_solve_energy_transfer_network_wide']
     (solve_id, state_id, collider_species_entry_id) [unique, name: 'uq_network_solve_energy_transfer_scope']
+  }
+
+  checks {
+    `(scope = 'per_well' AND state_id IS NOT NULL AND collider_species_entry_id IS NOT NULL) OR (scope = 'network_wide' AND state_id IS NULL AND collider_species_entry_id IS NULL)` [name: 'ck_network_solve_energy_transfer_scope_columns_agree']
   }
 
   Note: 'Energy transfer model parameters for one network solve.'

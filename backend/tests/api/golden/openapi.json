@@ -13336,7 +13336,7 @@
       },
       "EnergyTransferIn": {
         "additionalProperties": false,
-        "description": "Energy transfer model parameters for a network solve.\n\n:param model: Energy transfer model name (e.g. ``single_exponential_down``).\n:param alpha0_cm_inv: Average downward energy transfer at reference temperature.\n:param t_exponent: Temperature exponent for the energy transfer model.\n:param t_ref_k: Reference temperature in K.\n:param note: Optional note.",
+        "description": "Energy transfer model parameters for a network solve.\n\n``scope`` declares what the model was specified over. ⟨ΔE⟩down is a\nproperty of a (well, collider) pair, and ``per_well`` — the default —\nrecords it that way. But Arkane, RMG and MESS inputs routinely declare one\nsingle-exponential-down for the entire network, and demanding a per-pair\nentry for such a run would force the depositor to paste one number N\ntimes, fabricating specificity the calculation never had. ``network_wide``\nlets that be said honestly. See ADR 0009.\n\n:param scope: ``per_well`` (names a state and a collider) or\n    ``network_wide`` (names neither, by declaration).\n:param state_key: Local key of the well this applies to. Required for\n    ``per_well``, forbidden for ``network_wide``.\n:param collider_species_key: Local key of the collider species. Required\n    for ``per_well``, forbidden for ``network_wide``.\n:param model: Energy transfer model name (e.g. ``single_exponential_down``).\n:param alpha0_cm_inv: Average downward energy transfer at reference temperature.\n:param t_exponent: Temperature exponent for the energy transfer model.\n:param t_ref_k: Reference temperature in K.\n:param note: Optional note.",
         "properties": {
           "alpha0_cm_inv": {
             "exclusiveMinimum": 0.0,
@@ -13369,6 +13369,10 @@
               }
             ],
             "title": "Note"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/NetworkEnergyTransferScope",
+            "default": "per_well"
           },
           "state_key": {
             "anyOf": [
@@ -20608,6 +20612,15 @@
         "title": "NetworkDetailRead",
         "type": "object"
       },
+      "NetworkEnergyTransferScope": {
+        "description": "What a collisional energy-transfer declaration was specified *over*.\n\n⟨ΔE⟩down is physically a property of a (well, collider) pair, but master-\nequation inputs do not always resolve it that far. Arkane, RMG and MESS\nruns routinely declare one single-exponential-down model for the whole\nnetwork. Recording which of the two happened is the difference between\nN independently determined values and one value copied N times; without\nthis axis the database cannot tell them apart. See ADR 0009.\n\n``per_well``\n    The declaration names one network state and one collider species, and\n    applies only to that pair. This is the preferred, more informative\n    form: it is what the physics is a property of.\n\n``network_wide``\n    A single declaration the producer applied to every collisionally\n    stabilised well and to the bath gas as a whole. It names no state and\n    no collider *by declaration* — not by omission — and the well-resolved\n    values it stands in for were never determined.",
+        "enum": [
+          "per_well",
+          "network_wide"
+        ],
+        "title": "NetworkEnergyTransferScope",
+        "type": "string"
+      },
       "NetworkEvidenceSummary": {
         "description": "Bounded evidence projection. Counts come from cheap aggregates\nover the child tables; the ``has_*`` booleans report which kinetics\nmodel kinds are present anywhere in the network.",
         "properties": {
@@ -23410,7 +23423,7 @@
         "type": "object"
       },
       "NetworkSolveEnergyTransferRead": {
-        "description": "Energy transfer model parameters for one solve.",
+        "description": "Energy transfer model parameters for one solve.\n\n``scope`` says what the declaration was specified over, so a consumer can\ntell a well-resolved ⟨ΔE⟩down from one model declared for the whole\nnetwork. On a ``network_wide`` row ``state_id`` and\n``collider_species_entry_id`` are null by declaration (ADR 0009).",
         "properties": {
           "alpha0_cm_inv": {
             "anyOf": [
@@ -23460,6 +23473,10 @@
             ],
             "title": "Note"
           },
+          "scope": {
+            "$ref": "#/components/schemas/NetworkEnergyTransferScope",
+            "default": "per_well"
+          },
           "solve_id": {
             "title": "Solve Id",
             "type": "integer"
@@ -23506,7 +23523,7 @@
         "type": "object"
       },
       "NetworkSolveEnergyTransferSummary": {
-        "description": "One ``network_solve_energy_transfer`` row projected for\n``include=energy_transfer`` on the solve detail.\n\nORM fields: ``model`` (free text), ``alpha0_cm_inv`` (Å — actually\ncm⁻¹ for an exponential-down model's α₀), ``t_exponent``\n(dimensionless power-law exponent on T/T_ref),\n``t_ref_k`` (reference temperature in K), ``note``.",
+        "description": "One ``network_solve_energy_transfer`` row projected for\n``include=energy_transfer`` on the solve detail.\n\nORM fields: ``model`` (free text), ``alpha0_cm_inv`` (Å — actually\ncm⁻¹ for an exponential-down model's α₀), ``t_exponent``\n(dimensionless power-law exponent on T/T_ref),\n``t_ref_k`` (reference temperature in K), ``note``.\n\n``scope`` says what the declaration was specified over. On a\n``network_wide`` row ``state_composition_hash`` and\n``collider_species_entry_ref`` are null *by declaration* — the producer\ndetermined one ⟨ΔE⟩down for the entire network — not because the fields\nwere dropped. See ADR 0009.",
         "properties": {
           "alpha0_cm_inv": {
             "anyOf": [
@@ -23563,6 +23580,10 @@
               }
             ],
             "title": "Note"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/NetworkEnergyTransferScope",
+            "default": "per_well"
           },
           "state_composition_hash": {
             "anyOf": [
@@ -23652,7 +23673,7 @@
       },
       "NetworkSolveIn": {
         "additionalProperties": false,
-        "description": "Master-equation solve configuration and provenance.\n\n:param me_method: ME solution method.\n:param interpolation_model: Interpolation model for the ME solution.\n:param tmin_k: Minimum temperature in K for the ME solve.\n:param tmax_k: Maximum temperature in K for the ME solve.\n:param pmin_bar: Minimum pressure in bar for the ME solve.\n:param pmax_bar: Maximum pressure in bar for the ME solve.\n:param grain_size_cm_inv: Energy grain size in cm⁻¹.\n:param grain_count: Number of energy grains.\n:param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param bath_gas: Bath gas composition.\n:param energy_transfer: Energy transfer model parameters.\n:param source_calculations: Calculations used in this solve, by local key and role.\n:param channel_kinetics: Fitted phenomenological k(T,P) for channels, each\n    referencing its channel by ``(source_state_key, sink_state_key)``.\n:param note: Optional free-text note.",
+        "description": "Master-equation solve configuration and provenance.\n\n:param me_method: ME solution method.\n:param interpolation_model: Interpolation model for the ME solution.\n:param tmin_k: Minimum temperature in K for the ME solve.\n:param tmax_k: Maximum temperature in K for the ME solve.\n:param pmin_bar: Minimum pressure in bar for the ME solve.\n:param pmax_bar: Maximum pressure in bar for the ME solve.\n:param grain_size_cm_inv: Energy grain size in cm⁻¹.\n:param grain_count: Number of energy grains.\n:param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param bath_gas: Bath gas composition.\n:param energy_transfer: Energy transfer model parameters — either one\n    ``per_well`` entry per (well, bath collider) pair, or a single\n    ``network_wide`` entry.\n:param source_calculations: Calculations used in this solve, by local key and role.\n:param channel_kinetics: Fitted phenomenological k(T,P) for channels, each\n    referencing its channel by ``(source_state_key, sink_state_key)``.\n:param note: Optional free-text note.",
         "properties": {
           "bath_gas": {
             "items": {

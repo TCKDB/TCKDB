@@ -33,6 +33,7 @@ from app.db.models.common import (
     EnergyZeroConvention,
     NetworkChannelKind,
     NetworkChannelMechanism,
+    NetworkEnergyTransferScope,
     NetworkKineticsModelKind,
     NetworkSolveCalculationRole,
     PressureUnit,
@@ -522,6 +523,20 @@ class BathGasIn(SchemaBase):
 class EnergyTransferIn(SchemaBase):
     """Energy transfer model parameters for a network solve.
 
+    ``scope`` declares what the model was specified over. ⟨ΔE⟩down is a
+    property of a (well, collider) pair, and ``per_well`` — the default —
+    records it that way. But Arkane, RMG and MESS inputs routinely declare one
+    single-exponential-down for the entire network, and demanding a per-pair
+    entry for such a run would force the depositor to paste one number N
+    times, fabricating specificity the calculation never had. ``network_wide``
+    lets that be said honestly. See ADR 0009.
+
+    :param scope: ``per_well`` (names a state and a collider) or
+        ``network_wide`` (names neither, by declaration).
+    :param state_key: Local key of the well this applies to. Required for
+        ``per_well``, forbidden for ``network_wide``.
+    :param collider_species_key: Local key of the collider species. Required
+        for ``per_well``, forbidden for ``network_wide``.
     :param model: Energy transfer model name (e.g. ``single_exponential_down``).
     :param alpha0_cm_inv: Average downward energy transfer at reference temperature.
     :param t_exponent: Temperature exponent for the energy transfer model.
@@ -529,6 +544,7 @@ class EnergyTransferIn(SchemaBase):
     :param note: Optional note.
     """
 
+    scope: NetworkEnergyTransferScope = NetworkEnergyTransferScope.per_well
     state_key: str | None = None
     collider_species_key: str | None = None
     model: str = Field(min_length=1)
@@ -545,8 +561,26 @@ class EnergyTransferIn(SchemaBase):
 
     @model_validator(mode="after")
     def validate_scope(self) -> Self:
-        if self.state_key is None or self.collider_species_key is None:
-            raise ValueError("energy_transfer requires an explicit state_key and collider_species_key; global transfer is scientifically ambiguous.")
+        """The declared scope and the supplied keys must agree.
+
+        This is a definitional check, not an expectation (ADR 0008): a
+        ``network_wide`` entry that also names a well contradicts itself, and a
+        ``per_well`` entry with no well names nothing. Neither can be produced
+        by a correct calculation, so both block.
+        """
+        if self.scope == NetworkEnergyTransferScope.per_well:
+            if self.state_key is None or self.collider_species_key is None:
+                raise ValueError(
+                    "a per_well energy_transfer entry requires an explicit "
+                    "state_key and collider_species_key; to declare one model "
+                    "for the whole network set scope='network_wide'."
+                )
+        elif self.state_key is not None or self.collider_species_key is not None:
+            raise ValueError(
+                "a network_wide energy_transfer entry must not name a "
+                "state_key or a collider_species_key; it applies to every "
+                "well and to the bath gas as a whole."
+            )
         return self
 
 
@@ -874,7 +908,9 @@ class NetworkSolveIn(SchemaBase):
     :param software_release: Optional software provenance reference.
     :param workflow_tool_release: Optional workflow-tool provenance reference.
     :param bath_gas: Bath gas composition.
-    :param energy_transfer: Energy transfer model parameters.
+    :param energy_transfer: Energy transfer model parameters — either one
+        ``per_well`` entry per (well, bath collider) pair, or a single
+        ``network_wide`` entry.
     :param source_calculations: Calculations used in this solve, by local key and role.
     :param channel_kinetics: Fitted phenomenological k(T,P) for channels, each
         referencing its channel by ``(source_state_key, sink_state_key)``.
@@ -938,9 +974,29 @@ class NetworkSolveIn(SchemaBase):
         keys = [item.state_key for item in self.state_energies]
         if len(keys) != len(set(keys)):
             raise ValueError("state_energies must be unique by state_key.")
-        scopes = [(item.state_key, item.collider_species_key) for item in self.energy_transfer]
+        declared_scopes = {item.scope for item in self.energy_transfer}
+        if len(declared_scopes) > 1:
+            # Half a network described per-well and half described globally is
+            # genuinely ambiguous: nothing says which wells the global entry
+            # was meant to cover, or whether it overrides the specific ones.
+            raise ValueError(
+                "energy_transfer entries must all share one scope: either "
+                "every entry is per_well, or there is a single network_wide "
+                "entry. Mixing the two leaves it undefined which wells the "
+                "network-wide model applies to."
+            )
+        # Checked ahead of the tuple-uniqueness rule below, which would
+        # otherwise catch two network-wide entries with a message about keys
+        # that a network-wide entry does not have.
+        if NetworkEnergyTransferScope.network_wide in declared_scopes and len(self.energy_transfer) > 1:
+            raise ValueError(
+                "a network_wide energy_transfer declaration is a single "
+                "entry; supplying more than one says nothing about which "
+                "applies where."
+            )
+        scopes = [(item.scope, item.state_key, item.collider_species_key) for item in self.energy_transfer]
         if len(scopes) != len(set(scopes)):
-            raise ValueError("energy_transfer entries must be unique by (state_key, collider_species_key).")
+            raise ValueError("energy_transfer entries must be unique by (scope, state_key, collider_species_key).")
         return self
 
 
@@ -1307,33 +1363,50 @@ class NetworkPDepUploadRequest(SchemaBase):
                     raise ValueError("state_energies references undefined source_calculation_key.")
             species_keys = {sp.key for sp in self.species}
             for et in self.solve.energy_transfer:
+                if et.scope != NetworkEnergyTransferScope.per_well:
+                    continue
                 if et.state_key not in state_keys:
                     raise ValueError("energy_transfer references undefined state_key.")
                 if et.collider_species_key not in species_keys:
                     raise ValueError("energy_transfer references undefined collider_species_key.")
             # Collisional energy transfer is a property of a (well, collider)
-            # pair: a five-well network with an argon bath needs five ⟨ΔE⟩down
-            # declarations, not one. Bimolecular/termolecular states are
-            # reservoirs in the master equation and carry no collisional
-            # stabilisation term, so only wells are required.
-            expected_transfer_scopes = {
-                (state.key, bath.species_key)
-                for state in self.states
-                if state.kind == "well"
-                for bath in self.solve.bath_gas
-            }
-            supplied_transfer_scopes = {
-                (item.state_key, item.collider_species_key)
+            # pair, so a per-well declaration is held to that: a five-well
+            # network with an argon bath needs five ⟨ΔE⟩down entries, not one.
+            # Bimolecular/termolecular states are reservoirs in the master
+            # equation and carry no collisional stabilisation term, so only
+            # wells are required.
+            #
+            # A ``network_wide`` declaration is exempt by construction: it says
+            # the producer determined one model for the entire network, which
+            # is what an Arkane or MESS input usually contains. Demanding the
+            # cross product there would only get one number pasted N times.
+            # The completeness limitation is reported as an UploadWarning
+            # instead (ADR 0008, ADR 0009), never refused.
+            network_wide = any(
+                item.scope == NetworkEnergyTransferScope.network_wide
                 for item in self.solve.energy_transfer
-            }
-            if supplied_transfer_scopes != expected_transfer_scopes:
-                missing = sorted(expected_transfer_scopes - supplied_transfer_scopes)
-                extra = sorted(supplied_transfer_scopes - expected_transfer_scopes)
-                raise ValueError(
-                    "energy_transfer must cover exactly one entry per (well state, "
-                    "bath-gas collider) pair. "
-                    f"Missing: {missing}. Unexpected: {extra}."
-                )
+            )
+            if not network_wide:
+                expected_transfer_scopes = {
+                    (state.key, bath.species_key)
+                    for state in self.states
+                    if state.kind == "well"
+                    for bath in self.solve.bath_gas
+                }
+                supplied_transfer_scopes = {
+                    (item.state_key, item.collider_species_key)
+                    for item in self.solve.energy_transfer
+                }
+                if supplied_transfer_scopes != expected_transfer_scopes:
+                    missing = sorted(expected_transfer_scopes - supplied_transfer_scopes)
+                    extra = sorted(supplied_transfer_scopes - expected_transfer_scopes)
+                    raise ValueError(
+                        "energy_transfer must cover exactly one entry per (well state, "
+                        "bath-gas collider) pair, or declare a single "
+                        "scope='network_wide' entry if the run specified one "
+                        "model for the whole network. "
+                        f"Missing: {missing}. Unexpected: {extra}."
+                    )
             # Every saddle-point path needs a barrier; a barrierless path has
             # none, and offering one would be a fabricated number.
             expected_paths = {

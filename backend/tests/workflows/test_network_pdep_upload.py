@@ -7,6 +7,7 @@ from copy import deepcopy
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
@@ -16,7 +17,10 @@ from app.db.models.calculation import (
     CalculationOutputGeometry,
     CalculationSPResult,
 )
-from app.db.models.common import CalculationType
+from app.db.models.common import (
+    CalculationType,
+    NetworkEnergyTransferScope,
+)
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.db.models.network_pdep import (
     NetworkChannel,
@@ -39,6 +43,7 @@ from app.db.models.transition_state import (
     TransitionStateValidationEvidence,
 )
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
+from app.services.provenance_warnings import W_NETWORK_WIDE_ENERGY_TRANSFER
 from app.services.scientific_read.networks import get_network, get_network_solve
 from app.workflows.network_pdep import persist_network_pdep_upload
 
@@ -2271,8 +2276,6 @@ def test_transition_state_without_irc_evidence_succeeds_with_a_warning(
     db_engine,
 ) -> None:
     """IRC evidence is recommended, not required — but its absence is stated."""
-    from tckdb_schemas.upload_warning import UploadWarning
-
     payload = _full_payload()
     payload["transition_states"][0]["validation_evidence"] = []
 
@@ -2300,7 +2303,13 @@ def test_multiple_transition_states_per_micro_reaction_are_accepted() -> None:
 
 
 def test_energy_transfer_must_cover_every_well_collider_pair() -> None:
-    """One well's alpha0 does not describe a two-well network."""
+    """A *per-well* claim must be made for every well it claims to describe.
+
+    Dropping one well's entry while leaving the other scoped ``per_well`` says
+    the second well's ⟨ΔE⟩down was resolved and the first one's was simply
+    lost. That is still refused. What is no longer refused is declaring one
+    model for the whole network — see the ``network_wide`` tests below.
+    """
     payload = _parallel_path_payload()
     payload["solve"]["energy_transfer"] = payload["solve"]["energy_transfer"][:1]
     with pytest.raises(ValueError, match="energy_transfer must cover"):
@@ -2374,6 +2383,201 @@ def test_chebyshev_grid_dimensions_must_match_declared_orders() -> None:
     ]
     with pytest.raises(ValueError, match="n_pressure=3 columns"):
         NetworkPDepUploadRequest(**payload)
+
+
+def test_per_well_energy_transfer_entry_requires_both_scoping_keys() -> None:
+    """``per_well`` is a claim about a pair, so it must name the pair.
+
+    Definitional under ADR 0008: an entry that declares itself well-resolved
+    and then names no well is internally contradictory, and the error points at
+    the honest alternative rather than at a dead end.
+    """
+    payload = _full_payload()
+    del payload["solve"]["energy_transfer"][0]["collider_species_key"]
+    with pytest.raises(ValueError, match="a per_well energy_transfer entry requires"):
+        NetworkPDepUploadRequest(**payload)
+
+    payload = _full_payload()
+    del payload["solve"]["energy_transfer"][0]["state_key"]
+    with pytest.raises(ValueError, match="scope='network_wide'"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_network_wide_energy_transfer_is_accepted_without_per_well_coverage() -> None:
+    """One ⟨ΔE⟩down for a two-well network is accepted when declared as such.
+
+    Arkane, RMG and MESS inputs routinely specify a single
+    ``SingleExponentialDown`` for the whole network. Refusing that used to force
+    the depositor to paste one number once per well, fabricating specificity the
+    run never had (ADR 0009).
+    """
+    payload = _parallel_path_payload()
+    payload["solve"]["energy_transfer"] = [
+        {
+            "scope": "network_wide",
+            "model": "single_exponential_down",
+            "alpha0_cm_inv": 300,
+            "t_ref_k": 300,
+        }
+    ]
+    request = NetworkPDepUploadRequest(**payload)
+    assert len(request.solve.energy_transfer) == 1
+    entry = request.solve.energy_transfer[0]
+    assert entry.scope == NetworkEnergyTransferScope.network_wide
+    assert entry.state_key is None
+    assert entry.collider_species_key is None
+
+
+def test_network_wide_energy_transfer_must_not_name_a_scope() -> None:
+    """Naming a well while claiming network-wide scope contradicts itself."""
+    payload = _full_payload()
+    payload["solve"]["energy_transfer"] = [
+        {
+            "scope": "network_wide",
+            "state_key": "well_RO2",
+            "model": "single_exponential_down",
+            "alpha0_cm_inv": 300,
+        }
+    ]
+    with pytest.raises(ValueError, match="must not name a"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_mixed_energy_transfer_scopes_are_refused() -> None:
+    """Half per-well and half global genuinely is ambiguous.
+
+    Nothing in such a payload says which wells the network-wide entry covers,
+    or whether it overrides the specific ones. Unlike the pure network-wide
+    case, no correct calculation produces this, so it blocks.
+    """
+    payload = _parallel_path_payload()
+    payload["solve"]["energy_transfer"] = [
+        payload["solve"]["energy_transfer"][0],
+        {
+            "scope": "network_wide",
+            "model": "single_exponential_down",
+            "alpha0_cm_inv": 280,
+            "t_ref_k": 300,
+        },
+    ]
+    with pytest.raises(ValueError, match="must all share one scope"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_two_network_wide_energy_transfer_entries_are_refused() -> None:
+    """Two global declarations say nothing about which applies where."""
+    payload = _full_payload()
+    payload["solve"]["energy_transfer"] = [
+        {
+            "scope": "network_wide",
+            "model": "single_exponential_down",
+            "alpha0_cm_inv": 300,
+            "t_ref_k": 300,
+        },
+        {
+            "scope": "network_wide",
+            "model": "single_exponential_down",
+            "alpha0_cm_inv": 280,
+            "t_ref_k": 300,
+        },
+    ]
+    with pytest.raises(ValueError, match="a network_wide energy_transfer declaration"):
+        NetworkPDepUploadRequest(**payload)
+
+
+def test_network_wide_energy_transfer_round_trips_and_warns(db_engine) -> None:
+    """Accepted, annotated, and readable back as network-wide.
+
+    The three things a reader needs: the row survives with its scope intact,
+    the read surface says ``network_wide`` with no state or collider attached,
+    and the upload carried a warning saying the well-to-well variation was
+    never determined.
+    """
+    payload = _parallel_path_payload()
+    payload["solve"]["energy_transfer"] = [
+        {
+            "scope": "network_wide",
+            "model": "single_exponential_down",
+            "alpha0_cm_inv": 300,
+            "t_ref_k": 300,
+            "note": "one energyTransferModel declared for the whole network",
+        }
+    ]
+    with Session(db_engine) as session, session.begin():
+        request = NetworkPDepUploadRequest(**payload)
+        warnings: list[UploadWarning] = []
+        network = persist_network_pdep_upload(session, request, warnings=warnings)
+        session.flush()
+
+        assert W_NETWORK_WIDE_ENERGY_TRANSFER in {w.code for w in warnings}
+
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+        rows = session.scalars(
+            select(NetworkSolveEnergyTransfer).where(
+                NetworkSolveEnergyTransfer.solve_id == solve.id
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].scope == NetworkEnergyTransferScope.network_wide
+        assert rows[0].state_id is None
+        assert rows[0].collider_species_entry_id is None
+        assert rows[0].alpha0_cm_inv == 300
+
+        solve_read = get_network_solve(
+            session,
+            network_solve_handle=solve.public_ref,
+            include=["energy_transfer"],
+        )
+        read_rows = solve_read.record.energy_transfer or []
+        assert len(read_rows) == 1
+        assert read_rows[0].scope == NetworkEnergyTransferScope.network_wide
+        assert read_rows[0].state_composition_hash is None
+        assert read_rows[0].collider_species_entry_ref is None
+
+
+def test_per_well_energy_transfer_round_trips_and_does_not_warn(db_engine) -> None:
+    """The preferred form keeps working and stays unannotated.
+
+    Lowering the barrier for the network-wide case must not blur the two: a
+    per-well deposit still resolves both axes on the read surface and carries
+    no completeness warning.
+    """
+    with Session(db_engine) as session, session.begin():
+        request = NetworkPDepUploadRequest(**_parallel_path_payload())
+        warnings: list[UploadWarning] = []
+        network = persist_network_pdep_upload(session, request, warnings=warnings)
+        session.flush()
+
+        assert W_NETWORK_WIDE_ENERGY_TRANSFER not in {w.code for w in warnings}
+
+        solve = session.scalars(
+            select(NetworkSolve).where(NetworkSolve.network_id == network.id)
+        ).one()
+        rows = session.scalars(
+            select(NetworkSolveEnergyTransfer).where(
+                NetworkSolveEnergyTransfer.solve_id == solve.id
+            )
+        ).all()
+        assert len(rows) == 2
+        assert all(
+            row.scope == NetworkEnergyTransferScope.per_well for row in rows
+        )
+        assert all(row.state_id is not None for row in rows)
+        assert all(row.collider_species_entry_id is not None for row in rows)
+
+        solve_read = get_network_solve(
+            session,
+            network_solve_handle=solve.public_ref,
+            include=["energy_transfer"],
+        )
+        read_rows = solve_read.record.energy_transfer or []
+        assert len(read_rows) == 2
+        assert all(
+            row.scope == NetworkEnergyTransferScope.per_well for row in read_rows
+        )
+        assert all(row.state_composition_hash is not None for row in read_rows)
 
 
 def test_other_convention_requires_a_note() -> None:

@@ -268,6 +268,29 @@ class SpeciesEntryStateKind(str, Enum):
     excited = "excited"
 
 
+class NetworkEnergyTransferScope(str, Enum):
+    """What a collisional energy-transfer declaration was specified *over*.
+
+    ⟨ΔE⟩down is physically a property of a (well, collider) pair, but master-
+    equation inputs do not always resolve it that far: Arkane, RMG and MESS
+    runs routinely declare one single-exponential-down model for the whole
+    network. Recording which of the two happened is the difference between N
+    independently determined values and one value copied N times. See ADR 0009.
+
+    ``per_well``
+        The declaration names one network state and one collider species, and
+        applies only to that pair. The preferred, more informative form.
+
+    ``network_wide``
+        A single declaration the producer applied to every collisionally
+        stabilised well and to the bath gas as a whole. It names no state and
+        no collider *by declaration* — not by omission.
+    """
+
+    per_well = "per_well"
+    network_wide = "network_wide"
+
+
 class NetworkChannelKind(str, Enum):
     isomerization = "isomerization"
     association = "association"

@@ -1252,6 +1252,42 @@ def test_solve_detail_include_energy_transfer(client, db_session):
     assert et[0]["alpha0_cm_inv"] == 300.0
     assert et[0]["t_exponent"] == 0.85
     assert et[0]["t_ref_k"] == 300.0
+    # A well-resolved declaration says so on the wire.
+    assert et[0]["scope"] == "per_well"
+
+
+def test_solve_detail_distinguishes_network_wide_energy_transfer(
+    client, db_session
+):
+    """A consumer can tell one global ⟨ΔE⟩down from a well-resolved one.
+
+    The two differ only in what is *absent* — no state, no collider — so
+    without ``scope`` on the wire a client would have to guess whether the
+    producer declared it network-wide or simply dropped the fields (ADR 0009).
+    """
+    from app.db.models.common import NetworkEnergyTransferScope
+    from app.db.models.network_pdep import NetworkSolveEnergyTransfer
+
+    fx = _make_simple_network(db_session, with_channel=True, with_solve=True)
+    db_session.add(
+        NetworkSolveEnergyTransfer(
+            solve_id=fx["solve"].id,
+            scope=NetworkEnergyTransferScope.network_wide,
+            model="single_exponential_down",
+            alpha0_cm_inv=175.0,
+            t_ref_k=298.0,
+        )
+    )
+    db_session.flush()
+    body = client.get(
+        _solve_url(fx["solve"].public_ref, include="energy_transfer")
+    ).json()
+    et = body["record"]["energy_transfer"]
+    assert len(et) == 1
+    assert et[0]["scope"] == "network_wide"
+    assert et[0]["state_composition_hash"] is None
+    assert et[0]["collider_species_entry_ref"] is None
+    assert et[0]["alpha0_cm_inv"] == 175.0
 
 
 def test_solve_detail_reads_scoped_energy_transfer_and_state_energies(
@@ -1304,6 +1340,7 @@ def test_solve_detail_reads_scoped_energy_transfer_and_state_energies(
     assert record["evidence_summary"]["state_energy_count"] == 1
     scoped = record["energy_transfer"]
     assert len(scoped) == 2
+    assert {row["scope"] for row in scoped} == {"per_well"}
     assert scoped[1]["state_composition_hash"] == fx["state_a"].composition_hash
     assert scoped[1]["collider_species_entry_ref"] == collider.public_ref
     state_energy = record["state_energies"]

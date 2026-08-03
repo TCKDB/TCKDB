@@ -267,7 +267,7 @@ If both counts are zero, `alembic upgrade head` proceeds normally and nothing be
    ```
    Species, calculations, transition states and statmech rows are **not** deleted — they are shared identity/result rows and the re-upload will resolve to the existing ones.
 4. **Migrate.** `alembic upgrade head` now runs to completion.
-5. **Re-upload** each network through `POST /api/v1/uploads/networks/pdep` with a v2 payload regenerated from its source run (for Arkane runs, `backend/scripts/pdep_ingestion` emits one). Each payload must carry per-path `channel_barriers`, `(state_key, collider_species_key)`-scoped `energy_transfer`, and, for every channel that is one elementary step, `microreaction_paths`. A chemically-activated **well-skipping** channel has no elementary step to name and instead declares `mechanism: "well_skipping"` with no paths (see `backend/docs/specs/pdep_upload_contract_v2.md`, "Well-skipping channels"). Omitting the paths *without* that declaration is still rejected.
+5. **Re-upload** each network through `POST /api/v1/uploads/networks/pdep` with a v2 payload regenerated from its source run (for Arkane runs, `backend/scripts/pdep_ingestion` emits one). Each payload must carry per-path `channel_barriers`, an `energy_transfer` block, and, for every channel that is one elementary step, `microreaction_paths`. Since `b6e1d3a9c740` the energy-transfer block may take either form: one `scope: "per_well"` entry per `(state_key, collider_species_key)` pair, or — if the source run declared a single `energyTransferModel` for the network, as Arkane and MESS inputs usually do — one `scope: "network_wide"` entry naming neither. Do **not** duplicate a single value across the wells to make it look per-well; that is the fabrication ADR 0009 exists to stop. A chemically-activated **well-skipping** channel has no elementary step to name and instead declares `mechanism: "well_skipping"` with no paths (see `backend/docs/specs/pdep_upload_contract_v2.md`, "Well-skipping channels"). Omitting the paths *without* that declaration is still rejected.
 6. **Verify** that the re-uploaded network count matches the export, and that `network_channel.channel_key` is non-null everywhere:
    ```sql
    SELECT count(*) FROM network_channel WHERE channel_key IS NULL;  -- expect 0
@@ -275,6 +275,24 @@ If both counts are zero, `alembic upgrade head` proceeds normally and nothing be
    The per-network **channel** count should match the export too: well-skipping channels are carried across, so a v1 network's phenomenological channels are all representable in v2. A shortfall means the producer dropped chemically-activated pathways rather than declaring them.
 
 **Downgrading** `c1d2e3f4a5b6` refuses symmetrically when either a TS-owned `statmech` row exists (the prior schema has no truthful subject for it) or two channels share `(network_id, source_state_id, sink_state_id)` (the prior schema made that triple unique). Resolve those rows before rolling back.
+
+---
+
+## Energy-transfer declaration scope (revision `b6e1d3a9c740`)
+
+Adds `network_solve_energy_transfer.scope` (`per_well` | `network_wide`) and makes `state_id` / `collider_species_entry_id` nullable so a network-wide ⟨ΔE⟩down is representable. See [ADR 0009](../../../docs/adr/0009-record-what-energy-transfer-was-specified-over.md).
+
+**Upgrading needs no operator action.** Both scope columns were NOT NULL before this revision, so every existing row already resolves a (state, collider) pair; `server_default='per_well'` states that fact rather than guessing it. No row changes meaning, acquires a NULL, or needs a re-upload. Verify with:
+
+```sql
+SELECT scope, count(*) FROM network_solve_energy_transfer GROUP BY scope;
+-- expect every pre-existing row under 'per_well'
+SELECT count(*) FROM network_solve_energy_transfer
+ WHERE scope = 'per_well' AND (state_id IS NULL OR collider_species_entry_id IS NULL);
+-- expect 0 (also enforced by ck_network_solve_energy_transfer_scope_columns_agree)
+```
+
+**Downgrading refuses** while any `network_wide` row exists. Such a row has no (state, collider) to restore — the producer never determined one — so dropping the column would either delete a real declaration or re-present it as per-well data it never was. Export the affected solves (`GET /scientific/network-solves/{ref}?include=energy_transfer`), delete the network-wide rows or the solves carrying them, then re-run the downgrade.
 
 ---
 

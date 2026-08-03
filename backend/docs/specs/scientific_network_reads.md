@@ -451,7 +451,12 @@ alongside this surface (handle prefix `nsolve_…`). Default response
 carries the solve core block + parent-network context + bounded
 evidence + available_sections summaries. Include tokens:
 `bath_gas`, `energy_transfer`, `source_calculations`, `kinetics`,
-`review`, `internal_ids`, `all`. The `kinetics` include surfaces
+`review`, `internal_ids`, `all`. Every `energy_transfer` row carries
+`scope` (`per_well` | `network_wide`); on a `network_wide` row
+`state_composition_hash` and `collider_species_entry_ref` are null
+*by declaration* — the run determined one ⟨ΔE⟩down for the whole
+network — not because the fields were dropped (ADR 0009). The
+`kinetics` include surfaces
 the same shape-metadata-only projection as the network detail
 surface (no coefficient payloads). Anti-drift cross-endpoint test
 asserts the per-solve kinetics block on this surface is dict-equal
