@@ -2248,7 +2248,7 @@ Table network_solve {
     `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k` [name: 'ck_network_solve_tmin_le_tmax']
   }
 
-  Note: 'One master-equation solution for a reaction network.'
+  Note: 'The provenance envelope for one coherent set of k(T,P) on a network.'
 }
 
 Table network_solve_bath_gas {

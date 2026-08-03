@@ -310,7 +310,20 @@ class NetworkSolveChannelBarrier(Base):
 
 
 class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
-    """One master-equation solution for a reaction network."""
+    """The provenance envelope for one coherent set of k(T,P) on a network.
+
+    ``kind`` says what stands behind it: ``computed`` means the master
+    equation was solved here, and the ME settings and T/P envelope below
+    describe that run; ``reported`` means the rates were transcribed from the
+    publication named by ``literature_id``, and this database holds none of
+    the derivation.
+
+    The distinction is stored rather than inferred because every ME-specific
+    column here is nullable — before ADR 0010 ``network_id`` was the only NOT
+    NULL column, so a row could assert "master-equation solution" by table
+    membership alone while carrying no evidence of one. ``kind`` is what
+    turns that into a checkable claim.
+    """
 
     __tablename__ = "network_solve"
 
