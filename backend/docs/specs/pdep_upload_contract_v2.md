@@ -25,9 +25,17 @@ are rejected; the backend does not manufacture missing scientific evidence.
   "Well-skipping channels" below. A channel that omits its paths *without*
   declaring `mechanism: well_skipping` is still rejected: silence is never a
   declaration.
-- A solve gives a state energy for every state, and one forward/reverse barrier
-  for every *saddle-point* channel path. A barrierless path carries no barrier —
-  offering one would be a fabricated number.
+- A solve declares `kind`. A `computed` solve — the default, and the preferred
+  form — is one whose master equation was solved here, and the three coverage
+  rules below apply to it in full. A `reported` solve carries k(T,P)
+  transcribed from a publication; it supplies `literature` and at least one
+  `channel_kinetics` entry, is not held to the coverage rules because it holds
+  none of those inputs, and returns a `reported_network_solve` upload warning.
+  Anything a reported solve *does* supply is validated exactly as strictly.
+  See ADR 0010.
+- A computed solve gives a state energy for every state, and one
+  forward/reverse barrier for every *saddle-point* channel path. A barrierless
+  path carries no barrier — offering one would be a fabricated number.
 - Both energies and barriers declare a machine-token `energy_zero_convention`
   and `correction_convention` (see `app/db/models/common.py`). Free text is
   rejected. `other` is the single escape hatch and requires `convention_note`.
@@ -35,10 +43,16 @@ are rejected; the backend does not manufacture missing scientific evidence.
   channel (source → sink), not by the micro reaction's own written direction. A
   submerged entrance barrier is legitimately negative; only non-finite values
   are rejected.
-- Energy-transfer rows are scoped to a `(state_key, collider_species_key)` pair
-  and must cover the full cross product of collisionally-stabilised well states
-  and declared bath-gas colliders. Global transfer parameters are not accepted,
-  and one well's ⟨ΔE⟩down does not describe a five-well network.
+- Energy-transfer rows on a computed solve declare a `scope`. `per_well` rows
+  name a `(state_key, collider_species_key)` pair and must cover the full cross
+  product of collisionally-stabilised well states and declared bath-gas
+  colliders; one well's ⟨ΔE⟩down does not describe a five-well network. Since
+  `b6e1d3a9c740` a run that specified a single `energyTransferModel` for the
+  whole network — as Arkane and MESS inputs usually do — declares instead one
+  `network_wide` entry naming no state and no collider, which is accepted and
+  returns a `network_wide_energy_transfer_scope` warning. Mixing the two scopes
+  in one payload is rejected. Duplicating a single value across the wells to
+  make it look per-well is the fabrication ADR 0009 exists to stop.
 - IRC validation evidence on a transition state is **optional but strongly
   recommended**. Depositing a TS without it succeeds and returns a
   `transition_state_missing_irc_evidence` upload warning. What is never accepted

@@ -451,7 +451,14 @@ alongside this surface (handle prefix `nsolve_…`). Default response
 carries the solve core block + parent-network context + bounded
 evidence + available_sections summaries. Include tokens:
 `bath_gas`, `energy_transfer`, `source_calculations`, `kinetics`,
-`review`, `internal_ids`, `all`. Every `energy_transfer` row carries
+`review`, `internal_ids`, `all`. The core block carries `kind`
+(`computed` | `reported`), which says whether the master equation was
+solved here or the k(T,P) were transcribed from a publication. It also
+appears on the embedded `NetworkSolveSummary` under
+`/networks/{ref}?include=solves` and on the parent-solve context of a
+network-kinetics record, so a consumer pulling rates can tell a
+re-derivable one from a cited one without a second request (ADR 0010).
+Every `energy_transfer` row carries
 `scope` (`per_well` | `network_wide`); on a `network_wide` row
 `state_composition_hash` and `collider_species_entry_ref` are null
 *by declaration* — the run determined one ⟨ΔE⟩down for the whole
@@ -465,7 +472,8 @@ to the kinetics block embedded under
 
 A standalone search endpoint
 (`GET/POST /scientific/network-solves/search`) **also ships** now —
-20 filters covering identity (`network_solve_ref`, `network_ref`),
+21 filters covering identity (`network_solve_ref`, `network_ref`),
+`kind` (origin: `computed` vs literature-`reported`),
 `solve_method` (`NetworkSolve.me_method`, the ME algorithm), T/P
 envelope (overlap semantics matching the network search surface),
 evidence booleans (each accepting explicit `False`), and provenance
