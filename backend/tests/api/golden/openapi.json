@@ -21877,8 +21877,7 @@
         "description": "Lightweight parent-solve pointer for a network-kinetics record.\n\n``kind`` is carried here rather than left to the solve detail endpoint\nbecause it qualifies *these rates*: it says whether the k(T,P) in this\nrecord were produced by a master equation this database holds, or\ntranscribed from a publication whose inputs it does not. A consumer\npulling rates should not have to make a second request to find that out\n(ADR 0010).",
         "properties": {
           "kind": {
-            "$ref": "#/components/schemas/NetworkSolveKind",
-            "default": "computed"
+            "$ref": "#/components/schemas/NetworkSolveKind"
           },
           "me_method": {
             "anyOf": [
@@ -21909,7 +21908,8 @@
           }
         },
         "required": [
-          "network_solve_ref"
+          "network_solve_ref",
+          "kind"
         ],
         "title": "NetworkKineticsSolveContext",
         "type": "object"
@@ -21976,8 +21976,7 @@
             "x-tckdb-policy-hidden": true
           },
           "network_solve_kind": {
-            "$ref": "#/components/schemas/NetworkSolveKind",
-            "default": "computed"
+            "$ref": "#/components/schemas/NetworkSolveKind"
           },
           "network_solve_ref": {
             "anyOf": [
@@ -22058,6 +22057,7 @@
           }
         },
         "required": [
+          "network_solve_kind",
           "channel_source_composition_hash",
           "channel_sink_composition_hash",
           "model_kind"
@@ -23093,8 +23093,7 @@
             "title": "Interpolation Model"
           },
           "kind": {
-            "$ref": "#/components/schemas/NetworkSolveKind",
-            "default": "computed"
+            "$ref": "#/components/schemas/NetworkSolveKind"
           },
           "me_method": {
             "anyOf": [
@@ -23184,6 +23183,7 @@
         },
         "required": [
           "network_solve_ref",
+          "kind",
           "created_at",
           "review"
         ],
@@ -23282,8 +23282,7 @@
             "title": "Interpolation Model"
           },
           "kind": {
-            "$ref": "#/components/schemas/NetworkSolveKind",
-            "default": "computed"
+            "$ref": "#/components/schemas/NetworkSolveKind"
           },
           "kinetics": {
             "items": {
@@ -23443,7 +23442,8 @@
         "required": [
           "id",
           "network_id",
-          "created_at"
+          "created_at",
+          "kind"
         ],
         "title": "NetworkSolveDetailRead",
         "type": "object"
@@ -23956,8 +23956,7 @@
             "title": "Interpolation Model"
           },
           "kind": {
-            "$ref": "#/components/schemas/NetworkSolveKind",
-            "default": "computed"
+            "$ref": "#/components/schemas/NetworkSolveKind"
           },
           "kinetics_count": {
             "default": 0,
@@ -24106,7 +24105,8 @@
         "required": [
           "id",
           "network_id",
-          "created_at"
+          "created_at",
+          "kind"
         ],
         "title": "NetworkSolveListItemRead",
         "type": "object"
@@ -24600,8 +24600,7 @@
             "title": "Interpolation Model"
           },
           "kind": {
-            "$ref": "#/components/schemas/NetworkSolveKind",
-            "default": "computed"
+            "$ref": "#/components/schemas/NetworkSolveKind"
           },
           "me_method": {
             "anyOf": [
@@ -24695,6 +24694,7 @@
         },
         "required": [
           "network_solve_ref",
+          "kind",
           "created_at",
           "review",
           "bath_gas_count",

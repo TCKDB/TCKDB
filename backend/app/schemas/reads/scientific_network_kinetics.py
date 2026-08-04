@@ -109,7 +109,11 @@ class NetworkKineticsSolveContext(BaseModel):
 
     network_solve_id: int | None = None
     network_solve_ref: str
-    kind: NetworkSolveKind = NetworkSolveKind.computed
+    # Required, no default. ``network_kinetics.solve_id`` is NOT NULL and
+    # ``network_solve.kind`` is NOT NULL, so this is always knowable; a
+    # default could only mask a builder that forgot to project it, and the
+    # value it would mask with is the stronger claim (ADR 0010).
+    kind: NetworkSolveKind
     me_method: str | None = None
 
 

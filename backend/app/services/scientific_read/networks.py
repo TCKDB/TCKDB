@@ -32,7 +32,6 @@ from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     NetworkKineticsModelKind,
-    NetworkSolveKind,
     RecordReviewStatus,
     SubmissionRecordType,
 )
@@ -819,9 +818,12 @@ def _build_kinetics(
                 network_channel_id=r.channel_id,
                 network_solve_id=r.solve_id,
                 network_solve_ref=solve_ref_by_id.get(r.solve_id),
-                network_solve_kind=solve_kind_by_id.get(
-                    r.solve_id, NetworkSolveKind.computed
-                ),
+                # Subscript, not ``.get(..., computed)``: these kinetics rows
+                # were selected *by* ``solve_id.in_(solve_ids)``, so the key is
+                # always present. A default here could only ever fabricate a
+                # provenance claim out of a lookup miss that cannot happen
+                # (ADR 0010).
+                network_solve_kind=solve_kind_by_id[r.solve_id],
                 channel_source_composition_hash=src,
                 channel_sink_composition_hash=sink,
                 model_kind=r.model_kind,

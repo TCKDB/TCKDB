@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 
+import pydantic
+import pytest
+
 from app.db.models.common import (
     CalculationType,
     NetworkChannelKind,
@@ -17,6 +20,18 @@ from app.db.models.common import (
 )
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.schemas.reads.network import (
+    NetworkSolveDetailRead,
+    NetworkSolveListItemRead,
+)
+from app.schemas.reads.scientific_network import (
+    NetworkKineticsSummary,
+    NetworkSolveCoreBlock,
+    NetworkSolveSummary,
+)
+from app.schemas.reads.scientific_network_kinetics import (
+    NetworkKineticsSolveContext,
+)
 from tests.services.scientific_read._factories import (
     attach_network_kinetics_chebyshev,
     attach_network_kinetics_plog,
@@ -3973,3 +3988,45 @@ def test_solve_search_kind_counts_as_a_filter(client, db_session):
 def test_solve_search_rejects_unknown_kind(client, db_session):
     resp = client.get(_solve_search_url(kind="guessed"))
     assert resp.status_code == 422
+
+
+def test_read_schemas_require_origin_kind_rather_than_defaulting_it():
+    """A read schema must never supply ``kind`` on a builder's behalf.
+
+    Every surface below projects a row whose ``kind`` column is NOT NULL,
+    reached through FKs that are themselves NOT NULL — so the value is
+    always knowable and a default could only ever fire when a *builder
+    forgot to project it*. Defaulting to ``computed`` in that case reads
+    the stronger scientific claim out of an absence, which is the read-side
+    twin of the write-side gap ADR 0010 closed: a reported record would
+    read back as computed, and a consumer would propagate as re-derivable
+    rates that nobody can re-derive.
+
+    Requiring the field costs consumers nothing — Pydantic already emits
+    defaulted fields, so ``kind`` is present in every response today; this
+    only moves it into the OpenAPI ``required`` array. What it buys is that
+    the omission raises here, at construction, instead of shipping silently.
+
+    ``None`` was rejected for the same surfaces: it asserts "unknown" where
+    the database always knows, and taxes every consumer with a branch that
+    cannot occur. (On a *client* mirroring an older server, ``None`` would
+    be right — the client genuinely may not know. That is not this.)
+    """
+    cases = [
+        (NetworkSolveSummary, "kind"),
+        (NetworkSolveCoreBlock, "kind"),
+        (NetworkKineticsSummary, "network_solve_kind"),
+        (NetworkKineticsSolveContext, "kind"),
+        (NetworkSolveListItemRead, "kind"),
+        (NetworkSolveDetailRead, "kind"),
+    ]
+    for model, field_name in cases:
+        field = model.model_fields[field_name]
+        assert field.is_required(), (
+            f"{model.__name__}.{field_name} has a default. A builder that "
+            "forgets to project the ADR 0010 origin kind would then publish "
+            "an unsupported provenance claim instead of failing."
+        )
+        # And the omission really does raise, not merely type as required.
+        with pytest.raises(pydantic.ValidationError):
+            model.model_validate({})

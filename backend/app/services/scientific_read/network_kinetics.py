@@ -26,7 +26,6 @@ from sqlalchemy.orm import Session
 from app.api.config import settings
 from app.api.errors import NotFoundError
 from app.db.models.common import (
-    NetworkSolveKind,
     RecordReviewStatus,
     SubmissionRecordType,
 )
@@ -175,10 +174,19 @@ def build_network_kinetics_record(
     byte-identical per-record payloads for the same include set.
     """
     solve = session.get(NetworkSolve, nk.solve_id)
+    if solve is None:  # pragma: no cover — NOT NULL, FK-constrained
+        # Not a degradation case. ``network_kinetics.solve_id`` is NOT NULL
+        # with an FK, so a missing parent means referential corruption. The
+        # record's ``kind`` — whether these rates were derived here or read
+        # out of a paper — is unknowable in that state, and rendering it as
+        # ``computed`` would publish a provenance claim nothing supports
+        # (ADR 0010). Failing is the honest response, and the alarm.
+        raise RuntimeError(
+            "network_kinetics references a missing network_solve "
+            f"(network_kinetics_ref={nk.public_ref})"
+        )
     channel = session.get(NetworkChannel, nk.channel_id)
-    network = (
-        session.get(Network, solve.network_id) if solve is not None else None
-    )
+    network = session.get(Network, solve.network_id)
     return _build_network_kinetics_record(
         session,
         nk=nk,
@@ -199,7 +207,9 @@ def _build_network_kinetics_record(
     session: Session,
     *,
     nk: NetworkKinetics,
-    solve: NetworkSolve | None,
+    # Not ``| None``: ``network_kinetics.solve_id`` is NOT NULL and
+    # FK-constrained, so a caller never legitimately has None here.
+    solve: NetworkSolve,
     channel: NetworkChannel | None,
     network: Network | None,
     badge: RecordReviewBadge,
@@ -223,14 +233,10 @@ def _build_network_kinetics_record(
         NetworkKineticsPoint,
         NetworkKineticsPoint.network_kinetics_id == nk.id,
     )
-    source_calc_count = (
-        _count(
-            session,
-            NetworkSolveSourceCalculation,
-            NetworkSolveSourceCalculation.solve_id == solve.id,
-        )
-        if solve is not None
-        else 0
+    source_calc_count = _count(
+        session,
+        NetworkSolveSourceCalculation,
+        NetworkSolveSourceCalculation.solve_id == solve.id,
     )
 
     cheb_n_t = cheb_row.n_temperature if cheb_row is not None else None
@@ -281,9 +287,7 @@ def _build_network_kinetics_record(
         has_source_calculations=source_calc_count > 0,
         # ``NetworkKinetics`` itself is not in ``SubmissionRecordType``;
         # any review history is inherited from the parent solve.
-        has_review=_exists_solve_review(
-            session, solve.id if solve else None
-        ),
+        has_review=_exists_solve_review(session, solve.id),
     )
 
     # ---- core block --------------------------------------------------------
@@ -315,12 +319,12 @@ def _build_network_kinetics_record(
         description=network.description if network is not None else None,
     )
     solve_ctx = NetworkKineticsSolveContext(
-        network_solve_id=solve.id if solve is not None else None,
-        network_solve_ref=solve.public_ref if solve is not None else "",
+        network_solve_id=solve.id,
+        network_solve_ref=solve.public_ref,
         # Says whether *these* rates were derived here or transcribed from a
         # paper, without a second request to the solve surface (ADR 0010).
-        kind=solve.kind if solve is not None else NetworkSolveKind.computed,
-        me_method=solve.me_method if solve is not None else None,
+        kind=solve.kind,
+        me_method=solve.me_method,
     )
     channel_ctx = NetworkKineticsChannelContext(
         network_channel_id=channel.id if channel is not None else None,
@@ -360,11 +364,11 @@ def _build_network_kinetics_record(
         point_count_total = point_count
 
     sources_block: list[NetworkSourceCalculationSummary] | None = None
-    if "source_calculations" in includes and solve is not None:
+    if "source_calculations" in includes:
         sources_block = _build_source_calculations(session, [solve])
 
     review_block: list[NetworkReviewEntry] | None = None
-    if "review" in includes and solve is not None:
+    if "review" in includes:
         review_block = _build_solve_review_history(session, solve.id)
 
     return ScientificNetworkKineticsRecord(

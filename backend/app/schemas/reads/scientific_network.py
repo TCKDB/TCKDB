@@ -217,7 +217,17 @@ class NetworkSolveSummary(BaseModel):
     # Whether the master equation was solved here or the rates were read out
     # of a paper. A consumer comparing two solves of the same network needs
     # this to tell "we computed it" from "a paper says so" (ADR 0010).
-    kind: NetworkSolveKind = NetworkSolveKind.computed
+    #
+    # Deliberately **required, with no default**. ``network_solve.kind`` is
+    # NOT NULL, so every row this schema can ever project provably has one;
+    # a default would only ever fire when a *builder forgot to project it*,
+    # and defaulting to ``computed`` would then read the stronger scientific
+    # claim out of an absence — the read-side twin of the write-side bug
+    # ADR 0010 fixed. Required means that mistake raises a ValidationError at
+    # construction instead of silently shipping a false provenance claim.
+    # Nothing changes on the wire: the field is already present in every
+    # response, so this only moves it into the OpenAPI ``required`` array.
+    kind: NetworkSolveKind
     me_method: str | None = None
     interpolation_model: str | None = None
     grain_size_cm_inv: float | None = None
@@ -255,7 +265,11 @@ class NetworkKineticsSummary(BaseModel):
     # Named ``network_solve_kind`` rather than ``kind`` because ``model_kind``
     # already occupies the unqualified sense here (Chebyshev vs PLOG). This is
     # the parent solve's origin, not the rate's functional form.
-    network_solve_kind: NetworkSolveKind = NetworkSolveKind.computed
+    #
+    # Required, no default — see :class:`NetworkSolveSummary`.
+    # ``network_kinetics.solve_id`` is NOT NULL and FK-constrained, so the
+    # parent solve, and therefore its kind, always exists.
+    network_solve_kind: NetworkSolveKind
     channel_source_composition_hash: str
     channel_sink_composition_hash: str
     model_kind: NetworkKineticsModelKind
@@ -391,7 +405,8 @@ class NetworkSolveCoreBlock(BaseModel):
     network_solve_ref: str
     # See :class:`NetworkSolveSummary` — a reported record that read back
     # indistinguishably from a computed one would be worse than no record.
-    kind: NetworkSolveKind = NetworkSolveKind.computed
+    # Required, no default, for the reason given there.
+    kind: NetworkSolveKind
     me_method: str | None = None
     interpolation_model: str | None = None
     grain_size_cm_inv: float | None = None
