@@ -32,6 +32,11 @@ enum ArtifactKind {
   ancillary
 }
 
+enum AtomMapSource {
+  declared
+  inferred
+}
+
 enum CalculationDependencyRole {
   optimized_from
   freq_on
@@ -1651,6 +1656,7 @@ Table geometry_atom {
 
   indexes {
     (atom_index, geometry_id) [pk]
+    (geometry_id, atom_index, element) [unique, name: 'uq_geometry_atom_geometry_id_element']
   }
 
   checks {
@@ -2389,6 +2395,54 @@ Table network_state_participant {
   Note: 'Species composition of a network state.'
 }
 
+Table reaction_atom_map {
+  id bigint [pk, not null]
+  reaction_entry_id bigint [not null, ref: > reaction_entry.id]
+  transition_state_entry_id bigint [not null, ref: > transition_state_entry.id]
+  transition_state_geometry_id bigint [not null, ref: > geometry.id]
+  source AtomMapSource [not null]
+  equivalent_map_count int
+  note text
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+
+  indexes {
+    (id, transition_state_geometry_id) [unique, name: 'uq_reaction_atom_map_id']
+    (reaction_entry_id, transition_state_entry_id) [unique, name: 'uq_reaction_atom_map_reaction_entry_id']
+  }
+
+  checks {
+    `equivalent_map_count IS NULL OR equivalent_map_count >= 1` [name: 'ck_reaction_atom_map_equivalent_map_count_ge_1']
+    `source <> 'inferred' OR note IS NOT NULL` [name: 'ck_reaction_atom_map_inferred_requires_note']
+  }
+
+  Note: 'One depositor-supplied atom correspondence for one micro reaction.'
+}
+
+Table reaction_atom_map_pair {
+  id bigint [pk, not null]
+  atom_map_id bigint [not null, ref: > reaction_atom_map.id]
+  side ReactionRole [not null, ref: > reaction_entry_structure_participant.role]
+  structure_participant_id bigint [not null, ref: > reaction_entry_structure_participant.id]
+  geometry_id bigint [not null, ref: > geometry_atom.geometry_id]
+  atom_index int [not null, ref: > geometry_atom.atom_index]
+  transition_state_geometry_id bigint [not null, ref: > geometry_atom.geometry_id]
+  ts_atom_index int [not null, ref: > geometry_atom.atom_index]
+  element varchar(2) [not null, ref: > geometry_atom.element]
+
+  indexes {
+    (atom_map_id, structure_participant_id, atom_index) [unique, name: 'uq_reaction_atom_map_pair_atom_map_id']
+    (atom_map_id, side, ts_atom_index) [unique, name: 'uq_reaction_atom_map_pair_ts_atom_index']
+  }
+
+  checks {
+    `atom_index >= 1` [name: 'ck_reaction_atom_map_pair_atom_index_ge_1']
+    `ts_atom_index >= 1` [name: 'ck_reaction_atom_map_pair_ts_atom_index_ge_1']
+  }
+
+  Note: 'One atom of one participant identified with one transition-state atom.'
+}
+
 Table reaction_entry {
   id bigint [pk, not null]
   reaction_id bigint [not null, ref: > chem_reaction.id]
@@ -2412,6 +2466,7 @@ Table reaction_entry_structure_participant {
   created_by bigint [ref: > app_user.id]
 
   indexes {
+    (id, role) [unique, name: 'uq_reaction_entry_structure_participant_id']
     (reaction_entry_id, role, participant_index) [unique, name: 'uq_reaction_entry_structure_participant_reaction_entry_id']
   }
 
@@ -3358,3 +3413,11 @@ Table workflow_tool_release {
 Ref fk_cspcv_calc_id_coordinate_index: calc_scan_point_coordinate_value.(calculation_id, coordinate_index) > calc_scan_coordinate.(calculation_id, coordinate_index)
 
 Ref fk_cspcv_calc_id_point_index: calc_scan_point_coordinate_value.(calculation_id, point_index) > calc_scan_point.(calculation_id, point_index)
+
+Ref fk_reaction_atom_map_pair_atom_map_id_reaction_atom_map: reaction_atom_map_pair.(atom_map_id, transition_state_geometry_id) > reaction_atom_map.(id, transition_state_geometry_id)
+
+Ref fk_reaction_atom_map_pair_geometry_id_geometry_atom: reaction_atom_map_pair.(geometry_id, atom_index, element) > geometry_atom.(geometry_id, atom_index, element)
+
+Ref fk_reaction_atom_map_pair_structure_participant: reaction_atom_map_pair.(structure_participant_id, side) > reaction_entry_structure_participant.(id, role)
+
+Ref fk_reaction_atom_map_pair_ts_geometry_id_geometry_atom: reaction_atom_map_pair.(transition_state_geometry_id, ts_atom_index, element) > geometry_atom.(geometry_id, atom_index, element)

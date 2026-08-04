@@ -1356,6 +1356,24 @@
         "title": "ArtifactsUploadResult",
         "type": "object"
       },
+      "AtomMapSource-Input": {
+        "description": "How a reaction atom map was obtained (ADR 0011).\n\n``declared``\n    The depositor stated the correspondence.\n``inferred``\n    An algorithm produced it. It is recorded and read back as inferred,\n    never as though a human asserted it.\n\nThere is no default member. A map that cannot say how it was obtained is\nnot a map this database accepts.",
+        "enum": [
+          "declared",
+          "inferred"
+        ],
+        "title": "AtomMapSource",
+        "type": "string"
+      },
+      "AtomMapSource-Output": {
+        "description": "How a reaction atom map was obtained (ADR 0011).\n\n``declared``\n    The depositor stated the correspondence. They ran the calculation and\n    followed the intrinsic reaction coordinate, so they know which atom\n    went where.\n``inferred``\n    An algorithm produced the correspondence. It is recorded and read back\n    as inferred, never as though a human asserted it.\n\nThe column carrying this token has no default. Defaulting to ``declared``\nwould manufacture human attribution for a row nobody wrote by hand, and\ndefaulting to ``inferred`` would understate a real declaration; a map that\ncannot say how it was obtained is not a map this database accepts.",
+        "enum": [
+          "declared",
+          "inferred"
+        ],
+        "title": "AtomMapSource",
+        "type": "string"
+      },
       "AvailableArtifactSections": {
         "description": "Boolean map describing which optional artifact-record sections\nhave data. Mirrors the ``available_sections`` pattern used by other\nscientific read shapes; lets clients introspect availability\nwithout fetching the heavy sections.",
         "properties": {
@@ -9348,6 +9366,17 @@
                 "type": "null"
               }
             ]
+          },
+          "atom_map": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReactionAtomMapIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which atom of each reactant and product is which atom of the transition state. Supplied by the depositor and never derived here: TCKDB does not run a mapping algorithm, because several chemically distinct maps are usually consistent with the same reactants and products and choosing one by algorithm would manufacture provenance (ADR 0011). Optional — a reaction deposited without one succeeds and returns a 'reaction_atom_map_absent' upload warning, because an unmapped reaction is incomplete rather than false. Requires a transition state: both legs of the map run toward the saddle point."
           },
           "kinetics": {
             "items": {
@@ -26990,9 +27019,289 @@
         "title": "PublicAssessmentSummary",
         "type": "object"
       },
-      "ReactionAvailability": {
-        "description": "Boolean availability flags + counts per L1.",
+      "ReactionAtomMapBadge": {
+        "description": "Says whether this reaction is atom-mapped, and on whose authority.\n\nPresent on every ``/full`` response without asking for the map itself, so\na mapped reaction can be told from an unmapped one in a single request.\nAn empty ``atom_maps`` list on the reaction-entry header means the record\ngenuinely carries no map — it does not mean the section was not requested.\n\n``source`` is the load-bearing field. A map produced by an algorithm reads\nback as ``inferred`` and is never presented as though a human asserted it\n(ADR 0011); a consumer that treats the two alike is reading a claim the\nrecord does not make.\n\n``equivalent_map_count`` is ``null`` when the depositor made no claim. It\nis **not** ``1``: symmetry makes a valid map routinely non-unique, and\nTCKDB does not canonicalise among the alternatives.\n\n``reactant_atoms_mapped`` / ``product_atoms_mapped`` count the mapped\natoms on each leg. Compare them against the participants' atom counts to\nsee whether the map is complete; a partial map is accepted and says\nnothing about the atoms it omits.",
         "properties": {
+          "equivalent_map_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equivalent Map Count"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "product_atoms_mapped": {
+            "title": "Product Atoms Mapped",
+            "type": "integer"
+          },
+          "reactant_atoms_mapped": {
+            "title": "Reactant Atoms Mapped",
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AtomMapSource-Output"
+          },
+          "transition_state_entry_id": {
+            "title": "Transition State Entry Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transition_state_entry_ref",
+          "source",
+          "reactant_atoms_mapped",
+          "product_atoms_mapped"
+        ],
+        "title": "ReactionAtomMapBadge",
+        "type": "object"
+      },
+      "ReactionAtomMapDetail": {
+        "description": "A full atom map: both legs, atom by atom, toward the transition state.\n\nOnly the two legs are stored. Composing them gives reactants→products;\nthat composition is deliberately not a stored record, because keeping the\nlegs is what preserves which bonds break and form at the saddle point.",
+        "properties": {
+          "equivalent_map_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equivalent Map Count"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/ReactionAtomMapPairRead"
+            },
+            "title": "Pairs",
+            "type": "array"
+          },
+          "product_atoms_mapped": {
+            "title": "Product Atoms Mapped",
+            "type": "integer"
+          },
+          "reactant_atoms_mapped": {
+            "title": "Reactant Atoms Mapped",
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AtomMapSource-Output"
+          },
+          "transition_state_entry_id": {
+            "title": "Transition State Entry Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          },
+          "transition_state_geometry_id": {
+            "title": "Transition State Geometry Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "transition_state_geometry_ref": {
+            "title": "Transition State Geometry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transition_state_entry_ref",
+          "source",
+          "reactant_atoms_mapped",
+          "product_atoms_mapped",
+          "transition_state_geometry_ref",
+          "pairs"
+        ],
+        "title": "ReactionAtomMapDetail",
+        "type": "object"
+      },
+      "ReactionAtomMapIn": {
+        "additionalProperties": false,
+        "description": "A complete atom correspondence for one micro reaction.\n\n:param source: How the map was obtained. Required — there is no default,\n    because ``declared`` would manufacture human attribution and\n    ``inferred`` would understate a real declaration.\n:param ts_geometry_key: Bundle-local key of the saddle-point geometry both\n    legs map onto.\n:param participants: One entry per participant molecule that is mapped.\n:param equivalent_map_count: How many maps are equivalent to this one under\n    the symmetry of the participating structures, where known. Omit when\n    unknown — ``null`` is not ``1``. Symmetry makes a valid map routinely\n    non-unique and TCKDB does not attempt to canonicalise among the\n    alternatives.\n:param note: Free text. **Required when ``source`` is ``inferred``**, where\n    it must name the algorithm that produced the map.",
+        "properties": {
+          "equivalent_map_count": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equivalent Map Count"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/ReactionAtomMapParticipantIn"
+            },
+            "minItems": 1,
+            "title": "Participants",
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AtomMapSource-Input"
+          },
+          "ts_geometry_key": {
+            "minLength": 1,
+            "title": "Ts Geometry Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "ts_geometry_key",
+          "participants"
+        ],
+        "title": "ReactionAtomMapIn",
+        "type": "object"
+      },
+      "ReactionAtomMapPairRead": {
+        "description": "One participant atom identified with one transition-state atom.\n\n``atom_index`` counts into ``geometry_ref``; ``ts_atom_index`` counts into\nthe map's transition-state geometry. Atom indices are geometry-relative,\nso neither number means anything without the geometry beside it.",
+        "properties": {
+          "atom_index": {
+            "title": "Atom Index",
+            "type": "integer"
+          },
+          "element": {
+            "title": "Element",
+            "type": "string"
+          },
+          "geometry_id": {
+            "title": "Geometry Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "geometry_ref": {
+            "title": "Geometry Ref",
+            "type": "string"
+          },
+          "participant_index": {
+            "title": "Participant Index",
+            "type": "integer"
+          },
+          "side": {
+            "$ref": "#/components/schemas/ReactionRole"
+          },
+          "species_entry_id": {
+            "title": "Species Entry Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          },
+          "ts_atom_index": {
+            "title": "Ts Atom Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "side",
+          "species_entry_ref",
+          "participant_index",
+          "geometry_ref",
+          "atom_index",
+          "element",
+          "ts_atom_index"
+        ],
+        "title": "ReactionAtomMapPairRead",
+        "type": "object"
+      },
+      "ReactionAtomMapParticipantIn": {
+        "additionalProperties": false,
+        "description": "One participant molecule's atoms, identified with transition-state atoms.\n\n:param side: Which leg this participant sits on.\n:param species_key: Bundle-local key of the species this participant is.\n:param participant_index: 1-based position of this participant on its side.\n    Required because the same species may appear twice on one side\n    (``2 CH3 → C2H6``) and the two copies map to different saddle-point\n    atoms.\n:param geometry_key: Bundle-local key of the geometry the atom indices\n    count into. Named explicitly; see the module docstring.\n:param atom_to_ts: ``{atom index in this participant's geometry: atom index\n    in the transition-state geometry}``. Both sides 1-based.",
+        "properties": {
+          "atom_to_ts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "minProperties": 1,
+            "title": "Atom To Ts",
+            "type": "object"
+          },
+          "geometry_key": {
+            "minLength": 1,
+            "title": "Geometry Key",
+            "type": "string"
+          },
+          "participant_index": {
+            "minimum": 1.0,
+            "title": "Participant Index",
+            "type": "integer"
+          },
+          "side": {
+            "$ref": "#/components/schemas/ReactionRole"
+          },
+          "species_key": {
+            "minLength": 1,
+            "title": "Species Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "side",
+          "species_key",
+          "participant_index",
+          "geometry_key",
+          "atom_to_ts"
+        ],
+        "title": "ReactionAtomMapParticipantIn",
+        "type": "object"
+      },
+      "ReactionAvailability": {
+        "description": "Boolean availability flags + counts per L1.\n\n``has_atom_map`` says whether the record states which atom of the\nreactants and products is which atom of the transition state (ADR 0011).\n``false`` is the ordinary state for everything deposited before atom\nmapping existed and for every barrierless channel; it means the record is\nincomplete, not wrong. It is here rather than only on the deep read so a\nconsumer never has to fetch a reaction to find out that it cannot answer\nthe question they came with.",
+        "properties": {
+          "has_atom_map": {
+            "default": false,
+            "title": "Has Atom Map",
+            "type": "boolean"
+          },
           "has_kinetics": {
             "title": "Has Kinetics",
             "type": "boolean"
@@ -27065,8 +27374,15 @@
         "type": "object"
       },
       "ReactionEntrySummary": {
-        "description": "Top-level reaction-entry header for the /full response.\n\nPhase B: ``reaction_ref`` and ``reaction_entry_ref`` are the public\nstable handles alongside the integer IDs.",
+        "description": "Top-level reaction-entry header for the /full response.\n\nPhase B: ``reaction_ref`` and ``reaction_entry_ref`` are the public\nstable handles alongside the integer IDs.\n\n``atom_maps`` is always present and never gated behind an ``include``\ntoken: an unmapped reaction that is indistinguishable from a mapped one is\nthe failure ADR 0011 exists to remove, and it would be reintroduced by\nmaking the distinction cost a second request.",
         "properties": {
+          "atom_maps": {
+            "items": {
+              "$ref": "#/components/schemas/ReactionAtomMapBadge"
+            },
+            "title": "Atom Maps",
+            "type": "array"
+          },
           "equation": {
             "title": "Equation",
             "type": "string"
@@ -31601,6 +31917,20 @@
               }
             ],
             "title": "Artifacts"
+          },
+          "atom_map": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReactionAtomMapDetail"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atom Map"
           },
           "calculations": {
             "anyOf": [
