@@ -1454,6 +1454,14 @@ class NetworkPDepUploadRequest(SchemaBase):
         # publication: the depositor holds none of those inputs and the paper
         # usually never published them, so demanding them refused the deposit
         # outright instead of recording a weaker but honest record (ADR 0010).
+        #
+        # These rules are the *full* contract and this is the only place that
+        # holds it. Migration ``f9b2e6c4a1d7`` adds a deferred constraint
+        # trigger that refuses a computed solve carrying *zero* rows of an
+        # applicable evidence class, which is belt and braces for write paths
+        # that never reach this validator — not a replacement for it. The
+        # trigger guarantees existence; the coverage below is guaranteed
+        # nowhere else, so do not thin it out on the strength of it.
         if self.solve is not None and self.solve.kind is NetworkSolveKind.computed:
             if {item.state_key for item in self.solve.state_energies} != state_keys:
                 raise ValueError("state_energies must provide exactly one energy for every network state.")
