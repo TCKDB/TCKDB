@@ -77,6 +77,7 @@ from app.services.reaction_atom_map import (
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
     resolve_chem_reaction,
+    validate_transition_state_composition,
 )
 from app.services.record_review import (
     RecordRef,
@@ -477,6 +478,19 @@ def persist_computed_reaction_upload(
             session, GeometryPayload(xyz_text=ts_in.geometry.xyz_text)
         )
         geometry_key_to_id[ts_in.geometry.key] = ts_geom.id
+
+        # The saddle point must be made of this reaction's atoms, at this
+        # reaction's charge. Checked for every deposit, mapped or not: an atom
+        # map would catch a formula mismatch implicitly, but only where one was
+        # supplied.
+        validate_transition_state_composition(
+            session,
+            reaction_entry_id=canonical_reaction_entry.id,
+            transition_state_charge=ts_in.charge,
+            transition_state_smiles=ts_in.unmapped_smiles,
+            transition_state_geometry_id=ts_geom.id,
+            subject_label=ts_in.label or "transition state",
+        )
 
         ts_calc = _persist_calculation(
             session,

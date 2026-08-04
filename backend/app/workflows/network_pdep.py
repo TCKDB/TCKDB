@@ -74,6 +74,9 @@ from app.services.provenance_warnings import (
     collect_network_energy_transfer_warnings,
     collect_network_solve_kind_warnings,
 )
+from app.services.reaction_resolution import (
+    validate_transition_state_composition,
+)
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -424,6 +427,16 @@ def persist_network_pdep_upload(
         ts_geom_payload = GeometryPayload(xyz_text=ts_in.geometry.xyz_text)
         ts_geometry = resolve_geometry_payload(session, ts_geom_payload)
         geometry_key_to_id[ts_in.geometry.key] = ts_geometry.id
+
+        # The saddle point must be made of its micro reaction's atoms, at that
+        # reaction's charge (ADR 0008: definitional, therefore blocking).
+        validate_transition_state_composition(
+            session,
+            reaction_entry_id=reaction_entry.id,
+            transition_state_charge=ts_in.charge,
+            transition_state_geometry_id=ts_geometry.id,
+            subject_label=ts_in.label or ts_in.key,
+        )
 
         # Create TS opt calculation
         ts_calc = _persist_calculation(

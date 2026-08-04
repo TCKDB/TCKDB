@@ -19,6 +19,9 @@ from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.services.reaction_resolution import (
+    validate_transition_state_composition,
+)
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -102,6 +105,17 @@ def persist_transition_state_upload(
 
     # 3. Resolve saddle-point geometry
     geometry = resolve_geometry_payload(session, request.geometry)
+
+    # The saddle point must be made of this reaction's atoms, at this
+    # reaction's charge (ADR 0008: definitional, therefore blocking).
+    validate_transition_state_composition(
+        session,
+        reaction_entry_id=reaction_entry.id,
+        transition_state_charge=request.charge,
+        transition_state_smiles=request.unmapped_smiles,
+        transition_state_geometry_id=geometry.id,
+        subject_label=request.label or "transition state",
+    )
 
     # 4. Persist calculations (primary opt + additional)
     primary_calc, additional_calcs = persist_ts_calculations(
