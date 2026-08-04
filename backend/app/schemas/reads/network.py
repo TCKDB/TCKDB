@@ -207,8 +207,10 @@ class _NetworkSolveBase(ORMBaseSchema):
     created_at: datetime
     created_by: int | None = None
 
-    # Solved here, or transcribed from a publication (ADR 0010).
-    kind: NetworkSolveKind = NetworkSolveKind.computed
+    # Solved here, or transcribed from a publication (ADR 0010). Required,
+    # no default: the column is NOT NULL, so a read schema that had to
+    # supply one would be inventing provenance rather than reporting it.
+    kind: NetworkSolveKind
 
     literature_id: int | None = None
     software_release_id: int | None = None

@@ -199,6 +199,7 @@ downstream scientific records.
   "calculation_ref": null,
   "network_ref": null,
   "network_solve_ref": null,
+  "network_solve_kind": null,       // "computed" | "reported" on network_solve rows
   "review": null,                   // populates only with include=review
   "created_at": "...",
   "endpoint": "/api/v1/scientific/thermo/thm_…"
@@ -218,7 +219,24 @@ guarantees the URL stays valid after Phase D internal-ID stripping.
 | `statmech` | `species_ref`, `species_entry_ref`, `label` (= `statmech_treatment`) |
 | `transport` | `species_ref`, `species_entry_ref`, `label` (= SMILES) |
 | `network` | `network_ref`, `title` (= `network.name`) |
-| `network_solve` | `network_ref`, `network_solve_ref`, `label` (= `me_method`) |
+| `network_solve` | `network_ref`, `network_solve_ref`, `network_solve_kind`, `label` (= `me_method`) |
+
+`network_solve_kind` is the ADR 0010 discriminator (`computed` |
+`reported`) and is the one type-specific field on this surface that is
+**not** optional decoration. `reported` is the only solve kind *required*
+to carry a literature link, so every reported solve in the database is
+listed here, and `me_method` — the sole free-text `label` for the type —
+is in practice NULL for it, though nothing forbids one: a depositor
+transcribing rates may quite reasonably record the method the paper
+states, and the wired upload schema accepts it. That makes the token
+*more* necessary rather than less, because two rows can then be identical
+apart from their refs. Without the token a reported solve reads
+back as an unlabelled `network_solve`, indistinguishable from a computed
+solve that merely cites the same paper. It is a separate enum-typed field
+rather than folded into `label` so a consumer can switch on it instead of
+string-matching prose, and so `me_method` keeps its slot for computed
+solves. It is `null` on every other `record_type`, meaning "not
+applicable" — the same reading the other type-specific slots carry.
 
 ### 4.6 Ordering
 

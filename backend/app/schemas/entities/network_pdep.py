@@ -430,6 +430,16 @@ class NetworkSolveUpdate(SchemaBase):
 class NetworkSolveRead(NetworkSolveBase, TimestampedCreatedByReadSchema):
     """Read schema for a master-equation solve."""
 
+    # Overrides ``NetworkSolveBase``'s default. On the write side a default is
+    # defensible -- a producer that does not know about this axis should write
+    # the stronger, more informative claim. On a *read* schema it is the
+    # read-side twin of the gap ADR 0010 closed: projecting a source that never
+    # stated a kind would fabricate ``computed`` and publish a provenance claim
+    # nothing supports. This schema is unwired today, which is why the hole was
+    # latent rather than served -- but it is reachable from the test suite, so
+    # it is live, not theoretical.
+    kind: NetworkSolveKind
+
     bath_gases: list[NetworkSolveBathGasRead] = Field(default_factory=list)
     energy_transfers: list[NetworkSolveEnergyTransferRead] = Field(
         default_factory=list
