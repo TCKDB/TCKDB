@@ -226,7 +226,11 @@ guarantees the URL stays valid after Phase D internal-ID stripping.
 **not** optional decoration. `reported` is the only solve kind *required*
 to carry a literature link, so every reported solve in the database is
 listed here, and `me_method` — the sole free-text `label` for the type —
-is NULL for it by construction. Without the token a reported solve reads
+is in practice NULL for it, though nothing forbids one: a depositor
+transcribing rates may quite reasonably record the method the paper
+states, and the wired upload schema accepts it. That makes the token
+*more* necessary rather than less, because two rows can then be identical
+apart from their refs. Without the token a reported solve reads
 back as an unlabelled `network_solve`, indistinguishable from a computed
 solve that merely cites the same paper. It is a separate enum-typed field
 rather than folded into `label` so a consumer can switch on it instead of

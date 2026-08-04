@@ -17,6 +17,7 @@ See ``backend/docs/specs/scientific_network_reads.md``.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from typing import Any
 
@@ -24,7 +25,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
-from app.api.errors import NotFoundError
+from app.api.errors import DataIntegrityError, NotFoundError
 from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
@@ -81,6 +82,8 @@ from app.services.scientific_read.networks import (
     _build_solve_review_history,
     _build_source_calculations,
 )
+
+logger = logging.getLogger(__name__)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "coefficients",
@@ -181,7 +184,19 @@ def build_network_kinetics_record(
         # out of a paper — is unknowable in that state, and rendering it as
         # ``computed`` would publish a provenance claim nothing supports
         # (ADR 0010). Failing is the honest response, and the alarm.
-        raise RuntimeError(
+        # ``DataIntegrityError`` rather than a bare exception: it is the
+        # repo's registered member for "persisted data violates a scientific
+        # invariant assumed by the API", so it renders a structured envelope
+        # with a machine-readable code instead of an unhandled 500 that tells
+        # an operator nothing. The internal id goes to the log, never to the
+        # response.
+        logger.error(
+            "network_kinetics references a missing network_solve "
+            "(network_kinetics.id=%s, solve_id=%s)",
+            nk.id,
+            nk.solve_id,
+        )
+        raise DataIntegrityError(
             "network_kinetics references a missing network_solve "
             f"(network_kinetics_ref={nk.public_ref})"
         )

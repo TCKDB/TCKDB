@@ -4027,6 +4027,18 @@ def test_read_schemas_require_origin_kind_rather_than_defaulting_it():
             "forgets to project the ADR 0010 origin kind would then publish "
             "an unsupported provenance claim instead of failing."
         )
-        # And the omission really does raise, not merely type as required.
-        with pytest.raises(pydantic.ValidationError):
+        # And the omission really does raise *for this field*. Asserting only
+        # that ``model_validate({})`` raises would be vacuous: every one of
+        # these models has other required fields, so it raises whether or not
+        # ``kind`` has a default. Pin ``kind`` in the error locations instead.
+        with pytest.raises(pydantic.ValidationError) as excinfo:
             model.model_validate({})
+        missing = {
+            error["loc"][0]
+            for error in excinfo.value.errors()
+            if error["type"] == "missing" and error["loc"]
+        }
+        assert "kind" in missing or "network_solve_kind" in missing, (
+            f"{model.__name__} did not report the origin kind as missing; "
+            f"got {sorted(missing)}. A default would make this pass silently."
+        )
