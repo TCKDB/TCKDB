@@ -1,7 +1,8 @@
 # TCKDB release and paper readiness ledger
 
 **Authoritative roadmap:** `docs/reviews/tckdb_product_scientific_paper_readiness_2026-07-30.md`, “Followable implementation roadmap”.
-**Baseline:** `00546f6`; Alembic head `a8b9c0d1e2f3`.
+**Original baseline:** `00546f6`; Alembic head `a8b9c0d1e2f3`.
+**Current as of 2026-08-04:** `216ee83`; Alembic head `f9b2e6c4a1d7`; deployed Pi at `f8f4f58` / `c4d8f1b2a9e6` (one revision behind).
 
 This ledger preserves the report’s stage names, order, deliverables, and exit
 criteria. Stage 0 is an acceptance gate, not work moved to later stages.
@@ -12,8 +13,8 @@ criteria. Stage 0 is an acceptance gate, not work moved to later stages.
 | 1 — ingestion reliability and security | Worker lease/heartbeat/retry/reclaim; job authorization/idempotency; async parity; submission pagination; test-DB cleanup | **PASS — versioned implementation** | Kill-after-claim recovery is exactly once; cross-user job reads fail; retried enqueue returns same job; no duplicate science. |
 | 2 — scientific integrity blockers | Kinetics/statmech validation; PDep pathway/state identity; bath/energy-transfer normalization; rate interpretation, TS validation, isotope boundary | **PASS — versioned implementation** | Multi-well/multi-pathway records round-trip without ambiguity; incomplete records fail before persistence. |
 | 3 — curated product and release semantics | Curated/exploratory profiles; attributed append-only selections; immutable manifest/checksums; version/license/citation metadata | **PASS — versioned implementation** | A user can cite and reproduce the exact selected dataset while retrieving candidates and review history. |
-| 4 — query and client validation | Catalog benchmark/plans; bounded analytics or numeric filters; release-watermarked traversal; client parity and safe retries | Open | Published SLOs hold on representative corpus and every documented journey has a tested Python-client example. |
-| 5 — production operations | Expected-head readiness; DB/object backup/restore; metrics/alerts; rate limits; immutable arm64 image smoke test | Open | Restore drill passes, worker crash self-heals, schema drift blocks readiness, Pi is reproducible from tagged release. |
+| 4 — query and client validation | Catalog benchmark/plans; bounded analytics or numeric filters; release-watermarked traversal; client parity and safe retries | **PASS — versioned implementation** | Published SLOs hold on representative corpus and every documented journey has a tested Python-client example. |
+| 5 — production operations | Expected-head readiness; DB/object backup/restore; metrics/alerts; rate limits; immutable arm64 image smoke test | Open — partial | Restore drill passes, worker crash self-heals, schema drift blocks readiness, Pi is reproducible from tagged release. |
 | 6 — paper release | Corrected claims; primary-source comparison; SI; frozen code/data DOI; executable figures/tables; traceability evidence | Open | Every quantitative/comparative statement points to a cited source, public artifact, or executable test at paper tag. |
 
 ## Stage 0 acceptance evidence table
@@ -242,6 +243,96 @@ recovery archive rather than using the `blobs/` sidecar (~4/3 inflation); and
 `ALTER TABLE ... DISABLE TRIGGER` remains available to an owning role, a gap
 that exists only where the prescribed three-role deployment split has not been
 applied.
+
+## Stage 4 implementation evidence recorded 2026-08-04
+
+Commits `8802ada` (#84), `45ff0f2` (#87), `27351d0` (#90), with `e3f300e` (#85)
+and `b19b309` (#86) alongside. Migration `a7c2e4f8b6d9` adds two measured
+indexes and nothing else.
+
+- **All four deliverables are present and verified in the tree**, not inferred
+  from commit titles: the benchmark catalogue (`backend/docs/benchmarks/`,
+  regenerated from measurement JSON by `scripts/bench/report.py` and never
+  hand-written), four bounded analytics routes, keyset traversal with a
+  snapshot watermark that pins to a release when one is named, and the client's
+  `retry.py` / `_parity.py` with `clients/python/docs/api_parity_matrix.md`.
+  All 91 typed operations resolve; `test_openapi_parity.py` passes in full.
+- **The headline SLO finding was a correctness bug, not a latency one.**
+  `calculation_search_by_lot` could not succeed at all on the 50,000-species
+  corpus: `fetch_review_badges` rendered one bind parameter per candidate id,
+  and 116,940 matches needed 119,702 against PostgreSQL's 65,535 wire-protocol
+  cap, so the endpoint returned `503`. Moving the review filter and sort into
+  SQL took it to p50 281 ms with a maximum of 51 parameters. The threshold was
+  established by measurement (65,534 succeed, 65,535 fail), not assumed.
+- **The `build_record` N+1 is closed**: 1,060 → 310 statements for a 50-record
+  page, p50 346.6 → 215.0 ms, marginal cost per record 21 → 6, with all 17
+  other query shapes byte-identical in statement count. An independent
+  re-measurement on a separate 50k corpus reproduced 1,059 → 310.
+- **Generated artefacts stopped under-reporting the schema.** `generate_dbml.py`
+  suppressed a `UniqueConstraint` whenever *any* index covered the same
+  columns, so a non-unique lookup index silently erased `uq_record_review_record`
+  from `schema.dbml` while the constraint remained enforced in the database.
+  Suppression now requires the covering index to be unique.
+- **Verification:** scientific gate 1,954–1,962 passed; API gate 2,395–2,404
+  passed; client 1,337 passed; `ruff check app tests` clean; `alembic check`
+  showing only the two known pre-existing RDKit index artifacts.
+
+**Not covered by this stage, recorded rather than implied:** the benchmark
+corpus was rebuilt rather than reused between the before and after runs, so
+published latencies for the 17 untouched shapes drifted −14% to +55% with no
+code change — statement counts are deterministic and are the number to read.
+Two measured defects remain open with reasons stated in
+`backend/docs/benchmarks/README.md`: the composed `thermo_search_broad` /
+`kinetics_search` shapes (cost proportional to matches, not to the page), and
+`structure_search_substructure`, which has no plan-backed diagnosis and so gets
+no guessed fix.
+
+## Stage 5 partial progress recorded 2026-08-04
+
+Not a pass. Two of the four exit clauses have evidence; two do not.
+
+- **"Schema drift blocks readiness"** is *not* yet satisfiable as a gate.
+  `alembic check` can never return clean: `ix_species_formula_lookup` (an
+  expression index) and `ix_species_entry_mol_gist` (an RDKit GiST index over a
+  `mol` column autogenerate cannot type) are reported as removals on every run,
+  identically on `origin/main`. Until those two are excluded or taught to
+  round-trip, drift detection cannot be wired to readiness without a permanent
+  false positive.
+- **"Restore drill passes"** has fresh evidence beyond the Stage 0 drill: the
+  archive path was exercised end to end during the `f9b2e6c4a1d7` review —
+  `write_archive` then `restore_archive` into a separately migrated database
+  followed by a real commit, 384 rows, one computed solve. Worth noting that
+  every existing archive test rolls back, so `SET CONSTRAINTS ALL DEFERRED` at
+  `app/services/archive/core.py:706` had never met a deferred trigger before
+  that run.
+- Worker crash self-heal and reproducible-arm64-image remain untouched.
+
+## Deferred scope recorded 2026-08-04
+
+**CCCBDB import is deferred, not abandoned.** `backend/scripts/cccbdb_*.py` and
+`backend/app/importers/cccbdb/` implement extracting molecular property data
+from an online third-party source to populate the database. The code is live
+and its wrappers resolve, but the direction is parked: whether TCKDB ingests
+from external databases at all is a scope question for after the paper, not a
+Stage 4–6 deliverable. Recorded here so the modules are not later mistaken for
+dead code — a reference-count audit on 2026-08-04 flagged them as unreferenced
+precisely because they are hand-run entry points.
+
+## Process finding recorded 2026-08-04
+
+A `git checkout origin/main -- .` run to read one file's contents destroyed
+every uncommitted tracked-file edit in the working tree. The Stage 4 read/query
+surface was uncommitted at the time: its new modules survived, because that
+command does not touch untracked files, but every edit that wired them in was
+lost and had to be rewritten from the surviving tests and `_parity.py`.
+
+Two things follow, and neither is "be careful". First, `git show <ref>:<path>`
+reads another ref's version of a file without touching the working tree, and is
+what should have been used. Second, and more usefully: the work was
+recoverable only because the *tests* survived as untracked files and specified
+the contract precisely enough to rebuild against. Uncommitted work in a single
+working tree has no recovery path — the branch is now pushed to origin, which
+is the actual fix.
 
 ## Process finding recorded 2026-07-31
 

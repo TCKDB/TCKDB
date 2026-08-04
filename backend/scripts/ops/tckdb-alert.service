@@ -1,0 +1,23 @@
+[Unit]
+Description=TCKDB health check with ntfy push on state change
+# Do not fight the network coming up after a reboot.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# oneshot + Type=oneshot means systemd runs it, waits, records the exit code,
+# and stops. The timer decides when. This is the unix cron model with better
+# logging: `journalctl -u tckdb-alert` shows every run and its output.
+
+# Set these for your deployment. EnvironmentFile keeps the secret topic out of
+# the unit file, which is world-readable.
+EnvironmentFile=/home/calvin/.config/tckdb-alert.env
+ExecStart=/home/calvin/repos/tckdbv2/backend/scripts/ops/tckdb_alert_check.sh
+
+# The script exits 1 when the deployment is unhealthy. That is information,
+# not a unit failure -- without this, systemd marks the unit failed and the
+# journal fills with noise about the checker rather than about TCKDB.
+SuccessExitStatus=0 1
+
+User=calvin

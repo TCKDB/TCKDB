@@ -8,10 +8,18 @@
 # makes multi-arch builds practical (a Raspberry Pi is arm64; most CI/cloud is
 # amd64). Building the same stack from pip wheels is far less reliable on arm64.
 #
-# STATUS: scaffold. It must be validated by an actual multi-arch CI build (see
-# .github/workflows/build-api-image.yml). If a runtime import fails for a
-# missing dependency, add it to backend/environment.yml (the single source of
-# runtime deps) rather than to a pip line here.
+# STATUS: validated. .github/workflows/build-api-image.yml now builds the
+# native arch, RUNS it, and fails the workflow unless the image imports (rdkit,
+# tckdb_schemas, the app factory), serves /api/v1/health, and starts its inline
+# worker thread — plus an arm64 import check under emulation, because arm64 is
+# the deployment target and a missing arm64 build is the failure that would
+# only ever show up on the Pi. A `docker build` that succeeds proves the layers
+# assembled and nothing more, which is why publishing used to be the first time
+# anyone found out.
+#
+# If a runtime import fails for a missing dependency, add it to
+# backend/environment.yml (the single source of runtime deps) rather than to a
+# pip line here.
 #
 # Build context is the REPO ROOT (so the shared schemas package is available):
 #   docker build -f backend/Dockerfile -t tckdb-api .
