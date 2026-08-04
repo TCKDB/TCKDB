@@ -126,6 +126,28 @@ than the one that wrote the solve. Checked only at solve-commit, it would be
 checkable-but-evadable — add a state next month and the "guarantee" lapses
 while the schema advertises that it cannot.
 
+That argument has a dual, and it bites the *existence* rules too. Because
+applicability is read from topology at check time rather than at write time,
+adding topology later makes an already-committed solve **retroactively
+non-conforming**. Concretely: a well-less ``computed`` solve legitimately
+commits with zero energy-transfer rows; someone then inserts a
+``network_state`` with ``kind='well'`` into its network, which is accepted
+silently because ``network_state`` carries no trigger; from that moment every
+write touching the solve or its evidence is refused, including
+``UPDATE network_solve SET note='typo fix'``. The same happens when a
+saddle-point path is added to a previously all-barrierless network. The record
+is readable but frozen: it can be neither corrected nor annotated in place
+until the now-expected evidence class is supplied.
+
+This is judged acceptable rather than fixed. The pre-existing state really is
+scientifically wrong once the well exists — a pressure-dependent well with no
+collisional energy transfer is not a solve — so refusing to let it drift
+further is defensible, and the escape is to supply the evidence or re-declare
+the solve ``reported``. It is recorded here because the failure surfaces as an
+opaque ``CheckViolation`` on an innocuous edit, and only an operator working
+outside the wired path can reach it, which is precisely the audience this
+backstop exists for.
+
 This is belt and braces, not a replacement. ``validate_mechanistic_channel_evidence``
 is untouched and remains the full contract; the trigger is the floor under
 write paths that never reach it — the unwired ``NetworkSolveCreate`` entity
@@ -209,6 +231,52 @@ TRIGGERS = (
         "DELETE OR UPDATE",
     ),
 )
+
+# A row-level trigger does not fire for TRUNCATE, so the constraint triggers
+# above cannot see it: ``TRUNCATE network_solve_state_energy CASCADE`` would
+# leave every ``computed`` solve unevidenced in a database whose schema
+# advertises that this cannot happen. Naming that hole is not enough when the
+# audience this backstop exists for -- an admin at a psql prompt -- is exactly
+# who reaches for TRUNCATE. Statement-level, because TRUNCATE has no rows to
+# iterate, and a CONSTRAINT TRIGGER cannot cover it by construction (those must
+# be ``AFTER ... FOR EACH ROW``). Same shape as the guards ``e3f4a5b6c7d8``
+# installs over the release layer.
+TRUNCATE_FUNCTION_NAME = "network_solve_computed_evidence_truncate"
+TRUNCATE_GUARD_TABLES = (
+    "network_solve_state_energy",
+    "network_solve_energy_transfer",
+    "network_solve_channel_barrier",
+)
+
+_TRUNCATE_FUNCTION_SQL = f"""
+CREATE OR REPLACE FUNCTION {TRUNCATE_FUNCTION_NAME}() RETURNS trigger AS $$
+DECLARE
+    computed_count bigint;
+BEGIN
+    SELECT count(*) INTO computed_count
+      FROM network_solve
+     WHERE kind = 'computed';
+
+    IF computed_count > 0 THEN
+        RAISE EXCEPTION
+            'truncate_would_strand_computed_evidence: TRUNCATE on % would '
+            'remove master-equation evidence while % network_solve row(s) '
+            'still declare kind=''computed'', which asserts that this '
+            'database holds the derivation behind their k(T,P).',
+            TG_TABLE_NAME, computed_count
+            USING ERRCODE = '23514',
+                  HINT = 'Use DELETE instead -- it is row-level, so the '
+                         'deferred constraint triggers check each affected '
+                         'solve at COMMIT. To discard the solves too, delete '
+                         'them first, or re-declare them kind=''reported'' '
+                         'with the publication their rates came from '
+                         '(ADR 0010).';
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+"""
 
 # Applicability predicates, kept next to each other so the shape is obvious:
 # each rule bites only when the network topology says the class of evidence is
@@ -408,9 +476,22 @@ def upgrade() -> None:
             f"FOR EACH ROW EXECUTE FUNCTION {FUNCTION_NAME}()"
         )
 
+    op.execute(_TRUNCATE_FUNCTION_SQL)
+    for table in TRUNCATE_GUARD_TABLES:
+        op.execute(
+            f"CREATE TRIGGER {table}_computed_evidence_truncate "
+            f"BEFORE TRUNCATE ON {table} "
+            f"FOR EACH STATEMENT EXECUTE FUNCTION {TRUNCATE_FUNCTION_NAME}()"
+        )
+
 
 def downgrade() -> None:
     """Drop the trigger; the Pydantic validator still carries the rule."""
+    for table in TRUNCATE_GUARD_TABLES:
+        op.execute(
+            f"DROP TRIGGER IF EXISTS {table}_computed_evidence_truncate ON {table}"
+        )
+    op.execute(f"DROP FUNCTION IF EXISTS {TRUNCATE_FUNCTION_NAME}()")
     for name, table, _events in TRIGGERS:
         op.execute(f"DROP TRIGGER IF EXISTS {name} ON {table}")
     op.execute(f"DROP FUNCTION IF EXISTS {FUNCTION_NAME}()")
