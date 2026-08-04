@@ -211,22 +211,38 @@ def status():
 
     session = SessionLocal()
     try:
-        session.execute(text("SELECT 1"))
-        revision = session.execute(
-            text("SELECT version_num FROM alembic_version")
-        ).scalar_one_or_none()
-        components["database"] = {
-            "healthy": revision is not None,
-            "alembic_revision": revision,
-            "reason": None if revision is not None else "schema not initialized",
-        }
-    except SQLAlchemyError as exc:
-        logger.warning("status: database check failed: %r", exc)
-        components["database"] = {
-            "healthy": False,
-            "alembic_revision": None,
-            "reason": "database unreachable",
-        }
+        # Two separate failures with two separate fixes, so they get two
+        # separate reasons. Collapsing them into one ``except`` reports an
+        # un-migrated database as "unreachable", which sends an operator to
+        # check the network when the answer is `alembic upgrade head`. Caught
+        # by running this against a fresh database, where /health returned 200
+        # while /status claimed the database was unreachable.
+        try:
+            session.execute(text("SELECT 1"))
+        except SQLAlchemyError as exc:
+            logger.warning("status: database SELECT 1 failed: %r", exc)
+            components["database"] = {
+                "healthy": False,
+                "alembic_revision": None,
+                "reason": "database unreachable",
+            }
+        else:
+            try:
+                revision = session.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalar_one_or_none()
+            except SQLAlchemyError as exc:
+                logger.warning("status: alembic_version lookup failed: %r", exc)
+                revision = None
+            components["database"] = {
+                "healthy": revision is not None,
+                "alembic_revision": revision,
+                "reason": (
+                    None
+                    if revision is not None
+                    else "schema not initialized (run alembic upgrade head)"
+                ),
+            }
     finally:
         session.close()
 

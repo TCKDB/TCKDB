@@ -17,6 +17,11 @@ on:
       - 'backend/**'
       - 'schemas/python/**'
       - '.github/workflows/build-api-image.yml'
+    # A release tag builds an image named after the release. `sha-<commit>` is
+    # already immutable and is what a deploy should pin to, but it is not what
+    # a paper or a citation can reasonably quote; `v1.2.3` is.
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -46,10 +51,140 @@ jobs:
         with:
           images: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tckdb-api
           tags: |
+            # Mutable pointer at the newest main build. Convenient for a
+            # scratch pull; never pin a deployment to it -- it moves.
             type=raw,value=latest,enable={{is_default_branch}}
+            # Immutable, one per commit. This is what a deployment pins to and
+            # what makes "which code is running" answerable.
             type=sha,format=long
+            # Immutable, human-meaningful, cut from a `v*` git tag. This is the
+            # one a paper cites, and the one stage 5's "Pi is reproducible from
+            # tagged release" means.
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
-      - uses: docker/build-push-action@v7
+      # Build the native arch first and load it locally so it can be RUN before
+      # anything is published. `docker build` succeeding only proves the layers
+      # assembled -- not that Python can import the app, that RDKit's shared
+      # libraries resolve, or that uvicorn binds. The Dockerfile has carried
+      # "STATUS: scaffold, must be validated by an actual build" since it was
+      # written; publishing an image nobody has run is how that stays true.
+      - name: Build amd64 image for smoke testing
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: backend/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: tckdb-api:smoketest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test — the image must import and serve
+        env:
+          PGPASSWORD: tckdb
+        run: |
+          set -euo pipefail
+
+          # A throwaway database on a user-defined network, addressed by
+          # container name. No host ports are published for it: binding 5432 on
+          # the host makes this collide with anything else already listening,
+          # which is exactly how it failed when first rehearsed locally against
+          # a developer machine running its own Postgres.
+          #
+          # The RDKit cartridge image, not stock postgres: the first migration
+          # issues `CREATE EXTENSION IF NOT EXISTS rdkit`, so a stock image
+          # fails at "Could not open extension control file rdkit.control".
+          # Serving needs no cartridge types; migrating does. Same image and
+          # tag as docker-compose.yml, so this tests the real pairing.
+          docker network create smoke-net
+          docker run -d --name smoke-db --network smoke-net \
+            -e POSTGRES_USER=tckdb -e POSTGRES_PASSWORD=tckdb \
+            -e POSTGRES_DB=tckdb_smoke \
+            informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+
+          # pg_isready runs INSIDE the container, so this does not depend on
+          # the runner having postgresql-client installed.
+          for _ in $(seq 1 30); do
+            docker exec smoke-db pg_isready -U tckdb >/dev/null 2>&1 && break
+            sleep 2
+          done
+
+          # 1. Does the app import at all? This is where a missing runtime
+          #    dependency shows up, and the Dockerfile says to fix those in
+          #    backend/environment.yml rather than with a pip line.
+          docker run --rm tckdb-api:smoketest \
+            python -c "import rdkit, tckdb_schemas; from app.api.app import create_app; print('imports ok', rdkit.__version__)"
+
+          # 2. Can it migrate a fresh database? This is how the image is
+          #    actually deployed, so an image that serves but cannot bring a
+          #    schema up is not deployable. It also proves alembic and every
+          #    migration import cleanly inside the container.
+          docker run --rm --network smoke-net \
+            -e DB_USER=tckdb -e DB_PASSWORD=tckdb -e DB_NAME=tckdb_smoke \
+            -e DB_HOST=smoke-db -e DB_PORT=5432 \
+            tckdb-api:smoketest alembic upgrade head
+
+          # 3. Does it serve? A container that imports but cannot answer
+          #    /health is still broken. Only the API port is published, on a
+          #    high number to stay clear of anything else.
+          docker run -d --name smoke-api --network smoke-net -p 18010:8010 \
+            -e DB_USER=tckdb -e DB_PASSWORD=tckdb -e DB_NAME=tckdb_smoke \
+            -e DB_HOST=smoke-db -e DB_PORT=5432 \
+            -e TCKDB_INLINE_WORKER=true \
+            tckdb-api:smoketest
+
+          code=000
+          for _ in $(seq 1 45); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18010/api/v1/health || true)
+            [ "$code" = "200" ] && break || sleep 2
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::image did not serve /health (last code: $code)"
+            docker logs smoke-api 2>&1 | tail -50
+            exit 1
+          fi
+
+          # 4. Does it report its own health, and did the inline worker thread
+          #    actually start inside the container? That is the signal the
+          #    deployment's alerting relies on, so an image where it never
+          #    starts is broken in a way /health cannot see.
+          status="$(curl -s http://127.0.0.1:18010/api/v1/status)"
+          echo "$status"
+          echo "$status" | grep -q '"thread_alive":true' || {
+            echo "::error::inline worker thread did not start in the container"
+            docker logs smoke-api 2>&1 | tail -50
+            exit 1
+          }
+          # Having migrated above, the deployment must now report itself fully
+          # healthy. Asserting only on the worker would let a broken database
+          # component pass unnoticed.
+          echo "$status" | grep -q '"status":"ok"' || {
+            echo "::error::image did not report status=ok after migrating"
+            docker logs smoke-api 2>&1 | tail -50
+            exit 1
+          }
+
+          docker rm -f smoke-api smoke-db >/dev/null
+          docker network rm smoke-net >/dev/null
+
+      # arm64 is the deployment target (Raspberry Pi) but cannot be booted on
+      # an amd64 runner without QEMU, which is far too slow for a full server
+      # start. An import check under emulation is cheap and catches what
+      # actually differs between architectures: a dependency with no arm64
+      # build, or a shared library that fails to load.
+      - name: Smoke test — arm64 imports under emulation
+        run: |
+          set -euo pipefail
+          docker buildx build --platform linux/arm64 \
+            -f backend/Dockerfile -t tckdb-api:arm64-smoke --load \
+            --cache-from type=gha .
+          docker run --rm --platform linux/arm64 tckdb-api:arm64-smoke \
+            python -c "import rdkit, tckdb_schemas; from app.api.app import create_app; print('arm64 imports ok', rdkit.__version__)"
+
+      - name: Build and push multi-arch
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: backend/Dockerfile
