@@ -323,6 +323,24 @@ class NetworkSolve(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     NULL column, so a row could assert "master-equation solution" by table
     membership alone while carrying no evidence of one. ``kind`` is what
     turns that into a checkable claim.
+
+    Two rules bind this table that are **not visible in this class**, because
+    SQLAlchemy has no way to declare them:
+
+    * ``ck_network_solve_reported_requires_literature`` below is only half the
+      contract. The other half is a deferred constraint trigger installed by
+      migration ``f9b2e6c4a1d7``, which refuses *at COMMIT* a ``computed``
+      solve carrying no state energy, no energy-transfer model where the
+      network declares a well, or no channel barrier where it declares a
+      saddle-point path. It has to be deferred: this row is written before the
+      children that carry its id, so a per-statement check would refuse every
+      legitimate insert.
+    * That trigger guarantees **existence**, not coverage. One energy per
+      state, one ⟨ΔE⟩down per (well, collider) pair, one barrier per
+      saddle-point path — those remain properties of the wired upload path,
+      enforced by ``validate_mechanistic_channel_evidence`` in
+      ``app/schemas/workflows/network_pdep_upload.py``. See ADR 0010's
+      amendment.
     """
 
     __tablename__ = "network_solve"
