@@ -1,0 +1,98 @@
+name: uptime-check
+
+# The dead man's switch for the deployed instance.
+#
+# WHY THIS EXISTS SEPARATELY FROM THE PI-SIDE CHECKER
+#   backend/scripts/ops/tckdb_alert_check.sh runs ON the Pi, so it reports
+#   component failures (worker thread dead, database unreachable, schema not
+#   migrated) but cannot report the Pi itself dying -- it dies too, and silence
+#   is indistinguishable from health. Alerting must not share a failure domain
+#   with the thing it watches. This job runs on GitHub's infrastructure, which
+#   is about as independent from a Raspberry Pi as it gets, and it needs no
+#   third-party monitoring account.
+#
+# NOISE BEHAVIOUR, DELIBERATE
+#   The Pi-side checker notifies only on state *change*. This one notifies on
+#   every failed run, because a job on hosted CI has nowhere reliable to keep
+#   state between runs, and because a total outage genuinely should keep
+#   nagging. Expect a push roughly every 15 minutes until the site is back.
+#
+# SCHEDULING CAVEAT
+#   GitHub's cron is best-effort: runs can be delayed several minutes under
+#   load and are occasionally skipped. This is fine for "is it alive" and is
+#   not a latency SLA. Note also that GitHub disables scheduled workflows in
+#   repositories with no activity for 60 days.
+#
+# SETUP
+#   gh secret set TCKDB_NTFY_TOPIC --repo TCKDB/TCKDB
+#   (the same topic the Pi-side checker publishes to, so both classes of alarm
+#   land in one place)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+# Never run two checks at once; a backed-up queue would alert on stale state.
+concurrency:
+  group: uptime-check
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    if: github.repository == 'TCKDB/TCKDB'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Probe the deployment and alert on failure
+        env:
+          # Read into the environment rather than interpolated into a command,
+          # so the topic never appears in a rendered command line. This
+          # repository is public; GitHub masks secret values in logs, but the
+          # safe habit is not to put them anywhere that gets echoed.
+          NTFY_TOPIC: ${{ secrets.TCKDB_NTFY_TOPIC }}
+          STATUS_URL: https://tckdb.homecalvin.com/api/v1/status
+        run: |
+          set -uo pipefail
+
+          if [ -z "${NTFY_TOPIC}" ]; then
+            echo "::warning::TCKDB_NTFY_TOPIC is not set; probing without alerting."
+          fi
+
+          raw="$(curl -sS --max-time 25 -w '\n%{http_code}' "$STATUS_URL" 2>/dev/null)"
+          rc=$?
+          code="$(tail -n1 <<<"$raw")"
+          body="$(sed '$d' <<<"$raw")"
+
+          if [ $rc -ne 0 ] || [ -z "$body" ]; then
+            summary="TCKDB is unreachable from GitHub (curl exit ${rc})."
+            detail="No response from the public status endpoint. The host may be down, off the network, or the tunnel/proxy may be broken. The on-host checker cannot tell you this, which is why this job exists."
+          elif [ "$code" != "200" ]; then
+            summary="TCKDB status endpoint returned HTTP ${code}."
+            detail="The deployment answered but could not report its own health. A 404 usually means a build without /status; a 5xx means the API is failing before it can respond."
+          else
+            state="$(jq -r '.status // "unparseable"' <<<"$body")"
+            if [ "$state" = "ok" ]; then
+              echo "TCKDB ok"
+              exit 0
+            fi
+            degraded="$(jq -r '(.degraded // []) | join(", ")' <<<"$body")"
+            reasons="$(jq -r '[.components // {} | to_entries[] | select(.value.healthy == false) | "\(.key): \(.value.reason // "unhealthy")"] | join("; ")' <<<"$body")"
+            summary="TCKDB is degraded (${degraded:-unknown})."
+            detail="${reasons:-no reason reported}"
+          fi
+
+          echo "::error::${summary}"
+
+          if [ -n "${NTFY_TOPIC}" ]; then
+            message="$(printf '%s\n\nChecked from GitHub Actions, which runs independently of the deployment host. Repeats every ~15 minutes until resolved.' "$detail")"
+            curl -sS --max-time 25 \
+              -H "Title: ${summary}" \
+              -H "Priority: urgent" \
+              -H "Tags: rotating_light" \
+              -d "$message" \
+              "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null \
+              || echo "::warning::failed to publish to ntfy"
+          fi
+
+          exit 1
