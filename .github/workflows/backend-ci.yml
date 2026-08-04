@@ -143,6 +143,18 @@ jobs:
           test "$(printf '%s\n' "$heads_output" | grep -c '(head)')" -eq 1
           conda run -n tckdb_env alembic current
 
+      - name: Alembic drift check
+        working-directory: backend
+        # The models and the migrations must describe the same schema. Until
+        # now this could not be a gate: two migration-only RDKit indexes
+        # (ix_species_entry_mol_gist, ix_species_formula_lookup) are absent
+        # from Base.metadata by design and autogenerate reported each as a
+        # phantom removal on every run, so `alembic check` never returned
+        # clean and a real drift would have been indistinguishable from the
+        # standing noise. alembic/env.py now excludes exactly those two when
+        # reflected, so this fails only on drift someone introduced.
+        run: conda run -n tckdb_env alembic check
+
       - name: Initialize artifact bucket
         run: |
           conda run -n tckdb_env python - <<'PY'

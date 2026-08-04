@@ -49,6 +49,46 @@ from app.db.base import Base  # noqa: E402
 
 target_metadata = Base.metadata
 
+
+#: Indexes that exist in the database but deliberately not in
+#: ``Base.metadata``, so autogenerate has nothing to compare them against and
+#: reports each as a spurious ``remove_index`` on every run.
+#:
+#: Both are built on RDKit cartridge functions and cannot be round-tripped:
+#: ``ix_species_entry_mol_gist`` is a GiST index over a ``mol`` column whose
+#: type autogenerate cannot determine, and ``ix_species_formula_lookup`` is an
+#: expression index whose DDL-time inlining quirk makes declaring it via
+#: ``Index(..., text(...))`` risk autogenerate recreating it in a form that
+#: fails. Each migration that creates one says so and asks that it never be
+#: auto-dropped -- see ``d4e5f6a7b8c9`` and ``94daa2c345fb``.
+#:
+#: Excluding them is what lets ``alembic check`` return clean, which is what
+#: lets schema drift be wired to readiness (stage 5). The cost is real and
+#: bounded: genuine drift in *these two* indexes is now invisible to
+#: autogenerate. That is an acceptable trade only because neither is generated
+#: from the models -- their definition lives in one migration each and changes
+#: only by someone writing a new one -- and the alternative is a permanent
+#: false positive that makes the check unusable as a gate, which is strictly
+#: worse than a narrow blind spot nobody can act on anyway.
+MIGRATION_ONLY_INDEXES: frozenset[str] = frozenset(
+    {
+        "ix_species_entry_mol_gist",
+        "ix_species_formula_lookup",
+    }
+)
+
+
+def include_object(object_, name, type_, reflected, compare_to):
+    """Keep migration-only RDKit indexes out of autogenerate comparison.
+
+    Scoped as narrowly as it can be: only indexes, only these two names, and
+    only when reflected from the database (a same-named object appearing in
+    the models is a real change and must still be reported).
+    """
+    if type_ == "index" and name in MIGRATION_ONLY_INDEXES and reflected:
+        return False
+    return True
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
@@ -73,6 +113,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -93,7 +134,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
+        )
 
         with context.begin_transaction():
             context.run_migrations()
