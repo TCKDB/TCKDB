@@ -64,6 +64,15 @@ So the database now guarantees ``reported ⇒ literature`` and
 remains a property of the wired upload path only.** Nobody should read the
 trigger as the whole contract.
 
+One further hole is named rather than papered over: these are ``FOR EACH ROW``
+triggers, and ``TRUNCATE`` fires no row-level trigger, so
+``TRUNCATE network_solve_state_energy`` would strand every computed solve
+unevidenced. Statement-level ``TRUNCATE`` guards are how ``e3f4a5b6c7d8``
+protects the append-only release tables and would be the fix; they are not
+added here because ``TRUNCATE`` on these tables is an operator action outside
+the write paths this backstop is for, and one narrow rule at a time is easier
+to reason about than two.
+
 That boundary is where ADR 0008's tiering rule puts it, and not by accident. A
 computed solve with *zero* state energies **contradicts its own kind** — it is
 exactly the over-claiming row ADR 0010 was written about, and a contradiction
