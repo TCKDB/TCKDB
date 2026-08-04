@@ -1,0 +1,19 @@
+[Unit]
+Description=Run the TCKDB health check every 5 minutes
+
+[Timer]
+# First run shortly after boot, so a host that comes back up reports in
+# without waiting a full interval.
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+# Spread the load off exact minute boundaries. Irrelevant at this scale, but
+# it is the habit that stops a hundred hosts stampeding one endpoint.
+RandomizedDelaySec=30
+
+# Run a missed check on wake rather than silently skipping it -- a laptop or a
+# Pi that was asleep should still tell you what it finds.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

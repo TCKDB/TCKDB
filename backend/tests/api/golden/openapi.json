@@ -73480,6 +73480,26 @@
         ]
       }
     },
+    "/api/v1/status": {
+      "get": {
+        "description": "Operational summary for humans and for the alerting checker.\n\n``/health`` and ``/readyz`` deliberately return a tiny fixed shape because\nload balancers consume them. This endpoint is the richer one: it answers\n\"is anything wrong, and what\" in a single request, so an operator has one\nURL to open and a checker has one URL to poll.\n\nIt returns 200 with ``status: \"degraded\"`` rather than a 5xx when a\ncomponent is unhealthy. A non-200 here would make the endpoint itself\nindistinguishable from the outage it is trying to describe, and a checker\ncould not tell \"the site is down\" from \"the site is up and telling me the\nworker died\" -- which are different pages of the runbook.\n\nDiscloses no hostnames, credentials, or driver text: it is public, on the\nsame host as the docs.",
+        "operationId": "status_api_v1_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/api/v1/submissions/for-review": {
       "get": {
         "description": "List submissions awaiting curator review (curator/admin only).",
