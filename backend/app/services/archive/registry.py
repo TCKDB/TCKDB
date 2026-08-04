@@ -95,6 +95,8 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "network_species",
         "network_state",
         "network_state_participant",
+        "reaction_atom_map",
+        "reaction_atom_map_pair",
         "reaction_entry",
         "reaction_entry_structure_participant",
         "reaction_family",

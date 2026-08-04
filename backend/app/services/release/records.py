@@ -139,6 +139,19 @@ RECORD_VALUE_TABLES: dict[SubmissionRecordType, tuple[ChildTable, ...]] = {
     ),
     SubmissionRecordType.transition_state_entry: (
         ChildTable("transition_state_validation_evidence", "transition_state_entry_id"),
+        # The atom map is scientific content of the released saddle point, not
+        # a curation overlay: it is what says which bonds break and form, and
+        # it is the difference between a record a reader can check and a bare
+        # assertion that this TS connects those endpoints. Shipping the entry
+        # without it would make a mapped reaction read in a citable release
+        # exactly like an unmapped one — the indistinguishability ADR 0011
+        # exists to remove. ``source`` rides along, so an inferred map never
+        # ships looking like a declared one.
+        ChildTable(
+            "reaction_atom_map",
+            "transition_state_entry_id",
+            children=(ChildTable("reaction_atom_map_pair", "atom_map_id"),),
+        ),
     ),
 }
 
