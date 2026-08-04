@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -82,5 +83,18 @@ class GeometryAtom(Base):
         CheckConstraint(
             "isotope_mass_number IS NULL OR isotope_mass_number >= 1",
             name="isotope_mass_number_ge_1",
+        ),
+        # Redundant with the primary key on its own terms — ``(geometry_id,
+        # atom_index)`` already determines the row, so this adds no
+        # restriction. It exists to be the target of
+        # ``reaction_atom_map_pair``'s two foreign keys, which carry
+        # ``element`` on both ends so that a mapped pair whose atoms are
+        # different elements cannot be written. See ADR 0011 and
+        # :mod:`app.db.models.reaction_atom_map`.
+        UniqueConstraint(
+            "geometry_id",
+            "atom_index",
+            "element",
+            name="uq_geometry_atom_geometry_id_element",
         ),
     )

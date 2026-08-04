@@ -22,6 +22,7 @@ from app.db.models.common import (
     ReactionRole,
     SubmissionRecordType,
 )
+from app.db.models.geometry import Geometry
 from app.db.models.kinetics import Kinetics
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.reaction import (
@@ -29,6 +30,10 @@ from app.db.models.reaction import (
     ReactionEntry,
     ReactionEntryStructureParticipant,
     ReactionFamily,
+)
+from app.db.models.reaction_atom_map import (
+    ReactionAtomMap,
+    ReactionAtomMapPair,
 )
 from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
@@ -42,6 +47,9 @@ from app.schemas.reads.scientific_common import (
 )
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.schemas.reads.scientific_provenance import (
+    ReactionAtomMapBadge,
+    ReactionAtomMapDetail,
+    ReactionAtomMapPairRead,
     ReactionEntrySummary,
     ReactionFullCalculationArtifacts,
     ReactionFullCalculationEvidenceSummary,
@@ -95,6 +103,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "species",
     "kinetics",
     "transition_states",
+    "atom_map",
     "calculations",
     "path_search",
     "irc",
@@ -177,6 +186,12 @@ def get_reaction_full(
     )
     entry_badge = entry_badges[reaction_entry_id]
 
+    # Read once, used twice: the header badge is unconditional (a consumer
+    # must be able to tell a mapped reaction from an unmapped one without a
+    # second request) and the per-atom legs are the opt-in ``atom_map``
+    # section built from the same rows.
+    atom_map_details = _build_atom_map_section(session, reaction_entry_id)
+
     reaction_entry_summary = ReactionEntrySummary(
         id=entry.id,
         reaction_entry_ref=entry.public_ref,
@@ -186,6 +201,14 @@ def get_reaction_full(
         reversible=chem.reversible if chem else True,
         family=family_name,
         review=entry_badge,
+        atom_maps=[
+            ReactionAtomMapBadge(
+                **detail.model_dump(
+                    include=set(ReactionAtomMapBadge.model_fields)
+                )
+            )
+            for detail in atom_map_details
+        ],
     )
 
     # Build each requested sub-section.
@@ -239,6 +262,9 @@ def get_reaction_full(
     artifacts_block: list[ReactionFullCalculationArtifacts] | None = None
     if "artifacts" in includes:
         artifacts_block = _build_artifacts_section(session, reaction_entry_id)
+    atom_map_block: list[ReactionAtomMapDetail] | None = None
+    if "atom_map" in includes:
+        atom_map_block = atom_map_details
 
     # Hosted abuse-control caps: reject responses that would expand
     # beyond the configured public limits. ``include=all`` is what
@@ -301,6 +327,7 @@ def get_reaction_full(
         scans=scans_block,
         conformers=conformers_block,
         artifacts=artifacts_block,
+        atom_map=atom_map_block,
         review_records=review_records_block,
     )
 
@@ -308,6 +335,125 @@ def get_reaction_full(
 # ---------------------------------------------------------------------------
 # Section builders
 # ---------------------------------------------------------------------------
+
+
+def _build_atom_map_section(
+    session: Session,
+    reaction_entry_id: int,
+) -> list[ReactionAtomMapDetail]:
+    """Return every atom map on this micro reaction, both legs, atom by atom.
+
+    Not filtered by review status. The map is not a scientific *result* that
+    could be rejected on its own; it is the correspondence the depositor
+    asserted between structures that carry their own review state, and
+    dropping it under a filter would make a mapped reaction read as unmapped —
+    which is precisely the indistinguishability ADR 0011 exists to remove.
+
+    An empty list therefore means the record genuinely carries no map.
+    """
+
+    maps = session.execute(
+        select(
+            ReactionAtomMap.id,
+            ReactionAtomMap.transition_state_entry_id,
+            TransitionStateEntry.public_ref,
+            ReactionAtomMap.transition_state_geometry_id,
+            Geometry.public_ref,
+            ReactionAtomMap.source,
+            ReactionAtomMap.equivalent_map_count,
+            ReactionAtomMap.note,
+        )
+        .join(
+            TransitionStateEntry,
+            TransitionStateEntry.id == ReactionAtomMap.transition_state_entry_id,
+        )
+        .join(Geometry, Geometry.id == ReactionAtomMap.transition_state_geometry_id)
+        .where(ReactionAtomMap.reaction_entry_id == reaction_entry_id)
+        .order_by(ReactionAtomMap.transition_state_entry_id, ReactionAtomMap.id)
+    ).all()
+    if not maps:
+        return []
+
+    map_ids = [row[0] for row in maps]
+    pair_rows = session.execute(
+        select(
+            ReactionAtomMapPair.atom_map_id,
+            ReactionAtomMapPair.side,
+            ReactionEntryStructureParticipant.species_entry_id,
+            SpeciesEntry.public_ref,
+            ReactionEntryStructureParticipant.participant_index,
+            ReactionAtomMapPair.geometry_id,
+            Geometry.public_ref,
+            ReactionAtomMapPair.atom_index,
+            ReactionAtomMapPair.element,
+            ReactionAtomMapPair.ts_atom_index,
+        )
+        .join(
+            ReactionEntryStructureParticipant,
+            ReactionEntryStructureParticipant.id
+            == ReactionAtomMapPair.structure_participant_id,
+        )
+        .join(
+            SpeciesEntry,
+            SpeciesEntry.id == ReactionEntryStructureParticipant.species_entry_id,
+        )
+        .join(Geometry, Geometry.id == ReactionAtomMapPair.geometry_id)
+        .where(ReactionAtomMapPair.atom_map_id.in_(map_ids))
+        .order_by(
+            ReactionAtomMapPair.atom_map_id,
+            ReactionAtomMapPair.side,
+            ReactionEntryStructureParticipant.participant_index,
+            ReactionAtomMapPair.atom_index,
+        )
+    ).all()
+
+    pairs_by_map: dict[int, list[ReactionAtomMapPairRead]] = {}
+    for row in pair_rows:
+        pairs_by_map.setdefault(row[0], []).append(
+            ReactionAtomMapPairRead(
+                side=row[1],
+                species_entry_id=row[2],
+                species_entry_ref=row[3],
+                participant_index=row[4],
+                geometry_id=row[5],
+                geometry_ref=row[6],
+                atom_index=row[7],
+                element=row[8].strip(),
+                ts_atom_index=row[9],
+            )
+        )
+
+    details: list[ReactionAtomMapDetail] = []
+    for (
+        atom_map_id,
+        ts_entry_id,
+        ts_entry_ref,
+        ts_geometry_id,
+        ts_geometry_ref,
+        source,
+        equivalent_map_count,
+        note,
+    ) in maps:
+        pairs = pairs_by_map.get(atom_map_id, [])
+        details.append(
+            ReactionAtomMapDetail(
+                transition_state_entry_id=ts_entry_id,
+                transition_state_entry_ref=ts_entry_ref,
+                transition_state_geometry_id=ts_geometry_id,
+                transition_state_geometry_ref=ts_geometry_ref,
+                source=source,
+                equivalent_map_count=equivalent_map_count,
+                note=note,
+                reactant_atoms_mapped=sum(
+                    1 for pair in pairs if pair.side == ReactionRole.reactant
+                ),
+                product_atoms_mapped=sum(
+                    1 for pair in pairs if pair.side == ReactionRole.product
+                ),
+                pairs=pairs,
+            )
+        )
+    return details
 
 
 def _build_species_section(

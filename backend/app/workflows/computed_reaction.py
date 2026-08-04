@@ -70,6 +70,10 @@ from app.services.kinetics_resolution import (
     assert_kinetics_source_role_compatible,
 )
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.reaction_atom_map import (
+    ResolvedAtomMapParticipant,
+    persist_reaction_atom_map,
+)
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
     resolve_chem_reaction,
@@ -417,26 +421,25 @@ def persist_computed_reaction_upload(
         )
     )
 
-    for idx, key in enumerate(request.reactant_keys, start=1):
-        session.add(
-            ReactionEntryStructureParticipant(
+    # Participant rows are kept, not just added: the atom map identifies an
+    # atom by the participant *molecule* it belongs to, because the same
+    # species may appear twice on one side and the two copies map to different
+    # saddle-point atoms.
+    structure_participants: list[tuple[str, ReactionEntryStructureParticipant]] = []
+    for role, keys in (
+        (ReactionRole.reactant, request.reactant_keys),
+        (ReactionRole.product, request.product_keys),
+    ):
+        for idx, key in enumerate(keys, start=1):
+            participant_row = ReactionEntryStructureParticipant(
                 reaction_entry_id=canonical_reaction_entry.id,
                 species_entry_id=species_key_to_entry[key].id,
-                role=ReactionRole.reactant,
+                role=role,
                 participant_index=idx,
                 created_by=created_by,
             )
-        )
-    for idx, key in enumerate(request.product_keys, start=1):
-        session.add(
-            ReactionEntryStructureParticipant(
-                reaction_entry_id=canonical_reaction_entry.id,
-                species_entry_id=species_key_to_entry[key].id,
-                role=ReactionRole.product,
-                participant_index=idx,
-                created_by=created_by,
-            )
-        )
+            session.add(participant_row)
+            structure_participants.append((key, participant_row))
     session.flush()
 
     # ------------------------------------------------------------------
@@ -564,6 +567,40 @@ def persist_computed_reaction_upload(
             _wire_depends_on(calc_in)
 
     session.flush()
+
+    # ------------------------------------------------------------------
+    # 3b-bis. Atom map (ADR 0011)
+    #
+    # Sits outside the transition-state branch on purpose: the map belongs
+    # to the micro reaction, and the *absence* of one has to be reported
+    # for a reaction that has a saddle point but no map — which is exactly
+    # the case the branch above would skip. Placed here because it needs
+    # the reaction entry, its participant rows, the TS entry and every
+    # geometry id at once, and all of those exist by this point.
+    # ------------------------------------------------------------------
+    atom_map_row = persist_reaction_atom_map(
+        session,
+        request.atom_map,
+        reaction_entry_id=canonical_reaction_entry.id,
+        transition_state_entry_id=ts_entry.id if ts_entry is not None else None,
+        transition_state_geometry_id=(
+            geometry_key_to_id[request.transition_state.geometry.key]
+            if request.transition_state is not None
+            else None
+        ),
+        participants=[
+            ResolvedAtomMapParticipant(
+                side=row.role,
+                species_key=species_key,
+                participant_index=row.participant_index,
+                structure_participant_id=row.id,
+            )
+            for species_key, row in structure_participants
+        ],
+        geometry_id_by_key=geometry_key_to_id,
+        created_by=created_by,
+        warnings=sp_energy_warnings,
+    )
 
     # ------------------------------------------------------------------
     # 3c. Applied energy corrections (species-side + TS-side)
@@ -1016,6 +1053,7 @@ def persist_computed_reaction_upload(
         "reaction_entry_id": canonical_reaction_entry.id,
         "reaction_id": chem_reaction.id,
         "transition_state_entry_id": ts_entry.id if ts_entry else None,
+        "atom_map_id": atom_map_row.id if atom_map_row is not None else None,
         "kinetics_ids": kinetics_ids,
         "thermo_ids": thermo_ids,
         "statmech_ids": statmech_ids,

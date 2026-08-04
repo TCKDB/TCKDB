@@ -390,11 +390,34 @@ class EnergyCorrectionConvention(str, Enum):
     other = "other"
 
 
+class ReactionRole(str, Enum):
+    reactant = "reactant"
+    product = "product"
+
+
+class AtomMapSource(str, Enum):
+    """How a reaction atom map was obtained (ADR 0011).
+
+    ``declared``
+        The depositor stated the correspondence.
+    ``inferred``
+        An algorithm produced it. It is recorded and read back as inferred,
+        never as though a human asserted it.
+
+    There is no default member. A map that cannot say how it was obtained is
+    not a map this database accepts.
+    """
+
+    declared = "declared"
+    inferred = "inferred"
+
+
 __all__ = (
     "ActivationEnergyUnits",
     "AppliedCorrectionComponentKind",
     "ArrheniusAUnits",
     "ArtifactKind",
+    "AtomMapSource",
     "CalculationDependencyRole",
     "CalculationGeometryRole",
     "CalculationQuality",
@@ -421,6 +444,7 @@ __all__ = (
     "NetworkSolveCalculationRole",
     "PathSearchMethod",
     "PressureUnit",
+    "ReactionRole",
     "RigidRotorKind",
     "SCFStabilityStatus",
     "ScientificOriginKind",

@@ -23,6 +23,7 @@ from app.db.models.reaction import (
     ReactionEntryStructureParticipant,
     ReactionFamily,
 )
+from app.db.models.reaction_atom_map import ReactionAtomMap
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState
 from app.schemas.reads.scientific_common import REVIEW_RANK
@@ -539,11 +540,25 @@ def _compute_availability(
         ).all()
         has_path_search_set = {row[0] for row in rows}
 
+    # has_atom_map: the reaction states which atom of its reactants and
+    # products is which atom of its transition state (ADR 0011). Advertised
+    # here so a search result already distinguishes a mapped reaction from an
+    # unmapped one; an unmapped reaction is a true record, just an incomplete
+    # one, and the flag is what makes the incompleteness visible.
+    has_atom_map_set = set(
+        session.scalars(
+            select(ReactionAtomMap.reaction_entry_id)
+            .where(ReactionAtomMap.reaction_entry_id.in_(entry_ids))
+            .distinct()
+        ).all()
+    )
+
     return {
         eid: ReactionAvailability(
             has_kinetics=kinetics_count_by_entry.get(eid, 0) > 0,
             has_transition_state=eid in has_ts_set,
             has_path_search=eid in has_path_search_set,
+            has_atom_map=eid in has_atom_map_set,
             kinetics_count=kinetics_count_by_entry.get(eid, 0),
         )
         for eid in entry_ids

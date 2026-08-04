@@ -21,6 +21,7 @@ from app.db.models.common import ReactionRole
 
 if TYPE_CHECKING:
     from app.db.models.kinetics import Kinetics
+    from app.db.models.reaction_atom_map import ReactionAtomMap
     from app.db.models.species import Species, SpeciesEntry
     from app.db.models.transition_state import TransitionState
 
@@ -132,6 +133,14 @@ class ReactionEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         cascade="all, delete-orphan",
         foreign_keys="Kinetics.reaction_entry_id",
     )
+    #: Atom correspondences across this micro reaction, one per
+    #: transition-state candidate (ADR 0011). Empty is the ordinary state for
+    #: everything deposited before atom mapping existed, and for every
+    #: barrierless channel.
+    atom_maps: Mapped[list["ReactionAtomMap"]] = relationship(
+        back_populates="reaction_entry",
+        cascade="all, delete-orphan",
+    )
 
 
 class ReactionEntryStructureParticipant(Base, TimestampMixin, CreatedByMixin):
@@ -181,5 +190,15 @@ class ReactionEntryStructureParticipant(Base, TimestampMixin, CreatedByMixin):
             "role",
             "participant_index",
             name="uq_reaction_entry_structure_participant_reaction_entry_id",
+        ),
+        # Redundant on its own terms — ``id`` is already the primary key. It
+        # exists to be the target of ``reaction_atom_map_pair``'s
+        # ``(structure_participant_id, side)`` foreign key, which keeps a
+        # mapped atom's declared leg in step with the role of the participant
+        # it belongs to. See ADR 0011.
+        UniqueConstraint(
+            "id",
+            "role",
+            name="uq_reaction_entry_structure_participant_id",
         ),
     )
