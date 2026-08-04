@@ -18936,6 +18936,16 @@
             ],
             "title": "Network Ref"
           },
+          "network_solve_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkSolveKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "network_solve_ref": {
             "anyOf": [
               {

@@ -1490,11 +1490,14 @@ def make_network_solve(
     workflow_tool_release_id: int | None = None,
     literature_id: int | None = None,
     note: str | None = None,
+    kind=None,
 ):
+    from app.db.models.common import NetworkSolveKind
     from app.db.models.network_pdep import NetworkSolve
 
     row = NetworkSolve(
         network_id=network.id,
+        kind=kind if kind is not None else NetworkSolveKind.computed,
         me_method=me_method,
         tmin_k=tmin_k,
         tmax_k=tmax_k,

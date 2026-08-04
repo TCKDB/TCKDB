@@ -20,6 +20,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.db.models.common import NetworkSolveKind
 from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
@@ -122,6 +123,18 @@ class LiteratureLinkedRecordSummary(BaseModel):
     calculation_ref: str | None = None
     network_ref: str | None = None
     network_solve_ref: str | None = None
+    # Whether a linked ``network_solve`` solved the master equation here or
+    # transcribed the rates out of a publication (ADR 0010). ``reported`` is
+    # the *only* kind required to carry a literature link, so every reported
+    # solve is listed on this surface and its ``me_method`` — the sole
+    # free-text ``label`` for the type — is NULL. Without this field a
+    # reported solve would appear here as an unlabelled ``network_solve``,
+    # indistinguishable from a computed one that merely cites the same paper.
+    #
+    # Populated only for ``record_type == "network_solve"``; ``None`` on every
+    # other record type means "not applicable", the same reading every other
+    # type-specific slot on this schema carries.
+    network_solve_kind: NetworkSolveKind | None = None
 
     review: RecordReviewBadge | None = None
     created_at: datetime | None = None

@@ -12,6 +12,7 @@ from app.db.models.author import Author
 from app.db.models.common import (
     CalculationType,
     LiteratureKind,
+    NetworkSolveKind,
     RecordReviewStatus,
     SubmissionRecordType,
 )
@@ -416,6 +417,73 @@ def test_records_endpoint_returns_network_solve_summary(client, db_session):
     assert len(rows) == 1
     assert rows[0]["network_ref"] == net.public_ref
     assert rows[0]["record_ref"] == solve.public_ref
+    assert rows[0]["network_solve_kind"] == "computed"
+
+
+def test_records_endpoint_distinguishes_reported_from_computed_solve(
+    client, db_session
+):
+    """A reported solve must not read back as a computed one here.
+
+    ``reported`` is the only ``network_solve`` kind *required* to carry a
+    literature link (ADR 0010), so every reported solve in the database
+    appears on this surface — and its ``me_method`` is NULL, which is the
+    only free-text slot the type has. If the ``kind`` projection is ever
+    dropped, the two rows below become byte-identical apart from their
+    refs and the surface silently over-claims. This test fails in that
+    case.
+    """
+    lit = _make_literature(db_session)
+    net = make_network(db_session)
+    computed = make_network_solve(
+        db_session,
+        network=net,
+        literature_id=lit.id,
+        kind=NetworkSolveKind.computed,
+        me_method="RRKM/ME",
+    )
+    reported = make_network_solve(
+        db_session,
+        network=net,
+        literature_id=lit.id,
+        kind=NetworkSolveKind.reported,
+        # A transcribed solve has no ME method — the field that would
+        # otherwise fill ``label`` — which is exactly why the token is
+        # load-bearing here.
+        me_method=None,
+    )
+
+    body = client.get(_records_url(lit.public_ref)).json()
+    by_ref = {
+        r["record_ref"]: r
+        for r in body["records"]
+        if r["record_type"] == "network_solve"
+    }
+    assert set(by_ref) == {computed.public_ref, reported.public_ref}
+
+    assert by_ref[computed.public_ref]["network_solve_kind"] == "computed"
+    assert by_ref[reported.public_ref]["network_solve_kind"] == "reported"
+
+    # The reported row carries no free-text label at all, so the token is
+    # the *only* thing separating the two rows.
+    assert by_ref[reported.public_ref]["label"] is None
+    assert by_ref[computed.public_ref]["label"] == "RRKM/ME"
+
+    differing = {
+        k
+        for k in by_ref[computed.public_ref]
+        if by_ref[computed.public_ref][k] != by_ref[reported.public_ref][k]
+    }
+    assert "network_solve_kind" in differing
+
+    # Every non-solve record type leaves the slot at null ("not applicable").
+    make_network(db_session, literature_id=lit.id, name="unrelated-network")
+    body = client.get(_records_url(lit.public_ref)).json()
+    assert all(
+        r["network_solve_kind"] is None
+        for r in body["records"]
+        if r["record_type"] != "network_solve"
+    )
 
 
 def test_records_endpoint_record_type_filter_works(client, db_session):

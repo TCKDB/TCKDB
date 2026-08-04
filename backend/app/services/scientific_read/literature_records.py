@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
+    NetworkSolveKind,
     RecordReviewStatus,
     SubmissionRecordType,
 )
@@ -95,6 +96,7 @@ class _LinkedRow:
     calculation_ref: str | None = None
     network_ref: str | None = None
     network_solve_ref: str | None = None
+    network_solve_kind: NetworkSolveKind | None = None
     role: str | None = None
 
 
@@ -418,6 +420,7 @@ def _load_network_solves(
             NetworkSolve.id,
             NetworkSolve.public_ref,
             NetworkSolve.created_at,
+            NetworkSolve.kind,
             NetworkSolve.me_method,
             Network.public_ref.label("network_ref"),
         )
@@ -430,9 +433,16 @@ def _load_network_solves(
             record_id=r.id,
             record_ref=r.public_ref,
             created_at=r.created_at,
+            # ``label`` stays ``me_method``: it is still the useful
+            # short identification for a computed solve, and folding an
+            # enum into a free-text slot would leave a consumer unable to
+            # tell the token "reported" from an ME method that happens to
+            # be spelled that way. ADR 0010 wants one predicate, not a
+            # string match.
             label=r.me_method,
             network_ref=r.network_ref,
             network_solve_ref=r.public_ref,
+            network_solve_kind=r.kind,
         )
         for r in rows
     ]
@@ -555,6 +565,7 @@ def _to_summary(
         calculation_ref=row.calculation_ref,
         network_ref=row.network_ref,
         network_solve_ref=row.network_solve_ref,
+        network_solve_kind=row.network_solve_kind,
         review=summary_review,
         created_at=row.created_at,
         endpoint=_endpoint_for(row.record_type, row.record_ref),
