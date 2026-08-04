@@ -574,6 +574,21 @@ class TCKDBClient:
         its dependencies (database, object store) answered."""
         return self.request_json("GET", "/readyz", authenticated=False).data
 
+    def status(self) -> Any:
+        """Operational summary: what is wrong with the deployment, and why.
+
+        ``health`` and ``readyz`` answer yes/no for a load balancer. This
+        returns a per-component breakdown — database schema revision, whether
+        the upload worker is actually running, how long the oldest queued job
+        has waited — so a caller can tell *what* is degraded rather than only
+        *that* something is.
+
+        Returns HTTP 200 even when degraded, deliberately: a non-200 would be
+        indistinguishable from the outage it is describing. Check the
+        ``status`` field, not the HTTP code.
+        """
+        return self.request_json("GET", "/status", authenticated=False).data
+
     def get_meta(self) -> Any:
         """Deployment metadata — versions, limits, and enabled features.
 

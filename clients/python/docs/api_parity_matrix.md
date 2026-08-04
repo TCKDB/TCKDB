@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 91 |
+| typed | 92 |
 | raw_only | 103 |
 | not_applicable | 37 |
-| **total** | **231** |
+| **total** | **232** |
 
 ## Typed coverage
 
@@ -102,6 +102,7 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/transition-states/{transition_state_ref_or_id}` | yes | `get_transition_state` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/transport/search` | yes | `search_transport` | `iter_transport` | — | `tests/test_typed_parity_methods.py` |
 | `POST /api/v1/scientific/transport/search` | yes | `search_transport` | `iter_transport` | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/status` | yes | `status` | — | — | `tests/test_typed_parity_methods.py` |
 | `POST /api/v1/uploads/computed-reaction` | yes | `upload` | — | `examples/builder_computed_reaction_demo.py` | `tests/test_client_upload_dispatch.py` |
 | `POST /api/v1/uploads/computed-species` | yes | `upload` | — | `examples/builder_computed_species_demo.py` | `tests/test_client_upload_dispatch.py` |
 | `POST /api/v1/uploads/conformers` | yes | `upload` | — | `examples/upload_json_file.py` | `tests/test_client_upload_dispatch.py` |
