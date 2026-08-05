@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.chemistry.geometry import normalize_element_symbol
+from app.chemistry.species import element_counts_from_smiles, format_element_counts
 from app.db.models.common import MoleculeKind, ReactionRole
 from app.db.models.geometry import GeometryAtom
 from app.db.models.reaction import (
@@ -65,17 +66,47 @@ def _element_counts_for_species(species: Species) -> Counter[str]:
     :raises ValueError: If the stored SMILES cannot be parsed by RDKit.
     """
 
-    mol = Chem.MolFromSmiles(species.smiles)
-    if mol is None:
+    try:
+        return element_counts_from_smiles(species.smiles)
+    except ValueError as exc:
         raise ValueError(
             f"Cannot parse stored SMILES for species_id={species.id} "
             "while validating reaction elemental balance."
-        )
-    mol = Chem.AddHs(mol)
-    counts: Counter[str] = Counter()
-    for atom in mol.GetAtoms():
-        counts[normalize_element_symbol(atom.GetSymbol())] += 1
-    return counts
+        ) from exc
+
+
+def _load_participant_species(
+    session: Session,
+    *,
+    reactant_stoichiometry: Mapping[int, int],
+    product_stoichiometry: Mapping[int, int],
+) -> dict[int, Species] | None:
+    """Fetch the participant species rows, or ``None`` if the check is exempt.
+
+    ``None`` means "do not judge this reaction": either it has no participants
+    at all, or one of them is a pseudo-species. Pseudo-species are lumped or
+    phenomenological constructs rather than atom-resolved chemistry, so neither
+    their elements nor their charge is a quantity a conservation law applies
+    to. Shared by both conservation checks so the two can never drift into
+    exempting different reactions.
+    """
+
+    species_ids = set(reactant_stoichiometry) | set(product_stoichiometry)
+    if not species_ids:
+        return None
+
+    species_rows = session.scalars(
+        select(Species).where(Species.id.in_(species_ids))
+    ).all()
+    species_by_id = {species.id: species for species in species_rows}
+
+    if any(
+        species_by_id[species_id].kind == MoleculeKind.pseudo
+        for species_id in species_ids
+    ):
+        return None
+
+    return species_by_id
 
 
 def validate_reaction_elemental_balance(
@@ -92,23 +123,19 @@ def validate_reaction_elemental_balance(
     may represent lumped or phenomenological constructs rather than
     atom-resolved chemistry).
 
+    Charge is the other conserved quantity and is checked separately by
+    :func:`validate_reaction_charge_conservation`.
+
     :raises ValueError: If all participants are ordinary molecule species
         and the reactant/product element totals disagree.
     """
 
-    species_ids = set(reactant_stoichiometry) | set(product_stoichiometry)
-    if not species_ids:
-        return
-
-    species_rows = session.scalars(
-        select(Species).where(Species.id.in_(species_ids))
-    ).all()
-    species_by_id = {species.id: species for species in species_rows}
-
-    if any(
-        species_by_id[species_id].kind == MoleculeKind.pseudo
-        for species_id in species_ids
-    ):
+    species_by_id = _load_participant_species(
+        session,
+        reactant_stoichiometry=reactant_stoichiometry,
+        product_stoichiometry=product_stoichiometry,
+    )
+    if species_by_id is None:
         return
 
     reactant_totals: Counter[str] = Counter()
@@ -131,13 +158,93 @@ def validate_reaction_elemental_balance(
         )
 
 
+def validate_reaction_charge_conservation(
+    session: Session,
+    *,
+    reactant_stoichiometry: Mapping[int, int],
+    product_stoichiometry: Mapping[int, int],
+) -> None:
+    """Enforce charge conservation for ordinary reactions.
+
+    Charge is conserved by every elementary and overall chemical reaction, in
+    exactly the sense that atoms are: electrons are neither created nor
+    destroyed by rearranging bonds, so the summed formal charge of the
+    reactants equals that of the products. ``[OH-] + [H] -> H2O`` is not a
+    reaction that is hard to compute — it is not a reaction, because it loses
+    an electron on the way across. Under ADR 0008 that is a **definition**, not
+    an expectation: no correct calculation can produce it, so the check blocks
+    rather than warns, and it sits beside
+    :func:`validate_reaction_elemental_balance` because it is the same
+    conservation argument applied to the other conserved quantity.
+
+    Nothing checked this before. Elemental balance compared element totals and
+    said nothing about charge, so a charge-losing reaction deposited with no
+    error and no warning at all. That gap reached further than itself:
+    :func:`validate_transition_state_composition` checks a saddle point's
+    charge against its *reactants*, and until now the reactant side carried no
+    conservation guarantee of its own for that rule to be anchored to.
+
+    Per-species charge is trustworthy input: ``Species.charge`` is compared
+    against the formal charge of its own SMILES by
+    :func:`app.chemistry.species.canonical_species_identity`, which blocks, so
+    this function sums values that have already been reconciled with the
+    structures they label.
+
+    The stoichiometric coefficients and the pseudo-species exemption are the
+    same as elemental balance's, by construction — both read
+    :func:`_load_participant_species`.
+
+    **Conservation, not neutrality.** A reaction may carry any net charge as
+    long as both sides carry the same one. Requiring neutrality would refuse
+    every ion-molecule reaction in the literature, which is exactly the false
+    positive ADR 0008 disqualifies a blocking check for.
+
+    **What this cannot express.** A free electron is not a species TCKDB can
+    represent — there is no SMILES for one — so genuinely electron-transferring
+    processes (dissociative attachment, photoionization) have no way to balance
+    here. Elemental balance has the same limitation for the same reason and
+    offers the same escape: declare a participant as a ``pseudo`` species,
+    which exempts the reaction from both rules and records that its
+    bookkeeping is phenomenological.
+
+    :raises ValueError: If all participants are ordinary molecule species and
+        the reactant/product charge totals disagree.
+    """
+
+    species_by_id = _load_participant_species(
+        session,
+        reactant_stoichiometry=reactant_stoichiometry,
+        product_stoichiometry=product_stoichiometry,
+    )
+    if species_by_id is None:
+        return
+
+    reactant_charge = sum(
+        coefficient * species_by_id[species_id].charge
+        for species_id, coefficient in reactant_stoichiometry.items()
+    )
+    product_charge = sum(
+        coefficient * species_by_id[species_id].charge
+        for species_id, coefficient in product_stoichiometry.items()
+    )
+
+    if reactant_charge != product_charge:
+        raise ValueError(
+            f"Reaction reactants total charge {reactant_charge:+d} but products "
+            f"total {product_charge:+d} (reaction_charge_not_conserved). Charge "
+            "is conserved across a reaction, so the two sides describe "
+            "different numbers of electrons and cannot be the same reaction. "
+            "A net charge is fine as long as both sides carry the same one; if "
+            "the process genuinely transfers an electron to or from somewhere "
+            "outside the reaction, declare that participant as a pseudo "
+            "species."
+        )
+
+
 def _format_formula(counts: Mapping[str, int]) -> str:
     """Render an element count as a formula, for an error a human can read."""
 
-    return "".join(
-        f"{element}{count if count > 1 else ''}"
-        for element, count in sorted(counts.items())
-    )
+    return format_element_counts(counts)
 
 
 def validate_transition_state_composition(
@@ -330,6 +437,11 @@ def resolve_chem_reaction(
     """
 
     validate_reaction_elemental_balance(
+        session,
+        reactant_stoichiometry=reactant_stoichiometry,
+        product_stoichiometry=product_stoichiometry,
+    )
+    validate_reaction_charge_conservation(
         session,
         reactant_stoichiometry=reactant_stoichiometry,
         product_stoichiometry=product_stoichiometry,
