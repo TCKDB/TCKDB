@@ -6,6 +6,34 @@ from app.chemistry.isotopes import normalize_isotope, validate_isotope
 from app.schemas.fragments.geometry import GeometryPayload
 
 
+def normalize_element_symbol(symbol: str) -> str:
+    """Return an element symbol in the one case every comparison agrees on.
+
+    ``geometry_atom.element`` is stored **verbatim** as the depositor's XYZ
+    wrote it (see :func:`parse_xyz`), and electronic-structure codes are not
+    consistent about capitalisation: ``Cl``, ``CL`` and ``cl`` are the same
+    element and different strings. Anything that compares a stored element
+    against a symbol from another source — RDKit's title-case ``GetSymbol()``,
+    a second geometry deposited from a different program, the wire schema's
+    :func:`tckdb_schemas.fragments.reaction_atom_map.parse_xyz_elements` — must
+    normalise both sides first, or it refuses correct chemistry over
+    capitalisation, which ADR 0008 disqualifies a blocking check from doing.
+
+    ``str.capitalize`` is the rule: it upper-cases the first character and
+    lower-cases the rest, which is exactly the wire schema's
+    ``symbol[:1].upper() + symbol[1:].lower()`` for every element symbol, and
+    the same rule :mod:`app.chemistry.isotopes` already applies before handing
+    a symbol to RDKit's periodic table.
+
+    Normalising here, at comparison time, rather than at ingestion is
+    deliberate: it is correct for the rows already stored as well as for new
+    ones, where canonicalising ``parse_xyz`` would fix only the future and
+    leave a backfill question behind.
+    """
+
+    return symbol.strip().capitalize()
+
+
 @dataclass(frozen=True)
 class ParsedXYZ:
     """Parsed canonical representation of an XYZ geometry block.

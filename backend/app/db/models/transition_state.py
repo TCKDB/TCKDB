@@ -24,6 +24,7 @@ from app.db.types import RDKitMol
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
     from app.db.models.reaction import ReactionEntry
+    from app.db.models.reaction_atom_map import ReactionAtomMap
 
 
 class TransitionState(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
@@ -92,6 +93,14 @@ class TransitionStateEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
     )
     validation_evidence: Mapped[list["TransitionStateValidationEvidence"]] = relationship(
         back_populates="transition_state_entry", cascade="all, delete-orphan"
+    )
+    #: Atom correspondence across the reaction this saddle point sits in
+    #: (ADR 0011). At most one, keyed on the owning reaction entry. Distinct
+    #: from ``validation_evidence``'s participant mappings, which partition the
+    #: TS atoms among participant molecules without saying which atom is which.
+    atom_maps: Mapped[list["ReactionAtomMap"]] = relationship(
+        back_populates="transition_state_entry",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (

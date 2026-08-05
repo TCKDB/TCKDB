@@ -111,11 +111,21 @@ class ReactionParticipantSummary(BaseModel):
 
 
 class ReactionAvailability(BaseModel):
-    """Boolean availability flags + counts per L1."""
+    """Boolean availability flags + counts per L1.
+
+    ``has_atom_map`` says whether the record states which atom of the
+    reactants and products is which atom of the transition state (ADR 0011).
+    ``false`` is the ordinary state for everything deposited before atom
+    mapping existed and for every barrierless channel; it means the record is
+    incomplete, not wrong. It is here rather than only on the deep read so a
+    consumer never has to fetch a reaction to find out that it cannot answer
+    the question they came with.
+    """
 
     has_kinetics: bool
     has_transition_state: bool
     has_path_search: bool
+    has_atom_map: bool = False
     kinetics_count: int
 
 

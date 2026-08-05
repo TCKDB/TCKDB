@@ -57,9 +57,19 @@ def _transition_state_payload(
         "charge": 0,
         "multiplicity": 2,
         "geometry": {
+            # H + CH4 -> H2 + CH3, so the saddle point is CH5. This block was
+            # a three-atom stub (H, C, H) until
+            # ``validate_transition_state_composition`` started refusing a
+            # saddle point that is not made of its own reaction's atoms; the
+            # coordinates stay schematic, the composition does not.
             "xyz_text": (
-                "3\nH-CH3 abstraction TS\n"
-                "H 0.0 0.0 0.0\nC 0.0 0.0 1.4\nH 0.0 0.0 -0.9"
+                "6\nH...H-CH3 abstraction TS\n"
+                "C  0.000  0.000  0.000\n"
+                "H -0.510  0.883  0.000\n"
+                "H -0.510 -0.883  0.000\n"
+                "H  0.000  0.000 -1.090\n"
+                "H  0.000  0.000  1.350\n"
+                "H  0.000  0.000  2.250"
             ),
         },
         "primary_opt": {

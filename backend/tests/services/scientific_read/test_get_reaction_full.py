@@ -74,6 +74,11 @@ def test_default_returns_species_kinetics_transition_states_only(db_session):
     assert response.calculations is None
     assert response.path_search is None
     assert response.artifacts is None
+    assert response.atom_map is None
+    # ...but whether the reaction is atom-mapped is never gated behind a
+    # token: an unmapped reaction that reads identically to a mapped one is
+    # the failure ADR 0011 exists to remove.
+    assert response.reaction_entry.atom_maps == []
 
 
 def test_include_all_populates_every_section(db_session):
@@ -98,6 +103,9 @@ def test_include_all_populates_every_section(db_session):
     assert len(response.conformers) == 2  # one reactant + one product
     assert all(p.conformer_groups == [] for p in response.conformers)
     assert response.artifacts == []
+    assert response.atom_map == []
+    # The header advertises the absence without the section being asked for.
+    assert response.reaction_entry.atom_maps == []
 
 
 def test_include_calculations_does_not_add_other_sections(db_session):

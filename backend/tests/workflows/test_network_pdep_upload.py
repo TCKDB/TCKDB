@@ -51,13 +51,59 @@ from app.services.provenance_warnings import (
 from app.services.scientific_read.networks import get_network, get_network_solve
 from app.workflows.network_pdep import persist_network_pdep_upload
 
-_XYZ_ETHYL = "3\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nH 2.0 1.0 0.0"
-_XYZ_O2 = "2\n\nO 0.0 0.0 0.0\nO 1.21 0.0 0.0"
-_XYZ_ETOO = "4\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nO 2.5 0.0 0.0\nO 3.7 0.0 0.0"
-_XYZ_TS = "4\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nO 2.2 0.0 0.0\nO 3.4 0.0 0.0"
-_XYZ_ETHENE = "2\n\nC 0.0 0.0 0.0\nC 1.33 0.0 0.0"
-_XYZ_HO2 = "2\n\nO 0.0 0.0 0.0\nO 1.33 0.0 0.0"
-_XYZ_AR = "1\n\nAr 0.0 0.0 0.0"
+# Every geometry below carries the atoms its species actually has. They used
+# to omit hydrogen entirely -- ethyl was "C C H", the elimination saddle point
+# was "C C O O" -- which left the fixture's transition state as C2O2 for a
+# C2H5O2 reaction. Nothing checked that until
+# ``validate_transition_state_composition``, which refuses a saddle point that
+# is not made of its own reaction's atoms. The coordinates stay schematic; the
+# composition does not.
+_XYZ_ETHYL = (
+    "7\nC2H5\n"
+    "C  0.00  0.00  0.00\n"
+    "C  1.49  0.00  0.00\n"
+    "H -0.38  1.01  0.00\n"
+    "H -0.38 -0.51  0.88\n"
+    "H -0.38 -0.51 -0.88\n"
+    "H  1.99  0.94  0.00\n"
+    "H  1.99 -0.94  0.00"
+)
+_XYZ_O2 = "2\nO2\nO 0.0 0.0 0.0\nO 1.21 0.0 0.0"
+_XYZ_ETOO = (
+    "9\nC2H5OO\n"
+    "C  0.00  0.00  0.00\n"
+    "C  1.51  0.00  0.00\n"
+    "O  2.05  1.28  0.00\n"
+    "O  3.44  1.30  0.00\n"
+    "H -0.38  1.01  0.00\n"
+    "H -0.38 -0.51  0.88\n"
+    "H -0.38 -0.51 -0.88\n"
+    "H  1.88 -0.53  0.88\n"
+    "H  1.88 -0.53 -0.88"
+)
+_XYZ_TS = (
+    "9\nTS for C2H5OO -> C2H4 + HO2\n"
+    "C  0.00  0.00  0.00\n"
+    "C  1.42  0.00  0.00\n"
+    "O  2.14  1.24  0.00\n"
+    "O  3.42  1.06  0.00\n"
+    "H -0.32  1.03  0.00\n"
+    "H -0.42 -0.55  0.86\n"
+    "H -0.42 -0.55 -0.86\n"
+    "H  1.92 -0.61  0.78\n"
+    "H  2.71 -0.74 -0.42"
+)
+_XYZ_ETHENE = (
+    "6\nC2H4\n"
+    "C  0.00  0.00  0.00\n"
+    "C  1.33  0.00  0.00\n"
+    "H -0.57  0.92  0.00\n"
+    "H -0.57 -0.92  0.00\n"
+    "H  1.90  0.92  0.00\n"
+    "H  1.90 -0.92  0.00"
+)
+_XYZ_HO2 = "3\nHO2\nO 0.0 0.0 0.0\nO 1.33 0.0 0.0\nH -0.35 0.92 0.0"
+_XYZ_AR = "1\nAr\nAr 0.0 0.0 0.0"
 
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT_DFT = {"method": "B3LYP", "basis": "6-31G(d)"}
@@ -69,12 +115,25 @@ _CONVENTIONS = {
     "correction_convention": "electronic_plus_zpe",
 }
 
-# The elimination TS has four atoms (C, C, O, O). Passing IRC evidence must
+# The elimination TS has nine atoms (C2H5O2). Passing IRC evidence must
 # account for every one of them on BOTH sides: the whole C2H5OO skeleton on
-# the reactant side, splitting into C2H4 (the two carbons) and HO2 (the two
-# oxygens) on the product side.
-_ELIM_REACTANT_MAP = {"reactant:1": [1, 2, 3, 4]}
-_ELIM_PRODUCT_MAP = {"product:1": [1, 2], "product:2": [3, 4]}
+# the reactant side, splitting into C2H4 and HO2 on the product side.
+#
+# ``_XYZ_TS`` lists them in the order ``1 C, 2 C, 3 O, 4 O, 5-9 H``, and the
+# partition has to follow the *atoms*, not just their count. The micro
+# reaction is ethylperoxy -> ethene + HO2, so ``product:1`` (C2H4) takes both
+# carbons and four hydrogens, and ``product:2`` (HO2) takes both oxygens and
+# the fifth hydrogen. Handing ethene the oxygens would still cover nine atoms
+# exactly once and still pass, because
+# ``transition_state_validation_evidence`` bounds-checks the partition and
+# never element-checks it — so the indices below are only as trustworthy as
+# this comment, and both are stated against the geometry above.
+_ELIM_TS_ATOMS = list(range(1, 10))
+_ELIM_REACTANT_MAP = {"reactant:1": _ELIM_TS_ATOMS}
+_ELIM_PRODUCT_MAP = {
+    "product:1": [1, 2, 5, 6, 7, 8],  # C2H4: C, C, H, H, H, H
+    "product:2": [3, 4, 9],  # HO2: O, O, H
+}
 
 
 def _full_payload(*, include_solve: bool = True) -> dict:
@@ -412,9 +471,9 @@ def _parallel_path_payload() -> dict:
             {"key": "ts_isomer_irc", "type": "irc", "geometry_key": "ts_isomer_geom", "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT},
         ],
         "statmech": {"statmech_treatment": "rrho", "source_calculations": [{"calculation_key": "ts_isomer_freq", "role": "freq"}]},
-        # A 1->1 isomerization: every TS atom belongs to the single reactant
-        # and, after the H shift, to the single product.
-        "validation_evidence": [{"kind": "irc", "passed": True, "rationale": "IRC connects the two C2H5O2 wells.", "source_calculation_key": "ts_isomer_irc", "reactant_participant_mapping": {"reactant:1": [1, 2, 3, 4]}, "product_participant_mapping": {"product:1": [1, 2, 3, 4]}}],
+        # A 1->1 isomerization: every one of the nine TS atoms belongs to the
+        # single reactant and, after the H shift, to the single product.
+        "validation_evidence": [{"kind": "irc", "passed": True, "rationale": "IRC connects the two C2H5O2 wells.", "source_calculation_key": "ts_isomer_irc", "reactant_participant_mapping": {"reactant:1": _ELIM_TS_ATOMS}, "product_participant_mapping": {"product:1": _ELIM_TS_ATOMS}}],
     })
     payload["channels"].append({"key": "isomerization_path", "source_state_key": "well_RO2", "sink_state_key": "well_iso", "kind": "isomerization", "microreaction_paths": [{"micro_reaction_key": "rxn_isomer", "transition_state_key": "ts_isomer"}]})
     payload["solve"]["state_energies"].append({"state_key": "well_iso", "energy_kj_mol": -110.0, **_CONVENTIONS, "source_calculation_key": "etoo_iso_sp"})
@@ -641,10 +700,10 @@ def test_full_end_to_end_upload(db_engine) -> None:
         # Passing evidence accounts for every TS atom on both sides.
         assert sorted(
             i for atoms in evidence[0].reactant_participant_mapping.values() for i in atoms
-        ) == [1, 2, 3, 4]
+        ) == _ELIM_TS_ATOMS
         assert sorted(
             i for atoms in evidence[0].product_participant_mapping.values() for i in atoms
-        ) == [1, 2, 3, 4]
+        ) == _ELIM_TS_ATOMS
 
         # TS calculations belong to TS entry
         ts_calcs = session.scalars(
@@ -2128,8 +2187,8 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> N
             "out-of-bounds IRC participant mapping",
         ),
         (
-            # A map covering 2 of the TS's 4 atoms proves nothing about the
-            # other 2 and can never be passing evidence.
+            # A map covering 2 of the TS's 9 atoms proves nothing about the
+            # other 7 and can never be passing evidence.
             lambda p: p["transition_states"][0]["validation_evidence"][0].update(
                 {"reactant_participant_mapping": {"reactant:1": [1, 2]}}
             ),
@@ -2289,10 +2348,55 @@ def test_transition_state_without_irc_evidence_succeeds_with_a_warning(
         network = persist_network_pdep_upload(session, request, warnings=warnings)
         session.flush()
         assert network.id is not None
+        # Two absences, both about the same saddle point and both stated:
+        # nothing evidences that it connects its declared endpoints, and
+        # nothing says which atom of the reactants is which atom of it.
         assert [w.code for w in warnings] == [
-            "transition_state_missing_irc_evidence"
+            "transition_state_missing_irc_evidence",
+            "reaction_atom_map_absent",
         ]
-        assert "ts_elim" in warnings[0].field
+        assert all("ts_elim" in w.field for w in warnings)
+
+
+def test_every_pdep_saddle_point_reports_its_missing_atom_map(
+    db_engine,
+) -> None:
+    """A network's micro reactions are reactions, and their gaps are visible.
+
+    ADR 0011 accepts an unmapped reaction — the rate constant is still the rate
+    constant — on condition that the absence is *stated*, loudly enough that a
+    depositor who has the mapping notices they are being asked for it. Before
+    this warning existed, every micro reaction in a pressure-dependent network
+    deposited unmapped and silent, which is precisely the invisible absence the
+    decision was written to remove.
+    """
+    payload = _full_payload()
+
+    with _rolled_back_session(db_engine) as session:
+        warnings: list[UploadWarning] = []
+        request = NetworkPDepUploadRequest(**payload)
+        persist_network_pdep_upload(session, request, warnings=warnings)
+        session.flush()
+
+    absent = [w for w in warnings if w.code == "reaction_atom_map_absent"]
+    # One per saddle point. The barrierless association path declares no
+    # transition state, so it is correctly not warned about: both legs of a map
+    # run toward a saddle point there is none of.
+    assert len(absent) == len(request.transition_states)
+    # The pointer names the saddle point, not ``.atom_map``. The prose below
+    # is careful never to promise a field this bundle lacks, and the
+    # machine-readable pointer has to keep the same promise -- a client that
+    # highlights ``field`` in the submitted payload would otherwise be sent to
+    # a path that does not resolve.
+    assert {w.field for w in absent} == {
+        f"transition_states[{ts.key}]" for ts in request.transition_states
+    }
+    assert not any(w.field.endswith(".atom_map") for w in absent)
+    # And it does not send a depositor looking for a field this bundle has not
+    # got: a warning that cannot be acted on is the kind nobody reads.
+    assert "cannot yet carry a map" in absent[0].message
+    assert "computed-reaction upload" in absent[0].message
+    assert "atom_map" not in set(NetworkPDepUploadRequest.model_fields)
 
 
 def test_multiple_transition_states_per_micro_reaction_are_accepted() -> None:

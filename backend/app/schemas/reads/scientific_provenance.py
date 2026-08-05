@@ -12,6 +12,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 from app.db.models.common import (
+    AtomMapSource,
     CalculationType,
     ReactionRole,
     RecordReviewStatus,
@@ -86,11 +87,80 @@ class ReactionFullReadRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ReactionAtomMapBadge(BaseModel):
+    """Says whether this reaction is atom-mapped, and on whose authority.
+
+    Present on every ``/full`` response without asking for the map itself, so
+    a mapped reaction can be told from an unmapped one in a single request.
+    An empty ``atom_maps`` list on the reaction-entry header means the record
+    genuinely carries no map — it does not mean the section was not requested.
+
+    ``source`` is the load-bearing field. A map produced by an algorithm reads
+    back as ``inferred`` and is never presented as though a human asserted it
+    (ADR 0011); a consumer that treats the two alike is reading a claim the
+    record does not make.
+
+    ``equivalent_map_count`` is ``null`` when the depositor made no claim. It
+    is **not** ``1``: symmetry makes a valid map routinely non-unique, and
+    TCKDB does not canonicalise among the alternatives.
+
+    ``reactant_atoms_mapped`` / ``product_atoms_mapped`` count the mapped
+    atoms on each leg. Compare them against the participants' atom counts to
+    see whether the map is complete; a partial map is accepted and says
+    nothing about the atoms it omits.
+    """
+
+    transition_state_entry_id: int
+    transition_state_entry_ref: str
+    source: AtomMapSource
+    equivalent_map_count: int | None = None
+    reactant_atoms_mapped: int
+    product_atoms_mapped: int
+    note: str | None = None
+
+
+class ReactionAtomMapPairRead(BaseModel):
+    """One participant atom identified with one transition-state atom.
+
+    ``atom_index`` counts into ``geometry_ref``; ``ts_atom_index`` counts into
+    the map's transition-state geometry. Atom indices are geometry-relative,
+    so neither number means anything without the geometry beside it.
+    """
+
+    side: ReactionRole
+    species_entry_id: int
+    species_entry_ref: str
+    participant_index: int
+    geometry_id: int
+    geometry_ref: str
+    atom_index: int
+    element: str
+    ts_atom_index: int
+
+
+class ReactionAtomMapDetail(ReactionAtomMapBadge):
+    """A full atom map: both legs, atom by atom, toward the transition state.
+
+    Only the two legs are stored. Composing them gives reactants→products;
+    that composition is deliberately not a stored record, because keeping the
+    legs is what preserves which bonds break and form at the saddle point.
+    """
+
+    transition_state_geometry_id: int
+    transition_state_geometry_ref: str
+    pairs: list[ReactionAtomMapPairRead]
+
+
 class ReactionEntrySummary(BaseModel):
     """Top-level reaction-entry header for the /full response.
 
     Phase B: ``reaction_ref`` and ``reaction_entry_ref`` are the public
     stable handles alongside the integer IDs.
+
+    ``atom_maps`` is always present and never gated behind an ``include``
+    token: an unmapped reaction that is indistinguishable from a mapped one is
+    the failure ADR 0011 exists to remove, and it would be reintroduced by
+    making the distinction cost a second request.
     """
 
     id: int
@@ -101,6 +171,7 @@ class ReactionEntrySummary(BaseModel):
     reversible: bool
     family: str | None = None
     review: RecordReviewBadge
+    atom_maps: list[ReactionAtomMapBadge] = Field(default_factory=list)
 
 
 class ReactionFullSpeciesParticipant(BaseModel):
@@ -371,6 +442,10 @@ class ScientificReactionFullResponse(BaseModel):
     scans: list[ReactionFullScanItem] | None = None
     conformers: list[ReactionFullSpeciesConformers] | None = None
     artifacts: list[ReactionFullCalculationArtifacts] | None = None
+    # The per-atom legs. ``reaction_entry.atom_maps`` already says whether a
+    # map exists and how it was obtained; this section is the map itself, which
+    # is per-atom and therefore opt-in.
+    atom_map: list[ReactionAtomMapDetail] | None = None
 
     # Present only when include_review=full.
     review_records: list[ReviewRecordEntry] | None = None

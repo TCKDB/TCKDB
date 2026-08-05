@@ -65,6 +65,7 @@ def test_include_all_populates_every_top_level_section(client, db_session):
         "scans",
         "conformers",
         "artifacts",
+        "atom_map",
     ):
         assert key in body
         assert body[key] is not None  # included sections are present

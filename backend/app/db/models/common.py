@@ -138,6 +138,27 @@ class ReactionRole(str, Enum):
     product = "product"
 
 
+class AtomMapSource(str, Enum):
+    """How a reaction atom map was obtained (ADR 0011).
+
+    ``declared``
+        The depositor stated the correspondence. They ran the calculation and
+        followed the intrinsic reaction coordinate, so they know which atom
+        went where.
+    ``inferred``
+        An algorithm produced the correspondence. It is recorded and read back
+        as inferred, never as though a human asserted it.
+
+    The column carrying this token has no default. Defaulting to ``declared``
+    would manufacture human attribution for a row nobody wrote by hand, and
+    defaulting to ``inferred`` would understate a real declaration; a map that
+    cannot say how it was obtained is not a map this database accepts.
+    """
+
+    declared = "declared"
+    inferred = "inferred"
+
+
 class CalculationType(str, Enum):
     opt = "opt"
     freq = "freq"

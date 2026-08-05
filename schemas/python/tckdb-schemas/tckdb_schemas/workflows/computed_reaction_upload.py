@@ -27,6 +27,7 @@ from tckdb_schemas.enums import (
     KineticsModelKind,
     KineticsUncertaintyKind,
     PressureContext,
+    ReactionRole,
     TunnelingModel,
     RigidRotorKind,
     ScientificOriginKind,
@@ -41,6 +42,11 @@ from tckdb_schemas.fragments.calculation import (
     PathSearchResultPayload,
 )
 from tckdb_schemas.fragments.geometry import GeometryPayload
+from tckdb_schemas.fragments.reaction_atom_map import (
+    AtomMapParticipantGeometry,
+    ReactionAtomMapIn,
+    validate_reaction_atom_map,
+)
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.fragments.refs import (
     FreqScaleFactorRef,
@@ -948,6 +954,85 @@ class ComputedReactionUploadRequest(SchemaBase):
 
     # Kinetics fits (empty when Arkane fitting didn't complete)
     kinetics: list[BundleKineticsIn] = Field(default_factory=list)
+
+    # Atom correspondence across the reaction (ADR 0011)
+    atom_map: ReactionAtomMapIn | None = Field(
+        default=None,
+        description=(
+            "Which atom of each reactant and product is which atom of the "
+            "transition state. Supplied by the depositor and never derived "
+            "here: TCKDB does not run a mapping algorithm, because several "
+            "chemically distinct maps are usually consistent with the same "
+            "reactants and products and choosing one by algorithm would "
+            "manufacture provenance (ADR 0011). Optional — a reaction "
+            "deposited without one succeeds and returns a "
+            "'reaction_atom_map_absent' upload warning, because an unmapped "
+            "reaction is incomplete rather than false. Requires a transition "
+            "state: both legs of the map run toward the saddle point."
+        ),
+    )
+
+    def atom_map_participants(self) -> list[AtomMapParticipantGeometry]:
+        """Describe every declared participant and the geometries it may use.
+
+        Assembled here because the atom map is the one part of the bundle that
+        needs the reaction's participant slots *and* each species's geometries
+        at the same time; neither nested model can see both.
+        """
+
+        species_by_key = {species.key: species for species in self.species}
+        participants: list[AtomMapParticipantGeometry] = []
+        for side, keys in (
+            (ReactionRole.reactant, self.reactant_keys),
+            (ReactionRole.product, self.product_keys),
+        ):
+            for position, species_key in enumerate(keys, start=1):
+                species = species_by_key.get(species_key)
+                if species is None:
+                    # An undefined species key is ``validate_species_key_refs``'s
+                    # to report; do not pre-empt it with a KeyError.
+                    continue
+                xyz_by_key = {
+                    conformer.geometry.key: conformer.geometry.xyz_text
+                    for conformer in species.conformers
+                }
+                participants.append(
+                    AtomMapParticipantGeometry(
+                        side=side,
+                        species_key=species_key,
+                        participant_index=position,
+                        geometry_keys=frozenset(xyz_by_key),
+                        xyz_by_geometry_key=xyz_by_key,
+                    )
+                )
+        return participants
+
+    @model_validator(mode="after")
+    def validate_atom_map(self) -> Self:
+        """Refuse a self-contradictory atom map; accept an incomplete one.
+
+        Runs here rather than on a nested model because the map spans the
+        reaction's participant slots, every participant's geometry, and the
+        transition state's geometry — the same reason
+        ``validate_ts_validation_evidence`` sits at this level.
+        """
+        if self.atom_map is None:
+            return self
+        validate_reaction_atom_map(
+            self.atom_map,
+            participants=self.atom_map_participants(),
+            ts_geometry_key=(
+                None
+                if self.transition_state is None
+                else self.transition_state.geometry.key
+            ),
+            ts_xyz_text=(
+                None
+                if self.transition_state is None
+                else self.transition_state.geometry.xyz_text
+            ),
+        )
+        return self
 
     def stationary_point_findings(self) -> list[StationaryPointFinding]:
         """Collect every entity's stationary-point findings in this bundle.
