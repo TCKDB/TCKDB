@@ -1001,9 +1001,9 @@ def build_network_pdep_payload(
     # Source calculations: species sp -> well_energy, freq -> well_freq;
     # TS sp -> barrier_energy, freq -> barrier_freq.
     source_calcs: list[dict] = []
-    for label, key in species_sp_key.items():
+    for key in species_sp_key.values():
         source_calcs.append({"calculation_key": key, "role": "well_energy"})
-    for label, key in species_freq_key.items():
+    for key in species_freq_key.values():
         source_calcs.append({"calculation_key": key, "role": "well_freq"})
     for ts in transition_states:
         for calc in ts["calculations"]:

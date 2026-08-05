@@ -55,8 +55,8 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     # Import here to keep the CLI lightweight for --help
-    from .extractor import ARCRunExtractor
     from .builder import build_payload
+    from .extractor import ARCRunExtractor
 
     print(f"Extracting ARC run from: {arc_dir}", file=sys.stderr)
     extractor = ARCRunExtractor(arc_dir)

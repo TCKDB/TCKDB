@@ -22,8 +22,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+# E402: must follow the sys.path bootstrap above so `app` resolves when the
+# wrapper is run directly without PYTHONPATH.
 from app.importers.cccbdb.property_payload_dryrun import main  # noqa: E402
-
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))

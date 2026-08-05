@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
             payload = request.model_dump(mode="json", exclude_none=True)
             validated_ok = True
             print("VALIDATION: PASS (schema-valid NetworkPDepUploadRequest)", file=sys.stderr)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             validated_ok = False
             print("VALIDATION: FAIL", file=sys.stderr)
             print(repr(exc), file=sys.stderr)

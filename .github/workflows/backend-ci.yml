@@ -115,7 +115,7 @@ jobs:
       - name: Lint (ruff)
         if: matrix.gate == 'api'
         working-directory: backend
-        run: conda run -n tckdb_env ruff check app tests
+        run: conda run -n tckdb_env ruff check app tests scripts
 
       - name: Type check (mypy, scoped)
         if: matrix.gate == 'api'
