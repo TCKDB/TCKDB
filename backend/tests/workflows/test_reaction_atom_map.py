@@ -400,6 +400,45 @@ def test_database_refuses_relabelling_an_inferred_map_as_declared(
         assert "atom_map_source_is_immutable" in str(excinfo.value)
 
 
+@pytest.mark.parametrize("blanked", ["'   '", "''", "NULL"])
+def test_database_refuses_blanking_an_inferred_maps_note(
+    db_engine, blanked: str
+) -> None:
+    """Freezing ``source`` is only half of "an inferred map names its origin".
+
+    ``source`` can no longer leave ``inferred``, but ``note`` stays mutable so
+    a typo can be corrected -- which means the same anonymity the wire schema
+    refuses on the way in can still be reached by emptying the note afterwards.
+    The check has to hold the trimmed value, not merely a non-NULL one.
+
+    ``NULL`` is parametrised alongside the blank strings because the obvious
+    tightening -- ``btrim(note) <> ''`` on its own -- silently *loses* that
+    case: a CHECK rejects only on FALSE, and ``btrim(NULL) <> ''`` is NULL, so
+    the anonymous map would start committing again. This asserts both halves
+    of the constraint at once.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    payload = _payload()
+    payload["atom_map"] = _complete_map(
+        source="inferred", note="mapped by RXNMapper"
+    )
+
+    with _isolated_session(db_engine) as session:
+        result = _upload(session, payload)
+
+        with pytest.raises(DBAPIError) as excinfo:
+            session.execute(
+                text(
+                    f"UPDATE reaction_atom_map SET note = {blanked} "
+                    "WHERE id = :id"
+                ),
+                {"id": result["atom_map_id"]},
+            )
+        assert "inferred_requires_note" in str(excinfo.value)
+
+
 def test_an_inferred_map_may_still_have_its_note_corrected(db_engine) -> None:
     """Freezing the token must not freeze the record it labels.
 

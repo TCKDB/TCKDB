@@ -532,7 +532,11 @@ def persist_network_pdep_upload(
             transition_state_geometry_id=ts_geometry.id,
             participants=(),
             geometry_id_by_key={},
-            field_path=f"transition_states[{ts_in.key}].atom_map",
+            # Points at the saddle point, not at ``.atom_map``: this bundle has
+            # no such field, and a machine-readable pointer naming one would
+            # send a client that highlights ``field`` to somewhere that does
+            # not exist. ``absence_remedy`` carries where the map can go.
+            field_path=f"transition_states[{ts_in.key}]",
             absence_remedy=_PDEP_ABSENCE_REMEDY,
             created_by=created_by,
             warnings=warning_sink,

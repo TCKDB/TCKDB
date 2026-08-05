@@ -2383,9 +2383,15 @@ def test_every_pdep_saddle_point_reports_its_missing_atom_map(
     # transition state, so it is correctly not warned about: both legs of a map
     # run toward a saddle point there is none of.
     assert len(absent) == len(request.transition_states)
+    # The pointer names the saddle point, not ``.atom_map``. The prose below
+    # is careful never to promise a field this bundle lacks, and the
+    # machine-readable pointer has to keep the same promise -- a client that
+    # highlights ``field`` in the submitted payload would otherwise be sent to
+    # a path that does not resolve.
     assert {w.field for w in absent} == {
-        f"transition_states[{ts.key}].atom_map" for ts in request.transition_states
+        f"transition_states[{ts.key}]" for ts in request.transition_states
     }
+    assert not any(w.field.endswith(".atom_map") for w in absent)
     # And it does not send a depositor looking for a field this bundle has not
     # got: a warning that cannot be acted on is the kind nobody reads.
     assert "cannot yet carry a map" in absent[0].message

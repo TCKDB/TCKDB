@@ -186,7 +186,7 @@ def upgrade() -> None:
         ),
         sa.Column("created_by", sa.BigInteger(), nullable=True),
         sa.CheckConstraint(
-            "source <> 'inferred' OR note IS NOT NULL",
+            "source <> 'inferred' OR (note IS NOT NULL AND btrim(note) <> '')",
             name=op.f("ck_reaction_atom_map_inferred_requires_note"),
         ),
         sa.CheckConstraint(

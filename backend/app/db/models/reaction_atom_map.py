@@ -224,7 +224,11 @@ class ReactionAtomMap(Base, TimestampMixin, CreatedByMixin):
             name="equivalent_map_count_ge_1",
         ),
         CheckConstraint(
-            "source <> 'inferred' OR note IS NOT NULL",
+            # ``note IS NOT NULL AND`` is load-bearing, not belt-and-braces. A
+            # CHECK rejects only on FALSE, and ``btrim(NULL) <> ''`` is NULL,
+            # so the trimmed test *alone* would admit the anonymous inferred
+            # map this constraint exists to refuse.
+            "source <> 'inferred' OR (note IS NOT NULL AND btrim(note) <> '')",
             name="inferred_requires_note",
         ),
     )

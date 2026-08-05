@@ -2413,7 +2413,7 @@ Table reaction_atom_map {
 
   checks {
     `equivalent_map_count IS NULL OR equivalent_map_count >= 1` [name: 'ck_reaction_atom_map_equivalent_map_count_ge_1']
-    `source <> 'inferred' OR note IS NOT NULL` [name: 'ck_reaction_atom_map_inferred_requires_note']
+    `source <> 'inferred' OR (note IS NOT NULL AND btrim(note) <> '')` [name: 'ck_reaction_atom_map_inferred_requires_note']
   }
 
   Note: 'One depositor-supplied atom correspondence for one micro reaction.'
