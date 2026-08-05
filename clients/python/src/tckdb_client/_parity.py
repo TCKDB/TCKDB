@@ -135,6 +135,7 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
     # --- Probes and deployment metadata -----------------------------
     ("GET", "/api/v1/health", "health", None, None, "tests/test_client.py"),
     ("GET", "/api/v1/readyz", "readyz", None, None, _NEW_METHOD_TESTS),
+    ("GET", "/api/v1/status", "status", None, None, _NEW_METHOD_TESTS),
     ("GET", "/api/v1/meta", "get_meta", None, None, _NEW_METHOD_TESTS),
     ("GET", "/api/v1/auth/me", "me", None, None, "tests/test_client.py"),
     # --- Contribution bundles ---------------------------------------

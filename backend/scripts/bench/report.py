@@ -277,8 +277,11 @@ KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
     {
         "shape": "thermo_search_broad",
         "symptom": (
-            "~1,330 SQL statements and ~1 second for a 50-record page over 171 "
-            "matches."
+            "1,331 SQL statements and 1,009 ms for a 50-record page over 171 "
+            "matches (re-measured 2026-08-04 against the same 50k corpus; "
+            "previously ~1,330 and ~1 second, so this has not drifted and no "
+            "regression has crept in -- the architectural cause below is "
+            "simply unchanged)."
         ),
         "cause": (
             "`thermo_search` is a *composed* search: it walks every page of "
@@ -302,15 +305,36 @@ KNOWN_UNFIXED: tuple[dict[str, str], ...] = (
     },
     {
         "shape": "structure_search_substructure",
-        "symptom": "~550 ms for a substructure query matching 12,649 entries.",
+        "symptom": (
+            "535 ms p50 for a substructure query matching 12,649 entries "
+            "(re-measured 2026-08-04; previously recorded at ~550 ms)."
+        ),
         "cause": (
-            "Not investigated in depth. The RDKit GiST index is used, but a "
-            "substructure match over a large candidate set still rechecks many "
-            "molecules."
+            "Diagnosed from the captured plan, replacing the earlier "
+            "'not investigated in depth'. **This is not an N+1**: the whole "
+            "request issues 5 SQL statements, and 292 ms of the 559 ms of SQL "
+            "is a single query. The GiST index IS used -- the plan shows a "
+            "Bitmap Heap Scan with `Recheck Cond: ((mol IS NOT NULL) AND "
+            "(mol @> 'C(=O)O'::qmol))` -- and the recheck genuinely has to "
+            "examine 13,489 molecules, at 70,127 shared buffer hits. Matching "
+            "a carboxyl group against a 50k-species corpus returns a quarter "
+            "of it, and that work is real. "
+            "The one thing that is *wrong* rather than merely expensive is the "
+            "row estimate: the planner expects **1 row** and gets **12,649**, "
+            "a ~12,000x underestimate, because RDKit's `@>` carries no useful "
+            "selectivity statistics. On that estimate it picks nested loops, "
+            "which is the wrong join strategy for twelve thousand rows."
         ),
         "why_not_fixed": (
-            "No plan-backed diagnosis was produced, so no fix and no index is "
-            "proposed. Recorded as an open question rather than guessed at."
+            "The dominant cost is inherent to substructure matching on a "
+            "common fragment and no index removes it. The row estimate is a "
+            "real and separable lead -- a custom selectivity estimator, or "
+            "materialising the candidate set before the join so the planner "
+            "sees a countable relation -- but changing join strategy on the "
+            "structure-search path warrants its own measurement rather than "
+            "being folded into a benchmark refresh. Recorded here with the "
+            "plan so the next person starts from a diagnosis rather than from "
+            "a stopwatch."
         ),
     },
 )

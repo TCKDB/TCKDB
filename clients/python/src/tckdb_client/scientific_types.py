@@ -551,6 +551,17 @@ class LiteratureLinkedRecord(TypedDict, total=False):
     calculation_ref: str | None
     network_ref: str | None
     network_solve_ref: str | None
+    # Whether a linked network solve derived its k(T,P) here ("computed") or
+    # transcribed them from this very publication ("reported") -- see ADR 0010.
+    # Present only for ``record_type == "network_solve"``.
+    #
+    # Optional here, unlike the server, where the field is required and has no
+    # default. The asymmetry is deliberate and follows the same principle in
+    # both directions: never claim what you do not know. A server always knows
+    # a solve's origin, so defaulting there would fabricate a provenance claim.
+    # A client can be talking to an older deployment that does not send the
+    # field at all, and for that client "unknown" is simply true.
+    network_solve_kind: str | None
     review: JSONDict | None
     created_at: str | None
 
