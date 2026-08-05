@@ -12,16 +12,19 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from sqlalchemy import CheckConstraint, UniqueConstraint
+
 # Ensure repo root is on sys.path so `app` is importable
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from sqlalchemy import CheckConstraint, UniqueConstraint
-
+# E402: the `app` imports must follow the sys.path bootstrap above — run
+# directly or as `python -m scripts.generate_dbml` without PYTHONPATH,
+# `app` is only importable once REPO_ROOT is on sys.path.
 # Load all models so metadata is populated
-import app.db.models  # noqa: F401
-from app.db.base import Base
+import app.db.models  # noqa: F401,E402
+from app.db.base import Base  # noqa: E402
 
 OUTPUT = REPO_ROOT / "schema.dbml"
 

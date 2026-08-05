@@ -19,17 +19,17 @@ The DB is left alive after loading — connect with:
 
 from __future__ import annotations
 
+import argparse
 import os
+import subprocess
 import sys
 import time
-import subprocess
-import argparse
 from pathlib import Path
 
 # Ensure project root is on sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.parse_sdf_to_bundle import sdf_to_bundle, _SDF_DIR, _CSV_PATH
+from scripts.parse_sdf_to_bundle import _CSV_PATH, _SDF_DIR, sdf_to_bundle
 
 
 def get_all_rxn_ids(sdf_dir: Path = _SDF_DIR) -> list[str]:
@@ -230,7 +230,7 @@ def main():
 
         stats = load_reactions(session, rxn_ids, user_id)
 
-        print(f"\n--- Load Complete ---")
+        print("\n--- Load Complete ---")
         print(f"  Total:   {stats['total']}")
         print(f"  Success: {stats['success']}")
         print(f"  Failed:  {stats['failed']}")
@@ -238,7 +238,7 @@ def main():
         print(f"  Time:    {stats['elapsed_s']:.1f}s")
 
         if stats["errors"]:
-            print(f"\n--- First 10 Errors ---")
+            print("\n--- First 10 Errors ---")
             for err in stats["errors"][:10]:
                 print(f"  {err}")
 
@@ -248,7 +248,7 @@ def main():
         session.close()
         engine.dispose()
 
-    print(f"\nDB is alive at: psql -h 127.0.0.1 -p 5432 -U tckdb -d tckdb_dev")
+    print("\nDB is alive at: psql -h 127.0.0.1 -p 5432 -U tckdb -d tckdb_dev")
 
 
 if __name__ == "__main__":

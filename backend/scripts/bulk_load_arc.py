@@ -226,10 +226,10 @@ def _process_one_run(
     Returns ``(run_name, status, error_msg)`` where status is one of
     ``'success'``, ``'skipped'``, or ``'failed'``.
     """
-    from scripts.arc_ingestion.extractor import ARCRunExtractor
-    from scripts.arc_ingestion.builder import build_payload
     from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
     from app.workflows.computed_reaction import persist_computed_reaction_upload
+    from scripts.arc_ingestion.builder import build_payload
+    from scripts.arc_ingestion.extractor import ARCRunExtractor
 
     run_name = run_dir.name
 
@@ -479,7 +479,7 @@ def main():
     print(f"  Workers: {workers}  Artifacts: {'yes' if include_artifacts else 'no (--no-artifacts)'}")
     if arc_repo_dir:
         print(f"  ARC repo: {arc_repo_dir} (freq scale factor citations enabled)")
-    print(f"Loading into tckdb_dev...\n")
+    print("Loading into tckdb_dev...\n")
 
     # Create a short-lived session just for user setup and DB stats
     engine, session = create_engine_and_session()
@@ -493,7 +493,7 @@ def main():
     stats = load_arc_runs(run_dirs, user_id, workers=workers, include_artifacts=include_artifacts,
                           arc_repo_dir=arc_repo_dir)
 
-    print(f"\n--- Load Complete ---")
+    print("\n--- Load Complete ---")
     print(f"  Total runs:    {stats['total']}")
     print(f"  Already done:  {stats['already_done']}")
     print(f"  New success:   {stats['success']}")
@@ -502,7 +502,7 @@ def main():
     print(f"  Time:          {stats['elapsed_s']:.1f}s")
 
     if stats["errors"]:
-        print(f"\n--- First 10 Errors ---")
+        print("\n--- First 10 Errors ---")
         for err in stats["errors"][:10]:
             print(f"  {err}")
 
@@ -514,8 +514,8 @@ def main():
         session.close()
         engine.dispose()
 
-    print(f"\nDB is alive at: psql -h 127.0.0.1 -p 5432 -U tckdb -d tckdb_dev")
-    print(f"Start the API with: conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8010 --reload")
+    print("\nDB is alive at: psql -h 127.0.0.1 -p 5432 -U tckdb -d tckdb_dev")
+    print("Start the API with: conda run -n tckdb_env uvicorn main:app --host 127.0.0.1 --port 8010 --reload")
 
 
 if __name__ == "__main__":

@@ -32,18 +32,22 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
 # Ensure repo root is on sys.path so `app` is importable without
 # requiring the caller to export PYTHONPATH.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
-from app.api.config import settings
-from app.db.models.common import AppUserRole
-from app.services.auth import RoleChangeRefused, bootstrap_user
+# E402: the `app` imports must follow the sys.path bootstrap above. This
+# script is run directly (`python scripts/bootstrap_admin.py`) with no
+# PYTHONPATH exported, so `app` is not importable until REPO_ROOT is on
+# sys.path.
+from app.api.config import settings  # noqa: E402
+from app.db.models.common import AppUserRole  # noqa: E402
+from app.services.auth import RoleChangeRefused, bootstrap_user  # noqa: E402
 
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:

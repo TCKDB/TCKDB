@@ -333,7 +333,8 @@ def parse_pdep_arrhenius_reactions(text: str) -> list[PlogFit]:
         entries: list[PlogArrhenius] = []
         tmin_value = tmax_value = None
         temperature_units: str | None = None
-        for pressure, ab in zip(pressures, arr_blocks):
+        # strict: lengths are already enforced by the equality check above.
+        for pressure, ab in zip(pressures, arr_blocks, strict=True):
             a = _extract_value_units(ab, "A")
             ea = _extract_value_units(ab, "Ea")
             n_m = re.search(r"\bn\s*=\s*([-\d.eE+]+)", ab)
@@ -803,6 +804,20 @@ def _parse_csv_xyz(raw: str) -> str | None:
     return f"{len(lines)}\n\n" + "\n".join(lines)
 
 
+def _csv_num(row: dict[str, str], key: str) -> float | None:
+    """Read ``key`` from a supporting-information CSV row as a float."""
+    v = (row.get(key) or "").strip()
+    if not v or v == "-":
+        return None
+    return float(v)
+
+
+def _csv_int(row: dict[str, str], key: str) -> int | None:
+    """Read ``key`` from a supporting-information CSV row as an int."""
+    v = _csv_num(row, key)
+    return int(v) if v is not None else None
+
+
 def parse_supporting_information(path: Path) -> dict[str, SupportingInfo]:
     """Parse ``supporting_information.csv`` into a label -> SupportingInfo map."""
     out: dict[str, SupportingInfo] = {}
@@ -812,16 +827,6 @@ def parse_supporting_information(path: Path) -> dict[str, SupportingInfo]:
             label = (row.get("Label") or "").strip()
             if not label:
                 continue
-
-            def _num(key: str) -> float | None:
-                v = (row.get(key) or "").strip()
-                if not v or v == "-":
-                    return None
-                return float(v)
-
-            def _int(key: str) -> int | None:
-                v = _num(key)
-                return int(v) if v is not None else None
 
             freqs_raw = (
                 row.get("Calculated Frequencies (unscaled and prior to "
@@ -841,21 +846,25 @@ def parse_supporting_information(path: Path) -> dict[str, SupportingInfo]:
 
             out[label] = SupportingInfo(
                 label=label,
-                symmetry_number=_int("Symmetry Number"),
-                optical_isomers=_int("Number of optical isomers"),
+                symmetry_number=_csv_int(row, "Symmetry Number"),
+                optical_isomers=_csv_int(row, "Number of optical isomers"),
                 point_group=((row.get("Symmetry Group") or "").strip() or None),
                 rotational_constants_cm_inv=rot,
                 frequencies_cm_inv=freqs,
                 n_imag=n_imag,
-                electronic_energy_j_mol=_num("Electronic energy (J/mol)"),
-                e0_zpe_j_mol=_num("E0 (electronic energy + ZPE, J/mol)"),
-                e0_corrected_j_mol=_num(
-                    "E0 with atom and bond corrections (J/mol)"
+                electronic_energy_j_mol=_csv_num(
+                    row, "Electronic energy (J/mol)"
+                ),
+                e0_zpe_j_mol=_csv_num(
+                    row, "E0 (electronic energy + ZPE, J/mol)"
+                ),
+                e0_corrected_j_mol=_csv_num(
+                    row, "E0 with atom and bond corrections (J/mol)"
                 ),
                 xyz_text=_parse_csv_xyz(
                     row.get("Atom XYZ coordinates (angstrom)") or ""
                 ),
-                t1_diagnostic=_num("T1 diagnostic"),
-                d1_diagnostic=_num("D1 diagnostic"),
+                t1_diagnostic=_csv_num(row, "T1 diagnostic"),
+                d1_diagnostic=_csv_num(row, "D1 diagnostic"),
             )
     return out

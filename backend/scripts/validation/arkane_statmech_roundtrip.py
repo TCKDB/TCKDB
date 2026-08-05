@@ -465,7 +465,10 @@ json.dump(out, sys.stdout)
             f"rotor-term computation failed in {RMG_ENV}:\n{proc.stderr[-2000:]}"
         )
     terms = json.loads(proc.stdout)
-    for rotor, term in zip(data["rotors"], terms):
+    # strict: the subprocess emits exactly one term per input rotor, so a
+    # mismatch means truncated output from the RMG env — raise, don't pair up
+    # the wrong rotors.
+    for rotor, term in zip(data["rotors"], terms, strict=True):
         rotor["inertia_amu_a2"] = term["inertia_amu_a2"]
         rotor["fourier_kj_mol"] = term["fourier_kj_mol"]
 
@@ -479,7 +482,9 @@ def principal_moments(symbols, coords) -> np.ndarray:
     com = (m[:, None] * coords).sum(0) / m.sum()
     r = coords - com
     tensor = np.zeros((3, 3))
-    for mi, ri in zip(m, r):
+    # strict: one mass per atom and one displacement row per atom by
+    # construction; a mismatch means symbols and coords disagree.
+    for mi, ri in zip(m, r, strict=True):
         tensor += mi * (np.dot(ri, ri) * np.eye(3) - np.outer(ri, ri))
     return np.linalg.eigvalsh(tensor), m.sum()
 

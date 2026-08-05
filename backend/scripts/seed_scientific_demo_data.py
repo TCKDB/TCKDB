@@ -423,7 +423,8 @@ def seed(session: Session) -> dict[str, int]:
     # ---- Thermo records (2–3) ----
     # Scalar-only for CH4 + scalar+NASA for C2H6 + a points-shaped one is
     # skipped to keep the script short; the goal is variety, not coverage.
-    thermo_ch4 = _make_thermo_scalar(
+    # Created for its persistence side effect only; nothing references it.
+    _make_thermo_scalar(
         session, entry=entry_by_smiles["C"], h298=-74.6, s298=186.3
     )
     thermo_c2h6 = _make_thermo_scalar(
@@ -569,7 +570,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
 
     db_url = args.database_url or settings.database_url
-    print(f"TCKDB scientific demo seed")
+    print("TCKDB scientific demo seed")
     print(f"  database_url: {db_url}")
     print(f"  marker note : {DEMO_NOTE!r}")
     print(f"  timestamp   : {datetime.now(timezone.utc).isoformat()}")

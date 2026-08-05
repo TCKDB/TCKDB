@@ -33,7 +33,6 @@ from app.services.cccbdb_molecular_property_import import (
     import_cccbdb_molecular_property_payloads,
 )
 
-
 _logger = logging.getLogger(__name__)
 
 

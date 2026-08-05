@@ -11,7 +11,6 @@ from pathlib import Path
 
 import yaml
 
-
 # ---- Unit conversion constants ----
 KCAL_TO_KJ = 4.184
 CAL_TO_J = 4.184
@@ -145,7 +144,10 @@ def _parse_thermo(data: dict) -> SpeciesThermo | None:
             t_values = _get_array_values(thermo_data_node["Tdata"])
             cp_units = thermo_data_node["Cpdata"].get("units", "cal/(mol*K)")
 
-            for t, cp in zip(t_values, cp_values):
+            # strict: Arkane serialises ThermoData's Tdata/Cpdata as parallel
+            # arrays, so a length mismatch means a corrupt file — raise rather
+            # than silently drop the tail of the Cp table.
+            for t, cp in zip(t_values, cp_values, strict=True):
                 if "cal" in cp_units and "kcal" not in cp_units:
                     cp_j = cp * CAL_TO_J
                 else:

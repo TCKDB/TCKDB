@@ -71,7 +71,7 @@ def _extract_e0_kj_mol(block: str) -> float:
     )
     m = pattern.search(block)
     if not m:
-        raise ValueError(f"Could not parse E0 from conformer block.")
+        raise ValueError("Could not parse E0 from conformer block.")
 
     value = float(m.group(1))
     units = m.group(2).strip()

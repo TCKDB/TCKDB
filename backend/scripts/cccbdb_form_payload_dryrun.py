@@ -54,7 +54,6 @@ from app.schemas.entities.molecular_property_observation import (
     MolecularPropertyObservationCreate,
 )
 
-
 _logger = logging.getLogger(__name__)
 
 
@@ -226,7 +225,7 @@ def _run_one_target(
                 resolver_strategy=parsed_file.resolver_strategy,
                 species_key=parsed_file.species_key,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             result.warnings.append(
                 f"{path.name}: builder raised "
                 f"{type(exc).__name__}: {exc}"
