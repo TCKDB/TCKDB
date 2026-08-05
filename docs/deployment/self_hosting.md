@@ -33,7 +33,7 @@ uncontroversial part. The real choice is **how you run the API**.
 
 Everything (DB, MinIO, API, worker) is a container; `docker compose up` brings
 the whole stack up. The API runs from a published image
-(`ghcr.io/<org>/tckdbv2/tckdb-api`, built by
+(`docker.io/laxzal/tckdb-api`, built by
 [`.github/workflows/build-api-image.yml`](../../.github/workflows/build-api-image.yml)).
 
 - **Pros:** maximum reproducibility (the image pins Python + every dependency),
@@ -233,8 +233,24 @@ verify. Never drop-and-recreate a deployed DB.
 ## CI/CD (Pattern A)
 
 [`build-api-image.yml`](../../.github/workflows/build-api-image.yml) builds and
-publishes a multi-arch image to `ghcr.io` on every push to `main` that touches
-the backend. That is the **build half**. The **deploy half** is deliberately
+publishes a multi-arch image (`linux/amd64` + `linux/arm64`) to Docker Hub as
+`laxzal/tckdb-api` on every push to `main` that touches the backend, and on a
+`v*` git tag. The image is public: no `docker login` is needed to pull it.
+
+Three tags are published, and which you use matters:
+
+| Tag | Mutable? | Use for |
+|---|---|---|
+| `latest` | **yes, it moves** | a scratch pull; never pin a deployment to it |
+| `sha-<full-commit>` | no | **what a deployment should pin to** — makes "which code is running" answerable |
+| `v1.2.3` / `v1.2` | no | what a paper or a citation quotes |
+
+Before publishing, CI runs the image: it must import (rdkit, tckdb_schemas,
+the app factory), migrate a fresh RDKit-cartridge database to head, serve
+`/api/v1/health`, and report `status: ok` with its inline worker thread alive.
+An arm64 import check runs under emulation as well, because arm64 is the
+deployment target and a dependency with no arm64 build would otherwise only
+fail on the Pi. That is the **build half**. The **deploy half** is deliberately
 left to the operator, because it involves a choice and a migration step:
 
 1. **Pull + restart** on the host — options: a small webhook that runs
