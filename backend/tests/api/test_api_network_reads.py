@@ -33,11 +33,41 @@ from app.db.models.network_pdep import (
 # ---------------------------------------------------------------------------
 
 
-_XYZ_ETHYL = "3\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nH 2.0 1.0 0.0"
-_XYZ_O2 = "2\n\nO 0.0 0.0 0.0\nO 1.21 0.0 0.0"
-_XYZ_ETOO = "4\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nO 2.5 0.0 0.0\nO 3.7 0.0 0.0"
-_XYZ_TS = "4\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nO 2.2 0.0 0.0\nO 3.4 0.0 0.0"
-_XYZ_AR = "1\n\nAr 0.0 0.0 0.0"
+# Every geometry below carries the atoms its species actually has. Ethyl used
+# to be "C C H" and ethylperoxy "C C O O" -- three and four atoms for species
+# that have seven and nine -- because nothing compared a deposited structure
+# against its own SMILES. The same rot was corrected in the PDep workflow
+# fixture when ``validate_transition_state_composition`` landed; these API
+# copies were missed. Coordinates stay schematic; composition does not.
+#
+# A ``_XYZ_TS`` constant sat here too, four atoms for a saddle point that this
+# payload never declares -- C2H5 + O2 -> C2H5OO is a barrierless association,
+# as the comment on ``micro_reactions`` says. It was dead, and dead fixture
+# chemistry that looks meaningful is worse than none, so it is gone.
+_XYZ_ETHYL = (
+    "7\nC2H5\n"
+    "C  0.00  0.00  0.00\n"
+    "C  1.49  0.00  0.00\n"
+    "H -0.38  1.01  0.00\n"
+    "H -0.38 -0.51  0.88\n"
+    "H -0.38 -0.51 -0.88\n"
+    "H  1.99  0.94  0.00\n"
+    "H  1.99 -0.94  0.00"
+)
+_XYZ_O2 = "2\nO2\nO 0.0 0.0 0.0\nO 1.21 0.0 0.0"
+_XYZ_ETOO = (
+    "9\nC2H5OO\n"
+    "C  0.00  0.00  0.00\n"
+    "C  1.51  0.00  0.00\n"
+    "O  2.05  1.28  0.00\n"
+    "O  3.44  1.30  0.00\n"
+    "H -0.38  1.01  0.00\n"
+    "H -0.38 -0.51  0.88\n"
+    "H -0.38 -0.51 -0.88\n"
+    "H  1.88 -0.53  0.88\n"
+    "H  1.88 -0.53 -0.88"
+)
+_XYZ_AR = "1\nAr\nAr 0.0 0.0 0.0"
 
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT_DFT = {"method": "B3LYP", "basis": "6-31G(d)"}

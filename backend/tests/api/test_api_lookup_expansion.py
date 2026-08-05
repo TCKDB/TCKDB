@@ -55,10 +55,35 @@ def _transport_payload(smiles: str = "[H]", mult: int = 2,
 
 
 def _pdep_payload(name: str = "net-lookup") -> dict:
-    xyz_ethyl = "3\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nH 2.0 1.0 0.0"
-    xyz_o2 = "2\n\nO 0.0 0.0 0.0\nO 1.21 0.0 0.0"
-    xyz_etoo = "4\n\nC 0.0 0.0 0.0\nC 1.54 0.0 0.0\nO 2.5 0.0 0.0\nO 3.7 0.0 0.0"
-    xyz_ar = "1\n\nAr 0.0 0.0 0.0"
+    # Composition matches the SMILES each geometry is deposited under: ethyl
+    # (``C[CH2]``) is C2H5, seven atoms, and ethylperoxy (``CCO[O]``) is
+    # C2H5O2, nine. They used to be "C C H" and "C C O O", hydrogens simply
+    # absent, which nothing compared against the identity. Coordinates are
+    # schematic; the atoms are not.
+    xyz_ethyl = (
+        "7\nC2H5\n"
+        "C  0.00  0.00  0.00\n"
+        "C  1.49  0.00  0.00\n"
+        "H -0.38  1.01  0.00\n"
+        "H -0.38 -0.51  0.88\n"
+        "H -0.38 -0.51 -0.88\n"
+        "H  1.99  0.94  0.00\n"
+        "H  1.99 -0.94  0.00"
+    )
+    xyz_o2 = "2\nO2\nO 0.0 0.0 0.0\nO 1.21 0.0 0.0"
+    xyz_etoo = (
+        "9\nC2H5OO\n"
+        "C  0.00  0.00  0.00\n"
+        "C  1.51  0.00  0.00\n"
+        "O  2.05  1.28  0.00\n"
+        "O  3.44  1.30  0.00\n"
+        "H -0.38  1.01  0.00\n"
+        "H -0.38 -0.51  0.88\n"
+        "H -0.38 -0.51 -0.88\n"
+        "H  1.88 -0.53  0.88\n"
+        "H  1.88 -0.53 -0.88"
+    )
+    xyz_ar = "1\nAr\nAr 0.0 0.0 0.0"
     software = {"name": "Gaussian", "version": "16"}
     lot = {"method": "B3LYP", "basis": "6-31G(d)"}
 
