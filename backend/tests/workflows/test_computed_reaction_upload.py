@@ -3037,7 +3037,13 @@ def test_computed_species_applied_correction_behavior_unchanged(db_engine) -> No
                 {
                     "key": "c0",
                     "geometry": {
-                        "xyz_text": "1\nHCl\nCl 0.0 0.0 0.0",
+                        # HCl, two atoms: Cl (index 1) and H (index 2), at the
+                        # experimental 1.2746 A bond length. The identity here
+                        # has always been HCl — SMILES ``Cl`` is hydrogen
+                        # chloride, not the chlorine atom, and multiplicity 1
+                        # agrees — but the geometry listed the chlorine alone
+                        # and dropped the hydrogen.
+                        "xyz_text": "2\nHCl\nCl 0.0 0.0 0.0\nH 0.0 0.0 1.2746",
                     },
                     "primary_calculation": {
                         "key": "opt0",

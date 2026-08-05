@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
 
 from rdkit import Chem
@@ -8,17 +9,19 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 
-from app.chemistry.geometry import parse_xyz
+from app.chemistry.geometry import normalize_element_symbol, parse_xyz
 from app.chemistry.species import (
     canonical_isotope_key,
     canonical_species_identity,
     classify_stereo_kind,
     derive_stereo_label_from_3d,
     derive_unmapped_smiles,
+    element_counts_from_smiles,
+    format_element_counts,
     identity_mol_from_smiles,
     isotope_substitutions,
 )
-from app.db.models.common import StereoKind
+from app.db.models.common import MoleculeKind, StereoKind
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
@@ -151,6 +154,100 @@ def assert_geometry_isotopes_match_identity(
     )
 
 
+def assert_geometry_composition_matches_identity(
+    payload: SpeciesEntryIdentityPayload,
+    geometry: GeometryPayload,
+) -> None:
+    """Refuse a deposit whose structure is not made of the atoms it declares.
+
+    Nothing checked this before. A species entry declares what it is in
+    ``smiles``; the geometry deposited under it is the structure that every
+    downstream number — energies, frequencies, partition functions, thermo —
+    is computed from. If the two name different molecules, the record is
+    internally contradictory: the identity says methane and the coordinates
+    describe methyl, and every consumer that trusts the label gets numbers for
+    a molecule nobody deposited.
+
+    Formula agreement between a structure and its own identifier is
+    **definitional** under ADR 0008 — no correct calculation can produce a
+    geometry that is not made of its own molecule's atoms — so it blocks,
+    exactly as :func:`app.services.reaction_resolution.validate_reaction_elemental_balance`
+    blocks the same class of contradiction one layer up and
+    :func:`~app.services.reaction_resolution.validate_transition_state_composition`
+    blocks it for a saddle point.
+
+    This is not a hypothetical. The pressure-dependent test fixtures stored
+    geometries with hydrogen omitted entirely — ethyl as three atoms, HO2 as
+    two — for as long as they existed, and nothing looked, because the only
+    composition check in the codebase compared a reaction's two *sides*
+    against each other and never a structure against its own label.
+
+    What is compared, and what deliberately is not
+    ----------------------------------------------
+    **Elements, not nuclides.** ``[2H]`` is stored as element ``H`` in the
+    canonical form, so counting isotope-resolved would refuse every
+    isotopologue. Isotope agreement is checked separately and exactly by
+    :func:`assert_geometry_isotopes_match_identity`.
+
+    **Counts, not positions.** Two structures with the same formula pass, even
+    if the connectivity differs — an isomer deposited under the wrong
+    identity is not caught here. Catching that needs 3D bond perception, which
+    fails silently on strained and radical systems, i.e. exactly where it
+    would matter; the same reasoning that stops
+    :func:`assert_geometry_isotopes_match_identity` from distinguishing
+    isotopomers.
+
+    **Charge is already owned elsewhere.** The SMILES formal charge is
+    compared against the declared ``charge`` by
+    :func:`app.chemistry.species.canonical_species_identity`, which blocks. Per
+    ADR 0008 the blocking tier owns a rule and the others cite it rather than
+    re-deriving it, so this function does not re-check charge — a second copy
+    could only disagree with the first.
+
+    **Absence does not block.** No geometry, or a SMILES RDKit will not parse,
+    is incompleteness rather than contradiction, and gets the tier an absent
+    atom map gets. (In practice an unparseable SMILES is already refused
+    upstream by the identity canonicalisation; the branch here exists so this
+    function is safe to call from anywhere.)
+
+    Pseudo-species are exempt, mirroring
+    :func:`~app.services.reaction_resolution.validate_reaction_elemental_balance`:
+    a lumped or phenomenological construct has no atom-resolved composition
+    for a geometry to agree with.
+
+    :param payload: Upload-facing resolved identity payload.
+    :param geometry: Upload-facing geometry payload deposited alongside it.
+    :raises ValueError: If the geometry's element counts contradict the
+        identity's own SMILES.
+    """
+
+    if payload.molecule_kind == MoleculeKind.pseudo:
+        return
+
+    try:
+        from_smiles = element_counts_from_smiles(payload.smiles)
+    except ValueError:
+        return
+
+    from_geometry: Counter[str] = Counter(
+        normalize_element_symbol(element)
+        for element, _x, _y, _z in parse_xyz(geometry).atoms
+    )
+    if from_smiles == from_geometry:
+        return
+
+    raise ValueError(
+        f"Species geometry is {format_element_counts(from_geometry)}, but "
+        f"species_entry.smiles={payload.smiles!r} is "
+        f"{format_element_counts(from_smiles)} "
+        "(species_geometry_composition_mismatch). A deposited structure must "
+        "be made of the atoms its own identifier declares, or every number "
+        "computed from it describes a different molecule. Hydrogens are "
+        "counted explicitly on both sides, and isotope labels are counted as "
+        "their element, so an isotopologue is not a mismatch."
+    )
+
+
 def resolve_species_entry(
     session: Session,
     payload: SpeciesEntryIdentityPayload,
@@ -173,21 +270,27 @@ def resolve_species_entry(
     :param created_by: Optional application user id for new rows.
     :param geometry: Optional geometry deposited with this entry. When given,
         it supplies 3D stereo perception and is cross-checked against the
-        identity's isotope labels.
+        identity's element composition and isotope labels.
     :param additional_geometries: Any further geometries deposited under this
-        same entry (the second and later conformers). They are isotope-checked
-        too but never used for stereo perception. Checking only the first
-        conformer let a deuterated entry store all-protium geometries for
-        every other conformer.
+        same entry (the second and later conformers). They are composition- and
+        isotope-checked too but never used for stereo perception. Checking only
+        the first conformer let a deuterated entry store all-protium geometries
+        for every other conformer.
     :returns: Existing or newly created ``SpeciesEntry`` row.
     :raises ValueError: If the underlying species identity cannot be
-        canonicalized, or the geometry contradicts the declared isotopes.
+        canonicalized, or a geometry contradicts the declared composition or
+        isotopes.
     """
 
-    if geometry is not None:
-        assert_geometry_isotopes_match_identity(payload, geometry)
-    for extra_geometry in additional_geometries:
-        assert_geometry_isotopes_match_identity(payload, extra_geometry)
+    # Composition first: a geometry made of the wrong atoms is the larger
+    # contradiction, and reporting "this is CH3, not CH4" reads better than an
+    # isotope-multiset complaint derived from the same broken structure.
+    for candidate_geometry in (
+        *(() if geometry is None else (geometry,)),
+        *additional_geometries,
+    ):
+        assert_geometry_composition_matches_identity(payload, candidate_geometry)
+        assert_geometry_isotopes_match_identity(payload, candidate_geometry)
 
     species = resolve_species(session, payload)
 

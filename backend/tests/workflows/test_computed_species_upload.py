@@ -7,7 +7,11 @@ through HTTP.
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 import pytest
+from rdkit import Chem
+from rdkit.Chem import AllChem
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -2362,16 +2366,40 @@ def _bac_melius_scheme_ref(**overrides) -> dict:
     return base
 
 
-_METHANE_GEOM = {
-    "xyz_text": (
-        "5\nmethane\n"
-        "C 0.0 0.0 0.0\n"
-        "H 0.629 0.629 0.629\n"
-        "H -0.629 -0.629 0.629\n"
-        "H -0.629 0.629 -0.629\n"
-        "H 0.629 -0.629 -0.629"
-    )
-}
+@lru_cache(maxsize=None)
+def _geom_for_smiles(smiles: str) -> str:
+    """Build an XYZ that is genuinely the molecule ``smiles`` names.
+
+    These bundles used to hand every species the same methane geometry, which
+    was accepted because nothing compared a deposited structure against its
+    own identifier. ``assert_geometry_composition_matches_identity`` now does,
+    and it is right to: a bundle claiming ``BrCCCCCCCCCCCCCCCO`` while storing
+    five atoms of methane is not a record of that molecule.
+
+    Generating from the SMILES rather than hand-writing coordinates makes
+    per-atom correctness structural instead of asserted: ``AddHs`` puts in
+    exactly the hydrogens the graph implies and ETKDG only assigns positions
+    to atoms that are already there, so the element multiset of the result is
+    the molecule's by construction and cannot drift as SMILES are added.
+    ``randomSeed`` is fixed so a rerun deposits the same geometry.
+
+    The coordinates are an embedded conformer, not an optimised structure —
+    these tests are about energy-correction bookkeeping and never read them.
+    """
+
+    mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    params = AllChem.ETKDGv3()
+    params.randomSeed = 0xC0FFEE
+    if AllChem.EmbedMolecule(mol, params) != 0:
+        raise AssertionError(f"RDKit could not embed a 3D structure for {smiles!r}")
+    conformer = mol.GetConformer()
+    lines = [str(mol.GetNumAtoms()), smiles]
+    for atom in mol.GetAtoms():
+        position = conformer.GetAtomPosition(atom.GetIdx())
+        lines.append(
+            f"{atom.GetSymbol()} {position.x:.4f} {position.y:.4f} {position.z:.4f}"
+        )
+    return "\n".join(lines)
 
 
 def _bundle_with_sp_calc(*, smiles: str, **overrides) -> dict:
@@ -2387,7 +2415,7 @@ def _bundle_with_sp_calc(*, smiles: str, **overrides) -> dict:
         "conformers": [
             {
                 "key": "c0",
-                "geometry": dict(_METHANE_GEOM),
+                "geometry": {"xyz_text": _geom_for_smiles(smiles)},
                 "primary_calculation": _calc("opt0", calc_type="opt"),
                 "additional_calculations": [
                     _calc("sp0", calc_type="sp"),

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
+from typing import Mapping
 
 from rdkit import Chem
 from rdkit.Chem import AllChem, inchi, rdDetermineBonds
 
+from app.chemistry.geometry import normalize_element_symbol
 from app.chemistry.isotopes import normalize_isotope, validate_isotope
 from app.db.models.common import MoleculeKind, StereoKind
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
@@ -134,6 +137,53 @@ def isotope_substitutions(smiles: str) -> dict[tuple[str, int], int]:
             key = (atom.GetSymbol(), mass_number)
             counts[key] = counts.get(key, 0) + 1
     return counts
+
+
+def element_counts_from_smiles(smiles: str) -> Counter[str]:
+    """Count the elements a SMILES declares, the way a geometry counts them.
+
+    Three normalisations make the result comparable against
+    ``geometry_atom.element`` and against another SMILES:
+
+    * **Hydrogens are made explicit.** A SMILES carries most of its hydrogens
+      implicitly (``C`` is methane, one atom in the graph and five in the
+      molecule), while an XYZ lists every nucleus. Without
+      :func:`rdkit.Chem.AddHs` every organic species would appear to be
+      missing its hydrogens.
+    * **Isotopes collapse to their element.** ``[2H]`` counts as ``H``. The
+      canonical form stores the element, not the nuclide, and isotopic
+      substitution changes masses rather than composition — counting
+      isotope-resolved would refuse every isotopologue whose geometry, quite
+      correctly, lists the same elements as the ordinary compound. Isotope
+      agreement is a separate check with its own multiset comparison
+      (:func:`app.services.species_resolution.assert_geometry_isotopes_match_identity`).
+    * **Symbols are normalised** through
+      :func:`~app.chemistry.geometry.normalize_element_symbol`, because the
+      other side of every comparison is an XYZ element stored verbatim and
+      electronic-structure codes disagree about capitalisation.
+
+    :param smiles: SMILES string to count.
+    :returns: Mapping of normalised element symbol to atom count.
+    :raises ValueError: If RDKit cannot parse the SMILES string.
+    """
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError(f"RDKit failed to parse SMILES: {smiles}")
+    mol = Chem.AddHs(mol)
+    counts: Counter[str] = Counter()
+    for atom in mol.GetAtoms():
+        counts[normalize_element_symbol(atom.GetSymbol())] += 1
+    return counts
+
+
+def format_element_counts(counts: Mapping[str, int]) -> str:
+    """Render an element count as a formula, for an error a human can read."""
+
+    return "".join(
+        f"{element}{count if count > 1 else ''}"
+        for element, count in sorted(counts.items())
+    )
 
 
 def derive_unmapped_smiles(smiles: str) -> str:
