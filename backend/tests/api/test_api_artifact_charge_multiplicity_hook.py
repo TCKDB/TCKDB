@@ -26,6 +26,53 @@ MOLPRO_CH4_LOG = (
 W_CHARGE = "charge_mismatch"
 W_MULT = "multiplicity_mismatch"
 
+# Every payload below used to carry the same one-atom geometry,
+# ``1\nC atom\nC 0.0 0.0 0.0``, whatever species it declared -- a lone carbon
+# under methyl, methylene, methylene cation and methane alike. The geometry is
+# incidental to what these tests assert (charge and multiplicity read out of a
+# log header), which is exactly why nobody looked, and
+# ``assert_geometry_composition_matches_identity`` now refuses it: a structure
+# has to be made of the atoms its own identifier declares.
+#
+# Coordinates are schematic but the atoms are the molecules', per species:
+_GEOMETRY_BY_SMILES = {
+    # Methyl radical, CH3. Planar D3h: C at the origin (index 1), three H in
+    # the z = 0 plane at 1.079 A (indices 2-4).
+    "[CH3]": (
+        "4\nmethyl\n"
+        "C  0.0000  0.0000  0.0000\n"
+        "H  1.0790  0.0000  0.0000\n"
+        "H -0.5395  0.9345  0.0000\n"
+        "H -0.5395 -0.9345  0.0000"
+    ),
+    # Methylene cation, CH2+. C at the origin (index 1), two H at 1.09 A
+    # (indices 2-3); CH2+ is quasi-linear, so they sit opposite each other.
+    "[CH2+]": (
+        "3\nmethylene cation\n"
+        "C  0.0000  0.0000  0.0000\n"
+        "H  1.0900  0.0000  0.0000\n"
+        "H -1.0900  0.0000  0.0000"
+    ),
+    # Methylene, CH2. C at the origin (index 1), two H at 1.03 A (indices 2-3)
+    # with the ~134 degree H-C-H angle of the triplet ground state.
+    "[CH2]": (
+        "3\nmethylene\n"
+        "C  0.0000  0.0000  0.0000\n"
+        "H  0.4020  0.9480  0.0000\n"
+        "H  0.4020 -0.9480  0.0000"
+    ),
+    # Methane, CH4. C at the origin (index 1), four H at the tetrahedral
+    # vertices (indices 2-5).
+    "C": (
+        "5\nmethane\n"
+        "C  0.000  0.000  0.000\n"
+        "H  0.629  0.629  0.629\n"
+        "H -0.629 -0.629  0.629\n"
+        "H -0.629  0.629 -0.629\n"
+        "H  0.629 -0.629 -0.629"
+    ),
+}
+
 
 @pytest.fixture
 def stub_store_artifact(monkeypatch) -> list[tuple[str, str]]:
@@ -61,7 +108,7 @@ def _conformer_payload(*, smiles: str, charge: int, multiplicity: int) -> dict:
             "charge": charge,
             "multiplicity": multiplicity,
         },
-        "geometry": {"xyz_text": "1\nC atom\nC 0.0 0.0 0.0"},
+        "geometry": {"xyz_text": _GEOMETRY_BY_SMILES[smiles]},
         # An ``opt`` calculation keeps the single-point-energy hook out of the
         # way so the warnings under test are unambiguous.
         "calculation": {
@@ -240,7 +287,7 @@ def _computed_species_bundle(*, charge: int, multiplicity: int) -> dict:
         "conformers": [
             {
                 "key": "c0",
-                "geometry": {"xyz_text": "1\nC atom\nC 0.0 0.0 0.0"},
+                "geometry": {"xyz_text": _GEOMETRY_BY_SMILES["C"]},
                 "primary_calculation": {
                     "key": "opt0",
                     "type": "opt",

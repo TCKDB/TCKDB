@@ -90,6 +90,27 @@ def _artifact(content: bytes, *, kind: str, filename: str) -> dict:
     return {"kind": kind, "filename": filename, "content_base64": _b64(content)}
 
 
+def _smiles_for(xyz: str) -> str:
+    """Name the collection of separated atoms that ``xyz`` actually is.
+
+    These geometries are deliberately not molecules. ``_xyz`` spaces its atoms
+    five Angstrom apart precisely so no bonds are perceived, and
+    ``_orca_frame_xyz`` reproduces a saddle-point frame; only the atom count
+    and the elements matter for binding a Hessian to a geometry.
+
+    The species entry nevertheless declared ``C`` -- methane -- for every one
+    of them, so a twelve-atom deposit claimed to be a five-atom molecule.
+    ``assert_geometry_composition_matches_identity`` refuses that, and rightly:
+    the identity has to be made of the atoms the structure has. A
+    dot-separated set of bare atoms is the honest identity here, it is exactly
+    what the coordinates describe, and it stays correct for any ``natoms`` a
+    later test asks for rather than needing a hand-picked molecule per count.
+    """
+
+    elements = [line.split()[0] for line in xyz.strip().splitlines()[2:]]
+    return ".".join(f"[{element}]" for element in elements)
+
+
 def _conformer_payload(
     *,
     natoms: int,
@@ -110,9 +131,14 @@ def _conformer_payload(
         calc["opt_result"] = {"converged": True}
     if input_geometries is not None:
         calc["input_geometries"] = [{"xyz_text": g} for g in input_geometries]
+    geometry_xyz = xyz if xyz is not None else _xyz(natoms)
     return {
-        "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
-        "geometry": {"xyz_text": xyz if xyz is not None else _xyz(natoms)},
+        "species_entry": {
+            "smiles": _smiles_for(geometry_xyz),
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        "geometry": {"xyz_text": geometry_xyz},
         "calculation": calc,
         "label": "hessian-hook",
     }
@@ -330,7 +356,11 @@ def _computed_species_bundle(*, natoms: int) -> dict:
     The freq calc links the conformer geometry as its input geometry (via the
     freq/sp fallback), so the inline Hessian binds to it."""
     return {
-        "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
+        "species_entry": {
+            "smiles": _smiles_for(_xyz(natoms)),
+            "charge": 0,
+            "multiplicity": 1,
+        },
         "conformers": [
             {
                 "key": "c0",
