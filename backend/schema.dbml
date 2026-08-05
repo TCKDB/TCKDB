@@ -2429,6 +2429,7 @@ Table reaction_atom_map_pair {
   transition_state_geometry_id bigint [not null, ref: > geometry_atom.geometry_id]
   ts_atom_index int [not null, ref: > geometry_atom.atom_index]
   element varchar(2) [not null, ref: > geometry_atom.element]
+  ts_element varchar(2) [not null, ref: > geometry_atom.element]
 
   indexes {
     (atom_map_id, structure_participant_id, atom_index) [unique, name: 'uq_reaction_atom_map_pair_atom_map_id']
@@ -2437,6 +2438,7 @@ Table reaction_atom_map_pair {
 
   checks {
     `atom_index >= 1` [name: 'ck_reaction_atom_map_pair_atom_index_ge_1']
+    `upper(element) = upper(ts_element)` [name: 'ck_reaction_atom_map_pair_element_matches']
     `ts_atom_index >= 1` [name: 'ck_reaction_atom_map_pair_ts_atom_index_ge_1']
   }
 
@@ -3420,4 +3422,4 @@ Ref fk_reaction_atom_map_pair_geometry_id_geometry_atom: reaction_atom_map_pair.
 
 Ref fk_reaction_atom_map_pair_structure_participant: reaction_atom_map_pair.(structure_participant_id, side) > reaction_entry_structure_participant.(id, role)
 
-Ref fk_reaction_atom_map_pair_ts_geometry_id_geometry_atom: reaction_atom_map_pair.(transition_state_geometry_id, ts_atom_index, element) > geometry_atom.(geometry_id, atom_index, element)
+Ref fk_reaction_atom_map_pair_ts_geometry_id_geometry_atom: reaction_atom_map_pair.(transition_state_geometry_id, ts_atom_index, ts_element) > geometry_atom.(geometry_id, atom_index, element)

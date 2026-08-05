@@ -117,11 +117,23 @@ _CONVENTIONS = {
 
 # The elimination TS has nine atoms (C2H5O2). Passing IRC evidence must
 # account for every one of them on BOTH sides: the whole C2H5OO skeleton on
-# the reactant side, splitting into C2H4 (six atoms) and HO2 (three) on the
-# product side.
+# the reactant side, splitting into C2H4 and HO2 on the product side.
+#
+# ``_XYZ_TS`` lists them in the order ``1 C, 2 C, 3 O, 4 O, 5-9 H``, and the
+# partition has to follow the *atoms*, not just their count. The micro
+# reaction is ethylperoxy -> ethene + HO2, so ``product:1`` (C2H4) takes both
+# carbons and four hydrogens, and ``product:2`` (HO2) takes both oxygens and
+# the fifth hydrogen. Handing ethene the oxygens would still cover nine atoms
+# exactly once and still pass, because
+# ``transition_state_validation_evidence`` bounds-checks the partition and
+# never element-checks it — so the indices below are only as trustworthy as
+# this comment, and both are stated against the geometry above.
 _ELIM_TS_ATOMS = list(range(1, 10))
 _ELIM_REACTANT_MAP = {"reactant:1": _ELIM_TS_ATOMS}
-_ELIM_PRODUCT_MAP = {"product:1": [1, 2, 3, 4, 5, 6], "product:2": [7, 8, 9]}
+_ELIM_PRODUCT_MAP = {
+    "product:1": [1, 2, 5, 6, 7, 8],  # C2H4: C, C, H, H, H, H
+    "product:2": [3, 4, 9],  # HO2: O, O, H
+}
 
 
 def _full_payload(*, include_solve: bool = True) -> dict:
@@ -2336,10 +2348,49 @@ def test_transition_state_without_irc_evidence_succeeds_with_a_warning(
         network = persist_network_pdep_upload(session, request, warnings=warnings)
         session.flush()
         assert network.id is not None
+        # Two absences, both about the same saddle point and both stated:
+        # nothing evidences that it connects its declared endpoints, and
+        # nothing says which atom of the reactants is which atom of it.
         assert [w.code for w in warnings] == [
-            "transition_state_missing_irc_evidence"
+            "transition_state_missing_irc_evidence",
+            "reaction_atom_map_absent",
         ]
-        assert "ts_elim" in warnings[0].field
+        assert all("ts_elim" in w.field for w in warnings)
+
+
+def test_every_pdep_saddle_point_reports_its_missing_atom_map(
+    db_engine,
+) -> None:
+    """A network's micro reactions are reactions, and their gaps are visible.
+
+    ADR 0011 accepts an unmapped reaction — the rate constant is still the rate
+    constant — on condition that the absence is *stated*, loudly enough that a
+    depositor who has the mapping notices they are being asked for it. Before
+    this warning existed, every micro reaction in a pressure-dependent network
+    deposited unmapped and silent, which is precisely the invisible absence the
+    decision was written to remove.
+    """
+    payload = _full_payload()
+
+    with _rolled_back_session(db_engine) as session:
+        warnings: list[UploadWarning] = []
+        request = NetworkPDepUploadRequest(**payload)
+        persist_network_pdep_upload(session, request, warnings=warnings)
+        session.flush()
+
+    absent = [w for w in warnings if w.code == "reaction_atom_map_absent"]
+    # One per saddle point. The barrierless association path declares no
+    # transition state, so it is correctly not warned about: both legs of a map
+    # run toward a saddle point there is none of.
+    assert len(absent) == len(request.transition_states)
+    assert {w.field for w in absent} == {
+        f"transition_states[{ts.key}].atom_map" for ts in request.transition_states
+    }
+    # And it does not send a depositor looking for a field this bundle has not
+    # got: a warning that cannot be acted on is the kind nobody reads.
+    assert "cannot yet carry a map" in absent[0].message
+    assert "computed-reaction upload" in absent[0].message
+    assert "atom_map" not in set(NetworkPDepUploadRequest.model_fields)
 
 
 def test_multiple_transition_states_per_micro_reaction_are_accepted() -> None:

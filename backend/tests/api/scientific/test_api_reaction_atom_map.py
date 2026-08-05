@@ -303,3 +303,60 @@ def test_reaction_search_advertises_whether_a_reaction_is_mapped(client):
         records = resp.json()["records"]
         assert len(records) == 1
         assert records[0]["availability"]["has_atom_map"] is expected
+
+
+def test_atom_map_expansion_is_capped_like_every_other_section(
+    client, monkeypatch
+):
+    """The cap applies regardless of how the section was requested.
+
+    ``atom_map`` was the one ``/full`` expansion with no ceiling, which made it
+    the way past a policy the other four sections all obey. The cap counts
+    *pairs*, not maps: a reaction carries one map per saddle-point candidate
+    and each holds a row per atom per leg, so the pairs are the leaf rows that
+    can actually run away on a large transition state.
+    """
+    from app.api.config import settings
+
+    result = _upload(client, _map())
+    reaction_entry_id = result["reaction_entry_id"]
+
+    # Ten pairs for CH3 + H -> CH4; a ceiling of nine is one too few.
+    monkeypatch.setattr(settings, "max_full_atom_map_pairs_public", 9)
+    resp = client.get(
+        f"/api/v1/scientific/reaction-entries/{reaction_entry_id}/full"
+        "?include=atom_map"
+    )
+    assert resp.status_code == 422
+    assert "query_too_expensive" in resp.json()["detail"]
+    assert "atom_map_pairs" in resp.json()["detail"]
+
+    # ``include=all`` is not a way around it either.
+    resp = client.get(
+        f"/api/v1/scientific/reaction-entries/{reaction_entry_id}/full"
+        "?include=all"
+    )
+    assert resp.status_code == 422
+    assert "query_too_expensive" in resp.json()["detail"]
+
+    # And the section is served when it fits.
+    monkeypatch.setattr(settings, "max_full_atom_map_pairs_public", 10)
+    body = _full(client, reaction_entry_id, "atom_map")
+    assert len(body["atom_map"][0]["pairs"]) == 10
+
+
+def test_the_atom_map_badge_is_not_subject_to_the_pair_cap(client, monkeypatch):
+    """The header badge carries no pairs, so it cannot be capped away.
+
+    Whether a reaction is mapped at all is the one thing ADR 0011 refuses to
+    put behind a second request; a cap that hid it would reintroduce exactly
+    the indistinguishability the decision removes.
+    """
+    from app.api.config import settings
+
+    result = _upload(client, _map())
+    monkeypatch.setattr(settings, "max_full_atom_map_pairs_public", 1)
+
+    body = _full(client, result["reaction_entry_id"])
+    assert body["atom_map"] is None
+    assert len(body["reaction_entry"]["atom_maps"]) == 1

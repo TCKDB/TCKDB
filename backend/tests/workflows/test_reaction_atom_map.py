@@ -333,6 +333,107 @@ def test_inferred_map_without_a_note_is_refused(db_engine) -> None:
         ComputedReactionUploadRequest(**payload)
 
 
+def test_a_blank_note_does_not_name_an_algorithm(db_engine) -> None:
+    """Whitespace is not the name of an inference engine.
+
+    Without normalisation ``note='   '`` satisfies "an inferred map says what
+    inferred it" while saying nothing, which is the anonymous inferred map
+    ADR 0011 refuses, admitted through a loophole.
+    """
+    payload = _payload()
+    payload["atom_map"] = _complete_map(source="inferred", note="   ")
+    with pytest.raises(ValidationError, match="requires atom_map.note"):
+        ComputedReactionUploadRequest(**payload)
+
+
+def test_a_declared_map_note_is_trimmed(db_engine) -> None:
+    payload = _payload()
+    payload["atom_map"] = _complete_map(note="  followed the IRC by hand  ")
+    with _isolated_session(db_engine) as session:
+        result = _upload(session, payload)
+        atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
+        assert atom_map.note == "followed the IRC by hand"
+
+
+def test_a_blank_declared_note_becomes_no_note(db_engine) -> None:
+    payload = _payload()
+    payload["atom_map"] = _complete_map(note="  ")
+    with _isolated_session(db_engine) as session:
+        result = _upload(session, payload)
+        atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
+        assert atom_map.note is None
+
+
+def test_database_refuses_relabelling_an_inferred_map_as_declared(
+    db_engine,
+) -> None:
+    """The laundering path, closed where a second write path cannot reopen it.
+
+    ``ck_reaction_atom_map_inferred_requires_note`` constrains only the
+    ``inferred`` member, so ``SET source='declared', note=NULL`` satisfies the
+    check as written and commits: the row then reads back as a depositor's own
+    statement about a mechanism an algorithm produced. There is no API route
+    that does this — which is exactly why it is a trigger, per ADR 0010's
+    argument about rules that hold only because today's code happens not to
+    exercise them.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    payload = _payload()
+    payload["atom_map"] = _complete_map(
+        source="inferred", note="mapped by RXNMapper"
+    )
+
+    with _isolated_session(db_engine) as session:
+        result = _upload(session, payload)
+        atom_map_id = result["atom_map_id"]
+
+        with pytest.raises(DBAPIError) as excinfo:
+            session.execute(
+                text(
+                    "UPDATE reaction_atom_map "
+                    "SET source = 'declared', note = NULL WHERE id = :id"
+                ),
+                {"id": atom_map_id},
+            )
+        assert "atom_map_source_is_immutable" in str(excinfo.value)
+
+
+def test_an_inferred_map_may_still_have_its_note_corrected(db_engine) -> None:
+    """Freezing the token must not freeze the record it labels.
+
+    A depositor correcting the name of the algorithm is completing the record,
+    not changing what it claims. Removing the note entirely is still refused,
+    by the check constraint that was there already — with ``source`` frozen,
+    the two together close the hole without making the row read-only.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+
+    payload = _payload()
+    payload["atom_map"] = _complete_map(source="inferred", note="RXNMapper")
+
+    with _isolated_session(db_engine) as session:
+        result = _upload(session, payload)
+        atom_map_id = result["atom_map_id"]
+
+        session.execute(
+            text("UPDATE reaction_atom_map SET note = :note WHERE id = :id"),
+            {"note": "RXNMapper v1.1.0", "id": atom_map_id},
+        )
+        session.expire_all()
+        assert session.get(ReactionAtomMap, atom_map_id).note == "RXNMapper v1.1.0"
+
+        with pytest.raises(IntegrityError):
+            session.execute(
+                text(
+                    "UPDATE reaction_atom_map SET note = NULL WHERE id = :id"
+                ),
+                {"id": atom_map_id},
+            )
+
+
 # ---------------------------------------------------------------------------
 # Absence warns
 # ---------------------------------------------------------------------------
@@ -647,8 +748,127 @@ def test_same_participant_mapped_twice_is_refused(db_engine) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Capitalisation is not chemistry
+# ---------------------------------------------------------------------------
+
+#: Methyl and the saddle point, with the same atoms written in different case.
+#: ``geometry_atom.element`` stores the depositor's symbol verbatim, so this is
+#: what a reactant optimised in one program and a saddle point located in
+#: another actually looks like once both are in the database.
+_XYZ_CH3_LOWER = (
+    "4\nmethyl, elements whispered\n"
+    "c  0.000  0.000  0.000\n"
+    "h  1.080  0.000  0.000\n"
+    "h -0.540  0.935  0.000\n"
+    "h -0.540 -0.935  0.000"
+)
+
+
+def test_map_across_geometries_that_disagree_only_about_case_persists(
+    db_engine,
+) -> None:
+    """``c`` and ``C`` are one element, and a map across them is one map.
+
+    Both ends of a pair quote a *different* geometry, and each geometry stores
+    the element symbol its own XYZ wrote. If the two ends are compared raw, or
+    forced through one shared column, then a depositor whose reactant came out
+    of a program that writes ``c`` and whose saddle point came out of one that
+    writes ``C`` cannot record a correct map at all — refused for a capital
+    letter, which is the failure ADR 0008 puts out of bounds.
+
+    The map here is the same map as everywhere else in this module; only the
+    methyl geometry's capitalisation differs.
+    """
+    payload = _payload()
+    payload["species"][0] = _species("ch3", "[CH3]", 2, _XYZ_CH3_LOWER)
+    payload["atom_map"] = _complete_map()
+
+    with _isolated_session(db_engine) as session:
+        result = _upload(session, payload)
+
+        atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
+        assert atom_map is not None
+
+        pairs = session.scalars(
+            select(ReactionAtomMapPair).where(
+                ReactionAtomMapPair.atom_map_id == atom_map.id
+            )
+        ).all()
+        assert len(pairs) == 10
+
+        # Each end kept the spelling of the geometry it points at, which is
+        # what lets both composite foreign keys into ``geometry_atom`` resolve.
+        methyl_carbon = next(
+            pair
+            for pair in pairs
+            if pair.side is ReactionRole.reactant
+            and pair.geometry_id != atom_map.transition_state_geometry_id
+            and pair.atom_index == 1
+            and pair.ts_atom_index == 1
+        )
+        assert methyl_carbon.element.strip() == "c"
+        assert methyl_carbon.ts_element.strip() == "C"
+
+
+def test_an_element_really_changing_across_the_map_is_still_refused(
+    db_engine,
+) -> None:
+    """Normalising case must not cost the rule it is normalising for.
+
+    Carbon becoming nitrogen is a record that cannot be what it says it is, and
+    it blocks — the map is refused at the schema boundary before anything is
+    written.
+    """
+    payload = _payload()
+    payload["species"][0] = _species("nh3", "N", 1, _XYZ_NH3)
+    payload["reactant_keys"] = ["nh3", "h"]
+    atom_map = _complete_map()
+    for participant in atom_map["participants"]:
+        if participant["species_key"] == "ch3":
+            participant["species_key"] = "nh3"
+            participant["geometry_key"] = "nh3-geom"
+    payload["atom_map"] = atom_map
+
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**payload)
+    assert "An element does not change across a reaction" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
 # The database refuses these too, not only the API
 # ---------------------------------------------------------------------------
+
+
+def test_database_refuses_a_pair_whose_two_ends_are_really_different_elements(
+    db_engine,
+) -> None:
+    """The check constraint owns the element rule; prove it is not dead.
+
+    Both foreign keys can resolve and the pair still be a lie: point the
+    saddle-point end at a real hydrogen atom of the saddle-point geometry and
+    give it that hydrogen's own element, and only
+    ``ck_reaction_atom_map_pair_element_matches`` stands between the write and
+    a carbon that became a hydrogen. Going around the service layer entirely,
+    which is the write path this constraint exists for.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    payload = _payload()
+    payload["atom_map"] = _complete_map()
+
+    with _isolated_session(db_engine) as session:
+        result = _upload(session, payload)
+        pair = session.scalars(
+            select(ReactionAtomMapPair)
+            .where(ReactionAtomMapPair.atom_map_id == result["atom_map_id"])
+            .where(ReactionAtomMapPair.element == "C ")
+        ).first()
+        assert pair is not None
+        pair.ts_atom_index = 5
+        pair.ts_element = "H "
+        with pytest.raises(IntegrityError) as excinfo:
+            session.flush()
+    assert "element_matches" in str(excinfo.value)
 
 
 def test_database_refuses_a_pair_whose_two_ends_are_different_elements(

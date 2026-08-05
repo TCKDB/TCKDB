@@ -290,6 +290,16 @@ def get_reaction_full(
             if conformers_block is not None
             else None
         ),
+        # Same leaf-row rule: a reaction carries at most a handful of maps,
+        # but each one holds a pair per atom per leg, so the pairs are what
+        # can actually run away on a large saddle point. Counted only when
+        # the section was expanded — the always-present ``atom_maps`` badge
+        # on the header carries no pairs.
+        atom_map_pairs=(
+            [pair for detail in atom_map_block for pair in detail.pairs]
+            if atom_map_block is not None
+            else None
+        ),
     )
 
     review_records_block: list[ReviewRecordEntry] | None = None
@@ -1229,6 +1239,7 @@ def _enforce_full_expansion_caps(
     geometries: list | None,
     artifacts: list | None,
     conformer_groups: list | None = None,
+    atom_map_pairs: list | None = None,
 ) -> None:
     """Reject /full responses whose expanded sub-arrays exceed the caps.
 
@@ -1241,6 +1252,10 @@ def _enforce_full_expansion_caps(
     (heavy leaf rows), not the species-participant grouping list — the
     cap counts conformer-group rows so a heavily-studied species with
     many basins can't tunnel past it via a single participant.
+
+    ``atom_map_pairs`` is likewise flattened across the reaction's maps:
+    a reaction has few maps and each holds one row per atom per leg, so
+    the pairs are the leaf rows and the maps are the grouping ones.
     """
     pairs: list[tuple[str, list | None, int]] = [
         ("calculations", calculations, settings.max_full_calculations_public),
@@ -1250,6 +1265,11 @@ def _enforce_full_expansion_caps(
             "conformer_groups",
             conformer_groups,
             settings.max_full_conformer_groups_public,
+        ),
+        (
+            "atom_map_pairs",
+            atom_map_pairs,
+            settings.max_full_atom_map_pairs_public,
         ),
     ]
     for section_name, block, cap in pairs:

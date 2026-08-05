@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.chemistry.geometry import normalize_element_symbol
 from app.db.models.common import MoleculeKind, ReactionRole
 from app.db.models.geometry import GeometryAtom
 from app.db.models.reaction import (
@@ -73,7 +74,7 @@ def _element_counts_for_species(species: Species) -> Counter[str]:
     mol = Chem.AddHs(mol)
     counts: Counter[str] = Counter()
     for atom in mol.GetAtoms():
-        counts[atom.GetSymbol()] += 1
+        counts[normalize_element_symbol(atom.GetSymbol())] += 1
     return counts
 
 
@@ -255,6 +256,16 @@ def _transition_state_element_counts(
     as saying nothing rather than as a contradiction — a transition-state
     SMILES is a lossy description of a structure that is, by construction, not
     a stable molecule.
+
+    Both branches are normalised through
+    :func:`~app.chemistry.geometry.normalize_element_symbol` before they are
+    counted, and so is the reactant side, because the two sources disagree
+    about capitalisation by construction: ``geometry_atom.element`` holds
+    whatever the depositor's XYZ said, while ``_element_counts_for_species``
+    reads RDKit's title-case ``GetSymbol()``. Comparing them raw makes a saddle
+    point written ``CL`` or ``c`` contradict a reaction it is in fact made of,
+    which refuses correct chemistry over a string — the failure ADR 0008 puts
+    out of bounds for a blocking check.
     """
 
     if transition_state_geometry_id is not None:
@@ -264,13 +275,15 @@ def _transition_state_element_counts(
             )
         ).all()
         if elements:
-            return Counter(element.strip() for element in elements)
+            return Counter(normalize_element_symbol(element) for element in elements)
 
     if transition_state_smiles is not None:
         mol = Chem.MolFromSmiles(transition_state_smiles)
         if mol is not None:
             mol = Chem.AddHs(mol)
-            return Counter(atom.GetSymbol() for atom in mol.GetAtoms())
+            return Counter(
+                normalize_element_symbol(atom.GetSymbol()) for atom in mol.GetAtoms()
+            )
 
     return None
 

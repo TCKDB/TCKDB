@@ -1,8 +1,18 @@
 """Persistence seam for a reaction's atom map (ADR 0011).
 
-Every deposit path that can carry both a transition state and geometries for
-its reactants and products routes through here, so all of them write identical
-rows and report an identical gap.
+Every deposit path that can carry a transition state routes through here, so
+all of them report an identical gap. They do **not** all write maps: only
+:func:`app.workflows.computed_reaction.persist_computed_reaction_upload`
+accepts one, because only its bundle schema has an ``atom_map`` field.
+
+``persist_network_pdep_upload`` calls this seam with ``atom_map=None`` for
+every saddle point it deposits, which is not a formality — a pressure-dependent
+network is a set of micro reactions, and before that call every one of them was
+deposited unmapped *and silent*, which is exactly the invisible absence
+ADR 0011 exists to remove. Until the PDep bundle grows an ``atom_map`` field
+the warning is all that path can honestly offer, so it says so rather than
+telling a depositor to fill in a field that does not exist: see
+``_PDEP_ABSENCE_REMEDY`` in :mod:`app.workflows.network_pdep`.
 
 Blocking validation is *not* here. A self-contradictory map is refused by
 :func:`tckdb_schemas.fragments.reaction_atom_map.validate_reaction_atom_map`
@@ -41,12 +51,20 @@ from tckdb_schemas.enums import ReactionRole as WireReactionRole
 from tckdb_schemas.fragments.reaction_atom_map import ReactionAtomMapIn
 from tckdb_schemas.upload_warning import UploadWarning
 
+from app.chemistry.geometry import normalize_element_symbol
 from app.db.models.common import AtomMapSource, ReactionRole
 from app.db.models.geometry import GeometryAtom
 from app.db.models.reaction_atom_map import ReactionAtomMap, ReactionAtomMapPair
 
 #: Emitted when a reaction with a transition state is deposited without a map.
 W_MISSING_REACTION_ATOM_MAP = "reaction_atom_map_absent"
+
+#: Closing sentence of the absence warning on a path whose payload schema has
+#: an ``atom_map`` field to fill in.
+SUPPLY_THE_MAP_REMEDY = (
+    "If you followed the intrinsic reaction coordinate, you already have "
+    "this — supply it as 'atom_map' (ADR 0011)."
+)
 
 #: Emitted when a map omits a declared participant molecule entirely.
 W_ATOM_MAP_PARTICIPANTS_INCOMPLETE = "reaction_atom_map_participants_incomplete"
@@ -86,6 +104,7 @@ def persist_reaction_atom_map(
     participants: Sequence[ResolvedAtomMapParticipant],
     geometry_id_by_key: Mapping[str, int],
     field_path: str = "atom_map",
+    absence_remedy: str = SUPPLY_THE_MAP_REMEDY,
     created_by: int | None = None,
     warnings: list[UploadWarning] | None = None,
 ) -> ReactionAtomMap | None:
@@ -101,6 +120,10 @@ def persist_reaction_atom_map(
     :param participants: Every participant the reaction declares, resolved.
     :param geometry_id_by_key: Bundle-local geometry key → persisted geometry
         id, covering every geometry the map may name.
+    :param absence_remedy: Closing sentence of the absence warning, telling
+        this deposit path's user what to actually do. Overridden by a path
+        whose payload schema has nowhere to put a map, so the warning does not
+        name a field that does not exist.
     :param warnings: Optional sink for the absence and incompleteness warnings.
     :returns: The persisted map, or ``None`` when none was supplied.
     """
@@ -110,6 +133,7 @@ def persist_reaction_atom_map(
             warnings,
             field_path=field_path,
             transition_state_entry_id=transition_state_entry_id,
+            absence_remedy=absence_remedy,
         )
         return None
 
@@ -186,7 +210,16 @@ def persist_reaction_atom_map(
                     f"{ts_atom_index}, which the saddle-point geometry does "
                     "not have."
                 )
-            if element != ts_element:
+            # Compared normalised, stored raw. The two ends quote two
+            # geometries, each of which stores the element symbol its own XYZ
+            # wrote: ``Cl`` and ``CL`` are one element written by two
+            # programs, and refusing that map would reject correct chemistry
+            # over a capital letter, which ADR 0008 puts out of bounds for a
+            # blocking check. Carbon becoming nitrogen still cannot be what it
+            # says it is, and still blocks.
+            if normalize_element_symbol(element) != normalize_element_symbol(
+                ts_element
+            ):
                 raise ValueError(
                     f"{field_path} maps atom {atom_index} of {side.value} "
                     f"{mapping.participant_index}, which is {element}, onto "
@@ -203,7 +236,11 @@ def persist_reaction_atom_map(
                     atom_index=atom_index,
                     transition_state_geometry_id=transition_state_geometry_id,
                     ts_atom_index=ts_atom_index,
+                    # Each end stores what its own geometry stores, so both
+                    # composite foreign keys into ``geometry_atom`` resolve
+                    # even when the two geometries disagree about case.
                     element=element,
+                    ts_element=ts_element,
                 )
             )
             claimed_ts_by_side[side].add(ts_atom_index)
@@ -238,7 +275,15 @@ def _element_index(
     The element is read from the stored geometry rather than taken from the
     payload: the map's element consistency is a claim about what the deposited
     geometries actually contain, and ``reaction_atom_map_pair`` carries the
-    value into two foreign keys that make the claim structural.
+    values into two foreign keys that make the claim structural.
+
+    Returned **as stored**, only unpadded — ``geometry_atom.element`` is
+    ``character(2)``, so a one-letter symbol reads back as ``"C "``. It is not
+    case-normalised here, because each value has to go back into its own
+    geometry's foreign key exactly as that geometry spells it; callers
+    normalise through
+    :func:`~app.chemistry.geometry.normalize_element_symbol` when they
+    *compare*.
     """
 
     rows = session.execute(
@@ -265,6 +310,7 @@ def _warn_absent(
     *,
     field_path: str,
     transition_state_entry_id: int | None,
+    absence_remedy: str = SUPPLY_THE_MAP_REMEDY,
 ) -> None:
     if warnings is None or transition_state_entry_id is None:
         return
@@ -283,9 +329,8 @@ def _warn_absent(
                 "atom-mapped form reaction machine learning consumes. TCKDB "
                 "will not infer one: several chemically distinct maps are "
                 "usually consistent with the same reactants and products, and "
-                "choosing one by algorithm would manufacture provenance. If "
-                "you followed the intrinsic reaction coordinate, you already "
-                "have this — supply it as 'atom_map' (ADR 0011)."
+                "choosing one by algorithm would manufacture provenance. "
+                + absence_remedy
             ),
         )
     )
@@ -375,6 +420,7 @@ def _warn_incomplete(
 
 
 __all__ = [
+    "SUPPLY_THE_MAP_REMEDY",
     "W_ATOM_MAP_ATOMS_INCOMPLETE",
     "W_ATOM_MAP_PARTICIPANTS_INCOMPLETE",
     "W_MISSING_REACTION_ATOM_MAP",

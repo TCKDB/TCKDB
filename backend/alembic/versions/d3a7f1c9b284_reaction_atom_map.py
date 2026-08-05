@@ -62,15 +62,21 @@ in the record rather than only in one Pydantic validator on one write path:
 
 * **an index that is not a real atom of the named geometry** — the two
   ``geometry_atom`` foreign keys;
-* **an element changing across the map** — those same two foreign keys carry
-  the *same* ``element`` column, so a pair whose two ends are different
-  elements cannot be written at all. This is why
-  ``uq_geometry_atom_geometry_id_element`` is added: it is redundant with
-  ``geometry_atom``'s primary key on its own terms and exists solely to be the
-  target of those keys. ``isotope_mass_number`` is deliberately *not* carried
-  the same way — it is nullable, and a NULL column silently disables a MATCH
-  SIMPLE foreign key, so an isotope check written this way would quietly not
-  run on the ordinary case;
+* **an element changing across the map** — those same two foreign keys each
+  carry an element column, ``element`` and ``ts_element``, and
+  ``ck_reaction_atom_map_pair_element_matches`` holds the two equal
+  case-insensitively, so a pair whose two ends are different elements cannot
+  be written at all. This is why ``uq_geometry_atom_geometry_id_element`` is
+  added: it is redundant with ``geometry_atom``'s primary key on its own terms
+  and exists solely to be the target of those keys. The two ends do **not**
+  share one column, because ``geometry_atom.element`` is stored exactly as the
+  depositor's XYZ wrote it and ``CL`` and ``Cl`` are one element in two
+  spellings: a shared column would have made a correct map unwritable whenever
+  the reactant and the saddle point came out of programs that capitalise
+  differently. ``isotope_mass_number`` is deliberately *not* carried the same
+  way — it is nullable, and a NULL column silently disables a MATCH SIMPLE
+  foreign key, so an isotope check written this way would quietly not run on
+  the ordinary case;
 * **an atom claimed twice** — one unique constraint per direction, per leg.
 
 ``uq_reaction_entry_structure_participant_id`` is added for the same kind of
@@ -245,6 +251,7 @@ def upgrade() -> None:
         sa.Column("transition_state_geometry_id", sa.BigInteger(), nullable=False),
         sa.Column("ts_atom_index", sa.Integer(), nullable=False),
         sa.Column("element", sa.CHAR(length=2), nullable=False),
+        sa.Column("ts_element", sa.CHAR(length=2), nullable=False),
         sa.CheckConstraint(
             "atom_index >= 1",
             name=op.f("ck_reaction_atom_map_pair_atom_index_ge_1"),
@@ -252,6 +259,13 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "ts_atom_index >= 1",
             name=op.f("ck_reaction_atom_map_pair_ts_atom_index_ge_1"),
+        ),
+        # "An element does not change across a reaction", stated where a
+        # second write path cannot get around it. Case-insensitive: see the
+        # two-column note beside the geometry_atom foreign keys below.
+        sa.CheckConstraint(
+            "upper(element) = upper(ts_element)",
+            name=op.f("ck_reaction_atom_map_pair_element_matches"),
         ),
         sa.ForeignKeyConstraint(
             ["atom_map_id", "transition_state_geometry_id"],
@@ -275,9 +289,19 @@ def upgrade() -> None:
             initially="IMMEDIATE",
             deferrable=True,
         ),
-        # These two carry the *same* ``element`` column, which is what makes
-        # "an element does not change across the map" a thing the database
-        # refuses rather than a thing one validator checks.
+        # Each of these carries its own end's element column, and
+        # ``ck_reaction_atom_map_pair_element_matches`` above holds the two
+        # equal case-insensitively. That pairing is what makes "an element
+        # does not change across the map" a thing the database refuses rather
+        # than a thing one validator checks.
+        #
+        # A single shared ``element`` column would have been tidier and was
+        # wrong: ``geometry_atom.element`` stores the symbol the depositor's
+        # XYZ wrote, verbatim, so a reactant optimised in one program (``CL``)
+        # and a saddle point in another (``Cl``) are two different
+        # ``character(2)`` values for one element. No single value satisfies
+        # both foreign keys, and a correct map would have been unwritable
+        # because two programs disagreed about a capital letter.
         sa.ForeignKeyConstraint(
             ["geometry_id", "atom_index", "element"],
             [
@@ -290,7 +314,7 @@ def upgrade() -> None:
             deferrable=True,
         ),
         sa.ForeignKeyConstraint(
-            ["transition_state_geometry_id", "ts_atom_index", "element"],
+            ["transition_state_geometry_id", "ts_atom_index", "ts_element"],
             [
                 "geometry_atom.geometry_id",
                 "geometry_atom.atom_index",

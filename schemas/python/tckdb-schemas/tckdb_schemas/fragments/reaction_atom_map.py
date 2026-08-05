@@ -52,6 +52,7 @@ from pydantic import Field, model_validator
 
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import AtomMapSource, ReactionRole
+from tckdb_schemas.utils import normalize_optional_text
 
 __all__ = [
     "AtomMapParticipantGeometry",
@@ -139,14 +140,28 @@ class ReactionAtomMapIn(SchemaBase):
         non-unique and TCKDB does not attempt to canonicalise among the
         alternatives.
     :param note: Free text. **Required when ``source`` is ``inferred``**, where
-        it must name the algorithm that produced the map.
+        it must name the algorithm that produced the map. Trimmed, and blank
+        collapses to ``None``.
     """
 
     source: AtomMapSource
     ts_geometry_key: str = Field(min_length=1)
     participants: list[ReactionAtomMapParticipantIn] = Field(min_length=1)
     equivalent_map_count: int | None = Field(default=None, ge=1)
-    note: str | None = Field(default=None, min_length=1)
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def normalize_optional_text_fields(self) -> Self:
+        """Trim ``note`` and collapse a blank one to ``None``.
+
+        Declared before the ``inferred`` rule below so that rule sees the
+        normalised value: ``note='   '`` is not the name of an algorithm, and
+        without this it would satisfy "an inferred map says what inferred it"
+        while carrying nothing at all — the anonymous inferred map ADR 0011
+        exists to prevent, admitted through whitespace.
+        """
+        self.note = normalize_optional_text(self.note)
+        return self
 
     @model_validator(mode="after")
     def validate_inferred_names_its_algorithm(self) -> Self:

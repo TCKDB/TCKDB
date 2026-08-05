@@ -74,6 +74,7 @@ from app.services.provenance_warnings import (
     collect_network_energy_transfer_warnings,
     collect_network_solve_kind_warnings,
 )
+from app.services.reaction_atom_map import persist_reaction_atom_map
 from app.services.reaction_resolution import (
     validate_transition_state_composition,
 )
@@ -90,6 +91,28 @@ from app.services.transition_state_validation import (
 from app.services.transport_resolution import resolve_and_create_transport
 from app.workflows.computed_species import _persist_statmech_block
 from app.workflows.reaction import persist_reaction_upload
+
+#: How the atom-map absence warning ends on this path.
+#:
+#: The generic remedy tells a depositor to supply ``atom_map``. The
+#: pressure-dependent network bundle has no such field, so saying that here
+#: would send them looking for something that does not exist — a warning that
+#: cannot be acted on is the kind nobody reads, and ADR 0011 is explicit that a
+#: warning nobody reads leaves the corpus splitting between mapped and unmapped
+#: records for no reason. The honest statement is that this path cannot record
+#: a map yet and which path can.
+#:
+#: Adding ``atom_map`` to the PDep bundle is the real fix. It is a wire-contract
+#: change — new schema surface in ``tckdb_schemas``, a per-micro-reaction map
+#: rather than the single per-bundle one the computed-reaction path takes, and
+#: every client mirror — and is deliberately not folded into the change that
+#: made the gap visible.
+_PDEP_ABSENCE_REMEDY = (
+    "The pressure-dependent network bundle cannot yet carry a map, so this "
+    "gap cannot be closed on this deposit path: to record one for this micro "
+    "reaction, deposit it through the computed-reaction upload, which accepts "
+    "'atom_map' (ADR 0011)."
+)
 
 
 def _composition_hash(participants: list[tuple[int, int]]) -> str:
@@ -490,6 +513,27 @@ def persist_network_pdep_upload(
             ],
             subject_label=ts_in.key,
             field_path=f"transition_states[{ts_in.key}].validation_evidence",
+            created_by=created_by,
+            warnings=warning_sink,
+        )
+
+        # Atom map (ADR 0011). A pressure-dependent network is a set of micro
+        # reactions, and each saddle point here is one of them: the absence of
+        # a map is exactly as invisible on this path as on any other, and the
+        # ADR requires it be loud enough that a depositor who *has* the
+        # mapping notices they are being asked for it. The map itself cannot
+        # be deposited here yet — see ``_PDEP_ABSENCE_REMEDY`` — so the call
+        # passes ``None`` unconditionally and exists to report the gap.
+        persist_reaction_atom_map(
+            session,
+            None,
+            reaction_entry_id=reaction_entry.id,
+            transition_state_entry_id=ts_entry.id,
+            transition_state_geometry_id=ts_geometry.id,
+            participants=(),
+            geometry_id_by_key={},
+            field_path=f"transition_states[{ts_in.key}].atom_map",
+            absence_remedy=_PDEP_ABSENCE_REMEDY,
             created_by=created_by,
             warnings=warning_sink,
         )

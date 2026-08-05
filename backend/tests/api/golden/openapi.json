@@ -27149,7 +27149,7 @@
       },
       "ReactionAtomMapIn": {
         "additionalProperties": false,
-        "description": "A complete atom correspondence for one micro reaction.\n\n:param source: How the map was obtained. Required — there is no default,\n    because ``declared`` would manufacture human attribution and\n    ``inferred`` would understate a real declaration.\n:param ts_geometry_key: Bundle-local key of the saddle-point geometry both\n    legs map onto.\n:param participants: One entry per participant molecule that is mapped.\n:param equivalent_map_count: How many maps are equivalent to this one under\n    the symmetry of the participating structures, where known. Omit when\n    unknown — ``null`` is not ``1``. Symmetry makes a valid map routinely\n    non-unique and TCKDB does not attempt to canonicalise among the\n    alternatives.\n:param note: Free text. **Required when ``source`` is ``inferred``**, where\n    it must name the algorithm that produced the map.",
+        "description": "A complete atom correspondence for one micro reaction.\n\n:param source: How the map was obtained. Required — there is no default,\n    because ``declared`` would manufacture human attribution and\n    ``inferred`` would understate a real declaration.\n:param ts_geometry_key: Bundle-local key of the saddle-point geometry both\n    legs map onto.\n:param participants: One entry per participant molecule that is mapped.\n:param equivalent_map_count: How many maps are equivalent to this one under\n    the symmetry of the participating structures, where known. Omit when\n    unknown — ``null`` is not ``1``. Symmetry makes a valid map routinely\n    non-unique and TCKDB does not attempt to canonicalise among the\n    alternatives.\n:param note: Free text. **Required when ``source`` is ``inferred``**, where\n    it must name the algorithm that produced the map. Trimmed, and blank\n    collapses to ``None``.",
         "properties": {
           "equivalent_map_count": {
             "anyOf": [
@@ -27166,7 +27166,6 @@
           "note": {
             "anyOf": [
               {
-                "minLength": 1,
                 "type": "string"
               },
               {

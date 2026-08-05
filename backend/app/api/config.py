@@ -109,6 +109,14 @@ class Settings(BaseSettings):
     max_full_geometries_public: int = 100
     max_full_artifacts_public: int = 100
     max_full_conformer_groups_public: int = 100
+    # Atom-map pairs are counted per pair, not per map: a reaction carries
+    # one map per transition-state candidate, and each map holds one row per
+    # atom per leg. The ceiling is higher than the others because the leaf
+    # row here is an *atom* rather than a calculation or an artifact — a
+    # 60-atom saddle point is ordinary science and produces ~120 pairs per
+    # map, so a cap of 100 would refuse correct records rather than abusive
+    # ones.
+    max_full_atom_map_pairs_public: int = 2_000
 
     # OpenAPI / Swagger / ReDoc exposure. Default on for local
     # development so the docs stay one URL away. Hosted deployments
