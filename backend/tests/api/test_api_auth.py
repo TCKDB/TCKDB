@@ -8,6 +8,7 @@ override) so they exercise the real auth dependency.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import timedelta
 
 import pytest
@@ -17,12 +18,14 @@ from sqlalchemy import select
 from app.api.app import create_app
 from app.api.config import settings
 from app.api.deps import get_db, get_write_db
+from app.api.routes import auth as auth_routes
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 from app.db.models.user_session import UserSession
 from app.services.auth import (
     SESSION_COOKIE_NAME,
     SESSION_TTL_BY_ROLE,
+    verify_password,
 )
 
 
@@ -434,3 +437,119 @@ class TestRegistrationPolicy:
             json={"username": "seeded", "password": "password-123"},
         )
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# 9. Opportunistic password re-hashing on login
+# ---------------------------------------------------------------------------
+
+
+def _legacy_pbkdf2_hash(plain: str) -> str:
+    """The pre-scrypt stored format, rebuilt without ``app.services.auth``.
+
+    Deployed accounts carry hashes in exactly this shape. Building it
+    from :mod:`hashlib` here keeps the test honest even after the app
+    stops emitting the format.
+    """
+    salt = bytes.fromhex("0f1e2d3c4b5a69788796a5b4c3d2e1f0")
+    digest = hashlib.pbkdf2_hmac("sha256", plain.encode("utf-8"), salt, 200_000)
+    return f"pbkdf2_sha256$200000${salt.hex()}${digest.hex()}"
+
+
+class TestPasswordRehashOnLogin:
+    """Login is the only moment the plaintext exists, so it is the only
+    moment a legacy hash can be upgraded in place."""
+
+    PASSWORD = "legacy-user-password"
+
+    def _seed_legacy_user(self, db_session, username: str) -> int:
+        user = AppUser(
+            username=username,
+            password_hash=_legacy_pbkdf2_hash(self.PASSWORD),
+            role=AppUserRole.user,
+            is_active=True,
+        )
+        db_session.add(user)
+        db_session.flush()
+        return user.id
+
+    def _persisted_hash(self, db_session, user_id: int) -> str:
+        db_session.expire_all()
+        return db_session.scalar(
+            select(AppUser.password_hash).where(AppUser.id == user_id)
+        )
+
+    def test_legacy_hash_is_replaced_on_successful_login(
+        self, raw_client, db_session
+    ):
+        user_id = self._seed_legacy_user(db_session, "legacy-alice")
+        before = self._persisted_hash(db_session, user_id)
+        assert before.startswith("pbkdf2_sha256$")
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-alice", "password": self.PASSWORD},
+        )
+        assert resp.status_code == 200, resp.json()
+
+        after = self._persisted_hash(db_session, user_id)
+        assert after != before
+        assert after.startswith("scrypt$")
+        assert verify_password(self.PASSWORD, after)
+
+        # And the upgraded hash is usable: same password, fresh login.
+        raw_client.cookies.clear()
+        again = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-alice", "password": self.PASSWORD},
+        )
+        assert again.status_code == 200, again.json()
+        # Second login finds nothing to migrate, so the hash stays put.
+        assert self._persisted_hash(db_session, user_id) == after
+
+    def test_failed_login_does_not_rehash(self, raw_client, db_session):
+        user_id = self._seed_legacy_user(db_session, "legacy-bob")
+        before = self._persisted_hash(db_session, user_id)
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-bob", "password": "wrong-password"},
+        )
+        assert resp.status_code == 401
+        assert self._persisted_hash(db_session, user_id) == before
+
+    def test_rehash_failure_does_not_fail_the_login(
+        self, raw_client, db_session, monkeypatch
+    ):
+        """The user authenticated correctly; a storage problem is ours."""
+        user_id = self._seed_legacy_user(db_session, "legacy-carol")
+        before = self._persisted_hash(db_session, user_id)
+
+        def _boom(_plain: str) -> str:
+            raise RuntimeError("hashing backend unavailable")
+
+        monkeypatch.setattr(auth_routes, "hash_password", _boom)
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-carol", "password": self.PASSWORD},
+        )
+        assert resp.status_code == 200, resp.json()
+        # Old hash survives untouched, so the next login can retry.
+        assert self._persisted_hash(db_session, user_id) == before
+
+        # The session really was issued, not just a 200 shell.
+        assert raw_client.get("/api/v1/auth/me").json()["username"] == "legacy-carol"
+
+    def test_inactive_legacy_user_is_not_rehashed(self, raw_client, db_session):
+        user_id = self._seed_legacy_user(db_session, "legacy-dan")
+        db_session.get(AppUser, user_id).is_active = False
+        db_session.flush()
+        before = self._persisted_hash(db_session, user_id)
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-dan", "password": self.PASSWORD},
+        )
+        assert resp.status_code == 403
+        assert self._persisted_hash(db_session, user_id) == before

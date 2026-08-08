@@ -7,6 +7,7 @@ is returned exactly once at creation time.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -26,11 +27,14 @@ from app.services.auth import (
     create_api_key,
     create_session,
     hash_password,
+    password_needs_rehash,
     revoke_api_key,
     revoke_session,
     session_ttl_for_role,
     verify_password,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -107,6 +111,39 @@ def _to_metadata(row: ApiKey) -> ApiKeyMetadata:
     )
 
 
+def _migrate_password_hash(session: Session, user: AppUser, plain: str) -> None:
+    """Re-hash *user*'s password under the current KDF, best-effort.
+
+    Login is the only moment the plaintext is available, so it is the
+    only moment a stored hash can be upgraded — users migrate off the
+    legacy PBKDF2 scheme (or off stale scrypt parameters) as they come
+    back, with no password reset and no bulk job.
+
+    Call this **only after a successful verification**. A failure here
+    must never turn a correct password into a failed login: the user
+    authenticated, and a storage problem is not their problem. The write
+    is wrapped in a SAVEPOINT so a failed upgrade rolls back on its own
+    without poisoning the session that is about to create their session
+    row; they keep their old, still-valid hash and the next login tries
+    again.
+
+    The log line deliberately carries only the exception type — a
+    SQLAlchemy error renders its bound parameters, which would put the
+    digest in the logs.
+    """
+    if not password_needs_rehash(user.password_hash):
+        return
+    try:
+        with session.begin_nested():
+            user.password_hash = hash_password(plain)
+    except Exception as exc:  # deliberately broad: never fail a valid login
+        logger.warning(
+            "password rehash skipped for user id=%s (%s)",
+            user.id,
+            type(exc).__name__,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Registration / login / logout
 # ---------------------------------------------------------------------------
@@ -172,6 +209,8 @@ def login(
         raise HTTPException(status_code=401, detail="Invalid username or password.")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is inactive.")
+
+    _migrate_password_hash(session, user, request.password)
 
     ttl = session_ttl_for_role(user.role)
     _, token = create_session(session, user, ttl=ttl)
