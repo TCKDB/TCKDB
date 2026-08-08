@@ -20,11 +20,29 @@ Usage in a route (flat, exception-safe by ordering)::
 
 Transaction management stays with the route's ``get_write_db`` dependency. If
 the wrapped workflow raises, control never reaches
-:func:`mark_upload_ingested`, and the whole transaction — submission, audit,
-record links, review rows, and scientific records — rolls back together. There
-is therefore no orphan-submission state to clean up on the synchronous path,
-and ``ingestion_failed`` is reserved for a future async/two-phase path that can
-commit a failure record independently.
+:func:`mark_upload_ingested`, the whole transaction rolls back, and
+:func:`record_failed_upload` writes the durable failure audit in a session of
+its own. There is therefore no orphan-submission state to clean up on the
+synchronous path.
+
+**The audit event does not get a vote on the science.** An earlier version of
+this note argued the coupling was a feature — "the whole transaction rolls
+back together" — and that reasoning is what produced the 2026-08-05 incident
+one line further down, where a failing idempotency receipt destroyed the
+upload it receipted for. The two directions are not symmetric:
+
+* Workflow fails → the audit event is meaningless and must roll back. Kept.
+* Audit event fails → the science is already correct, already persisted, and
+  irreproducible in the sense that nothing else in the system can regenerate
+  it. Letting a row that merely *describes* the upload veto it inverts what
+  the database is for.
+
+So :func:`mark_upload_ingested` confines its write to a ``SAVEPOINT`` and
+degrades to a loud log rather than taking the upload down with it. The
+remaining audit trail — the ``submission`` row, its ``submission_created``
+event, the record links and the review rows — is untouched by that
+degradation, so a lost ``ingestion_succeeded`` event costs one line of history
+and never a scientific record.
 
 A submission is the audit wrapper for an upload event; it is *not* a claim of
 scientific approval. ``submission.status`` stays ``pending`` (awaiting curator
@@ -150,17 +168,68 @@ def mark_upload_ingested(
     sub: UploadSubmissionContext,
     *,
     summary: Optional[str] = None,
-) -> None:
+) -> bool:
     """Append the ``ingestion_succeeded`` audit event for a finished upload.
 
     Status is unchanged (``pending``): successful ingestion is not scientific
     approval.
+
+    Returns ``True`` when the event was appended, ``False`` when it could not
+    be and was skipped. **Never raises** for a reason confined to the event
+    itself — see the module docstring for why a description must not be able
+    to veto the thing it describes.
+
+    The isolation has the same two parts as
+    :func:`app.services.idempotency.write_receipt_isolated`, which sits one
+    line below this in all eleven synchronous upload routes:
+
+    1. **Flush first**, so every pending scientific row is INSERTed *outside*
+       the savepoint. Without this, anything the workflow had not yet flushed
+       would be swept into the savepoint and rolled back alongside a failing
+       audit event — the same data loss through a subtler door.
+    2. **Savepoint around the event alone.** On failure the savepoint rolls
+       back, the outer transaction and its payload survive, and the session
+       stays usable for the rest of the request (``idem.record`` still runs).
+
+    On success the savepoint is released and the event commits with the
+    payload exactly as before.
+
+    This has not yet fired in production only because ``summary`` is currently
+    a server-built f-string. It is not a server-only field: the signature
+    accepts arbitrary ``summary`` text, and
+    :func:`app.services.submission.mark_ingestion_succeeded` accepts arbitrary
+    ``details_json`` — ``Text`` and ``JSONB``, the same two column types that
+    failed in the incident.
     """
-    mark_ingestion_succeeded(
-        session,
-        submission=sub.submission,
-        summary=summary or f"Ingested {sub.kind.value} upload via direct API.",
-    )
+    text = summary or f"Ingested {sub.kind.value} upload via direct API."
+
+    # Part 1: get the payload out of the savepoint's blast radius.
+    session.flush()
+
+    # Part 2: the audit event, and only the audit event, inside the savepoint.
+    savepoint = session.begin_nested()
+    try:
+        mark_ingestion_succeeded(
+            session,
+            submission=sub.submission,
+            summary=text,
+        )
+    except Exception as exc:
+        savepoint.rollback()
+        logger.error(
+            "ingestion_succeeded audit event could not be written for "
+            "submission_id=%s (kind=%s): %s. The upload itself succeeded and "
+            "its scientific records, review rows and record links are intact; "
+            "only this line of the submission's audit history is missing.",
+            sub.submission_id,
+            sub.kind.value,
+            type(exc).__name__,
+            exc_info=exc,
+        )
+        return False
+
+    savepoint.commit()
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +292,12 @@ def record_failed_upload(
         return None
 
 
+#: Key under which a sync upload route parks its failure-audit intent on the
+#: write session, so ``get_write_db`` can finish the job the decorator cannot
+#: reach. See :func:`audit_sync_upload_failure`.
+SYNC_UPLOAD_AUDIT_KEY = "sync_upload_failure_audit"
+
+
 def audit_sync_upload_failure(kind: SubmissionKind) -> Callable:
     """Decorator: durably audit a synchronous upload route's failures.
 
@@ -231,16 +306,43 @@ def audit_sync_upload_failure(kind: SubmissionKind) -> Callable:
     (see :func:`record_failed_upload`) before propagating — the scientific
     transaction still rolls back atomically. The handler must take a
     ``current_user`` keyword (every upload route does).
+
+    **The blind spot this closes.** A decorator can only observe what happens
+    inside the function it wraps, and the route function is not where an
+    upload finishes. ``get_write_db`` commits in dependency *teardown*, after
+    the route has returned — so a commit-time failure raises outside this
+    ``try`` entirely and used to leave **no failed-upload audit row for
+    precisely the failure class that matters most**: the one where the
+    response was already determined and the work is already gone. The
+    2026-08-05 incident was exactly such a failure, and it is invisible in the
+    audit tables for exactly this reason.
+
+    The intent (who, what kind) is therefore parked on the write session under
+    :data:`SYNC_UPLOAD_AUDIT_KEY` *before* the handler runs, so
+    :func:`app.api.deps.get_write_db` can record the audit for a failure this
+    wrapper never sees. ``audited`` guards against both paths recording the
+    same failure twice.
     """
 
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
+            user = kwargs.get("current_user")
+            session = kwargs.get("session")
+            state: Optional[dict] = None
+            if user is not None and isinstance(session, Session):
+                state = {
+                    "created_by": user.id,
+                    "kind": kind,
+                    "audited": False,
+                }
+                session.info[SYNC_UPLOAD_AUDIT_KEY] = state
             try:
                 return fn(*args, **kwargs)
             except Exception as exc:
-                user = kwargs.get("current_user")
                 if user is not None:
+                    if state is not None:
+                        state["audited"] = True
                     record_failed_upload(
                         created_by=user.id,
                         kind=kind,
@@ -253,9 +355,41 @@ def audit_sync_upload_failure(kind: SubmissionKind) -> Callable:
     return decorator
 
 
+def audit_upload_failure_at_commit(session: Session, exc: BaseException) -> None:
+    """Record the failure audit for an upload that died after the route returned.
+
+    Called from :func:`app.api.deps.get_write_db`'s error path, which is the
+    only place that can see a commit-time failure. No-ops for every session
+    that is not a decorated synchronous upload, and for one whose failure the
+    decorator already audited.
+
+    Best-effort by construction — :func:`record_failed_upload` swallows its
+    own errors — so this can never mask the exception on its way out.
+    """
+    state = session.info.get(SYNC_UPLOAD_AUDIT_KEY)
+    if not isinstance(state, dict) or state.get("audited"):
+        return
+    state["audited"] = True
+    logger.error(
+        "Synchronous %s upload failed at commit, after the route returned "
+        "(%s). Nothing was stored; recording the failed-upload audit that the "
+        "route decorator could not reach.",
+        state["kind"].value,
+        type(exc).__name__,
+        exc_info=exc,
+    )
+    record_failed_upload(
+        created_by=state["created_by"],
+        kind=state["kind"],
+        error_summary=f"{type(exc).__name__}: {exc}",
+    )
+
+
 __all__ = [
+    "SYNC_UPLOAD_AUDIT_KEY",
     "UploadSubmissionContext",
     "audit_sync_upload_failure",
+    "audit_upload_failure_at_commit",
     "mark_upload_ingested",
     "open_job_submission",
     "open_upload_submission",
