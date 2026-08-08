@@ -242,14 +242,25 @@ def validate_encoded_lengths(encoded_lengths: list[int]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _get_s3_client():
-    """Create a boto3 S3 client configured for MinIO or AWS S3."""
+def _get_s3_client(config=None):
+    """Create a boto3 S3 client configured for MinIO or AWS S3.
+
+    :param config: Optional :class:`botocore.config.Config`. Callers that
+        must not block on a dead endpoint -- the ``/status`` storage probe
+        in :mod:`app.api.routes.health` -- pass a short-timeout config here
+        instead of building a second client of their own. Endpoint,
+        credentials, and region stay owned by this module, so the probe can
+        never disagree with the write path about *which* object store it is
+        talking to. A health check that reaches a different endpoint than
+        the uploads do is worse than no health check at all.
+    """
     return boto3.client(
         "s3",
         endpoint_url=S3_ENDPOINT_URL,
         aws_access_key_id=S3_ACCESS_KEY,
         aws_secret_access_key=S3_SECRET_KEY,
         region_name=S3_REGION,
+        config=config,
     )
 
 

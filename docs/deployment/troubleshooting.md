@@ -94,6 +94,48 @@ You should see the `rdkit` extension listed.
 
 ---
 
+### Uploads with files return 503, but everything else works
+
+**Symptom**
+
+Plain uploads succeed. Any upload carrying an artifact (an ESS output log, a
+checkpoint) returns `503` with `"code": "artifact_storage_unavailable"`.
+`/api/v1/health` and `/api/v1/readyz` are fine.
+
+**Cause**
+
+The API cannot reach the object store. By far the most common reason is a
+containerised API still configured with the host's address:
+
+```text
+S3_ENDPOINT_URL=http://127.0.0.1:9000     # correct on the host
+S3_ENDPOINT_URL=http://minio:9000         # correct inside the compose network
+```
+
+Inside a container, `127.0.0.1` is the container's own loopback. The setting
+is not malformed, which is why it survives a migration from a host deployment
+unnoticed.
+
+**Verify**
+
+```bash
+curl -s http://127.0.0.1:8010/api/v1/status | jq '.components.artifact_storage'
+```
+
+`/status` reports the endpoint and bucket it actually reached for, and splits
+`reachable: false` (wrong address, or the store is down) from `reachable:
+true` with an unhealthy verdict (the store answered but the bucket is missing
+or the credentials are refused). The server log also carries the underlying
+botocore error for each 503 — `journalctl -u tckdb-api` or
+`docker logs tckdb-api`, filtered on `ArtifactStorageUnavailable`.
+
+**Fix**
+
+Set `S3_ENDPOINT_URL` to the compose service name and restart the API. See
+[self_hosted_single_node.md](self_hosted_single_node.md#if-the-api-runs-in-a-container-address-siblings-by-service-name).
+
+---
+
 ## Database
 
 ### `database "tckdb_dev" does not exist`

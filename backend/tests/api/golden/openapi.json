@@ -55774,7 +55774,7 @@
     },
     "/api/v1/readyz": {
       "get": {
-        "description": "Readiness probe.\n\nReturns 200 with the current Alembic revision when the database is\nreachable and the schema has been migrated. Returns 503 with a\nstable error envelope when either check fails. The response shape\nis deliberately narrow — no DB URL, no driver text, no hostname.",
+        "description": "Readiness probe.\n\nReturns 200 with the current Alembic revision when the database is\nreachable and the schema has been migrated. Returns 503 with a\nstable error envelope when either check fails. The response shape\nis deliberately narrow — no DB URL, no driver text, no hostname.\n\nArtifact storage is deliberately not checked here: with the object\nstore down, reads, queries, and uploads without attached files all\nstill work, so removing the instance from rotation would replace a\npartial outage with a total one. Storage is reported on ``/status``.",
         "operationId": "readyz_api_v1_readyz_get",
         "responses": {
           "200": {
@@ -73812,7 +73812,7 @@
     },
     "/api/v1/status": {
       "get": {
-        "description": "Operational summary for humans and for the alerting checker.\n\n``/health`` and ``/readyz`` deliberately return a tiny fixed shape because\nload balancers consume them. This endpoint is the richer one: it answers\n\"is anything wrong, and what\" in a single request, so an operator has one\nURL to open and a checker has one URL to poll.\n\nIt returns 200 with ``status: \"degraded\"`` rather than a 5xx when a\ncomponent is unhealthy. A non-200 here would make the endpoint itself\nindistinguishable from the outage it is trying to describe, and a checker\ncould not tell \"the site is down\" from \"the site is up and telling me the\nworker died\" -- which are different pages of the runbook.\n\nDiscloses no hostnames, credentials, or driver text: it is public, on the\nsame host as the docs.",
+        "description": "Operational summary for humans and for the alerting checker.\n\n``/health`` and ``/readyz`` deliberately return a tiny fixed shape because\nload balancers consume them. This endpoint is the richer one: it answers\n\"is anything wrong, and what\" in a single request, so an operator has one\nURL to open and a checker has one URL to poll.\n\nIt returns 200 with ``status: \"degraded\"`` rather than a 5xx when a\ncomponent is unhealthy. A non-200 here would make the endpoint itself\nindistinguishable from the outage it is trying to describe, and a checker\ncould not tell \"the site is down\" from \"the site is up and telling me the\nworker died\" -- which are different pages of the runbook.\n\nComponents: ``database``, ``worker``, ``artifact_storage``. Each is a hard\ndependency that can fail alone while the others stay green.\n\nDiscloses no credentials and no driver text. It does disclose the Alembic\nrevision and the object-store ``scheme://host:port`` and bucket name -- a\ndeliberate, bounded trade: those are what let an operator diagnose a\nmisconfigured deployment from the outside, and none of them grants access.",
         "operationId": "status_api_v1_status_get",
         "responses": {
           "200": {

@@ -46,9 +46,18 @@ running_image() {
 }
 
 if [[ "${1:-}" == "--check" ]]; then
+    check_body="$(curl -s "$STATUS_URL" 2>/dev/null)"
     echo "container:      $(running_image)"
     echo "systemd uvicorn: $(systemctl is-active tckdb-api.service 2>/dev/null || echo n/a)"
-    echo "live revision:  $(curl -s "$STATUS_URL" | grep -o '"alembic_revision":"[^"]*"' || echo unknown)"
+    echo "live revision:  $(grep -o '"alembic_revision":"[^"]*"' <<<"$check_body" || echo unknown)"
+    if command -v jq >/dev/null 2>&1; then
+        # The object store is a hard dependency that fails independently of
+        # the database, and its address is the thing most likely to be wrong
+        # after a host-to-container move. Show it here so "what is running?"
+        # answers that too.
+        echo "status:         $(jq -r '"\(.status) degraded=[\((.degraded // []) | join(","))]"' <<<"$check_body" 2>/dev/null || echo unknown)"
+        echo "artifact store: $(jq -r '.components.artifact_storage | "\(.endpoint) bucket=\(.bucket) healthy=\(.healthy) \(.reason // "")"' <<<"$check_body" 2>/dev/null || echo unknown)"
+    fi
     exit 0
 fi
 
@@ -101,18 +110,76 @@ docker run -d --name "$CONTAINER" \
     "$IMAGE" >/dev/null || die "could not start the new container; roll back with: $0 <previous-tag>"
 
 # 5. Verify, and be specific about what to do if it is wrong.
+#
+#    WHAT "VERIFIED" HAS TO MEAN
+#      Both `status` and `degraded` are checked, not just `status`. They are
+#      derived from the same set today, so a divergence would be a bug rather
+#      than a state -- which is the point: if that derivation ever changes, a
+#      deploy that ships a degraded component must fail here rather than pass
+#      on a field that happened to stay "ok". The old check was a substring
+#      match for `"status":"ok"` anywhere in the body, which does not even
+#      distinguish the top-level field from one nested inside a component.
+#
+#      This only catches what /status covers. On 2026-08-05 it covered the
+#      database and the worker but not artifact storage, so a deployment whose
+#      object-store endpoint pointed at the container's own loopback reported
+#      ok here while every artifact-bearing upload returned 503. /status now
+#      probes artifact storage, so this loop sees it.
+live_status() {
+    if command -v jq >/dev/null 2>&1; then
+        jq -r '.status // ""' <<<"$1" 2>/dev/null
+    else
+        # `status` is the first top-level key FastAPI emits, so the first
+        # match is the top-level one and not a component's field.
+        grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' <<<"$1" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'
+    fi
+}
+
+live_degraded() {
+    # Comma-separated component names, empty when nothing is degraded.
+    if command -v jq >/dev/null 2>&1; then
+        jq -r '(.degraded // []) | join(", ")' <<<"$1" 2>/dev/null
+    else
+        # `degraded` is an ARRAY, so a string-shaped grep would silently
+        # return empty for every value including a non-empty one -- i.e. it
+        # would report a degraded deployment as clean. Match the array.
+        sed -n 's/.*"degraded"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' <<<"$1" | head -1 | tr -d '"'
+    fi
+}
+
 echo "==> verifying"
 for _ in $(seq 1 45); do
     body="$(curl -s "$STATUS_URL" 2>/dev/null)"
-    [[ "$body" == *'"status":"ok"'* ]] && { echo "    $body"; echo "==> deployed ${IMAGE}"; exit 0; }
+    if [[ -n "$body" ]]; then
+        reported_status="$(live_status "$body")"
+        reported_degraded="$(live_degraded "$body")"
+        if [[ "$reported_status" == "ok" && -z "$reported_degraded" ]]; then
+            echo "    $body"
+            echo "==> deployed ${IMAGE}"
+            exit 0
+        fi
+    fi
     sleep 2
 done
 
 echo "    last response: ${body:-<none>}" >&2
+if [[ -n "${reported_degraded:-}" ]]; then
+    echo "    degraded components: ${reported_degraded}" >&2
+    if command -v jq >/dev/null 2>&1; then
+        jq -r '[.components // {} | to_entries[] | select(.value.healthy == false) | "    \(.key): \(.value.reason // "unhealthy")"] | .[]' <<<"$body" >&2
+    fi
+fi
 cat >&2 <<EOF
-error: the new container did not report status=ok.
+error: the new container did not report status=ok with nothing degraded.
+
+  The container may well be running -- "degraded" means it answered and
+  reported a broken component, which is a different problem from a container
+  that never came up. Read the component reasons above first; an
+  artifact_storage failure is usually the object-store endpoint in the env
+  file, not the image.
 
   logs:      docker logs ${CONTAINER} | tail -50
+  status:    curl -s ${STATUS_URL}
   roll back: $0 <previous-tag>
   restore:   the pre-deploy backup is at ${BACKUP}
              (only needed if a migration is the problem -- the image itself
