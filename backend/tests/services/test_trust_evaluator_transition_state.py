@@ -53,7 +53,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.trust import (
-    COMPUTED_TRANSITION_STATE_V1,
+    COMPUTED_TRANSITION_STATE_V2,
     EvidenceBadge,
     HardFailReason,
     evaluate_computed_transition_state_entry,
@@ -733,10 +733,10 @@ def test_session_wrapper_returns_hard_fail_for_missing_id(db_session: Session):
 
 def test_rubric_metadata_pinned():
     """Pin the public contract of the rubric metadata."""
-    assert COMPUTED_TRANSITION_STATE_V1.name == "computed_transition_state"
-    assert COMPUTED_TRANSITION_STATE_V1.version == 1
-    assert COMPUTED_TRANSITION_STATE_V1.record_type == "transition_state_entry"
-    assert len(COMPUTED_TRANSITION_STATE_V1.checks) == 28
+    assert COMPUTED_TRANSITION_STATE_V2.name == "computed_transition_state"
+    assert COMPUTED_TRANSITION_STATE_V2.version == 1
+    assert COMPUTED_TRANSITION_STATE_V2.record_type == "transition_state_entry"
+    assert len(COMPUTED_TRANSITION_STATE_V2.checks) == 28
 
 
 def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Session):

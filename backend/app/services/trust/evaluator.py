@@ -65,7 +65,7 @@ from app.services.trust.rubrics import (
     COMPUTED_KINETICS_V1,
     COMPUTED_STATMECH_V1,
     COMPUTED_THERMO_V1,
-    COMPUTED_TRANSITION_STATE_V1,
+    COMPUTED_TRANSITION_STATE_V2,
     COMPUTED_TRANSPORT_V1,
     _ts_representative_freq_result,
     _ts_source_calculations,
@@ -618,7 +618,23 @@ def _detect_transition_state_entry_hard_fail(
         return HardFailReason.all_source_calculations_hard_failed
 
     # Frequency contradictions for status-validated TS entries are hard
-    # fails per spec §8.2.
+    # fails per spec §8.2, as narrowed by ADR 0012.
+    #
+    # Zero imaginary modes still hard-fails: that is definitional and the
+    # blocking tier refuses it too, so the two agree. What is *not*
+    # re-derived here any more is the old ``n_imag > 1`` gate. ADR 0012
+    # accepts a higher-order saddle whose reaction coordinate is
+    # designated and whose other imaginary modes are declared, so
+    # counting again at read time would hard-fail a record the upload
+    # tier deliberately accepted — the exact contradiction ADR 0008 §9
+    # warned about.
+    #
+    # The read layer therefore asks a question about persisted state
+    # rather than about physics: does this record carry the reaction
+    # coordinate the blocking tier required of it? Anything that passed
+    # upload validation does. Only a record written around the upload
+    # path can fail here, and for that record the judgement is genuinely
+    # absent rather than negative.
     if ts_entry.status in {
         TransitionStateEntryStatus.optimized,
         TransitionStateEntryStatus.validated,
@@ -629,9 +645,12 @@ def _detect_transition_state_entry_hard_fail(
                 return (
                     HardFailReason.frequency_source_has_zero_imaginary_modes_for_validated_ts
                 )
-            if freq.n_imag > 1:
+            if (
+                freq.n_imag > 1
+                and freq.reaction_coordinate_mode_index is None
+            ):
                 return (
-                    HardFailReason.frequency_source_has_multiple_imaginary_modes_for_validated_ts
+                    HardFailReason.frequency_source_reaction_coordinate_not_designated_for_validated_ts
                 )
 
     return None
@@ -1051,7 +1070,7 @@ def evaluate_loaded_transition_state_entry(
     ``child_dependencies`` (both directions), and the linked calcs along
     each dependency edge.
     """
-    rubric = COMPUTED_TRANSITION_STATE_V1
+    rubric = COMPUTED_TRANSITION_STATE_V2
     if transition_state_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(None, rubric)
 
@@ -1429,6 +1448,6 @@ def evaluate_computed_transition_state_entry(
     ts_entry = session.scalars(statement).one_or_none()
     if ts_entry is None:
         return _empty_evaluation_for_missing_transition_state_entry(
-            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V1
+            transition_state_entry_id, COMPUTED_TRANSITION_STATE_V2
         )
     return evaluate_loaded_transition_state_entry(ts_entry)

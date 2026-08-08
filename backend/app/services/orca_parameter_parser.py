@@ -42,6 +42,15 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     ("pno", "tightpno"): ("pno.truncation", "tight"),
     ("pno", "normalpno"): ("pno.truncation", "normal"),
     ("pno", "loosepno"): ("pno.truncation", "loose"),
+    # Frequency-job Hessian method (from ! line, section="freq").
+    #
+    # ADR 0012's tau keys on how the *frequency job* built its second
+    # derivatives, which is not the same thing as opt.initial_hessian.
+    # ORCA says so explicitly in the keyword line, so it is recorded
+    # rather than guessed; a run that says neither leaves the key absent
+    # and gets the conservative tau.
+    ("freq", "numfreq"): ("freq.hessian_method", "finite_difference_gradient"),
+    ("freq", "anfreq"): ("freq.hessian_method", "analytic"),
     # Grid keywords (from ! line, section="grid")
     ("grid", "defgrid1"): ("grid.quality", "defgrid1"),
     ("grid", "defgrid2"): ("grid.quality", "defgrid2"),
@@ -71,10 +80,20 @@ def _lookup_canonical(
 # ---------------------------------------------------------------------------
 
 #: Job types — these define Calculation.type, not parameters.
+#:
+#: ``numfreq`` and ``anfreq`` are deliberately absent. They *are* job
+#: types, but they also state how the frequency job built its Hessian,
+#: which ADR 0012's tau keys on and which nothing else in the record
+#: says. They are classified into the ``freq`` section by
+#: :func:`_classify_keyword` so they emit a ``freq.hessian_method`` row;
+#: the calculation's type is decided elsewhere and is unaffected.
 _JOB_TYPES = frozenset({
-    "sp", "opt", "optts", "copt", "zopt", "freq", "numfreq", "neb", "neb-ts",
+    "sp", "opt", "optts", "copt", "zopt", "freq", "neb", "neb-ts",
     "neb-ci", "irc", "md", "goat",
 })
+
+#: Keywords that name the frequency job's second-derivative method.
+_FREQ_METHOD_KEYWORDS = frozenset({"numfreq", "anfreq"})
 
 #: Known method keywords — belong in level_of_theory, not parameters.
 #: Matched as **prefixes**, so ``dlpno-ccsd(t)-f12`` is recognised
@@ -149,6 +168,12 @@ def _classify_keyword(kw: str) -> str | None:
     parameter rows).
     """
     kw_lower = kw.lower()
+
+    # Frequency Hessian method → its own section. Checked before the job
+    # types because these keywords are both, and the parameter row is
+    # the only place the distinction survives.
+    if kw_lower in _FREQ_METHOD_KEYWORDS:
+        return "freq"
 
     # Job types → skip
     if kw_lower in _JOB_TYPES:

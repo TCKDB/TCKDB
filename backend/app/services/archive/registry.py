@@ -177,6 +177,7 @@ PRESEEDED_TABLES: Mapping[
             (key,)
             for key in (
                 "f12.ansatz",
+                "freq.hessian_method",
                 "grid.quality",
                 "guess.strategy",
                 "integral.accuracy",

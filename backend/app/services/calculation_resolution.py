@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
+from tckdb_schemas.stationary_point import has_structural_flag
 
 from app.db.models.calculation import (
     Calculation,
@@ -685,12 +686,35 @@ def persist_calculation_result(
         )
 
     if calc_upload.freq_result is not None:
+        # ADR 0012: tau and the structural flag are *recorded*, not
+        # recomputed later. tau is read from this calculation's own
+        # execution provenance, so a future parser improvement would
+        # otherwise silently re-decide every historical record; and the
+        # read-time trust rubric cites what was stored here rather than
+        # re-deriving the judgement from n_imag and disagreeing with it.
+        #
+        # The findings come from the same single owner the upload
+        # validator used, called once more with the same inputs — so
+        # what is stored is what was judged, not a second opinion. Only
+        # the warn tier can reach this point: a blocking finding refused
+        # the payload long before persistence.
+        tau = calc_upload.tau_resolution()
+        findings = calc_upload.transition_state_frequency_findings(
+            location="freq_result"
+        )
+        designated = calc_upload.freq_result.reaction_coordinate_mode_index
         session.add(
             CalculationFreqResult(
                 calculation_id=calculation.id,
                 n_imag=calc_upload.freq_result.n_imag,
                 imag_freq_cm1=calc_upload.freq_result.imag_freq_cm1,
                 zpe_hartree=calc_upload.freq_result.zpe_hartree,
+                reaction_coordinate_mode_index=designated,
+                imaginary_mode_tau_cm1=tau.tau_cm1,
+                imaginary_mode_tau_basis=tau.basis.value,
+                imaginary_mode_structural_flag=(
+                    has_structural_flag(findings) if designated is not None else None
+                ),
             )
         )
         if calc_upload.freq_result.modes:
@@ -706,6 +730,7 @@ def persist_calculation_result(
                         ir_intensity_km_mol=mode.ir_intensity_km_mol,
                         raman_activity=mode.raman_activity,
                         symmetry_label=mode.symmetry_label,
+                        imaginary_disposition=mode.imaginary_disposition,
                         note=mode.note,
                     )
                 )

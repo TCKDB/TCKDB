@@ -82,6 +82,11 @@ What the drift guard enforces
   source of the function said to emit it;
 * every file in the repository containing ``ScientificCheck(`` is
   listed in ``_DECLARING_MODULES``;
+* every :class:`ProvenanceThreshold` resolves to a real callable, and
+  every canonical parameter key it reads exists in
+  ``calculation_parameter_vocab`` in the live schema — without which the
+  threshold would resolve to its fallback forever while the register
+  went on claiming it keys on that provenance;
 * codes are unique across the register.
 """
 
@@ -222,6 +227,95 @@ Enforcement = PythonCheck | DatabaseConstraint | DesignPosition
 
 
 # ---------------------------------------------------------------------------
+# Where a check's threshold comes from
+# ---------------------------------------------------------------------------
+#
+# Until ADR 0012 every numeric line in the register was a literal in
+# Python, so naming it in ``tier_rationale`` was honest. ADR 0012's tau
+# is not: it is *read from the execution provenance the record carries*,
+# and two deposits of the same structure legitimately get different
+# values. A register that rendered it as "roughly 50 cm-1" would state a
+# constant the code does not have, which is precisely the drift this
+# package exists to prevent — and would also hide the failure mode that
+# matters, which is what happens when the provenance is missing.
+#
+# So a check may declare its thresholds, and the two kinds are different
+# types rather than a flag, because they carry different obligations: a
+# constant needs a value, a provenance-derived one needs the keys it
+# reads and what it does when they are absent.
+
+
+@dataclass(frozen=True)
+class ConstantThreshold:
+    """A numeric line fixed in code.
+
+    :param name: Identifier a reader can grep for.
+    :param value: The number.
+    :param unit: Its unit, spelled the way a chemist writes it.
+    :param rationale: Why this number, and what tuning it would change.
+    """
+
+    name: str
+    value: float
+    unit: str
+    rationale: str
+
+    @property
+    def summary(self) -> str:
+        return f"{self.value:g} {self.unit}"
+
+
+@dataclass(frozen=True)
+class ProvenanceThreshold:
+    """A numeric line resolved from what the record records about its own execution.
+
+    The resolver is held as a callable for the same reason
+    :class:`PythonCheck` is: renaming or deleting it breaks the import of
+    the declaring module, so the register cannot keep describing a
+    resolution that no longer exists.
+
+    :param name: Identifier a reader can grep for.
+    :param unit: Unit of the resolved value.
+    :param resolver: The function that performs the resolution.
+    :param parameter_keys: Canonical ``calculation_parameter`` keys the
+        resolver reads. Verified against ``calculation_parameter_vocab``
+        in the live schema by the drift guard, so a key that is renamed
+        or never seeded fails CI rather than silently resolving to the
+        fallback forever.
+    :param values: The resolved value per recorded protocol, as
+        ``(protocol, value)`` pairs, for the register table.
+    :param fallback: What is used when the provenance is absent, and why
+        that is the safe direction. Load-bearing: a threshold that
+        degrades silently is worse than a constant.
+    :param rationale: Why the threshold cannot be a constant.
+    """
+
+    name: str
+    unit: str
+    resolver: Callable[..., object]
+    parameter_keys: tuple[str, ...]
+    values: tuple[tuple[str, str], ...]
+    fallback: str
+    rationale: str
+
+    @property
+    def location(self) -> str:
+        """``path/to/module.py:LINE``, resolved from the live object."""
+        source_file = inspect.getsourcefile(self.resolver)
+        if source_file is None:  # pragma: no cover - builtins only
+            return f"{self.resolver.__module__}.{self.resolver.__qualname__}"
+        _lines, first = inspect.getsourcelines(self.resolver)
+        return f"{_repo_relative(source_file)}:{first}"
+
+    @property
+    def summary(self) -> str:
+        return f"resolved per record, in {self.unit}"
+
+
+Threshold = ConstantThreshold | ProvenanceThreshold
+
+
+# ---------------------------------------------------------------------------
 # The declaration
 # ---------------------------------------------------------------------------
 
@@ -268,6 +362,13 @@ class ScientificCheck:
         boundary.
     :param divergence: A recorded disagreement between the check's
         documentation and its behaviour. Reported, never silently fixed.
+    :param thresholds: The numeric lines the check fires on, each
+        declared as a :class:`ConstantThreshold` or a
+        :class:`ProvenanceThreshold`. Empty where the check is purely
+        structural. Declaring the *kind* is the point: a register that
+        printed ADR 0012's τ as a number would be claiming the code
+        holds a constant it does not have, and would hide what happens
+        when the provenance τ is read from is missing.
     """
 
     code: str | tuple[str, ...] | None
@@ -279,6 +380,7 @@ class ScientificCheck:
     escape_hatch: str | None = None
     emitted: bool = True
     divergence: str | None = None
+    thresholds: tuple[Threshold, ...] = ()
     group: str = "Uncategorised"
     sort_key: int = 0
 
@@ -335,10 +437,13 @@ def collect_registered_checks(modules: tuple[ModuleType, ...]) -> list[Scientifi
 
 __all__ = [
     "CheckTier",
+    "ConstantThreshold",
     "DatabaseConstraint",
     "DesignPosition",
     "Enforcement",
+    "ProvenanceThreshold",
     "PythonCheck",
     "ScientificCheck",
+    "Threshold",
     "collect_registered_checks",
 ]

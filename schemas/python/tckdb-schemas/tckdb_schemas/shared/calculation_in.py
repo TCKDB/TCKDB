@@ -12,7 +12,11 @@ from datetime import datetime
 from pydantic import Field, field_validator
 
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.enums import CalculationQuality, CalculationType
+from tckdb_schemas.enums import (
+    CalculationQuality,
+    CalculationType,
+    ImaginaryModeDisposition,
+)
 from tckdb_schemas.fragments.artifact import ArtifactIn
 from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from tckdb_schemas.fragments.geometry import GeometryPayload
@@ -31,6 +35,11 @@ from tckdb_schemas.fragments.refs import (
     LevelOfTheoryRef,
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
+)
+from tckdb_schemas.stationary_point import (
+    StationaryPointFinding,
+    evaluate_transition_state_frequency,
+    resolve_tau_from_parameters,
 )
 
 
@@ -90,6 +99,15 @@ class CalculationIn(SchemaBase):
     freq_zpe_hartree: float | None = None
     freq_frequencies_cm1: list[float] | None = None
 
+    #: 1-based index into ``freq_frequencies_cm1`` naming the reaction
+    #: coordinate. Required by ADR 0012 for a transition state with more
+    #: than one imaginary mode; meaningless anywhere else.
+    freq_reaction_coordinate_mode_index: int | None = Field(default=None, ge=1)
+
+    #: What each *other* imaginary mode is, keyed by the same 1-based
+    #: index. Declared, never inferred.
+    freq_imaginary_dispositions: dict[int, ImaginaryModeDisposition] | None = None
+
     # Optional inline Cartesian Hessian (geometry-bound at persistence).
     hessian: HessianPayload | None = None
 
@@ -120,6 +138,85 @@ def freq_evidence(calc_in: "CalculationIn") -> tuple[int | None, float | None]:
     if calc_in.type != CalculationType.freq:
         return (None, None)
     return (calc_in.freq_n_imag, calc_in.freq_imag_freq_cm1)
+
+
+def freq_result_of(calc_in: "CalculationIn") -> FreqResultPayload | None:
+    """Build the ``FreqResultPayload`` this calculation will persist.
+
+    The single place the flat ``freq_*`` fields become the canonical
+    result block, so a consistency check and the persistence seam can
+    never disagree about what was deposited. ADR 0012's judgement needs
+    the whole block — the frequency list, the designated reaction
+    coordinate and each other imaginary mode's disposition — not just
+    the ``(n_imag, imag_freq_cm1)`` pair :func:`freq_evidence` returns.
+
+    Returns ``None`` when the calculation is not a frequency job or
+    carries no frequency evidence at all.
+    """
+    if calc_in.type != CalculationType.freq:
+        return None
+    if (
+        calc_in.freq_n_imag is None
+        and calc_in.freq_imag_freq_cm1 is None
+        and calc_in.freq_zpe_hartree is None
+        and calc_in.freq_frequencies_cm1 is None
+    ):
+        return None
+
+    dispositions = calc_in.freq_imaginary_dispositions or {}
+    modes = None
+    if calc_in.freq_frequencies_cm1 is not None:
+        # Sign convention: negative magnitudes mean imaginary modes; the
+        # canonical FrequencyModePayload validator will reject any
+        # inconsistent pair.
+        modes = [
+            FrequencyModePayload(
+                mode_index=i + 1,
+                frequency_cm1=value,
+                is_imaginary=value < 0,
+                imaginary_disposition=dispositions.get(i + 1),
+            )
+            for i, value in enumerate(calc_in.freq_frequencies_cm1)
+        ]
+    return FreqResultPayload(
+        n_imag=calc_in.freq_n_imag,
+        imag_freq_cm1=calc_in.freq_imag_freq_cm1,
+        zpe_hartree=calc_in.freq_zpe_hartree,
+        modes=modes,
+        reaction_coordinate_mode_index=(
+            calc_in.freq_reaction_coordinate_mode_index
+        ),
+    )
+
+
+def transition_state_frequency_findings(
+    calc_in: "CalculationIn", *, location: str
+) -> list[StationaryPointFinding]:
+    """Judge a bundle-local calculation's frequency evidence as a saddle point.
+
+    The bundle form of
+    :meth:`CalculationWithResultsPayload.transition_state_frequency_findings`,
+    so every path that can carry a transition state — the standalone
+    upload, the computed-reaction bundle and the pressure-dependent
+    network bundle — reaches the same owner with the same inputs and
+    cannot drift into three slightly different rules.
+    """
+    freq_result = freq_result_of(calc_in)
+    if freq_result is None:
+        return []
+    return evaluate_transition_state_frequency(
+        freq_result.n_imag,
+        freq_result.imag_freq_cm1,
+        location=location,
+        imaginary_modes=freq_result.imaginary_modes(),
+        reaction_coordinate_mode_index=(
+            freq_result.reaction_coordinate_mode_index
+        ),
+        tau=resolve_tau_from_parameters(
+            (observation.canonical_key, observation.canonical_value)
+            for observation in (calc_in.parameters or ())
+        ),
+    )
 
 
 def calculation_in_to_with_results_payload(
@@ -155,25 +252,7 @@ def calculation_in_to_with_results_payload(
         or calc_in.freq_zpe_hartree is not None
         or calc_in.freq_frequencies_cm1 is not None
     ):
-        modes = None
-        if calc_in.freq_frequencies_cm1 is not None:
-            # Sign convention: negative magnitudes mean imaginary modes; the
-            # canonical FrequencyModePayload validator will reject any
-            # inconsistent pair.
-            modes = [
-                FrequencyModePayload(
-                    mode_index=i + 1,
-                    frequency_cm1=value,
-                    is_imaginary=value < 0,
-                )
-                for i, value in enumerate(calc_in.freq_frequencies_cm1)
-            ]
-        freq_result = FreqResultPayload(
-            n_imag=calc_in.freq_n_imag,
-            imag_freq_cm1=calc_in.freq_imag_freq_cm1,
-            zpe_hartree=calc_in.freq_zpe_hartree,
-            modes=modes,
-        )
+        freq_result = freq_result_of(calc_in)
     if (
         calc_in.type == CalculationType.sp
         and calc_in.sp_electronic_energy_hartree is not None

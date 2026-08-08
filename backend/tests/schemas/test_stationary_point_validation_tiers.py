@@ -1,21 +1,31 @@
-"""The four-way split of imaginary-frequency validation (ADR 0008).
+"""Imaginary-frequency validation across its tiers (ADR 0008, ADR 0012).
 
-======================  ====================================  ======
-declared                rule                                  tier
-======================  ====================================  ======
-``minimum``             ``n_imag == 0``                       block
-``vdw_complex``         ``n_imag == 0`` *expected*            warn
-transition state        ``n_imag == 1``                       block
-transition state        ``|imag_freq_cm1| >= 100 cm⁻¹``       warn
-======================  ====================================  ======
+======================  ==========================================  =====================
+declared                rule                                        tier
+======================  ==========================================  =====================
+``minimum``             ``n_imag == 0``                             block
+``vdw_complex``         ``n_imag == 0`` *expected*                  warn
+transition state        at least one imaginary mode                 block
+transition state        exactly one designated reaction coordinate  block
+transition state        no undeclared extra at or above |ω_RC|      block
+transition state        extra imaginary modes, all below τ          warn
+transition state        an extra imaginary mode at or above τ       warn + structural flag
+transition state        ``|ω_RC| >= 100 cm⁻¹``                      warn
+======================  ==========================================  =====================
 
-The two blocking rules are definitions: no correct calculation produces a
-covalently bound minimum with an imaginary mode, or a "transition state"
-that is really a well or a higher-order saddle. The two warning rules are
-expectations: a van der Waals complex's intermolecular modes sit low
-enough that Hessian grid noise can fake a small imaginary mode, and a
+The minimum rules are unchanged by ADR 0012 and are definitions: no
+correct calculation produces a covalently bound minimum with an imaginary
+mode. The transition-state blocking rules are *contracts about what the
+record says*, not about magnitude — ADR 0012 retired ``n_imag == 1``
+because two scientifically correct calculations of the same saddle point
+can return ``n_imag == 1`` and ``n_imag == 3``, so the count was a gate a
+depositor could pass by changing an integration grid. The warning rules
+are expectations: a van der Waals complex's intermolecular modes sit low
+enough that Hessian grid noise can fake a small imaginary mode, a
 genuinely flat or variational barrier can have a soft reaction
-coordinate. Refusing either would reject correct science.
+coordinate, and an extra imaginary mode below the protocol's noise floor
+has an undetermined sign. Refusing any of them would reject correct
+science.
 
 Absence is never contradiction — an upload carrying no frequency evidence
 is unaffected in every case.
@@ -25,17 +35,31 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
-from tckdb_schemas.enums import StationaryPointKind as SchemasStationaryPointKind
+from tckdb_schemas.enums import (
+    HessianMethod,
+    ImaginaryModeDisposition,
+    StationaryPointKind as SchemasStationaryPointKind,
+)
 from tckdb_schemas.stationary_point import (
+    TAU_ANALYTIC_TIGHT_CM1,
+    TAU_PROTOCOL_NOT_RECORDED_CM1,
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
+    ImaginaryMode,
+    TauBasis,
     W_N_IMAG_CONTRADICTS_MINIMUM,
     W_N_IMAG_HIGHER_ORDER_SADDLE,
     W_N_IMAG_SUGGESTS_TS,
+    W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU,
+    W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE,
+    W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU,
     W_TS_IMAG_FREQ_TOO_SMALL,
-    W_TS_N_IMAG_NOT_ONE,
+    W_TS_NO_IMAGINARY_MODE,
+    W_TS_REACTION_COORDINATE_AMBIGUOUS,
+    W_TS_REACTION_COORDINATE_NOT_DESIGNATED,
     ValidationTier,
     evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
+    resolve_tau,
 )
 from tckdb_schemas.workflows.computed_reaction_upload import (
     BundleSpeciesIn,
