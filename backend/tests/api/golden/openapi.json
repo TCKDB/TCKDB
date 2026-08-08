@@ -19974,7 +19974,8 @@
       "MoleculeKind": {
         "enum": [
           "molecule",
-          "pseudo"
+          "pseudo",
+          "electron"
         ],
         "title": "MoleculeKind",
         "type": "string"

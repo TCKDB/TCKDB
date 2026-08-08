@@ -4,8 +4,37 @@ from enum import Enum
 
 
 class MoleculeKind(str, Enum):
+    # What sort of thing a reaction participant is.
+    #
+    # ``molecule`` is an atom-resolved structure with a SMILES, which is nearly
+    # everything. ``pseudo`` is a lumped or phenomenological construct whose
+    # composition and charge are not atom-resolved facts, so
+    # ``validate_reaction_elemental_balance`` and
+    # ``validate_reaction_charge_conservation`` decline to judge a reaction
+    # containing one.
+    #
+    # ``electron`` is deliberately **not** a flavour of ``pseudo``. A free
+    # electron has no SMILES and no atoms, but it is precisely known — zero
+    # atoms, charge -1 — where a pseudo-species is unknowable by construction.
+    # It therefore exempts a reaction from nothing: it contributes 0 to every
+    # element count and -1 to the charge sum, and both conservation checks stay
+    # live. Routing it through the ``pseudo`` exemption would have let any
+    # depositor switch mass balance off by adding an electron, which is a worse
+    # hole than the one the electron exists to close. See
+    # ``app.services.reaction_resolution._load_participant_species`` and
+    # revision ``b8f3d6a1c9e4``.
+    #
+    # Deliberately a comment rather than a docstring: this enum is mirrored as
+    # ``tckdb_schemas.enums.MoleculeKind``, and the two JSON schemas merge into
+    # one ``MoleculeKind`` component only while they are byte-identical. A
+    # docstring on one side alone splits it into ``MoleculeKind-Output`` and
+    # ``tckdb_schemas__enums__MoleculeKind`` and renames a published component.
+    # The two enums are kept in lockstep by
+    # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
+
     molecule = "molecule"
     pseudo = "pseudo"
+    electron = "electron"
 
 
 class StationaryPointKind(str, Enum):

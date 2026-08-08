@@ -1,10 +1,45 @@
-"""Validate calculation output geometry against species identity.
+"""Compare a calculation's output geometry against its species' formula.
 
-This is a *structure-consistency* check: does the output geometry still
-represent the molecule we claimed it does? It is intended to catch
-optimizations that rearranged the molecule, broke/formed bonds,
-dissociated, transferred a proton, or otherwise drifted to a different
-chemical identity.
+**What this actually checks is the molecular formula, not the molecular
+graph.** The field is named ``is_isomorphic`` and the policy below is worded
+as graph isomorphism, but the code beneath it does not test that.
+:func:`app.chemistry.torsion_fingerprint.resolve_atom_mapping` falls back to
+:func:`~app.chemistry.torsion_fingerprint._find_matches_using_smiles_graph`
+whenever bond perception from XYZ fails or produces no substructure match,
+which is the common case for the radicals, ions and stretched geometries this
+service mostly sees — and that fallback rejects a candidate on one condition
+only: the per-element atom counts disagree. Anything with the right formula is
+reported as isomorphic.
+
+Verified consequences, by direct call:
+
+- Ethanol declared, dimethyl ether deposited — constitutional isomers, both
+  C2H6O — **passes**.
+- Methane with one hydrogen pulled out to 5 Å, i.e. a dissociated fragment
+  pair — **passes**.
+
+So the rearrangement, bond-breaking, dissociation and proton-transfer cases
+this module was written to catch are **not** caught. A ``pass`` here means
+"the output has the same atoms as the declared species", nothing more, and a
+``fail`` here has only ever meant "the atom counts disagree".
+
+Connectivity validation is not implemented. Implementing it needs a bond
+perception step that is trustworthy on exactly the strained, radical and
+stretched structures where a rearrangement would matter, which
+``rdDetermineBonds`` is not — it fails silently rather than loudly, so a naive
+version would trade a visible gap for an invisible one.
+
+Where the formula rule blocks
+-----------------------------
+Per ADR 0008 §9, where the same fact is checked in more than one tier the
+blocking tier owns it and the others cite it. Formula agreement between a
+structure and the identity it is deposited under is owned by
+:func:`app.services.species_resolution.assert_geometry_composition_matches_identity`,
+which refuses the upload outright — but only for **conformer** geometries. A
+calculation's input and output geometries reach no composition check on any
+upload path, so for those this service's advisory row is the only place the
+comparison happens at all. That is deliberate for an *output* geometry: an
+optimisation that drifted is science to record, not a payload to refuse.
 
 Not in scope here:
 
@@ -15,12 +50,13 @@ Not in scope here:
   Hessian character, etc. — lives on the frequency result surfaces.
 
 Policy (species-entry optimizations):
-- Not graph-isomorphic → fail (hard gate)
-- Isomorphic + RMSD above threshold → warning (advisory)
+- Formula disagrees (recorded as ``is_isomorphic=False``) → fail
+- Formula agrees + RMSD above threshold → warning (advisory)
 - Otherwise → pass
 
-Graph isomorphism is the identity criterion.
-RMSD is a suspicion signal, not an identity criterion.
+Neither outcome refuses an upload; see
+:func:`run_and_persist_geometry_validation`. RMSD is a suspicion signal, not
+an identity criterion.
 
 Two layers:
 
@@ -99,7 +135,9 @@ def validate_calculation_geometry(
     :param rmsd_warning_threshold: RMSD above this triggers warning.
     :returns: GeometryValidationResult (caller persists).
     """
-    # --- Step 1: Graph isomorphism check on output geometry ---
+    # --- Step 1: Identity check on output geometry. Named for graph
+    # isomorphism; in practice a formula comparison — see the module
+    # docstring. ---
     output_mapping = resolve_atom_mapping(species_smiles, output_atoms)
 
     if output_mapping.status in ("no_match", "error"):

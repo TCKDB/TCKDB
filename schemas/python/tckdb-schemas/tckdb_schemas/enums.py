@@ -17,8 +17,33 @@ from enum import Enum
 
 
 class MoleculeKind(str, Enum):
+    # What sort of thing a reaction participant is.
+    #
+    # ``molecule`` is an atom-resolved structure with a SMILES, which is nearly
+    # everything. ``pseudo`` is a lumped or phenomenological construct whose
+    # composition and charge are not atom-resolved facts, so the conservation
+    # laws are not applied to a reaction containing one.
+    #
+    # ``electron`` is neither. A free electron has no SMILES and no atoms, but
+    # it is not *unknown* the way a pseudo-species is — it is exactly known:
+    # zero atoms, charge -1. It exists so that associative detachment
+    # (``OH- + H -> H2O + e-``), dissociative attachment, photoionization and
+    # photodetachment can be deposited as the balanced reactions they are.
+    # Declaring one therefore does **not** exempt a reaction from elemental
+    # balance or charge conservation; it contributes 0 to every element count
+    # and -1 to the charge sum, and both checks stay live. How to declare one
+    # is documented on ``SpeciesIdentityPayload``, which is where a depositor
+    # will be reading.
+    #
+    # Deliberately a comment rather than a docstring: this enum is mirrored by
+    # the backend's ``app.db.models.common.MoleculeKind``, and the two JSON
+    # schemas merge into one ``MoleculeKind`` component only while they are
+    # byte-identical. A docstring on one side alone renames the published
+    # component.
+
     molecule = "molecule"
     pseudo = "pseudo"
+    electron = "electron"
 
 
 class StationaryPointKind(str, Enum):

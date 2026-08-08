@@ -2385,13 +2385,27 @@ def _geom_for_smiles(smiles: str) -> str:
 
     The coordinates are an embedded conformer, not an optimised structure —
     these tests are about energy-correction bookkeeping and never read them.
+
+    Distance-geometry embedding fails on a minority of structures — long
+    flexible chains and strained rings are the usual culprits, and this helper
+    is handed a C16 chain — so a failure falls back to ``useRandomCoords``,
+    which seeds the optimisation from random positions instead of from the
+    distance bounds and succeeds where the default gives up. The fallback
+    changes only *where* the atoms are, never *which* atoms there are, so the
+    composition guarantee above survives it intact. Failing outright would turn
+    a future SMILES addition into an unrelated-looking test error.
     """
 
     mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
     params = AllChem.ETKDGv3()
     params.randomSeed = 0xC0FFEE
     if AllChem.EmbedMolecule(mol, params) != 0:
-        raise AssertionError(f"RDKit could not embed a 3D structure for {smiles!r}")
+        params.useRandomCoords = True
+        if AllChem.EmbedMolecule(mol, params) != 0:
+            raise AssertionError(
+                f"RDKit could not embed a 3D structure for {smiles!r}, with or "
+                "without random starting coordinates."
+            )
     conformer = mol.GetConformer()
     lines = [str(mol.GetNumAtoms()), smiles]
     for atom in mol.GetAtoms():

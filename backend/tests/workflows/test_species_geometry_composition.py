@@ -16,10 +16,23 @@ Formula agreement between a structure and its own identifier is definitional
 under ADR 0008 — no correct calculation can produce a geometry that is not made
 of its own molecule's atoms — so it blocks.
 
+**Scope: conformer geometries, and only those.** The check runs from
+``resolve_species_entry``, so it reaches every conformer geometry on the
+computed-species bundle, ``/uploads/conformers``, the computed-reaction bundle
+and the PDep bundle. It does **not** reach ``CalculationIn.input_geometries``
+or ``output_geometries`` on any path: benzene coordinates can still be attached
+as a calculation geometry under a ``smiles: "C"`` species entry and the deposit
+is accepted. That gap is stated rather than closed here — for an *output*
+geometry, an optimisation that drifted is science to record, not a payload to
+refuse; for an *input* geometry it is simply open. The only comparison those
+geometries get is the advisory ``calc_geometry_validation`` row, which is
+formula-based too (see ``app.services.geometry_validation``).
+
 The interesting half of this file is the accepting half. A blocking check that
 refuses correct science is worse than no check, so isotopologues, charged
-species, two-letter element symbols written in whatever case an ESS felt like,
-and deposits with no geometry at all must all still go through.
+species, hydrogens written ``D`` or ``T``, two-letter element symbols written
+in whatever case an ESS felt like, and deposits with no geometry at all must
+all still go through.
 """
 
 from __future__ import annotations
@@ -28,9 +41,12 @@ from contextlib import contextmanager
 from typing import Iterator
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
+from app.db.models.calculation import Calculation, CalculationGeometryValidation
+from app.db.models.common import ValidationStatus
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.workflows.computed_species_upload import (
@@ -77,6 +93,24 @@ _XYZ_CH3CL_MIXED_CASE = (
     "h -0.372  1.028  0.000\n"
     "h -0.372 -0.514  0.890\n"
     "h -0.372 -0.514 -0.890"
+)
+#: Heavy water, written the way an ESS is entitled to write it: ``D`` in the
+#: element column. Gaussian, ORCA, Molpro and CFOUR all emit or accept the
+#: token, and ``geometry_atom.element`` stores it verbatim by design.
+_XYZ_D2O = (
+    "3\nheavy water, hydrogens written as D\n"
+    "O  0.000  0.000  0.117\n"
+    "D  0.000  0.757 -0.469\n"
+    "D  0.000 -0.757 -0.469"
+)
+#: Tritiated methane, CH3T, with the tritium written ``T``.
+_XYZ_CH3T = (
+    "5\nmethane with one tritium\n"
+    "C  0.000  0.000  0.000\n"
+    "T  0.629  0.629  0.629\n"
+    "H -0.629 -0.629  0.629\n"
+    "H -0.629  0.629 -0.629\n"
+    "H  0.629 -0.629 -0.629"
 )
 #: Hydroxide, OH-. Two atoms: O (index 1) and H (index 2) at 0.964 A.
 _XYZ_OH = "2\nhydroxide\nO 0.000 0.000 0.000\nH 0.000 0.000 0.964"
@@ -297,6 +331,62 @@ def test_a_radical_is_accepted(db_engine) -> None:
     assert outcome.species_entry_id is not None
 
 
+def test_deuterium_written_as_the_element_D_is_accepted(db_engine) -> None:
+    """``D`` is hydrogen, and this check must know it.
+
+    ``D`` is a legal, common XYZ token — Gaussian, ORCA, Molpro and CFOUR all
+    emit or accept it — and ``geometry_atom.element`` stores it verbatim. A raw
+    comparison reads this geometry as containing an element water's SMILES
+    never mentions and refuses a deposit that was accepted before any
+    composition check existed. That is a regression on correct chemistry, and
+    the error message it produced ended by promising that "isotope labels are
+    counted as their element, so an isotopologue is not a mismatch" — while
+    refusing the depositor for an isotope label.
+
+    Note what the ``D`` does *not* do: it carries no isotope identity. Isotope
+    identity lives in ``geometry.isotopes`` and in SMILES isotope notation, so
+    this deposit is the ordinary H2O it declares itself to be. That is
+    unchanged from before the composition check, and deliberately not widened
+    here.
+    """
+
+    with _isolated_session(db_engine) as session:
+        outcome = _upload(session, _bundle(smiles="O", xyz=_XYZ_D2O))
+    assert outcome.species_entry_id is not None
+
+
+def test_tritium_written_as_the_element_T_is_accepted(db_engine) -> None:
+    """``T`` is hydrogen too, and for exactly the same reason."""
+
+    with _isolated_session(db_engine) as session:
+        outcome = _upload(session, _bundle(smiles="C", xyz=_XYZ_CH3T))
+    assert outcome.species_entry_id is not None
+
+
+def test_a_D_geometry_with_the_wrong_atom_count_is_still_refused(
+    db_engine,
+) -> None:
+    """Resolving ``D`` to ``H`` must not blunt the check.
+
+    Otherwise the fix for the deuterium regression would have bought
+    acceptance by making the rule stop counting hydrogens at all.
+    """
+
+    with _isolated_session(db_engine) as session:
+        with pytest.raises(ValueError) as excinfo:
+            _upload(
+                session,
+                _bundle(
+                    smiles="O",
+                    xyz="2\nhydroxyl written with a D\nO 0.0 0.0 0.0\nD 0.0 0.0 0.96",
+                ),
+            )
+    message = str(excinfo.value)
+    assert "species_geometry_composition_mismatch" in message
+    assert "geometry is HO" in message
+    assert "is H2O" in message
+
+
 def test_element_symbols_in_any_case_are_accepted(db_engine) -> None:
     """``CL`` is chlorine and ``c`` is carbon.
 
@@ -304,13 +394,40 @@ def test_element_symbols_in_any_case_are_accepted(db_engine) -> None:
     electronic-structure codes are not consistent about capitalisation.
     Refusing correct chemistry over a string is what ADR 0008 puts out of
     bounds for a blocking check; this exact bug shipped once already.
+
+    The upload succeeding is only half of it. ``validate_calculation_geometry``
+    compares the very same symbols on the very same deposit, and it compared
+    them raw — so this bundle was accepted at the blocking tier and
+    simultaneously recorded ``is_isomorphic=False`` /
+    ``validation_status='fail'`` in ``calc_geometry_validation``, a false
+    ``fail`` on correct chemistry with two checks in one tree disagreeing about
+    one deposit. Per ADR 0008 §9 a fact gets one owner; asserting the persisted
+    row here is what keeps the advisory tier from contradicting the blocking
+    one.
     """
 
     with _isolated_session(db_engine) as session:
         outcome = _upload(
             session, _bundle(smiles="CCl", xyz=_XYZ_CH3CL_MIXED_CASE)
         )
-    assert outcome.species_entry_id is not None
+        assert outcome.species_entry_id is not None
+
+        session.flush()
+        # Scoped to this deposit's own calculation: ``db_engine`` is
+        # session-scoped and other test modules commit, so an unfiltered
+        # count would depend on what else ran first.
+        validation = session.scalar(
+            select(CalculationGeometryValidation).where(
+                CalculationGeometryValidation.calculation_id.in_(
+                    select(Calculation.id).where(
+                        Calculation.species_entry_id == outcome.species_entry_id
+                    )
+                )
+            )
+        )
+        assert validation is not None
+        assert validation.is_isomorphic is True
+        assert validation.validation_status == ValidationStatus.passed
 
 
 def test_a_deposit_with_no_geometry_is_accepted(db_engine) -> None:
@@ -373,3 +490,35 @@ def test_the_pure_seam_refuses_a_mismatch() -> None:
             _identity("C"), GeometryPayload(xyz_text=_XYZ_CH3)
         )
     assert "species_geometry_composition_mismatch" in str(excinfo.value)
+
+
+def test_the_formula_is_rendered_in_hill_notation() -> None:
+    """A chemist must recognise the formula in the error, or it is noise.
+
+    Ordering the elements alphabetically renders chloromethane ``CClH3``, which
+    nobody reads as the molecule they deposited. Hill notation — carbon, then
+    hydrogen, then the rest alphabetically — renders it ``CH3Cl``, and is what
+    every formula in the literature uses.
+    """
+
+    with pytest.raises(ValueError) as excinfo:
+        assert_geometry_composition_matches_identity(
+            _identity("CCl"), GeometryPayload(xyz_text=_XYZ_CH3)
+        )
+    message = str(excinfo.value)
+    assert "is CH3Cl" in message
+    assert "CClH3" not in message
+
+
+def test_a_carbon_free_formula_stays_alphabetical() -> None:
+    """Hill notation only privileges C and H when there is a carbon.
+
+    Water is ``H2O``, not ``OH2``: with no carbon, hydrogen takes its
+    alphabetical place like everything else.
+    """
+
+    with pytest.raises(ValueError) as excinfo:
+        assert_geometry_composition_matches_identity(
+            _identity("O"), GeometryPayload(xyz_text=_XYZ_CH3)
+        )
+    assert "is H2O" in str(excinfo.value)

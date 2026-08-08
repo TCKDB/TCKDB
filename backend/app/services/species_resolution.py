@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 
-from app.chemistry.geometry import normalize_element_symbol, parse_xyz
+from app.chemistry.geometry import parse_xyz, resolve_element_symbol
 from app.chemistry.species import (
     canonical_isotope_key,
     canonical_species_identity,
@@ -19,6 +19,7 @@ from app.chemistry.species import (
     element_counts_from_smiles,
     format_element_counts,
     identity_mol_from_smiles,
+    is_electron,
     isotope_substitutions,
 )
 from app.db.models.common import MoleculeKind, StereoKind
@@ -44,6 +45,12 @@ def resolve_species(
 ) -> Species:
     """Resolve or create a species row from upload identity data.
 
+    A free electron resolves like anything else — one row, deduped on the same
+    ``(smiles, charge, multiplicity)`` identity as every other species — but
+    with the graph-derived steps skipped, because it has no graph. There is
+    exactly one electron, so every deposit that declares one converges on that
+    single row.
+
     :param session: Active SQLAlchemy session.
     :param payload: Upload-facing species-entry identity payload.
     :returns: Existing or newly created ``Species`` row.
@@ -55,8 +62,13 @@ def resolve_species(
     # Derive stereo_kind from molecular graph if not explicitly provided
     stereo_kind = payload.stereo_kind
     if stereo_kind == StereoKind.unspecified:
-        ident_mol = identity_mol_from_smiles(payload.smiles)
-        stereo_kind, _auto_label = classify_stereo_kind(ident_mol)
+        if is_electron(payload):
+            # No graph, no stereocentres, and nothing that could ever acquire
+            # one — not "unspecified pending better data".
+            stereo_kind = StereoKind.achiral
+        else:
+            ident_mol = identity_mol_from_smiles(payload.smiles)
+            stereo_kind, _auto_label = classify_stereo_kind(ident_mol)
 
     # Identity is (canonical_smiles, charge, multiplicity) — see DR-0031.
     # inchi_key is stored for cross-notation search but is NOT the dedup
@@ -132,6 +144,12 @@ def assert_geometry_isotopes_match_identity(
     :raises ValueError: If the isotope substitutions disagree.
     """
 
+    if is_electron(payload):
+        # ``[e-]`` is a sentinel, not a SMILES; there are no nuclei to label.
+        # The composition check has already refused any geometry attached to
+        # an electron, so reaching here with one is not possible.
+        return
+
     from_smiles = isotope_substitutions(payload.smiles)
     from_geometry = parse_xyz(geometry).isotope_substitutions()
     if from_smiles == from_geometry:
@@ -158,15 +176,15 @@ def assert_geometry_composition_matches_identity(
     payload: SpeciesEntryIdentityPayload,
     geometry: GeometryPayload,
 ) -> None:
-    """Refuse a deposit whose structure is not made of the atoms it declares.
+    """Refuse a conformer geometry not made of the atoms its entry declares.
 
     Nothing checked this before. A species entry declares what it is in
-    ``smiles``; the geometry deposited under it is the structure that every
-    downstream number — energies, frequencies, partition functions, thermo —
-    is computed from. If the two name different molecules, the record is
-    internally contradictory: the identity says methane and the coordinates
-    describe methyl, and every consumer that trusts the label gets numbers for
-    a molecule nobody deposited.
+    ``smiles``; the conformer geometry deposited under it is the structure that
+    the numbers hanging off that conformer — energies, frequencies, partition
+    functions, thermo — are computed from. If the two name different molecules,
+    the record is internally contradictory: the identity says methane and the
+    coordinates describe methyl, and every consumer that trusts the label gets
+    numbers for a molecule nobody deposited.
 
     Formula agreement between a structure and its own identifier is
     **definitional** under ADR 0008 — no correct calculation can produce a
@@ -182,11 +200,39 @@ def assert_geometry_composition_matches_identity(
     composition check in the codebase compared a reaction's two *sides*
     against each other and never a structure against its own label.
 
+    Which geometries this reaches, and which it does not
+    ---------------------------------------------------
+    **Conformer geometries only.** This function is called from
+    :func:`resolve_species_entry` and its coverage is exactly that of the
+    isotope check beside it: the geometry deposited with a species entry and
+    the further conformer geometries deposited under the same entry. That
+    reaches the computed-species bundle, ``/uploads/conformers``, the
+    computed-reaction bundle and the PDep bundle, because all four resolve
+    their conformer geometries through this one seam.
+
+    **Calculation geometries are not reached, on any path.**
+    ``CalculationIn.input_geometries`` and ``output_geometries`` are attached
+    to a ``calculation`` row, never resolved through
+    :func:`resolve_species_entry`, and no composition check runs on them
+    anywhere: benzene coordinates can be attached as a calculation geometry
+    under a ``smiles: "C"`` species entry and the deposit is accepted. The
+    only comparison they get is
+    :mod:`app.services.geometry_validation`, which is advisory rather than
+    blocking, runs only for ``opt`` calculations, and — despite its
+    ``is_isomorphic`` field name — compares formulas too (see that module's
+    docstring). Closing that gap for *output* geometries would be wrong: an
+    optimisation that dissociated is science to record. Closing it for *input*
+    geometries is a genuine open gap and is not attempted here.
+
     What is compared, and what deliberately is not
     ----------------------------------------------
     **Elements, not nuclides.** ``[2H]`` is stored as element ``H`` in the
     canonical form, so counting isotope-resolved would refuse every
-    isotopologue. Isotope agreement is checked separately and exactly by
+    isotopologue. The XYZ element column gets the same treatment from the
+    other direction: ``D`` and ``T`` are legal tokens that every major ESS
+    emits or accepts, and they are counted as the hydrogen they are (see
+    :func:`app.chemistry.geometry.resolve_element_symbol`). Isotope agreement
+    is checked separately and exactly by
     :func:`assert_geometry_isotopes_match_identity`.
 
     **Counts, not positions.** Two structures with the same formula pass, even
@@ -215,6 +261,12 @@ def assert_geometry_composition_matches_identity(
     a lumped or phenomenological construct has no atom-resolved composition
     for a geometry to agree with.
 
+    A free electron is **not** exempt, and this is the point of separating the
+    two kinds. Its composition is not unknown, it is empty: zero atoms. Any
+    geometry deposited under an electron therefore contradicts it and is
+    refused here, which is what keeps ``molecule_kind: electron`` from becoming
+    a second, quieter way to smuggle a structure past this check.
+
     :param payload: Upload-facing resolved identity payload.
     :param geometry: Upload-facing geometry payload deposited alongside it.
     :raises ValueError: If the geometry's element counts contradict the
@@ -224,27 +276,36 @@ def assert_geometry_composition_matches_identity(
     if payload.molecule_kind == MoleculeKind.pseudo:
         return
 
-    try:
-        from_smiles = element_counts_from_smiles(payload.smiles)
-    except ValueError:
-        return
+    if is_electron(payload):
+        from_smiles: Counter[str] = Counter()
+    else:
+        try:
+            from_smiles = element_counts_from_smiles(payload.smiles)
+        except ValueError:
+            return
 
     from_geometry: Counter[str] = Counter(
-        normalize_element_symbol(element)
+        resolve_element_symbol(element)
         for element, _x, _y, _z in parse_xyz(geometry).atoms
     )
     if from_smiles == from_geometry:
         return
 
+    geometry_formula = format_element_counts(from_geometry) or "empty"
+    identity_formula = (
+        format_element_counts(from_smiles)
+        or "nothing at all — a free electron has no atoms"
+    )
     raise ValueError(
-        f"Species geometry is {format_element_counts(from_geometry)}, but "
+        f"Species geometry is {geometry_formula}, but "
         f"species_entry.smiles={payload.smiles!r} is "
-        f"{format_element_counts(from_smiles)} "
+        f"{identity_formula} "
         "(species_geometry_composition_mismatch). A deposited structure must "
         "be made of the atoms its own identifier declares, or every number "
         "computed from it describes a different molecule. Hydrogens are "
         "counted explicitly on both sides, and isotope labels are counted as "
-        "their element, so an isotopologue is not a mismatch."
+        "their element — SMILES [2H] and the XYZ symbols D and T all count as "
+        "H — so an isotopologue is not a mismatch."
     )
 
 
@@ -264,6 +325,12 @@ def resolve_species_entry(
     :func:`app.chemistry.species.canonical_isotope_key`). Two deposits that
     differ only in deuteration therefore resolve to different entries under
     one shared species, and two all-standard deposits dedupe onto one entry.
+
+    A free electron (``molecule_kind: electron``) resolves through here too,
+    so a reaction can declare one as a participant, but every graph-derived
+    column of its entry stays ``NULL`` — it has no molecular graph — and any
+    geometry deposited under it is refused, because an electron has no atoms
+    for a structure to be made of.
 
     :param session: Active SQLAlchemy session.
     :param payload: Upload-facing resolved identity payload.
@@ -300,7 +367,11 @@ def resolve_species_entry(
     if stereo_label is None and species.stereo_kind != StereoKind.achiral and xyz_text:
         stereo_label = derive_stereo_label_from_3d(payload.smiles, xyz_text)
 
-    isotope_key = canonical_isotope_key(payload.smiles)
+    # A free electron has no molecular graph, so every graph-derived column
+    # stays NULL: no isotope key (no nuclei to label), no ``mol`` and no
+    # ``unmapped_smiles`` (nothing for the RDKit cartridge to hold, and nothing
+    # a structure search should ever return).
+    isotope_key = None if is_electron(payload) else canonical_isotope_key(payload.smiles)
 
     species_entry = session.scalar(
         select(SpeciesEntry).where(
@@ -319,12 +390,17 @@ def resolve_species_entry(
     if species_entry is None:
         # Auto-derive unmapped_smiles and mol SMILES for the RDKit cartridge
         unmapped = payload.unmapped_smiles
-        if unmapped is None:
-            unmapped = derive_unmapped_smiles(payload.smiles)
+        mol_smiles: str | None
+        if is_electron(payload):
+            unmapped = None
+            mol_smiles = None
+        else:
+            if unmapped is None:
+                unmapped = derive_unmapped_smiles(payload.smiles)
 
-        mol_smiles = Chem.MolToSmiles(
-            identity_mol_from_smiles(payload.smiles), canonical=True
-        )
+            mol_smiles = Chem.MolToSmiles(
+                identity_mol_from_smiles(payload.smiles), canonical=True
+            )
 
         try:
             with session.begin_nested():

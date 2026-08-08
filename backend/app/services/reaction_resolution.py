@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.chemistry.geometry import normalize_element_symbol
+from app.chemistry.geometry import resolve_element_symbol
 from app.chemistry.species import element_counts_from_smiles, format_element_counts
 from app.db.models.common import MoleculeKind, ReactionRole
 from app.db.models.geometry import GeometryAtom
@@ -61,10 +61,19 @@ def reaction_stoichiometry_hash(
 
 
 def _element_counts_for_species(species: Species) -> Counter[str]:
-    """Count element occurrences for one ordinary (molecule-kind) species.
+    """Count element occurrences for one reaction participant.
+
+    A free electron contributes an empty count — not because its composition
+    is unknown, but because it is known to be nothing. That is the whole
+    difference between it and a pseudo-species, which is skipped by
+    :func:`_load_participant_species` before it ever gets here: an electron
+    still has to balance, it simply has no atoms to bring to the balance.
 
     :raises ValueError: If the stored SMILES cannot be parsed by RDKit.
     """
+
+    if species.kind == MoleculeKind.electron:
+        return Counter()
 
     try:
         return element_counts_from_smiles(species.smiles)
@@ -89,6 +98,15 @@ def _load_participant_species(
     their elements nor their charge is a quantity a conservation law applies
     to. Shared by both conservation checks so the two can never drift into
     exempting different reactions.
+
+    **A declared electron does not land here.** ``MoleculeKind.electron`` is
+    checked against ``pseudo`` specifically, not against "anything that is not
+    a molecule", and that is load-bearing rather than incidental. An electron
+    is exactly known — zero atoms, charge -1 — so it participates in both
+    conservation laws instead of suspending them. Were it routed through this
+    exemption, adding an electron to any reaction would switch its mass
+    balance off, which is a larger hole than the one the electron exists to
+    close.
     """
 
     species_ids = set(reactant_stoichiometry) | set(product_stoichiometry)
@@ -123,11 +141,16 @@ def validate_reaction_elemental_balance(
     may represent lumped or phenomenological constructs rather than
     atom-resolved chemistry).
 
+    A declared free electron is **not** exempted — it contributes an empty
+    element count, so a reaction carrying one still has to balance atom for
+    atom. See :func:`_load_participant_species` for why that separation
+    matters.
+
     Charge is the other conserved quantity and is checked separately by
     :func:`validate_reaction_charge_conservation`.
 
-    :raises ValueError: If all participants are ordinary molecule species
-        and the reactant/product element totals disagree.
+    :raises ValueError: If no participant is a pseudo-species and the
+        reactant/product element totals disagree.
     """
 
     species_by_id = _load_participant_species(
@@ -199,16 +222,30 @@ def validate_reaction_charge_conservation(
     every ion-molecule reaction in the literature, which is exactly the false
     positive ADR 0008 disqualifies a blocking check for.
 
-    **What this cannot express.** A free electron is not a species TCKDB can
-    represent — there is no SMILES for one — so genuinely electron-transferring
-    processes (dissociative attachment, photoionization) have no way to balance
-    here. Elemental balance has the same limitation for the same reason and
-    offers the same escape: declare a participant as a ``pseudo`` species,
-    which exempts the reaction from both rules and records that its
-    bookkeeping is phenomenological.
+    **Electron-transferring processes balance here too.** Associative
+    detachment (``OH- + H -> H2O + e-``), dissociative attachment,
+    photoionization and photodetachment all release or consume a free
+    electron, and all are real measured gas-phase chemistry. They are
+    deposited by declaring the electron as a participant —
+    ``{"molecule_kind": "electron", "smiles": "[e-]", "charge": -1,
+    "multiplicity": 2}`` — which contributes -1 to the side it sits on and
+    lets the reaction balance as written.
 
-    :raises ValueError: If all participants are ordinary molecule species and
-        the reactant/product charge totals disagree.
+    That door has to exist for this check to be allowed to block at all.
+    Charge conservation is definitional only if the participant list can be
+    *complete*; with no way to name the electron, the rule would in fact be
+    asserting "every participant was declared", which is an expectation about
+    the depositor rather than a definition of a reaction, and ADR 0008
+    disqualifies an expectation from blocking. The electron is what makes the
+    stated claim the claim actually enforced.
+
+    Declaring one exempts nothing. Unlike a ``pseudo`` participant, an
+    electron is precisely known, so it contributes 0 atoms to elemental
+    balance and -1 to this sum, and both checks still have to pass. See
+    :func:`_load_participant_species`.
+
+    :raises ValueError: If no participant is a pseudo-species and the
+        reactant/product charge totals disagree.
     """
 
     species_by_id = _load_participant_species(
@@ -234,17 +271,14 @@ def validate_reaction_charge_conservation(
             f"total {product_charge:+d} (reaction_charge_not_conserved). Charge "
             "is conserved across a reaction, so the two sides describe "
             "different numbers of electrons and cannot be the same reaction. "
-            "A net charge is fine as long as both sides carry the same one; if "
-            "the process genuinely transfers an electron to or from somewhere "
-            "outside the reaction, declare that participant as a pseudo "
-            "species."
+            "A net charge is fine as long as both sides carry the same one. If "
+            "the process genuinely releases or consumes a free electron — "
+            "associative or dissociative attachment, photoionization, "
+            "photodetachment — declare the electron as a participant: "
+            '{"molecule_kind": "electron", "smiles": "[e-]", "charge": -1, '
+            '"multiplicity": 2}. It balances the charge and still leaves the '
+            "elemental balance to be satisfied on its own terms."
         )
-
-
-def _format_formula(counts: Mapping[str, int]) -> str:
-    """Render an element count as a formula, for an error a human can read."""
-
-    return format_element_counts(counts)
 
 
 def validate_transition_state_composition(
@@ -326,8 +360,8 @@ def validate_transition_state_composition(
         if ts_counts != reactant_totals:
             raise ValueError(
                 f"Transition state '{subject_label}' is "
-                f"{_format_formula(ts_counts)}, but the reaction it sits in is "
-                f"{_format_formula(reactant_totals)} "
+                f"{format_element_counts(ts_counts)}, but the reaction it sits "
+                f"in is {format_element_counts(reactant_totals)} "
                 "(transition_state_composition_mismatch). A transition state is "
                 "a stationary point on the potential energy surface of its "
                 "reaction's atoms, so a saddle point made of different atoms "
@@ -364,15 +398,15 @@ def _transition_state_element_counts(
     SMILES is a lossy description of a structure that is, by construction, not
     a stable molecule.
 
-    Both branches are normalised through
-    :func:`~app.chemistry.geometry.normalize_element_symbol` before they are
-    counted, and so is the reactant side, because the two sources disagree
-    about capitalisation by construction: ``geometry_atom.element`` holds
+    Both branches are resolved through
+    :func:`~app.chemistry.geometry.resolve_element_symbol` before they are
+    counted, and so is the reactant side, because the two sources spell
+    elements differently by construction: ``geometry_atom.element`` holds
     whatever the depositor's XYZ said, while ``_element_counts_for_species``
     reads RDKit's title-case ``GetSymbol()``. Comparing them raw makes a saddle
-    point written ``CL`` or ``c`` contradict a reaction it is in fact made of,
-    which refuses correct chemistry over a string — the failure ADR 0008 puts
-    out of bounds for a blocking check.
+    point written ``CL``, ``c`` or ``D`` contradict a reaction it is in fact
+    made of, which refuses correct chemistry over a string — the failure ADR
+    0008 puts out of bounds for a blocking check.
     """
 
     if transition_state_geometry_id is not None:
@@ -382,14 +416,14 @@ def _transition_state_element_counts(
             )
         ).all()
         if elements:
-            return Counter(normalize_element_symbol(element) for element in elements)
+            return Counter(resolve_element_symbol(element) for element in elements)
 
     if transition_state_smiles is not None:
         mol = Chem.MolFromSmiles(transition_state_smiles)
         if mol is not None:
             mol = Chem.AddHs(mol)
             return Counter(
-                normalize_element_symbol(atom.GetSymbol()) for atom in mol.GetAtoms()
+                resolve_element_symbol(atom.GetSymbol()) for atom in mol.GetAtoms()
             )
 
     return None

@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from rdkit import Chem
 from rdkit.Chem import rdMolTransforms
 
+from app.chemistry.geometry import resolve_element_symbol
+
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -460,15 +462,27 @@ def _find_matches_using_smiles_graph(
     inference for radicals, TSs, and stretched bonds.
 
     Returns a list of valid (xyz_idx → ref_idx) mappings.
+
+    Both sides go through
+    :func:`~app.chemistry.geometry.resolve_element_symbol` before they are
+    grouped, because they come from sources that spell elements differently by
+    construction: the XYZ side holds whatever the depositor's file said
+    (``CL``, ``c``, ``D``), the reference side holds RDKit's title-case
+    ``GetSymbol()``. Grouping the raw strings makes a correct geometry look
+    like it has no atoms in common with its own SMILES, and the caller records
+    that as ``is_isomorphic=False`` / ``validation_status='fail'`` — a false
+    ``fail`` on correct chemistry, and one that disagreed with
+    :func:`app.services.species_resolution.assert_geometry_composition_matches_identity`,
+    which normalises, about the very same deposit.
     """
     # Build element→indices maps for XYZ atoms
     xyz_by_elem: dict[str, list[int]] = {}
     for i, (elem, _x, _y, _z) in enumerate(xyz_atoms):
-        xyz_by_elem.setdefault(elem, []).append(i)
+        xyz_by_elem.setdefault(resolve_element_symbol(elem), []).append(i)
 
     ref_by_elem: dict[str, list[int]] = {}
     for i in range(ref_mol.GetNumAtoms()):
-        elem = ref_mol.GetAtomWithIdx(i).GetSymbol()
+        elem = resolve_element_symbol(ref_mol.GetAtomWithIdx(i).GetSymbol())
         ref_by_elem.setdefault(elem, []).append(i)
 
     # Check element counts match
@@ -571,15 +585,25 @@ def resolve_atom_mapping(
         if not matches:
             return AtomMappingResult(status="no_match")
 
+        # Everything below indexes the *uploaded* atom list, never ``xyz_mol``.
+        # ``xyz_mol`` is unbound whenever ``_build_mol_from_xyz`` raised, which
+        # is precisely when the SMILES-graph fallback was supposed to rescue
+        # the mapping; reading it here turned that rescue into a ``NameError``,
+        # caught by the blanket handler below and reported as
+        # ``status="error"`` — so the fallback could only ever be reached when
+        # bond perception had already succeeded.
+        heavy_xyz_indices = [
+            index
+            for index, (element, _x, _y, _z) in enumerate(xyz_atoms)
+            if resolve_element_symbol(element) != "H"
+        ]
+
         # Deduplicate: only care about heavy-atom-distinct mappings
         # (H permutations within the same heavy-atom mapping are equivalent
         # for torsion purposes since we use canonical terminal atom selection)
         seen_heavy_maps: dict[tuple, tuple] = {}
         for match in matches:
-            heavy_key = tuple(
-                match[i] for i in range(xyz_mol.GetNumAtoms())
-                if xyz_mol.GetAtomWithIdx(i).GetAtomicNum() > 1
-            )
+            heavy_key = tuple(match[i] for i in heavy_xyz_indices)
             if heavy_key not in seen_heavy_maps:
                 seen_heavy_maps[heavy_key] = match
 
@@ -595,7 +619,7 @@ def resolve_atom_mapping(
             # Build conformer on ref_mol with mapped coordinates
             conf = Chem.Conformer(ref_mol.GetNumAtoms())
             mapped_coords: list[tuple[float, float, float]] = [(0.0, 0.0, 0.0)] * ref_mol.GetNumAtoms()
-            for xyz_idx in range(xyz_mol.GetNumAtoms()):
+            for xyz_idx in range(len(xyz_atoms)):
                 ref_idx = match[xyz_idx]
                 _, x, y, z = xyz_atoms[xyz_idx]
                 conf.SetAtomPosition(ref_idx, (x, y, z))
@@ -615,7 +639,9 @@ def resolve_atom_mapping(
 
             fingerprints.append(fp)
             if chosen_mapping is None:
-                chosen_mapping = {xyz_idx: match[xyz_idx] for xyz_idx in range(xyz_mol.GetNumAtoms())}
+                chosen_mapping = {
+                    xyz_idx: match[xyz_idx] for xyz_idx in range(len(xyz_atoms))
+                }
                 chosen_mapped_coords = mapped_coords
 
         # Check if all fingerprints agree

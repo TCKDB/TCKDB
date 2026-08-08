@@ -308,6 +308,7 @@ enum MolecularPropertyKind {
 enum MoleculeKind {
   molecule
   pseudo
+  electron
 }
 
 enum NetworkChannelKind {

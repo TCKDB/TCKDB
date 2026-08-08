@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.chemistry.isotopes import normalize_isotope, validate_isotope
+from app.chemistry.isotopes import (
+    HYDROGEN_ISOTOPE_SYMBOLS,
+    normalize_isotope,
+    validate_isotope,
+)
 from app.schemas.fragments.geometry import GeometryPayload
 
 
@@ -32,6 +36,39 @@ def normalize_element_symbol(symbol: str) -> str:
     """
 
     return symbol.strip().capitalize()
+
+
+def resolve_element_symbol(symbol: str) -> str:
+    """Return the *element* an XYZ symbol names, not the nuclide it names.
+
+    :func:`normalize_element_symbol` settles capitalisation. This settles the
+    other way an XYZ can spell an element that a comparison must not trip over:
+    ``D`` and ``T`` are hydrogen. Both are legal, common tokens — Gaussian,
+    ORCA, Molpro and CFOUR all emit or accept them — and
+    ``geometry_atom.element`` stores them verbatim by design, so a check that
+    compares raw symbols reads a perfectly ordinary deuterated geometry as
+    containing an element its SMILES never mentions. That refuses correct
+    chemistry, which ADR 0008 disqualifies a blocking check from doing.
+
+    Use this wherever elements are **counted or matched** — composition checks,
+    graph-isomorphism element groups. Do not use it where the deposited symbol
+    itself is the subject (round-tripping ``geometry_atom.element``, rendering
+    an XYZ back to a depositor): ``D`` is what they wrote and what they should
+    read back.
+
+    Isotope *identity* is unaffected: it is carried atom-resolved by
+    ``geometry.isotopes`` and by SMILES isotope notation, and compared by
+    :func:`app.services.species_resolution.assert_geometry_isotopes_match_identity`.
+    Writing ``D`` in the element column is therefore composition-neutral and
+    isotope-silent, exactly as it was before any composition check existed.
+
+    :param symbol: Element symbol as deposited.
+    :returns: The normalised symbol of the element, with ``D`` and ``T``
+        resolved to ``H``.
+    """
+
+    normalized = normalize_element_symbol(symbol)
+    return "H" if normalized in HYDROGEN_ISOTOPE_SYMBOLS else normalized
 
 
 @dataclass(frozen=True)

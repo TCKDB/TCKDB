@@ -297,7 +297,7 @@ def test_a_saddle_point_whose_xyz_shouts_its_elements_is_accepted(
     ``geometry_atom.element`` holds the depositor's XYZ symbol verbatim, while
     the reactant side of the comparison comes from RDKit's title-case
     ``GetSymbol()``. Comparing the two raw makes a correct saddle point read as
-    ``CCLHHH`` against a reaction of ``CClH3`` and refuses it — rejecting
+    ``CCLHHH`` against a reaction of ``CH3Cl`` and refuses it — rejecting
     correct chemistry over capitalisation, which ADR 0008 disqualifies a
     blocking check from doing.
     """
@@ -320,9 +320,9 @@ def test_normalising_case_does_not_blunt_the_check(db_engine) -> None:
             )
     message = str(excinfo.value)
     assert "transition_state_composition_mismatch" in message
-    # Reported in the normalised spelling, so the formula reads as chemistry
-    # rather than as whatever the file happened to shout.
-    assert "is CH3, but the reaction it sits in is CClH3" in message
+    # Reported in the normalised spelling and in Hill notation, so the formula
+    # reads as chemistry rather than as whatever the file happened to shout.
+    assert "is CH3, but the reaction it sits in is CH3Cl" in message
 
 
 def test_multiplicity_is_deliberately_not_checked(db_engine) -> None:
