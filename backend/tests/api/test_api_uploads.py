@@ -27,13 +27,38 @@ _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
 
 
-def _freq_calc(*, n_imag: int, imag_freq_cm1: float | None = None) -> dict:
-    return {
+def _freq_calc(
+    *,
+    n_imag: int,
+    imag_freq_cm1: float | None = None,
+    frequencies: list[float] | None = None,
+    reaction_coordinate_mode_index: int | None = None,
+    dispositions: dict[int, str] | None = None,
+    parameters: list[dict] | None = None,
+) -> dict:
+    result: dict = {"n_imag": n_imag, "imag_freq_cm1": imag_freq_cm1}
+    if frequencies is not None:
+        dispositions = dispositions or {}
+        result["modes"] = [
+            {
+                "mode_index": index + 1,
+                "frequency_cm1": value,
+                "is_imaginary": value < 0,
+                "imaginary_disposition": dispositions.get(index + 1),
+            }
+            for index, value in enumerate(frequencies)
+        ]
+    if reaction_coordinate_mode_index is not None:
+        result["reaction_coordinate_mode_index"] = reaction_coordinate_mode_index
+    calc: dict = {
         "type": "freq",
         "software_release": _SOFTWARE,
         "level_of_theory": _LOT,
-        "freq_result": {"n_imag": n_imag, "imag_freq_cm1": imag_freq_cm1},
+        "freq_result": result,
     }
+    if parameters is not None:
+        calc["parameters"] = parameters
+    return calc
 
 
 def _transition_state_payload(
@@ -41,6 +66,7 @@ def _transition_state_payload(
     n_imag: int | None = 1,
     imag_freq_cm1: float | None = -1500.0,
     label: str = "ts-a",
+    **freq_kwargs,
 ) -> dict:
     payload: dict = {
         "reaction": {
@@ -82,9 +108,32 @@ def _transition_state_payload(
     }
     if n_imag is not None:
         payload["additional_calculations"] = [
-            _freq_calc(n_imag=n_imag, imag_freq_cm1=imag_freq_cm1)
+            _freq_calc(
+                n_imag=n_imag, imag_freq_cm1=imag_freq_cm1, **freq_kwargs
+            )
         ]
     return payload
+
+
+#: ADR 0012's motivating record, in the shape a producer deposits it: the
+#: complete signed frequency list, the designated reaction coordinate, and
+#: a declared disposition for each other imaginary mode.
+_MOTIVATING_FREQUENCIES = [-1300.0, -42.0, -13.0, 800.0, 1400.0]
+_MOTIVATING_DISPOSITIONS = {2: "torsion", 3: "rigid_body_residue"}
+
+
+def _motivating_transition_state_payload(
+    *, label: str, parameters: list[dict] | None = None
+) -> dict:
+    return _transition_state_payload(
+        n_imag=3,
+        imag_freq_cm1=-1300.0,
+        label=label,
+        frequencies=_MOTIVATING_FREQUENCIES,
+        reaction_coordinate_mode_index=1,
+        dispositions=_MOTIVATING_DISPOSITIONS,
+        parameters=parameters,
+    )
 
 
 def _reaction_payload() -> dict:
@@ -135,7 +184,9 @@ class TestConformerUpload:
 #
 # minimum + n_imag >= 1     -> block   (definition)
 # vdw_complex + n_imag >= 1 -> warn    (expectation: Hessian grid noise)
-# TS + n_imag != 1          -> block   (definition)
+# TS + n_imag == 0          -> block   (no reaction coordinate)
+# TS + extras undesignated  -> block   (contract, ADR 0012)
+# TS + extras declared      -> warn    (judged against tau, ADR 0012)
 # TS + |imag| < threshold   -> warn    (expectation: flat/variational)
 # ---------------------------------------------------------------------------
 
@@ -227,6 +278,8 @@ class TestTransitionStateImaginaryModeTiers:
         assert "transition_state_imaginary_frequency_too_small" not in codes
 
     def test_zero_imaginary_modes_returns_422(self, client):
+        """Unchanged in tier by ADR 0012, renamed in code: no imaginary
+        mode means no reaction coordinate at all."""
         resp = client.post(
             "/api/v1/uploads/transition-states",
             json=_transition_state_payload(
@@ -234,9 +287,12 @@ class TestTransitionStateImaginaryModeTiers:
             ),
         )
         assert resp.status_code == 422
-        assert "transition_state_n_imag_not_one" in resp.text
+        assert "transition_state_no_imaginary_mode" in resp.text
 
-    def test_two_imaginary_modes_returns_422(self, client):
+    def test_extra_modes_without_a_designation_return_422(self, client):
+        """Was ``test_two_imaginary_modes_returns_422``, which asserted the
+        retired count-based rule. The refusal survives, but on the contract:
+        the payload will not say which mode is the reaction coordinate."""
         resp = client.post(
             "/api/v1/uploads/transition-states",
             json=_transition_state_payload(
@@ -244,7 +300,72 @@ class TestTransitionStateImaginaryModeTiers:
             ),
         )
         assert resp.status_code == 422
-        assert "transition_state_n_imag_not_one" in resp.text
+        assert "transition_state_reaction_coordinate_not_designated" in resp.text
+
+    def test_the_motivating_record_uploads_with_a_warning(self, client):
+        """-1300 / -42 / -13 cm⁻¹ over HTTP. Refused outright before ADR
+        0012; accepted and annotated now."""
+        resp = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_motivating_transition_state_payload(label="ts-adr0012"),
+        )
+        assert resp.status_code == 201, resp.text
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "transition_state_extra_imaginary_modes_below_tau" in codes
+        assert "transition_state_reaction_coordinate_not_designated" not in codes
+
+    def test_a_tight_recorded_protocol_flags_the_same_record(self, client):
+        """The same three frequencies, deposited with provenance saying the
+        Hessian was analytic on a tight grid. -42 cm⁻¹ is then real negative
+        curvature rather than quadrature noise, so the record is flagged —
+        accepted either way, which is what makes τ safe to read from
+        provenance a payload may not carry."""
+        resp = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_motivating_transition_state_payload(
+                label="ts-adr0012-tight",
+                parameters=[
+                    {
+                        "raw_key": "anfreq",
+                        "raw_value": "true",
+                        "canonical_key": "freq.hessian_method",
+                        "canonical_value": "analytic",
+                        "section": "freq",
+                    },
+                    {
+                        "raw_key": "grid",
+                        "raw_value": "ultrafine",
+                        "canonical_key": "grid.quality",
+                        "canonical_value": "ultrafine",
+                        "section": "integral",
+                    },
+                    {
+                        "raw_key": "tight",
+                        "raw_value": "true",
+                        "canonical_key": "opt.convergence",
+                        "canonical_value": "tight",
+                        "section": "opt",
+                    },
+                ],
+            ),
+        )
+        assert resp.status_code == 201, resp.text
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "transition_state_extra_imaginary_mode_above_tau" in codes
+
+    def test_an_undeclared_mode_stiffer_than_the_barrier_returns_422(self, client):
+        resp = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_transition_state_payload(
+                n_imag=2,
+                imag_freq_cm1=-400.0,
+                label="ts-ambiguous",
+                frequencies=[-400.0, -900.0, 700.0],
+                reaction_coordinate_mode_index=1,
+            ),
+        )
+        assert resp.status_code == 422
+        assert "transition_state_reaction_coordinate_ambiguous" in resp.text
 
     def test_small_imaginary_mode_is_accepted_with_a_warning(self, client):
         resp = client.post(
@@ -264,7 +385,8 @@ class TestTransitionStateImaginaryModeTiers:
         )
         assert resp.status_code == 201, resp.text
         codes = {w["code"] for w in resp.json()["warnings"]}
-        assert "transition_state_n_imag_not_one" not in codes
+        assert "transition_state_no_imaginary_mode" not in codes
+        assert "transition_state_reaction_coordinate_not_designated" not in codes
         assert "transition_state_imaginary_frequency_too_small" not in codes
 
 
