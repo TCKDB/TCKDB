@@ -95,6 +95,7 @@ from app.db.models.common import (
 from app.db.models.geometry import Geometry
 from app.schemas.fragments.geometry import GeometryPayload
 from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.services.best_effort import isolated_best_effort
 
 logger = logging.getLogger(__name__)
 
@@ -368,21 +369,37 @@ def run_and_persist_geometry_validation(
         )
         return None
 
-    row = CalculationGeometryValidation(
-        calculation_id=calculation.id,
-        input_geometry_id=result.input_geometry_id,
-        output_geometry_id=result.output_geometry_id,
-        species_smiles=result.species_smiles,
-        is_isomorphic=result.is_isomorphic,
-        rmsd=result.rmsd,
-        atom_mapping=result.atom_mapping,
-        n_mappings=result.n_mappings,
-        validation_status=result.validation_status,
-        validation_reason=result.validation_reason,
-        rmsd_warning_threshold=result.rmsd_warning_threshold,
+    def _persist() -> CalculationGeometryValidation:
+        row = CalculationGeometryValidation(
+            calculation_id=calculation.id,
+            input_geometry_id=result.input_geometry_id,
+            output_geometry_id=result.output_geometry_id,
+            species_smiles=result.species_smiles,
+            is_isomorphic=result.is_isomorphic,
+            rmsd=result.rmsd,
+            atom_mapping=result.atom_mapping,
+            n_mappings=result.n_mappings,
+            validation_status=result.validation_status,
+            validation_reason=result.validation_reason,
+            rmsd_warning_threshold=result.rmsd_warning_threshold,
+        )
+        session.add(row)
+        return row
+
+    # The write is isolated for the same reason the ``except`` above exists:
+    # this is best-effort by policy and must never abort the upload. Catching
+    # the chemistry call alone did not deliver that, because the row was added
+    # without a flush — so its INSERT was emitted by whatever flushed next, in
+    # practice the route's COMMIT, outside every guard here. That is the
+    # 2026-08-05 shape: a verdict *about* a calculation taking the calculation
+    # with it. ``isolated_best_effort`` flushes inside a savepoint so an
+    # unstorable ``atom_mapping``/``validation_reason`` fails where it can be
+    # absorbed.
+    return isolated_best_effort(
+        session,
+        _persist,
+        what=f"geometry validation for calculation id={calculation.id}",
     )
-    session.add(row)
-    return row
 
 
 CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
