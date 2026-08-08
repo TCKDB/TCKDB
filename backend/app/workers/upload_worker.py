@@ -376,6 +376,96 @@ def _fail_expired_exhausted_jobs(session: Session) -> int:
     return reaped
 
 
+def _append_ingestion_audit(
+    session: Session, job: UploadJob, submission: Submission
+) -> bool:
+    """Append ``ingestion_succeeded`` for a finished job, isolated from the science.
+
+    The event is a description of the ingestion; the ingestion is the fact.
+    Confined to a ``SAVEPOINT`` after an explicit flush so a ``Text``/``JSONB``
+    failure here costs one line of audit history rather than the scientific
+    records the job just persisted. Returns whether the event was written.
+    """
+    session.flush()
+    savepoint = session.begin_nested()
+    try:
+        mark_ingestion_succeeded(
+            session,
+            submission=submission,
+            summary=f"Ingested async {job.kind.value} job.",
+        )
+    except Exception as exc:
+        savepoint.rollback()
+        logger.error(
+            "ingestion_succeeded audit event could not be written for job %s "
+            "(submission_id=%s): %s. The job's scientific records are intact; "
+            "only this line of the submission's audit history is missing.",
+            job.id,
+            submission.id,
+            type(exc).__name__,
+            exc_info=exc,
+        )
+        return False
+    savepoint.commit()
+    return True
+
+
+def _store_job_result(session: Session, job: UploadJob, result) -> None:
+    """Write ``job.result``, isolated so it cannot cost the job its science.
+
+    ``result`` is presentational: it is what the polling client renders. It is
+    also arbitrary handler output going into a ``JSONB`` column, so a value
+    PostgreSQL will not store — a NUL character, an unserialisable object —
+    fails **deterministically**. Sharing the persistence transaction, that
+    meant every retry failed identically on the same value until
+    ``max_attempts`` was exhausted, and a presentational field permanently
+    prevented the science from ever being stored.
+
+    So the terminal job state — ``status``, ``completed_at``, the cleared
+    lease — is flushed *before* the savepoint opens, and only the ``result``
+    assignment goes inside it. That ordering is deliberate and is the reason
+    this is not simply wrapped wholesale: the terminal state is **not**
+    bookkeeping. It is the exactly-once fence. If the science committed while
+    the job stayed claimable, the reaper would re-lease it and a second run
+    would duplicate the records. The fence belongs in the primary unit; only
+    the rendering of the outcome does not.
+
+    On failure the job still completes, carrying a stand-in that says what
+    happened instead of the value that could not be stored.
+    """
+    savepoint = session.begin_nested()
+    try:
+        job.result = result
+        session.flush()
+    except Exception as exc:
+        savepoint.rollback()
+        logger.error(
+            "job %s finished successfully but its result could not be stored "
+            "(%s). The scientific records are committed and the job is marked "
+            "complete; the polling client sees a placeholder instead of the "
+            "result body.",
+            job.id,
+            type(exc).__name__,
+            exc_info=exc,
+        )
+        fallback = session.begin_nested()
+        try:
+            job.result = {
+                "result_unavailable": True,
+                "reason": type(exc).__name__,
+            }
+            session.flush()
+        except Exception:  # pragma: no cover - the stand-in is trivially storable
+            fallback.rollback()
+            logger.exception(
+                "job %s could not store even the placeholder result", job.id
+            )
+            return
+        fallback.commit()
+        return
+    savepoint.commit()
+
+
 def run_one_job(session: Session, job: UploadJob) -> None:
     """Execute a claimed job and write the result/error back to the row.
 
@@ -383,6 +473,10 @@ def run_one_job(session: Session, job: UploadJob) -> None:
     under review and linked to the submission, and an ``ingestion_succeeded``
     audit event is appended. The submission status stays ``pending`` —
     successful ingestion is not scientific approval.
+
+    Everything after the handler returns is about *describing* what the
+    handler did, with one exception: the terminal job state is the fence that
+    makes processing exactly-once. See :func:`_store_job_result`.
     """
     handler = _DISPATCH.get(job.kind)
     if handler is None:
@@ -398,20 +492,19 @@ def run_one_job(session: Session, job: UploadJob) -> None:
     result = handler(session, job, policy)
 
     if submission is not None:
-        mark_ingestion_succeeded(
-            session,
-            submission=submission,
-            summary=f"Ingested async {job.kind.value} job.",
-        )
+        _append_ingestion_audit(session, job, submission)
         if isinstance(result, dict):
             result = {**result, "submission_id": submission.id}
 
+    # The exactly-once fence, flushed outside any savepoint.
     job.status = UploadJobStatus.complete
     job.completed_at = _utcnow()
     job.lease_expires_at = None
     job.heartbeat_at = _utcnow()
-    job.result = result
     job.error = None
+    session.flush()
+
+    _store_job_result(session, job, result)
 
 
 # ---------------------------------------------------------------------------
