@@ -708,8 +708,26 @@ def apply_review_policy(
 ) -> list[RecordReview]:
     """Workflow-side entry point for ensuring review rows post-persist.
 
-    Idempotent — existing review rows are returned unchanged. Pass
-    ``policy=None`` to opt out (used by callers that only want to recurse
+    Idempotent — existing review rows are returned unchanged, including one
+    created by a *concurrent* upload against the same deduped identity (see
+    :func:`_insert_or_adopt_review`). This is the last statement of every
+    upload workflow, so it runs holding a transaction that already contains
+    the whole payload; it must not be able to collide with a row that says
+    what it was about to say.
+
+    It is deliberately not otherwise isolated from that payload. Unlike the
+    idempotency receipt or the ``ingestion_succeeded`` audit event, a
+    ``record_review`` row is not a description of the science — it is the
+    record's admission ticket into the review pipeline. A record deposited
+    without one reads as ``not_reviewed`` (``_NO_REVIEW_ROW_RANK`` in
+    ``app.services.scientific_read.sql_review``), indistinguishable from a
+    legacy internal record, and without its ``submission_record_link`` no
+    curator can ever approve it. Swallowing a failure here would store
+    stranded science and return ``201``. And because this runs before the
+    response is determined, failing yields an honest ``5xx`` to a client that
+    can retry the same payload — a recoverable outcome, unlike the incident's.
+
+    Pass ``policy=None`` to opt out (used by callers that only want to recurse
     into nested workflows without double-writing).
 
     When the policy carries a ``submission_id`` and ``link_records`` is set,
