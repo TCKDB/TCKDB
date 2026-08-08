@@ -15,8 +15,10 @@ from tckdb_schemas.stationary_point import (
     W_N_IMAG_CONTRADICTS_MINIMUM,
     W_N_IMAG_HIGHER_ORDER_SADDLE,
     W_N_IMAG_SUGGESTS_TS,
+    W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU,
+    W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU,
+    W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE,
     W_TS_IMAG_FREQ_TOO_SMALL,
-    W_TS_N_IMAG_NOT_ONE,
     StationaryPointFinding,
     evaluate_species_entry_frequency,
     warning_findings,
@@ -64,9 +66,11 @@ from app.services.ess_species_deduction import Deduction, deduce_all
 # * ``W_N_IMAG_SUGGESTS_TS`` is narrowed to the van der Waals case where
 #   the mode is too stiff to be noise — see its docstring in the owning
 #   module.
-# * The two transition-state codes are re-exported only; transition
-#   states are not species entries and never pass through
-#   ``reconcile_species_entry``.
+# * The transition-state codes are re-exported only; transition states
+#   are not species entries and never pass through
+#   ``reconcile_species_entry``. Since ADR 0012 they include the extra
+#   imaginary-mode findings, which are the warn-tier half of the rule
+#   that replaced ``transition_state_n_imag_not_one``.
 #
 # See ``__all__`` at the foot of this module for the re-exported set.
 
@@ -475,8 +479,10 @@ __all__ = [
     "W_N_IMAG_HIGHER_ORDER_SADDLE",
     "W_N_IMAG_SUGGESTS_TS",
     "W_TERM_SYMBOL_MISMATCH",
+    "W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU",
+    "W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE",
+    "W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU",
     "W_TS_IMAG_FREQ_TOO_SMALL",
-    "W_TS_N_IMAG_NOT_ONE",
     "build_ess_result_from_upload",
     "check_freq_parser_fidelity",
     "extract_freq_n_imag",

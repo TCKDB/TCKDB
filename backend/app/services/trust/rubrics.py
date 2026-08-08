@@ -2741,22 +2741,57 @@ def _check_ts_imaginary_frequency_count_recorded(
     return _bool_outcome(freq.n_imag is not None)
 
 
-def _check_ts_single_imaginary_frequency_for_ts(
+def _check_ts_reaction_coordinate_designated(
     ts_entry: TransitionStateEntry,
 ) -> EvidenceOutcome:
-    """Return passed when the representative freq result has exactly one imaginary mode.
+    """Return passed when the record identifies its reaction coordinate.
 
-    Status-aware policy is handled at the evaluator hard-fail layer: this
-    runner returns ``missing`` for ``n_imag != 1`` regardless of status; the
-    evaluator promotes the optimized/validated + ``n_imag in {0, >1}`` cases
-    to hard fails after the check has run.
+    This runner replaced ``_check_ts_single_imaginary_frequency_for_ts``,
+    which re-derived ``n_imag == 1`` at read time. Under ADR 0008 §9 that
+    was an untidy duplicate of the upload-time rule; under ADR 0012 it
+    was a live contradiction, because a record with three imaginary
+    modes and a designated reaction coordinate is now accepted at upload
+    and would still have been hard-failed here.
+
+    The physics has exactly one owner —
+    :mod:`tckdb_schemas.stationary_point`, which judged this record when
+    it was deposited and whose verdict was persisted on
+    ``calc_freq_result``. What is checked here is that the verdict is
+    present: one imaginary mode needs no designation because there is
+    nothing to disambiguate, and more than one is usable only if the
+    record says which mode is the barrier.
+
+    Status-aware policy stays at the evaluator hard-fail layer.
     """
     freq = _ts_representative_freq_result(ts_entry)
     if freq is None:
         return EvidenceOutcome.not_applicable
     if freq.n_imag is None:
         return EvidenceOutcome.missing
-    return _bool_outcome(freq.n_imag == 1)
+    if freq.n_imag == 0:
+        return EvidenceOutcome.missing
+    if freq.n_imag == 1:
+        return EvidenceOutcome.passed
+    return _bool_outcome(freq.reaction_coordinate_mode_index is not None)
+
+
+def _check_ts_extra_imaginary_modes_not_flagged(
+    ts_entry: TransitionStateEntry,
+) -> EvidenceOutcome:
+    """Return warning when ADR 0012's structural flag was recorded.
+
+    The flag is read, never recomputed. It was written at deposit time
+    by the same function that judged the payload, against the τ that the
+    calculation's own execution provenance selected; re-deriving it here
+    from today's τ would let a parser improvement silently re-label
+    historical records.
+    """
+    freq = _ts_representative_freq_result(ts_entry)
+    if freq is None or freq.imaginary_mode_structural_flag is None:
+        return EvidenceOutcome.not_applicable
+    if freq.imaginary_mode_structural_flag:
+        return EvidenceOutcome.warning
+    return EvidenceOutcome.passed
 
 
 def _check_ts_imaginary_frequency_value_present(
@@ -2782,9 +2817,18 @@ def _check_ts_review_not_rejected_or_deprecated_if_applicable(
     return EvidenceOutcome.not_applicable
 
 
-COMPUTED_TRANSITION_STATE_V1: EvidenceRubric = EvidenceRubric(
+# Version 2 (ADR 0012). v1 asserted that a transition state's
+# representative frequency result has exactly one imaginary mode, which
+# duplicated the upload-time rule and, once ADR 0012 replaced that rule,
+# contradicted it: a record accepted with a warning at deposit would have
+# been hard-failed here. The required check is replaced by
+# ``reaction_coordinate_designated_for_ts``, which cites the persisted
+# designation instead of recounting, and a new advisory check surfaces
+# the recorded structural flag. Bumping the version is deliberate — a
+# machine review performed under the counting rule is genuinely stale.
+COMPUTED_TRANSITION_STATE_V2: EvidenceRubric = EvidenceRubric(
     name="computed_transition_state",
-    version=1,
+    version=2,
     record_type="transition_state_entry",
     checks=(
         EvidenceCheckSpec(
@@ -2940,10 +2984,23 @@ COMPUTED_TRANSITION_STATE_V1: EvidenceRubric = EvidenceRubric(
             runner=_check_ts_imaginary_frequency_count_recorded,
         ),
         EvidenceCheckSpec(
-            name="single_imaginary_frequency_for_ts",
+            name="reaction_coordinate_designated_for_ts",
             kind=EvidenceCheckKind.required,
-            explain="Representative freq result should have exactly one imaginary mode.",
-            runner=_check_ts_single_imaginary_frequency_for_ts,
+            explain=(
+                "Representative freq result must identify its reaction "
+                "coordinate: one imaginary mode needs no designation, more "
+                "than one does (ADR 0012)."
+            ),
+            runner=_check_ts_reaction_coordinate_designated,
+        ),
+        EvidenceCheckSpec(
+            name="extra_imaginary_modes_not_flagged",
+            kind=EvidenceCheckKind.warning,
+            explain=(
+                "Recorded ADR 0012 structural flag: an extra imaginary mode "
+                "at or above the protocol's tau (advisory)."
+            ),
+            runner=_check_ts_extra_imaginary_modes_not_flagged,
         ),
         EvidenceCheckSpec(
             name="imaginary_frequency_value_present",
@@ -2966,7 +3023,7 @@ RUBRIC_REGISTRY: dict[str, EvidenceRubric] = {
     "kinetics": COMPUTED_KINETICS_V1,
     "statmech": COMPUTED_STATMECH_V1,
     "thermo": COMPUTED_THERMO_V1,
-    "transition_state_entry": COMPUTED_TRANSITION_STATE_V1,
+    "transition_state_entry": COMPUTED_TRANSITION_STATE_V2,
     "transport": COMPUTED_TRANSPORT_V1,
 }
 """Lookup of the latest active rubric per record-type discriminator.

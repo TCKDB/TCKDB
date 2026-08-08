@@ -518,7 +518,7 @@ record (`scientific_origin == experimental`).
 **Hard-fail signals:** `missing_required_identity` (reaction_entry
 without reactants/products); zero literature sources.
 
-### 9.7 `computed_transition_state_v1`
+### 9.7 `computed_transition_state_v2`
 
 Defined in its own spec file:
 [transition_state_trust_rubric.md](transition_state_trust_rubric.md).
@@ -589,7 +589,7 @@ shipped code, verified against `app/services/trust/` and
   (`include_unreviewed`, `min_evidence_label`, `trust_status=`, etc.) were
   never implemented; they remain a design sketch only.
 - **The TS rubric is implemented, not spec-only.**
-  `computed_transition_state_v1` ships in `app/services/trust/rubrics.py`
+  `computed_transition_state_v2` ships in `app/services/trust/rubrics.py`
   and is wired into the standalone transition-state-entry detail read and
   propagated into `reaction-entries/{id}/full`. §9.7 below is updated
   accordingly; `transition_state_trust_rubric.md` is a companion
@@ -825,7 +825,7 @@ app/services/trust/
                  # EvidenceRubric, TrustFragment, TrustLLMPrecheck, label_from_completeness
   rubrics.py    # all EvidenceRubric definitions (computed_calculation_v1,
                  # computed_kinetics_v1, computed_thermo_v1, computed_statmech_v1,
-                 # computed_transport_v1, computed_transition_state_v1) + the
+                 # computed_transport_v1, computed_transition_state_v2) + the
                  # record_type -> rubric registry
   evaluator.py  # select_rubric(record_type), per-record hard-fail detection,
                  # evaluate/aggregate helpers -> EvidenceEvaluation

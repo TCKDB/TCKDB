@@ -29,8 +29,10 @@ from sqlalchemy import text
 
 from app.scientific_checks import (
     CheckTier,
+    ConstantThreshold,
     DatabaseConstraint,
     DesignPosition,
+    ProvenanceThreshold,
     PythonCheck,
     ScientificCheck,
 )
@@ -290,6 +292,96 @@ def test_database_object_exists_in_live_schema(
         "live schema. Note the register must carry the *expanded* name "
         "PostgreSQL holds, not the short form in __table_args__."
     )
+
+
+def _provenance_thresholds() -> list[tuple[ScientificCheck, ProvenanceThreshold]]:
+    return [
+        (check, threshold)
+        for check in REGISTER
+        for threshold in check.thresholds
+        if isinstance(threshold, ProvenanceThreshold)
+    ]
+
+
+def test_there_are_provenance_thresholds_to_verify() -> None:
+    """Guard the guard: an empty list makes the vocab check below vacuous."""
+    assert _provenance_thresholds(), (
+        "No ProvenanceThreshold entries. Either ADR 0012's tau lost its "
+        "declaration or collection broke; either way the parameter-key "
+        "existence check would pass vacuously."
+    )
+
+
+@pytest.mark.parametrize(
+    ("check", "threshold"),
+    _provenance_thresholds(),
+    ids=lambda value: value.name if isinstance(value, ProvenanceThreshold) else "",
+)
+def test_provenance_threshold_keys_exist_in_the_parameter_vocabulary(
+    check: ScientificCheck, threshold: ProvenanceThreshold, db_session
+) -> None:
+    """Every key a provenance threshold reads must be a real vocab key.
+
+    This is the guard that makes a provenance-derived threshold as
+    checkable as a constant. ``calculation_parameter.canonical_key`` is
+    FK-constrained against ``calculation_parameter_vocab``, so a key that
+    was renamed, or never seeded, can never be written — and the
+    threshold would then resolve to its fallback forever while the
+    register went on claiming it keys on that provenance. Queried from
+    the live table rather than from the parser's mapping, because only
+    the database decides what a parameter row may reference.
+    """
+    for key in threshold.parameter_keys:
+        found = db_session.execute(
+            text(
+                "SELECT count(*) FROM calculation_parameter_vocab "
+                "WHERE canonical_key = :key"
+            ),
+            {"key": key},
+        ).scalar_one()
+        assert found == 1, (
+            f"{check.asserts!r} declares that its {threshold.name!r} threshold "
+            f"is resolved from the recorded parameter {key!r}, but no such "
+            f"canonical key exists in calculation_parameter_vocab. No "
+            f"calculation_parameter row can reference it, so the threshold "
+            f"would silently resolve to its fallback on every record."
+        )
+
+
+def test_provenance_thresholds_resolve_and_state_their_fallback() -> None:
+    """A provenance threshold must be live code with a documented fallback."""
+    for check, threshold in _provenance_thresholds():
+        assert callable(threshold.resolver), (
+            f"{check.asserts!r}: {threshold.resolver!r} is not callable"
+        )
+        assert ":" in threshold.location
+        assert threshold.parameter_keys, (
+            f"{check.asserts!r}: a provenance threshold that reads no recorded "
+            "parameter is a constant with extra steps"
+        )
+        assert threshold.values, (
+            f"{check.asserts!r}: no per-protocol values, so a reader cannot "
+            "see what the threshold ever resolves to"
+        )
+        assert len(threshold.fallback) > 60, (
+            f"{check.asserts!r}: a provenance-derived threshold must say what "
+            "happens when the provenance is missing. That is the case a "
+            "referee will probe, and silence there is worse than a constant."
+        )
+
+
+def test_constant_thresholds_justify_their_number() -> None:
+    """A constant in the register must say why it is that number."""
+    for check in REGISTER:
+        for threshold in check.thresholds:
+            if not isinstance(threshold, ConstantThreshold):
+                continue
+            assert threshold.unit, f"{check.asserts!r}: {threshold.name} has no unit"
+            assert len(threshold.rationale) > 40, (
+                f"{check.asserts!r}: {threshold.name} states a number with no "
+                "justification, which is the shape that invites a referee to "
+                "ask where it came from."
+            )
 
 
 def test_design_positions_are_prose_not_placeholders() -> None:

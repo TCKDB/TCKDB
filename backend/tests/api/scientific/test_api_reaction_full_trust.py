@@ -1,7 +1,7 @@
 """API tests for trust propagation on /api/v1/scientific/reaction-entries/{id}/full.
 
 Covers the slice that lets ``?include=trust`` carry ``computed_kinetics_v1``,
-``computed_calculation_v1``, and ``computed_transition_state_v1`` fragments
+``computed_calculation_v1``, and ``computed_transition_state_v2`` fragments
 down to the embedded kinetics, calculation, and transition-state-entry
 records inside the composite ``/full`` response. The standalone kinetics,
 calculation, and TS-entry detail surfaces are exercised elsewhere; here we
@@ -109,7 +109,7 @@ def _ts_entry(
     n_imag: int = 1,
 ):
     """Build a TS + TS-entry under *reaction_entry*, optionally with an
-    opt+freq calculation graph so the ``computed_transition_state_v1``
+    opt+freq calculation graph so the ``computed_transition_state_v2``
     frequency policy has evidence to evaluate.
     """
     ts = make_transition_state(
@@ -494,8 +494,8 @@ def test_full_include_trust_attaches_ts_trust(client, db_session):
     assert trust["review_status"] == "not_reviewed"
     assert trust["is_certified"] is False
     assert trust["evidence"]["record_type"] == "transition_state_entry"
-    assert trust["evidence"]["rubric"] == "computed_transition_state_v1"
-    assert trust["evidence"]["rubric_version"] == 1
+    assert trust["evidence"]["rubric"] == "computed_transition_state_v2"
+    assert trust["evidence"]["rubric_version"] == 2
     assert "passed_checks" in trust["evidence"]
     assert "missing_checks" in trust["evidence"]
     assert "warning_checks" in trust["evidence"]
@@ -623,7 +623,7 @@ def test_full_include_trust_ts_frequency_policy_for_optimized(client, db_session
     trust = _ts_trust_in_full(body, tse_ref=tse.public_ref)
     passed = trust["evidence"]["passed_checks"]
     assert "imaginary_frequency_count_recorded" in passed
-    assert "single_imaginary_frequency_for_ts" in passed
+    assert "reaction_coordinate_designated_for_ts" in passed
     assert trust["trust_status"] != "hard_failed"
 
 

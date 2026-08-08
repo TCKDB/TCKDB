@@ -246,12 +246,12 @@ def test_evidence_keys_accepted_as_pointer_strings():
         message="Missing IRC/path-search evidence.",
         evidence_keys=(
             "evidence.missing_checks.irc_evidence_present",
-            "evidence.passed_checks.single_imaginary_frequency_for_ts",
+            "evidence.passed_checks.reaction_coordinate_designated_for_ts",
         ),
     )
     assert finding.evidence_keys == (
         "evidence.missing_checks.irc_evidence_present",
-        "evidence.passed_checks.single_imaginary_frequency_for_ts",
+        "evidence.passed_checks.reaction_coordinate_designated_for_ts",
     )
     # Pointers cite; the model exposes no value-bearing/structured counterpart.
     assert "evidence_values" not in MachineReviewFinding.model_fields

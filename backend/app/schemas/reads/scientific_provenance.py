@@ -245,7 +245,7 @@ class TransitionStateInFull(BaseModel):
     so a trust block embedded here is structurally identical to the one
     returned by
     ``GET /scientific/transition-state-entries/{ref}?include=trust``
-    (rubric ``computed_transition_state_v1``).
+    (rubric ``computed_transition_state_v2``).
     """
 
     transition_state_id: int | None = None

@@ -62,11 +62,11 @@ from tckdb_schemas.shared.calculation_in import (
     GeometryIn,
     calculation_in_to_with_results_payload,
     freq_evidence,
+    transition_state_frequency_findings,
 )
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_species_entry_frequency,
-    evaluate_transition_state_frequency,
     raise_for_blocking_findings,
 )
 from tckdb_schemas.workflows.computed_species_upload import StatmechInBundle
@@ -279,11 +279,9 @@ class TransitionStateIn(SchemaBase):
         """Judge this saddle point against its own frequency evidence."""
         findings: list[StationaryPointFinding] = []
         for calc in (self.calculation, *self.calculations):
-            n_imag, imag_freq_cm1 = freq_evidence(calc)
             findings.extend(
-                evaluate_transition_state_frequency(
-                    n_imag,
-                    imag_freq_cm1,
+                transition_state_frequency_findings(
+                    calc,
                     location=(
                         f"transition_states['{self.key}'].calculations"
                         f"['{calc.key}']"
@@ -293,10 +291,13 @@ class TransitionStateIn(SchemaBase):
         return findings
 
     @model_validator(mode="after")
-    def validate_n_imag_is_one(self) -> Self:
-        """Refuse frequency evidence that is not a first-order saddle point.
+    def validate_reaction_coordinate_contract(self) -> Self:
+        """Refuse frequency evidence with no usable reaction coordinate.
 
-        Definitional, therefore blocking (ADR 0008).
+        Definitional, therefore blocking (ADR 0008, narrowed by ADR
+        0012: at least one imaginary mode, exactly one designated the
+        reaction coordinate, and no undeclared mode stiff enough to make
+        that designation meaningless).
         """
         raise_for_blocking_findings(self.stationary_point_findings())
         return self

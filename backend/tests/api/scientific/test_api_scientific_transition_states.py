@@ -1344,8 +1344,8 @@ def test_tse_detail_include_trust_returns_fragment(client, db_session):
     assert trust["is_certified"] is False
     evidence = trust["evidence"]
     assert evidence["record_type"] == "transition_state_entry"
-    assert evidence["rubric"] == "computed_transition_state_v1"
-    assert evidence["rubric_version"] == 1
+    assert evidence["rubric"] == "computed_transition_state_v2"
+    assert evidence["rubric_version"] == 2
     # Evidence object carries the deterministic check breakdown.
     for key in (
         "passed_checks",
@@ -1446,7 +1446,7 @@ def test_tse_detail_trust_optimized_n_imag_one_passes_freq_check(
     trust = body["record"]["trust"]
     assert trust["trust_status"] != "hard_failed"
     passed = set(trust["evidence"]["passed_checks"])
-    assert "single_imaginary_frequency_for_ts" in passed
+    assert "reaction_coordinate_designated_for_ts" in passed
     assert "imaginary_frequency_count_recorded" in passed
 
 
@@ -1463,7 +1463,7 @@ def test_tse_detail_trust_validated_n_imag_one_passes_freq_check(
     ).json()["record"]["trust"]
     assert trust["trust_status"] != "hard_failed"
     assert (
-        "single_imaginary_frequency_for_ts"
+        "reaction_coordinate_designated_for_ts"
         in trust["evidence"]["passed_checks"]
     )
 
@@ -1519,7 +1519,7 @@ def test_tse_detail_trust_guess_n_imag_not_one_warns_not_hard_fail(
     # required check but is NOT collapsed to hard_failed.
     assert trust["trust_status"] != "hard_failed"
     assert (
-        "single_imaginary_frequency_for_ts"
+        "reaction_coordinate_designated_for_ts"
         in trust["evidence"]["missing_checks"]
     )
 

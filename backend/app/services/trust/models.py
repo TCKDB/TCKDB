@@ -159,8 +159,20 @@ class HardFailReason(str, Enum):
     frequency_source_has_zero_imaginary_modes_for_validated_ts = (
         "frequency_source_has_zero_imaginary_modes_for_validated_ts"
     )
-    frequency_source_has_multiple_imaginary_modes_for_validated_ts = (
-        "frequency_source_has_multiple_imaginary_modes_for_validated_ts"
+    #: The stored record reports more than one imaginary mode and does
+    #: not say which one is the reaction coordinate.
+    #:
+    #: This replaced ``frequency_source_has_multiple_imaginary_modes_for_validated_ts``,
+    #: which ADR 0008 §9 named as a duplicate of the upload-time rule and
+    #: ADR 0012 turned into a live contradiction: a record accepted with
+    #: a warning at upload was hard-failed at read time by the surviving
+    #: copy of the retired count-based gate. The question asked here is
+    #: no longer a question about physics — "is n_imag one?" — but about
+    #: persisted state: does the record carry the designation the
+    #: blocking tier requires? A record that passed upload validation
+    #: always does, so the two tiers can no longer disagree.
+    frequency_source_reaction_coordinate_not_designated_for_validated_ts = (
+        "frequency_source_reaction_coordinate_not_designated_for_validated_ts"
     )
 
 

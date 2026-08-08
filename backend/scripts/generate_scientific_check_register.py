@@ -27,8 +27,10 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from app.scientific_checks import (  # noqa: E402
     CheckTier,
+    ConstantThreshold,
     DatabaseConstraint,
     DesignPosition,
+    ProvenanceThreshold,
     PythonCheck,
     ScientificCheck,
 )
@@ -97,6 +99,16 @@ disagree about a line number, this one is right by construction.
 - **Enforced at** — `file:line` for Python, or the constraint/trigger name for
   PostgreSQL. Database names are verified against live schema metadata by
   `backend/tests/db/test_scientific_check_register.py`, not trusted as strings.
+- **Thresholds** — the numeric lines the check fires on, and *where each number
+  comes from*. A constant is fixed in code and printed. A provenance-derived
+  threshold is not a number at all: it is resolved per record from the
+  execution provenance that record carries, so it is printed as the resolver,
+  the parameter keys it reads, the per-protocol table, and what it falls back
+  to when those keys are absent. ADR 0012's `tau` is the first of these, and
+  the distinction is load-bearing — a register that printed it as "roughly
+  50 cm-1" would be claiming the code holds a constant it does not have, and
+  would hide the case a referee cares about most, which is the record whose
+  protocol was never recorded.
 - **Escape hatch** — how legitimate chemistry the check would otherwise refuse
   gets deposited instead. This column carries most of the weight. Charge
   conservation is only defensible as a blocking check *because* an electron can
@@ -156,6 +168,51 @@ def _render_enforcement(check: ScientificCheck) -> str:
     return "\n".join(parts)
 
 
+def _render_thresholds(check: ScientificCheck) -> list[str]:
+    """Render a check's numeric lines, distinguishing the two kinds.
+
+    A constant gets its number. A provenance-derived threshold gets its
+    resolver, the keys it reads, its per-protocol table and — the part a
+    referee will go looking for — what happens when the provenance is
+    absent. Printing a provenance threshold as a single number would
+    state a constant the code does not have.
+    """
+    if not check.thresholds:
+        return []
+    lines = ["**Thresholds.**", ""]
+    for threshold in check.thresholds:
+        if isinstance(threshold, ConstantThreshold):
+            lines += [
+                f"- `{threshold.name}` = **{threshold.summary}** — a constant "
+                f"fixed in code.",
+                f"  {_md(threshold.rationale)}",
+            ]
+        elif isinstance(threshold, ProvenanceThreshold):
+            keys = ", ".join(f"`{key}`" for key in threshold.parameter_keys)
+            lines += [
+                f"- `{threshold.name}` — **not a constant.** Resolved per "
+                f"record, in {threshold.unit}, by "
+                f"`{threshold.resolver.__qualname__}` "
+                f"(`{threshold.location}`) from the recorded execution "
+                f"provenance {keys}.",
+                f"  {_md(threshold.rationale)}",
+                "",
+                f"  | recorded protocol | `{threshold.name}` / {threshold.unit} |",
+                "  | --- | --- |",
+            ]
+            lines += [
+                f"  | {protocol} | {value} |" for protocol, value in threshold.values
+            ]
+            lines += [
+                "",
+                f"  *When the provenance is missing.* {_md(threshold.fallback)}",
+            ]
+        else:  # pragma: no cover - exhaustive over Threshold
+            raise TypeError(f"unknown threshold: {threshold!r}")
+    lines.append("")
+    return lines
+
+
 def _render_check(check: ScientificCheck, index: int) -> str:
     codes = ", ".join(f"`{code}`" for code in check.codes) or "*(none — prose only)*"
     lines = [
@@ -174,6 +231,7 @@ def _render_check(check: ScientificCheck, index: int) -> str:
         _render_enforcement(check),
         "",
     ]
+    lines += _render_thresholds(check)
     if check.escape_hatch:
         lines += [f"**Escape hatch.** {_md(check.escape_hatch)}", ""]
     else:

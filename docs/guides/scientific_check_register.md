@@ -39,6 +39,16 @@ disagree about a line number, this one is right by construction.
 - **Enforced at** — `file:line` for Python, or the constraint/trigger name for
   PostgreSQL. Database names are verified against live schema metadata by
   `backend/tests/db/test_scientific_check_register.py`, not trusted as strings.
+- **Thresholds** — the numeric lines the check fires on, and *where each number
+  comes from*. A constant is fixed in code and printed. A provenance-derived
+  threshold is not a number at all: it is resolved per record from the
+  execution provenance that record carries, so it is printed as the resolver,
+  the parameter keys it reads, the per-protocol table, and what it falls back
+  to when those keys are absent. ADR 0012's `tau` is the first of these, and
+  the distinction is load-bearing — a register that printed it as "roughly
+  50 cm-1" would be claiming the code holds a constant it does not have, and
+  would hide the case a referee cares about most, which is the record whose
+  protocol was never recorded.
 - **Escape hatch** — how legitimate chemistry the check would otherwise refuse
   gets deposited instead. This column carries most of the weight. Charge
   conservation is only defensible as a blocking check *because* an electron can
@@ -55,10 +65,10 @@ disagree about a line number, this one is right by construction.
 | Tier | Entries | Meaning |
 | --- | --- | --- |
 | `block` | 14 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
-| `warn` | 7 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
+| `warn` | 8 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `review` | 0 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **26** | |
+| **total** | **27** | |
 
 ## Recorded divergences
 
@@ -68,8 +78,8 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - **[4]** A saddle point carries the same total charge as the reactants it sits between.
 - **[6]** The multiset of isotopic substitutions declared in a species entry's SMILES equals the multiset carried by the geometry deposited under it.
 - **[9]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
-- **[10]** A transition state has exactly one imaginary vibrational mode.
-- **[24]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+- **[13]** A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
+- **[25]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 ## Entries
 
@@ -246,24 +256,23 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Stationary points
 
-### 10. A transition state has exactly one imaginary vibrational mode.
+### 10. A transition state has at least one imaginary vibrational mode, exactly one of them is designated the reaction coordinate, and no undeclared mode is stiff enough to make that designation meaningless.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `block` |
-| **Code** | `transition_state_n_imag_not_one` |
-| **Governing ADR** | 0008 |
+| **Code** | `transition_state_no_imaginary_mode`, `transition_state_reaction_coordinate_not_designated`, `transition_state_reaction_coordinate_ambiguous` |
+| **Governing ADR** | 0012, 0008 |
 
-**Why this tier.** Definitional — ADR 0008's worked example. The Hessian eigenvalue spectrum *is* the definition of a stationary point: zero imaginary modes is a minimum and the geometry never reached a barrier top, two or more is a higher-order saddle. Either way the record is not the first-order saddle point it declares itself to be, and no correct calculation produces it as submitted.
+**Why this tier.** Definitional, and narrower than what it replaced. ADR 0008's worked example was `n_imag == 1`; ADR 0012 retired that, because 'exactly one negative eigenvalue' is a statement about the exact Hessian at the exact stationary point on a smooth surface and a deposit contains none of those. Two scientifically correct calculations of the same saddle point can return `n_imag == 1` and `n_imag == 3`, so a gate a depositor passes by switching to `Int=UltraFine` is not a gate on science — and its cheapest workaround is deleting a line from the frequency list, which turns visible ambiguity into invisible falsehood. What survives the translation into a database row is a *contract*: no imaginary mode at all means there is no reaction coordinate and the structure is not a transition state; more than one with no designation means the record cannot answer the question every transition-state-theory code asks it; and an undeclared mode at least as stiff as the designated one means the designation is an assertion the record does not support. None of the three can be produced by a correct calculation that has been honestly described.
 
 **Enforced at.**
 
-- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:298`
-  *A transition state carries no `stationary_point_kind` column — the entity *is* the claim — so the rule needs no kind argument. Upload schemas call `raise_for_blocking_findings` from a `model_validator`, so the contradiction becomes a 422 before the route body opens a submission.*
+- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:698`
+  *A transition state carries no `stationary_point_kind` column — the entity *is* the claim — so the rule needs no kind argument. Upload schemas call `raise_for_blocking_findings` from a `model_validator`, so the contradiction becomes a 422 before the route body opens a submission. The designation is then persisted on `calc_freq_result.reaction_coordinate_mode_index`, which is what lets the read-time trust rubric cite this judgement instead of re-deriving it.*
+- `_check_ts_reaction_coordinate_designated` and `_detect_transition_state_entry_hard_fail` (`backend/app/services/trust/rubrics.py`, `backend/app/services/trust/evaluator.py`) ask at read time whether the record carries the designation this blocking tier required of it — a question about persisted state, not a second opinion about physics. They cannot disagree with the verdict above, which is the collapse ADR 0008 section 9 asked for.
 
-**Escape hatch.** Deposit no frequency evidence: `n_imag=None` produces no findings at all. Absence is never contradiction.
-
-**Recorded divergence.** The module calls itself 'the single owner' of these findings, and ADR 0008 requires that where one fact is checked in more than one tier the blocking tier owns it and the others cite it. `_check_ts_single_imaginary_frequency_for_ts` in `app/services/trust/rubrics.py` nevertheless re-derives the same physical fact independently at read time, and the trust evaluator promotes it to a hard fail. ADR 0008 names this duplication as a defect to be collapsed onto one owner; it has not been collapsed.
+**Escape hatch.** Three, and they are the point of the rule. Deposit no frequency evidence: `n_imag=None` produces no findings at all, because absence is never contradiction. Or deposit the extra imaginary modes honestly — designate the reaction coordinate and give each other mode a disposition (`torsion`, `rigid_body_residue`, `intermolecular`, `ring_pucker`, `symmetry_breaking`, or an explicit `unassigned`) — and a genuine higher-order saddle is accepted with a warning and a structural flag. Or, if the extra mode really is the barrier, designate *it*. What has no door is refusing to say which mode is the reaction coordinate.
 
 ### 11. A species entry declared a minimum has no imaginary vibrational modes.
 
@@ -277,7 +286,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:170`
+- `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:560`
   *One imaginary mode and two-or-more are folded into a single blocking message that names `n_imag_higher_order_saddle` for the higher-order case. A stationary-point kind the module has not been taught about produces no findings — adding an enum member must be a deliberate decision, not a default.*
 
 **Escape hatch.** Declare `species_entry_kind='vdw_complex'`, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real.
@@ -294,29 +303,80 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:170`
+- `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:560`
   *Same entry point as the blocking minimum rule; the declared kind decides the tier while the code names the finding. A mode at or above 100 cm-1 additionally raises `n_imag_suggests_transition_state`, because that is far too stiff to be intermolecular.*
 
 **Escape hatch.** This *is* the escape hatch for the blocking minimum rule. Its own cost is that a genuinely mislabelled saddle point deposited as a van der Waals complex is accepted with a warning.
 
-### 13. A transition state's single imaginary mode should exceed roughly 100 cm-1 in magnitude.
+### 13. A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `transition_state_extra_imaginary_modes_below_tau`, `transition_state_extra_imaginary_mode_above_tau`, `transition_state_extra_imaginary_modes_not_assessable` |
+| **Governing ADR** | 0012 |
+
+**Why this tier.** The extra modes cannot be classified from the frequency list, so refusing the deposit would assert a determination the deposit does not contain the information to support — an expectation about numerical quality wearing the costume of a definition. They can also be simply correct: a harmonic model is inapplicable to a torsion, a ring pucker or an intermolecular mode in a loose complex, and a transition state can sit at a maximum of a torsional profile while being a perfectly correct reactive bottleneck, in which case the extra negative eigenvalue is not an artefact but exactly right. Warning rather than blocking is also the only choice that preserves evidence: a record carrying all three frequencies and the full protocol can be reassessed under a better rule in five years, while a refused deposit leaves nothing behind.
+
+**Enforced at.**
+
+- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:698`
+  *Above tau the record is flagged as well as warned: the flag is ADR 0012's answer to 'warnings get ignored', excluding the record from default transition-state consumption without creating the incentive to edit the frequency list that a hard block creates. Below tau it is warned only. The flag and the tau that decided it are persisted on `calc_freq_result` rather than recomputed, so a later parser improvement cannot silently re-label historical records.*
+
+**Thresholds.**
+
+- `tau` — **not a constant.** Resolved per record, in cm-1, by `resolve_tau` (`schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:223`) from the recorded execution provenance `freq.hessian_method`, `grid.quality`, `opt.convergence`.
+  The Hessian noise floor is flat in omega-squared, not in omega, so the uncertainty in a frequency diverges as omega goes to zero: at 300 cm-1 the sign is never in doubt, at 20 cm-1 it is indeterminate. Where the crossover sits depends on how the second derivatives were built, on what integration grid, and how tightly the geometry was converged. The same -42 cm-1 is real negative curvature under an analytic Hessian on a tight grid and indistinguishable from zero under a numerical one on a default grid, so it cannot be classified from the frequency list at all — only against the protocol that produced it. A constant here would be a claim about physics that is false.
+
+  | recorded protocol | `tau` / cm-1 |
+  | --- | --- |
+  | analytic Hessian, tight grid, tight optimisation | 15 |
+  | analytic Hessian, default grid and tolerances | 30 |
+  | finite-difference Hessian from analytic gradients | 50 |
+  | finite-difference Hessian from energies | 80 |
+  | Hessian method not recorded | 50 |
+
+  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — tau is 50 cm-1 and the record stores `protocol_not_recorded` as the basis. The fallback is deliberately the *conservative* row rather than the analytic one: assuming the better case would flag genuine quadrature noise as a real higher-order saddle. Crucially, tau never decides between blocking and warning — every blocking rule here is a contract about what the record says, not about magnitude — so missing provenance changes how loudly a record is flagged and never whether it is accepted.
+
+**Escape hatch.** None is needed — the check never refuses. Its cost runs the other way: a genuine higher-order saddle, a torsional maximum and a valley-ridge inflection are all accepted, and only the structural flag separates them from a clean first-order saddle for a consumer who reads it.
+
+**Recorded divergence.** ADR 0012 recommends replacing the threshold with a determination — projecting each imaginary eigenvector onto the six rigid-body vectors (more than about 90 percent overlap means projection residue) and onto dihedral-rotation vectors (more than about 70 percent means a torsion) — and says those should be implemented *before* tau is tuned, because a determination beats a threshold wherever one is available. They are not implemented, and cannot be: `backend/app/db/models/transition_state.py` records that normal-mode displacement evidence is deliberately absent from TCKDB, 'a producer-side heuristic, not a database record'. So the disposition on each extra mode is *declared by the depositor* and TCKDB cannot check it. Recorded, not resolved: reversing that decision is a schema change and its own ADR.
+
+### 14. A transition state's reaction coordinate should exceed roughly 100 cm-1 in magnitude.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `transition_state_imaginary_frequency_too_small` |
-| **Governing ADR** | 0008 |
+| **Governing ADR** | 0008, 0012 |
 
 **Why this tier.** ADR 0008's worked counter-example, and the sharpest statement of the whole rule. A very soft imaginary mode is suspicious — often an under-converged geometry or a coarse integration grid — but it can be perfectly real, because flat barriers and variational transition states genuinely produce them. Magnitude is therefore a quality expectation, never a definition, and a check that could fire on a correct novel result must not block.
 
 **Enforced at.**
 
-- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:298`
-  *The threshold is explicitly a starting point rather than a physical constant: reaction coordinates for hydrogen transfers run to thousands of cm-1, while genuinely flat barriers fall well under 100. It is also the scale that separates a van der Waals complex's soft intermolecular modes from a real reaction coordinate, and is reused for that judgement.*
+- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:698`
+  *ADR 0012 changed what this fires *on* without changing what it fires at. It used to read the single imaginary mode of a record that had passed the `n_imag == 1` gate; it now reads the designated reaction coordinate of a record that may carry several. Both thresholds are declared above because both reach the same message: the warning quotes the protocol's tau alongside its own constant, so a reader who is told a reaction coordinate is soft can see immediately whether that calculation could resolve a small mode at all.*
+
+**Thresholds.**
+
+- `TS_IMAGINARY_FREQUENCY_MIN_CM1` = **100 cm-1** — a constant fixed in code.
+  A starting point rather than a physical constant: reaction coordinates for hydrogen transfers run to thousands of cm-1, while genuinely flat barriers fall well under 100. Unlike tau it really is fixed in code, because it is a statement about chemistry — what a reaction coordinate looks like — rather than about numerics. It is also the scale that separates a van der Waals complex's soft intermolecular modes from a real reaction coordinate, and is reused for that judgement.
+- `tau` — **not a constant.** Resolved per record, in cm-1, by `resolve_tau` (`schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:223`) from the recorded execution provenance `freq.hessian_method`, `grid.quality`, `opt.convergence`.
+  The Hessian noise floor is flat in omega-squared, not in omega, so the uncertainty in a frequency diverges as omega goes to zero: at 300 cm-1 the sign is never in doubt, at 20 cm-1 it is indeterminate. Where the crossover sits depends on how the second derivatives were built, on what integration grid, and how tightly the geometry was converged. The same -42 cm-1 is real negative curvature under an analytic Hessian on a tight grid and indistinguishable from zero under a numerical one on a default grid, so it cannot be classified from the frequency list at all — only against the protocol that produced it. A constant here would be a claim about physics that is false.
+
+  | recorded protocol | `tau` / cm-1 |
+  | --- | --- |
+  | analytic Hessian, tight grid, tight optimisation | 15 |
+  | analytic Hessian, default grid and tolerances | 30 |
+  | finite-difference Hessian from analytic gradients | 50 |
+  | finite-difference Hessian from energies | 80 |
+  | Hessian method not recorded | 50 |
+
+  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — tau is 50 cm-1 and the record stores `protocol_not_recorded` as the basis. The fallback is deliberately the *conservative* row rather than the analytic one: assuming the better case would flag genuine quadrature noise as a real higher-order saddle. Crucially, tau never decides between blocking and warning — every blocking rule here is a contract about what the record says, not about magnitude — so missing provenance changes how loudly a record is flagged and never whether it is accepted.
 
 **Escape hatch.** None is needed — the check never refuses. A referee should read the threshold as a tunable reporting line, not a claim about physics.
 
-### 14. A deposited saddle point should carry passing intrinsic-reaction-coordinate evidence that it connects the declared reactants and products.
+### 15. A deposited saddle point should carry passing intrinsic-reaction-coordinate evidence that it connects the declared reactants and products.
 
 | Field | Value |
 | --- | --- |
@@ -335,7 +395,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Atom mapping across a reaction
 
-### 15. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
+### 16. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
 
 | Field | Value |
 | --- | --- |
@@ -356,7 +416,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 16. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
+### 17. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
 
 | Field | Value |
 | --- | --- |
@@ -379,7 +439,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 17. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
+### 18. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
 
 | Field | Value |
 | --- | --- |
@@ -404,7 +464,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 18. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
+### 19. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
 
 | Field | Value |
 | --- | --- |
@@ -423,7 +483,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 19. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
+### 20. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
 
 | Field | Value |
 | --- | --- |
@@ -440,7 +500,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None is needed — the warning *is* the accommodation. TCKDB deliberately will not infer a map: several chemically distinct maps are usually consistent with the same reactants and products, so choosing one by algorithm would manufacture provenance.
 
-### 20. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
+### 21. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
 
 | Field | Value |
 | --- | --- |
@@ -457,7 +517,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None.
 
-### 21. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
+### 22. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
 
 | Field | Value |
 | --- | --- |
@@ -480,7 +540,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Rate coefficients
 
-### 22. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
+### 23. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
 
 | Field | Value |
 | --- | --- |
@@ -501,7 +561,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Statistical mechanics
 
-### 23. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
+### 24. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
 
 | Field | Value |
 | --- | --- |
@@ -522,7 +582,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Pressure-dependent networks
 
-### 24. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+### 25. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 | Field | Value |
 | --- | --- |
@@ -543,7 +603,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** Existence, not coverage — and the trigger must not be read as the whole contract. The database guarantees a computed solve carries nonzero evidence of each applicable class; the three coverage rules (one energy per state, one energy-transfer model per (well, collider) pair or a network-wide declaration, one barrier per saddle-point path) remain properties of the single wired upload path. A computed solve with four energies out of five passes the database and fails the validator. ADR 0010's amendment states this deliberately: a computed solve with *zero* energies is a contradiction and may block, while an incomplete one is a true record to be graded by the trust and reproducibility layers. Separately, `kind` cannot surface in CHEMKIN export, which has no provenance field; a tripwire test guards the moment network kinetics first reach mechanism output.
 
-### 25. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
+### 26. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
 
 | Field | Value |
 | --- | --- |
@@ -562,7 +622,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Reproducibility
 
-### 26. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
+### 27. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
 
 | Field | Value |
 | --- | --- |

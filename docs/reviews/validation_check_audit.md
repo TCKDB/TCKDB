@@ -336,6 +336,16 @@ The module splits one rule four ways, and only two of the four block:
 | transition state | `n_imag == 1` | **block** | `W_TS_N_IMAG_NOT_ONE` (`:113`) |
 | transition state | `\|imag_freq_cm1\| >= 100 cm⁻¹` | warn | `W_TS_IMAG_FREQ_TOO_SMALL` (`:118`) |
 
+> **The transition-state row is superseded.**
+> [ADR 0012](../adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md)
+> retired `n_imag == 1` and `W_TS_N_IMAG_NOT_ONE` with it. What blocks now is a
+> contract — at least one imaginary mode, exactly one designated the reaction
+> coordinate, and no undeclared mode stiffer than it — while extra imaginary
+> modes are judged by magnitude against a tolerance read from the recorded
+> execution provenance. The minimum and van der Waals rows are unchanged. The
+> generated register at `docs/guides/scientific_check_register.md` is the
+> current statement; this audit is pinned to its commit and is not maintained.
+
 The threshold is the named constant `TS_IMAGINARY_FREQUENCY_MIN_CM1`
 (`.../stationary_point.py:77`), not a literal, because 100 cm⁻¹ is a starting point rather
 than a physical constant.

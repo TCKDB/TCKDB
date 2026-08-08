@@ -10,6 +10,7 @@ from tckdb_schemas.enums import (
     CalculationType,
     ConstraintKind,
     HessianSource,
+    ImaginaryModeDisposition,
     IRCDirection,
     PathSearchMethod,
     SCFStabilityStatus,
@@ -21,6 +22,13 @@ from tckdb_schemas.fragments.refs import (
     LevelOfTheoryRef,
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
+)
+from tckdb_schemas.stationary_point import (
+    ImaginaryMode,
+    StationaryPointFinding,
+    TauResolution,
+    evaluate_transition_state_frequency,
+    resolve_tau_from_parameters,
 )
 
 # ---------------------------------------------------------------------------
@@ -146,6 +154,11 @@ class FrequencyModePayload(BaseModel):
     :param raman_activity: Raman activity (Å⁴/amu), when reported.
     :param symmetry_label: Irreducible representation label
         (e.g. ``"A1"``, ``"E"``), when reported.
+    :param imaginary_disposition: What this imaginary mode *is*, when it
+        is not the reaction coordinate. Declared by the depositor, never
+        inferred — TCKDB stores no normal-mode displacement vectors to
+        infer it from. Only meaningful on an imaginary mode; setting it
+        on a real one is refused rather than ignored. See ADR 0012.
     :param note: Optional free-text annotation.
     """
 
@@ -157,6 +170,7 @@ class FrequencyModePayload(BaseModel):
     ir_intensity_km_mol: float | None = Field(default=None, ge=0)
     raman_activity: float | None = None
     symmetry_label: str | None = None
+    imaginary_disposition: ImaginaryModeDisposition | None = None
     note: str | None = None
 
     @model_validator(mode="after")
@@ -169,6 +183,14 @@ class FrequencyModePayload(BaseModel):
         if not self.is_imaginary and self.frequency_cm1 < 0:
             raise ValueError(
                 "frequency_cm1 < 0 requires is_imaginary=True."
+            )
+        if self.imaginary_disposition is not None and not self.is_imaginary:
+            raise ValueError(
+                f"imaginary_disposition="
+                f"{self.imaginary_disposition.value!r} was set on mode "
+                f"{self.mode_index}, which is not imaginary. A disposition "
+                f"says what an imaginary mode is instead of the reaction "
+                f"coordinate; on a real mode it has no meaning."
             )
         return self
 
@@ -183,12 +205,19 @@ class FreqResultPayload(SchemaBase):
         ``mode_index`` values must be unique within the payload, and
         the count of imaginary modes must agree with ``n_imag`` if both
         are present.
+    :param reaction_coordinate_mode_index: ``mode_index`` of the mode the
+        depositor designates the reaction coordinate. ADR 0012 makes this
+        the contract that replaces the old ``n_imag == 1`` gate: a
+        transition state with more than one imaginary mode is accepted
+        only if it says which one is the barrier and is removed from the
+        partition function. Meaningless on a minimum, and refused there.
     """
 
     n_imag: int | None = None
     imag_freq_cm1: float | None = None
     zpe_hartree: float | None = None
     modes: list[FrequencyModePayload] | None = None
+    reaction_coordinate_mode_index: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def validate_modes_consistency(self) -> Self:
@@ -205,6 +234,72 @@ class FreqResultPayload(SchemaBase):
                     f"{imaginary_count} in modes."
                 )
         return self
+
+    @model_validator(mode="after")
+    def validate_reaction_coordinate_designation(self) -> Self:
+        """The designated reaction coordinate must be an imaginary mode.
+
+        Checked here rather than in
+        :func:`~tckdb_schemas.stationary_point.evaluate_transition_state_frequency`
+        because it is a statement about the payload's internal
+        consistency, not about the chemistry: an index naming a real mode
+        or naming nothing at all is a malformed record whatever kind of
+        stationary point it describes.
+        """
+        index = self.reaction_coordinate_mode_index
+        if index is None:
+            return self
+        if self.n_imag == 0:
+            raise ValueError(
+                "reaction_coordinate_mode_index was set but n_imag=0: there "
+                "is no imaginary mode to designate."
+            )
+        if self.modes is None:
+            raise ValueError(
+                "reaction_coordinate_mode_index requires the frequency list. "
+                "Deposit modes so the designation can be checked and the "
+                "other imaginary modes judged."
+            )
+        designated = [m for m in self.modes if m.mode_index == index]
+        if not designated:
+            raise ValueError(
+                f"reaction_coordinate_mode_index={index} names no mode in "
+                f"the deposited frequency list."
+            )
+        if not designated[0].is_imaginary:
+            raise ValueError(
+                f"reaction_coordinate_mode_index={index} names mode "
+                f"{index} at {designated[0].frequency_cm1} cm-1, which is "
+                f"not imaginary. The reaction coordinate is the imaginary "
+                f"mode."
+            )
+        if designated[0].imaginary_disposition is not None:
+            raise ValueError(
+                f"mode {index} is designated the reaction coordinate and "
+                f"also carries imaginary_disposition="
+                f"{designated[0].imaginary_disposition.value!r}. A "
+                f"disposition says what a mode is *instead of* the reaction "
+                f"coordinate; the two cannot both be true."
+            )
+        return self
+
+    def imaginary_modes(self) -> list[ImaginaryMode]:
+        """The deposited imaginary modes, in the shape the rule expects.
+
+        Empty when no frequency list was deposited — which is a state the
+        rule reports on rather than one it can paper over.
+        """
+        if not self.modes:
+            return []
+        return [
+            ImaginaryMode(
+                frequency_cm1=mode.frequency_cm1,
+                mode_index=mode.mode_index,
+                disposition=mode.imaginary_disposition,
+            )
+            for mode in self.modes
+            if mode.is_imaginary
+        ]
 
 
 class SPResultPayload(SchemaBase):
@@ -746,6 +841,43 @@ class CalculationWithResultsPayload(CalculationPayload):
             "is declared on the scan_result.coordinates list."
         ),
     )
+
+    def transition_state_frequency_findings(
+        self, *, location: str
+    ) -> list[StationaryPointFinding]:
+        """Judge this calculation's frequency evidence as a transition state.
+
+        A thin adapter over the single owner in
+        :mod:`tckdb_schemas.stationary_point` — it knows payload shapes,
+        which that module deliberately does not, and it knows nothing
+        about the physics, which is entirely there.
+        """
+        if self.freq_result is None:
+            return []
+        return evaluate_transition_state_frequency(
+            self.freq_result.n_imag,
+            self.freq_result.imag_freq_cm1,
+            location=location,
+            imaginary_modes=self.freq_result.imaginary_modes(),
+            reaction_coordinate_mode_index=(
+                self.freq_result.reaction_coordinate_mode_index
+            ),
+            tau=self.tau_resolution(),
+        )
+
+    def tau_resolution(self) -> TauResolution:
+        """ADR 0012's τ for this calculation, from its own parameters.
+
+        Reads the ``canonical_key``/``canonical_value`` pairs the
+        producer deposited. A payload that carries no parameters — the
+        common case for a hand-written upload — resolves to the
+        conservative "protocol not recorded" row, and says so in the
+        stored reason rather than silently picking a number.
+        """
+        return resolve_tau_from_parameters(
+            (observation.canonical_key, observation.canonical_value)
+            for observation in (self.parameters or ())
+        )
 
     @model_validator(mode="after")
     def validate_constraint_indices_unique(self) -> Self:

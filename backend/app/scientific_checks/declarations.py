@@ -34,22 +34,36 @@ from types import ModuleType
 
 from tckdb_schemas.fragments import reaction_atom_map as wire_atom_map
 from tckdb_schemas.stationary_point import (
+    TAU_ANALYTIC_DEFAULT_CM1,
+    TAU_ANALYTIC_TIGHT_CM1,
+    TAU_FINITE_DIFFERENCE_ENERGY_CM1,
+    TAU_FINITE_DIFFERENCE_GRADIENT_CM1,
+    TAU_PARAMETER_KEYS,
+    TAU_PROTOCOL_NOT_RECORDED_CM1,
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
     W_N_IMAG_CONTRADICTS_MINIMUM,
     W_N_IMAG_HIGHER_ORDER_SADDLE,
     W_N_IMAG_SUGGESTS_TS,
+    W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU,
+    W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU,
+    W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE,
     W_TS_IMAG_FREQ_TOO_SMALL,
-    W_TS_N_IMAG_NOT_ONE,
+    W_TS_NO_IMAGINARY_MODE,
+    W_TS_REACTION_COORDINATE_AMBIGUOUS,
+    W_TS_REACTION_COORDINATE_NOT_DESIGNATED,
     evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
+    resolve_tau,
 )
 
 from app.chemistry import species as chemistry_species
 from app.chemistry import units as chemistry_units
 from app.scientific_checks import (
     CheckTier,
+    ConstantThreshold,
     DatabaseConstraint,
     DesignPosition,
+    ProvenanceThreshold,
     PythonCheck,
     ScientificCheck,
     collect_registered_checks,
@@ -71,23 +85,99 @@ from app.services.provenance_warnings import (
 # Stationary points — the imaginary-mode spectrum is the definition
 # ---------------------------------------------------------------------------
 
-CHECK_TRANSITION_STATE_ONE_IMAGINARY_MODE = ScientificCheck(
+#: ADR 0012's protocol table, declared once and rendered into both the
+#: register document and the τ entry below.
+_TAU_VALUES: tuple[tuple[str, str], ...] = (
+    (
+        "analytic Hessian, tight grid, tight optimisation",
+        f"{TAU_ANALYTIC_TIGHT_CM1:.0f}",
+    ),
+    (
+        "analytic Hessian, default grid and tolerances",
+        f"{TAU_ANALYTIC_DEFAULT_CM1:.0f}",
+    ),
+    (
+        "finite-difference Hessian from analytic gradients",
+        f"{TAU_FINITE_DIFFERENCE_GRADIENT_CM1:.0f}",
+    ),
+    (
+        "finite-difference Hessian from energies",
+        f"{TAU_FINITE_DIFFERENCE_ENERGY_CM1:.0f}",
+    ),
+    (
+        "Hessian method not recorded",
+        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f}",
+    ),
+)
+
+_TAU_THRESHOLD = ProvenanceThreshold(
+    name="tau",
+    unit="cm-1",
+    resolver=resolve_tau,
+    parameter_keys=TAU_PARAMETER_KEYS,
+    values=_TAU_VALUES,
+    fallback=(
+        f"When ``freq.hessian_method`` is absent — which is the common case, "
+        f"because most outputs do not say — tau is "
+        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1 and the record stores "
+        f"``protocol_not_recorded`` as the basis. The fallback is deliberately "
+        f"the *conservative* row rather than the analytic one: assuming the "
+        f"better case would flag genuine quadrature noise as a real "
+        f"higher-order saddle. Crucially, tau never decides between blocking "
+        f"and warning — every blocking rule here is a contract about what the "
+        f"record says, not about magnitude — so missing provenance changes how "
+        f"loudly a record is flagged and never whether it is accepted."
+    ),
+    rationale=(
+        "The Hessian noise floor is flat in omega-squared, not in omega, so "
+        "the uncertainty in a frequency diverges as omega goes to zero: at "
+        "300 cm-1 the sign is never in doubt, at 20 cm-1 it is indeterminate. "
+        "Where the crossover sits depends on how the second derivatives were "
+        "built, on what integration grid, and how tightly the geometry was "
+        "converged. The same -42 cm-1 is real negative curvature under an "
+        "analytic Hessian on a tight grid and indistinguishable from zero "
+        "under a numerical one on a default grid, so it cannot be classified "
+        "from the frequency list at all — only against the protocol that "
+        "produced it. A constant here would be a claim about physics that is "
+        "false."
+    ),
+)
+
+CHECK_TRANSITION_STATE_REACTION_COORDINATE = ScientificCheck(
     group="Stationary points",
     sort_key=1,
-    code=W_TS_N_IMAG_NOT_ONE,
+    code=(
+        W_TS_NO_IMAGINARY_MODE,
+        W_TS_REACTION_COORDINATE_NOT_DESIGNATED,
+        W_TS_REACTION_COORDINATE_AMBIGUOUS,
+    ),
     asserts=(
-        "A transition state has exactly one imaginary vibrational mode."
+        "A transition state has at least one imaginary vibrational mode, "
+        "exactly one of them is designated the reaction coordinate, and no "
+        "undeclared mode is stiff enough to make that designation meaningless."
     ),
     tier=CheckTier.block,
     tier_rationale=(
-        "Definitional — ADR 0008's worked example. The Hessian eigenvalue "
-        "spectrum *is* the definition of a stationary point: zero imaginary "
-        "modes is a minimum and the geometry never reached a barrier top, two "
-        "or more is a higher-order saddle. Either way the record is not the "
-        "first-order saddle point it declares itself to be, and no correct "
-        "calculation produces it as submitted."
+        "Definitional, and narrower than what it replaced. ADR 0008's worked "
+        "example was ``n_imag == 1``; ADR 0012 retired that, because "
+        "'exactly one negative eigenvalue' is a statement about the exact "
+        "Hessian at the exact stationary point on a smooth surface and a "
+        "deposit contains none of those. Two scientifically correct "
+        "calculations of the same saddle point can return ``n_imag == 1`` and "
+        "``n_imag == 3``, so a gate a depositor passes by switching to "
+        "``Int=UltraFine`` is not a gate on science — and its cheapest "
+        "workaround is deleting a line from the frequency list, which turns "
+        "visible ambiguity into invisible falsehood. What survives the "
+        "translation into a database row is a *contract*: no imaginary mode "
+        "at all means there is no reaction coordinate and the structure is "
+        "not a transition state; more than one with no designation means the "
+        "record cannot answer the question every transition-state-theory code "
+        "asks it; and an undeclared mode at least as stiff as the designated "
+        "one means the designation is an assertion the record does not "
+        "support. None of the three can be produced by a correct calculation "
+        "that has been honestly described."
     ),
-    adr="0008",
+    adr="0012, 0008",
     enforced_by=(
         PythonCheck(
             evaluate_transition_state_frequency,
@@ -97,23 +187,37 @@ CHECK_TRANSITION_STATE_ONE_IMAGINARY_MODE = ScientificCheck(
                 "kind argument. Upload schemas call "
                 "``raise_for_blocking_findings`` from a ``model_validator``, "
                 "so the contradiction becomes a 422 before the route body "
-                "opens a submission."
+                "opens a submission. The designation is then persisted on "
+                "``calc_freq_result.reaction_coordinate_mode_index``, which "
+                "is what lets the read-time trust rubric cite this judgement "
+                "instead of re-deriving it."
             ),
+        ),
+        DesignPosition(
+            where=(
+                "``_check_ts_reaction_coordinate_designated`` and "
+                "``_detect_transition_state_entry_hard_fail`` "
+                "(``backend/app/services/trust/rubrics.py``, "
+                "``backend/app/services/trust/evaluator.py``) ask at read time "
+                "whether the record carries the designation this blocking tier "
+                "required of it — a question about persisted state, not a "
+                "second opinion about physics. They cannot disagree with the "
+                "verdict above, which is the collapse ADR 0008 section 9 asked "
+                "for."
+            )
         ),
     ),
     escape_hatch=(
-        "Deposit no frequency evidence: ``n_imag=None`` produces no findings "
-        "at all. Absence is never contradiction."
-    ),
-    divergence=(
-        "The module calls itself 'the single owner' of these findings, and "
-        "ADR 0008 requires that where one fact is checked in more than one "
-        "tier the blocking tier owns it and the others cite it. "
-        "``_check_ts_single_imaginary_frequency_for_ts`` in "
-        "``app/services/trust/rubrics.py`` nevertheless re-derives the same "
-        "physical fact independently at read time, and the trust evaluator "
-        "promotes it to a hard fail. ADR 0008 names this duplication as a "
-        "defect to be collapsed onto one owner; it has not been collapsed."
+        "Three, and they are the point of the rule. Deposit no frequency "
+        "evidence: ``n_imag=None`` produces no findings at all, because "
+        "absence is never contradiction. Or deposit the extra imaginary "
+        "modes honestly — designate the reaction coordinate and give each "
+        "other mode a disposition (``torsion``, ``rigid_body_residue``, "
+        "``intermolecular``, ``ring_pucker``, ``symmetry_breaking``, or an "
+        "explicit ``unassigned``) — and a genuine higher-order saddle is "
+        "accepted with a warning and a structural flag. Or, if the extra mode "
+        "really is the barrier, designate *it*. What has no door is refusing "
+        "to say which mode is the reaction coordinate."
     ),
 )
 
@@ -200,12 +304,82 @@ CHECK_VDW_COMPLEX_IMAGINARY_MODE = ScientificCheck(
     ),
 )
 
-CHECK_TRANSITION_STATE_IMAGINARY_MODE_MAGNITUDE = ScientificCheck(
+CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES = ScientificCheck(
     group="Stationary points",
     sort_key=4,
+    code=(
+        W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU,
+        W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU,
+        W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE,
+    ),
+    asserts=(
+        "A transition state's imaginary modes other than the reaction "
+        "coordinate are judged by magnitude against a tolerance read from the "
+        "protocol that produced them, not by counting them."
+    ),
+    tier=CheckTier.warn,
+    tier_rationale=(
+        "The extra modes cannot be classified from the frequency list, so "
+        "refusing the deposit would assert a determination the deposit does "
+        "not contain the information to support — an expectation about "
+        "numerical quality wearing the costume of a definition. They can also "
+        "be simply correct: a harmonic model is inapplicable to a torsion, a "
+        "ring pucker or an intermolecular mode in a loose complex, and a "
+        "transition state can sit at a maximum of a torsional profile while "
+        "being a perfectly correct reactive bottleneck, in which case the "
+        "extra negative eigenvalue is not an artefact but exactly right. "
+        "Warning rather than blocking is also the only choice that preserves "
+        "evidence: a record carrying all three frequencies and the full "
+        "protocol can be reassessed under a better rule in five years, while "
+        "a refused deposit leaves nothing behind."
+    ),
+    adr="0012",
+    thresholds=(_TAU_THRESHOLD,),
+    enforced_by=(
+        PythonCheck(
+            evaluate_transition_state_frequency,
+            note=(
+                "Above tau the record is flagged as well as warned: the flag "
+                "is ADR 0012's answer to 'warnings get ignored', excluding "
+                "the record from default transition-state consumption without "
+                "creating the incentive to edit the frequency list that a hard "
+                "block creates. Below tau it is warned only. The flag and the "
+                "tau that decided it are persisted on ``calc_freq_result`` "
+                "rather than recomputed, so a later parser improvement cannot "
+                "silently re-label historical records."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "None is needed — the check never refuses. Its cost runs the other "
+        "way: a genuine higher-order saddle, a torsional maximum and a "
+        "valley-ridge inflection are all accepted, and only the structural "
+        "flag separates them from a clean first-order saddle for a consumer "
+        "who reads it."
+    ),
+    divergence=(
+        "ADR 0012 recommends replacing the threshold with a determination — "
+        "projecting each imaginary eigenvector onto the six rigid-body vectors "
+        "(more than about 90 percent overlap means projection residue) and "
+        "onto dihedral-rotation vectors (more than about 70 percent means a "
+        "torsion) — and says those should be implemented *before* tau is "
+        "tuned, because a determination beats a threshold wherever one is "
+        "available. They are not implemented, and cannot be: "
+        "``backend/app/db/models/transition_state.py`` records that "
+        "normal-mode displacement evidence is deliberately absent from TCKDB, "
+        "'a producer-side heuristic, not a database record'. So the "
+        "disposition on each extra mode is *declared by the depositor* and "
+        "TCKDB cannot check it. Recorded, not resolved: reversing that "
+        "decision is a schema change and its own ADR."
+    ),
+)
+
+CHECK_TRANSITION_STATE_SOFT_REACTION_COORDINATE = ScientificCheck(
+    group="Stationary points",
+    sort_key=5,
     code=W_TS_IMAG_FREQ_TOO_SMALL,
     asserts=(
-        "A transition state's single imaginary mode should exceed roughly "
+        "A transition state's reaction coordinate should exceed roughly "
         f"{TS_IMAGINARY_FREQUENCY_MIN_CM1:.0f} cm-1 in magnitude."
     ),
     tier=CheckTier.warn,
@@ -218,18 +392,39 @@ CHECK_TRANSITION_STATE_IMAGINARY_MODE_MAGNITUDE = ScientificCheck(
         "expectation, never a definition, and a check that could fire on a "
         "correct novel result must not block."
     ),
-    adr="0008",
+    adr="0008, 0012",
+    thresholds=(
+        ConstantThreshold(
+            name="TS_IMAGINARY_FREQUENCY_MIN_CM1",
+            value=TS_IMAGINARY_FREQUENCY_MIN_CM1,
+            unit="cm-1",
+            rationale=(
+                "A starting point rather than a physical constant: reaction "
+                "coordinates for hydrogen transfers run to thousands of cm-1, "
+                "while genuinely flat barriers fall well under 100. Unlike "
+                "tau it really is fixed in code, because it is a statement "
+                "about chemistry — what a reaction coordinate looks like — "
+                "rather than about numerics. It is also the scale that "
+                "separates a van der Waals complex's soft intermolecular "
+                "modes from a real reaction coordinate, and is reused for "
+                "that judgement."
+            ),
+        ),
+        _TAU_THRESHOLD,
+    ),
     enforced_by=(
         PythonCheck(
             evaluate_transition_state_frequency,
             note=(
-                "The threshold is explicitly a starting point rather than a "
-                "physical constant: reaction coordinates for hydrogen "
-                "transfers run to thousands of cm-1, while genuinely flat "
-                "barriers fall well under 100. It is also the scale that "
-                "separates a van der Waals complex's soft intermolecular "
-                "modes from a real reaction coordinate, and is reused for that "
-                "judgement."
+                "ADR 0012 changed what this fires *on* without changing what "
+                "it fires at. It used to read the single imaginary mode of a "
+                "record that had passed the ``n_imag == 1`` gate; it now reads "
+                "the designated reaction coordinate of a record that may carry "
+                "several. Both thresholds are declared above because both "
+                "reach the same message: the warning quotes the protocol's "
+                "tau alongside its own constant, so a reader who is told a "
+                "reaction coordinate is soft can see immediately whether that "
+                "calculation could resolve a small mode at all."
             ),
         ),
     ),

@@ -42,6 +42,56 @@ class StationaryPointKind(str, Enum):
     vdw_complex = "vdw_complex"
 
 
+class ImaginaryModeDisposition(str, Enum):
+    # What an imaginary vibrational mode *is*, other than the reaction
+    # coordinate. Declared by the depositor, never inferred: ADR 0012
+    # accepts a transition state carrying extra imaginary modes only
+    # because the record says what they are, and
+    # ``transition_state.py`` records that TCKDB deliberately does not
+    # store normal-mode displacement vectors, so there is nothing here
+    # to infer an assignment from.
+    #
+    # ``unassigned`` is a real answer and not a placeholder: it says the
+    # depositor looked and could not classify the mode. It is treated as
+    # declared for the purposes of the reaction-coordinate contract --
+    # an honest "I do not know" is still a statement a reader can act
+    # on -- but it never suppresses the structural flag.
+    #
+    # Deliberately a comment rather than a docstring, for the same
+    # reason as ``MoleculeKind`` above: the wire package mirrors this
+    # enum and the two JSON schemas merge into one published component
+    # only while they are byte-identical.
+
+    rigid_body_residue = "rigid_body_residue"
+    torsion = "torsion"
+    ring_pucker = "ring_pucker"
+    intermolecular = "intermolecular"
+    symmetry_breaking = "symmetry_breaking"
+    unassigned = "unassigned"
+
+
+class HessianMethod(str, Enum):
+    # How the second derivatives behind a frequency job were obtained.
+    #
+    # This is *not* ``opt.initial_hessian``, which names where the
+    # optimiser got its starting Hessian. It is the frequency job's own
+    # method, and it is the single largest term in the noise floor of a
+    # small imaginary mode, so ADR 0012's tolerance keys on it.
+    #
+    # Recorded only when the output says so explicitly (Gaussian
+    # ``Freq=Numer``, ORCA ``NumFreq`` / ``AnFreq``). Absence means "not
+    # recorded", which resolves to the conservative tolerance -- it is
+    # never assumed to be analytic.
+    #
+    # Not a database column: it is the canonical *value* of the
+    # ``freq.hessian_method`` parameter row, and lives here so the
+    # parsers and the wire package name the same tokens.
+
+    analytic = "analytic"
+    finite_difference_gradient = "finite_difference_gradient"
+    finite_difference_energy = "finite_difference_energy"
+
+
 class ConformerSelectionKind(str, Enum):
     display_default = "display_default"
     curator_pick = "curator_pick"
