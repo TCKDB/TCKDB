@@ -43,6 +43,7 @@ from app.services import (
     molpro_parameter_parser,
     orca_parameter_parser,
 )
+from app.services.best_effort import isolated_best_effort
 from app.services.artifact_storage import (
     ArtifactStorageUnavailable,
     load_artifact_bytes,
@@ -369,18 +370,41 @@ def _extract_safe(
     *,
     source: str,
 ) -> list[CalculationParameter] | None:
-    """Run extraction and convert any ``ParameterExtractionError`` to a warning.
+    """Run extraction as a genuinely best-effort operation.
 
     ``extract_and_store_calculation_parameters`` is parse-first /
-    write-second, so if this raises ``ParameterExtractionError`` no
-    ``calculation_parameter`` rows have been written and the
-    surrounding artifact transaction is safe.
+    write-second, and ``ParameterExtractionError`` is raised only by the parse
+    half, where no ``calculation_parameter`` rows have been written yet. That
+    is why catching it alone used to look sufficient.
+
+    It was not. The write half does real work — ``persist_calculation_parameters``
+    issues a ``DELETE`` of the previous parser rows and then ``INSERT``s the new
+    batch — and a database error there is not a ``ParameterExtractionError``.
+    It escaped this guard entirely and aborted the artifact upload, despite the
+    calling route declaring the whole step "best-effort (never abort the
+    upload)". The guard existed; it just did not cover the writes.
+
+    :func:`isolated_best_effort` now covers both halves: the artifact rows the
+    route already persisted are flushed outside the savepoint, the extraction
+    runs and flushes inside it, and any failure rolls back to the savepoint
+    with the upload intact and the session still usable for the artifacts that
+    follow in the same request.
     """
 
-    try:
-        return extract_and_store_calculation_parameters(session, calculation, text)
-    except ParameterExtractionError as exc:
-        logger.warning(
-            "calculation_parameter extraction skipped (%s): %s", source, exc
-        )
-        return None
+    def _run() -> list[CalculationParameter] | None:
+        try:
+            return extract_and_store_calculation_parameters(
+                session, calculation, text
+            )
+        except ParameterExtractionError as exc:
+            # A parse-layer refusal is expected and unremarkable — an
+            # unrecognised or malformed input file — so it keeps its quieter,
+            # message-carrying log line rather than a traceback.
+            logger.warning(
+                "calculation_parameter extraction skipped (%s): %s", source, exc
+            )
+            return None
+
+    return isolated_best_effort(
+        session, _run, what=f"calculation_parameter extraction ({source})"
+    )

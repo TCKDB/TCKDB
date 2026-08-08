@@ -52,6 +52,7 @@ from app.db.models.calculation import (
 from app.db.models.common import ArtifactKind, CalculationType
 from app.db.models.geometry import Geometry, GeometryAtom
 from app.schemas.fragments.artifact import ArtifactIn
+from app.services.best_effort import isolated_best_effort
 from app.services.hessian_parsing import (
     HESSIAN_PARSER_VERSION,
     ParsedHessian,
@@ -97,23 +98,23 @@ def try_extract_hessian_from_artifact_upload(
     ``kind`` is compared by value across the ``tckdb_schemas`` / ORM enum
     boundary (both are ``(str, Enum)`` with identical members), matching the
     sibling energy hook.
+
+    Isolation is via :func:`isolated_best_effort`, not a bare catch-all. A
+    database error swallowed without a ``ROLLBACK TO SAVEPOINT`` leaves the
+    transaction aborted, so the previous ``except Exception`` converted a
+    loud, immediate failure into a silent one that resurfaced at the caller's
+    ``COMMIT`` — where it takes the artifact upload with it.
     """
     if artifact_in.kind not in _HESSIAN_ARTIFACT_KINDS:
         return
     if calculation.type not in _HESSIAN_CALC_TYPES:
         return
 
-    try:
-        _extract_and_store(session, calculation, artifact_in)
-    except Exception:
-        # Artifact upload is canonical and must never be aborted by an
-        # extraction failure — swallow anything and log it.
-        logger.warning(
-            "hessian extraction failed for artifact '%s'",
-            artifact_in.filename,
-            exc_info=True,
-        )
-        return
+    isolated_best_effort(
+        session,
+        lambda: _extract_and_store(session, calculation, artifact_in),
+        what=f"hessian extraction for artifact '{artifact_in.filename}'",
+    )
 
 
 def _extract_and_store(
@@ -265,7 +266,18 @@ def _insert(
             )
         )
         session.flush()
-    except IntegrityError:
+    except Exception as exc:
+        # Wider than the concurrent-duplicate ``IntegrityError`` this was
+        # written for: a savepoint whose failure is not rolled back leaves the
+        # transaction aborted, and the caller's safety net would then hide
+        # that until COMMIT. Undoing the insert is right regardless of cause.
         savepoint.rollback()
         session.expire(calculation, ["hessian"])
+        if not isinstance(exc, IntegrityError):
+            logger.warning(
+                "hessian insert skipped for calculation id=%s (%s)",
+                calculation.id,
+                type(exc).__name__,
+                exc_info=exc,
+            )
         return
