@@ -7,6 +7,7 @@ re-verifies the persisted digest and size before returning content.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from mimetypes import guess_type
 from urllib.parse import quote
@@ -43,6 +44,7 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.profile import current_read_profile
 
 router = APIRouter(prefix="/artifacts")
+logger = logging.getLogger(__name__)
 
 # Query-string keys allowed alongside POST. None in v0 — POST search
 # requires every filter/include/pagination knob to live in the JSON body
@@ -201,12 +203,25 @@ def download_approved_artifact(
             sha256,
             expected_bytes=artifact.bytes,
         )
+    # These two are converted to HTTPException, which means they bypass the
+    # ArtifactStorageUnavailable handler in app.api.errors and its logging.
+    # Without these lines the download path reproduces the exact problem that
+    # made the 2026-08-05 storage outage undiagnosable: a bare access-log 5xx
+    # naming a subsystem, with no record of why that subsystem failed.
     except ArtifactIntegrityError as exc:
+        logger.error(
+            "Artifact integrity verification failed on download: %s",
+            exc,
+            exc_info=exc,
+        )
         raise HTTPException(
             status_code=502,
             detail="Stored artifact failed integrity verification.",
         ) from exc
     except ArtifactStorageUnavailable as exc:
+        logger.warning(
+            "Artifact storage unavailable on download: %s", exc, exc_info=exc
+        )
         raise HTTPException(
             status_code=503,
             detail="Artifact storage is unavailable.",
