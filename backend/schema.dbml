@@ -186,6 +186,15 @@ enum IRCDirection {
   both
 }
 
+enum ImaginaryModeDisposition {
+  rigid_body_residue
+  torsion
+  ring_pucker
+  intermolecular
+  symmetry_breaking
+  unassigned
+}
+
 enum KineticsCalculationRole {
   reactant_energy
   product_energy
@@ -831,6 +840,7 @@ Table calc_freq_mode {
   ir_intensity_km_mol double
   raman_activity double
   symmetry_label text
+  imaginary_disposition ImaginaryModeDisposition
   note text
 
   indexes {
@@ -839,6 +849,7 @@ Table calc_freq_mode {
 
   checks {
     `(is_imaginary AND frequency_cm1 < 0) OR (NOT is_imaginary AND frequency_cm1 >= 0)` [name: 'ck_calc_freq_mode_frequency_sign_matches_is_imaginary']
+    `imaginary_disposition IS NULL OR is_imaginary` [name: 'ck_calc_freq_mode_imaginary_disposition_requires_imaginary_mode']
     `ir_intensity_km_mol IS NULL OR ir_intensity_km_mol >= 0` [name: 'ck_calc_freq_mode_ir_intensity_km_mol_ge_0']
     `mode_index >= 1` [name: 'ck_calc_freq_mode_mode_index_ge_1']
     `reduced_mass_amu IS NULL OR reduced_mass_amu > 0` [name: 'ck_calc_freq_mode_reduced_mass_amu_gt_0']
@@ -853,6 +864,10 @@ Table calc_freq_result {
   imag_freq_cm1 double
   zpe_hartree double
   zpe_uncertainty_hartree double
+  reaction_coordinate_mode_index int
+  imaginary_mode_tau_cm1 double
+  imaginary_mode_tau_basis text
+  imaginary_mode_structural_flag boolean
 }
 
 Table calc_geometry_validation {

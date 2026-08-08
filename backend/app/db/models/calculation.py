@@ -34,6 +34,7 @@ from app.db.models.common import (
     ConstraintKind,
     CoordinateUnit,
     HessianSource,
+    ImaginaryModeDisposition,
     IRCDirection,
     ParameterSource,
     PathSearchMethod,
@@ -495,6 +496,37 @@ class CalculationFreqResult(Base):
     zpe_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
     zpe_uncertainty_hartree: Mapped[Optional[float]] = mapped_column(nullable=True)
 
+    #: ``mode_index`` of the mode the depositor designated the reaction
+    #: coordinate. ADR 0012 makes this the contract that replaced the
+    #: ``n_imag == 1`` gate, and persisting it is what lets the read-time
+    #: trust rubric *cite* the upload-time judgement instead of
+    #: re-deriving it from ``n_imag`` and disagreeing with it. NULL on
+    #: every minimum and on any transition state with a single imaginary
+    #: mode, where there is nothing to disambiguate.
+    reaction_coordinate_mode_index: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+
+    #: The ADR 0012 tolerance actually applied to this record's extra
+    #: imaginary modes (cm⁻¹), and which row of the protocol table chose
+    #: it. Stored rather than recomputed because τ is read from execution
+    #: provenance: a later parser improvement would silently re-decide
+    #: every historical record, and ADR 0012's whole point is that a
+    #: reader can see what was decided and on what basis.
+    imaginary_mode_tau_cm1: Mapped[Optional[float]] = mapped_column(nullable=True)
+    imaginary_mode_tau_basis: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )
+
+    #: ADR 0012's structural flag: this record carries an imaginary mode
+    #: at or above τ beyond its reaction coordinate, so it is a genuine
+    #: higher-order saddle. Accepted, because that can be correct
+    #: chemistry, but excluded from default transition-state consumption
+    #: unless explicitly opted into.
+    imaginary_mode_structural_flag: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
+
     calculation: Mapped["Calculation"] = relationship(back_populates="freq_result")
     modes: Mapped[list["CalculationFreqMode"]] = relationship(
         primaryjoin=(
@@ -532,10 +564,25 @@ class CalculationFreqMode(Base):
     ir_intensity_km_mol: Mapped[Optional[float]] = mapped_column(nullable=True)
     raman_activity: Mapped[Optional[float]] = mapped_column(nullable=True)
     symmetry_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    #: What this imaginary mode is, when it is not the reaction
+    #: coordinate — declared by the depositor, never inferred. ADR 0012
+    #: accepts extra imaginary modes on a transition state only because
+    #: the record says what they are; see ADR 0012's conflict note about
+    #: why TCKDB cannot compute the assignment itself.
+    imaginary_disposition: Mapped[Optional[ImaginaryModeDisposition]] = mapped_column(
+        SAEnum(ImaginaryModeDisposition, name="imaginary_mode_disposition"),
+        nullable=True,
+    )
+
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint("calculation_id", "mode_index"),
+        CheckConstraint(
+            "imaginary_disposition IS NULL OR is_imaginary",
+            name="imaginary_disposition_requires_imaginary_mode",
+        ),
         CheckConstraint("mode_index >= 1", name="mode_index_ge_1"),
         CheckConstraint(
             "reduced_mass_amu IS NULL OR reduced_mass_amu > 0",

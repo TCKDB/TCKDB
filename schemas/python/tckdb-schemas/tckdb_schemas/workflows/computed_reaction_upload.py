@@ -65,11 +65,11 @@ from tckdb_schemas.shared.calculation_in import (
     GeometryIn,
     calculation_in_to_with_results_payload as _base_calc_to_payload,
     freq_evidence,
+    transition_state_frequency_findings,
 )
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_species_entry_frequency,
-    evaluate_transition_state_frequency,
     raise_for_blocking_findings,
 )
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
@@ -661,24 +661,26 @@ class BundleTransitionStateIn(SchemaBase):
         """Judge this transition state against its own frequency evidence."""
         findings: list[StationaryPointFinding] = []
         for calc in (self.calculation, *self.calculations):
-            n_imag, imag_freq_cm1 = freq_evidence(calc)
             findings.extend(
-                evaluate_transition_state_frequency(
-                    n_imag,
-                    imag_freq_cm1,
+                transition_state_frequency_findings(
+                    calc,
                     location=f"transition_state.calculations['{calc.key}']",
                 )
             )
         return findings
 
     @model_validator(mode="after")
-    def validate_n_imag_is_one(self) -> Self:
-        """Refuse frequency evidence that is not a first-order saddle point.
+    def validate_reaction_coordinate_contract(self) -> Self:
+        """Refuse frequency evidence with no usable reaction coordinate.
 
         Definitional, therefore blocking (ADR 0008). A transition state
         does not carry a ``stationary_point_kind`` — the entity is the
         claim — so this model is where the declaration and the evidence
-        meet.
+        meet. ADR 0012 narrowed what is definitional here: not the
+        *count* of imaginary modes, but that there is at least one, that
+        exactly one is designated the reaction coordinate, and that no
+        undeclared mode is stiff enough to make that designation
+        meaningless.
         """
         raise_for_blocking_findings(self.stationary_point_findings())
         return self

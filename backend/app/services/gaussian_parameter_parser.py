@@ -34,6 +34,17 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     ("scf", "incore"): ("scf.direct", "incore"),
     ("scf", "xqc"): ("scf.fallback", "xqc"),
     ("scf", "maxcycle"): ("scf.max_cycles", None),
+    # freq section
+    #
+    # ADR 0012's tau keys on how the *frequency job* built its second
+    # derivatives. Gaussian only says so when the default is overridden,
+    # so only the overrides are recorded: an unqualified ``Freq`` leaves
+    # the key absent, which resolves to the conservative tau rather than
+    # being read as "analytic". Assuming the default would be a guess
+    # dressed as provenance.
+    ("freq", "numer"): ("freq.hessian_method", "finite_difference_gradient"),
+    ("freq", "numerical"): ("freq.hessian_method", "finite_difference_gradient"),
+    ("freq", "enonly"): ("freq.hessian_method", "finite_difference_energy"),
     # integral section
     ("integral", "grid"): ("grid.quality", None),
     ("integral", "acc2e"): ("integral.accuracy", None),
@@ -406,6 +417,29 @@ def _parse_route_tokens(route: str) -> list[dict]:
                             "value_type": "bool",
                         }
                     )
+
+        # ``Freq=Numer``: the one-option form of ``Freq=(Numer)``.
+        #
+        # Handled separately because the generic key=value branch below
+        # files everything under the ``general`` section, which would put
+        # the frequency job's Hessian method somewhere ADR 0012's tau
+        # resolution cannot see it. Only route it here when the option is
+        # one the vocabulary knows; anything else keeps the old shape.
+        elif token.lower().startswith("freq=") and _lookup_canonical(
+            "freq", token.split("=", 1)[1].strip()
+        ) != (None, None):
+            sub = token.split("=", 1)[1].strip()
+            ck, cv = _lookup_canonical("freq", sub)
+            params.append(
+                {
+                    "raw_key": sub,
+                    "canonical_key": ck,
+                    "raw_value": "true",
+                    "canonical_value": cv,
+                    "section": "freq",
+                    "value_type": "bool",
+                }
+            )
 
         # simple key=value
         elif "=" in token:

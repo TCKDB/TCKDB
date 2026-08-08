@@ -216,7 +216,7 @@ def scientific_transition_state_entry_detail(
     ``handle_type_mismatch``; unknown refs and unknown ids return 404.
 
     Deterministic trust / evidence metadata
-    (``computed_transition_state_v1``) is attached to the record only
+    (``computed_transition_state_v2``) is attached to the record only
     when ``include=trust`` is supplied explicitly — ``include=all`` does
     not pull it in, and the default response omits the field entirely so
     it stays byte-identical to its pre-trust shape.

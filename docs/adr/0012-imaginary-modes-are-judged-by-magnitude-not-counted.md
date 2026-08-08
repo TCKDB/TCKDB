@@ -1,6 +1,6 @@
 # Imaginary modes are judged by magnitude, not counted
 
-**Status: proposed 2026-08-08.** Supersedes the `n_imag == 1` blocking rule for transition states in `tckdb_schemas.stationary_point`. Does not change the rules for minima.
+**Status: accepted 2026-08-08.** Implemented in `tckdb_schemas.stationary_point`, which supersedes the `n_imag == 1` blocking rule for transition states. Does not change the rules for minima or van der Waals complexes. Three things this document asserted before implementation turned out to be wrong or unbuildable; each is corrected in place below and listed under [What implementation changed](#what-implementation-changed).
 
 A first-order saddle point has exactly one negative eigenvalue of the mass-weighted Hessian. TCKDB has enforced that literally: a transition state whose frequency evidence reports anything other than `n_imag == 1` is refused. The rule is easy to state, easy to check, and — for a large class of correct calculations — wrong.
 
@@ -68,6 +68,10 @@ Magnitude does not turn an expectation into a definition. It decides whether cla
 
 The motivating record — −1300, −42, −13 — is accepted with a warning under every τ.
 
+**τ never decides between blocking and warning.** This was not stated when the table was written, and it turns out to be the property that makes the whole design safe. Every blocking row above is a contract about what the record *says* — that a reaction coordinate exists, that exactly one is designated, that no undeclared mode is stiffer than it — and none of them consults a magnitude except relative to the designated coordinate itself. τ separates a quiet warning from a flagged one and nothing else. So a payload whose protocol was never recorded is judged for *acceptance* identically to one that recorded everything; missing provenance changes how loudly a record is flagged, never whether it is taken. Without that property, τ would have to be resolvable at validation time from data a payload may not carry, and the rule would be refusing deposits over the absence of a parameter row.
+
+The consequence for reading the table: τ resolves from `freq.hessian_method` first, and the grid and optimisation columns only refine the analytic row. An unrecorded Hessian method takes the last row whatever else is present — a tight grid and a tight optimisation cannot buy the 15 cm⁻¹ line on their own, because the frequency job's own method is the term that dominates the noise floor.
+
 ## Prefer determinations to thresholds
 
 Threshold tuning is the least interesting part of this decision, and two cheap projections replace judgement with fact.
@@ -75,6 +79,10 @@ Threshold tuning is the least interesting part of this decision, and two cheap p
 Project each imaginary eigenvector onto the six rigid-body vectors: more than about 90% overlap means the mode is projection residue and nothing else. That very likely settles the −13 cm⁻¹ mode outright, with no threshold involved. Project against dihedral-rotation vectors about each rotatable bond: more than about 70% identifies a torsion, whose correct treatment is a hindered rotor, which makes the sign moot.
 
 Both are deterministic, cheap, and computed from the eigenvectors the record should carry anyway. **They should be implemented before τ is tuned**, because a determination beats a threshold wherever one is available.
+
+> **Not implemented, and blocked rather than deferred.** The clause "the eigenvectors the record should carry anyway" is the error in this section: the record does not carry them and, by an existing decision, is not supposed to. `backend/app/db/models/transition_state.py` states that normal-mode displacement evidence is deliberately absent because "reading an imaginary mode's displacement vectors is a producer-side heuristic, not a database record". There is nothing in the schema to project, so the projections are uncomputable rather than merely unwritten, and this section's instruction to implement them *before* τ could not be followed.
+>
+> τ therefore shipped alone, and the assignment on each extra imaginary mode is **declared by the depositor** and unverifiable by TCKDB. That is recorded as a divergence on the register entry so a reader cannot mistake a declared assignment for a verified one. [ADR 0013](0013-imaginary-mode-assignment-is-declared-because-eigenvectors-are-not-stored.md) writes up the conflict in full: what this section wants, what forbids it, what would have to change, and why reversing the earlier decision inside this branch would have been the worse error.
 
 ## Why not refuse, when refusing is cheaper
 
@@ -106,13 +114,25 @@ The extra modes barely touch the zero-point energy — 42 and 13 cm⁻¹ contrib
 
 Much of that error cancels in Q‡/Q_R when the reactant carries a corresponding soft mode. **It does not cancel for bimolecular reactions**, where five new low-frequency modes appear that have no counterpart in the separated reactants — precisely the modes that come out at 10–80 cm⁻¹ or imaginary. Uncancelled, across several modes, that is an order of magnitude in *k*. Molecularity is already stored, so this case can be flagged specifically rather than left to the reader.
 
+## What implementation changed
+
+Three corrections, all folded into the text above.
+
+**The eigenvector projections could not be built.** §"Prefer determinations to thresholds" assumed the record carries displacement vectors. It does not, by an existing decision. See the note there and [ADR 0013](0013-imaginary-mode-assignment-is-declared-because-eigenvectors-are-not-stored.md).
+
+**The analytic-versus-numerical axis was not recorded anywhere, and now partly is.** τ's table keys on the Hessian algorithm, and nothing in TCKDB recorded it — `opt.initial_hessian` is the optimiser's starting Hessian, a different object from the one the frequency job diagonalised, and using it would have been a guess wearing the costume of provenance. Rather than fall back to the conservative τ for every record, the Gaussian and ORCA parameter parsers were taught to read the frequency job's own method (Gaussian `Freq=Numer` and `Freq=EnOnly`, ORCA `NumFreq` and `AnFreq`) into a new `freq.hessian_method` canonical parameter. Only explicit statements are recorded: Gaussian does not name its default, so an unqualified `Freq` leaves the key absent and takes the conservative row. The practical effect is that ORCA jobs can reach the 15 cm⁻¹ line and Gaussian jobs generally cannot, which is an honest description of what each output says rather than an assumption about what each program did.
+
+**τ had to be stored, not recomputed.** The requirement that "`n_imag` must be accompanied by the count above τ, the τ used, and how it was chosen" reads like a reporting obligation; it is a storage one. τ is derived from parsed provenance, so recomputing it at read time would let a parser improvement silently re-decide every historical record — the opposite of letting a reader re-decide deliberately. `calc_freq_result` therefore stores the τ applied, the row of the table it came from, and the resulting structural flag, alongside the designated reaction coordinate.
+
 ## What this does not decide
 
-Whether TCKDB computes the rigid-body and torsion overlaps itself or requires them from the depositor. Whether the structural flag suppresses records from `export_ml_reactions` as well as from bulk transition-state exports. Whether τ should eventually be derived from the recorded protocol by formula rather than by table. Whether a valley–ridge inflection deserves its own declared kind rather than living under `symmetry_breaking`/`unassigned`.
+Whether the structural flag suppresses records from `export_ml_reactions` as well as from bulk transition-state exports — it is recorded but not yet consumed by any export path. Whether τ should eventually be derived from the recorded protocol by formula rather than by table. Whether a valley–ridge inflection deserves its own declared kind rather than living under `symmetry_breaking`/`unassigned`. Whether an extra imaginary mode at or above τ carrying no declared disposition should eventually block rather than warn — it currently warns and flags, because the table above admits no such block and inventing one during implementation would have been a decision taken in the wrong place.
 
 ## Consequences
 
-Transition states deposited before this exists were filtered by `n_imag == 1`, so the corpus contains no accepted higher-order saddles and the flag is absent everywhere rather than false anywhere. Records refused under the old rule were never stored and cannot be recovered; depositors holding them can now re-upload.
+Transition states deposited before this exists were filtered by `n_imag == 1`, so the corpus contains no accepted higher-order saddles and the flag is absent everywhere rather than false anywhere. Records refused under the old rule were never stored and cannot be recovered; depositors holding them can now re-upload. The migration adds only nullable columns and backfills nothing, because there is nothing true to backfill: a record judged under the counting rule was never judged under this one, and writing `false` into the flag would claim otherwise.
+
+The read-time trust rubric also stopped re-deriving the count. ADR 0008 §9 recorded that `HardFailReason.frequency_source_has_multiple_imaginary_modes_for_validated_ts` duplicated the upload-time rule; under this decision the duplicate became a contradiction, because the motivating record would have been accepted with a warning at upload and hard-failed at read time by the surviving copy of the retired gate. The rubric now cites the persisted designation instead of recounting, and the hard-fail reason was replaced by `frequency_source_reaction_coordinate_not_designated_for_validated_ts` — a question about whether the record carries what the blocking tier required, which anything that passed upload validation does. The rubric is bumped to `computed_transition_state_v2`, which restales machine reviews performed under the counting rule; they are genuinely stale.
 
 The remediation ladder should be named in the warning text, because the third rung turns this from a nuisance into an instrument. Re-run the frequency job on a tighter grid — most modes between −10 and −40 cm⁻¹ vanish. Re-optimise more tightly and repeat. **If they persist, displace along each extra imaginary mode by 0.1–0.3 Å and re-optimise: if the energy drops and `n_imag` falls to 1, the original was a genuine higher-order saddle, and the warning has just caught a real scientific error rather than a numerical one.** If the mode is a torsion, scan it and treat it as a hindered rotor. If it is an intermolecular mode in a loose complex, RRHO is the wrong model and variational or VRC-TST is the right tool.
 
