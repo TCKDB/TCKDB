@@ -8,6 +8,7 @@ override) so they exercise the real auth dependency.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import timedelta
 
 import pytest
@@ -17,12 +18,16 @@ from sqlalchemy import select
 from app.api.app import create_app
 from app.api.config import settings
 from app.api.deps import get_db, get_write_db
+from app.api.routes import auth as auth_routes
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 from app.db.models.user_session import UserSession
 from app.services.auth import (
+    DUMMY_PASSWORD_HASH,
     SESSION_COOKIE_NAME,
     SESSION_TTL_BY_ROLE,
+    password_needs_rehash,
+    verify_password,
 )
 
 
@@ -434,3 +439,224 @@ class TestRegistrationPolicy:
             json={"username": "seeded", "password": "password-123"},
         )
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# 9. Opportunistic password re-hashing on login
+# ---------------------------------------------------------------------------
+
+
+def _legacy_pbkdf2_hash(plain: str) -> str:
+    """The pre-scrypt stored format, rebuilt without ``app.services.auth``.
+
+    Deployed accounts carry hashes in exactly this shape. Building it
+    from :mod:`hashlib` here keeps the test honest even after the app
+    stops emitting the format.
+    """
+    salt = bytes.fromhex("0f1e2d3c4b5a69788796a5b4c3d2e1f0")
+    digest = hashlib.pbkdf2_hmac("sha256", plain.encode("utf-8"), salt, 200_000)
+    return f"pbkdf2_sha256$200000${salt.hex()}${digest.hex()}"
+
+
+class TestPasswordRehashOnLogin:
+    """Login is the only moment the plaintext exists, so it is the only
+    moment a legacy hash can be upgraded in place."""
+
+    PASSWORD = "legacy-user-password"
+
+    def _seed_legacy_user(self, db_session, username: str) -> int:
+        user = AppUser(
+            username=username,
+            password_hash=_legacy_pbkdf2_hash(self.PASSWORD),
+            role=AppUserRole.user,
+            is_active=True,
+        )
+        db_session.add(user)
+        db_session.flush()
+        return user.id
+
+    def _persisted_hash(self, db_session, user_id: int) -> str:
+        db_session.expire_all()
+        return db_session.scalar(
+            select(AppUser.password_hash).where(AppUser.id == user_id)
+        )
+
+    def test_legacy_hash_is_replaced_on_successful_login(
+        self, raw_client, db_session
+    ):
+        user_id = self._seed_legacy_user(db_session, "legacy-alice")
+        before = self._persisted_hash(db_session, user_id)
+        assert before.startswith("pbkdf2_sha256$")
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-alice", "password": self.PASSWORD},
+        )
+        assert resp.status_code == 200, resp.json()
+
+        after = self._persisted_hash(db_session, user_id)
+        assert after != before
+        assert after.startswith("scrypt$")
+        assert verify_password(self.PASSWORD, after)
+
+        # And the upgraded hash is usable: same password, fresh login.
+        raw_client.cookies.clear()
+        again = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-alice", "password": self.PASSWORD},
+        )
+        assert again.status_code == 200, again.json()
+        # Second login finds nothing to migrate, so the hash stays put.
+        assert self._persisted_hash(db_session, user_id) == after
+
+    def test_failed_login_does_not_rehash(self, raw_client, db_session):
+        user_id = self._seed_legacy_user(db_session, "legacy-bob")
+        before = self._persisted_hash(db_session, user_id)
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-bob", "password": "wrong-password"},
+        )
+        assert resp.status_code == 401
+        assert self._persisted_hash(db_session, user_id) == before
+
+    def test_rehash_failure_does_not_fail_the_login(
+        self, raw_client, db_session, monkeypatch
+    ):
+        """The user authenticated correctly; a storage problem is ours."""
+        user_id = self._seed_legacy_user(db_session, "legacy-carol")
+        before = self._persisted_hash(db_session, user_id)
+
+        def _boom(_plain: str) -> str:
+            raise RuntimeError("hashing backend unavailable")
+
+        monkeypatch.setattr(auth_routes, "hash_password", _boom)
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-carol", "password": self.PASSWORD},
+        )
+        assert resp.status_code == 200, resp.json()
+        # Old hash survives untouched, so the next login can retry.
+        assert self._persisted_hash(db_session, user_id) == before
+
+        # The session really was issued, not just a 200 shell.
+        assert raw_client.get("/api/v1/auth/me").json()["username"] == "legacy-carol"
+
+    def test_inactive_legacy_user_is_not_rehashed(self, raw_client, db_session):
+        user_id = self._seed_legacy_user(db_session, "legacy-dan")
+        db_session.get(AppUser, user_id).is_active = False
+        db_session.flush()
+        before = self._persisted_hash(db_session, user_id)
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "legacy-dan", "password": self.PASSWORD},
+        )
+        assert resp.status_code == 403
+        assert self._persisted_hash(db_session, user_id) == before
+
+
+# ---------------------------------------------------------------------------
+# 10. Login does not leak which usernames exist
+# ---------------------------------------------------------------------------
+
+
+class TestLoginAccountEnumeration:
+    """An unknown username must cost the same as a wrong password.
+
+    These assert the *mechanism* — that the KDF runs on both paths —
+    rather than measuring elapsed time. A stopwatch assertion would
+    flake on a loaded CI box and end up skipped, which is worse than no
+    test at all; "verify_password was called exactly once" is the
+    property that actually matters and it cannot flake.
+    """
+
+    @pytest.fixture
+    def verify_calls(self, monkeypatch) -> list:
+        """Record every ``verify_password`` call the login route makes."""
+        calls: list = []
+        real = auth_routes.verify_password
+
+        def _spy(plain, stored):
+            calls.append(stored)
+            return real(plain, stored)
+
+        monkeypatch.setattr(auth_routes, "verify_password", _spy)
+        return calls
+
+    def _register(self, raw_client) -> None:
+        raw_client.post(
+            "/api/v1/auth/register",
+            json={"username": "known-user", "password": "password-123"},
+        )
+        raw_client.cookies.clear()
+
+    def test_unknown_username_still_runs_the_kdf(self, raw_client, verify_calls):
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "no-such-user", "password": "whatever-123"},
+        )
+        assert resp.status_code == 401
+        assert len(verify_calls) == 1, (
+            "unknown username must still verify against a decoy; skipping the "
+            "KDF turns response latency into a username oracle"
+        )
+        assert verify_calls[0] == DUMMY_PASSWORD_HASH
+
+    def test_wrong_password_runs_the_kdf_exactly_once_too(
+        self, raw_client, verify_calls
+    ):
+        self._register(raw_client)
+        verify_calls.clear()  # registration does not verify, but be explicit
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "known-user", "password": "wrong-password"},
+        )
+        assert resp.status_code == 401
+        assert len(verify_calls) == 1
+        assert verify_calls[0] != DUMMY_PASSWORD_HASH
+
+    def test_decoy_tracks_the_current_parameters(self):
+        """The decoy must cost what a real verification costs.
+
+        Comparing against ``password_needs_rehash`` means a future
+        ``_SCRYPT_N`` bump cannot leave the decoy cheaper than a real
+        hash — which would quietly reopen the gap in the other
+        direction.
+        """
+        assert DUMMY_PASSWORD_HASH.startswith("scrypt$")
+        assert password_needs_rehash(DUMMY_PASSWORD_HASH) is False
+
+    def test_decoy_is_not_a_usable_credential(self, raw_client, db_session):
+        """Nobody can log in as a user that does not exist."""
+        for attempt in ("", "password", "whatever-123", DUMMY_PASSWORD_HASH):
+            resp = raw_client.post(
+                "/api/v1/auth/login",
+                json={"username": "no-such-user", "password": attempt or "x"},
+            )
+            assert resp.status_code == 401
+        assert verify_password("password", DUMMY_PASSWORD_HASH) is False
+
+    def test_user_with_no_password_set_still_runs_the_kdf(
+        self, raw_client, db_session, verify_calls
+    ):
+        """Archive restore leaves ``password_hash`` NULL — same rule applies."""
+        db_session.add(
+            AppUser(
+                username="no-password",
+                password_hash=None,
+                role=AppUserRole.user,
+                is_active=True,
+            )
+        )
+        db_session.flush()
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "no-password", "password": "anything-123"},
+        )
+        assert resp.status_code == 401
+        assert len(verify_calls) == 1
+        # `verify_password` burns an equivalent hash internally for this case.
+        assert verify_calls[0] is None
