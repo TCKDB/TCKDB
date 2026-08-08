@@ -1063,7 +1063,7 @@ def evaluate_loaded_transition_state_entry(
     from inside this function or any check runner. Callers (typically the
     read serializer or the session/id wrapper below) are responsible for
     eager-loading the relationships required by
-    ``computed_transition_state_v1``: the parent ``TransitionState`` and
+    ``computed_transition_state_v2``: the parent ``TransitionState`` and
     its ``ReactionEntry`` (and that entry's ``ChemReaction``), the
     directly-attached ``calculations`` with their result blocks,
     ``geometry_validation``, ``artifacts``, ``parent_dependencies`` /

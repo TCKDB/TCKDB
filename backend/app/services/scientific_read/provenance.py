@@ -570,7 +570,7 @@ def _build_transition_states_section(
     """Embed the reaction entry's TS-entry rows.
 
     When ``include_trust`` is True, each visible TS-entry additionally
-    carries a ``computed_transition_state_v1`` trust fragment. The
+    carries a ``computed_transition_state_v2`` trust fragment. The
     evidence graph the rubric walks is eagerly loaded via
     ``_TS_ENTRY_TRUST_EAGER_LOADS`` — the same tuple the standalone
     TS-entry trust read uses — so the loaded evaluator emits no hidden

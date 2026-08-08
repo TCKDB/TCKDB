@@ -124,7 +124,7 @@ _TSE_DETAIL_INTERNAL_INCLUDE_TOKENS: set[str] = _INTERNAL_INCLUDE_TOKENS | {
 }
 
 
-# Eager-load graph required by ``computed_transition_state_v1``. Mirrors
+# Eager-load graph required by ``computed_transition_state_v2``. Mirrors
 # the load plan inside
 # :func:`app.services.trust.evaluator.evaluate_computed_transition_state_entry`
 # so the loaded evaluator (and its check runners) issue no further
@@ -386,7 +386,7 @@ def get_transition_state_entry(
         session, transition_state_entry_handle
     )
     if "trust" in includes:
-        # Eager-load the graph computed_transition_state_v1 inspects so the
+        # Eager-load the graph computed_transition_state_v2 inspects so the
         # loaded evaluator issues no further queries.
         tse = session.scalars(
             select(TransitionStateEntry)

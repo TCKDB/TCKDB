@@ -1,4 +1,4 @@
-"""Tests for ``computed_transition_state_v1``.
+"""Tests for ``computed_transition_state_v2``.
 
 These tests pin the contract of the deterministic transition-state
 trust/evidence evaluator (spec:
