@@ -237,8 +237,27 @@ def _invalid_idempotency_key_handler(
 
 
 def _artifact_storage_unavailable_handler(
-    _request: Request, exc: ArtifactStorageUnavailable
+    request: Request, exc: ArtifactStorageUnavailable
 ) -> JSONResponse:
+    """503 for the client; the actual reason for the operator.
+
+    The public body stays deliberately vague -- it names a subsystem and
+    says retry. That is right for a caller and useless for whoever has to
+    fix it: before this log line, a storage outage appeared in the journal
+    as a bare access-log ``503`` with no traceback and no cause, and
+    finding out *why* meant reading source to locate the raise site. The
+    raised message already carries the underlying botocore error (see
+    :func:`app.services.artifact_persistence._store_and_record`), which
+    names the endpoint it failed to reach; the only thing missing was
+    somewhere to put it. Response shape is unchanged.
+    """
+    logger.warning(
+        "ArtifactStorageUnavailable on %s %s: %s",
+        request.method,
+        request.url.path,
+        exc,
+        exc_info=exc,
+    )
     return JSONResponse(
         status_code=503,
         content={

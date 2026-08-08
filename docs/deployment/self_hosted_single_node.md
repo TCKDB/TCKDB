@@ -195,6 +195,36 @@ The same logic applies to MinIO: container ports `9000`/`9001`
 published to `127.0.0.1:9000`/`127.0.0.1:9001`. Never republish them
 on `0.0.0.0`.
 
+### If the API runs in a container, address siblings by service name
+
+**A containerised API must reach its sibling services by their compose
+service name — `db`, `minio` — never `localhost` or `127.0.0.1`.** Inside a
+container, loopback is *that container's own* loopback. Nothing else is
+listening on it, and the connection fails with no indication that the address
+was ever wrong.
+
+This applies to every service coordinate, not just the database:
+
+| Setting | API on the host | API in the compose network |
+|---|---|---|
+| `DB_HOST` / `DB_PORT` | `127.0.0.1` / host-published port | `db` / `5432` |
+| `S3_ENDPOINT_URL` | `http://127.0.0.1:9000` | `http://minio:9000` |
+
+The reason this deserves its own heading: **migrating the API from the host to
+a container does not change the config file, so nothing looks wrong.** Every
+value in it is still individually valid — a well-formed URL, a port that is
+genuinely published, a host that genuinely resolves. Only the *frame of
+reference* changed. This is not a hypothetical: on 2026-08-05 exactly this
+happened here with `S3_ENDPOINT_URL=http://127.0.0.1:9000`, and every
+artifact-bearing upload returned 503 while the deployment reported itself
+healthy.
+
+Whenever you move a process into or out of a container, re-read the whole
+env file asking "who is *this* address relative to?" — not "is this address
+valid?". Then check `/api/v1/status`, which now reports the object-store
+endpoint it actually reached for (see
+[backend/docs/deployment/monitoring.md](../../backend/docs/deployment/monitoring.md)).
+
 ---
 
 ## Compose services

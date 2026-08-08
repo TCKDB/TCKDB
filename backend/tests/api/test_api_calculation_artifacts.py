@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -393,9 +394,10 @@ class TestBatchAtomicity:
 
 class TestStorageFailure:
     def test_storage_failure_triggers_compensation_and_503(
-        self, client, db_session, monkeypatch, stub_delete_artifact
+        self, client, db_session, monkeypatch, stub_delete_artifact, caplog
     ) -> None:
         calc_id = _create_calc_via_conformer_upload(client)
+        caplog.set_level(logging.WARNING, logger="app.api.errors")
 
         # Succeed on the first store, then simulate an outage.
         call_count = {"n": 0}
@@ -431,6 +433,19 @@ class TestStorageFailure:
         assert stored
         assert stub_delete_artifact == []
         assert _artifact_count_for(db_session, calc_id) == 0
+
+        # The 503 body deliberately says nothing useful to an operator, so
+        # the server log has to. Without this, a storage outage is a bare
+        # access-log line and finding the cause means reading source for the
+        # raise site.
+        storage_logs = [
+            rec for rec in caplog.records
+            if rec.name == "app.api.errors"
+            and "ArtifactStorageUnavailable" in rec.getMessage()
+        ]
+        assert storage_logs, "storage 503 produced no explanatory log record"
+        assert "simulated S3 outage" in storage_logs[0].getMessage()
+        assert storage_logs[0].exc_info is not None
 
     def test_flush_failure_triggers_compensation(
         self, client, db_session, monkeypatch, stub_store_artifact, stub_delete_artifact

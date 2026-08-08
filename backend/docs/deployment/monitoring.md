@@ -6,7 +6,15 @@ fresh host by someone who has not done this before.
 ## The idea, in one page
 
 There are three separate jobs, and it is worth keeping them separate in your
-head because most confusion about monitoring comes from mixing them up.
+head because most confusion about monitoring comes from mixing them up. Before
+them sits one precondition that all three inherit.
+
+**0. The endpoint has to cover every hard dependency.** This comes first
+because it is the one that bites. A health check that omits a dependency is
+not merely incomplete — it converts an outage into a confident all-clear, and
+everything downstream of it (the checker, the dead man's switch, the deploy
+verification) inherits the lie. See "What a missing component costs" below;
+it is not hypothetical here.
 
 **1. The system reports on itself.** An endpoint answers "is anything wrong,
 and what". TCKDB has three, and they are not redundant:
@@ -23,6 +31,12 @@ the database, and restarting would only lose in-flight work. `/status` is the
 rich one, and it deliberately returns **200 even when degraded**: if it
 returned 500, a checker could not tell "the site is down" from "the site is up
 and telling me the worker died", and those are different problems.
+
+Because they answer different questions, they cover different things. Artifact
+storage appears in `/status` but deliberately *not* in `/readyz`: with the
+object store down, every read and every query still works, so pulling the
+instance out of rotation would turn a partial outage into a total one. "Is
+anything wrong" and "should you route to me" are not the same question.
 
 **2. Something polls that endpoint and decides whether to bother you.**
 `scripts/ops/tckdb_alert_check.sh`, run every 5 minutes by a systemd timer. It
@@ -53,10 +67,18 @@ the signal. Setup is in the last section.
       "inline": true, "thread_alive": true,
       "queued": 0, "oldest_queued_age_seconds": null,
       "queue_stalled": false, "healthy": true, "reason": null
+    },
+    "artifact_storage": {
+      "endpoint": "http://minio:9000", "bucket": "tckdb-artifacts",
+      "healthy": true, "reachable": true, "reason": null
     }
   }
 }
 ```
+
+`status` is `"ok"` only when `degraded` is empty; both are derived from the
+same set of unhealthy components, so anything consuming this should check
+both rather than rely on that derivation staying true.
 
 The worker block carries two independent signals because neither is sufficient:
 
@@ -73,6 +95,53 @@ The worker block carries two independent signals because neither is sufficient:
 The obvious signal — a worker heartbeat — does not work here:
 `upload_job.heartbeat_at` is written only *while processing a job*, so an idle
 worker and a dead one look identical. Hence checking the thread directly.
+
+The **`artifact_storage`** block answers "can an upload's files actually be
+stored". Artifacts (ESS output logs, checkpoints) go to an S3-compatible object
+store, not to PostgreSQL, so it fails entirely independently of the database
+and the worker — which is exactly why it has to be listed here.
+
+- **`endpoint` / `bucket`** — *what the API tried to reach*, not just whether
+  it worked. This is the field that turns a confusing outage into a five-second
+  diagnosis. The URL is reduced to `scheme://host:port` before it is reported,
+  so a credential accidentally embedded in `S3_ENDPOINT_URL` cannot leak from
+  this public endpoint.
+- **`reachable`** — `false` means no HTTP response came back at all: wrong
+  address, service down, DNS or TLS failure. `true` with `healthy: false` means
+  the store answered and refused: the bucket does not exist, or the credentials
+  are rejected. Different symptoms, different fixes, so they are never
+  collapsed into one "storage is broken". (`database` splits *unreachable* from
+  *schema not initialised* for the same reason.)
+- The probe is a **`head_bucket`**, not a write — no load, no stray objects,
+  no dependence on write quota. It is bounded by a short botocore timeout
+  *and* a hard wall-clock deadline enforced outside botocore, because
+  botocore's timeouts do not cover every way a call can stall (DNS is the
+  usual one). A dead object store degrades `/status`; it must never hang it.
+  A hung `/status` reads to a checker as "host down", which is the wrong page
+  of the runbook.
+
+### What a missing component costs
+
+On 2026-08-05 the containerised API ran with
+`S3_ENDPOINT_URL=http://127.0.0.1:9000`, inherited from the earlier deployment
+where the API ran on the host under systemd. Inside a container that address is
+the *container's own* loopback, where nothing is listening.
+
+Every artifact-bearing upload returned 503. Meanwhile `/status` — which then
+covered only the database and the worker — reported fully healthy, so the
+5-minute checker never fired, the dead man's switch kept receiving its pings
+(the host was fine; only a dependency was not), and the deploy script's
+post-deploy verification, which waited for `status:ok`, passed throughout. The
+monitoring did not miss the outage so much as vouch against it.
+
+Two lessons, both now enforced in code:
+
+1. Anything that can fail *alone and silently* while the rest stays green must
+   appear in `/status`. When you add a hard dependency to the API, add it here
+   in the same change.
+2. Report **what was reached for**, not only the verdict. Every value in that
+   deployment's configuration was individually valid; the only way to see the
+   fault was to see the address in use.
 
 ## Setting it up on a fresh host
 

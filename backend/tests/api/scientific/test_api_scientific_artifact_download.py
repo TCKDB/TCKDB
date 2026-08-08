@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 
 from fastapi.testclient import TestClient
 
@@ -12,7 +13,12 @@ from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
 )
-from app.services.artifact_storage import ArtifactIntegrityError
+from app.services.artifact_storage import (
+    ArtifactIntegrityError,
+    ArtifactStorageUnavailable,
+)
+
+_ROUTE_LOGGER = "app.api.routes.scientific.artifacts"
 from tests.api.scientific.test_api_scientific_artifacts import (
     _make_species_owned_calc,
 )
@@ -108,6 +114,77 @@ def test_artifact_download_maps_integrity_failure_to_502(
     assert response.json()["detail"] == (
         "Stored artifact failed integrity verification."
     )
+
+
+def test_artifact_download_maps_storage_outage_to_503(
+    client, db_session, monkeypatch, caplog
+) -> None:
+    """A storage outage on the download path is a 503 — and is logged.
+
+    This route converts the exception to ``HTTPException``, so it bypasses
+    the ``ArtifactStorageUnavailable`` handler in ``app.api.errors`` and
+    that handler's logging. Without a log line here, a storage outage
+    appears in the journal as a bare access-log 503 naming a subsystem
+    with no record of why — the exact thing that made the 2026-08-05
+    outage take so long to diagnose.
+    """
+    artifact, _content = _downloadable_artifact(
+        db_session, status=RecordReviewStatus.approved
+    )
+    caplog.set_level(logging.WARNING, logger=_ROUTE_LOGGER)
+
+    def fake_load(*_args, **_kwargs):
+        raise ArtifactStorageUnavailable(
+            "Artifact storage read failed: EndpointConnectionError: "
+            'Could not connect to the endpoint URL: "http://127.0.0.1:9000"'
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Artifact storage is unavailable."
+
+    records = [rec for rec in caplog.records if rec.name == _ROUTE_LOGGER]
+    assert records, "storage 503 on download produced no explanatory log record"
+    # The reason, not just the verdict: the endpoint it could not reach.
+    assert "EndpointConnectionError" in records[0].getMessage()
+    assert "127.0.0.1:9000" in records[0].getMessage()
+    assert records[0].exc_info is not None
+
+
+def test_artifact_download_logs_why_integrity_verification_failed(
+    client, db_session, monkeypatch, caplog
+) -> None:
+    """A 502 here means stored bytes no longer match their digest.
+
+    That is data corruption, and the public body says nothing about which
+    object or why. If it is not in the log it is nowhere.
+    """
+    artifact, _content = _downloadable_artifact(
+        db_session, status=RecordReviewStatus.approved
+    )
+    caplog.set_level(logging.ERROR, logger=_ROUTE_LOGGER)
+
+    def fake_load(*_args, **_kwargs):
+        raise ArtifactIntegrityError("retrieved sha=deadbeef")
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+
+    assert response.status_code == 502
+    records = [rec for rec in caplog.records if rec.name == _ROUTE_LOGGER]
+    assert records, "integrity 502 produced no explanatory log record"
+    assert "retrieved sha=deadbeef" in records[0].getMessage()
+    assert records[0].exc_info is not None
 
 
 def test_artifact_download_rejects_malformed_digest(client, db_session) -> None:
