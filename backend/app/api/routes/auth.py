@@ -23,6 +23,7 @@ from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 from app.services.auth import (
+    DUMMY_PASSWORD_HASH,
     SESSION_COOKIE_NAME,
     create_api_key,
     create_session,
@@ -205,8 +206,20 @@ def login(
     user = session.scalar(
         select(AppUser).where(AppUser.username == request.username.strip())
     )
-    if user is None or not verify_password(request.password, user.password_hash):
+    # Verify unconditionally, against a decoy when the username is
+    # unknown. The obvious `user is None or not verify_password(...)`
+    # short-circuits, so an unknown username skips the KDF entirely and
+    # answers in ~3 ms where a wrong password takes ~150 ms — the
+    # response time becomes a username oracle that anyone can read
+    # remotely. Binding the result to a name first is what keeps the
+    # work from being short-circuited away.
+    stored = user.password_hash if user is not None else DUMMY_PASSWORD_HASH
+    password_ok = verify_password(request.password, stored)
+    if user is None or not password_ok:
         raise HTTPException(status_code=401, detail="Invalid username or password.")
+    # Reached only by a caller who proved they hold this account's
+    # password, so telling them the account is disabled reveals nothing
+    # they could not already establish. Not an enumeration vector.
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is inactive.")
 

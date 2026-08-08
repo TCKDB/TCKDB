@@ -48,10 +48,20 @@ def test_repeated_failed_logins_return_429(auth_throttled_client):
     assert body["bucket"] == "login"
 
 
-def test_login_error_does_not_reveal_account_existence(
+def test_login_401_body_is_identical_for_unknown_user_and_wrong_password(
     auth_throttled_client, db_session
 ):
-    """401 detail for an unknown user must match the detail for a wrong password."""
+    """Status and detail must not distinguish the two failures.
+
+    Renamed from ``test_login_error_does_not_reveal_account_existence``,
+    which claimed more than it checked: identical response bodies say
+    nothing about identical response *times*, and for a long while the
+    login route skipped the KDF entirely for an unknown username, so
+    the two were trivially told apart with a stopwatch while this test
+    stayed green. Body parity is worth asserting, but it is only half
+    the property — the timing half lives in
+    ``TestLoginAccountEnumeration`` in ``test_api_auth.py``.
+    """
     from app.db.models.app_user import AppUser
     from app.db.models.common import AppUserRole
     from app.services.auth import hash_password

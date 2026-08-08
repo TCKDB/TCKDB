@@ -23,8 +23,10 @@ from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 from app.db.models.user_session import UserSession
 from app.services.auth import (
+    DUMMY_PASSWORD_HASH,
     SESSION_COOKIE_NAME,
     SESSION_TTL_BY_ROLE,
+    password_needs_rehash,
     verify_password,
 )
 
@@ -553,3 +555,108 @@ class TestPasswordRehashOnLogin:
         )
         assert resp.status_code == 403
         assert self._persisted_hash(db_session, user_id) == before
+
+
+# ---------------------------------------------------------------------------
+# 10. Login does not leak which usernames exist
+# ---------------------------------------------------------------------------
+
+
+class TestLoginAccountEnumeration:
+    """An unknown username must cost the same as a wrong password.
+
+    These assert the *mechanism* — that the KDF runs on both paths —
+    rather than measuring elapsed time. A stopwatch assertion would
+    flake on a loaded CI box and end up skipped, which is worse than no
+    test at all; "verify_password was called exactly once" is the
+    property that actually matters and it cannot flake.
+    """
+
+    @pytest.fixture
+    def verify_calls(self, monkeypatch) -> list:
+        """Record every ``verify_password`` call the login route makes."""
+        calls: list = []
+        real = auth_routes.verify_password
+
+        def _spy(plain, stored):
+            calls.append(stored)
+            return real(plain, stored)
+
+        monkeypatch.setattr(auth_routes, "verify_password", _spy)
+        return calls
+
+    def _register(self, raw_client) -> None:
+        raw_client.post(
+            "/api/v1/auth/register",
+            json={"username": "known-user", "password": "password-123"},
+        )
+        raw_client.cookies.clear()
+
+    def test_unknown_username_still_runs_the_kdf(self, raw_client, verify_calls):
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "no-such-user", "password": "whatever-123"},
+        )
+        assert resp.status_code == 401
+        assert len(verify_calls) == 1, (
+            "unknown username must still verify against a decoy; skipping the "
+            "KDF turns response latency into a username oracle"
+        )
+        assert verify_calls[0] == DUMMY_PASSWORD_HASH
+
+    def test_wrong_password_runs_the_kdf_exactly_once_too(
+        self, raw_client, verify_calls
+    ):
+        self._register(raw_client)
+        verify_calls.clear()  # registration does not verify, but be explicit
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "known-user", "password": "wrong-password"},
+        )
+        assert resp.status_code == 401
+        assert len(verify_calls) == 1
+        assert verify_calls[0] != DUMMY_PASSWORD_HASH
+
+    def test_decoy_tracks_the_current_parameters(self):
+        """The decoy must cost what a real verification costs.
+
+        Comparing against ``password_needs_rehash`` means a future
+        ``_SCRYPT_N`` bump cannot leave the decoy cheaper than a real
+        hash — which would quietly reopen the gap in the other
+        direction.
+        """
+        assert DUMMY_PASSWORD_HASH.startswith("scrypt$")
+        assert password_needs_rehash(DUMMY_PASSWORD_HASH) is False
+
+    def test_decoy_is_not_a_usable_credential(self, raw_client, db_session):
+        """Nobody can log in as a user that does not exist."""
+        for attempt in ("", "password", "whatever-123", DUMMY_PASSWORD_HASH):
+            resp = raw_client.post(
+                "/api/v1/auth/login",
+                json={"username": "no-such-user", "password": attempt or "x"},
+            )
+            assert resp.status_code == 401
+        assert verify_password("password", DUMMY_PASSWORD_HASH) is False
+
+    def test_user_with_no_password_set_still_runs_the_kdf(
+        self, raw_client, db_session, verify_calls
+    ):
+        """Archive restore leaves ``password_hash`` NULL — same rule applies."""
+        db_session.add(
+            AppUser(
+                username="no-password",
+                password_hash=None,
+                role=AppUserRole.user,
+                is_active=True,
+            )
+        )
+        db_session.flush()
+
+        resp = raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": "no-password", "password": "anything-123"},
+        )
+        assert resp.status_code == 401
+        assert len(verify_calls) == 1
+        # `verify_password` burns an equivalent hash internally for this case.
+        assert verify_calls[0] is None

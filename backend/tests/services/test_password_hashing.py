@@ -18,6 +18,7 @@ import pytest
 
 from app.services import auth as auth_service
 from app.services.auth import (
+    DUMMY_PASSWORD_HASH,
     hash_password,
     password_needs_rehash,
     verify_password,
@@ -122,6 +123,21 @@ class TestNeedsRehash:
     def test_false_for_missing_hash(self):
         assert password_needs_rehash(None) is False
         assert password_needs_rehash("") is False
+
+
+class TestDummyPasswordHash:
+    """The decoy callers verify against when there is nothing to verify."""
+
+    def test_is_a_real_hash_at_current_parameters(self):
+        assert DUMMY_PASSWORD_HASH.startswith("scrypt$")
+        # Derived at import from `hash_password`, so it cannot drift
+        # cheaper than a genuine hash when the parameters are raised.
+        assert password_needs_rehash(DUMMY_PASSWORD_HASH) is False
+        assert len(DUMMY_PASSWORD_HASH.split("$")) == 6
+
+    def test_no_password_matches_it(self):
+        for attempt in ("", "password", PASSWORD, DUMMY_PASSWORD_HASH):
+            assert verify_password(attempt, DUMMY_PASSWORD_HASH) is False
 
 
 class TestMalformedStoredValues:

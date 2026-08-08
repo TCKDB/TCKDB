@@ -213,27 +213,6 @@ def _derive(parsed: _StoredHash, plain: str) -> Optional[bytes]:
     return _scrypt(plain, parsed.salt, n, r, p, dklen)
 
 
-# A throwaway salt for the equal-cost rejection path below. It is never
-# stored and never compared against anything.
-_DUMMY_SALT = secrets.token_bytes(_SALT_BYTES)
-
-
-def _burn_verify_time(plain: str) -> None:
-    """Spend what a real verification spends, then discard the result.
-
-    Without this, "user has no password set" and "stored hash is in a
-    format we no longer understand" both fail in microseconds while a
-    merely-wrong password takes ~100 ms — a timing oracle. This keeps
-    :func:`verify_password` itself from being the thing that leaks; it
-    does not close the oracle in the login route, which skips the call
-    entirely when no such user exists.
-    """
-    try:
-        _scrypt(plain, _DUMMY_SALT, _SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_DKLEN)
-    except (ValueError, MemoryError):  # pragma: no cover - defensive
-        pass
-
-
 def hash_password(plain: str) -> str:
     """Hash *plain* for storage under the current scheme and parameters."""
     if not plain:
@@ -246,12 +225,50 @@ def hash_password(plain: str) -> str:
     )
 
 
+#: A real, well-formed hash of a password nobody knows and nobody kept.
+#:
+#: Callers that have *nothing* to verify against — no such user, no
+#: password set — verify against this instead of skipping the work, so
+#: the rejection costs what a wrong password costs. Without it the
+#: response time answers "does this username exist?" for anyone with a
+#: stopwatch.
+#:
+#: It is generated at import by :func:`hash_password`, so it is always at
+#: whatever the constants above currently say; bumping ``_SCRYPT_N``
+#: moves the decoy in lockstep with no further edits. A literal baked
+#: into the source would silently go stale and quietly reopen the gap
+#: that this is here to close. The plaintext is a fresh 32-byte token
+#: that is discarded before this module finishes loading, so no password
+#: can ever match it.
+DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
+
+
+def _burn_verify_time(plain: str) -> None:
+    """Spend what a real verification spends, then discard the result.
+
+    Used for stored values that cannot be verified at all: a user with
+    no password set, or a hash in a format we no longer understand.
+    Both would otherwise fail in microseconds while a merely-wrong
+    password takes ~150 ms.
+    """
+    parsed = _parse(DUMMY_PASSWORD_HASH)
+    if parsed is None:  # pragma: no cover - we just built it ourselves
+        return
+    try:
+        _derive(parsed, plain)
+    except (ValueError, MemoryError):  # pragma: no cover - defensive
+        pass
+
+
 def verify_password(plain: str, stored: Optional[str]) -> bool:
     """Return whether *plain* matches *stored*.
 
     Dispatches on the stored scheme prefix, so hashes written before the
     move to scrypt keep verifying. Never raises and never puts the
     password, the salt or the digest into an exception or a log line.
+
+    Every path through this function does one KDF's worth of work, so
+    which path was taken is not readable from the outside.
     """
     parsed = _parse(stored)
     if parsed is None:
