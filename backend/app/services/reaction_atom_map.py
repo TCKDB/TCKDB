@@ -55,6 +55,7 @@ from app.chemistry.geometry import normalize_element_symbol
 from app.db.models.common import AtomMapSource, ReactionRole
 from app.db.models.geometry import GeometryAtom
 from app.db.models.reaction_atom_map import ReactionAtomMap, ReactionAtomMapPair
+from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
 
 #: Emitted when a reaction with a transition state is deposited without a map.
 W_MISSING_REACTION_ATOM_MAP = "reaction_atom_map_absent"
@@ -417,6 +418,80 @@ def _warn_incomplete(
                 ),
             )
         )
+
+
+CHECK_ATOM_MAP_ABSENT = ScientificCheck(
+    group="Atom mapping across a reaction",
+    sort_key=5,
+    code=W_MISSING_REACTION_ATOM_MAP,
+    asserts=(
+        "A reaction that has a transition state should say which atom of the "
+        "reactants is which atom of the saddle point and of the products."
+    ),
+    tier=CheckTier.warn,
+    tier_rationale=(
+        "Absence, not contradiction. An unmapped reaction is an incomplete "
+        "record rather than a false one — the rate constant is still the rate "
+        "constant and what is missing is the mechanistic detail. Blocking "
+        "would reject correct science over evidence the depositor may not "
+        "have, and would make every reaction already in the database "
+        "undepositable."
+    ),
+    adr="0011, 0008",
+    enforced_by=(
+        PythonCheck(
+            _warn_absent,
+            note=(
+                "A reaction with no transition state is not warned about: both "
+                "legs of a map run toward the saddle point, so a barrierless "
+                "channel has nothing to map onto and a warning it could never "
+                "satisfy would train depositors to ignore the one that "
+                "matters. The PDep bundle has no ``atom_map`` field yet, so on "
+                "that path the warning carries a different remedy sentence "
+                "rather than naming a field that does not exist."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "None is needed — the warning *is* the accommodation. TCKDB "
+        "deliberately will not infer a map: several chemically distinct maps "
+        "are usually consistent with the same reactants and products, so "
+        "choosing one by algorithm would manufacture provenance."
+    ),
+)
+
+CHECK_ATOM_MAP_INCOMPLETE = ScientificCheck(
+    group="Atom mapping across a reaction",
+    sort_key=6,
+    code=(W_ATOM_MAP_PARTICIPANTS_INCOMPLETE, W_ATOM_MAP_ATOMS_INCOMPLETE),
+    asserts=(
+        "A supplied atom map should cover every declared participant molecule, "
+        "every atom of each mapped participant, and every atom of the saddle "
+        "point."
+    ),
+    tier=CheckTier.warn,
+    tier_rationale=(
+        "Absence again, at finer grain. A partial map is a true-but-partial "
+        "record; only a map that contradicts *itself* is refused, and that is "
+        "handled at the blocking tier by ``validate_reaction_atom_map`` and by "
+        "the constraints on ``reaction_atom_map_pair``."
+    ),
+    adr="0011, 0008",
+    enforced_by=(
+        PythonCheck(
+            _warn_incomplete,
+            note=(
+                "Two codes from one seam: "
+                "``reaction_atom_map_participants_incomplete`` when a declared "
+                "molecule is missing from the map entirely, "
+                "``reaction_atom_map_atoms_incomplete`` when a mapped "
+                "participant leaves its own atoms unmapped or a leg leaves "
+                "saddle-point atoms claimed by nobody."
+            ),
+        ),
+    ),
+    escape_hatch=None,
+)
 
 
 __all__ = [

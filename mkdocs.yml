@@ -65,6 +65,7 @@ nav:
       - Deployment: site/deployment.md
   - Concepts:
       - Core Concepts: guides/core_concepts.md
+      - Scientific Check Register: guides/scientific_check_register.md
       - Public Identifiers: specs/public_identifier_policy.md
       - Internal ID Visibility: specs/internal_ids_visibility_policy.md
   - Guides:
