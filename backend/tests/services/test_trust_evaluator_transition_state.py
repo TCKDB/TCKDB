@@ -257,6 +257,8 @@ def _attach_ts_freq_calc(
     *,
     n_imag: int | None = 1,
     imag_freq_cm1: float | None = -550.0,
+    reaction_coordinate_mode_index: int | None = None,
+    imaginary_mode_structural_flag: bool | None = None,
 ) -> Calculation:
     lot = _make_lot(db_session)
     release = _make_software_release(db_session)
@@ -282,6 +284,8 @@ def _attach_ts_freq_calc(
             n_imag=n_imag,
             imag_freq_cm1=imag_freq_cm1,
             zpe_hartree=0.05,
+            reaction_coordinate_mode_index=reaction_coordinate_mode_index,
+            imaginary_mode_structural_flag=imaginary_mode_structural_flag,
         )
     )
     if opt_calc is not None:
@@ -433,7 +437,7 @@ def test_none_input_hard_fails():
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.transition_state_entry_missing
     assert result.rubric == "computed_transition_state"
-    assert result.rubric_version == 1
+    assert result.rubric_version == 2
     assert result.record_type == "transition_state_entry"
     assert result.record_id is None
 
@@ -500,9 +504,10 @@ def test_guess_with_n_imag_zero_warns_not_hard_fail(db_session: Session):
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
     assert result.hard_fail_reason is None
-    # n_imag != 1 means single_imaginary_frequency_for_ts is missing, but the
-    # rubric does not collapse to hard_failed for guess-stage entries.
-    assert "single_imaginary_frequency_for_ts" in result.missing_checks
+    # No imaginary mode means no reaction coordinate, so the designation
+    # check is missing — but the rubric does not collapse to hard_failed
+    # for guess-stage entries.
+    assert "reaction_coordinate_designated_for_ts" in result.missing_checks
 
 
 def test_guess_with_n_imag_two_warns_not_hard_fail(db_session: Session):
@@ -529,7 +534,9 @@ def test_validated_with_n_imag_one_passes_freq_check(
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
     assert result.hard_fail_reason is None
-    assert "single_imaginary_frequency_for_ts" in result.passed_checks
+    # One imaginary mode needs no designation: there is nothing to
+    # disambiguate, so the contract is satisfied trivially.
+    assert "reaction_coordinate_designated_for_ts" in result.passed_checks
     assert "imaginary_frequency_count_recorded" in result.passed_checks
     assert "imaginary_frequency_value_present" in result.passed_checks
 
@@ -550,7 +557,18 @@ def test_validated_with_n_imag_zero_hard_fails(db_session: Session):
     )
 
 
-def test_validated_with_n_imag_multiple_hard_fails(db_session: Session):
+def test_validated_with_undesignated_extra_modes_hard_fails(db_session: Session):
+    """Renamed from ``test_validated_with_n_imag_multiple_hard_fails``.
+
+    The old test asserted that ``n_imag > 1`` hard-fails, full stop. ADR
+    0012 accepts such a record at upload when its reaction coordinate is
+    designated, so re-deriving the count here would hard-fail a record
+    the blocking tier deliberately let through. What survives is the
+    narrower fact: a stored record that reports several imaginary modes
+    and does not say which is the barrier carries no usable reaction
+    coordinate. It cannot be produced by the upload path at all, so this
+    now covers records written around it.
+    """
     ts_entry = _make_ts_entry(
         db_session, status=TransitionStateEntryStatus.optimized
     )
@@ -562,8 +580,71 @@ def test_validated_with_n_imag_multiple_hard_fails(db_session: Session):
     assert result.label is EvidenceBadge.hard_failed
     assert (
         result.hard_fail_reason
-        is HardFailReason.frequency_source_has_multiple_imaginary_modes_for_validated_ts
+        is HardFailReason.frequency_source_reaction_coordinate_not_designated_for_validated_ts
     )
+
+
+@pytest.mark.parametrize(
+    "status",
+    [TransitionStateEntryStatus.optimized, TransitionStateEntryStatus.validated],
+)
+def test_the_motivating_record_is_not_hard_failed_at_read_time(
+    db_session: Session, status: TransitionStateEntryStatus
+):
+    """The round trip ADR 0008 section 9 and ADR 0012 exist to close.
+
+    -1300 / -42 / -13 cm⁻¹ with the reaction coordinate designated is
+    accepted with a warning at upload. Before this change the surviving
+    copy of the count-based rule hard-failed exactly that record here, so
+    the two tiers disagreed about the same deposit and the more permissive
+    one silently won at upload time. The read layer now cites the stored
+    designation instead of recounting, so it cannot.
+    """
+    ts_entry = _make_ts_entry(db_session, status=status)
+    opt = _attach_ts_opt_calc(db_session, ts_entry)
+    _attach_ts_freq_calc(
+        db_session,
+        ts_entry,
+        opt,
+        n_imag=3,
+        imag_freq_cm1=-1300.0,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_structural_flag=False,
+    )
+    db_session.refresh(ts_entry)
+
+    result = evaluate_loaded_transition_state_entry(ts_entry)
+    assert result.hard_fail_reason is None
+    assert result.label is not EvidenceBadge.hard_failed
+    assert "reaction_coordinate_designated_for_ts" in result.passed_checks
+    # The record was judged and not flagged, so the advisory check is
+    # silent rather than absent.
+    assert "extra_imaginary_modes_not_flagged" not in result.warning_checks
+    assert "extra_imaginary_modes_not_flagged" not in result.not_applicable_checks
+
+
+def test_a_recorded_structural_flag_warns_without_hard_failing(
+    db_session: Session,
+):
+    """ADR 0012's structural flag is surfaced, not recomputed."""
+    ts_entry = _make_ts_entry(
+        db_session, status=TransitionStateEntryStatus.validated
+    )
+    opt = _attach_ts_opt_calc(db_session, ts_entry)
+    _attach_ts_freq_calc(
+        db_session,
+        ts_entry,
+        opt,
+        n_imag=2,
+        imag_freq_cm1=-1300.0,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_structural_flag=True,
+    )
+    db_session.refresh(ts_entry)
+
+    result = evaluate_loaded_transition_state_entry(ts_entry)
+    assert result.hard_fail_reason is None
+    assert "extra_imaginary_modes_not_flagged" in result.warning_checks
 
 
 def test_missing_freq_is_missing_not_hard_fail(db_session: Session):
@@ -577,7 +658,7 @@ def test_missing_freq_is_missing_not_hard_fail(db_session: Session):
     assert result.hard_fail_reason is None
     assert "ts_frequency_present" in result.missing_checks
     # n_imag checks become not_applicable when no freq result is in the set.
-    assert "single_imaginary_frequency_for_ts" in result.not_applicable_checks
+    assert "reaction_coordinate_designated_for_ts" in result.not_applicable_checks
 
 
 def test_irc_raises_completeness(db_session: Session):
@@ -734,9 +815,14 @@ def test_session_wrapper_returns_hard_fail_for_missing_id(db_session: Session):
 def test_rubric_metadata_pinned():
     """Pin the public contract of the rubric metadata."""
     assert COMPUTED_TRANSITION_STATE_V2.name == "computed_transition_state"
-    assert COMPUTED_TRANSITION_STATE_V2.version == 1
+    # Bumped by ADR 0012: the required imaginary-mode check changed from
+    # counting to citing the recorded designation, and a new advisory
+    # check surfaces the structural flag. A machine review performed
+    # under the counting rule is genuinely stale, which is what a version
+    # bump is for.
+    assert COMPUTED_TRANSITION_STATE_V2.version == 2
     assert COMPUTED_TRANSITION_STATE_V2.record_type == "transition_state_entry"
-    assert len(COMPUTED_TRANSITION_STATE_V2.checks) == 28
+    assert len(COMPUTED_TRANSITION_STATE_V2.checks) == 29
 
 
 def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Session):

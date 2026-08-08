@@ -189,20 +189,262 @@ class TestSpeciesEntryEvaluator:
         assert W_N_IMAG_SUGGESTS_TS not in _codes(just_below)
 
 
+#: The record that forced ADR 0012: a clean reaction coordinate at
+#: -1300 cm⁻¹ plus two soft modes the old rule refused outright.
+_MOTIVATING_MODES = (
+    ImaginaryMode(-1300.0, mode_index=1),
+    ImaginaryMode(-42.0, mode_index=2),
+    ImaginaryMode(-13.0, mode_index=3),
+)
+
+
+class TestTauResolution:
+    """τ is read from provenance, and says which row of the table it used."""
+
+    def test_no_provenance_gives_the_conservative_value(self) -> None:
+        tau = resolve_tau()
+        assert tau.tau_cm1 == TAU_PROTOCOL_NOT_RECORDED_CM1
+        assert tau.basis is TauBasis.protocol_not_recorded
+        assert "freq.hessian_method" in tau.reason
+
+    def test_an_unrecorded_hessian_method_is_never_assumed_analytic(self) -> None:
+        """Even a tight grid and a tight optimisation cannot buy the analytic
+        row: the frequency job's method is the term that dominates."""
+        tau = resolve_tau(grid_quality="ultrafine", opt_convergence="tight")
+        assert tau.basis is TauBasis.protocol_not_recorded
+
+    def test_a_fully_recorded_tight_protocol_gives_the_tightest_value(self) -> None:
+        tau = resolve_tau(
+            HessianMethod.analytic,
+            grid_quality="ultrafine",
+            opt_convergence="tight",
+        )
+        assert tau.tau_cm1 == TAU_ANALYTIC_TIGHT_CM1
+        assert tau.basis is TauBasis.analytic_tight
+
+    def test_the_reason_names_what_was_missing(self) -> None:
+        tau = resolve_tau(HessianMethod.analytic, grid_quality="ultrafine")
+        assert tau.basis is TauBasis.analytic_default
+        assert "opt.convergence not recorded" in tau.reason
+
+    @pytest.mark.parametrize(
+        ("method", "expected"),
+        [
+            (HessianMethod.finite_difference_gradient, TauBasis.finite_difference_gradient),
+            (HessianMethod.finite_difference_energy, TauBasis.finite_difference_energy),
+        ],
+    )
+    def test_finite_difference_protocols_widen_the_floor(
+        self, method: HessianMethod, expected: TauBasis
+    ) -> None:
+        tau = resolve_tau(method, grid_quality="ultrafine", opt_convergence="tight")
+        assert tau.basis is expected
+        assert tau.tau_cm1 > TAU_ANALYTIC_TIGHT_CM1
+
+
 class TestTransitionStateEvaluator:
     def test_absence_is_not_contradiction(self) -> None:
         assert evaluate_transition_state_frequency(None, location="x") == []
 
     def test_zero_imaginary_modes_blocks(self) -> None:
+        """Unchanged in tier, renamed in code: with no imaginary mode there
+        is no reaction coordinate, which is what ADR 0012 kept of the old
+        rule."""
         findings = evaluate_transition_state_frequency(0, location="ts")
         assert _tiers(findings) == {ValidationTier.block}
-        assert _codes(findings) == {W_TS_N_IMAG_NOT_ONE}
+        assert _codes(findings) == {W_TS_NO_IMAGINARY_MODE}
 
     @pytest.mark.parametrize("n_imag", [2, 3, 9])
-    def test_higher_order_saddle_blocks(self, n_imag: int) -> None:
+    def test_extra_modes_without_a_designation_block(self, n_imag: int) -> None:
+        """ADR 0012 blocks on the *contract*, not the count: a record that
+        will not say which mode is the barrier cannot be used as one."""
         findings = evaluate_transition_state_frequency(n_imag, location="ts")
         assert _tiers(findings) == {ValidationTier.block}
-        assert W_N_IMAG_HIGHER_ORDER_SADDLE in findings[0].message
+        assert _codes(findings) == {W_TS_REACTION_COORDINATE_NOT_DESIGNATED}
+
+    def test_the_motivating_record_is_accepted_with_a_warning(self) -> None:
+        """-1300, -42, -13 cm⁻¹. Refused outright before ADR 0012."""
+        findings = evaluate_transition_state_frequency(
+            3,
+            -1300.0,
+            location="ts",
+            imaginary_modes=_MOTIVATING_MODES,
+            reaction_coordinate_mode_index=1,
+        )
+        assert _tiers(findings) == {ValidationTier.warn}
+        assert _codes(findings) == {W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU}
+        assert not any(f.structural_flag for f in findings)
+
+    def test_the_motivating_record_is_accepted_under_every_tau(self) -> None:
+        """ADR 0012 claims this record survives every row of the protocol
+        table, which is the claim that makes tau uncontroversial here."""
+        for method in (None, *HessianMethod):
+            tau = resolve_tau(
+                method, grid_quality="ultrafine", opt_convergence="tight"
+            )
+            findings = evaluate_transition_state_frequency(
+                3,
+                -1300.0,
+                location="ts",
+                imaginary_modes=_MOTIVATING_MODES,
+                reaction_coordinate_mode_index=1,
+                tau=tau,
+            )
+            assert _tiers(findings) == {ValidationTier.warn}, method
+
+    def test_a_finding_records_the_tau_it_used_and_why(self) -> None:
+        """ADR 0012 requires that a reader can re-decide the mode later,
+        which "tau was 50" alone does not support."""
+        tau = resolve_tau()
+        findings = evaluate_transition_state_frequency(
+            3,
+            -1300.0,
+            location="ts",
+            imaginary_modes=_MOTIVATING_MODES,
+            reaction_coordinate_mode_index=1,
+            tau=tau,
+        )
+        assert findings[0].tau is tau
+        assert findings[0].tau.basis is TauBasis.protocol_not_recorded
+        assert str(int(TAU_PROTOCOL_NOT_RECORDED_CM1)) in findings[0].message
+
+    def test_an_extra_mode_at_or_above_tau_is_flagged_not_refused(self) -> None:
+        tau = resolve_tau(
+            HessianMethod.analytic,
+            grid_quality="ultrafine",
+            opt_convergence="tight",
+        )
+        findings = evaluate_transition_state_frequency(
+            2,
+            -1300.0,
+            location="ts",
+            imaginary_modes=(
+                ImaginaryMode(-1300.0, mode_index=1),
+                ImaginaryMode(-42.0, mode_index=2, disposition=ImaginaryModeDisposition.torsion),
+            ),
+            reaction_coordinate_mode_index=1,
+            tau=tau,
+        )
+        assert _tiers(findings) == {ValidationTier.warn}
+        assert _codes(findings) == {W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU}
+        assert all(f.structural_flag for f in findings)
+
+    def test_the_same_record_is_unflagged_under_a_looser_protocol(self) -> None:
+        """The point of ADR 0012: -42 cm⁻¹ is real curvature under an
+        analytic Hessian on a tight grid and indistinguishable from zero
+        under an unrecorded protocol. The same numbers, two verdicts."""
+        modes = (
+            ImaginaryMode(-1300.0, mode_index=1),
+            ImaginaryMode(-42.0, mode_index=2, disposition=ImaginaryModeDisposition.torsion),
+        )
+        loose = evaluate_transition_state_frequency(
+            2,
+            -1300.0,
+            location="ts",
+            imaginary_modes=modes,
+            reaction_coordinate_mode_index=1,
+            tau=resolve_tau(),
+        )
+        assert _codes(loose) == {W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU}
+        assert not any(f.structural_flag for f in loose)
+
+    def test_an_undeclared_mode_stiffer_than_the_barrier_blocks(self) -> None:
+        findings = evaluate_transition_state_frequency(
+            2,
+            -400.0,
+            location="ts",
+            imaginary_modes=(
+                ImaginaryMode(-400.0, mode_index=1),
+                ImaginaryMode(-900.0, mode_index=2),
+            ),
+            reaction_coordinate_mode_index=1,
+        )
+        assert _tiers(findings) == {ValidationTier.block}
+        assert _codes(findings) == {W_TS_REACTION_COORDINATE_AMBIGUOUS}
+
+    def test_declaring_the_competing_mode_reopens_the_door(self) -> None:
+        """The block is on ambiguity, not on stiffness: a symmetry-breaking
+        mode a depositor has named is a record a reader can act on."""
+        findings = evaluate_transition_state_frequency(
+            2,
+            -400.0,
+            location="ts",
+            imaginary_modes=(
+                ImaginaryMode(-400.0, mode_index=1),
+                ImaginaryMode(
+                    -900.0,
+                    mode_index=2,
+                    disposition=ImaginaryModeDisposition.symmetry_breaking,
+                ),
+            ),
+            reaction_coordinate_mode_index=1,
+        )
+        assert _tiers(findings) == {ValidationTier.warn}
+        assert W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU in _codes(findings)
+
+    def test_an_explicit_unassigned_counts_as_declared(self) -> None:
+        """An honest "I looked and could not classify it" is a statement a
+        reader can act on; it never suppresses the flag."""
+        findings = evaluate_transition_state_frequency(
+            2,
+            -400.0,
+            location="ts",
+            imaginary_modes=(
+                ImaginaryMode(-400.0, mode_index=1),
+                ImaginaryMode(
+                    -900.0,
+                    mode_index=2,
+                    disposition=ImaginaryModeDisposition.unassigned,
+                ),
+            ),
+            reaction_coordinate_mode_index=1,
+        )
+        assert _tiers(findings) == {ValidationTier.warn}
+        assert all(f.structural_flag for f in findings)
+
+    def test_a_designation_with_no_frequency_list_is_flagged_not_refused(self) -> None:
+        findings = evaluate_transition_state_frequency(
+            3, -1300.0, location="ts", reaction_coordinate_mode_index=1
+        )
+        assert _tiers(findings) == {ValidationTier.warn}
+        assert _codes(findings) == {W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE}
+        assert all(f.structural_flag for f in findings)
+
+    def test_tau_never_decides_between_blocking_and_warning(self) -> None:
+        """The property that makes it safe to resolve tau from provenance a
+        payload may not carry."""
+        cases = [
+            (0, None, None),
+            (3, None, None),
+            (
+                2,
+                (ImaginaryMode(-400.0, mode_index=1), ImaginaryMode(-900.0, mode_index=2)),
+                1,
+            ),
+            (3, _MOTIVATING_MODES, 1),
+            (1, (ImaginaryMode(-1300.0, mode_index=1),), None),
+        ]
+        for n_imag, modes, rc_index in cases:
+            tiers = {
+                frozenset(
+                    _tiers(
+                        evaluate_transition_state_frequency(
+                            n_imag,
+                            -1300.0,
+                            location="ts",
+                            imaginary_modes=modes,
+                            reaction_coordinate_mode_index=rc_index,
+                            tau=resolve_tau(
+                                method,
+                                grid_quality="ultrafine",
+                                opt_convergence="tight",
+                            ),
+                        )
+                    )
+                )
+                for method in (None, *HessianMethod)
+            }
+            assert len(tiers) == 1, (n_imag, tiers)
 
     def test_one_stiff_mode_is_clean(self) -> None:
         assert evaluate_transition_state_frequency(1, _STIFF_CM1, location="ts") == []
@@ -224,6 +466,22 @@ class TestTransitionStateEvaluator:
         )
         assert at == []
         assert _codes(just_below) == {W_TS_IMAG_FREQ_TOO_SMALL}
+
+    def test_the_softness_rule_reads_the_designated_coordinate(self) -> None:
+        """ADR 0012 changed what this fires on without changing what it
+        fires at: the reaction coordinate, not "the" imaginary mode."""
+        findings = evaluate_transition_state_frequency(
+            2,
+            None,
+            location="ts",
+            imaginary_modes=(
+                ImaginaryMode(-30.0, mode_index=1),
+                ImaginaryMode(-8.0, mode_index=2),
+            ),
+            reaction_coordinate_mode_index=1,
+        )
+        assert W_TS_IMAG_FREQ_TOO_SMALL in _codes(findings)
+        assert _tiers(findings) == {ValidationTier.warn}
 
     def test_sign_convention_is_irrelevant(self) -> None:
         """Producers write the imaginary mode as a negative magnitude, but a
@@ -510,8 +768,20 @@ def _ts_reaction() -> dict:
     }
 
 
+#: The motivating record, as a producer would deposit it: the signed
+#: frequency list, the designated reaction coordinate, and a disposition
+#: for each other imaginary mode.
+_MOTIVATING_FREQUENCIES = [-1300.0, -42.0, -13.0, 500.0]
+_MOTIVATING_DISPOSITIONS = {2: "torsion", 3: "rigid_body_residue"}
+
+
 def _standalone_ts(
-    n_imag: int | None, imag_freq_cm1: float | None = None
+    n_imag: int | None,
+    imag_freq_cm1: float | None = None,
+    *,
+    frequencies: list[float] | None = None,
+    reaction_coordinate_mode_index: int | None = None,
+    dispositions: dict[int, str] | None = None,
 ) -> TransitionStateUploadRequest:
     freq: dict = {
         "type": "freq",
@@ -519,7 +789,21 @@ def _standalone_ts(
         "level_of_theory": _LOT,
     }
     if n_imag is not None:
-        freq["freq_result"] = {"n_imag": n_imag, "imag_freq_cm1": imag_freq_cm1}
+        result: dict = {"n_imag": n_imag, "imag_freq_cm1": imag_freq_cm1}
+        if frequencies is not None:
+            dispositions = dispositions or {}
+            result["modes"] = [
+                {
+                    "mode_index": index + 1,
+                    "frequency_cm1": value,
+                    "is_imaginary": value < 0,
+                    "imaginary_disposition": dispositions.get(index + 1),
+                }
+                for index, value in enumerate(frequencies)
+            ]
+        if reaction_coordinate_mode_index is not None:
+            result["reaction_coordinate_mode_index"] = reaction_coordinate_mode_index
+        freq["freq_result"] = result
     return TransitionStateUploadRequest(
         reaction=_ts_reaction(),
         charge=0,
@@ -535,21 +819,33 @@ def _standalone_ts(
 
 
 def _bundle_ts_payload(
-    n_imag: int | None, imag_freq_cm1: float | None = None
+    n_imag: int | None,
+    imag_freq_cm1: float | None = None,
+    *,
+    frequencies: list[float] | None = None,
+    reaction_coordinate_mode_index: int | None = None,
+    dispositions: dict[int, str] | None = None,
 ) -> dict:
     calcs = []
     if n_imag is not None:
-        calcs.append(
-            {
-                "key": "ts_freq",
-                "type": "freq",
-                "geometry_key": "ts_geom",
-                "software_release": _SOFTWARE,
-                "level_of_theory": _LOT,
-                "freq_n_imag": n_imag,
-                "freq_imag_freq_cm1": imag_freq_cm1,
-            }
-        )
+        calc: dict = {
+            "key": "ts_freq",
+            "type": "freq",
+            "geometry_key": "ts_geom",
+            "software_release": _SOFTWARE,
+            "level_of_theory": _LOT,
+            "freq_n_imag": n_imag,
+            "freq_imag_freq_cm1": imag_freq_cm1,
+        }
+        if frequencies is not None:
+            calc["freq_frequencies_cm1"] = frequencies
+        if reaction_coordinate_mode_index is not None:
+            calc["freq_reaction_coordinate_mode_index"] = (
+                reaction_coordinate_mode_index
+            )
+        if dispositions is not None:
+            calc["freq_imaginary_dispositions"] = dispositions
+        calcs.append(calc)
     return {
         "charge": 0,
         "multiplicity": 2,
@@ -565,18 +861,20 @@ def _bundle_ts_payload(
 
 
 def _bundle_ts(
-    n_imag: int | None, imag_freq_cm1: float | None = None
+    n_imag: int | None, imag_freq_cm1: float | None = None, **kwargs
 ) -> BundleTransitionStateIn:
-    return BundleTransitionStateIn(**_bundle_ts_payload(n_imag, imag_freq_cm1))
+    return BundleTransitionStateIn(
+        **_bundle_ts_payload(n_imag, imag_freq_cm1, **kwargs)
+    )
 
 
 def _network_ts(
-    n_imag: int | None, imag_freq_cm1: float | None = None
+    n_imag: int | None, imag_freq_cm1: float | None = None, **kwargs
 ) -> TransitionStateIn:
     return TransitionStateIn(
         key="ts1",
         micro_reaction_key="mr1",
-        **_bundle_ts_payload(n_imag, imag_freq_cm1),
+        **_bundle_ts_payload(n_imag, imag_freq_cm1, **kwargs),
     )
 
 
@@ -588,14 +886,31 @@ class TestTransitionStateSeams:
     def test_zero_imaginary_modes_is_rejected(self, build) -> None:
         with pytest.raises(ValidationError) as exc:
             build(0)
-        assert W_TS_N_IMAG_NOT_ONE in str(exc.value)
+        assert W_TS_NO_IMAGINARY_MODE in str(exc.value)
 
     @pytest.mark.parametrize("build", _TS_BUILDERS)
     @pytest.mark.parametrize("n_imag", [2, 4])
-    def test_higher_order_saddle_is_rejected(self, build, n_imag: int) -> None:
+    def test_extra_modes_without_a_designation_are_rejected(
+        self, build, n_imag: int
+    ) -> None:
         with pytest.raises(ValidationError) as exc:
             build(n_imag)
-        assert W_TS_N_IMAG_NOT_ONE in str(exc.value)
+        assert W_TS_REACTION_COORDINATE_NOT_DESIGNATED in str(exc.value)
+
+    @pytest.mark.parametrize("build", _TS_BUILDERS)
+    def test_the_motivating_record_is_accepted_with_a_warning(self, build) -> None:
+        """-1300, -42, -13 cm⁻¹ reaches every seam that can carry a
+        transition state, and every one of them accepts it."""
+        request = build(
+            3,
+            -1300.0,
+            frequencies=_MOTIVATING_FREQUENCIES,
+            reaction_coordinate_mode_index=1,
+            dispositions=_MOTIVATING_DISPOSITIONS,
+        )
+        findings = request.stationary_point_findings()
+        assert _tiers(findings) == {ValidationTier.warn}
+        assert _codes(findings) == {W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU}
 
     @pytest.mark.parametrize("build", _TS_BUILDERS)
     def test_one_imaginary_mode_is_accepted(self, build) -> None:
@@ -620,3 +935,59 @@ class TestTransitionStateSeams:
         )
         assert ts_findings == []
         assert _tiers(species_findings) == {ValidationTier.block}
+
+
+class TestReactionCoordinateDesignationIsWellFormed:
+    """Payload-level consistency, separate from the chemistry judgement.
+
+    An index naming a real mode, or naming nothing, is a malformed record
+    whatever kind of stationary point it describes — so it is refused by
+    the payload rather than by the rule.
+    """
+
+    def test_the_index_must_name_a_deposited_mode(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            _standalone_ts(
+                3,
+                -1300.0,
+                frequencies=_MOTIVATING_FREQUENCIES,
+                reaction_coordinate_mode_index=99,
+            )
+        assert "names no mode" in str(exc.value)
+
+    def test_the_index_must_name_an_imaginary_mode(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            _standalone_ts(
+                3,
+                -1300.0,
+                frequencies=_MOTIVATING_FREQUENCIES,
+                reaction_coordinate_mode_index=4,
+            )
+        assert "not imaginary" in str(exc.value)
+
+    def test_a_designation_needs_the_frequency_list(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            _standalone_ts(3, -1300.0, reaction_coordinate_mode_index=1)
+        assert "requires the frequency list" in str(exc.value)
+
+    def test_the_reaction_coordinate_cannot_also_carry_a_disposition(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            _standalone_ts(
+                3,
+                -1300.0,
+                frequencies=_MOTIVATING_FREQUENCIES,
+                reaction_coordinate_mode_index=1,
+                dispositions={1: "torsion", **_MOTIVATING_DISPOSITIONS},
+            )
+        assert "cannot both be true" in str(exc.value)
+
+    def test_a_real_mode_cannot_carry_a_disposition(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            _standalone_ts(
+                3,
+                -1300.0,
+                frequencies=_MOTIVATING_FREQUENCIES,
+                reaction_coordinate_mode_index=1,
+                dispositions={**_MOTIVATING_DISPOSITIONS, 4: "torsion"},
+            )
+        assert "not imaginary" in str(exc.value)
