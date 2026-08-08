@@ -4809,6 +4809,20 @@
             ],
             "title": "Freq Imag Freq Cm1"
           },
+          "freq_imaginary_dispositions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ImaginaryModeDisposition"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freq Imaginary Dispositions"
+          },
           "freq_n_imag": {
             "anyOf": [
               {
@@ -4819,6 +4833,18 @@
               }
             ],
             "title": "Freq N Imag"
+          },
+          "freq_reaction_coordinate_mode_index": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freq Reaction Coordinate Mode Index"
           },
           "freq_zpe_hartree": {
             "anyOf": [
@@ -9102,6 +9128,20 @@
             ],
             "title": "Freq Imag Freq Cm1"
           },
+          "freq_imaginary_dispositions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ImaginaryModeDisposition"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freq Imaginary Dispositions"
+          },
           "freq_n_imag": {
             "anyOf": [
               {
@@ -9112,6 +9152,18 @@
               }
             ],
             "title": "Freq N Imag"
+          },
+          "freq_reaction_coordinate_mode_index": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freq Reaction Coordinate Mode Index"
           },
           "freq_zpe_hartree": {
             "anyOf": [
@@ -14010,7 +14062,7 @@
       },
       "FreqResultPayload": {
         "additionalProperties": false,
-        "description": "Optional inline result for a frequency calculation.\n\n:param n_imag: Number of imaginary frequencies.\n:param imag_freq_cm1: Value of the imaginary frequency in cm⁻¹.\n:param zpe_hartree: Zero-point energy in hartree.\n:param modes: Optional per-mode frequency rows. When supplied,\n    ``mode_index`` values must be unique within the payload, and\n    the count of imaginary modes must agree with ``n_imag`` if both\n    are present.",
+        "description": "Optional inline result for a frequency calculation.\n\n:param n_imag: Number of imaginary frequencies.\n:param imag_freq_cm1: Value of the imaginary frequency in cm⁻¹.\n:param zpe_hartree: Zero-point energy in hartree.\n:param modes: Optional per-mode frequency rows. When supplied,\n    ``mode_index`` values must be unique within the payload, and\n    the count of imaginary modes must agree with ``n_imag`` if both\n    are present.\n:param reaction_coordinate_mode_index: ``mode_index`` of the mode the\n    depositor designates the reaction coordinate. ADR 0012 makes this\n    the contract that replaces the old ``n_imag == 1`` gate: a\n    transition state with more than one imaginary mode is accepted\n    only if it says which one is the barrier and is removed from the\n    partition function. Meaningless on a minimum, and refused there.",
         "properties": {
           "imag_freq_cm1": {
             "anyOf": [
@@ -14047,6 +14099,18 @@
               }
             ],
             "title": "N Imag"
+          },
+          "reaction_coordinate_mode_index": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Coordinate Mode Index"
           },
           "zpe_hartree": {
             "anyOf": [
@@ -14129,7 +14193,7 @@
         "type": "object"
       },
       "FrequencyModePayload": {
-        "description": "One vibrational mode within a frequency calculation result.\n\nImaginary modes use a negative ``frequency_cm1`` together with\n``is_imaginary=True``. Producers that have only positive magnitudes\nmust flip the sign before upload; the cross-field validator below\nrefuses inconsistent combinations rather than silently normalising,\nso the source of truth stays at the producer boundary.\n\n:param mode_index: 1-based ordering from the ESS output.\n:param frequency_cm1: Harmonic frequency in cm⁻¹; negative for\n    imaginary modes.\n:param is_imaginary: Whether the mode is imaginary. Required and\n    consistent with the sign of ``frequency_cm1``.\n:param reduced_mass_amu: Reduced mass in amu, when reported.\n:param force_constant_mdyne_angstrom: Force constant in\n    mDyne/Ångström, when reported.\n:param ir_intensity_km_mol: IR intensity in km/mol, when reported.\n:param raman_activity: Raman activity (Å⁴/amu), when reported.\n:param symmetry_label: Irreducible representation label\n    (e.g. ``\"A1\"``, ``\"E\"``), when reported.\n:param note: Optional free-text annotation.",
+        "description": "One vibrational mode within a frequency calculation result.\n\nImaginary modes use a negative ``frequency_cm1`` together with\n``is_imaginary=True``. Producers that have only positive magnitudes\nmust flip the sign before upload; the cross-field validator below\nrefuses inconsistent combinations rather than silently normalising,\nso the source of truth stays at the producer boundary.\n\n:param mode_index: 1-based ordering from the ESS output.\n:param frequency_cm1: Harmonic frequency in cm⁻¹; negative for\n    imaginary modes.\n:param is_imaginary: Whether the mode is imaginary. Required and\n    consistent with the sign of ``frequency_cm1``.\n:param reduced_mass_amu: Reduced mass in amu, when reported.\n:param force_constant_mdyne_angstrom: Force constant in\n    mDyne/Ångström, when reported.\n:param ir_intensity_km_mol: IR intensity in km/mol, when reported.\n:param raman_activity: Raman activity (Å⁴/amu), when reported.\n:param symmetry_label: Irreducible representation label\n    (e.g. ``\"A1\"``, ``\"E\"``), when reported.\n:param imaginary_disposition: What this imaginary mode *is*, when it\n    is not the reaction coordinate. Declared by the depositor, never\n    inferred — TCKDB stores no normal-mode displacement vectors to\n    infer it from. Only meaningful on an imaginary mode; setting it\n    on a real one is refused rather than ignored. See ADR 0012.\n:param note: Optional free-text annotation.",
         "properties": {
           "force_constant_mdyne_angstrom": {
             "anyOf": [
@@ -14145,6 +14209,16 @@
           "frequency_cm1": {
             "title": "Frequency Cm1",
             "type": "number"
+          },
+          "imaginary_disposition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImaginaryModeDisposition"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "ir_intensity_km_mol": {
             "anyOf": [
@@ -15762,6 +15836,18 @@
         ],
         "title": "IRCResultPayload",
         "type": "object"
+      },
+      "ImaginaryModeDisposition": {
+        "enum": [
+          "rigid_body_residue",
+          "torsion",
+          "ring_pucker",
+          "intermolecular",
+          "symmetry_breaking",
+          "unassigned"
+        ],
+        "title": "ImaginaryModeDisposition",
+        "type": "string"
       },
       "JobEnqueueResponse": {
         "description": "Returned immediately when a job is queued.",
@@ -41862,7 +41948,7 @@
         "type": "object"
       },
       "TransitionStateInFull": {
-        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).\n\n``trust`` is populated only when the caller passes ``include=trust``\nto ``/reaction-entries/{id}/full``. It reuses :class:`TrustFragment`\nso a trust block embedded here is structurally identical to the one\nreturned by\n``GET /scientific/transition-state-entries/{ref}?include=trust``\n(rubric ``computed_transition_state_v1``).",
+        "description": "Transition-state record embedded in /full.\n\nCarries the public refs that let a caller navigate to the new\nscientific TS read surface:\n\n- ``transition_state_ref`` → ``GET /scientific/transition-states/{ref}``\n- ``transition_state_entry_ref`` →\n  ``GET /scientific/transition-state-entries/{ref}``\n- ``calculations[*].calculation_ref`` →\n  ``GET /scientific/calculations/{ref}``\n\nInteger ``*_id`` siblings are Phase D policy-gated. ``status``\nand ``evidence_summary`` mirror the corresponding fields on\n:class:`ScientificTransitionStateEntryRecord` so the\nfull-response block lines up byte-for-byte with the per-entry\ndetail endpoint (same counts, same booleans, same status enum).\n\n``trust`` is populated only when the caller passes ``include=trust``\nto ``/reaction-entries/{id}/full``. It reuses :class:`TrustFragment`\nso a trust block embedded here is structurally identical to the one\nreturned by\n``GET /scientific/transition-state-entries/{ref}?include=trust``\n(rubric ``computed_transition_state_v2``).",
         "properties": {
           "calculations": {
             "additionalProperties": {
@@ -70820,7 +70906,7 @@
     },
     "/api/v1/scientific/transition-state-entries/{transition_state_entry_ref_or_id}": {
       "get": {
-        "description": "Return one transition-state-entry as a scientific record.\n\nPath handle accepts an integer ``transition_state_entry.id`` or a\npublic ref of the form ``tse_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.\n\nDeterministic trust / evidence metadata\n(``computed_transition_state_v1``) is attached to the record only\nwhen ``include=trust`` is supplied explicitly — ``include=all`` does\nnot pull it in, and the default response omits the field entirely so\nit stays byte-identical to its pre-trust shape.",
+        "description": "Return one transition-state-entry as a scientific record.\n\nPath handle accepts an integer ``transition_state_entry.id`` or a\npublic ref of the form ``tse_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.\n\nDeterministic trust / evidence metadata\n(``computed_transition_state_v2``) is attached to the record only\nwhen ``include=trust`` is supplied explicitly — ``include=all`` does\nnot pull it in, and the default response omits the field entirely so\nit stays byte-identical to its pre-trust shape.",
         "operationId": "scientific_transition_state_entry_detail_api_v1_scientific_transition_state_entries__transition_state_entry_ref_or_id__get",
         "parameters": [
           {
