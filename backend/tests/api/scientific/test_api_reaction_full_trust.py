@@ -495,7 +495,7 @@ def test_full_include_trust_attaches_ts_trust(client, db_session):
     assert trust["is_certified"] is False
     assert trust["evidence"]["record_type"] == "transition_state_entry"
     assert trust["evidence"]["rubric"] == "computed_transition_state_v2"
-    assert trust["evidence"]["rubric_version"] == 1
+    assert trust["evidence"]["rubric_version"] == 2
     assert "passed_checks" in trust["evidence"]
     assert "missing_checks" in trust["evidence"]
     assert "warning_checks" in trust["evidence"]
