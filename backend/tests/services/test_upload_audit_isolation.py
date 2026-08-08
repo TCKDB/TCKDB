@@ -26,7 +26,7 @@ from __future__ import annotations
 import logging
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
 from app.api import deps as api_deps
@@ -393,3 +393,56 @@ class TestCommitTimeFailureIsAudited:
 
         with Session(db_engine) as verify:
             assert len(self._failed_submissions(verify, user_id, watermark)) == before
+
+
+class TestBundleImportAuditCannotDestroyTheImport:
+    """The same shape at the largest payload the API accepts.
+
+    ``submit_contribution_bundle`` appends ``ingestion_succeeded`` after
+    importing a whole bundle: the lowest failure probability in the flow,
+    attached to the biggest blast radius.
+    """
+
+    def test_the_imported_bundle_survives_an_unwritable_audit_event(
+        self, db_engine, committed_scratch, monkeypatch
+    ) -> None:
+        from app.schemas.workflows.contribution_bundle import BundleKind
+        from app.workflows import contribution_bundle_submit as bundle_submit
+
+        def _refuse(session_, **kwargs):
+            session_.execute(text("SELECT 1 FROM table_that_does_not_exist"))
+
+        monkeypatch.setattr(bundle_submit, "mark_ingestion_succeeded", _refuse)
+
+        user_id, watermark = committed_scratch
+
+        with Session(db_engine) as session:
+            sub = _open(session, user_id, "bundle")
+            session.add(Species(**_species_kwargs("-bundle")))
+
+            assert bundle_submit._append_import_audit(
+                session,
+                submission=sub.submission,
+                bundle_kind=BundleKind.thermo,
+                imported_count=3,
+                linked_count=1,
+            ) is False
+
+            submission_id = sub.submission_id
+            session.commit()
+
+        with Session(db_engine) as verify:
+            assert verify.scalar(
+                select(Species).where(Species.smiles == f"[He]{MARKER}-bundle")
+            ) is not None, (
+                "the imported bundle was destroyed by its own audit event"
+            )
+            kinds = set(
+                verify.scalars(
+                    select(SubmissionAuditEvent.event_kind).where(
+                        SubmissionAuditEvent.submission_id == submission_id
+                    )
+                ).all()
+            )
+            assert SubmissionAuditEventKind.ingestion_succeeded not in kinds
+            assert SubmissionAuditEventKind.submission_created in kinds
