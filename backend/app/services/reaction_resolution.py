@@ -581,19 +581,19 @@ def _resolved_participant_element_counts(species: Species) -> Counter[str] | Non
     A free electron is *not* exempt: it returns an empty count, because its
     composition is not unknown but known to be nothing.
 
-    Counts come back resolved through
-    :func:`~app.chemistry.geometry.resolve_element_symbol` so they can be
-    compared against ``geometry_atom.element``, which stores whatever the
-    depositor's XYZ wrote.
+    Counts arrive already resolved through
+    :func:`~app.chemistry.geometry.resolve_element_symbol`, because
+    :func:`~app.chemistry.species.element_counts_from_smiles` applies it on the
+    SMILES side for exactly this reason — so that both sides of a comparison are
+    counted by one rule rather than two that have to be remembered to agree. The
+    caller resolves the geometry side with the same function, which is what
+    keeps a deuterated saddle point written ``D`` from contradicting the
+    ``[2H]`` its own SMILES spells.
     """
 
     if species.kind == MoleculeKind.pseudo:
         return None
-
-    resolved: Counter[str] = Counter()
-    for element, count in _element_counts_for_species(species).items():
-        resolved[resolve_element_symbol(element)] += count
-    return resolved
+    return _element_counts_for_species(species)
 
 
 def validate_ts_evidence_participant_composition(
