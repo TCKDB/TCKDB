@@ -28,6 +28,21 @@ import requests
 DEFAULT_BASE_URL = "https://tckdb.homecalvin.com/api/v1"
 TIMEOUT_S = 30
 
+#: One connection, reused for every call.
+#:
+#: This is not a micro-optimisation. The hosted deployment resolves to both A
+#: and AAAA records, and ``urllib3`` tries resolved addresses **serially** --
+#: so on a network where IPv6 is advertised but blackholed, every new
+#: connection waits for the IPv6 attempt to time out before falling back to
+#: IPv4. Measured against the hosted instance from such a network: 18.4 s per
+#: call with a fresh connection each time, 144 ms with this session. ``curl``
+#: does not show the problem because it races both stacks (Happy Eyeballs)
+#: and gives up on IPv6 in milliseconds.
+#:
+#: Reusing the connection pays that cost once instead of per request. It is
+#: also simply correct for repeated calls to one host.
+SESSION = requests.Session()
+
 
 def base_url() -> str:
     """The deployment to talk to; override with ``TCKDB_BASE_URL``."""
@@ -41,7 +56,7 @@ def get(path: str, **params: Any) -> dict:
     returns a typed ``{"code", "detail", "context"}`` body, which says far
     more than a bare status line.
     """
-    response = requests.get(f"{base_url()}/{path.lstrip('/')}", params=params, timeout=TIMEOUT_S)
+    response = SESSION.get(f"{base_url()}/{path.lstrip('/')}", params=params, timeout=TIMEOUT_S)
     if not response.ok:
         try:
             envelope = response.json()
