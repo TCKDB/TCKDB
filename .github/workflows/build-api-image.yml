@@ -157,14 +157,28 @@ jobs:
             docker logs smoke-api 2>&1 | tail -50
             exit 1
           }
-          # Having migrated above, the deployment must now report itself fully
-          # healthy. Asserting only on the worker would let a broken database
-          # component pass unnoticed.
-          echo "$status" | grep -q '"status":"ok"' || {
-            echo "::error::image did not report status=ok after migrating"
+          # Every component this environment actually provides must be healthy.
+          #
+          # Deliberately NOT `status == ok`. This harness starts a database and
+          # nothing else, so `/status` correctly reports `artifact_storage` as
+          # degraded -- there is no object store to reach. Asserting overall ok
+          # would make the smoke test demand a dependency it never supplies,
+          # which is how it broke when artifact storage was added as a
+          # component. Asserting only on the worker would let a broken database
+          # pass unnoticed, so both are checked directly, and `degraded` is
+          # pinned to exactly the one component this harness omits -- anything
+          # else appearing there is a real regression.
+          echo "$status" | grep -q '"database":{"healthy":true' || {
+            echo "::error::image reported an unhealthy database after migrating"
             docker logs smoke-api 2>&1 | tail -50
             exit 1
           }
+          degraded="$(echo "$status" | sed -n 's/.*"degraded":\[\([^]]*\)\].*/\1/p')"
+          if [ "$degraded" != '"artifact_storage"' ] && [ -n "$degraded" ]; then
+            echo "::error::unexpected degraded components: ${degraded}"
+            docker logs smoke-api 2>&1 | tail -50
+            exit 1
+          fi
 
           docker rm -f smoke-api smoke-db >/dev/null
           docker network rm smoke-net >/dev/null
