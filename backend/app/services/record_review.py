@@ -37,6 +37,7 @@ from datetime import datetime, timezone
 from typing import Iterable, Optional
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.errors import DomainError
@@ -56,6 +57,12 @@ _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
 #: Role recorded on ``submission_record_link`` rows for artifact evidence.
 _ARTIFACT_LINK_ROLE = "artifact"
+
+#: Uniqueness scope that makes "one review row per record" true.
+_RECORD_REVIEW_UNIQUE_CONSTRAINT = "uq_record_review_record"
+
+#: Uniqueness scope for ``(submission, record, role)`` attachment.
+_RECORD_LINK_UNIQUE_CONSTRAINT = "uq_submission_record_link_identity"
 
 _TERMINAL_STATUSES = frozenset(
     {
@@ -247,6 +254,97 @@ def list_record_review_events(
 # ---------------------------------------------------------------------------
 
 
+def _insert_or_adopt_review(
+    session: Session,
+    *,
+    record_type: SubmissionRecordType,
+    record_id: int,
+    status: RecordReviewStatus,
+    submission_id: Optional[int],
+    created_by: Optional[int],
+    note: Optional[str],
+) -> tuple[RecordReview, bool]:
+    """Create the review row for one record, or adopt a concurrent one.
+
+    Returns ``(review, created)``. ``created`` is ``False`` when another
+    transaction got there first — the caller must then *not* append a
+    ``created`` event, because the row was only ever created once.
+
+    **Why this is not a plain check-then-insert.** The review row's targets
+    include reused identity rows — ``species_entry``, ``reaction_entry``,
+    ``conformer_group`` — that resolution deliberately dedupes *across*
+    uploads. Two contributors depositing against the same molecule at the
+    same time therefore aim at the same ``(record_type, record_id)``. Before
+    this, both read ``None``, both INSERTed, and the loser took a
+    ``uq_record_review_record`` violation as the **last statement of its
+    upload workflow** — poisoning a transaction that already held every
+    scientific row it had just persisted, so ``get_write_db`` rolled the
+    whole upload back. No exotic content was required: two people working on
+    one shared species is the normal case for a shared database, and the
+    window is not the instant between the SELECT and the INSERT but the
+    *entire duration* of the winner's transaction, during which it holds the
+    uncommitted unique-index entry.
+
+    **Adopt rather than fail.** Losing the race is not a conflict; it is the
+    documented outcome arriving by a different route. This helper already
+    returns the existing row unchanged when it finds one, and the review row
+    describes the *identity*, which both uploads legitimately share. Adopting
+    therefore reaches exactly the state a sequential pair of uploads reaches,
+    and nothing is lost: per-submission traceability lives in
+    ``submission_record_link``, which is written per submission, so the
+    loser's contribution is still fully attributed even though it did not
+    author the review row. Failing instead would destroy a correct upload to
+    protect a row that already says what the loser wanted it to say.
+
+    **Why ``ON CONFLICT`` rather than a ``SAVEPOINT``.** The neighbouring
+    identity resolvers (``resolve_species``, ``resolve_reaction``) use
+    ``begin_nested()`` + ``IntegrityError``, but they insert *one* row per
+    upload while this runs once per target — tens to hundreds of times for a
+    single network upload. That many subtransactions push a transaction past
+    PostgreSQL's 64-entry ``pg_subtrans`` cache and degrade concurrent
+    readers. ``ON CONFLICT DO NOTHING`` needs no subtransaction, blocks on a
+    concurrent uncommitted insert and then resolves cleanly rather than by
+    raising, and — the part that matters most — leaves the database to
+    discriminate the expected collision from a genuine integrity failure. An
+    FK violation on ``submission_id`` still raises normally instead of being
+    swallowed by a blanket ``except IntegrityError``.
+    """
+    values = {
+        "record_type": record_type,
+        "record_id": record_id,
+        "status": status,
+        "submission_id": submission_id,
+        "created_by": created_by,
+        "note": note,
+    }
+    # ``session.execute`` autoflushes, so anything the caller has pending —
+    # the upload's scientific rows — is INSERTed before this statement and is
+    # never entangled with it.
+    inserted_id = session.execute(
+        pg_insert(RecordReview)
+        .values(**values)
+        .on_conflict_do_nothing(constraint=_RECORD_REVIEW_UNIQUE_CONSTRAINT)
+        .returning(RecordReview.id)
+    ).scalar_one_or_none()
+
+    if inserted_id is not None:
+        review = session.get(RecordReview, inserted_id)
+        assert review is not None  # just inserted in this transaction
+        return review, True
+
+    # Lost the race. Under READ COMMITTED the winner's row is visible now:
+    # ``ON CONFLICT`` blocked until that transaction resolved.
+    adopted = get_record_review(
+        session, record_type=record_type, record_id=record_id
+    )
+    if adopted is None:  # pragma: no cover - would mean the conflict vanished
+        raise DomainError(
+            "Review row for this record conflicted on insert but could not be "
+            "read back; the record's review state is indeterminate."
+        )
+    return adopted, False
+
+
 def ensure_record_review(
     session: Session,
     *,
@@ -262,6 +360,10 @@ def ensure_record_review(
     First call inserts. Subsequent calls return the existing row unchanged
     — this helper does not mutate ``status`` once written. Use
     :func:`set_record_review_status` (or ``bulk_*``) for status changes.
+
+    Idempotent across transactions as well as within one: a concurrent
+    upload that creates the row first is adopted rather than collided with.
+    See :func:`_insert_or_adopt_review` for why that is the correct outcome.
 
     The default ``status=not_reviewed`` is for internal/nested callers that
     create records outside a contribution event. Both ingestion pathways —
@@ -284,7 +386,8 @@ def ensure_record_review(
     if existing is not None:
         return existing
 
-    review = RecordReview(
+    review, created = _insert_or_adopt_review(
+        session,
         record_type=record_type,
         record_id=record_id,
         status=status,
@@ -292,8 +395,11 @@ def ensure_record_review(
         created_by=created_by,
         note=note,
     )
-    session.add(review)
-    session.flush()
+    if not created:
+        # Someone else created it; ``record_review_event`` is append-only
+        # history and must not claim this identity entered review twice.
+        return review
+
     _emit_review_event(
         session,
         review=review,
@@ -337,7 +443,11 @@ def set_record_review_status(
     if existing is None:
         # Bootstrap row at not_reviewed and then transition, so the
         # transition policy and reviewer-stamp logic below run uniformly.
-        existing = RecordReview(
+        # Same check-then-insert race as ``ensure_record_review`` — two
+        # curators acting on one record at once — and the same resolution:
+        # adopt the row the other transaction created and transition that.
+        existing, created = _insert_or_adopt_review(
+            session,
             record_type=record_type,
             record_id=record_id,
             status=RecordReviewStatus.not_reviewed,
@@ -345,16 +455,15 @@ def set_record_review_status(
             created_by=None,
             note=None,
         )
-        session.add(existing)
-        session.flush()
-        _emit_review_event(
-            session,
-            review=existing,
-            event_kind=RecordReviewEventKind.created,
-            from_status=None,
-            to_status=RecordReviewStatus.not_reviewed,
-            actor_user_id=None,
-        )
+        if created:
+            _emit_review_event(
+                session,
+                review=existing,
+                event_kind=RecordReviewEventKind.created,
+                from_status=None,
+                to_status=RecordReviewStatus.not_reviewed,
+                actor_user_id=None,
+            )
 
     previous_status = existing.status
     previous_reviewed_by = existing.reviewed_by
@@ -549,31 +658,29 @@ def _ensure_record_link(
     (``app.services.submission`` imports from here). Review-target links use
     ``role=None``; artifact evidence links use ``role="artifact"``. The
     curated links the bundle workflow makes remain its own responsibility.
+
+    ``ON CONFLICT DO NOTHING`` for the same reasons as
+    :func:`_insert_or_adopt_review`, with which this shares a loop: it makes
+    the idempotency one atomic statement instead of a check-then-insert, and
+    costs no subtransaction per target. ``uq_submission_record_link_identity``
+    is declared ``NULLS NOT DISTINCT``, so a ``role=None`` link collides with
+    an existing ``role=None`` link exactly as intended.
+
+    A collision here is currently only reachable within one transaction (a
+    submission id is not visible to another session until its creating
+    upload commits), so this is hardening rather than a live-race fix — but
+    it also removes a per-target ``SELECT``.
     """
-    role_predicate = (
-        SubmissionRecordLink.role.is_(None)
-        if role is None
-        else SubmissionRecordLink.role == role
-    )
-    existing = session.scalar(
-        select(SubmissionRecordLink).where(
-            SubmissionRecordLink.submission_id == submission_id,
-            SubmissionRecordLink.record_type == record_type,
-            SubmissionRecordLink.record_id == record_id,
-            role_predicate,
-        )
-    )
-    if existing is not None:
-        return
-    session.add(
-        SubmissionRecordLink(
+    session.execute(
+        pg_insert(SubmissionRecordLink)
+        .values(
             submission_id=submission_id,
             record_type=record_type,
             record_id=record_id,
             role=role,
         )
+        .on_conflict_do_nothing(constraint=_RECORD_LINK_UNIQUE_CONSTRAINT)
     )
-    session.flush()
 
 
 def _artifact_ids_for_calculations(

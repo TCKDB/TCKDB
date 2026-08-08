@@ -181,6 +181,7 @@ class TestConcurrentDepositAgainstOneIdentity:
                 status=RecordReviewStatus.under_review,
             )
             assert fired["done"], "the race window was never entered"
+            adopted_review_id = review.id
 
             loser.commit()
         finally:
@@ -203,7 +204,7 @@ class TestConcurrentDepositAgainstOneIdentity:
             assert len(rows) == 1, (
                 "the shared identity must carry exactly one review row"
             )
-            assert review.id == rows[0].id, (
+            assert adopted_review_id == rows[0].id, (
                 "the loser must adopt the row the winner created for this "
                 "shared identity, not invent a second one"
             )
