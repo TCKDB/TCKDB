@@ -699,10 +699,22 @@ def persist_calculation_result(
         # the warn tier can reach this point: a blocking finding refused
         # the payload long before persistence.
         tau = calc_upload.tau_resolution()
-        findings = calc_upload.transition_state_frequency_findings(
-            location="freq_result"
-        )
         designated = calc_upload.freq_result.reaction_coordinate_mode_index
+
+        # The flag is judged only where there is a reaction coordinate to
+        # judge extras against — which is exactly where a designation
+        # exists. A minimum's freq result, and a plain first-order saddle
+        # with nothing to disambiguate, store NULL: "never judged under
+        # ADR 0012", which is a different fact from "judged and not
+        # flagged" and must not be collapsed into `false`.
+        structural_flag: bool | None = None
+        if designated is not None:
+            structural_flag = has_structural_flag(
+                calc_upload.transition_state_frequency_findings(
+                    location="freq_result"
+                )
+            )
+
         session.add(
             CalculationFreqResult(
                 calculation_id=calculation.id,
@@ -712,9 +724,7 @@ def persist_calculation_result(
                 reaction_coordinate_mode_index=designated,
                 imaginary_mode_tau_cm1=tau.tau_cm1,
                 imaginary_mode_tau_basis=tau.basis.value,
-                imaginary_mode_structural_flag=(
-                    has_structural_flag(findings) if designated is not None else None
-                ),
+                imaginary_mode_structural_flag=structural_flag,
             )
         )
         if calc_upload.freq_result.modes:
