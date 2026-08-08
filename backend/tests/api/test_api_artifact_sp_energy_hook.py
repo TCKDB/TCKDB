@@ -29,6 +29,21 @@ FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 CH4_LOG = (FIXTURES / "molpro" / "ch4_closed_shell" / "input.out").read_bytes()
 CH4_ENERGY = -40.457885930635
 
+# Methane, CH4: C at the origin (index 1) and four H at the tetrahedral
+# vertices (indices 2-5). The species entry has always declared ``C``, which is
+# methane, and the log is a closed-shell CH4 single point, but the geometry
+# said "1\nC atom\nC 0.0 0.0 0.0" -- a lone carbon, four hydrogens missing.
+# Nothing compared a deposited structure against its own SMILES until
+# ``assert_geometry_composition_matches_identity``.
+XYZ_CH4 = (
+    "5\nmethane\n"
+    "C  0.000  0.000  0.000\n"
+    "H  0.629  0.629  0.629\n"
+    "H -0.629 -0.629  0.629\n"
+    "H -0.629  0.629 -0.629\n"
+    "H  0.629 -0.629 -0.629"
+)
+
 
 @pytest.fixture
 def stub_store_artifact(monkeypatch) -> list[tuple[str, str]]:
@@ -106,7 +121,7 @@ def _sp_conformer_payload(
         calc["opt_result"] = {"converged": True}
     return {
         "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
-        "geometry": {"xyz_text": "1\nC atom\nC 0.0 0.0 0.0"},
+        "geometry": {"xyz_text": XYZ_CH4},
         "calculation": calc,
         "label": "ch4-sp-energy-hook",
     }
@@ -300,7 +315,7 @@ def _computed_species_bundle(*, sp_energy: float | None) -> dict:
         "conformers": [
             {
                 "key": "c0",
-                "geometry": {"xyz_text": "1\nC atom\nC 0.0 0.0 0.0"},
+                "geometry": {"xyz_text": XYZ_CH4},
                 "primary_calculation": {
                     "key": "opt0",
                     "type": "opt",

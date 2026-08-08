@@ -1,15 +1,49 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
+from collections.abc import Mapping
 
 from rdkit import Chem
 from rdkit.Chem import AllChem, inchi, rdDetermineBonds
+from tckdb_schemas.fragments.identity import ELECTRON_SMILES
 
+from app.chemistry.geometry import resolve_element_symbol
 from app.chemistry.isotopes import normalize_isotope, validate_isotope
 from app.db.models.common import MoleculeKind, StereoKind
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 
 logger = logging.getLogger(__name__)
+
+#: The value stored in ``species.inchi_key`` for the free electron.
+#:
+#: ``species.inchi_key`` is ``CHAR(27) NOT NULL`` and an electron has no
+#: InChI, so the row needs *something*. This is deliberately **not** a
+#: plausible InChIKey: a real one is ``[A-Z]{14}-[A-Z]{10}-[A-Z]``, and this
+#: fails that shape in its first block, so it can never collide with a real
+#: key, can never be returned by an InChIKey lookup, and cannot be mistaken
+#: for a chemical identifier by a reader. Exactly 27 characters, because the
+#: column is ``CHAR`` and would otherwise pad.
+#:
+#: The alternative — relaxing ``inchi_key`` to nullable — is the more honest
+#: schema and was rejected for reach: half a dozen read schemas type it
+#: ``str``, and widening all of them to admit one row that no structure search
+#: can return is a larger, more disruptive change than a sentinel that is
+#: self-describing at every point it can be read.
+ELECTRON_INCHI_KEY = "ELECTRON-NO-INCHIKEY-EXISTS"
+
+
+def is_electron(payload: SpeciesEntryIdentityPayload) -> bool:
+    """Return whether an identity payload declares a free electron.
+
+    One predicate for every caller that has to branch, so no two of them can
+    disagree about what an electron looks like. The payload schema has already
+    pinned ``smiles``, ``charge`` and ``multiplicity`` to each other by the
+    time this is asked (``SpeciesIdentityPayload.check_electron_identity``), so
+    the kind alone is sufficient and authoritative.
+    """
+
+    return payload.molecule_kind == MoleculeKind.electron
 
 
 def formal_charge(mol: Chem.Mol) -> int:
@@ -134,6 +168,77 @@ def isotope_substitutions(smiles: str) -> dict[tuple[str, int], int]:
             key = (atom.GetSymbol(), mass_number)
             counts[key] = counts.get(key, 0) + 1
     return counts
+
+
+def element_counts_from_smiles(smiles: str) -> Counter[str]:
+    """Count the elements a SMILES declares, the way a geometry counts them.
+
+    Three normalisations make the result comparable against
+    ``geometry_atom.element`` and against another SMILES:
+
+    * **Hydrogens are made explicit.** A SMILES carries most of its hydrogens
+      implicitly (``C`` is methane, one atom in the graph and five in the
+      molecule), while an XYZ lists every nucleus. Without
+      :func:`rdkit.Chem.AddHs` every organic species would appear to be
+      missing its hydrogens.
+    * **Isotopes collapse to their element.** ``[2H]`` counts as ``H``. The
+      canonical form stores the element, not the nuclide, and isotopic
+      substitution changes masses rather than composition — counting
+      isotope-resolved would refuse every isotopologue whose geometry, quite
+      correctly, lists the same elements as the ordinary compound. Isotope
+      agreement is a separate check with its own multiset comparison
+      (:func:`app.services.species_resolution.assert_geometry_isotopes_match_identity`).
+    * **Symbols are resolved to elements** through
+      :func:`~app.chemistry.geometry.resolve_element_symbol`, because the other
+      side of every comparison is an XYZ element stored verbatim: ESS codes
+      disagree about capitalisation (``CL``, ``cl``) and write hydrogen's
+      isotopes as elements (``D``, ``T``). RDKit's ``GetSymbol()`` produces
+      neither spelling, so this call is a no-op on this side — it is here so
+      that both sides of every comparison are counted by one rule rather than
+      two that must be remembered to agree.
+
+    :param smiles: SMILES string to count.
+    :returns: Mapping of element symbol to atom count.
+    :raises ValueError: If RDKit cannot parse the SMILES string.
+    """
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError(f"RDKit failed to parse SMILES: {smiles}")
+    mol = Chem.AddHs(mol)
+    counts: Counter[str] = Counter()
+    for atom in mol.GetAtoms():
+        counts[resolve_element_symbol(atom.GetSymbol())] += 1
+    return counts
+
+
+def format_element_counts(counts: Mapping[str, int]) -> str:
+    """Render an element count as a formula, for an error a human can read.
+
+    **Hill notation**, which is what a chemist reads: carbon first, hydrogen
+    second, then every other element alphabetically — and, when there is no
+    carbon, everything alphabetically including hydrogen. Plain alphabetical
+    ordering renders chloromethane as ``CClH3``, a string nobody recognises as
+    the molecule they deposited, in an error message whose whole job is to be
+    recognised.
+
+    :param counts: Element symbol to atom count. Elements counted zero times
+        are omitted rather than rendered with no subscript.
+    :returns: The molecular formula, e.g. ``CH3Cl`` or ``H2O``.
+    """
+
+    present = {element: count for element, count in counts.items() if count}
+    ordered: list[str] = []
+    if "C" in present:
+        ordered.append("C")
+        if "H" in present:
+            ordered.append("H")
+    ordered.extend(sorted(element for element in present if element not in ordered))
+
+    return "".join(
+        f"{element}{present[element] if present[element] > 1 else ''}"
+        for element in ordered
+    )
 
 
 def derive_unmapped_smiles(smiles: str) -> str:
@@ -427,8 +532,14 @@ def canonical_species_identity(
     :param payload: Upload-facing species-entry identity payload.
     :returns: ``(canonical_smiles, inchi_key)`` for the graph identity.
     :raises ValueError:
-        If the payload is not a supported molecule upload or if the stated
-        charge disagrees with the parsed SMILES identity.
+        If the payload is not a supported molecule or electron upload or if
+        the stated charge disagrees with the parsed SMILES identity.
+
+    A free electron short-circuits every step below: it has no molecular
+    graph to canonicalize and no InChI, so it resolves to the reserved
+    identity pair (see :data:`ELECTRON_INCHI_KEY`). Its charge is pinned by
+    the payload schema rather than reconciled against a structure, because
+    there is no structure to reconcile it against.
 
     Multiplicity is NOT validated against the SMILES: standard SMILES does
     not encode spin state, so the radical count RDKit infers is only a
@@ -444,6 +555,9 @@ def canonical_species_identity(
     ``inchi_key`` isotope-blind, so an InChIKey lookup finds every
     isotopologue of a compound rather than only the ordinary one.
     """
+
+    if payload.molecule_kind == MoleculeKind.electron:
+        return ELECTRON_SMILES, ELECTRON_INCHI_KEY
 
     if payload.molecule_kind != MoleculeKind.molecule:
         raise ValueError("Conformer upload currently supports only molecule species")

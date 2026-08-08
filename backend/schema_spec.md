@@ -61,6 +61,17 @@ Notes:
 - `inchi_key` is unique
 - `multiplicity` must be at least 1
 - `stereo_kind` is stored on the graph-level identity row, not on `species_entry`
+- `kind` (`molecule_kind` enum) is `molecule`, `pseudo`, or `electron`.
+  `pseudo` is a lumped or phenomenological construct whose composition and
+  charge are not atom-resolved facts, so `validate_reaction_elemental_balance`
+  and `validate_reaction_charge_conservation` decline to judge a reaction
+  containing one. `electron` is a free electron: it has no SMILES (the row
+  carries the reserved token `[e-]`) and no InChI (the row carries a sentinel
+  that is deliberately not InChIKey-shaped), and it exists so that associative
+  detachment, dissociative attachment, photoionization and photodetachment can
+  be deposited as balanced reactions. An electron exempts a reaction from
+  **nothing** — it contributes zero atoms and charge −1, and both conservation
+  checks still have to pass. See revision `b8f3d6a1c9e4`.
 
 ### 3.2 Species Entry
 
@@ -853,21 +864,40 @@ exactly as before.
 - `rmsd_warning_threshold`
 - `created_at`
 
-`calc_geometry_validation` is a *structure-consistency* check: does the
-calculation's output geometry still represent the declared species
-identity (graph isomorphism, with RMSD as a suspicion signal)? It exists
-to catch optimizations that rearranged the molecule, broke or formed
-bonds, dissociated, or transferred a proton.
+`calc_geometry_validation` compares the calculation's output geometry
+against the declared species identity, with RMSD as a suspicion signal.
 
-A `validation_status=fail` row means "the automated identity validator
-found a mismatch," **not** "the calculation is scientifically invalid."
-Connectivity perception from XYZ is imperfect for weak complexes,
-stretched or partially broken bonds, radicals, charged species, loose
-conformers, and proton-transfer-like geometries — these can produce
-false-positive `fail` rows even when the calculation is fine. These
-rows are curator-attention signals, not inputs to automatic rejection
-or quality gating. Phase-1 wiring records evidence; it never blocks an
-upload.
+**What it compares is the molecular formula, not the molecular graph.**
+The column is named `is_isomorphic` and the check was written intending
+graph isomorphism, but `resolve_atom_mapping` falls back to
+`_find_matches_using_smiles_graph` whenever bond perception from XYZ
+fails or finds no substructure match — the common case for radicals,
+ions and stretched geometries — and that fallback rejects a candidate
+only on a per-element atom-count mismatch. Verified by direct call:
+ethanol declared with dimethyl ether deposited (constitutional isomers,
+both C2H6O) **passes**, and methane with one hydrogen pulled to 5 Å
+**passes**. The rearrangement, bond-breaking, dissociation and
+proton-transfer cases this table was introduced for are therefore *not*
+caught, and connectivity validation is not implemented. Doing it
+properly needs bond perception that is trustworthy on exactly the
+strained, radical and stretched structures where it would matter, which
+`rdDetermineBonds` is not.
+
+A `validation_status=fail` row means "the atom counts disagree," **not**
+"the calculation is scientifically invalid." These rows are
+curator-attention signals, not inputs to automatic rejection or quality
+gating. Phase-1 wiring records evidence; it never blocks an upload.
+
+Per ADR 0008 §9 the blocking tier owns a rule and the others cite it:
+formula agreement between a structure and the identity it is deposited
+under is owned by
+`app.services.species_resolution.assert_geometry_composition_matches_identity`,
+which refuses the upload — but only for **conformer** geometries. A
+calculation's input and output geometries reach no blocking composition
+check on any path, so for those this advisory row is the only place the
+comparison happens at all. For an *output* geometry that is deliberate:
+an optimisation that drifted is science to record, not a payload to
+refuse.
 
 Three closely related but distinct calculation-quality surfaces must not
 be conflated:

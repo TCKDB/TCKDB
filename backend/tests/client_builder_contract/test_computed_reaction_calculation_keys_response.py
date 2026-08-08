@@ -51,14 +51,24 @@ _XYZ_CH4 = (
     "H -0.629  0.629 -0.629\n"
     "H  0.629 -0.629 -0.629"
 )
+# The ``CH3 + H -> CH4`` saddle point: CH4, five atoms. C at the origin
+# (index 1), the three methyl hydrogens flattened towards planarity in the
+# z = 0 plane (indices 2-4), and the incoming hydrogen on the C3 axis at a
+# stretched 1.500 A (index 5).
+#
+# This fixture used to list six atoms — a whole methane plus a sixth hydrogen —
+# which is CH5 for a CH4 reaction. ``validate_transition_state_composition``
+# refuses that, and has since it was introduced; this suite is in neither the
+# ``test-api`` nor the ``test-scientific`` gate, so the two tests below were
+# already failing on ``origin/main`` before the composition and charge work in
+# this branch touched anything.
 _XYZ_TS = (
-    "6\nts\n"
+    "5\nts for CH3 + H -> CH4\n"
     "C  0.000  0.000  0.000\n"
-    "H  0.629  0.629  0.629\n"
-    "H -0.629 -0.629  0.629\n"
-    "H -0.629  0.629 -0.629\n"
-    "H  0.629 -0.629 -0.629\n"
-    "H  1.500  0.000  0.000"
+    "H  1.080  0.000  0.000\n"
+    "H -0.540  0.935  0.000\n"
+    "H -0.540 -0.935  0.000\n"
+    "H  0.000  0.000  1.500"
 )
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT = {"method": "wb97xd", "basis": "def2tzvp"}

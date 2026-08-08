@@ -22,11 +22,31 @@ from __future__ import annotations
 from rdkit import Chem
 
 __all__ = [
+    "HYDROGEN_ISOTOPE_SYMBOLS",
     "isotope_mass",
     "most_common_isotope",
     "normalize_isotope",
     "validate_isotope",
 ]
+
+#: Element symbols that name a *nuclide* rather than an element, mapped to the
+#: mass number they stand for. Only hydrogen has them, and only these two:
+#: ``D`` is deuterium and ``T`` is tritium.
+#:
+#: They are legal, common XYZ tokens — Gaussian, ORCA, Molpro and CFOUR all
+#: emit or accept them — and ``geometry_atom.element`` stores whatever the
+#: depositor's XYZ said, verbatim (see :func:`app.chemistry.geometry.parse_xyz`).
+#: Anything that *counts elements* must therefore resolve them to ``H`` first
+#: (:func:`app.chemistry.geometry.resolve_element_symbol`), or it refuses a
+#: correctly deposited isotopologue for spelling its hydrogens the way its ESS
+#: did — which ADR 0008 puts out of bounds for a blocking check.
+#:
+#: This mapping is deliberately *not* wired into :func:`validate_isotope` or
+#: :func:`parse_xyz`. Isotope **identity** is carried atom-resolved by
+#: ``geometry.isotopes`` and by SMILES isotope notation, never by the element
+#: column; resolving ``D`` to ``H`` here answers "which element is this atom",
+#: which is the only question composition counting asks.
+HYDROGEN_ISOTOPE_SYMBOLS: dict[str, int] = {"D": 2, "T": 3}
 
 
 def _periodic_table() -> Chem.PeriodicTable:

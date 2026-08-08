@@ -12,6 +12,16 @@ calculations only. These tests verify the wiring contract:
 
 The pure chemistry seam is exercised separately in
 ``tests/services/test_geometry_validation.py``.
+
+**How narrow ``is_isomorphic=False`` really is.** ``resolve_atom_mapping``
+falls back to ``_find_matches_using_smiles_graph`` whenever bond perception
+from coordinates yields no substructure match, and that fallback bails out
+only on an element-count mismatch. So the ``fail`` branch here fires on a
+*formula* disagreement, not on a connectivity one: ethanol and dimethyl ether,
+constitutional isomers with identical element counts, are reported isomorphic.
+Since ``assert_geometry_composition_matches_identity`` now blocks a formula
+disagreement on the species entry's own geometry, an explicitly declared
+output geometry is the last place this row's ``fail`` status is reachable.
 """
 
 from __future__ import annotations
@@ -65,6 +75,21 @@ _XYZ_METHANE = (
     "H -0.629  0.629 -0.629\n"
     "H  0.629 -0.629 -0.629"
 )
+# Ethanol, CH3-CH2-OH. C2H6O, nine atoms: C1 (methyl carbon), C2 (methylene
+# carbon), O3 (hydroxyl oxygen), H4-H6 on C1, H7-H8 on C2, H9 on O3 — 1-based
+# file indices, matching the line order below.
+_XYZ_ETHANOL = (
+    "9\nethanol\n"
+    "C -0.8364 -0.3141 -0.1395\n"
+    "C  0.3591  0.5831  0.1051\n"
+    "O  1.4337 -0.1755  0.6405\n"
+    "H -1.6790  0.2587 -0.5368\n"
+    "H -0.5850 -1.1091 -0.8492\n"
+    "H -1.1474 -0.8033  0.7894\n"
+    "H  0.6916  1.0559 -0.8240\n"
+    "H  0.1068  1.3701  0.8217\n"
+    "H  1.6566 -0.8657 -0.0073"
+)
 
 
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
@@ -95,9 +120,31 @@ def _isolated_session(db_engine) -> Iterator[Session]:
 
 
 def _species_bundle(
-    *, smiles: str, xyz: str, multiplicity: int = 1
+    *,
+    smiles: str,
+    xyz: str,
+    multiplicity: int = 1,
+    output_xyz: str | None = None,
 ) -> ComputedSpeciesUploadRequest:
-    """Minimal one-conformer opt bundle for the wiring tests."""
+    """Minimal one-conformer opt bundle for the wiring tests.
+
+    ``output_xyz`` declares the opt calculation's output geometry explicitly
+    instead of letting it fall back to the conformer geometry. That is the
+    seam the identity-mismatch test needs: the conformer geometry is what the
+    *species entry* is checked against, and the output geometry is what
+    *geometry validation* is run against, so they can be made to disagree.
+    """
+    primary_calculation: dict = {
+        "key": "opt0",
+        "type": "opt",
+        "level_of_theory": _LOT,
+        "software_release": _SOFTWARE,
+        "opt_result": {"converged": True},
+    }
+    if output_xyz is not None:
+        primary_calculation["output_geometries"] = [
+            {"geometry": {"xyz_text": output_xyz}, "role": "final"}
+        ]
     return ComputedSpeciesUploadRequest(
         **{
             "species_entry": {
@@ -109,13 +156,7 @@ def _species_bundle(
                 {
                     "key": "c0",
                     "geometry": {"xyz_text": xyz},
-                    "primary_calculation": {
-                        "key": "opt0",
-                        "type": "opt",
-                        "level_of_theory": _LOT,
-                        "software_release": _SOFTWARE,
-                        "opt_result": {"converged": True},
-                    },
+                    "primary_calculation": primary_calculation,
                 }
             ],
         }
@@ -218,12 +259,30 @@ def test_computed_species_opt_persists_passed_row(db_engine) -> None:
 def test_computed_species_opt_records_fail_when_identity_mismatch(
     db_engine,
 ) -> None:
-    """Geometry is methane but the declared species is water — the
-    chemistry layer must reject isomorphism, and the wiring layer must
-    persist that as evidence (validation_status=fail) rather than abort
-    the upload. This is the policy: phase-1 is non-blocking."""
+    """The declared species is ethanol and the opt calculation reports a
+    methane output geometry — the chemistry layer must reject isomorphism, and
+    the wiring layer must persist that as evidence (validation_status=fail)
+    rather than abort the upload. This is the policy: phase-1 is non-blocking.
+
+    The mismatch is on the *output* geometry, not the conformer geometry.
+    This test used to declare water and deposit methane as the conformer
+    geometry, which is now refused outright by
+    ``assert_geometry_composition_matches_identity``: a species entry's own
+    structure must be made of the atoms its own identifier declares, and H2O
+    is not CH4. That blocking rule owns the species entry's geometry, so the
+    non-blocking evidence rule is exercised where it still applies — an output
+    geometry, which the species entry is deliberately *not* checked against
+    because an optimisation that rearranged or dissociated the molecule is
+    exactly the science this row exists to record rather than refuse.
+
+    Ethanol is nine atoms (C2H6O); methane is five (CH4). The atom counts
+    differ, which is what ``resolve_atom_mapping`` actually detects — see the
+    note in this module's docstring about how narrow ``is_isomorphic=False``
+    has become."""
     with _isolated_session(db_engine) as session:
-        bundle = _species_bundle(smiles="O", xyz=_XYZ_METHANE)
+        bundle = _species_bundle(
+            smiles="CCO", xyz=_XYZ_ETHANOL, output_xyz=_XYZ_METHANE
+        )
         outcome = persist_computed_species_upload(session, bundle)
         primary_id = outcome.conformers[0].primary_calculation.id
         row = session.scalar(
