@@ -94,6 +94,7 @@ from app.db.models.common import (
 )
 from app.db.models.geometry import Geometry
 from app.schemas.fragments.geometry import GeometryPayload
+from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
 
 logger = logging.getLogger(__name__)
 
@@ -382,3 +383,62 @@ def run_and_persist_geometry_validation(
     )
     session.add(row)
     return row
+
+
+CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
+    group="A structure against its own label",
+    sort_key=5,
+    code=None,
+    asserts=(
+        "An optimisation's output geometry still describes the species it was "
+        "declared for — the optimiser handed back the molecule it was given."
+    ),
+    tier=CheckTier.warn,
+    tier_rationale=(
+        "An expectation, and correctly non-blocking. An optimisation that "
+        "rearranged, dissociated or transferred a proton is science to record, "
+        "not a payload to refuse, and connectivity perception from XYZ is "
+        "unreliable for exactly the weak complexes, radicals, ions and "
+        "stretched geometries where a genuine rearrangement would matter. The "
+        "result is written as an evidence row that grades the record at read "
+        "time; it never refuses an upload."
+    ),
+    adr="0008, 0002",
+    emitted=False,
+    enforced_by=(
+        PythonCheck(
+            validate_calculation_geometry,
+            note=(
+                "Species-owned ``opt`` calculations only. Transition states "
+                "are deliberately excluded, having no canonical SMILES to "
+                "compare against. Best-effort by policy: a missing SMILES, a "
+                "missing output geometry, unparseable coordinates or a raising "
+                "chemistry layer all write nothing and let the upload "
+                "continue. A Kabsch RMSD above 1.0 A against the input "
+                "geometry is recorded as a separate suspicion signal."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "The whole check is advisory, so there is nothing to escape. What a "
+        "consumer must not do is read a ``fail`` row as 'this calculation is "
+        "scientifically invalid'; it means only that the automated identity "
+        "validator found a mismatch."
+    ),
+    divergence=(
+        "The stored column is named ``is_isomorphic`` and the surrounding "
+        "policy is worded as graph isomorphism, but the code tests the "
+        "**molecular formula** only. Atom mapping falls back to a "
+        "SMILES-graph matcher whenever bond perception from XYZ fails, which "
+        "is the common case for the radicals, ions and stretched geometries "
+        "this service mostly sees, and that fallback rejects a candidate on "
+        "one condition: the per-element atom counts disagree. Verified by "
+        "direct call in the module docstring — ethanol declared with dimethyl "
+        "ether deposited passes, and methane with one hydrogen pulled to 5 A "
+        "passes. So the rearrangement, bond-breaking, dissociation and "
+        "proton-transfer cases the module was written to catch are not "
+        "caught. Already self-documented in the module docstring rather than "
+        "discovered here; recorded because the field name is what a consumer "
+        "sees and it still overstates the guarantee."
+    ),
+)

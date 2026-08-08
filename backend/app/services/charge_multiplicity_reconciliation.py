@@ -46,6 +46,7 @@ from enum import Enum
 
 from tckdb_schemas.upload_warning import UploadWarning
 
+from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
 from app.services.ess_software_detection import SoftwareName, detect_software_from_text
 
 #: Emitted when the declared charge and the log's charge disagree.
@@ -310,3 +311,47 @@ def reconcile_charge_multiplicity(
         software=parsed.software,
         warnings=warnings,
     )
+
+
+CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
+    group="A structure against its own label",
+    sort_key=4,
+    code=(W_CHARGE_MISMATCH, W_MULTIPLICITY_MISMATCH),
+    asserts=(
+        "The charge and spin multiplicity a depositor declares match the ones "
+        "the electronic-structure log says the calculation was actually run "
+        "at."
+    ),
+    tier=CheckTier.warn,
+    tier_rationale=(
+        "**Placed against the ADR's own reasoning, deliberately.** ADR 0008 "
+        "names both findings as direct contradictions between a declaration "
+        "and the parsed evidence, therefore definitional, therefore belonging "
+        "at the blocking tier — and then defers the promotion, because "
+        "promoting a warning to a blocker rejects payloads that are accepted "
+        "today. These checks have never fired on real data, so their "
+        "false-positive rate is unknown and promoting them first would be "
+        "unsafe. The register records the gap rather than hiding it: this is "
+        "the clearest case in TCKDB of a check sitting one tier below where "
+        "its own governing decision puts it."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            reconcile_charge_multiplicity,
+            note=(
+                "Re-reads charge and multiplicity from the uploaded artifact "
+                "using the wired Gaussian, ORCA, Psi4 and Molpro parsers."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Absence is not contradiction: if the producing program is not one of "
+        "the wired parsers, the artifact is missing, the log is truncated, or "
+        "the declarations inside a single log disagree with each other, the "
+        "value is left unknown and **no** warning is emitted. Only a value "
+        "genuinely read from the log may contradict a declaration — emitting a "
+        "mismatch because parsing failed would fabricate a contradiction out "
+        "of ignorance."
+    ),
+)
