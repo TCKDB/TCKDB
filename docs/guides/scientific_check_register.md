@@ -472,7 +472,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `ck_reaction_atom_map_inferred_requires_note` (check on `reaction_atom_map`)
   `source <> 'inferred' OR (note IS NOT NULL AND btrim(note) <> '')`
 - `trg_reaction_atom_map_source_immutable` (trigger on `reaction_atom_map`)
-  `BEFORE UPDATE FOR EACH ROW: refuse any change to `source``
+  `BEFORE UPDATE FOR EACH ROW: refuse any change to the source column`
 
 **Escape hatch.** `note` and `equivalent_map_count` stay mutable on purpose, so a depositor can correct a description or record newly counted symmetry-equivalent maps without touching the attribution. Symmetry means a valid map is often not unique; ADR 0011 declines to canonicalise among equivalent maps and leaves reaction-path degeneracy to a later decision.
 
@@ -537,13 +537,13 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `ck_network_solve_reported_requires_literature` (check on `network_solve`)
   `kind <> 'reported' OR literature_id IS NOT NULL`
 - `ct_network_solve_computed_evidence` (trigger on `network_solve`)
-  `Deferred constraint trigger, at COMMIT: a `computed` solve must hold at least one state energy; at least one energy-transfer model if its network declares a well; at least one channel barrier if its network declares a saddle-point path`
+  `deferred constraint trigger, at COMMIT: a computed solve must hold at least one state energy; at least one energy-transfer model if its network declares a well; at least one channel barrier if its network declares a saddle-point path`
 
 **Escape hatch.** Declare `kind='reported'` and cite the literature. That relaxes the state-energy, channel-barrier and energy-transfer coverage rules a computed solve is held to, which is what makes a paper's supplementary table depositable at all — before the token existed such rates could not be deposited, so they went into somebody's private mechanism file, uncited and unversioned.
 
 **Recorded divergence.** Existence, not coverage — and the trigger must not be read as the whole contract. The database guarantees a computed solve carries nonzero evidence of each applicable class; the three coverage rules (one energy per state, one energy-transfer model per (well, collider) pair or a network-wide declaration, one barrier per saddle-point path) remain properties of the single wired upload path. A computed solve with four energies out of five passes the database and fails the validator. ADR 0010's amendment states this deliberately: a computed solve with *zero* energies is a contradiction and may block, while an incomplete one is a true record to be graded by the trust and reproducibility layers. Separately, `kind` cannot surface in CHEMKIN export, which has no provenance field; a tripwire test guards the moment network kinetics first reach mechanism output.
 
-### 25. A collisional energy-transfer model records whether its <dE>down was determined per (well, collider) pair or declared once for the whole network.
+### 25. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
 
 | Field | Value |
 | --- | --- |
@@ -551,14 +551,14 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | **Code** | `network_wide_energy_transfer_scope` |
 | **Governing ADR** | 0009, 0008 |
 
-**Why this tier.** A network-wide <dE>down is correct, common, published science — Arkane, RMG and MESS inputs routinely specify a single `SingleExponentialDown` applied network-wide — so a check demanding one entry per (well x collider) pair could fire on a correct result and must not block. It is an expectation about *resolution*, not a definition. What stays definitional still blocks: a `per_well` entry naming no well contradicts itself, a `network_wide` entry naming one contradicts itself, and a payload mixing the two is genuinely ambiguous.
+**Why this tier.** A network-wide ⟨ΔE⟩down is correct, common, published science — Arkane, RMG and MESS inputs routinely specify a single `SingleExponentialDown` applied network-wide — so a check demanding one entry per (well x collider) pair could fire on a correct result and must not block. It is an expectation about *resolution*, not a definition. What stays definitional still blocks: a `per_well` entry naming no well contradicts itself, a `network_wide` entry naming one contradicts itself, and a payload mixing the two is genuinely ambiguous.
 
 **Enforced at.**
 
 - `ck_network_solve_energy_transfer_scope_columns_agree` (check on `network_solve_energy_transfer`)
   `(scope='per_well' AND state_id IS NOT NULL AND collider_species_entry_id IS NOT NULL) OR (scope='network_wide' AND state_id IS NULL AND collider_species_entry_id IS NULL)`
 
-**Escape hatch.** Declare `scope='network_wide'`. The physics behind the old per-well rule was never in dispute — <dE>down depends on the density of states of the excited well and on the collider's ability to accept internal energy, so argon and helium do not relax the same well identically. The rule was wrong in practice because it confused what the quantity *is* with what a calculation *determined*: the only way to satisfy it was to paste one number once per well, and the repository's own Arkane ingester did exactly that. Those rows are indistinguishable from independently determined values — a provenance loss manufactured by the validation itself, worse than the gap it closed, because an absent value is honest while a duplicated one is a false positive every consumer will faithfully propagate.
+**Escape hatch.** Declare `scope='network_wide'`. The physics behind the old per-well rule was never in dispute — ⟨ΔE⟩down depends on the density of states of the excited well and on the collider's ability to accept internal energy, so argon and helium do not relax the same well identically. The rule was wrong in practice because it confused what the quantity *is* with what a calculation *determined*: the only way to satisfy it was to paste one number once per well, and the repository's own Arkane ingester did exactly that. Those rows are indistinguishable from independently determined values — a provenance loss manufactured by the validation itself, worse than the gap it closed, because an absent value is honest while a duplicated one is a false positive every consumer will faithfully propagate.
 
 ## Reproducibility
 

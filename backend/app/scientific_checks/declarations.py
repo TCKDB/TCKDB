@@ -464,7 +464,7 @@ CHECK_ATOM_MAP_PROVENANCE_IS_DECLARED = ScientificCheck(
             name="trg_reaction_atom_map_source_immutable",
             kind="trigger",
             definition=(
-                "BEFORE UPDATE FOR EACH ROW: refuse any change to ``source``"
+                "BEFORE UPDATE FOR EACH ROW: refuse any change to the source column"
             ),
         ),
     ),
@@ -516,7 +516,7 @@ CHECK_NETWORK_SOLVE_KIND_EVIDENCE = ScientificCheck(
             name="ct_network_solve_computed_evidence",
             kind="trigger",
             definition=(
-                "Deferred constraint trigger, at COMMIT: a ``computed`` solve "
+                "deferred constraint trigger, at COMMIT: a computed solve "
                 "must hold at least one state energy; at least one "
                 "energy-transfer model if its network declares a well; at "
                 "least one channel barrier if its network declares a "
@@ -554,13 +554,13 @@ CHECK_ENERGY_TRANSFER_SCOPE = ScientificCheck(
     sort_key=2,
     code=W_NETWORK_WIDE_ENERGY_TRANSFER,
     asserts=(
-        "A collisional energy-transfer model records whether its <dE>down was "
+        "A collisional energy-transfer model records whether its ⟨ΔE⟩down was "
         "determined per (well, collider) pair or declared once for the whole "
         "network."
     ),
     tier=CheckTier.structural,
     tier_rationale=(
-        "A network-wide <dE>down is correct, common, published science — "
+        "A network-wide ⟨ΔE⟩down is correct, common, published science — "
         "Arkane, RMG and MESS inputs routinely specify a single "
         "``SingleExponentialDown`` applied network-wide — so a check demanding "
         "one entry per (well x collider) pair could fire on a correct result "
@@ -586,7 +586,7 @@ CHECK_ENERGY_TRANSFER_SCOPE = ScientificCheck(
     ),
     escape_hatch=(
         "Declare ``scope='network_wide'``. The physics behind the old per-well "
-        "rule was never in dispute — <dE>down depends on the density of states "
+        "rule was never in dispute — ⟨ΔE⟩down depends on the density of states "
         "of the excited well and on the collider's ability to accept internal "
         "energy, so argon and helium do not relax the same well identically. "
         "The rule was wrong in practice because it confused what the quantity "
