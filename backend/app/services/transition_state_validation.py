@@ -24,6 +24,7 @@ from tckdb_schemas.fragments.ts_validation_evidence import (
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.transition_state import TransitionStateValidationEvidence
+from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
 
 #: Emitted when a transition state is deposited with no *passing* IRC evidence.
 W_MISSING_TS_IRC_EVIDENCE = "transition_state_missing_irc_evidence"
@@ -95,6 +96,45 @@ def persist_transition_state_validation_evidence(
             )
         )
     return rows
+
+
+CHECK_TS_IRC_EVIDENCE = ScientificCheck(
+    group="Stationary points",
+    sort_key=6,
+    code=W_MISSING_TS_IRC_EVIDENCE,
+    asserts=(
+        "A deposited saddle point should carry passing intrinsic-reaction-"
+        "coordinate evidence that it connects the declared reactants and "
+        "products."
+    ),
+    tier=CheckTier.warn,
+    tier_rationale=(
+        "Absence, not contradiction. Refusing a transition state without an "
+        "IRC would lose the saddle point entirely, and a saddle point with no "
+        "IRC is an incomplete record rather than a false one. The evidence is "
+        "recommended, not required."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            persist_transition_state_validation_evidence,
+            note=(
+                "Every path that can carry a transition state routes through "
+                "this seam — the PDep bundle, the computed-reaction bundle and "
+                "the standalone transition-state upload — so all three write "
+                "identical rows and report an identical gap. Before the seam "
+                "existed only the PDep bundle could deposit the evidence, so a "
+                "TS uploaded any other way always read back as ``irc: "
+                "absent`` even when the depositor had run one."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "None needed — the warning is the accommodation. Note the warning "
+        "fires on absence of a *passing* record, so evidence that was run and "
+        "failed is stored and still warns."
+    ),
+)
 
 
 __all__ = [

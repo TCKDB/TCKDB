@@ -26,6 +26,7 @@ from app.db.models.common import MoleculeKind, StereoKind
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
+from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
 
 
 def null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement[bool]:
@@ -172,6 +173,53 @@ def assert_geometry_isotopes_match_identity(
     )
 
 
+CHECK_GEOMETRY_ISOTOPES_MATCH_IDENTITY = ScientificCheck(
+    group="A structure against its own label",
+    sort_key=2,
+    code=None,
+    asserts=(
+        "The multiset of isotopic substitutions declared in a species entry's "
+        "SMILES equals the multiset carried by the geometry deposited under it."
+    ),
+    tier=CheckTier.block,
+    tier_rationale=(
+        "Definitional. The identity's isotope label and the geometry's "
+        "per-atom masses describe the same nuclei; when they disagree one of "
+        "them is wrong and there is no defensible way to pick a winner, so a "
+        "CD3OH identity on an all-protium geometry would yield frequencies for "
+        "a molecule nobody deposited."
+    ),
+    adr="0008",
+    emitted=False,
+    enforced_by=(
+        PythonCheck(
+            assert_geometry_isotopes_match_identity,
+            note=(
+                "Runs from ``resolve_species_entry`` only when a geometry is "
+                "supplied. Raises prose with no machine-readable code, so no "
+                "client can key off it — recorded here as a gap rather than "
+                "papered over."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Deposit no geometry. An explicitly declared *standard* isotope is "
+        "dropped before comparison, so ``{1: 1}`` on a hydrogen cannot fork an "
+        "identity away from an unlabelled deposit of the same molecule."
+    ),
+    divergence=(
+        "Not a divergence but a documented false *acceptance*, restated here "
+        "because a referee will ask: only the multiset is compared, so "
+        "isotopomers are not distinguished. An identity of ``[2H]OC`` (CH3-OD) "
+        "accepts a geometry labelling a methyl hydrogen instead (CH2D-OH) — "
+        "different molecules with different zero-point energies. Closing it "
+        "needs an atom-level SMILES-to-XYZ correspondence the repository does "
+        "not have. Where the two disagree invisibly, the geometry is "
+        "authoritative for masses and the SMILES only for identity."
+    ),
+)
+
+
 def assert_geometry_composition_matches_identity(
     payload: SpeciesEntryIdentityPayload,
     geometry: GeometryPayload,
@@ -307,6 +355,52 @@ def assert_geometry_composition_matches_identity(
         "their element — SMILES [2H] and the XYZ symbols D and T all count as "
         "H — so an isotopologue is not a mismatch."
     )
+
+
+CHECK_GEOMETRY_COMPOSITION_MATCHES_IDENTITY = ScientificCheck(
+    group="A structure against its own label",
+    sort_key=1,
+    code="species_geometry_composition_mismatch",
+    asserts=(
+        "A conformer geometry deposited under a species entry is made of the "
+        "atoms that entry's own SMILES declares."
+    ),
+    tier=CheckTier.block,
+    tier_rationale=(
+        "Definitional. No correct calculation produces a geometry that is not "
+        "made of its own molecule's atoms, so a formula disagreement between a "
+        "structure and its own identifier is a contradiction rather than an "
+        "expectation — every energy, frequency and partition function "
+        "downstream would describe a different molecule under the deposited "
+        "label."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            assert_geometry_composition_matches_identity,
+            note=(
+                "Conformer geometries only, via ``resolve_species_entry``: the "
+                "computed-species bundle, ``/uploads/conformers``, the "
+                "computed-reaction bundle and the PDep bundle. **Calculation** "
+                "input and output geometries are reached by no composition "
+                "check on any path — benzene coordinates can still be attached "
+                "as a calculation geometry under a ``smiles: \"C\"`` entry. "
+                "Closing that for *output* geometries would be wrong (an "
+                "optimisation that dissociated is science to record); for "
+                "*input* geometries it is an open gap."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Declare ``molecule_kind: pseudo``, which has no atom-resolved "
+        "composition to agree with. A free electron is deliberately **not** "
+        "exempt — its composition is not unknown but empty, so any geometry "
+        "deposited under one is refused, which stops ``electron`` becoming a "
+        "quieter way to smuggle a structure past the check. Absence does not "
+        "block: no geometry, or a SMILES RDKit will not parse, is "
+        "incompleteness."
+    ),
+)
 
 
 def resolve_species_entry(
