@@ -64,22 +64,21 @@ disagree about a line number, this one is right by construction.
 
 | Tier | Entries | Meaning |
 | --- | --- | --- |
-| `block` | 14 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
+| `block` | 15 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
 | `warn` | 8 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `review` | 0 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **27** | |
+| **total** | **28** | |
 
 ## Recorded divergences
 
 Where a check's documentation and its behaviour disagree, or where a guarantee is narrower than its name suggests. Every one of these is reported, never silently fixed — the register changes no check behaviour.
 
-- **[3]** A saddle point is made of exactly the atoms of the reaction it is declared to sit in.
-- **[4]** A saddle point carries the same total charge as the reactants it sits between.
-- **[6]** The multiset of isotopic substitutions declared in a species entry's SMILES equals the multiset carried by the geometry deposited under it.
-- **[9]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
-- **[13]** A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
-- **[25]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+- **[5]** The saddle-point atoms an IRC mapping assigns to a declared participant are that participant's own atoms, element for element.
+- **[7]** The multiset of isotopic substitutions declared in a species entry's SMILES equals the multiset carried by the geometry deposited under it.
+- **[10]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
+- **[14]** A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
+- **[26]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 ## Entries
 
@@ -97,7 +96,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_reaction_elemental_balance` — `backend/app/services/reaction_resolution.py:131`
+- `validate_reaction_elemental_balance` — `backend/app/services/reaction_resolution.py:134`
   *Called from `resolve_chem_reaction`, so it fires on every path that resolves a reaction, including the PDep bundle.*
 
 **Escape hatch.** Declare a participant with `molecule_kind: pseudo`. A lumped or phenomenological construct has no atom-resolved composition, so one such participant suspends the law for the whole reaction. A declared electron does **not** exempt it — an electron contributes zero atoms and the reaction still has to balance.
@@ -114,7 +113,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_reaction_charge_conservation` — `backend/app/services/reaction_resolution.py:219`
+- `validate_reaction_charge_conservation` — `backend/app/services/reaction_resolution.py:222`
   *Sums `Species.charge`, which `canonical_species_identity` has already reconciled against the formal charge of each species' own SMILES.*
 
 **Escape hatch.** Declare the free electron as a participant — `{"molecule_kind": "electron", "smiles": "[e-]", "charge": -1, "multiplicity": 2}` — which is how associative and dissociative attachment, photoionization and photodetachment are deposited. It contributes -1 to the side it sits on and zero atoms, so elemental balance still has to be satisfied separately. A `pseudo` participant suspends the law entirely, as it does for elemental balance. Conservation is not neutrality: any net charge is accepted as long as both sides carry the same one, so ion-molecule reactions are unaffected.
@@ -131,12 +130,10 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_transition_state_composition` — `backend/app/services/reaction_resolution.py:361`
+- `validate_transition_state_composition` — `backend/app/services/reaction_resolution.py:364`
   *Composition is read from the saddle-point geometry when there is one and from `unmapped_smiles` otherwise. The PDep path passes no SMILES, so it compares geometry only.*
 
-**Escape hatch.** Declare the extra species as participants of the reaction. A `pseudo` reactant exempts the reaction. Absence does not block: no geometry and no parseable SMILES means nothing is compared, and an unparseable transition-state SMILES is treated as silence rather than as a contradiction, because a TS SMILES is a lossy label for a structure that is by construction not a stable molecule.
-
-**Recorded divergence.** The docstring says pseudo-species exemption 'matches `validate_reaction_elemental_balance`'. It does not, quite: this function queries only `ReactionRole.reactant` and exempts only on a *reactant-side* pseudo participant, while `_load_participant_species` exempts the two conservation checks on a pseudo participant on **either** side. A reaction whose only pseudo species is a product is therefore exempt from elemental balance but still held to transition-state composition, and it is compared against a reactant side that carries no balance guarantee. Reported, not changed — this register alters no check behaviour.
+**Escape hatch.** Declare the extra species as participants of the reaction. A `pseudo` *reactant* exempts the reaction; a pseudo product does not, and that is not an oversight — see below. Absence does not block: no geometry and no parseable SMILES means nothing is compared, and an unparseable transition-state SMILES is treated as silence rather than as a contradiction, because a TS SMILES is a lossy label for a structure that is by construction not a stable molecule. The pseudo-species exemption here is narrower than `_load_participant_species`'s, and deliberately so. That helper exempts elemental balance and charge conservation on a pseudo participant on **either** side, because both compare one side against the other and a lumped construct makes the side it sits on unknowable. This check compares the saddle point against the **reactant side only**, so only a *reactant* being pseudo can make it meaningless; a pseudo *product* leaves the reactant side fully atom-resolved and is not exempted. Aligning the two would discard a guarantee that is still well-defined, and would discard it exactly where it is worth most: a reaction with a pseudo product has already lost elemental balance and charge conservation, so this is the only atom-level statement left about its saddle point.
 
 ### 4. A saddle point carries the same total charge as the reactants it sits between.
 
@@ -150,16 +147,33 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_transition_state_composition` — `backend/app/services/reaction_resolution.py:361`
+- `validate_transition_state_composition` — `backend/app/services/reaction_resolution.py:364`
   *Second, independent leg of the same function. Skipped entirely when the caller passes no `transition_state_charge`.*
 
-**Escape hatch.** Omit the transition state's charge, which skips the comparison. Multiplicity is deliberately **not** checked here at all: spin is not conserved the way charge and atoms are — two doublets may react over a singlet or a triplet surface, and spin-forbidden reactions are real chemistry — so a multiplicity rule would fire on correct novel results.
+**Escape hatch.** Omit the transition state's charge, which skips the comparison. Multiplicity is deliberately **not** checked here at all: spin is not conserved the way charge and atoms are — two doublets may react over a singlet or a triplet surface, and spin-forbidden reactions are real chemistry — so a multiplicity rule would fire on correct novel results. The pseudo-species exemption here is narrower than `_load_participant_species`'s, and deliberately so. That helper exempts elemental balance and charge conservation on a pseudo participant on **either** side, because both compare one side against the other and a lumped construct makes the side it sits on unknowable. This check compares the saddle point against the **reactant side only**, so only a *reactant* being pseudo can make it meaningless; a pseudo *product* leaves the reactant side fully atom-resolved and is not exempted. Aligning the two would discard a guarantee that is still well-defined, and would discard it exactly where it is worth most: a reaction with a pseudo product has already lost elemental balance and charge conservation, so this is the only atom-level statement left about its saddle point.
 
-**Recorded divergence.** The docstring says pseudo-species exemption 'matches `validate_reaction_elemental_balance`'. It does not, quite: this function queries only `ReactionRole.reactant` and exempts only on a *reactant-side* pseudo participant, while `_load_participant_species` exempts the two conservation checks on a pseudo participant on **either** side. A reaction whose only pseudo species is a product is therefore exempt from elemental balance but still held to transition-state composition, and it is compared against a reactant side that carries no balance guarantee. Reported, not changed — this register alters no check behaviour.
+### 5. The saddle-point atoms an IRC mapping assigns to a declared participant are that participant's own atoms, element for element.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `transition_state_irc_mapping_element_mismatch` |
+| **Governing ADR** | 0008, 0011 |
+
+**Why this tier.** Definitional. 'These saddle-point atoms become C2H4' while those atoms are C2O2H2 is a contradiction no correct calculation can produce — the same class of claim `CHECK_TRANSITION_STATE_COMPOSITION` already blocks, one level finer, per participant rather than per side. It is also what the register's own consistency requires: the identical assertion expressed as a `reaction_atom_map` is refused by `CHECK_ATOM_MAP_ELEMENT_CONSERVED`, at the wire boundary and again by a composite foreign key into `geometry_atom`. Two surfaces enforcing different standards on the same claim is not a defensible position for either — and the divergence was not theoretical: a well-formed partition handing ethene two oxygens and HO2 three hydrogens was accepted, under a fixture comment that correctly said 'C2H4 (six atoms)'.
+
+**Enforced at.**
+
+- `validate_ts_evidence_participant_composition` — `backend/app/services/reaction_resolution.py:599`
+  *Called from `persist_transition_state_validation_evidence`, the single seam every deposit path that can carry a transition state already routes through, so the PDep bundle, the computed-reaction bundle and the standalone transition-state upload cannot enforce different standards. It is a service-layer check rather than a wire-boundary one because a participant's composition comes from its SMILES, and `tckdb_schemas` is chemistry-free — RDKit is not available where `validate_ts_evidence_set` runs. That function keeps the *shape* half of the rule: keys name every declared participant, indices partition the TS atoms exactly once.*
+
+**Escape hatch.** Omit the participant mappings. They are optional on every path — evidence without them still deposits and still reads back as `irc: present` — so a depositor who cannot resolve the partition per atom is never forced to guess at one. Declaring a participant `molecule_kind: pseudo` skips that participant alone rather than the whole record, because the others' compositions are still well-defined. Isotopologues are safe by construction: both sides are compared through `resolve_element_symbol`, so a geometry written `D` counts as the hydrogen its SMILES spells `[2H]`.
+
+**Recorded divergence.** A zero-atom participant cannot be expressed. `TransitionStateValidationEvidenceIn` refuses an empty atom list, and `validate_ts_evidence_set` requires every declared participant to be named, so a reaction releasing a free electron — `MoleculeKind.electron`, newly reachable — has no way to write `product:2: []`. Before this check such a reaction could deposit a *wrong* mapping that stole a real atom for the electron; it now correctly cannot, but it also cannot deposit a right one, and must omit the mappings instead. Widening the wire schema to accept an empty list for a participant with no atoms is the fix, and is a wire-package change with its own version bump.
 
 ## A structure against its own label
 
-### 5. A conformer geometry deposited under a species entry is made of the atoms that entry's own SMILES declares.
+### 6. A conformer geometry deposited under a species entry is made of the atoms that entry's own SMILES declares.
 
 | Field | Value |
 | --- | --- |
@@ -176,7 +190,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Declare `molecule_kind: pseudo`, which has no atom-resolved composition to agree with. A free electron is deliberately **not** exempt — its composition is not unknown but empty, so any geometry deposited under one is refused, which stops `electron` becoming a quieter way to smuggle a structure past the check. Absence does not block: no geometry, or a SMILES RDKit will not parse, is incompleteness.
 
-### 6. The multiset of isotopic substitutions declared in a species entry's SMILES equals the multiset carried by the geometry deposited under it.
+### 7. The multiset of isotopic substitutions declared in a species entry's SMILES equals the multiset carried by the geometry deposited under it.
 
 | Field | Value |
 | --- | --- |
@@ -197,7 +211,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 7. A species entry's declared charge equals the summed formal charge of its own SMILES.
+### 8. A species entry's declared charge equals the summed formal charge of its own SMILES.
 
 | Field | Value |
 | --- | --- |
@@ -216,7 +230,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 8. The charge and spin multiplicity a depositor declares match the ones the electronic-structure log says the calculation was actually run at.
+### 9. The charge and spin multiplicity a depositor declares match the ones the electronic-structure log says the calculation was actually run at.
 
 | Field | Value |
 | --- | --- |
@@ -233,7 +247,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Absence is not contradiction: if the producing program is not one of the wired parsers, the artifact is missing, the log is truncated, or the declarations inside a single log disagree with each other, the value is left unknown and **no** warning is emitted. Only a value genuinely read from the log may contradict a declaration — emitting a mismatch because parsing failed would fabricate a contradiction out of ignorance.
 
-### 9. An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
+### 10. An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
 
 | Field | Value |
 | --- | --- |
@@ -256,7 +270,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Stationary points
 
-### 10. A transition state has at least one imaginary vibrational mode, exactly one of them is designated the reaction coordinate, and no undeclared mode is stiff enough to make that designation meaningless.
+### 11. A transition state has at least one imaginary vibrational mode, exactly one of them is designated the reaction coordinate, and no undeclared mode is stiff enough to make that designation meaningless.
 
 | Field | Value |
 | --- | --- |
@@ -274,7 +288,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Three, and they are the point of the rule. Deposit no frequency evidence: `n_imag=None` produces no findings at all, because absence is never contradiction. Or deposit the extra imaginary modes honestly — designate the reaction coordinate and give each other mode a disposition (`torsion`, `rigid_body_residue`, `intermolecular`, `ring_pucker`, `symmetry_breaking`, or an explicit `unassigned`) — and a genuine higher-order saddle is accepted with a warning and a structural flag. Or, if the extra mode really is the barrier, designate *it*. What has no door is refusing to say which mode is the reaction coordinate.
 
-### 11. A species entry declared a minimum has no imaginary vibrational modes.
+### 12. A species entry declared a minimum has no imaginary vibrational modes.
 
 | Field | Value |
 | --- | --- |
@@ -291,7 +305,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Declare `species_entry_kind='vdw_complex'`, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real.
 
-### 12. A van der Waals complex is formally a minimum, so an imaginary mode on one is recorded and flagged rather than refused — unless the mode is too stiff to be an intermolecular one, which suggests a genuine reaction coordinate.
+### 13. A van der Waals complex is formally a minimum, so an imaginary mode on one is recorded and flagged rather than refused — unless the mode is too stiff to be an intermolecular one, which suggests a genuine reaction coordinate.
 
 | Field | Value |
 | --- | --- |
@@ -308,7 +322,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** This *is* the escape hatch for the blocking minimum rule. Its own cost is that a genuinely mislabelled saddle point deposited as a van der Waals complex is accepted with a warning.
 
-### 13. A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
+### 14. A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
 
 | Field | Value |
 | --- | --- |
@@ -342,7 +356,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** ADR 0012 recommends replacing the threshold with a determination — projecting each imaginary eigenvector onto the six rigid-body vectors (more than about 90 percent overlap means projection residue) and onto dihedral-rotation vectors (more than about 70 percent means a torsion) — and says those should be implemented *before* tau is tuned, because a determination beats a threshold wherever one is available. They are not implemented, and cannot be: `backend/app/db/models/transition_state.py` records that normal-mode displacement evidence is deliberately absent from TCKDB, 'a producer-side heuristic, not a database record'. So the disposition on each extra mode is *declared by the depositor* and TCKDB cannot check it. Recorded, not resolved: reversing that decision is a schema change and its own ADR.
 
-### 14. A transition state's reaction coordinate should exceed roughly 100 cm-1 in magnitude.
+### 15. A transition state's reaction coordinate should exceed roughly 100 cm-1 in magnitude.
 
 | Field | Value |
 | --- | --- |
@@ -376,7 +390,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None is needed — the check never refuses. A referee should read the threshold as a tunable reporting line, not a claim about physics.
 
-### 15. A deposited saddle point should carry passing intrinsic-reaction-coordinate evidence that it connects the declared reactants and products.
+### 16. A deposited saddle point should carry passing intrinsic-reaction-coordinate evidence that it connects the declared reactants and products.
 
 | Field | Value |
 | --- | --- |
@@ -388,14 +402,14 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py:33`
+- `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py:36`
   *Every path that can carry a transition state routes through this seam — the PDep bundle, the computed-reaction bundle and the standalone transition-state upload — so all three write identical rows and report an identical gap. Before the seam existed only the PDep bundle could deposit the evidence, so a TS uploaded any other way always read back as `irc: absent` even when the depositor had run one.*
 
 **Escape hatch.** None needed — the warning is the accommodation. Note the warning fires on absence of a *passing* record, so evidence that was run and failed is stored and still warns.
 
 ## Atom mapping across a reaction
 
-### 16. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
+### 17. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
 
 | Field | Value |
 | --- | --- |
@@ -416,7 +430,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 17. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
+### 18. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
 
 | Field | Value |
 | --- | --- |
@@ -439,7 +453,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 18. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
+### 19. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
 
 | Field | Value |
 | --- | --- |
@@ -464,7 +478,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 19. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
+### 20. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
 
 | Field | Value |
 | --- | --- |
@@ -483,7 +497,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 20. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
+### 21. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
 
 | Field | Value |
 | --- | --- |
@@ -500,7 +514,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None is needed — the warning *is* the accommodation. TCKDB deliberately will not infer a map: several chemically distinct maps are usually consistent with the same reactants and products, so choosing one by algorithm would manufacture provenance.
 
-### 21. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
+### 22. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
 
 | Field | Value |
 | --- | --- |
@@ -517,7 +531,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None.
 
-### 22. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
+### 23. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
 
 | Field | Value |
 | --- | --- |
@@ -540,7 +554,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Rate coefficients
 
-### 23. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
+### 24. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
 
 | Field | Value |
 | --- | --- |
@@ -561,7 +575,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Statistical mechanics
 
-### 24. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
+### 25. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
 
 | Field | Value |
 | --- | --- |
@@ -582,7 +596,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Pressure-dependent networks
 
-### 25. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+### 26. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 | Field | Value |
 | --- | --- |
@@ -603,7 +617,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** Existence, not coverage — and the trigger must not be read as the whole contract. The database guarantees a computed solve carries nonzero evidence of each applicable class; the three coverage rules (one energy per state, one energy-transfer model per (well, collider) pair or a network-wide declaration, one barrier per saddle-point path) remain properties of the single wired upload path. A computed solve with four energies out of five passes the database and fails the validator. ADR 0010's amendment states this deliberately: a computed solve with *zero* energies is a contradiction and may block, while an incomplete one is a true record to be graded by the trust and reproducibility layers. Separately, `kind` cannot surface in CHEMKIN export, which has no provenance field; a tripwire test guards the moment network kinetics first reach mechanism output.
 
-### 26. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
+### 27. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
 
 | Field | Value |
 | --- | --- |
@@ -622,7 +636,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Reproducibility
 
-### 27. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
+### 28. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
 
 | Field | Value |
 | --- | --- |

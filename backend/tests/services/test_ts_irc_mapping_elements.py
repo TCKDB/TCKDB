@@ -23,6 +23,9 @@ or a deposit that simply declined to map its atoms would be the wrong rule.
 from __future__ import annotations
 
 import pytest
+from tckdb_schemas.fragments.ts_validation_evidence import (
+    TransitionStateValidationEvidenceIn,
+)
 
 from app.db.models.common import MoleculeKind
 from app.schemas.fragments.geometry import GeometryPayload
@@ -30,10 +33,6 @@ from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.reaction_resolution import (
     validate_ts_evidence_participant_composition,
 )
-from tckdb_schemas.fragments.ts_validation_evidence import (
-    TransitionStateValidationEvidenceIn,
-)
-
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_reaction_entry,
