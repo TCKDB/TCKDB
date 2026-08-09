@@ -23,6 +23,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import (
+    ArtifactIntegrityEvent,
     Calculation,
     CalculationArtifact,
     CalculationFreqResult,
@@ -35,6 +36,8 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import (
     ArrheniusAUnits,
+    ArtifactIntegrityDetectionContext,
+    ArtifactIntegrityFinding,
     ArtifactKind,
     CalculationGeometryRole,
     CalculationQuality,
@@ -919,6 +922,105 @@ class TestGeometryValidation:
         result = evaluate_computed_calculation(db_session, calc.id)
         assert result.label is EvidenceBadge.hard_failed
         assert result.hard_fail_reason is HardFailReason.geometry_validation_failed
+
+
+class TestArtifactIntegrityIsACustodyJudgement:
+    """ADR 0014: a recorded custody break is visible at read time, to everyone.
+
+    Before this the corruption was visible only to whoever happened to
+    request the download and got a 502; the record itself went on grading
+    normally, evidence-completeness and all.
+    """
+
+    def _break(self, db_session, artifact) -> None:
+        db_session.add(
+            ArtifactIntegrityEvent(
+                sha256=artifact.sha256,
+                artifact_id=artifact.id,
+                finding=ArtifactIntegrityFinding.digest_mismatch,
+                detected_during=ArtifactIntegrityDetectionContext.download,
+                observed_sha256="b" * 64,
+                expected_bytes=artifact.bytes,
+                observed_bytes=7,
+            )
+        )
+        db_session.flush()
+        db_session.expire_all()
+
+    def test_intact_artifact_is_not_a_hard_fail(self, db_session):
+        """Guard the guard: without this the assertion below is vacuous."""
+        calc = _make_minimal_opt_calc(db_session)
+        result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.hard_fail_reason is None
+        assert "artifacts_present" in result.passed_checks
+
+    def test_recorded_break_hard_fails_the_owning_calculation(self, db_session):
+        calc = _make_minimal_opt_calc(db_session)
+        artifact = calc.artifacts[0]
+        artifact.sha256 = "c1" + "0" * 62
+        db_session.flush()
+        self._break(db_session, artifact)
+
+        result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.label is EvidenceBadge.hard_failed
+        assert result.hard_fail_reason is HardFailReason.artifact_integrity_failed
+
+    def test_artifacts_present_still_passes_and_still_means_a_row_exists(
+        self, db_session
+    ):
+        """The rubric check keeps its meaning; it never learned to verify bytes.
+
+        ``artifacts_present`` is a claim about the depositor — this
+        calculation retained its evidence — and it is still true. Fusing
+        it with byte integrity would make a storage outage
+        indistinguishable from a contributor who never uploaded a log.
+        """
+        calc = _make_minimal_opt_calc(db_session)
+        artifact = calc.artifacts[0]
+        artifact.sha256 = "c2" + "0" * 62
+        db_session.flush()
+        self._break(db_session, artifact)
+
+        result = evaluate_computed_calculation(db_session, calc.id)
+        assert "artifacts_present" in result.passed_checks
+        assert "artifacts_present" not in result.missing_checks
+
+    def test_break_on_a_shared_object_reaches_a_calculation_that_never_saw_it(
+        self, db_session
+    ):
+        """Content-addressed corruption is per-object, not per-row.
+
+        Two unrelated calculations that deduplicated onto the same log
+        both rest on the same bytes. Recording the break against one row
+        must condemn both, or the twin goes on being served as sound.
+        """
+        shared = "c3" + "0" * 62
+        calc_a = _make_minimal_opt_calc(db_session)
+        calc_b = _make_minimal_opt_calc(db_session)
+        calc_a.artifacts[0].sha256 = shared
+        calc_b.artifacts[0].sha256 = shared
+        db_session.flush()
+        self._break(db_session, calc_a.artifacts[0])
+
+        for calc in (calc_a, calc_b):
+            result = evaluate_computed_calculation(db_session, calc.id)
+            assert result.hard_fail_reason is HardFailReason.artifact_integrity_failed
+
+    def test_custody_is_reported_ahead_of_the_geometry_verdict(self, db_session):
+        """When both apply, the reason names the one the operator can act on.
+
+        A geometry-validation verdict derived from a log whose stored
+        copy is corrupt is the more misleading of the two answers.
+        """
+        calc = _make_minimal_opt_calc(
+            db_session, geom_validation=ValidationStatus.fail
+        )
+        calc.artifacts[0].sha256 = "c4" + "0" * 62
+        db_session.flush()
+        self._break(db_session, calc.artifacts[0])
+
+        result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.hard_fail_reason is HardFailReason.artifact_integrity_failed
 
 
 # ---------------------------------------------------------------------------

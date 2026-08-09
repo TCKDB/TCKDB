@@ -6,10 +6,14 @@ import hashlib
 import logging
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.api.app import create_app
 from app.api.deps import get_db, get_write_db
+from app.db.models.calculation import ArtifactIntegrityEvent
 from app.db.models.common import (
+    ArtifactIntegrityDetectionContext,
+    ArtifactIntegrityFinding,
     RecordReviewStatus,
     SubmissionRecordType,
 )
@@ -17,12 +21,39 @@ from app.services.artifact_storage import (
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
 )
+from tests.services.test_artifact_integrity import _SessionProxy
 
 _ROUTE_LOGGER = "app.api.routes.scientific.artifacts"
 from tests.api.scientific.test_api_scientific_artifacts import (
     _make_species_owned_calc,
 )
 from tests.services.scientific_read._factories import attach_artifact, set_review
+
+
+def _events_for(db_session, sha256):
+    return list(
+        db_session.scalars(
+            select(ArtifactIntegrityEvent)
+            .where(ArtifactIntegrityEvent.sha256 == sha256)
+            .order_by(ArtifactIntegrityEvent.id)
+        ).all()
+    )
+
+
+def _record_into(monkeypatch, db_session):
+    """Point the recorder's independent transaction at the test session.
+
+    The recorder opens its own session on purpose — the durability of
+    that choice is asserted in ``tests/services/test_artifact_integrity``
+    against a real engine. Here the subject is what the *route* records,
+    so the transaction boundary is neutered and the per-test rollback
+    still owns cleanup.
+    """
+    monkeypatch.setattr(
+        "app.services.artifact_integrity.head_artifact_object",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr("app.api.deps.SessionLocal", _SessionProxy(db_session))
 
 
 def _downloadable_artifact(db_session, *, status: RecordReviewStatus):
@@ -101,11 +132,17 @@ def test_artifact_download_maps_integrity_failure_to_502(
     )
 
     def fake_load(*_args, **_kwargs):
-        raise ArtifactIntegrityError("corrupt")
+        raise ArtifactIntegrityError(
+            "corrupt",
+            finding=ArtifactIntegrityFinding.digest_mismatch,
+            sha256=artifact.sha256,
+            observed_sha256="1" * 64,
+        )
 
     monkeypatch.setattr(
         "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
     )
+    _record_into(monkeypatch, db_session)
     response = client.get(
         f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
     )
@@ -171,11 +208,17 @@ def test_artifact_download_logs_why_integrity_verification_failed(
     caplog.set_level(logging.ERROR, logger=_ROUTE_LOGGER)
 
     def fake_load(*_args, **_kwargs):
-        raise ArtifactIntegrityError("retrieved sha=deadbeef")
+        raise ArtifactIntegrityError(
+            "retrieved sha=deadbeef",
+            finding=ArtifactIntegrityFinding.digest_mismatch,
+            sha256=artifact.sha256,
+            observed_sha256="2" * 64,
+        )
 
     monkeypatch.setattr(
         "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
     )
+    _record_into(monkeypatch, db_session)
     response = client.get(
         f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
     )
@@ -185,6 +228,146 @@ def test_artifact_download_logs_why_integrity_verification_failed(
     assert records, "integrity 502 produced no explanatory log record"
     assert "retrieved sha=deadbeef" in records[0].getMessage()
     assert records[0].exc_info is not None
+
+
+def test_integrity_502_writes_a_durable_record_not_just_a_log(
+    client, db_session, monkeypatch
+) -> None:
+    """A log line nobody greps is not a record.
+
+    This reader gets a 502 either way. The row is what makes the break
+    visible to the *next* reader and to the trust evaluator, without
+    anyone having to go looking in the journal. ADR 0014.
+    """
+    artifact, content = _downloadable_artifact(
+        db_session, status=RecordReviewStatus.approved
+    )
+    observed = hashlib.sha256(b"swapped").hexdigest()
+
+    def fake_load(*_args, **_kwargs):
+        raise ArtifactIntegrityError(
+            f"Artifact digest verification failed for sha={artifact.sha256}: "
+            f"retrieved sha={observed}.",
+            finding=ArtifactIntegrityFinding.digest_mismatch,
+            sha256=artifact.sha256,
+            observed_sha256=observed,
+            expected_bytes=len(content),
+            observed_bytes=7,
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+    _record_into(monkeypatch, db_session)
+
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+
+    assert response.status_code == 502
+    events = _events_for(db_session, artifact.sha256)
+    assert len(events) == 1, "the 502 recorded nothing durable"
+    event = events[0]
+    assert event.finding is ArtifactIntegrityFinding.digest_mismatch
+    assert event.detected_during is ArtifactIntegrityDetectionContext.download
+    assert event.observed_sha256 == observed
+    assert event.expected_bytes == len(content)
+    assert event.artifact_id == artifact.id
+    # Who hit it — the question "has this ever happened, and to whom" is
+    # unanswerable without it.
+    assert event.created_by is not None
+
+
+def test_store_reporting_no_such_key_is_recorded_as_a_missing_object(
+    client, db_session, monkeypatch
+) -> None:
+    """A row referencing an object the store says is gone is a custody break."""
+    artifact, _content = _downloadable_artifact(
+        db_session, status=RecordReviewStatus.approved
+    )
+
+    def fake_load(*_args, **_kwargs):
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage read failed for sha={artifact.sha256}: "
+            "ClientError: NoSuchKey",
+            missing=True,
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+    _record_into(monkeypatch, db_session)
+
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+
+    assert response.status_code == 503
+    (event,) = _events_for(db_session, artifact.sha256)
+    assert event.finding is ArtifactIntegrityFinding.object_missing
+    assert event.observed_sha256 is None
+
+
+def test_unreachable_store_records_nothing(client, db_session, monkeypatch) -> None:
+    """An endpoint that never answered says nothing about the object.
+
+    Same 503 to the client as the case above, and the opposite fact for
+    custody: recording a break here would manufacture a hard fail out of
+    a network blip.
+    """
+    artifact, _content = _downloadable_artifact(
+        db_session, status=RecordReviewStatus.approved
+    )
+
+    def fake_load(*_args, **_kwargs):
+        raise ArtifactStorageUnavailable(
+            "Artifact storage read failed: EndpointConnectionError"
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+    _record_into(monkeypatch, db_session)
+
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+
+    assert response.status_code == 503
+    assert _events_for(db_session, artifact.sha256) == []
+
+
+def test_a_failing_recorder_does_not_turn_the_502_into_a_500(
+    client, db_session, monkeypatch
+) -> None:
+    """Recording is best effort; the reader's answer is not."""
+    artifact, _content = _downloadable_artifact(
+        db_session, status=RecordReviewStatus.approved
+    )
+
+    def fake_load(*_args, **_kwargs):
+        raise ArtifactIntegrityError(
+            "corrupt",
+            finding=ArtifactIntegrityFinding.digest_mismatch,
+            sha256=artifact.sha256,
+            observed_sha256="9" * 64,
+        )
+
+    def exploding_factory():
+        raise RuntimeError("database is on fire")
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+    monkeypatch.setattr(
+        "app.services.artifact_integrity.head_artifact_object", lambda *a, **k: None
+    )
+    monkeypatch.setattr("app.api.deps.SessionLocal", exploding_factory)
+
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+    assert response.status_code == 502
 
 
 def test_artifact_download_rejects_malformed_digest(client, db_session) -> None:

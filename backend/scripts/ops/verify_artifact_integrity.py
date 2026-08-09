@@ -40,7 +40,6 @@ gate on it.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import random
 import sys
 from pathlib import Path
