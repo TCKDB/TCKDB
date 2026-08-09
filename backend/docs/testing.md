@@ -286,6 +286,46 @@ psql -h 127.0.0.1 -U tckdb -d postgres -c "
   reachable — that's expected on a workstation without the dev
   container running.
 
+### Isolation contract: what a test may leave behind
+
+The database is created once per pytest process and shared by every test
+in it. **Nothing a test writes may outlive it**, because the next test
+cannot know what ran before it. Three fixtures deliver that, and a test
+should use one of them rather than opening its own connection:
+
+| Fixture | What you get | Use it when |
+|---|---|---|
+| `db_conn` | A `Connection` inside a transaction rolled back at teardown, with a SAVEPOINT already open so `Session(db_conn)` nests instead of joining | Anything that persists rows — this is the default, and what all of `tests/workflows/` uses |
+| `client` / `db_session` | The same, plus a `TestClient` whose `get_db`/`get_write_db` are bound to it | Anything going through a route |
+| `db_engine` | The raw session-scoped `Engine` | Only when a test genuinely needs **two concurrent transactions** — a race, an advisory lock, a `READ COMMITTED` visibility check |
+
+`Session(db_conn)` keeps working with the ordinary
+`with Session(...) as s, s.begin(): ...` idiom: because `db_conn` is inside a
+SAVEPOINT, SQLAlchemy's default `join_transaction_mode` resolves to
+`create_savepoint`, so the session's commit stays inside the per-test
+transaction and its rollback (including the implicit one when a test asserts
+that an upload raises) undoes only its own work.
+
+A test that takes `db_engine` **commits for real and must clean up after
+itself**, in a fixture `finally` so it also cleans up when the test fails.
+`tests/services/test_concurrent_deposit_isolation.py` and
+`tests/services/test_record_review_write_isolation.py` show the shape.
+
+The one thing a test cannot clean up is an append-only table.
+`record_review_event` and `scientific_record_supersession` carry a
+`BEFORE UPDATE OR DELETE` trigger (`tckdb_reject_mutation`, revision
+`c6f2a9d4e7b1`), and the scientific tables additionally refuse `TRUNCATE`, so
+the rows the record-review race tests commit cannot be removed by any
+test-level code. Deleting them would require the harness to disable a
+production integrity guard — which would leave that guarantee unenforced in
+the very suite meant to enforce it. **The harness answer is the per-run
+disposable database**: `_recreate_test_database` at session start and
+`_drop_test_database` at session end, plus the startup sweep above. Tests in
+that position must confine themselves to a reserved, non-colliding id band
+(as `test_record_review_write_isolation.py` does) so the residue can never be
+mistaken for another test's data, and no test may make an *absolute*
+unqualified count over those tables — before/after deltas only.
+
 ## Test policy
 
 - Full suite is a **gate**, not the edit loop. Don't run Tier 4 on

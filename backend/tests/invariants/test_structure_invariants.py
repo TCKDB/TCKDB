@@ -12,7 +12,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-
 from tckdb_schemas.fragments.identity import (
     ELECTRON_CHARGE,
     ELECTRON_MULTIPLICITY,
