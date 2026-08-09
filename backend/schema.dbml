@@ -35,6 +35,7 @@ enum ArtifactIntegrityFinding {
   digest_mismatch
   size_mismatch
   object_missing
+  verified
 }
 
 enum ArtifactKind {
@@ -858,9 +859,10 @@ Table artifact_integrity_event {
     `(finding = 'object_missing' AND observed_sha256 IS NULL) OR (finding <> 'object_missing' AND observed_sha256 IS NOT NULL)` [name: 'ck_artifact_integrity_event_observed_digest_present_iff_read']
     `observed_sha256 IS NULL OR observed_sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_artifact_integrity_event_observed_sha256_lower_hex']
     `sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_artifact_integrity_event_sha256_lower_hex']
+    `finding <> 'verified' OR observed_sha256 = sha256` [name: 'ck_artifact_integrity_event_verified_requires_matching_digest']
   }
 
-  Note: 'One observed break in TCKDB\'s custody of a stored artifact.'
+  Note: 'One observation about TCKDB\'s custody of a stored artifact.'
 }
 
 Table author {

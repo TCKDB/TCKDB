@@ -677,8 +677,10 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   *Applies the label. Any calculation with a recorded break on any of its artifacts hard-fails, ahead of the geometry-validation verdict, and the existing `source_calculation_hard_failed_for_required_role` propagates that to every product naming the calculation as a required source. Reads database rows only — the trust rubric's `artifacts_present` deliberately does not verify bytes, so that a storage outage can never be reported as a depositor who failed to upload a log.*
 - `ck_artifact_integrity_event_observed_digest_present_iff_read` (check on `artifact_integrity_event`)
   `(finding = 'object_missing' AND observed_sha256 IS NULL) OR (finding <> 'object_missing' AND observed_sha256 IS NOT NULL)`
+- `ck_artifact_integrity_event_verified_requires_matching_digest` (check on `artifact_integrity_event`)
+  `finding <> 'verified' OR observed_sha256 = sha256`
 
-**Escape hatch.** None, and deliberately so — there is no legitimate deposit this refuses, because it refuses nothing. The corrupt object is never deleted or repaired, so the evidence of the incident survives for an operator to act on; remediation is re-uploading the original bytes under the same digest, which restores the record without rewriting history, and the event row remains as the account of what happened.
+**Escape hatch.** Restore the object. There is no legitimate deposit this refuses — it refuses nothing — but a label that could never be cleared would be a trap, so the door is a later observation rather than an edit: the corrupt object is never deleted or overwritten by TCKDB, and re-uploading the original bytes under the same digest lets the verification pass record a `verified` observation that supersedes the break. A check constraint requires that row to carry a digest matching the key, so the hard fail is cleared by bytes that actually hash correctly and never by an operator asserting that they do. The break row stays as the account of what happened.
 
 ## Reproducibility
 

@@ -1174,13 +1174,21 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
 
 
 class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin):
-    """One observed break in TCKDB's custody of a stored artifact.
+    """One observation about TCKDB's custody of a stored artifact.
 
     Append-only. A row here says: *at this moment, the bytes behind this
-    content-addressed digest were not the bytes TCKDB claims to hold.*
-    That is not an HTTP incident and not a transient error — it is
-    corruption of stored evidence, or a swapped object, and TCKDB refuses
-    payloads for less. A log line is not a record; this table is.
+    content-addressed digest were / were not the bytes TCKDB claims to
+    hold.* A break is not an HTTP incident and not a transient error — it
+    is corruption of stored evidence, or a swapped object, and TCKDB
+    refuses payloads for less. A log line is not a record; this table is.
+
+    Nothing here is ever updated or deleted, including on repair. An
+    object restored to its correct bytes is a **new** observation
+    (``finding='verified'``) that supersedes the older break, and a check
+    constraint requires it to carry a digest matching the key — so a hard
+    fail can be cleared by evidence and never by assertion. The trust
+    evaluator reads the *latest* observation per digest, which is what
+    keeps the label a judgement rather than a trap.
 
     Keyed by digest, not by row
     ---------------------------
@@ -1307,6 +1315,14 @@ class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin):
             "(finding = 'object_missing' AND observed_sha256 IS NULL) "
             "OR (finding <> 'object_missing' AND observed_sha256 IS NOT NULL)",
             name="observed_digest_present_iff_read",
+        ),
+        # A clearing observation has to carry its own proof. Recording
+        # ``verified`` without the matching digest would let an operator
+        # clear a hard fail by assertion, which is precisely the move
+        # this table exists to make impossible.
+        CheckConstraint(
+            "finding <> 'verified' OR observed_sha256 = sha256",
+            name="verified_requires_matching_digest",
         ),
         Index(
             "ix_artifact_integrity_event_sha256_created_at",

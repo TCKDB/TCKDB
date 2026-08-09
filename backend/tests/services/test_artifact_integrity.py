@@ -25,6 +25,7 @@ from app.services.artifact_integrity import (
     digests_with_recorded_breaks,
     record_from_error,
     record_integrity_failure,
+    record_integrity_verified,
 )
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
@@ -486,6 +487,62 @@ def test_digests_with_recorded_breaks_answers_a_batch_in_one_query(
         {broken}
     )
     assert digests_with_recorded_breaks(db_session, []) == frozenset()
+
+
+def test_a_later_verification_supersedes_an_earlier_break(db_session) -> None:
+    """Latest observation wins, and the break is not erased to make it so.
+
+    "Any break ever" would leave a record condemned after its evidence
+    was restored — a trap rather than a judgement — and deleting the
+    break to clear it would destroy the account of what happened.
+    """
+    sha = hashlib.sha256(b"repairable").hexdigest()
+    record_integrity_failure(
+        sha256=sha,
+        finding=ArtifactIntegrityFinding.digest_mismatch,
+        detected_during=ArtifactIntegrityDetectionContext.download,
+        observed_sha256="a" * 64,
+        session_factory=_SessionProxy(db_session),
+        storage_client=_HeadClient(),
+    )
+    assert digests_with_recorded_breaks(db_session, [sha]) == frozenset({sha})
+
+    record_integrity_verified(
+        sha256=sha,
+        detected_during=ArtifactIntegrityDetectionContext.verification_sweep,
+        observed_bytes=10,
+        session_factory=_SessionProxy(db_session),
+        storage_client=_HeadClient(),
+    )
+
+    assert digests_with_recorded_breaks(db_session, [sha]) == frozenset()
+    events = _events(db_session, sha)
+    assert [e.finding for e in events] == [
+        ArtifactIntegrityFinding.digest_mismatch,
+        ArtifactIntegrityFinding.verified,
+    ]
+    # The clearing row carries its own proof.
+    assert events[-1].observed_sha256 == sha
+
+
+def test_a_break_after_a_verification_condemns_the_record_again(db_session) -> None:
+    """Custody can break twice. The log is a sequence, not a latch."""
+    sha = hashlib.sha256(b"twice").hexdigest()
+    for finding, observed in (
+        (ArtifactIntegrityFinding.digest_mismatch, "b" * 64),
+        (ArtifactIntegrityFinding.verified, sha),
+        (ArtifactIntegrityFinding.digest_mismatch, "c" * 64),
+    ):
+        record_integrity_failure(
+            sha256=sha,
+            finding=finding,
+            detected_during=ArtifactIntegrityDetectionContext.verification_sweep,
+            observed_sha256=observed,
+            session_factory=_SessionProxy(db_session),
+            storage_client=_HeadClient(),
+        )
+
+    assert digests_with_recorded_breaks(db_session, [sha]) == frozenset({sha})
 
 
 # ---------------------------------------------------------------------------

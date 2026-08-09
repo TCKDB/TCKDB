@@ -97,7 +97,15 @@ def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]
     # the grading a report about bytes we do not have. Reporting a
     # geometry-validation verdict derived from a log whose stored copy is
     # corrupt would be the more misleading of the two answers.
-    if any(artifact.integrity_events for artifact in calc.artifacts):
+    # The *latest* observation per artifact, not merely "any break ever".
+    # The events table is append-only, so a repaired object is recorded as
+    # a later ``verified`` observation rather than by deleting the break —
+    # and reading "any break" would leave a restored record condemned
+    # forever, which would make this label a trap rather than a judgement.
+    if any(
+        artifact.integrity_events and artifact.integrity_events[-1].finding.is_break
+        for artifact in calc.artifacts
+    ):
         return HardFailReason.artifact_integrity_failed
     gv = calc.geometry_validation
     if gv is not None and gv.validation_status is ValidationStatus.fail:

@@ -326,11 +326,14 @@ class ArtifactKind(str, Enum):
 
 
 class ArtifactIntegrityFinding(str, Enum):
-    """What went wrong when stored bytes were checked against their digest.
+    """What was observed when stored bytes were checked against their digest.
 
-    The three members are not severities; they are three different
-    observations about a content-addressed object, and an operator needs
-    to tell them apart before deciding what to do.
+    Not severities: four different observations about a content-addressed
+    object, and an operator needs to tell them apart before deciding what
+    to do. Three are breaks; the fourth is the observation that clears
+    them, which is what keeps the record append-only. Nothing is ever
+    updated or deleted — a repaired object is a *new* observation that
+    supersedes the older one, evidenced by the digest it now hashes to.
     """
 
     #: The object was read and its SHA-256 is not the key it is stored
@@ -347,6 +350,18 @@ class ArtifactIntegrityFinding(str, Enum):
     #: object that is not there — a lifecycle rule, a manual delete, or a
     #: write that never landed.
     object_missing = "object_missing"
+
+    #: The object was read and does hash to its key. Recorded **only**
+    #: for a digest that already carries a break, so this table stays a
+    #: log of incidents rather than a row per download. Without it a
+    #: record whose evidence was restored would stay condemned forever,
+    #: which would make the hard fail a trap rather than a judgement.
+    verified = "verified"
+
+    @property
+    def is_break(self) -> bool:
+        """Whether this observation is a break in custody."""
+        return self is not ArtifactIntegrityFinding.verified
 
 
 class ArtifactIntegrityDetectionContext(str, Enum):

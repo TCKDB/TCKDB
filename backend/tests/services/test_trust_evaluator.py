@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import (
@@ -1005,6 +1006,71 @@ class TestArtifactIntegrityIsACustodyJudgement:
         for calc in (calc_a, calc_b):
             result = evaluate_computed_calculation(db_session, calc.id)
             assert result.hard_fail_reason is HardFailReason.artifact_integrity_failed
+
+    def test_a_restored_object_clears_the_label_without_erasing_the_break(
+        self, db_session
+    ):
+        """A label that could never be cleared would be a trap, not a judgement.
+
+        The break stays in the log as the account of what happened; a
+        later ``verified`` observation supersedes it. Nothing is updated
+        or deleted, which is what keeps the record append-only.
+        """
+        calc = _make_minimal_opt_calc(db_session)
+        artifact = calc.artifacts[0]
+        artifact.sha256 = "c5" + "0" * 62
+        db_session.flush()
+        self._break(db_session, artifact)
+        assert (
+            evaluate_computed_calculation(db_session, calc.id).hard_fail_reason
+            is HardFailReason.artifact_integrity_failed
+        )
+
+        db_session.add(
+            ArtifactIntegrityEvent(
+                sha256=artifact.sha256,
+                artifact_id=artifact.id,
+                finding=ArtifactIntegrityFinding.verified,
+                detected_during=(
+                    ArtifactIntegrityDetectionContext.verification_sweep
+                ),
+                observed_sha256=artifact.sha256,
+                observed_bytes=artifact.bytes,
+            )
+        )
+        db_session.flush()
+        db_session.expire_all()
+
+        result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.hard_fail_reason is None
+        # The break is still on the record — cleared, not erased.
+        assert len(db_session.get(CalculationArtifact, artifact.id).integrity_events) == 2
+
+    def test_a_verified_row_must_carry_the_matching_digest(self, db_session):
+        """A hard fail is cleared by evidence, never by assertion.
+
+        Without this constraint an operator could clear a custody break
+        by writing a row that claims a repair that never happened.
+        """
+        calc = _make_minimal_opt_calc(db_session)
+        artifact = calc.artifacts[0]
+        artifact.sha256 = "c6" + "0" * 62
+        db_session.flush()
+
+        # Savepoint so the constraint violation does not tear down the
+        # per-test transaction the fixture owns.
+        with pytest.raises(IntegrityError), db_session.begin_nested():
+            db_session.add(
+                ArtifactIntegrityEvent(
+                    sha256=artifact.sha256,
+                    artifact_id=artifact.id,
+                    finding=ArtifactIntegrityFinding.verified,
+                    # Not the key it is stored under: an unevidenced claim.
+                    observed_sha256="d" * 64,
+                    detected_during=ArtifactIntegrityDetectionContext.download,
+                )
+            )
+            db_session.flush()
 
     def test_custody_is_reported_ahead_of_the_geometry_verdict(self, db_session):
         """When both apply, the reason names the one the operator can act on.

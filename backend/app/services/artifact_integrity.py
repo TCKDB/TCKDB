@@ -215,28 +215,79 @@ def record_from_error(
     )
 
 
+def record_integrity_verified(
+    *,
+    sha256: str,
+    detected_during: ArtifactIntegrityDetectionContext,
+    observed_bytes: int | None = None,
+    artifact_id: int | None = None,
+    artifact_recorded_at: datetime | None = None,
+    detected_by: int | None = None,
+    detail: str | None = None,
+    session_factory: Optional[Callable[[], Session]] = None,
+    storage_client=None,
+    bucket: str | None = None,
+) -> Optional[int]:
+    """Record that a previously-broken object now reads back correctly.
+
+    This is how a hard fail is cleared, and it is cleared by evidence:
+    the row carries ``observed_sha256 == sha256``, which a check
+    constraint enforces, so an operator cannot assert a repair that did
+    not happen. Nothing is updated or deleted — the break stays in the
+    log as the account of what occurred, and the later observation
+    supersedes it.
+
+    Callers should only invoke this for a digest that *has* a recorded
+    break (see :func:`digests_with_recorded_breaks`). Writing a row per
+    successful read would turn an incident log into a download log and
+    make the trust query proportional to traffic.
+    """
+    return record_integrity_failure(
+        sha256=sha256,
+        finding=ArtifactIntegrityFinding.verified,
+        detected_during=detected_during,
+        observed_sha256=sha256,
+        observed_bytes=observed_bytes,
+        artifact_id=artifact_id,
+        artifact_recorded_at=artifact_recorded_at,
+        detected_by=detected_by,
+        detail=detail,
+        session_factory=session_factory,
+        storage_client=storage_client,
+        bucket=bucket,
+    )
+
+
 def digests_with_recorded_breaks(
     session: Session, sha256s: list[str]
 ) -> frozenset[str]:
-    """Return the subset of ``sha256s`` that have a recorded custody break.
+    """Return the subset of ``sha256s`` whose *latest* observation is a break.
 
     One query for a batch of digests, so read paths that grade many
     calculations at once do not fan out. Kept here rather than in the
     trust package because it is a question about storage custody, not
     about the science.
+
+    "Latest", not "any": the table is append-only and a repaired object
+    is recorded as a later ``verified`` observation, so a digest with a
+    break followed by a verification is *not* currently broken.
     """
     if not sha256s:
         return frozenset()
-    rows = session.scalars(
-        select(ArtifactIntegrityEvent.sha256).where(
-            ArtifactIntegrityEvent.sha256.in_(sorted(set(sha256s)))
-        )
+    rows = session.execute(
+        select(ArtifactIntegrityEvent.sha256, ArtifactIntegrityEvent.finding)
+        .where(ArtifactIntegrityEvent.sha256.in_(sorted(set(sha256s))))
+        .order_by(ArtifactIntegrityEvent.sha256, ArtifactIntegrityEvent.id)
     ).all()
-    return frozenset(rows)
+    latest: dict[str, ArtifactIntegrityFinding] = {}
+    for sha, finding in rows:
+        latest[sha] = finding
+    return frozenset(sha for sha, finding in latest.items() if finding.is_break)
 
 
 __all__ = [
     "digests_with_recorded_breaks",
     "record_from_error",
     "record_integrity_failure",
+    "record_integrity_verified",
 ]

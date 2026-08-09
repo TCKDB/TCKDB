@@ -46,7 +46,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 _FINDING_ENUM = "artifact_integrity_finding"
-_FINDING_VALUES = ("digest_mismatch", "size_mismatch", "object_missing")
+_FINDING_VALUES = (
+    "digest_mismatch",
+    "size_mismatch",
+    "object_missing",
+    "verified",
+)
 
 _CONTEXT_ENUM = "artifact_integrity_detection_context"
 _CONTEXT_VALUES = (
@@ -121,6 +126,10 @@ def upgrade() -> None:
             "(finding = 'object_missing' AND observed_sha256 IS NULL) "
             "OR (finding <> 'object_missing' AND observed_sha256 IS NOT NULL)",
             name=op.f("ck_artifact_integrity_event_observed_digest_present_iff_read"),
+        ),
+        sa.CheckConstraint(
+            "finding <> 'verified' OR observed_sha256 = sha256",
+            name=op.f("ck_artifact_integrity_event_verified_requires_matching_digest"),
         ),
     )
     op.create_index(

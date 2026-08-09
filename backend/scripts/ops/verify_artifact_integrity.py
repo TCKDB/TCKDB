@@ -55,7 +55,11 @@ from app.db.models.common import (  # noqa: E402
     ArtifactIntegrityDetectionContext,
     ArtifactIntegrityFinding,
 )
-from app.services.artifact_integrity import record_integrity_failure  # noqa: E402
+from app.services.artifact_integrity import (  # noqa: E402
+    digests_with_recorded_breaks,
+    record_integrity_failure,
+    record_integrity_verified,
+)
 from app.services.artifact_storage import (  # noqa: E402
     S3_BUCKET,
     ArtifactIntegrityError,
@@ -136,15 +140,36 @@ def _verify_one(
     *,
     client,
     bucket: str,
+    previously_broken: frozenset[str] = frozenset(),
 ) -> str | None:
-    """Read one object and record any break. Returns the finding, or None."""
+    """Read one object and record what it shows. Returns the finding, or None.
+
+    A clean read is recorded **only** when the digest already carries a
+    break, because that read is what clears the hard fail. Writing a row
+    for every clean read would turn an incident log into a read log.
+    """
     try:
-        load_artifact_bytes(
+        content = load_artifact_bytes(
             artifact.sha256,
             expected_bytes=artifact.bytes,
             client=client,
             bucket=bucket,
         )
+        if artifact.sha256 in previously_broken:
+            record_integrity_verified(
+                sha256=artifact.sha256,
+                detected_during=(
+                    ArtifactIntegrityDetectionContext.verification_sweep
+                ),
+                observed_bytes=len(content),
+                artifact_id=artifact.id,
+                artifact_recorded_at=artifact.created_at,
+                detail="re-read cleanly; supersedes the recorded break",
+                session_factory=session_factory,
+                storage_client=client,
+                bucket=bucket,
+            )
+            return "repaired"
         return None
     except ArtifactIntegrityError as exc:
         record_integrity_failure(
@@ -252,6 +277,11 @@ def main() -> int:
             if args.orphans and not args.dry_run
             else []
         )
+        # Which of these already carry a break, so a clean read of one
+        # can be recorded as the observation that clears it.
+        previously_broken = digests_with_recorded_breaks(
+            session, [artifact.sha256 for artifact in artifacts]
+        )
 
     print(f"bucket={bucket} digests_in_scope={len(artifacts)}")
     if args.dry_run:
@@ -262,14 +292,24 @@ def main() -> int:
     findings: dict[str, int] = {}
     for artifact in artifacts:
         finding = _verify_one(
-            SessionLocal, artifact, client=client, bucket=bucket
+            SessionLocal,
+            artifact,
+            client=client,
+            bucket=bucket,
+            previously_broken=previously_broken,
         )
-        if finding is not None:
-            findings[finding] = findings.get(finding, 0) + 1
-            print(f"  BREAK {finding}: sha={artifact.sha256} file={artifact.filename}")
+        if finding is None:
+            continue
+        findings[finding] = findings.get(finding, 0) + 1
+        label = "REPAIRED" if finding == "repaired" else "BREAK"
+        print(f"  {label} {finding}: sha={artifact.sha256} file={artifact.filename}")
 
-    verified = len(artifacts) - sum(findings.values())
-    print(f"verified={verified} breaks={sum(findings.values())}")
+    breaks = {k: v for k, v in findings.items() if k not in ("repaired", "unavailable")}
+    clean = len(artifacts) - sum(findings.values())
+    print(
+        f"verified={clean + findings.get('repaired', 0)} "
+        f"breaks={sum(breaks.values())} repaired={findings.get('repaired', 0)}"
+    )
     for name, count in sorted(findings.items()):
         print(f"  {name}: {count}")
     if orphans:
@@ -277,8 +317,7 @@ def main() -> int:
         for digest in orphans[:50]:
             print(f"  orphan {digest}")
 
-    recorded = {k: v for k, v in findings.items() if k != "unavailable"}
-    return 1 if recorded else 0
+    return 1 if breaks else 0
 
 
 if __name__ == "__main__":

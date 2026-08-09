@@ -916,14 +916,24 @@ CHECK_STORED_ARTIFACT_BYTES_MATCH_THEIR_DIGEST = ScientificCheck(
                 "(finding <> 'object_missing' AND observed_sha256 IS NOT NULL)"
             ),
         ),
+        DatabaseConstraint(
+            table="artifact_integrity_event",
+            name="ck_artifact_integrity_event_verified_requires_matching_digest",
+            kind="check",
+            definition="finding <> 'verified' OR observed_sha256 = sha256",
+        ),
     ),
     escape_hatch=(
-        "None, and deliberately so — there is no legitimate deposit this "
-        "refuses, because it refuses nothing. The corrupt object is never "
-        "deleted or repaired, so the evidence of the incident survives for "
-        "an operator to act on; remediation is re-uploading the original "
-        "bytes under the same digest, which restores the record without "
-        "rewriting history, and the event row remains as the account of "
+        "Restore the object. There is no legitimate deposit this refuses — "
+        "it refuses nothing — but a label that could never be cleared would "
+        "be a trap, so the door is a later observation rather than an "
+        "edit: the corrupt object is never deleted or overwritten by "
+        "TCKDB, and re-uploading the original bytes under the same digest "
+        "lets the verification pass record a ``verified`` observation that "
+        "supersedes the break. A check constraint requires that row to "
+        "carry a digest matching the key, so the hard fail is cleared by "
+        "bytes that actually hash correctly and never by an operator "
+        "asserting that they do. The break row stays as the account of "
         "what happened."
     ),
 )
