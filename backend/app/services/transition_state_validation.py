@@ -25,6 +25,9 @@ from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.transition_state import TransitionStateValidationEvidence
 from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.services.reaction_atom_map import (
+    validate_atom_map_agrees_with_irc_evidence,
+)
 from app.services.reaction_resolution import (
     validate_ts_evidence_participant_composition,
 )
@@ -109,6 +112,24 @@ def persist_transition_state_validation_evidence(
         )
         session.add(row)
         rows.append(row)
+
+    # The same comparison the atom-map seam runs, from the other side. Whichever
+    # of the two surfaces a deposit writes second is the one that can see both,
+    # and today that is always the atom map — ``persist_computed_reaction_upload``
+    # is the only path with an ``atom_map`` field and writes it after this call,
+    # while every transition-state entry is created fresh by the deposit that
+    # writes it, so a map can never arrive for a saddle point deposited earlier.
+    # Both of those are incidental orderings a later edit could reverse, and the
+    # check reads both surfaces from the database precisely so it does not
+    # depend on either. Calling it here costs one indexed lookup that finds
+    # nothing on today's paths and removes the ordering from the contract.
+    validate_atom_map_agrees_with_irc_evidence(
+        session,
+        reaction_entry_id=reaction_entry_id,
+        transition_state_entry_id=transition_state_entry_id,
+        subject_label=subject_label,
+        field_path=field_path,
+    )
 
     if warnings is not None and not any(record.passed for record in evidence):
         warnings.append(
