@@ -354,12 +354,23 @@ psql -h 127.0.0.1 -U tckdb -d postgres -c "
   ```bash
   TCKDB_TEST_SEED=1 bash backend/scripts/test-full.sh   # a different order
   bash backend/scripts/test-full.sh -p no:randomly      # declaration order
-
-  # Declaration order, reversed. No plugin needed: hand pytest the node ids.
-  cd backend
-  pytest -q -p no:randomly --collect-only tests/ | grep '::' > /tmp/nodeids.txt
-  pytest -q -p no:randomly -n 8 $(tac /tmp/nodeids.txt)
   ```
+
+  For declaration order *reversed*, write a throwaway plugin outside the repo
+  and load it by name — deliberately not a supported flag, because the suite
+  should never have a way to pin an order:
+
+  ```bash
+  mkdir -p /tmp/po && printf 'def pytest_collection_modifyitems(items):\n    items.reverse()\n' \
+      > /tmp/po/revorder.py
+  cd backend
+  PYTHONPATH=/tmp/po pytest -q -n 8 -p no:randomly -p revorder tests/
+  ```
+
+  Do **not** try to do this by collecting node ids and reversing the list:
+  several parametrized ids in this suite embed newlines (ESS log fragments used
+  as parameters), so a line-based `--collect-only | tac` silently mangles them
+  into unrecognised arguments.
 - The pytest fixture creates a fresh `tckdb_test` database via
   `alembic upgrade head` once per session (see
   [`tests/conftest.py`](../tests/conftest.py)) and rolls each test
