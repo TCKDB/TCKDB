@@ -57,7 +57,7 @@ from app.db.models.common import (  # noqa: E402
 )
 from app.services.artifact_integrity import (  # noqa: E402
     digests_with_recorded_breaks,
-    record_integrity_failure,
+    record_integrity_observation,
     record_integrity_verified,
 )
 from app.services.artifact_storage import (  # noqa: E402
@@ -172,7 +172,7 @@ def _verify_one(
             return "repaired"
         return None
     except ArtifactIntegrityError as exc:
-        record_integrity_failure(
+        record_integrity_observation(
             sha256=exc.sha256,
             finding=exc.finding,
             detected_during=ArtifactIntegrityDetectionContext.verification_sweep,
@@ -193,7 +193,7 @@ def _verify_one(
             # object, so recording a custody break would be a lie.
             print(f"  ! storage unavailable for {artifact.sha256}: {exc}")
             return "unavailable"
-        record_integrity_failure(
+        record_integrity_observation(
             sha256=artifact.sha256,
             finding=ArtifactIntegrityFinding.object_missing,
             detected_during=ArtifactIntegrityDetectionContext.verification_sweep,

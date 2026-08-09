@@ -24,7 +24,7 @@ from app.db.models.common import (
 from app.services.artifact_integrity import (
     digests_with_recorded_breaks,
     record_from_error,
-    record_integrity_failure,
+    record_integrity_observation,
     record_integrity_verified,
 )
 from app.services.artifact_storage import (
@@ -204,7 +204,7 @@ def test_row_captures_the_stores_own_metadata_so_causes_can_be_told_apart(
         ContentLength=7,
     )
 
-    record_integrity_failure(
+    record_integrity_observation(
         sha256=sha,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=ArtifactIntegrityDetectionContext.verification_sweep,
@@ -241,7 +241,7 @@ def test_missing_object_records_no_observed_digest(db_session) -> None:
     artifact.sha256 = sha
     db_session.flush()
 
-    record_integrity_failure(
+    record_integrity_observation(
         sha256=sha,
         finding=ArtifactIntegrityFinding.object_missing,
         detected_during=ArtifactIntegrityDetectionContext.download,
@@ -274,7 +274,7 @@ def test_record_is_keyed_on_the_digest_so_it_finds_the_sharing_row(
     existing.bytes = len(content)
     db_session.flush()
 
-    record_integrity_failure(
+    record_integrity_observation(
         sha256=sha,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=(
@@ -312,7 +312,7 @@ def test_one_corrupt_object_condemns_every_row_that_shares_it(db_session) -> Non
         row.bytes = len(content)
     db_session.flush()
 
-    record_integrity_failure(
+    record_integrity_observation(
         sha256=sha,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=ArtifactIntegrityDetectionContext.download,
@@ -339,7 +339,7 @@ def test_recording_failure_never_masks_the_integrity_break(db_session) -> None:
             raise RuntimeError("database is on fire")
 
     assert (
-        record_integrity_failure(
+        record_integrity_observation(
             sha256="a" * 64,
             finding=ArtifactIntegrityFinding.digest_mismatch,
             detected_during=ArtifactIntegrityDetectionContext.download,
@@ -360,7 +360,7 @@ def test_head_probe_failure_still_produces_a_row(db_session) -> None:
         def head_object(self, **_kwargs):
             raise RuntimeError("connection refused")
 
-    record_integrity_failure(
+    record_integrity_observation(
         sha256="c" * 64,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=ArtifactIntegrityDetectionContext.download,
@@ -385,7 +385,7 @@ def test_record_survives_the_transaction_that_discovered_it(
     would be the one thing that is discarded.
     """
     sha = hashlib.sha256(b"durability").hexdigest()
-    event_id = record_integrity_failure(
+    event_id = record_integrity_observation(
         sha256=sha,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=ArtifactIntegrityDetectionContext.download,
@@ -474,7 +474,7 @@ def test_digests_with_recorded_breaks_answers_a_batch_in_one_query(
 ) -> None:
     clean = hashlib.sha256(b"clean").hexdigest()
     broken = hashlib.sha256(b"broken").hexdigest()
-    record_integrity_failure(
+    record_integrity_observation(
         sha256=broken,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=ArtifactIntegrityDetectionContext.verification_sweep,
@@ -497,7 +497,7 @@ def test_a_later_verification_supersedes_an_earlier_break(db_session) -> None:
     break to clear it would destroy the account of what happened.
     """
     sha = hashlib.sha256(b"repairable").hexdigest()
-    record_integrity_failure(
+    record_integrity_observation(
         sha256=sha,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=ArtifactIntegrityDetectionContext.download,
@@ -533,7 +533,7 @@ def test_a_break_after_a_verification_condemns_the_record_again(db_session) -> N
         (ArtifactIntegrityFinding.verified, sha),
         (ArtifactIntegrityFinding.digest_mismatch, "c" * 64),
     ):
-        record_integrity_failure(
+        record_integrity_observation(
             sha256=sha,
             finding=finding,
             detected_during=ArtifactIntegrityDetectionContext.verification_sweep,

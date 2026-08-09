@@ -76,7 +76,7 @@ from app.services import (
 )
 from app.services import geometry_validation as geometry_validation_service
 from app.services import reaction_atom_map as reaction_atom_map_service
-from app.services.artifact_integrity import record_integrity_failure
+from app.services.artifact_integrity import record_integrity_observation
 from app.services.artifact_storage import load_artifact_bytes
 from app.services.provenance_warnings import (
     W_NETWORK_WIDE_ENERGY_TRANSFER,
@@ -881,7 +881,7 @@ CHECK_STORED_ARTIFACT_BYTES_MATCH_THEIR_DIGEST = ScientificCheck(
             ),
         ),
         PythonCheck(
-            record_integrity_failure,
+            record_integrity_observation,
             note=(
                 "Turns a detection into an append-only "
                 "``artifact_integrity_event`` row, in its own transaction so "

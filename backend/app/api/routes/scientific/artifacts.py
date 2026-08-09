@@ -33,7 +33,7 @@ from app.schemas.reads.scientific_artifact_search import (
 )
 from app.services.artifact_integrity import (
     record_from_error,
-    record_integrity_failure,
+    record_integrity_observation,
 )
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
@@ -256,7 +256,7 @@ def download_approved_artifact(
         # said the object is *not there*, for a digest a row still
         # references, has told us something durable.
         if getattr(exc, "missing", False):
-            record_integrity_failure(
+            record_integrity_observation(
                 sha256=sha256,
                 finding=ArtifactIntegrityFinding.object_missing,
                 detected_during=ArtifactIntegrityDetectionContext.download,

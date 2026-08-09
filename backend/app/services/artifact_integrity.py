@@ -1,4 +1,4 @@
-"""Durable recording of observed breaks in custody of stored artifacts.
+"""Durable recording of what TCKDB observes about custody of stored artifacts.
 
 TCKDB refuses a reaction whose atoms do not balance and a saddle point
 made of the wrong elements. It should not shrug when its own object
@@ -86,7 +86,7 @@ def _probe_object(sha256: str, *, client=None, bucket: str | None = None) -> dic
     }
 
 
-def record_integrity_failure(
+def record_integrity_observation(
     *,
     sha256: str,
     finding: ArtifactIntegrityFinding,
@@ -103,6 +103,11 @@ def record_integrity_failure(
     bucket: str | None = None,
 ) -> Optional[int]:
     """Write one ``artifact_integrity_event`` in its own transaction.
+
+    Records both breaks and the ``verified`` observation that clears
+    them; the table is an append-only log of observations, not of
+    failures, which is what lets a repaired object be recorded without
+    editing or deleting the break.
 
     Returns the event id, or ``None`` if recording itself failed — in
     which case the failure is logged and swallowed, because the caller's
@@ -156,8 +161,9 @@ def record_integrity_failure(
                 session.add(event)
                 session.flush()
                 event_id = event.id
-            logger.error(
-                "artifact integrity failure recorded: sha=%s finding=%s "
+            log = logger.error if finding.is_break else logger.warning
+            log(
+                "artifact integrity observation recorded: sha=%s finding=%s "
                 "context=%s observed_sha=%s event_id=%s",
                 sha256,
                 finding.value,
@@ -168,7 +174,7 @@ def record_integrity_failure(
             return event_id
     except Exception:  # pragma: no cover - must never mask the real failure
         logger.exception(
-            "FAILED to record artifact integrity failure durably "
+            "FAILED to record an artifact integrity observation durably "
             "(sha=%s finding=%s context=%s); the break is real and is now "
             "only in this log",
             sha256,
@@ -194,7 +200,7 @@ def record_from_error(
     the structured exception and, usually, the artifact row that led it
     there.
     """
-    return record_integrity_failure(
+    return record_integrity_observation(
         sha256=error.sha256,
         finding=error.finding,
         detected_during=detected_during,
@@ -242,7 +248,7 @@ def record_integrity_verified(
     successful read would turn an incident log into a download log and
     make the trust query proportional to traffic.
     """
-    return record_integrity_failure(
+    return record_integrity_observation(
         sha256=sha256,
         finding=ArtifactIntegrityFinding.verified,
         detected_during=detected_during,
@@ -288,6 +294,6 @@ def digests_with_recorded_breaks(
 __all__ = [
     "digests_with_recorded_breaks",
     "record_from_error",
-    "record_integrity_failure",
+    "record_integrity_observation",
     "record_integrity_verified",
 ]

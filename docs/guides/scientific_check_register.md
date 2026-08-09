@@ -671,7 +671,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 - `load_artifact_bytes` — `backend/app/services/artifact_storage.py:395`
   *Recomputes SHA-256 over every retrieval and compares it against the content-addressed key, in constant time. This is the detection; it is reached by the approved-byte download, the ESS-parameter backfill, archive streaming, and the operator verification pass, and by nothing else — an object none of those touch is never checked.*
-- `record_integrity_failure` — `backend/app/services/artifact_integrity.py:89`
+- `record_integrity_observation` — `backend/app/services/artifact_integrity.py:89`
   *Turns a detection into an append-only `artifact_integrity_event` row, in its own transaction so the record survives the request that discovered it. Carries expected-versus-observed digest and size plus the store's own `LastModified` / `ETag` / `ContentLength`, which is what lets an operator separate 'the object was modified after write' from 'we never stored what we said we did' from 'the store returned wrong bytes on this read'.*
 - `_detect_calculation_hard_fail` — `backend/app/services/trust/evaluator.py:85`
   *Applies the label. Any calculation with a recorded break on any of its artifacts hard-fails, ahead of the geometry-validation verdict, and the existing `source_calculation_hard_failed_for_required_role` propagates that to every product naming the calculation as a required source. Reads database rows only — the trust rubric's `artifacts_present` deliberately does not verify bytes, so that a storage outage can never be reported as a depositor who failed to upload a log.*
