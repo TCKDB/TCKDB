@@ -513,6 +513,8 @@ def persist_network_pdep_upload(
             ],
             subject_label=ts_in.key,
             field_path=f"transition_states[{ts_in.key}].validation_evidence",
+            reaction_entry_id=reaction_entry.id,
+            transition_state_geometry_id=ts_geometry.id,
             created_by=created_by,
             warnings=warning_sink,
         )

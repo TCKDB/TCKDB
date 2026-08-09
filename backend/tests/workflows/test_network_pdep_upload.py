@@ -123,11 +123,14 @@ _CONVENTIONS = {
 # partition has to follow the *atoms*, not just their count. The micro
 # reaction is ethylperoxy -> ethene + HO2, so ``product:1`` (C2H4) takes both
 # carbons and four hydrogens, and ``product:2`` (HO2) takes both oxygens and
-# the fifth hydrogen. Handing ethene the oxygens would still cover nine atoms
-# exactly once and still pass, because
-# ``transition_state_validation_evidence`` bounds-checks the partition and
-# never element-checks it — so the indices below are only as trustworthy as
-# this comment, and both are stated against the geometry above.
+# the fifth hydrogen.
+#
+# Handing ethene the oxygens instead would still cover nine atoms exactly once,
+# and for a while that was enough to pass: the partition was bounds-checked and
+# never element-checked, so the indices below were only as trustworthy as this
+# comment. ``validate_ts_evidence_participant_composition`` now checks them
+# against the geometry, and
+# ``test_pdep_ts_evidence_refuses_ethene_made_of_oxygens`` holds that door shut.
 _ELIM_TS_ATOMS = list(range(1, 10))
 _ELIM_REACTANT_MAP = {"reactant:1": _ELIM_TS_ATOMS}
 _ELIM_PRODUCT_MAP = {
@@ -2324,6 +2327,60 @@ def test_non_finite_barrier_is_rejected() -> None:
     payload["solve"]["channel_barriers"][0]["forward_barrier_kj_mol"] = float("nan")
     with pytest.raises(ValueError, match="finite"):
         NetworkPDepUploadRequest(**payload)
+
+
+def test_pdep_ts_evidence_refuses_ethene_made_of_oxygens(db_engine) -> None:
+    """The partition that used to pass, refused end to end on this path.
+
+    ``product:1`` is declared ``C=C`` and handed atoms 1-6 of a saddle point
+    listed ``1 C, 2 C, 3 O, 4 O, 5-9 H`` — two carbons, two oxygens and two
+    hydrogens. Every one of the nine atoms is still claimed exactly once, so the
+    shape rule has nothing to object to; only the element rule sees it. This is
+    the exact mapping a fixture "correction" once wrote here, under a comment
+    that correctly said "C2H4 (six atoms)".
+    """
+    payload = _full_payload()
+    payload["transition_states"][0]["validation_evidence"][0].update(
+        {
+            "product_participant_mapping": {
+                "product:1": [1, 2, 3, 4, 5, 6],
+                "product:2": [7, 8, 9],
+            }
+        }
+    )
+
+    with _rolled_back_session(db_engine) as session:
+        request = NetworkPDepUploadRequest(**payload)
+        with pytest.raises(ValueError) as excinfo:
+            persist_network_pdep_upload(session, request, warnings=[])
+
+    message = str(excinfo.value)
+    assert "transition_state_irc_mapping_element_mismatch" in message
+    # Named per formula, so the depositor can correct it per atom.
+    assert "C2H2O2" in message and "C2H4" in message
+
+
+def test_pdep_ts_evidence_accepts_the_correct_partition(db_engine) -> None:
+    """The other half: the same saddle point, partitioned per atom, deposits.
+
+    Guards against closing the gap by refusing the whole family — the check has
+    to distinguish ethene from C2O2H2, not merely notice that a mapping exists.
+    """
+    payload = _full_payload()
+    assert payload["transition_states"][0]["validation_evidence"][0][
+        "product_participant_mapping"
+    ] == _ELIM_PRODUCT_MAP
+
+    with _rolled_back_session(db_engine) as session:
+        warnings: list[UploadWarning] = []
+        network = persist_network_pdep_upload(
+            session, NetworkPDepUploadRequest(**payload), warnings=warnings
+        )
+        session.flush()
+        assert network.id is not None
+        assert "transition_state_missing_irc_evidence" not in [
+            w.code for w in warnings
+        ]
 
 
 def test_transition_state_without_irc_evidence_succeeds_with_a_warning(

@@ -662,6 +662,33 @@ def test_standalone_ts_upload_persists_irc_evidence(db_conn) -> None:
         assert _build_validation_descriptor(session, ts_entry.id).irc == "present"
 
 
+def test_standalone_ts_evidence_element_checks_its_participant_mapping(
+    db_conn,
+) -> None:
+    """The element rule reaches this path too, through the shared persist seam.
+
+    The saddle point is H + H2, so no participant can be handed the *wrong
+    element* — but ``reactant:1`` is a single H atom and this mapping hands it
+    two, which is the same contradiction in the only form this reaction can
+    express it. What matters is that the rule is enforced here at all: it lives
+    on ``persist_transition_state_validation_evidence``, the one seam all three
+    deposit paths meet at, so the standalone upload, the computed-reaction
+    bundle and the PDep bundle cannot hold the same claim to different
+    standards.
+    """
+    request = _ts_request_with_evidence(
+        reactant_participant_mapping={"reactant:1": [1, 2], "reactant:2": [3]},
+    )
+    with Session(db_conn) as session, session.begin():
+        with pytest.raises(ValueError) as excinfo:
+            persist_transition_state_upload(session, request, warnings=[])
+        session.rollback()
+
+    message = str(excinfo.value)
+    assert "transition_state_irc_mapping_element_mismatch" in message
+    assert "reactant:1" in message
+
+
 def test_standalone_ts_upload_without_evidence_warns(db_conn) -> None:
     with Session(db_conn) as session, session.begin():
         warnings: list = []

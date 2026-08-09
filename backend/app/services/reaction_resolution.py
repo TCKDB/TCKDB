@@ -9,6 +9,9 @@ from rdkit import Chem
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.ts_validation_evidence import (
+    TransitionStateValidationEvidenceIn,
+)
 
 from app.chemistry.geometry import resolve_element_symbol
 from app.chemistry.species import element_counts_from_smiles, format_element_counts
@@ -397,9 +400,21 @@ def validate_transition_state_composition(
     surface, and spin-forbidden reactions are real chemistry. A multiplicity
     rule would fire on correct novel results, which ADR 0008 disqualifies.
 
-    Reactions carrying a pseudo-species participant are exempt, matching
-    ``validate_reaction_elemental_balance``: a lumped or phenomenological
-    construct has no atom-resolved composition to compare against.
+    The pseudo exemption is narrower here than in the balance checks, on purpose
+    ----------------------------------------------------------------------------
+    ``_load_participant_species`` exempts elemental balance and charge
+    conservation when a pseudo-species appears on **either** side, because those
+    two checks compare one side against the other and a lumped or
+    phenomenological construct makes the side it sits on unknowable. This check
+    compares the saddle point against the **reactant side only**, so only a
+    *reactant* being pseudo can make its comparison meaningless. A pseudo
+    *product* is therefore not exempted here, and that asymmetry is the correct
+    behaviour rather than a drift: a lumped product says nothing about whether
+    the reactant side is atom-resolved, so exempting on one would discard a
+    guarantee that is still perfectly well-defined. It also matters most exactly
+    there — a reaction with a pseudo product has already lost elemental balance
+    and charge conservation, and this check is then the only atom-level
+    statement left about the saddle point.
 
     :raises ValueError: If the saddle point's elements or charge contradict
         the reactants it is declared to sit between.
@@ -460,17 +475,22 @@ def validate_transition_state_composition(
             )
 
 
-_TS_COMPOSITION_PSEUDO_DIVERGENCE = (
-    "The docstring says pseudo-species exemption 'matches "
-    "``validate_reaction_elemental_balance``'. It does not, quite: this "
-    "function queries only ``ReactionRole.reactant`` and exempts only on a "
-    "*reactant-side* pseudo participant, while "
-    "``_load_participant_species`` exempts the two conservation checks on a "
-    "pseudo participant on **either** side. A reaction whose only pseudo "
-    "species is a product is therefore exempt from elemental balance but "
-    "still held to transition-state composition, and it is compared against "
-    "a reactant side that carries no balance guarantee. Reported, not "
-    "changed — this register alters no check behaviour."
+#: Why this check's pseudo exemption is deliberately narrower than the balance
+#: checks', rather than drifted from them. Recorded on both legs of the
+#: function, because both are scoped to the reactant side.
+_TS_COMPOSITION_PSEUDO_SCOPE = (
+    "The pseudo-species exemption here is narrower than "
+    "``_load_participant_species``'s, and deliberately so. That helper exempts "
+    "elemental balance and charge conservation on a pseudo participant on "
+    "**either** side, because both compare one side against the other and a "
+    "lumped construct makes the side it sits on unknowable. This check compares "
+    "the saddle point against the **reactant side only**, so only a *reactant* "
+    "being pseudo can make it meaningless; a pseudo *product* leaves the "
+    "reactant side fully atom-resolved and is not exempted. Aligning the two "
+    "would discard a guarantee that is still well-defined, and would discard it "
+    "exactly where it is worth most: a reaction with a pseudo product has "
+    "already lost elemental balance and charge conservation, so this is the "
+    "only atom-level statement left about its saddle point."
 )
 
 CHECK_TRANSITION_STATE_COMPOSITION = ScientificCheck(
@@ -501,13 +521,14 @@ CHECK_TRANSITION_STATE_COMPOSITION = ScientificCheck(
     ),
     escape_hatch=(
         "Declare the extra species as participants of the reaction. A "
-        "``pseudo`` reactant exempts the reaction. Absence does not block: no "
+        "``pseudo`` *reactant* exempts the reaction; a pseudo product does not, "
+        "and that is not an oversight — see below. Absence does not block: no "
         "geometry and no parseable SMILES means nothing is compared, and an "
         "unparseable transition-state SMILES is treated as silence rather "
         "than as a contradiction, because a TS SMILES is a lossy label for a "
-        "structure that is by construction not a stable molecule."
+        "structure that is by construction not a stable molecule. "
+        + _TS_COMPOSITION_PSEUDO_SCOPE
     ),
-    divergence=_TS_COMPOSITION_PSEUDO_DIVERGENCE,
 )
 
 CHECK_TRANSITION_STATE_CHARGE = ScientificCheck(
@@ -541,9 +562,255 @@ CHECK_TRANSITION_STATE_CHARGE = ScientificCheck(
         "conserved the way charge and atoms are — two doublets may react over "
         "a singlet or a triplet surface, and spin-forbidden reactions are real "
         "chemistry — so a multiplicity rule would fire on correct novel "
-        "results."
+        "results. " + _TS_COMPOSITION_PSEUDO_SCOPE
     ),
-    divergence=_TS_COMPOSITION_PSEUDO_DIVERGENCE,
+)
+
+
+#: Emitted when an IRC mapping hands a declared participant saddle-point atoms
+#: whose elements are not that participant's own.
+W_IRC_MAPPING_ELEMENT_MISMATCH = "transition_state_irc_mapping_element_mismatch"
+
+
+def _resolved_participant_element_counts(species: Species) -> Counter[str] | None:
+    """Element counts for one declared participant, or ``None`` where exempt.
+
+    ``None`` means "this participant has no atom-resolved composition to compare
+    against" and is returned only for a pseudo-species, matching the exemption
+    :func:`validate_transition_state_composition` applies to the reactant side.
+    A free electron is *not* exempt: it returns an empty count, because its
+    composition is not unknown but known to be nothing.
+
+    Counts arrive already resolved through
+    :func:`~app.chemistry.geometry.resolve_element_symbol`, because
+    :func:`~app.chemistry.species.element_counts_from_smiles` applies it on the
+    SMILES side for exactly this reason — so that both sides of a comparison are
+    counted by one rule rather than two that have to be remembered to agree. The
+    caller resolves the geometry side with the same function, which is what
+    keeps a deuterated saddle point written ``D`` from contradicting the
+    ``[2H]`` its own SMILES spells.
+    """
+
+    if species.kind == MoleculeKind.pseudo:
+        return None
+    return _element_counts_for_species(species)
+
+
+def validate_ts_evidence_participant_composition(
+    session: Session,
+    evidence: Sequence[TransitionStateValidationEvidenceIn],
+    *,
+    reaction_entry_id: int,
+    transition_state_geometry_id: int | None,
+    subject_label: str = "transition state",
+    field_path: str = "validation_evidence",
+) -> None:
+    """Refuse an IRC mapping that makes a participant out of the wrong atoms.
+
+    ``transition_state_validation_evidence.reactant_participant_mapping`` and
+    ``product_participant_mapping`` say which saddle-point atom indices become
+    which declared participant. Until this check existed those mappings were
+    only ever *bounds*-checked — ``validate_ts_evidence_set`` verifies that the
+    keys name every declared participant and that the indices partition the TS
+    atoms exactly once — and nothing looked at what the atoms actually **are**.
+
+    A well-formed partition of the wrong atoms therefore passed. The failure is
+    not hypothetical: a nine-atom ``C C O O H H H H H`` saddle point for
+    ``ethylperoxy -> ethene + HO2`` was deposited with ``product:1 = [1..6]``,
+    handing ethene two oxygens and HO2 three hydrogens, under a comment that
+    correctly read "C2H4 (six atoms)". The partition was valid; the chemistry
+    was not.
+
+    Why this blocks
+    ---------------
+    Definitional under ADR 0008, and the register's own consistency demands it.
+    "These saddle-point atoms become C2H4" while those atoms are C2O2H2 is a
+    contradiction no correct calculation can produce — the same class of claim
+    as :func:`validate_transition_state_composition`, one level finer. Crucially,
+    the *identical assertion expressed as a* ``reaction_atom_map`` **is already
+    refused**, by ``CHECK_ATOM_MAP_ELEMENT_CONSERVED``'s composite foreign key
+    into ``geometry_atom`` and by
+    :func:`~app.services.reaction_atom_map.persist_reaction_atom_map`. Two
+    surfaces enforcing different standards on the same claim is not a defensible
+    position for either, so this closes the gap on the IRC side.
+
+    This is a *composition* check, not a bijection: an atom map names which
+    participant atom becomes which saddle-point atom, while an IRC mapping only
+    names the set. So the comparison is between multisets of elements, which is
+    the strongest statement the mapping's own shape supports.
+
+    Only what is present is checked
+    ------------------------------
+    Records that are not ``passed``, and records carrying no mappings, are
+    skipped: a mapping that does not claim to be evidence is not contradicted by
+    anything, and evidence is optional on every path. A pseudo-species
+    participant is skipped individually rather than exempting the whole record,
+    because the other participants' compositions are still perfectly
+    well-defined. Absent geometry means nothing is compared.
+
+    :param evidence: Producer-declared evidence records, already shape-validated
+        by ``validate_ts_evidence_set``.
+    :param reaction_entry_id: The reaction whose participants the mapping names.
+    :param transition_state_geometry_id: Saddle-point geometry the mapping's
+        atom indices count into. ``None`` skips the check.
+    :raises ValueError: If a participant is assigned saddle-point atoms whose
+        elements are not that participant's own.
+    """
+
+    if transition_state_geometry_id is None:
+        return
+    if not any(
+        record.passed and record.reactant_participant_mapping is not None
+        for record in evidence
+    ):
+        return
+
+    ts_element_by_index = {
+        atom_index: resolve_element_symbol(element)
+        for atom_index, element in session.execute(
+            select(GeometryAtom.atom_index, GeometryAtom.element).where(
+                GeometryAtom.geometry_id == transition_state_geometry_id
+            )
+        ).all()
+    }
+    if not ts_element_by_index:
+        return
+
+    participants = session.execute(
+        select(
+            ReactionEntryStructureParticipant.role,
+            ReactionEntryStructureParticipant.participant_index,
+            Species,
+        )
+        .select_from(ReactionEntryStructureParticipant)
+        .join(
+            SpeciesEntry,
+            SpeciesEntry.id == ReactionEntryStructureParticipant.species_entry_id,
+        )
+        .join(Species, Species.id == SpeciesEntry.species_id)
+        .where(
+            ReactionEntryStructureParticipant.reaction_entry_id == reaction_entry_id
+        )
+    ).all()
+    species_by_slot = {
+        (role, participant_index): species
+        for role, participant_index, species in participants
+    }
+
+    for record in evidence:
+        if not record.passed or record.reactant_participant_mapping is None:
+            continue
+        assert record.product_participant_mapping is not None
+        for role, mapping in (
+            (ReactionRole.reactant, record.reactant_participant_mapping),
+            (ReactionRole.product, record.product_participant_mapping),
+        ):
+            for participant_key, atom_indices in sorted(mapping.items()):
+                _, _, index_text = participant_key.partition(":")
+                try:
+                    participant_index = int(index_text)
+                except ValueError:  # pragma: no cover - shape already validated
+                    continue
+                species = species_by_slot.get((role, participant_index))
+                if species is None:  # pragma: no cover - shape already validated
+                    continue
+
+                declared = _resolved_participant_element_counts(species)
+                if declared is None:
+                    continue
+
+                assigned: Counter[str] = Counter()
+                for atom_index in atom_indices:
+                    element = ts_element_by_index.get(atom_index)
+                    if element is None:  # pragma: no cover - bounds already checked
+                        return
+                    assigned[element] += 1
+
+                if assigned != declared:
+                    raise ValueError(
+                        f"Transition state '{subject_label}' {field_path} assigns "
+                        f"saddle-point atoms "
+                        f"{sorted(atom_indices)} to {participant_key}, which is "
+                        f"{format_element_counts(assigned)}, but {role.value} "
+                        f"{participant_index} is declared as '{species.smiles}', "
+                        f"which is {format_element_counts(declared)} "
+                        f"({W_IRC_MAPPING_ELEMENT_MISMATCH}). An IRC mapping says "
+                        "which saddle-point atoms become which declared "
+                        "participant, so a participant cannot be made of atoms it "
+                        "does not contain. The identical claim written as an "
+                        "atom_map is already refused; correct the mapping per "
+                        "atom, not per count."
+                    )
+
+
+CHECK_TS_IRC_MAPPING_ELEMENTS = ScientificCheck(
+    group="Conservation across a reaction",
+    sort_key=5,
+    code=W_IRC_MAPPING_ELEMENT_MISMATCH,
+    asserts=(
+        "The saddle-point atoms an IRC mapping assigns to a declared "
+        "participant are that participant's own atoms, element for element."
+    ),
+    tier=CheckTier.block,
+    tier_rationale=(
+        "Definitional. 'These saddle-point atoms become C2H4' while those atoms "
+        "are C2O2H2 is a contradiction no correct calculation can produce — the "
+        "same class of claim ``CHECK_TRANSITION_STATE_COMPOSITION`` already "
+        "blocks, one level finer, per participant rather than per side. It is "
+        "also what the register's own consistency requires: the identical "
+        "assertion expressed as a ``reaction_atom_map`` is refused by "
+        "``CHECK_ATOM_MAP_ELEMENT_CONSERVED``, at the wire boundary and again "
+        "by a composite foreign key into ``geometry_atom``. Two surfaces "
+        "enforcing different standards on the same claim is not a defensible "
+        "position for either — and the divergence was not theoretical: a "
+        "well-formed partition handing ethene two oxygens and HO2 three "
+        "hydrogens was accepted, under a fixture comment that correctly said "
+        "'C2H4 (six atoms)'."
+    ),
+    adr="0008, 0011",
+    enforced_by=(
+        PythonCheck(
+            validate_ts_evidence_participant_composition,
+            note=(
+                "Called from "
+                "``persist_transition_state_validation_evidence``, the single "
+                "seam every deposit path that can carry a transition state "
+                "already routes through, so the PDep bundle, the "
+                "computed-reaction bundle and the standalone transition-state "
+                "upload cannot enforce different standards. It is a service-"
+                "layer check rather than a wire-boundary one because a "
+                "participant's composition comes from its SMILES, and "
+                "``tckdb_schemas`` is chemistry-free — RDKit is not available "
+                "where ``validate_ts_evidence_set`` runs. That function keeps "
+                "the *shape* half of the rule: keys name every declared "
+                "participant, indices partition the TS atoms exactly once."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Omit the participant mappings. They are optional on every path — "
+        "evidence without them still deposits and still reads back as "
+        "``irc: present`` — so a depositor who cannot resolve the partition per "
+        "atom is never forced to guess at one. Declaring a participant "
+        "``molecule_kind: pseudo`` skips that participant alone rather than the "
+        "whole record, because the others' compositions are still well-defined. "
+        "Isotopologues are safe by construction: both sides are compared "
+        "through ``resolve_element_symbol``, so a geometry written ``D`` counts "
+        "as the hydrogen its SMILES spells ``[2H]``."
+    ),
+    divergence=(
+        "A zero-atom participant cannot be expressed. "
+        "``TransitionStateValidationEvidenceIn`` refuses an empty atom list, "
+        "and ``validate_ts_evidence_set`` requires every declared participant "
+        "to be named, so a reaction releasing a free electron — "
+        "``MoleculeKind.electron``, newly reachable — has no way to write "
+        "``product:2: []``. Before this check such a reaction could deposit a "
+        "*wrong* mapping that stole a real atom for the electron; it now "
+        "correctly cannot, but it also cannot deposit a right one, and must "
+        "omit the mappings instead. Widening the wire schema to accept an empty "
+        "list for a participant with no atoms is the fix, and is a wire-package "
+        "change with its own version bump."
+    ),
 )
 
 
