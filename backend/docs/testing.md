@@ -641,3 +641,10 @@ Things still worth knowing:
 - `--dist load` (the default) may split one file across workers. Nothing in the
   suite depends on file grouping; if something appears to, that is a leak to
   fix rather than a reason to reach for `--dist loadfile`.
+- **`tmp_path` usage multiplies by the worker count.** The CCCBDB importer tests
+  write snapshot trees into `tmp_path`, and pytest retains the last three
+  `basetemp` directories per worker. On a host where `/tmp` is a small tmpfs
+  shared with other workloads this exhausts it, and the whole band of tests
+  running at that moment fails with `OSError: [Errno 122] Disk quota exceeded` —
+  which looks nothing like a disk problem in the summary. Point `TMPDIR` (or
+  `--basetemp`) at real disk if `df -h /tmp` is tight.
