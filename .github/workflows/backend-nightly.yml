@@ -57,6 +57,9 @@ jobs:
       DB_NAME: tckdb_test_ci
       DB_CLIENT_ENCODING: utf8
       DB_TEST_NAME: tckdb_test_${{ github.run_id }}_${{ github.run_attempt }}
+      # See the note in backend-ci.yml: 4 vCPUs on a standard runner, and each
+      # worker creates and migrates its own database.
+      TCKDB_TEST_WORKERS: "4"
       AUTH_ALLOW_OPEN_REGISTRATION: "true"
       DEPLOYMENT_MODE: local
       EXPOSE_API_DOCS: "true"

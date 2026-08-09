@@ -77,6 +77,12 @@ jobs:
       # only for names beginning ``tckdb_test``. Keeping CI inside that
       # pattern preserves the guard rather than widening it.
       DB_TEST_NAME: tckdb_test_${{ matrix.gate }}_${{ github.run_id }}_${{ github.run_attempt }}
+      # The gate scripts default to 8 xdist workers, which suits a 20-core
+      # workstation. A GitHub standard runner has 4 vCPUs and one Postgres
+      # container, so 8 workers would pay 8 per-worker `alembic upgrade head`
+      # costs to contend over 4 cores. Each worker still gets its own database
+      # (DB_TEST_NAME above gains a `_gw<n>` suffix).
+      TCKDB_TEST_WORKERS: "4"
       AUTH_ALLOW_OPEN_REGISTRATION: "true"
       DEPLOYMENT_MODE: local
       EXPOSE_API_DOCS: "true"
@@ -126,6 +132,7 @@ jobs:
         if: matrix.gate == 'api'
         run: |
           git diff --check
+          bash -n backend/scripts/lib/pytest_run_args.sh
           bash -n backend/scripts/test-fast.sh
           bash -n backend/scripts/test-api.sh
           bash -n backend/scripts/test-scientific.sh
