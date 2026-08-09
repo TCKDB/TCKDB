@@ -12,15 +12,23 @@
 #   bash backend/scripts/test-profile.sh tests/api/scientific/
 #   bash backend/scripts/test-profile.sh tests/api/ -k upload
 #   conda run -n tckdb_env bash backend/scripts/test-profile.sh tests/services/
+#
+# Deliberately serial (workers default to 0): durations measured while eight
+# workers contend for one PostgreSQL server describe the contention, not the
+# tests. Pass ``TCKDB_TEST_WORKERS=8`` if you want to profile the parallel run
+# itself.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+# shellcheck source=lib/pytest_run_args.sh
+source "$(dirname "$0")/lib/pytest_run_args.sh"
+TCKDB_DEFAULT_WORKERS=0 tckdb_pytest_run_args "$@"
 
 # Use ``tests/`` as the default target when the caller passed no path.
 # Pytest treats ``--durations`` as a top-level option, so additional
 # flags can ride along on the same command line.
 if [[ $# -eq 0 ]]; then
-    exec pytest -v tests/ --durations=50
+    exec pytest -v "${TCKDB_PYTEST_ARGS[@]}" tests/ --durations=50
 fi
 
-exec pytest -v --durations=50 "$@"
+exec pytest -v "${TCKDB_PYTEST_ARGS[@]}" --durations=50 "$@"

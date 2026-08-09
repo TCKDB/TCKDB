@@ -3,9 +3,11 @@
 #
 # Runs every test under ``tests/api/`` — the cross-surface regression
 # gate for any backend change that touches a route, middleware, or
-# request/response shape. Slower than the scientific tier (10+ minutes
-# on a cold machine); pair with ``-x`` if you want fail-fast on a
+# request/response shape. Pair with ``-x`` if you want fail-fast on a
 # suspected regression.
+#
+# Runs with a pinned random-order seed and parallel workers; see
+# scripts/lib/pytest_run_args.sh for why, and how to override either.
 #
 # Examples:
 #   bash backend/scripts/test-api.sh
@@ -14,4 +16,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec pytest -q --tb=short tests/api/ "$@"
+# shellcheck source=lib/pytest_run_args.sh
+source "$(dirname "$0")/lib/pytest_run_args.sh"
+tckdb_pytest_run_args "$@"
+exec pytest -q --tb=short "${TCKDB_PYTEST_ARGS[@]}" tests/api/ "$@"

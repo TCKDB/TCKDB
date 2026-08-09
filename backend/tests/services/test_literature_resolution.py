@@ -72,14 +72,14 @@ def test_resolve_literature_submission_manual_fallback() -> None:
 
 
 def test_resolve_or_create_literature_reuses_existing_row(
-    db_engine, monkeypatch
+    db_conn, monkeypatch
 ) -> None:
     monkeypatch.setattr(
         "app.services.literature_resolution.fetch_doi_metadata",
         lambda doi: {"title": "Should Not Be Used"},
     )
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             existing = Literature(
                 kind="article",

@@ -134,10 +134,10 @@ def _make_calculation(
 # ---------------------------------------------------------------------------
 
 
-def test_gaussian_dispatch_via_software_release(db_engine) -> None:
+def test_gaussian_dispatch_via_software_release(db_conn) -> None:
     """When software_release.name='gaussian', the Gaussian parser runs."""
     text_data = GAUSSIAN_LOG.read_text()
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name="gaussian")
 
         rows = extract_and_store_calculation_parameters(
@@ -154,10 +154,10 @@ def test_gaussian_dispatch_via_software_release(db_engine) -> None:
         assert stored.parameters_extracted_at is not None
 
 
-def test_orca_dispatch_via_software_release(db_engine) -> None:
+def test_orca_dispatch_via_software_release(db_conn) -> None:
     """When software_release.name='orca', the ORCA parser runs."""
     text_data = ORCA_LOG.read_text()
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name="orca")
 
         rows = extract_and_store_calculation_parameters(
@@ -177,10 +177,10 @@ def test_detect_software_from_text_recognises_molpro() -> None:
     assert _detect_software_from_text(MOLPRO_MRCI_LOG.read_text()) == "molpro"
 
 
-def test_molpro_dispatch_via_text_sniff(db_engine) -> None:
+def test_molpro_dispatch_via_text_sniff(db_conn) -> None:
     """A Molpro ``.out`` is sniffed as molpro and routed to its parser."""
     text_data = MOLPRO_LOG.read_text()
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name=None)
 
         rows = extract_and_store_calculation_parameters(
@@ -200,10 +200,10 @@ def test_molpro_dispatch_via_text_sniff(db_engine) -> None:
         assert stored.parameters_parser_version == "molpro_v1"
 
 
-def test_text_sniff_fallback_when_no_software_release(db_engine) -> None:
+def test_text_sniff_fallback_when_no_software_release(db_conn) -> None:
     """No DB-linked software_release → sniff log markers."""
     text_data = GAUSSIAN_LOG.read_text()
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name=None)
 
         rows = extract_and_store_calculation_parameters(
@@ -213,9 +213,9 @@ def test_text_sniff_fallback_when_no_software_release(db_engine) -> None:
         assert all(r.parser_version == "gaussian_v1" for r in rows)
 
 
-def test_extraction_raises_when_software_unknown(db_engine) -> None:
+def test_extraction_raises_when_software_unknown(db_conn) -> None:
     """No software_release and unrecognised text → ParameterExtractionError."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name=None)
         with pytest.raises(ParameterExtractionError):
             extract_and_store_calculation_parameters(
@@ -223,7 +223,7 @@ def test_extraction_raises_when_software_unknown(db_engine) -> None:
             )
 
 
-def test_psi4_raises_instead_of_falling_through_to_orca(db_engine) -> None:
+def test_psi4_raises_instead_of_falling_through_to_orca(db_conn) -> None:
     """Psi4 is sniffed, but has no parameter parser — so nothing is emitted.
 
     ``_run_parser`` used to treat ORCA as its catch-all, so a newly
@@ -232,19 +232,19 @@ def test_psi4_raises_instead_of_falling_through_to_orca(db_engine) -> None:
     dispatch is now exhaustive and raises instead.
     """
     text_data = PSI4_LOG.read_text(errors="replace")
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name=None)
         with pytest.raises(ParameterExtractionError, match="psi4"):
             extract_and_store_calculation_parameters(session, calc, text_data)
 
 
-def test_psi4_extraction_failure_never_aborts_an_upload(db_engine) -> None:
+def test_psi4_extraction_failure_never_aborts_an_upload(db_conn) -> None:
     """The opportunistic wrapper downgrades the raise to a logged skip.
 
     An unsupported program must never fail an artifact upload.
     """
     text_data = PSI4_LOG.read_text(errors="replace")
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name=None)
         assert (
             _extract_safe(session, calc, text_data, source="psi4 fixture") is None
@@ -256,10 +256,10 @@ def test_psi4_extraction_failure_never_aborts_an_upload(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_seeded_vocab_keys_link_through_fk(db_engine) -> None:
+def test_seeded_vocab_keys_link_through_fk(db_conn) -> None:
     """At least one parser-emitted canonical_key links to seeded vocab."""
     text_data = GAUSSIAN_LOG.read_text()
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name="gaussian")
         extract_and_store_calculation_parameters(session, calc, text_data)
 
@@ -280,10 +280,10 @@ def test_seeded_vocab_keys_link_through_fk(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_reparse_replaces_only_parser_rows(db_engine) -> None:
+def test_reparse_replaces_only_parser_rows(db_conn) -> None:
     """Re-parsing wipes parser rows but preserves upload + curated rows."""
     text_data = GAUSSIAN_LOG.read_text()
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name="gaussian")
 
         # First parse.
@@ -343,7 +343,7 @@ def test_reparse_replaces_only_parser_rows(db_engine) -> None:
         )
 
 
-def test_empty_reparse_clears_stale_parser_rows(db_engine) -> None:
+def test_empty_reparse_clears_stale_parser_rows(db_conn) -> None:
     """A re-parse with no observations still wipes prior parser rows.
 
     This guards against drift: if an artifact is re-uploaded with a
@@ -351,7 +351,7 @@ def test_empty_reparse_clears_stale_parser_rows(db_engine) -> None:
     must not silently linger.
     """
     text_data = GAUSSIAN_LOG.read_text()
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         calc = _make_calculation(session, software_name="gaussian")
         extract_and_store_calculation_parameters(session, calc, text_data)
 
@@ -377,9 +377,9 @@ def test_empty_reparse_clears_stale_parser_rows(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_upload_payload_parameters_default_to_source_upload(db_engine) -> None:
+def test_upload_payload_parameters_default_to_source_upload(db_conn) -> None:
     """Existing upload flow continues to write source='upload' by default."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("DEFSRC")
         )

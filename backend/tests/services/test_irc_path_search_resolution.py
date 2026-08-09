@@ -89,10 +89,10 @@ def _xyz(comment: str, z: float) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_persist_irc_result_with_points_and_geometries(db_engine) -> None:
+def test_persist_irc_result_with_points_and_geometries(db_conn) -> None:
     """IRC result row plus forward/reverse/TS points with geometry links."""
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("IRCPATH")
         )
@@ -168,10 +168,10 @@ def test_persist_irc_result_with_points_and_geometries(db_engine) -> None:
         assert by_role[CalculationGeometryRole.irc_reverse].output_order == 4
 
 
-def test_persist_irc_result_rejected_for_non_irc_calc(db_engine) -> None:
+def test_persist_irc_result_rejected_for_non_irc_calc(db_conn) -> None:
     """The defensive type check in ``persist_calculation_result`` fires."""
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("IRCBAD")
         )
@@ -205,11 +205,11 @@ def test_persist_irc_result_rejected_for_non_irc_calc(db_engine) -> None:
 
 
 def test_persist_path_search_neb_result_with_points_and_geometries(
-    db_engine,
+    db_conn,
 ) -> None:
     """NEB-method path-search result plus per-point output-geometry links."""
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PSNEB")
         )
@@ -282,10 +282,10 @@ def test_persist_path_search_neb_result_with_points_and_geometries(
         assert {link.output_order for link in links} == {2, 3, 4}
 
 
-def test_persist_path_search_gsm_result_persists(db_engine) -> None:
+def test_persist_path_search_gsm_result_persists(db_conn) -> None:
     """A GSM-method path-search row persists with method='gsm'."""
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PSGSM")
         )
@@ -327,10 +327,10 @@ def test_persist_path_search_gsm_result_persists(db_engine) -> None:
         assert result.selected_ts_point_index == 1
 
 
-def test_path_search_result_dedupes_shared_point_geometry(db_engine) -> None:
+def test_path_search_result_dedupes_shared_point_geometry(db_conn) -> None:
     """Two points with the same geometry produce only one output-geometry row."""
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PSDEDUP")
         )

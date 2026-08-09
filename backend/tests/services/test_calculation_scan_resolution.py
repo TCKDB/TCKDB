@@ -48,8 +48,8 @@ def _create_scan_calculation(connection, *, inchi_key: str) -> int:
     ).scalar_one()
 
 
-def test_persist_calculation_scan_persists_nested_scan_rows(db_engine) -> None:
-    with Session(db_engine) as session:
+def test_persist_calculation_scan_persists_nested_scan_rows(db_conn) -> None:
+    with Session(db_conn) as session:
         with session.begin():
             calculation_id = _create_scan_calculation(
                 session.connection(),
@@ -153,8 +153,8 @@ def _scan_payload_with_point_geometries(*, geometries: list[str | None]) -> dict
     }
 
 
-def test_persist_calculation_scan_resolves_inline_point_geometry(db_engine) -> None:
-    with Session(db_engine) as session:
+def test_persist_calculation_scan_resolves_inline_point_geometry(db_conn) -> None:
+    with Session(db_conn) as session:
         with session.begin():
             calculation_id = _create_scan_calculation(
                 session.connection(),
@@ -182,9 +182,9 @@ def test_persist_calculation_scan_resolves_inline_point_geometry(db_engine) -> N
             assert len({p.geometry_id for p in points}) == 3
 
 
-def test_persist_calculation_scan_dedupes_repeated_inline_geometry(db_engine) -> None:
+def test_persist_calculation_scan_dedupes_repeated_inline_geometry(db_conn) -> None:
     """Two scan points with the same XYZ collapse to one geometry row."""
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             calculation_id = _create_scan_calculation(
                 session.connection(),
@@ -217,9 +217,9 @@ def test_persist_calculation_scan_dedupes_repeated_inline_geometry(db_engine) ->
             assert geom_count is not None
 
 
-def test_persist_calculation_scan_allows_points_without_geometry(db_engine) -> None:
+def test_persist_calculation_scan_allows_points_without_geometry(db_conn) -> None:
     """Mixed geometry-present / geometry-absent points: absent stays NULL."""
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             calculation_id = _create_scan_calculation(
                 session.connection(),
@@ -293,11 +293,11 @@ def test_calculation_scan_create_rejects_unknown_coordinate_reference() -> None:
         )
 
 
-def test_persist_scan_persists_stepped_and_held_fixed_coords_together(db_engine) -> None:
+def test_persist_scan_persists_stepped_and_held_fixed_coords_together(db_conn) -> None:
     """A scan can carry both a stepped coordinate and held-fixed
     constraints; the two land in distinct tables and do not duplicate.
     """
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             calculation_id = _create_scan_calculation(
                 session.connection(),

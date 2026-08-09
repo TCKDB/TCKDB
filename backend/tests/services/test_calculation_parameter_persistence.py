@@ -122,8 +122,8 @@ def _opt_upload(
 # ---------------------------------------------------------------------------
 
 
-def test_parameters_persist_through_resolve_and_persist(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_parameters_persist_through_resolve_and_persist(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PARAMS")
         )
@@ -180,8 +180,8 @@ def test_parameters_persist_through_resolve_and_persist(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_canonical_key_does_not_block_persistence(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_unknown_canonical_key_does_not_block_persistence(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PARAMSUNK")
         )
@@ -223,8 +223,8 @@ def test_unknown_canonical_key_does_not_block_persistence(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_known_canonical_key_links_when_vocab_exists(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_known_canonical_key_links_when_vocab_exists(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PARAMSKNOWN")
         )
@@ -262,7 +262,7 @@ def test_known_canonical_key_links_when_vocab_exists(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_snapshot_and_relational_persistence_coexist(db_engine) -> None:
+def test_snapshot_and_relational_persistence_coexist(db_conn) -> None:
     extracted_at = datetime(2025, 1, 2, 3, 4, 5, tzinfo=timezone.utc).replace(
         tzinfo=None
     )
@@ -271,7 +271,7 @@ def test_snapshot_and_relational_persistence_coexist(db_engine) -> None:
         "sections": {"opt": {"tight": "tight"}},
     }
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PARAMSSNAP")
         )
@@ -314,8 +314,8 @@ def test_snapshot_and_relational_persistence_coexist(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_indexed_repeated_observations_persist_in_order(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_indexed_repeated_observations_persist_in_order(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PARAMSIDX")
         )
@@ -354,11 +354,11 @@ def test_indexed_repeated_observations_persist_in_order(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_parameters_persist_for_additional_calculations(db_engine) -> None:
+def test_parameters_persist_for_additional_calculations(db_conn) -> None:
     """``persist_additional_calculations`` delegates to the shared helper, so
     parameters on per-child uploads must end up on the right calculation."""
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("PARAMSADD")
         )

@@ -90,8 +90,8 @@ def _gaussian_log_text() -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_declared_only_recorded_at_primary_seam(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_declared_only_recorded_at_primary_seam(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("RECDECL")
         )
@@ -113,8 +113,8 @@ def test_declared_only_recorded_at_primary_seam(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_matched_after_parser_seam(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_matched_after_parser_seam(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("RECMATCH")
         )
@@ -146,8 +146,8 @@ def test_matched_after_parser_seam(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_enriched_after_parser_seam(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_enriched_after_parser_seam(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("RECENR")
         )
@@ -174,8 +174,8 @@ def test_enriched_after_parser_seam(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_mismatch_after_parser_seam_is_non_blocking(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_mismatch_after_parser_seam_is_non_blocking(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("RECMIS")
         )
@@ -205,8 +205,8 @@ def test_mismatch_after_parser_seam_is_non_blocking(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_parsed_only_when_no_declared_software(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_parsed_only_when_no_declared_software(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         species_entry_id = _create_species_entry(
             session, inchi_key=_next_inchi_key("RECPARSED")
         )

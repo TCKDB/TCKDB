@@ -91,6 +91,24 @@ def _dead_pid() -> int:
     return proc.pid
 
 
+@pytest.fixture(autouse=True)
+def _name_the_database_exactly(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let these tests choose the database name they then assert about.
+
+    ``_resolve_test_db_name`` appends the xdist worker id to an explicit
+    ``DB_TEST_NAME`` so that ``-n 8`` gives eight databases rather than eight
+    workers fighting over one. The tests below drive the ``db_engine`` fixture
+    body directly and check for a database under the exact name they set, so
+    under xdist they would look for ``tckdb_test_regress_1234`` while the
+    fixture created ``tckdb_test_regress_1234_gw3``.
+
+    Clearing the worker id is the honest fix: what these tests pin is the
+    *lifecycle* (create, migrate, drop on every failure path), not the naming —
+    which ``tests/test_db_name_resolution.py`` covers on its own.
+    """
+    monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
+
+
 # ---------------------------------------------------------------------------
 # 1. The leak itself
 # ---------------------------------------------------------------------------

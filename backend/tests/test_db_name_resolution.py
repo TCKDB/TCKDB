@@ -21,11 +21,55 @@ def _clean_db_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
 
 
-def test_explicit_db_test_name_wins(monkeypatch: pytest.MonkeyPatch, _clean_db_env: None) -> None:
+def test_explicit_db_test_name_used_verbatim_without_xdist(
+    monkeypatch: pytest.MonkeyPatch, _clean_db_env: None
+) -> None:
     monkeypatch.setenv("DB_TEST_NAME", "ci_job_42_db")
-    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw0")  # must be ignored
 
     assert _resolve_test_db_name() == "ci_job_42_db"
+
+
+def test_explicit_db_test_name_is_still_per_worker_under_xdist(
+    monkeypatch: pytest.MonkeyPatch, _clean_db_env: None
+) -> None:
+    """An explicit name must not collapse every worker onto one database.
+
+    Every gate script and CI job sets ``DB_TEST_NAME``. When the explicit name
+    won unconditionally, ``-n auto`` had all workers drop, recreate and then
+    write the same database concurrently.
+    """
+    monkeypatch.setenv("DB_TEST_NAME", "tckdb_test_api_ci")
+
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw0")
+    first = _resolve_test_db_name()
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw1")
+    second = _resolve_test_db_name()
+
+    assert first == "tckdb_test_api_ci_gw0"
+    assert second == "tckdb_test_api_ci_gw1"
+    assert first != second
+
+
+def test_long_explicit_name_keeps_workers_distinct(
+    monkeypatch: pytest.MonkeyPatch, _clean_db_env: None
+) -> None:
+    """Postgres truncates over-long identifiers silently rather than failing.
+
+    A 63-byte cap applied to the concatenation would give ``gw10`` and ``gw11``
+    the same database. The base is trimmed so the worker suffix survives.
+    """
+    monkeypatch.setenv("DB_TEST_NAME", "tckdb_test_" + "x" * 80)
+
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw10")
+    first = _resolve_test_db_name()
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw11")
+    second = _resolve_test_db_name()
+
+    assert len(first) <= 63
+    assert len(second) <= 63
+    assert first.endswith("_gw10")
+    assert second.endswith("_gw11")
+    assert first != second
 
 
 def test_xdist_worker_derives_suffix(monkeypatch: pytest.MonkeyPatch, _clean_db_env: None) -> None:

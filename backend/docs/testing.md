@@ -29,13 +29,18 @@ backend directory before invoking pytest. They forward extra arguments
 through, so `-k`, `-x`, `--maxfail=...`, and named-test selectors all
 work as you'd expect:
 
-| Script                                   | Default pytest call                                                                |
-|------------------------------------------|------------------------------------------------------------------------------------|
-| [`test-fast.sh`](../scripts/test-fast.sh)             | `pytest -v -x --tb=short "$@"`                                         |
-| [`test-scientific.sh`](../scripts/test-scientific.sh) | `pytest -q --tb=short tests/api/scientific/ tests/services/scientific_read/ "$@"` |
-| [`test-api.sh`](../scripts/test-api.sh)               | `pytest -q --tb=short tests/api/ "$@"`                                 |
-| [`test-full.sh`](../scripts/test-full.sh)             | `pytest -q --tb=short tests/ "$@"`                                     |
-| [`test-profile.sh`](../scripts/test-profile.sh)       | `pytest -v --durations=50 [<path>|tests/]`                             |
+| Script                                   | Default pytest call                                                                | Workers |
+|------------------------------------------|------------------------------------------------------------------------------------|---------|
+| [`test-fast.sh`](../scripts/test-fast.sh)             | `pytest -v -x --tb=short "$@"`                                         | 0 |
+| [`test-scientific.sh`](../scripts/test-scientific.sh) | `pytest -q --tb=short tests/api/scientific/ tests/services/scientific_read/ "$@"` | 8 |
+| [`test-api.sh`](../scripts/test-api.sh)               | `pytest -q --tb=short tests/api/ "$@"`                                 | 8 |
+| [`test-full.sh`](../scripts/test-full.sh)             | `pytest -q --tb=short tests/ "$@"`                                     | 8 |
+| [`test-profile.sh`](../scripts/test-profile.sh)       | `pytest -v --durations=50 [<path>|tests/]`                             | 0 |
+
+Every script additionally passes `--randomly-seed=424242` and `-n <workers>`,
+via [`scripts/lib/pytest_run_args.sh`](../scripts/lib/pytest_run_args.sh).
+See [Pinned order and parallel workers](#pinned-order-and-parallel-workers)
+for why, and how to override either.
 
 Tier 0/1 (`test-fast.sh`) keeps `-v` so each test name prints live while
 you iterate. Tiers 2/3/4 use `-q --tb=short` to keep CI and pre-push
@@ -213,27 +218,73 @@ The session fixture derives a test-DB name with the following
 precedence (see `_resolve_test_db_name` in
 [`tests/conftest.py`](../tests/conftest.py)):
 
-1. **Explicit `DB_TEST_NAME`** — used verbatim. Backward-compatible
+1. **Explicit `DB_TEST_NAME` *and* `PYTEST_XDIST_WORKER`** — the
+   explicit name with the worker id appended, e.g.
+   `tckdb_test_api_991_gw3`. This case comes **first**, and that
+   ordering is load-bearing: every gate script and every CI job sets
+   `DB_TEST_NAME`, so while the explicit name won unconditionally,
+   turning on `-n` pointed all workers at one database. They raced to
+   drop and recreate it during session setup, and whichever survived
+   was then written concurrently by every worker — reintroducing
+   exactly the cross-test visibility the per-test rollback exists to
+   prevent. Asking for a specific database name *and* N workers is
+   asking for N databases. Over-long names have the base trimmed, not
+   the suffix, because Postgres truncates identifiers silently and
+   `…_gw10` / `…_gw11` must not collapse onto one name.
+2. **Explicit `DB_TEST_NAME`** alone — used verbatim. Backward-compatible
    with existing CI configs that pin a job-specific name. Explicit
    names are **single-tenant**: only one pytest process at a time may
    use them. For CI runners that share one Postgres host, set
    `DB_TEST_NAME` per job (e.g. include the runner / job id) so
    parallel jobs do not collide.
-2. **`PYTEST_XDIST_WORKER`** — when pytest-xdist is invoked, each
-   worker exports its id (`gw0`, `gw1`, …) and the fixture maps it to
-   `tckdb_test_<worker>` (e.g. `tckdb_test_gw0`, `tckdb_test_gw1`).
-   Worker ids are sanitized to safe identifier characters, so each
-   worker owns its own database and the drop-and-recreate sequence
-   cannot race.
-3. **Fallback** — `tckdb_test_<pid>` so two ad-hoc pytest processes
+3. **`PYTEST_XDIST_WORKER`** alone — each worker exports its id
+   (`gw0`, `gw1`, …) and the fixture maps it to `tckdb_test_<worker>`
+   (e.g. `tckdb_test_gw0`, `tckdb_test_gw1`). Worker ids are sanitized
+   to safe identifier characters, so each worker owns its own database
+   and the drop-and-recreate sequence cannot race.
+4. **Fallback** — `tckdb_test_<pid>` so two ad-hoc pytest processes
    on one host (e.g. two terminals running `make test-fast`) never
    share a database, even without xdist.
 
 The resolved name is exported back into `os.environ["DB_TEST_NAME"]`
 so subprocess-based tests (e.g. the contribution-bundle CLI smoke
-test) inherit the same database. xdist is **not** wired up by
-default; this is forward-looking infrastructure that activates the
-moment a caller sets `PYTEST_XDIST_WORKER`.
+test) inherit the same database.
+
+The xdist controller process never creates a database: it collects but
+does not execute tests, and `PYTEST_XDIST_WORKER` is unset there.
+
+### Pinned order and parallel workers
+
+Both are applied by [`scripts/lib/pytest_run_args.sh`](../scripts/lib/pytest_run_args.sh),
+which every `test-*.sh` script sources.
+
+**The random-order seed is pinned to `424242`.** `pytest-randomly` is installed
+and active, and left alone it seeds itself from the clock — so every gate
+invocation ran the suite in a different order, a red gate could not be told
+apart from bad luck, and a green one proved nothing about the next run. Two
+different agents reported `3 failed` and `69 failed` for the *same commit*
+purely because they drew different orders. A pinned seed does not make the
+suite order-independent; the rollback fixtures and the committed-row tripwire
+below do that. It makes a gate *result* reproducible.
+
+**Workers default to 8**, not to core count. Each xdist worker creates its own
+database and runs `alembic upgrade head` into it, so raising the count buys
+test throughput while paying a fixed per-worker migration cost and pushing the
+single Postgres server toward being the bottleneck. Tier 0/1 (`test-fast.sh`)
+and `test-profile.sh` default to 0 workers: one file does not need eight
+databases, and durations measured under eight-way contention describe the
+contention rather than the tests.
+
+```bash
+TCKDB_TEST_SEED=7 bash backend/scripts/test-full.sh        # a different order
+bash backend/scripts/test-full.sh --randomly-seed=last     # caller wins
+TCKDB_TEST_WORKERS=16 bash backend/scripts/test-full.sh    # more workers
+TCKDB_TEST_WORKERS=0  bash backend/scripts/test-full.sh    # serial
+```
+
+An explicit `--randomly-seed=…`, `-n …`, or `-p no:randomly` on the command
+line always beats the default, because the caller's arguments are appended
+after the script's.
 
 ### Test-database cleanup and the startup sweep
 
@@ -289,7 +340,22 @@ psql -h 127.0.0.1 -U tckdb -d postgres -c "
 
 - Reproduce in isolation first (Tier 0/1). If it passes alone but
   fails in the full suite, it's a test-isolation bug, not a unit
-  bug — bisect by running an ordered subset of files.
+  bug — and the tripwire below should already have named the culprit.
+  If it did not, the pollution is not committed rows: look at
+  sequence counters (non-transactional, so `setval` survives a
+  rollback), process-global state, and session-scoped fixtures.
+- The order is pinned, so a failure reproduces. Confirm order
+  *independence* by varying it on purpose:
+
+  ```bash
+  TCKDB_TEST_SEED=1 bash backend/scripts/test-full.sh   # a different order
+  bash backend/scripts/test-full.sh -p no:randomly      # declaration order
+
+  # Declaration order, reversed. No plugin needed: hand pytest the node ids.
+  cd backend
+  pytest -q -p no:randomly --collect-only tests/ | grep '::' > /tmp/nodeids.txt
+  pytest -q -p no:randomly -n 8 $(tac /tmp/nodeids.txt)
+  ```
 - The pytest fixture creates a fresh `tckdb_test` database via
   `alembic upgrade head` once per session (see
   [`tests/conftest.py`](../tests/conftest.py)) and rolls each test
@@ -323,20 +389,50 @@ itself**, in a fixture `finally` so it also cleans up when the test fails.
 `tests/services/test_concurrent_deposit_isolation.py` and
 `tests/services/test_record_review_write_isolation.py` show the shape.
 
-The one thing a test cannot clean up is an append-only table.
+#### The tripwire
+
+The contract above is enforced, not merely documented.
+`_refuse_committed_rows` in [`tests/conftest.py`](../tests/conftest.py) is an
+autouse fixture that counts a curated set of tables before and after every
+test that touches the database, and **fails the test that committed** — by
+name, wherever it lives. Without it, a single committing test surfaced as an
+inexplicable failure in whatever unrelated file `pytest-randomly` scheduled
+next, hundreds of tests later.
+
+It started in `tests/workflows/conftest.py` and now covers every tree, because
+~40 other files had the same habit. Tests that legitimately commit satisfy it
+by cleaning up: the counts match again by teardown. There is no exemption
+marker, deliberately. `TCKDB_TEST_COMMIT_TRIPWIRE=0` disables it for bisecting
+an unrelated failure, never as a way to land a committing test.
+
+It watches a curated ~35-table union rather than all ~110 public tables
+because counting everything costs ~90 ms per probe (~12 minutes over the
+suite) against ~2 ms for the union. `app_user` and `api_key` are deliberately
+excluded: the session-scoped `_api_test_user` fixture commits exactly one user
+and key on first use, and watching those tables would blame whichever test
+happened to run first.
+
+#### Append-only tables
+
+An append-only table cannot be cleaned up through the ordinary path.
 `record_review_event` and `scientific_record_supersession` carry a
 `BEFORE UPDATE OR DELETE` trigger (`tckdb_reject_mutation`, revision
-`c6f2a9d4e7b1`), and the scientific tables additionally refuse `TRUNCATE`, so
-the rows the record-review race tests commit cannot be removed by any
-test-level code. Deleting them would require the harness to disable a
-production integrity guard — which would leave that guarantee unenforced in
-the very suite meant to enforce it. **The harness answer is the per-run
-disposable database**: `_recreate_test_database` at session start and
-`_drop_test_database` at session end, plus the startup sweep above. Tests in
-that position must confine themselves to a reserved, non-colliding id band
-(as `test_record_review_write_isolation.py` does) so the residue can never be
-mistaken for another test's data, and no test may make an *absolute*
-unqualified count over those tables — before/after deltas only.
+`c6f2a9d4e7b1`), and the scientific tables additionally refuse `TRUNCATE`.
+
+The narrow escape hatch is `SET LOCAL session_replication_role = replica`,
+which suppresses user triggers **for one transaction only**. Three teardowns
+use it — `tests/services/test_record_review_write_isolation.py`,
+`tests/workers/test_upload_worker.py`,
+`tests/services/archive/test_archive.py` — each confined to row ids the test
+itself created (a reserved id band, or an `id >` high-water mark taken before
+the test ran). It appears only in test teardown; no production code path and
+no test *body* may use it, because the guard it suspends is the thing those
+tests exist to protect.
+
+The per-run disposable database remains the backstop — `_recreate_test_database`
+at session start, `_drop_test_database` at session end, plus the startup sweep
+above — but it is no longer the *primary* answer, and "the database gets
+dropped eventually" is not an acceptable substitute for a teardown.
 
 The other thing that outlives a test is **the schema itself**. The migration
 round-trip tests in `tests/db/` run `alembic downgrade` against the per-run
@@ -500,28 +596,42 @@ smoke         # opt-in liveness/sanity tests (already a directory)
 Do NOT tag hundreds of files in one PR. Tag a single suite at a
 time and validate the deselection behavior end-to-end.
 
-## Parallelization (follow-up, not in this slice)
+## Parallelization
 
-[`pytest-xdist`](https://pypi.org/project/pytest-xdist/) can cut the
-wall time of the Tier 3/4 suites substantially once test isolation
-under parallel workers is proven safe.
+[`pytest-xdist`](https://pypi.org/project/pytest-xdist/) is installed (a `dev`
+extra in `backend/pyproject.toml`) and **on by default** in the Tier 2/3/4
+scripts. See [Pinned order and parallel workers](#pinned-order-and-parallel-workers)
+for the flags and how to override them.
 
-Things to verify before enabling xdist by default:
+Order-independence was the prerequisite, not a separate nicety: xdist
+distributes tests across workers in arbitrary groupings, so a suite that only
+passed in particular orders could not survive it. What made it safe:
 
-- The test DB is named per worker (`tckdb_test_gw0`, `tckdb_test_gw1`,
-  ...) so workers do not race on the same `alembic upgrade head` /
-  drop-and-recreate sequence in [`tests/conftest.py`](../tests/conftest.py).
-  This requires omitting `DB_TEST_NAME` (or making it worker-specific),
-  because explicit names intentionally take precedence over
-  `PYTEST_XDIST_WORKER`.
-- The rate-limit middleware in-memory store is disabled per test
-  (already the case via `_disable_rate_limit_by_default` autouse
-  fixture) so two workers do not poison each other's bucket counters
-  when they happen to land on the same IP.
-- The MinIO/artifact-storage tests that skip on `not _minio_available()`
-  do the right thing under parallel workers, including worker-isolated object
-  keys/buckets and subprocess inheritance.
-- The process-global scientific-read factory counters use worker-distinct
-  prefixes or another isolation mechanism.
+- **A database per worker.** `_resolve_test_db_name` appends the worker id even
+  when `DB_TEST_NAME` is set explicitly, which every gate script and CI job
+  does. Without that, all workers dropped, recreated and then wrote one
+  database concurrently.
+- **No test commits to the shared database.** ~50 tests across 16 files did;
+  they now persist through `db_conn`, and the tripwire above keeps it that way.
+- **Advisory locks are per-database.** The only one in the app
+  (`pg_advisory_xact_lock` in `app/services/conformer_resolution.py`) is
+  transaction-scoped and lives in each worker's own database, so workers cannot
+  contend.
+- **Migration round-trip tests own their databases.** The `tests/db/` tests that
+  run `alembic downgrade` create a `uuid4`-named database of their own rather
+  than downgrading the session database.
+- **Worker-local process state is harmless.** Each worker is a separate process,
+  so the in-memory rate-limit store and the module-level factory counters in
+  `tests/services/scientific_read/_factories.py` are already isolated.
 
-Until that work is done, the scripts run pytest single-threaded.
+Things still worth knowing:
+
+- Worker count is a tuning knob, not a core count — the Postgres server is
+  shared. 8 is the measured default; see the header of
+  [`scripts/lib/pytest_run_args.sh`](../scripts/lib/pytest_run_args.sh).
+- The MinIO bucket is **not** per worker. Artifact tests key objects by content
+  hash or by row id from their own worker-local database, so they do not
+  collide today, but a future test that writes a fixed object key would.
+- `--dist load` (the default) may split one file across workers. Nothing in the
+  suite depends on file grouping; if something appears to, that is a leak to
+  fix rather than a reason to reach for `--dist loadfile`.

@@ -34,6 +34,7 @@ from app.services.contribution_bundle_export import (
     export_kinetics_bundle,
     export_thermo_bundle,
 )
+from app.services.record_review import ReviewPolicy
 from app.workflows.kinetics import persist_kinetics_upload
 from app.workflows.thermo import persist_thermo_upload
 
@@ -66,8 +67,19 @@ def _isolated_session(db_engine) -> Iterator[Session]:
 # ---------------------------------------------------------------------------
 
 
-def _seed_thermo(session: Session, *, smiles: str, note: str) -> int:
-    """Persist one thermo row via the real upload workflow and return its id."""
+def _seed_thermo(
+    session: Session,
+    *,
+    smiles: str,
+    note: str,
+    review_policy: ReviewPolicy | None = ReviewPolicy(),
+) -> int:
+    """Persist one thermo row via the real upload workflow and return its id.
+
+    ``review_policy`` mirrors ``persist_thermo_upload``'s own default so
+    callers that seed inside a rolled-back transaction exercise the full
+    workflow. The committing CLI fixture passes ``None`` — see the note there.
+    """
     request = ThermoUploadRequest(
         species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
         scientific_origin="computed",
@@ -79,7 +91,7 @@ def _seed_thermo(session: Session, *, smiles: str, note: str) -> int:
         tmax_k=3000.0,
         note=note,
     )
-    thermo = persist_thermo_upload(session, request)
+    thermo = persist_thermo_upload(session, request, review_policy=review_policy)
     session.flush()
     return thermo.id
 
@@ -438,6 +450,13 @@ def _seeded_thermo_for_cli(db_engine) -> int:
 
     The CLI opens its own DB session against the dev/test database, so the
     fixture must commit (not roll back) and clean up after the test.
+
+    ``review_policy=None`` keeps that cleanup possible. The default policy
+    would also write ``record_review`` rows plus their ``record_review_event``
+    log, and the log carries an append-only database trigger that refuses
+    ``DELETE`` — so those rows could never be removed again and the committed
+    seed would outlive the test in the shared database. The exporter under
+    test never reads review state, so opting out changes nothing it asserts.
     """
     from app.db.models.species import Species, SpeciesEntry
     from app.db.models.thermo import Thermo
@@ -445,7 +464,10 @@ def _seeded_thermo_for_cli(db_engine) -> int:
     with Session(db_engine) as session:
         with session.begin():
             thermo_id = _seed_thermo(
-                session, smiles="C#N", note="cli-test-thermo"
+                session,
+                smiles="C#N",
+                note="cli-test-thermo",
+                review_policy=None,
             )
 
     yield thermo_id

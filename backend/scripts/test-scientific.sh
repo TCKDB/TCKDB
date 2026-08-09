@@ -6,6 +6,9 @@
 # ``app/api/routes/scientific/`` or ``app/services/scientific_read/``.
 # Extra pytest args (``-k``, ``-x``, ``--maxfail=...``) are forwarded.
 #
+# Runs with a pinned random-order seed and parallel workers; see
+# scripts/lib/pytest_run_args.sh for why, and how to override either.
+#
 # Examples:
 #   bash backend/scripts/test-scientific.sh
 #   bash backend/scripts/test-scientific.sh -k species
@@ -13,4 +16,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec pytest -q --tb=short tests/api/scientific/ tests/services/scientific_read/ "$@"
+# shellcheck source=lib/pytest_run_args.sh
+source "$(dirname "$0")/lib/pytest_run_args.sh"
+tckdb_pytest_run_args "$@"
+exec pytest -q --tb=short "${TCKDB_PYTEST_ARGS[@]}" \
+    tests/api/scientific/ tests/services/scientific_read/ "$@"
