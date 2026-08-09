@@ -532,6 +532,8 @@ def persist_computed_reaction_upload(
             ],
             subject_label=ts_in.label or "transition state",
             field_path="transition_state.validation_evidence",
+            reaction_entry_id=canonical_reaction_entry.id,
+            transition_state_geometry_id=ts_geom.id,
             created_by=created_by,
             warnings=sp_energy_warnings,
         )

@@ -3601,6 +3601,32 @@ def test_bundle_ts_evidence_must_name_an_irc_calculation() -> None:
         )
 
 
+def test_bundle_ts_evidence_element_checks_its_participant_mapping(
+    db_engine,
+) -> None:
+    """The element rule reaches the bundle path too, through the shared seam.
+
+    The CH3 + H saddle point is listed ``1 C, 2-5 H``. This mapping hands the
+    carbon to ``reactant:2``, which is declared ``[H]``, and the four hydrogens
+    to ``reactant:1``, which is declared ``[CH3]``. The partition is still
+    perfectly well-formed — five atoms, each claimed once — and the *side* still
+    totals CH4, so ``validate_transition_state_composition``'s aggregate
+    comparison sees nothing wrong either. Only the per-participant rule does.
+    """
+    payload = _payload_with_ts_evidence(
+        reactant_participant_mapping={"reactant:1": [2, 3, 4, 5], "reactant:2": [1]},
+    )
+    with _isolated_session(db_engine) as session:
+        with pytest.raises(ValueError) as excinfo:
+            persist_computed_reaction_upload(
+                session, ComputedReactionUploadRequest(**payload)
+            )
+
+    message = str(excinfo.value)
+    assert "transition_state_irc_mapping_element_mismatch" in message
+    assert "reactant:2" in message or "reactant:1" in message
+
+
 def test_bundle_ts_evidence_enforces_full_atom_coverage() -> None:
     with pytest.raises(ValueError, match="cover every one of the 5 TS atoms"):
         ComputedReactionUploadRequest(

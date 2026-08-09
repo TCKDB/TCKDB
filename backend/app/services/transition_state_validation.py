@@ -25,6 +25,9 @@ from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.transition_state import TransitionStateValidationEvidence
 from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.services.reaction_resolution import (
+    validate_ts_evidence_participant_composition,
+)
 
 #: Emitted when a transition state is deposited with no *passing* IRC evidence.
 W_MISSING_TS_IRC_EVIDENCE = "transition_state_missing_irc_evidence"
@@ -38,6 +41,8 @@ def persist_transition_state_validation_evidence(
     reconstruction_calculation_ids: Sequence[int | None],
     subject_label: str,
     field_path: str,
+    reaction_entry_id: int,
+    transition_state_geometry_id: int | None,
     created_by: int | None = None,
     warnings: list[UploadWarning] | None = None,
 ) -> list[TransitionStateValidationEvidence]:
@@ -51,6 +56,13 @@ def persist_transition_state_validation_evidence(
         calculation) before calling in.
     :param subject_label: Producer-facing name of the TS, for the warning text.
     :param field_path: Dot-path of the evidence field, for the warning.
+    :param reaction_entry_id: The reaction whose declared participants the
+        evidence's ``reactant:N`` / ``product:N`` mappings name. Required rather
+        than optional: it is what lets the element check below run on *every*
+        path, and a default would let a new path silently opt out of it.
+    :param transition_state_geometry_id: Saddle-point geometry the mappings'
+        atom indices count into. ``None`` where the path has no geometry, which
+        skips the element check as an absence.
     :param warnings: Optional sink for the absent-evidence warning.
     :returns: The persisted rows.
     """
@@ -59,6 +71,22 @@ def persist_transition_state_validation_evidence(
         raise ValueError(
             "reconstruction_calculation_ids must align with the evidence records."
         )
+
+    # Definitional, therefore blocking (ADR 0008). The mappings' *shape* was
+    # already settled at the wire boundary by ``validate_ts_evidence_set``;
+    # what the mapped atoms actually **are** needs a species SMILES and so
+    # needs RDKit, which the chemistry-free wire package does not have. Doing
+    # it here rather than in the three workflows is deliberate: this seam is
+    # the one place all three deposit paths already meet, and three call sites
+    # is exactly how the pseudo-exemption divergence next door happened.
+    validate_ts_evidence_participant_composition(
+        session,
+        evidence,
+        reaction_entry_id=reaction_entry_id,
+        transition_state_geometry_id=transition_state_geometry_id,
+        subject_label=subject_label,
+        field_path=field_path,
+    )
 
     rows: list[TransitionStateValidationEvidence] = []
     for record, calculation_id in zip(

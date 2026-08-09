@@ -144,6 +144,8 @@ def persist_transition_state_upload(
         ],
         subject_label=request.label or "transition state",
         field_path="validation_evidence",
+        reaction_entry_id=reaction_entry.id,
+        transition_state_geometry_id=geometry.id,
         created_by=created_by,
         warnings=warnings,
     )
