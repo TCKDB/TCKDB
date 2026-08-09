@@ -1439,7 +1439,15 @@ def persist_additional_calculations(
     """
 
     results: list[Calculation] = []
-    for calc_upload in additional_uploads:
+    for position, calc_upload in enumerate(additional_uploads):
+        # The label names the calculation's position in the payload the
+        # caller sent, not its row id. A primary key is an internal handle
+        # the caller cannot use, cannot verify, and did not ask for; the
+        # index is the only identifier that means anything on their side of
+        # the request.
+        upload_label = (
+            f"additional_calculations[{position}] (type='{calc_upload.type.value}')"
+        )
         child_calc = resolve_and_persist_calculation_with_results(
             session,
             calc_upload,
@@ -1458,10 +1466,7 @@ def persist_additional_calculations(
             calc=child_calc,
             explicit_output_geometries=calc_upload.output_geometries,
             fallback_geometry_id=geometry_id,
-            context=(
-                f"additional calculation (type='{calc_upload.type.value}', "
-                f"id={child_calc.id})"
-            ),
+            context=upload_label,
         )
 
         attach_calculation_input_geometries(
@@ -1469,10 +1474,7 @@ def persist_additional_calculations(
             calc=child_calc,
             explicit_input_geometries=calc_upload.input_geometries,
             fallback_geometry_id=geometry_id,
-            context=(
-                f"additional calculation (type='{calc_upload.type.value}', "
-                f"id={child_calc.id})"
-            ),
+            context=upload_label,
         )
 
         dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)

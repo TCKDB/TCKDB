@@ -13,9 +13,10 @@ from sqlalchemy.exc import IntegrityError, NoResultFound, OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.error_contract import (
-    CodedValueError,
+    CodedValidationError,
     error_envelope,
     validation_detail_code,
+    validation_detail_context,
 )
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
@@ -58,7 +59,9 @@ class DataIntegrityError(Exception):
 
 
 def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
-    if isinstance(exc, CodedValueError):
+    # ``CodedValueError`` is the backend subclass; a wire-schema check raises
+    # the base directly, because ``tckdb_schemas`` may not import ``app``.
+    if isinstance(exc, CodedValidationError):
         content = error_envelope(
             str(exc),
             code=exc.code,
@@ -74,6 +77,7 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
             code=validation_detail_code(
                 validation_detail, fallback="validation_error"
             ),
+            context=validation_detail_context(validation_detail),
             fallback_code="validation_error",
         )
     return JSONResponse(status_code=422, content=content)
@@ -91,6 +95,7 @@ def _request_validation_error_handler(
                 code=validation_detail_code(
                     details, fallback="request_validation_error"
                 ),
+                context=validation_detail_context(details),
                 fallback_code="request_validation_error",
             )
         ),

@@ -1,7 +1,20 @@
 """Unit conversion utilities for scientific quantities."""
 
+from app.api.error_contract import CodedValueError
 from app.db.models.common import ActivationEnergyUnits, ArrheniusAUnits
-from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    PythonCheck,
+    ScientificCheck,
+)
+
+#: Raised when an Arrhenius A carries units of the wrong dimensionality for
+#: the reaction order it is declared at.
+W_ARRHENIUS_A_UNITS_MISMATCH = "arrhenius_a_units_molecularity_mismatch"
+
+#: Raised when a molecularity outside 1..3 is asked for.
+W_UNSUPPORTED_MOLECULARITY = "unsupported_reaction_molecularity"
 
 # 1 cal = 4.184 J (thermochemical calorie)
 _CAL_TO_J = 4.184
@@ -58,24 +71,34 @@ def validate_a_units_for_molecularity(
     """
     allowed = _A_UNITS_BY_ORDER.get(molecularity)
     if allowed is None:
-        raise ValueError(
+        raise CodedValueError(
+            W_UNSUPPORTED_MOLECULARITY,
             f"Unsupported reaction molecularity: {molecularity}. "
-            "Expected 1 (unimolecular), 2 (bimolecular), or 3 (termolecular)."
+            "Expected 1 (unimolecular), 2 (bimolecular), or 3 (termolecular).",
+            context={"molecularity": molecularity},
+            message_prefix=False,
         )
     if a_units not in allowed:
         order_label = {1: "unimolecular", 2: "bimolecular", 3: "termolecular"}
         allowed_names = sorted(u.value for u in allowed)
-        raise ValueError(
+        raise CodedValueError(
+            W_ARRHENIUS_A_UNITS_MISMATCH,
             f"a_units '{a_units.value}' is incompatible with "
             f"{order_label[molecularity]} reaction (molecularity={molecularity}). "
-            f"Expected one of: {allowed_names}."
+            f"Expected one of: {allowed_names}.",
+            context={
+                "a_units": a_units.value,
+                "molecularity": molecularity,
+                "expected": allowed_names,
+            },
+            message_prefix=False,
         )
 
 
 CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
     group="Rate coefficients",
     sort_key=1,
-    code=None,
+    code=W_ARRHENIUS_A_UNITS_MISMATCH,
     asserts=(
         "An Arrhenius pre-exponential factor carries units of the "
         "dimensionality its reaction order requires — per-second for "
@@ -83,6 +106,7 @@ CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
         "concentration^-2 time^-1 for termolecular."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. The dimensionality of A follows from the rate law, so "
         "an A in cm3/mol/s on a unimolecular reaction is not an unusual result "
@@ -91,7 +115,6 @@ CHECK_ARRHENIUS_A_UNITS_MATCH_MOLECULARITY = ScientificCheck(
         "stack can recover the intended order from the value alone."
     ),
     adr="0008",
-    emitted=False,
     enforced_by=(
         PythonCheck(
             validate_a_units_for_molecularity,

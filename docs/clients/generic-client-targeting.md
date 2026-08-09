@@ -425,8 +425,44 @@ instance is to upload it to that instance directly via its API.
 
 - **422 on upload even though authentication works.** The request reached
   TCKDB, but the payload failed schema/scientific validation. Check
-  `Content-Type: application/json`, inspect the response `detail`, and
-  verify you are using the upload schema for the target endpoint.
+  `Content-Type: application/json`, read the response `code` (see below),
+  and verify you are using the upload schema for the target endpoint.
+
+---
+
+## Telling one 422 from another
+
+A refusal body is `{"code": ..., "detail": ..., "context": {...}}`. **Branch
+on `code`, never on `detail`.** `detail` is a paragraph of advice written for
+a human, and it will be reworded; `code` is the contract.
+
+`request_validation_error` means the payload did not match the schema — a
+missing field, a wrong type — and the `detail` list names the offending
+path. Anything else is a *scientific* refusal: the payload was well-formed
+and the chemistry in it contradicted itself. Those codes are enumerated,
+one per claim, in
+[the scientific check register](../guides/scientific_check_register.md);
+every entry whose "code reaches a client via" row says `error_envelope`
+appears in a 422 body exactly as written there.
+
+The distinction worth building on is what a client should *do*:
+
+| Code | What it means | What to do |
+| --- | --- | --- |
+| `species_geometry_composition_mismatch`, `species_geometry_isotope_mismatch`, `species_smiles_charge_mismatch` | the structure you deposited and the label you gave it describe different molecules | fix the payload and retry — one of the two is a typo |
+| `reaction_mass_balance_failed`, `reaction_charge_not_conserved`, `transition_state_composition_mismatch`, `transition_state_charge_mismatch` | the reaction as written is not a reaction | stop and investigate; retrying the same thing cannot help |
+| `atom_map_*`, `transition_state_irc_mapping_element_mismatch` | the mechanism you described contradicts itself, or an index counts against the wrong geometry | correct the mapping; note that indices are geometry-relative (ADR 0011) |
+| `transition_state_no_imaginary_mode`, `transition_state_reaction_coordinate_*`, `n_imag_contradicts_minimum` | the frequency evidence contradicts the kind of stationary point declared | re-declare the entry as what it is, or deposit no frequency evidence |
+| `arrhenius_a_units_molecularity_mismatch` | `a_units` do not have the dimensionality the reaction order requires | fix the unit token |
+| `validation_error` | a refusal that carries no more specific code | read `detail`; and please report it, because a scientific refusal reaching you as this is a gap |
+
+`context` carries the same facts in structured form — the two element
+counts that disagreed, the two charges, the disputed atom indices — so a
+client can render a useful message without parsing the sentence.
+
+A warning is not a refusal: an accepted upload returns `201` with a
+`warnings` list whose entries carry their own `code`. The register's
+`upload_warning` rows are those.
 
 ---
 

@@ -14,7 +14,11 @@ Nothing in the code distinguishes the two populations. A generator
 cannot tell :func:`validate_reaction_charge_conservation` from
 ``max_length=64`` by inspection, and the machine-readable codes the
 scientific checks emit — ``reaction_mass_balance_failed`` and the rest —
-live inside f-string message bodies, discoverable only by reading. The
+used to live inside f-string message bodies, discoverable only by reading
+and reportable to nobody. They now travel as attributes of the exception
+that carries the refusal, which is a change this package forced: the
+register asked "which checks emit a code?" and the honest answer, once
+somebody looked, was "none of them, to any consumer". The
 earlier hand-written audit at ``docs/reviews/validation_check_audit.md``
 hit exactly this wall: it covers the Pydantic tier only, and every
 conservation law in the database is absent from it.
@@ -41,11 +45,17 @@ the check it describes::
         asserts="The reactant and product sides of a reaction contain "
                 "the same number of atoms of every element.",
         tier=CheckTier.block,
+        channel=CodeChannel.error_envelope,
         tier_rationale="...",
         adr="0008",
         enforced_by=(PythonCheck(validate_reaction_elemental_balance),),
         escape_hatch="...",
     )
+
+A check that declares a code must raise it, not spell it — the code goes
+to :class:`~tckdb_schemas.coded_error.CodedValidationError` as its first
+argument, and ``message_prefix=False`` where an existing message must not
+move. A code written only into the sentence reaches no client.
 
 then add the module to ``_DECLARING_MODULES`` in :mod:`.declarations`
 (a guard test fails if you forget). Regenerate the register document
@@ -80,6 +90,18 @@ What the drift guard enforces
   trusted as a string;
 * every code declared as ``emitted=True`` appears verbatim in the
   source of the function said to emit it;
+* every entry declares a :class:`CodeChannel`, and a code and a channel
+  imply each other — a blocking check enforced from Python must reach
+  the error envelope, because a refusal a client cannot identify is a
+  refusal it has to string-match English to understand;
+* every ``error_envelope`` code is passed as the *first argument* of a
+  ``CodedValidationError`` in a module that defines an enforcing
+  function, which is what separates a code the module reports from a
+  code it merely mentions inside a sentence;
+* every ``error_envelope`` code is named by an end-to-end test that
+  asserts it against a real HTTP response body, because none of the
+  above proves it survives Pydantic, the exception handler and the JSON
+  encoder — and that path is exactly where the codes were being lost;
 * every file in the repository containing ``ScientificCheck(`` is
   listed in ``_DECLARING_MODULES``;
 * every :class:`ProvenanceThreshold` resolves to a real callable, and
@@ -142,6 +164,55 @@ class CheckTier(str, Enum):
     #: constraint, a trigger — so there is no runtime check to place in a
     #: tier, and a record violating it cannot be represented at all.
     structural = "structural"
+
+
+class CodeChannel(str, Enum):
+    """Where a check's code actually surfaces to a client.
+
+    ``code`` alone was never enough. An entry could name a code that
+    nothing carried anywhere a consumer could read it, and for eleven of
+    the register's entries — and, more quietly, for *every* blocking
+    chemistry check — that is exactly what had happened: the code was
+    spelled inside an English sentence, ``"Reaction is not
+    element-balanced (reaction_mass_balance_failed)."``, and the response
+    body's own ``code`` field said ``validation_error``. Reading the
+    register you would have concluded a client could branch on mass
+    balance. It could not.
+
+    Naming the channel is what makes that checkable. The guards in
+    ``backend/tests/db/test_scientific_check_register.py`` hold each
+    channel to its own obligation, so "declared but unreachable" fails CI
+    instead of being found by reading.
+    """
+
+    #: The ``code`` field of the 422 error envelope, carried there by a
+    #: :class:`~tckdb_schemas.coded_error.CodedValidationError`. Guarded
+    #: twice: the enforcing module must construct the coded error with
+    #: this code, and an end-to-end test must assert the code arrives in
+    #: an HTTP response body.
+    error_envelope = "error_envelope"
+
+    #: The ``code`` field of an
+    #: :class:`~tckdb_schemas.upload_warning.UploadWarning` returned
+    #: alongside a *successful* upload. The warn tier's surface; it has
+    #: been machine-readable since the class was written.
+    upload_warning = "upload_warning"
+
+    #: A read-time label — a ``HardFailReason`` from the trust evaluator.
+    #: Reaches a consumer through the trust payload of a record, not
+    #: through any request that could have been refused.
+    trust_label = "trust_label"
+
+    #: Enforced only by PostgreSQL, so the refusal arrives through the
+    #: integrity handler as a 409 whose code names the SQLSTATE class
+    #: (``state_conflict`` and friends) rather than the scientific claim.
+    #: An honest "the client is told *something*, but not which check".
+    database_constraint = "database_constraint"
+
+    #: No machine-readable code reaches anybody. Recorded rather than
+    #: papered over: an entry declaring no code must also declare that
+    #: nothing carries one.
+    none = "none"
 
 
 # ---------------------------------------------------------------------------
@@ -372,6 +443,10 @@ class ScientificCheck:
         declaration sits in the same file, and renaming a
         ``tckdb_schemas`` code fails it from across the package
         boundary.
+    :param channel: Where the code surfaces to a client — see
+        :class:`CodeChannel`. Must be :attr:`CodeChannel.none` exactly
+        when the entry declares no code, so "this check has a code" and
+        "a client can act on it" can never drift apart again.
     :param divergence: A recorded disagreement between the check's
         documentation and its behaviour. Reported, never silently fixed.
     :param thresholds: The numeric lines the check fires on, each
@@ -391,6 +466,7 @@ class ScientificCheck:
     enforced_by: tuple[Enforcement, ...]
     escape_hatch: str | None = None
     emitted: bool = True
+    channel: CodeChannel = CodeChannel.none
     divergence: str | None = None
     thresholds: tuple[Threshold, ...] = ()
     group: str = "Uncategorised"
@@ -411,6 +487,14 @@ class ScientificCheck:
                 f"ScientificCheck({self.code!r}) declares no enforcement site; "
                 "an entry that names no code, constraint or position cannot be "
                 "drift-guarded and is a comment, not a register entry."
+            )
+        if bool(self.codes) != (self.channel is not CodeChannel.none):
+            raise ValueError(
+                f"ScientificCheck({self.code!r}) declares "
+                f"{len(self.codes)} code(s) and channel={self.channel.value}. "
+                "A code with no channel is a code nothing carries, and a "
+                "channel with no code is a channel carrying nothing; the "
+                "register must not be able to say either."
             )
 
 
@@ -449,6 +533,7 @@ def collect_registered_checks(modules: tuple[ModuleType, ...]) -> list[Scientifi
 
 __all__ = [
     "CheckTier",
+    "CodeChannel",
     "ConstantThreshold",
     "DatabaseConstraint",
     "DesignPosition",

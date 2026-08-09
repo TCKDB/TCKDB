@@ -29,6 +29,7 @@ from sqlalchemy import text
 
 from app.scientific_checks import (
     CheckTier,
+    CodeChannel,
     ConstantThreshold,
     DatabaseConstraint,
     DesignPosition,
@@ -42,6 +43,16 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = REPO_ROOT / "backend"
 GENERATOR = BACKEND_ROOT / "scripts" / "generate_scientific_check_register.py"
 REGISTER_DOC = REPO_ROOT / "docs" / "guides" / "scientific_check_register.md"
+
+#: The end-to-end proof that an ``error_envelope`` code actually arrives in
+#: an HTTP response body. Named here so the guard below can require every
+#: such code to appear in it.
+ENVELOPE_PROOF = (
+    BACKEND_ROOT / "tests" / "api" / "test_api_scientific_rejection_codes.py"
+)
+
+#: The exception types that carry a code out of a check as an attribute.
+CODED_ERROR_TYPES = frozenset({"CodedValueError", "CodedValidationError"})
 
 REGISTER = register()
 
@@ -133,6 +144,161 @@ def test_every_declared_code_appears_in_the_enforcing_module() -> None:
                 "Either the code was renamed and the register not updated, or "
                 "the entry should set emitted=False."
             )
+
+
+def _coded_error_codes(module) -> tuple[set[str], bool]:
+    """Codes this module raises through the typed path, and whether any is dynamic.
+
+    Reads the first positional argument of every ``CodedValueError`` /
+    ``CodedValidationError`` construction, resolving a bare name against
+    the module's own top-level string constants. A first argument that is
+    neither a literal nor a resolvable constant — ``codes.pop()`` in
+    ``raise_for_blocking_findings``, which reports whichever code the
+    findings agreed on — is reported as *dynamic* rather than guessed at.
+
+    Register declarations are blanked out first, for the same reason the
+    code-literal guard blanks them: a declaration must not be able to
+    satisfy an assertion about the check.
+    """
+    source = _source_without_declarations(module)
+    tree = ast.parse(source)
+
+    constants: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not isinstance(node.value, ast.Constant):
+            continue
+        if not isinstance(node.value.value, str):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                constants[target.id] = node.value.value
+
+    resolved: set[str] = set()
+    dynamic = False
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = node.func
+        name = callee.id if isinstance(callee, ast.Name) else getattr(callee, "attr", "")
+        if name not in CODED_ERROR_TYPES:
+            continue
+        if not node.args:
+            dynamic = True
+            continue
+        first = node.args[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str):
+            resolved.add(first.value)
+        elif isinstance(first, ast.Name) and first.id in constants:
+            resolved.add(constants[first.id])
+        elif isinstance(first, ast.Attribute) and first.attr in constants:
+            resolved.add(constants[first.attr])
+        else:
+            dynamic = True
+    return resolved, dynamic
+
+
+def test_every_entry_declares_where_its_code_reaches_a_client() -> None:
+    """A code and a channel imply each other, and blocking checks name one.
+
+    The gap this exists to catch was found by reading, not by CI: eleven
+    entries declared no code at all, and every entry that *did* declare
+    one spelled it inside an English sentence that the response envelope
+    never promoted — so the register read as though a client could branch
+    on elemental balance when it could only branch on
+    ``validation_error``. The construction-time invariant in
+    :class:`ScientificCheck` covers the first half; this covers the half
+    that matters for a refusal, which is that a check able to refuse an
+    upload must say something a program can act on.
+    """
+    for check in REGISTER:
+        assert bool(check.codes) == (check.channel is not CodeChannel.none), (
+            f"{check.asserts!r} declares {len(check.codes)} code(s) with "
+            f"channel={check.channel.value}"
+        )
+        if check.tier is not CheckTier.block:
+            continue
+        if not any(isinstance(s, PythonCheck) for s in check.enforced_by):
+            continue
+        assert check.channel is CodeChannel.error_envelope, (
+            f"{check.asserts!r} refuses payloads from Python and would reach a "
+            f"client as channel={check.channel.value}. A blocking check whose "
+            "refusal carries no code in the error envelope leaves a client "
+            "string-matching English to find out what it did wrong — which is "
+            "the exact condition this field was added to make impossible."
+        )
+
+
+def test_error_envelope_codes_are_raised_through_the_typed_path() -> None:
+    """An ``error_envelope`` code must be an argument, never only a substring.
+
+    The parenthesised convention — ``"... (reaction_mass_balance_failed)."``
+    — satisfied the older "the literal appears in the module" guard while
+    reaching no client at all, because the envelope promoter's pattern
+    requires a colon. Requiring the code to be the *first argument* of a
+    coded-error construction is the difference between a code the module
+    mentions and a code the module reports.
+    """
+    for check in REGISTER:
+        if check.channel is not CodeChannel.error_envelope:
+            continue
+        python_sites = [s for s in check.enforced_by if isinstance(s, PythonCheck)]
+        assert python_sites, (
+            f"{check.asserts!r} claims to reach the error envelope but names no "
+            "Python enforcement site, so nothing can raise it."
+        )
+        resolved: set[str] = set()
+        dynamic = False
+        for site in python_sites:
+            module = inspect.getmodule(site.func)
+            assert module is not None
+            site_resolved, site_dynamic = _coded_error_codes(module)
+            resolved |= site_resolved
+            dynamic |= site_dynamic
+        assert resolved or dynamic, (
+            f"{check.asserts!r} is declared to reach the error envelope, but no "
+            "module defining its enforcing function constructs a "
+            f"{' or '.join(sorted(CODED_ERROR_TYPES))} at all — so it raises a "
+            "bare ValueError and the response body will say validation_error."
+        )
+        for code in check.codes:
+            assert code in resolved or dynamic, (
+                f"Code {code!r} is declared to reach the error envelope, but no "
+                "enforcing module passes it to a coded error. Embedding a code "
+                "in a message is not reporting it: only the exception's own "
+                "attribute survives into the response body's code field."
+            )
+
+
+def test_every_error_envelope_code_is_proved_end_to_end() -> None:
+    """Each envelope code must be asserted against a real HTTP response body.
+
+    The two guards above are about the raise site. Neither can tell you
+    whether the code survives Pydantic wrapping, the exception handler and
+    the JSON encoder — and that whole path is where the codes were being
+    lost. So the register's claim is anchored to a test that reads
+    ``response.json()["code"]``, and a new envelope code cannot be
+    declared without one.
+    """
+    assert ENVELOPE_PROOF.exists(), f"{ENVELOPE_PROOF} is missing"
+    proof = ENVELOPE_PROOF.read_text()
+    declared = sorted(
+        {
+            code
+            for check in REGISTER
+            if check.channel is CodeChannel.error_envelope
+            for code in check.codes
+        }
+    )
+    assert declared, "no error_envelope codes — this guard would pass vacuously"
+    missing = [code for code in declared if code not in proof]
+    assert not missing, (
+        f"These codes are declared to reach the 422 body but no end-to-end test "
+        f"in {ENVELOPE_PROOF.name} names them: {missing}. Add one that asserts "
+        "response.json()['code'] == the code — not that the message contains "
+        "it, which is the assertion that let the gap survive."
+    )
 
 
 def test_declaring_modules_covers_every_file_that_declares_a_check() -> None:

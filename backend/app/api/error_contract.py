@@ -5,6 +5,25 @@ The public interface is deliberately small: domain code may raise
 use :func:`error_envelope` for both new and legacy errors.  Legacy
 ``"code: message"`` details remain valid and are promoted into the additive
 top-level ``code`` field.
+
+Three ways a ``code`` can be found, in descending order of trust
+---------------------------------------------------------------
+1. **The exception says so.** A :class:`CodedValidationError` — raised
+   directly by service code, or raised inside a Pydantic validator and
+   preserved by Pydantic in ``errors()[i]["ctx"]["error"]`` — carries
+   ``.code`` as an attribute. Nothing is parsed. This is the mechanism
+   every scientific refusal uses, and the only one a new one should.
+2. **A legacy ``"code: message"`` detail**, promoted by :func:`detail_code`.
+3. **A nested ``code:`` inside a framework-generated validation message**,
+   promoted by :func:`validation_detail_code`.
+
+(2) and (3) read English, and reading English is how a code silently stops
+being reported when somebody rewords a sentence — which is exactly what had
+happened to the parenthesised convention the scientific checks used to use
+(``"... (reaction_mass_balance_failed)."``): the pattern below requires a
+colon, so those codes matched nothing and every chemistry refusal reached
+its client as the generic ``validation_error``. They are kept because
+existing details are a published surface, not because they are a good idea.
 """
 
 from __future__ import annotations
@@ -12,6 +31,8 @@ from __future__ import annotations
 import math
 import re
 from typing import Any
+
+from tckdb_schemas.coded_error import CodedValidationError
 
 _NESTED_CODE_PATTERN = re.compile(r"(?<![a-z0-9_])([a-z][a-z0-9_]*_[a-z0-9_]+): ")
 
@@ -36,20 +57,15 @@ def _json_safe(obj: Any) -> Any:
     return obj
 
 
-class CodedValueError(ValueError):
-    """A 422 domain error with a stable code and machine-readable context."""
+class CodedValueError(CodedValidationError):
+    """A 422 domain error with a stable code and machine-readable context.
 
-    def __init__(
-        self,
-        code: str,
-        detail: str,
-        *,
-        context: dict[str, Any] | None = None,
-    ) -> None:
-        self.code = code
-        self.detail = detail
-        self.context = dict(context or {})
-        super().__init__(f"{code}: {detail}")
+    The backend-side name for :class:`~tckdb_schemas.coded_error.CodedValidationError`,
+    which lives in the wire package so that a schema-level check — forbidden
+    from importing anything under ``app`` — can raise the same thing. Both
+    are caught by the same handler and reported the same way; use whichever
+    one the module you are in can import.
+    """
 
 
 def detail_code(detail: object, *, fallback: str) -> str:
@@ -66,14 +82,81 @@ def detail_code(detail: object, *, fallback: str) -> str:
     return fallback
 
 
+def _declared_errors(detail: object) -> list[CodedValidationError]:
+    """The coded exceptions Pydantic preserved inside a validation detail.
+
+    A ``ValueError`` raised inside a validator reaches ``errors()`` as
+    ``{"type": "value_error", "msg": "Value error, <prose>", "ctx":
+    {"error": <the exception>}}``. When that exception is a
+    :class:`CodedValidationError` its code and context are attributes of
+    it, so what a client receives is what the check declared — not
+    whatever survives in the sentence. This is what lets a refusal gain a
+    code without its message moving by a single byte.
+    """
+
+    found: list[CodedValidationError] = []
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            context = value.get("ctx")
+            if isinstance(context, dict):
+                error = context.get("error")
+                if isinstance(error, CodedValidationError) and error.code:
+                    found.append(error)
+        elif isinstance(value, (list, tuple)):
+            for nested in value:
+                visit(nested)
+
+    visit(detail)
+    return found
+
+
+def validation_detail_context(detail: object) -> dict[str, Any]:
+    """Structured facts from the coded error behind a validation failure.
+
+    A check raised from service code hands its ``context`` straight to the
+    handler; one raised inside a Pydantic validator has it buried in the
+    error list, where the only way to find the two element counts that
+    disagreed is to parse the sentence that named them. Lifting it to the
+    envelope's own ``context`` puts both kinds of refusal in the same
+    place, which is what makes "read ``context``, never ``detail``"
+    advice a client can actually follow.
+
+    Empty unless exactly one code was promoted, for the same reason
+    :func:`validation_detail_code` falls back there: facts attached to a
+    code the envelope is not reporting would be facts about nothing.
+    """
+
+    errors = _declared_errors(detail)
+    if len({error.code for error in errors}) != 1:
+        return {}
+    merged: dict[str, Any] = {}
+    for error in errors:
+        merged.update(error.context)
+    return merged
+
+
 def validation_detail_code(detail: object, *, fallback: str) -> str:
-    """Promote one unambiguous nested ``snake_case:`` validation code."""
+    """Promote one unambiguous validation code.
+
+    Prefers a code the raising exception *declared* (see
+    :func:`_declared_errors`) over one spelled inside a message.
+    """
 
     # Pydantic/FastAPI expose the independent validation failures as the
     # outer list. Even if two failures happen to carry the same embedded
     # code, promoting that code would hide the fact that the request failed
     # in more than one place.
     if isinstance(detail, (list, tuple)) and len(detail) != 1:
+        return fallback
+
+    declared = {error.code for error in _declared_errors(detail)}
+    if len(declared) == 1:
+        return declared.pop()
+    if declared:
+        # More than one distinct declared code in a single failure means the
+        # refusal is genuinely about more than one thing; naming one of them
+        # would be a lie about which.
         return fallback
 
     candidates: set[str] = set()
@@ -146,9 +229,11 @@ def reject_unsupported_filters(
 
 
 __all__ = [
+    "CodedValidationError",
     "CodedValueError",
     "detail_code",
     "error_envelope",
     "reject_unsupported_filters",
     "validation_detail_code",
+    "validation_detail_context",
 ]

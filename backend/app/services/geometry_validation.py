@@ -94,7 +94,12 @@ from app.db.models.common import (
 )
 from app.db.models.geometry import Geometry
 from app.schemas.fragments.geometry import GeometryPayload
-from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    PythonCheck,
+    ScientificCheck,
+)
 from app.services.best_effort import isolated_best_effort
 
 logger = logging.getLogger(__name__)
@@ -411,6 +416,7 @@ CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
         "declared for — the optimiser handed back the molecule it was given."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.none,
     tier_rationale=(
         "An expectation, and correctly non-blocking. An optimisation that "
         "rearranged, dissociated or transferred a proton is science to record, "

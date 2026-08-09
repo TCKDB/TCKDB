@@ -60,16 +60,28 @@ from itertools import permutations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.enums import ReactionRole as WireReactionRole
-from tckdb_schemas.fragments.reaction_atom_map import ReactionAtomMapIn
+from tckdb_schemas.fragments.reaction_atom_map import (
+    W_ATOM_MAP_ELEMENT_NOT_CONSERVED,
+    W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+    W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
+    W_ATOM_MAP_WITHOUT_TRANSITION_STATE,
+    ReactionAtomMapIn,
+)
 from tckdb_schemas.upload_warning import UploadWarning
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import normalize_element_symbol
 from app.db.models.common import AtomMapSource, ReactionRole
 from app.db.models.geometry import GeometryAtom
 from app.db.models.reaction import ReactionEntryStructureParticipant
 from app.db.models.reaction_atom_map import ReactionAtomMap, ReactionAtomMapPair
 from app.db.models.transition_state import TransitionStateValidationEvidence
-from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    PythonCheck,
+    ScientificCheck,
+)
 
 #: Emitted when a reaction with a transition state is deposited without a map.
 W_MISSING_REACTION_ATOM_MAP = "reaction_atom_map_absent"
@@ -163,10 +175,13 @@ def persist_reaction_atom_map(
         # The schema layer refuses this; repeated here because this seam is
         # callable from any path and a map with no saddle point to run toward
         # is not a map.
-        raise ValueError(
+        raise CodedValueError(
+            W_ATOM_MAP_WITHOUT_TRANSITION_STATE,
             f"{field_path} was supplied for a reaction with no transition "
             "state. Both legs of an atom map run toward the saddle point "
-            "(ADR 0011)."
+            "(ADR 0011).",
+            context={"field_path": field_path},
+            message_prefix=False,
         )
 
     row = ReactionAtomMap(
@@ -190,9 +205,12 @@ def persist_reaction_atom_map(
     for mapping in atom_map.participants:
         geometry_id = geometry_id_by_key.get(mapping.geometry_key)
         if geometry_id is None:
-            raise ValueError(
+            raise CodedValueError(
+                W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
                 f"{field_path} names geometry '{mapping.geometry_key}', which "
-                "this deposit does not define."
+                "this deposit does not define.",
+                context={"geometry_key": mapping.geometry_key},
+                message_prefix=False,
             )
         geometry_ids.add(geometry_id)
 
@@ -209,28 +227,43 @@ def persist_reaction_atom_map(
         slot = (side, mapping.participant_index)
         participant = participant_by_slot.get(slot)
         if participant is None:
-            raise ValueError(
+            raise CodedValueError(
+                W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
                 f"{field_path} names {side.value} {mapping.participant_index}, "
-                "which this reaction does not declare."
+                "which this reaction does not declare.",
+                context={
+                    "side": side.value,
+                    "participant_index": mapping.participant_index,
+                },
+                message_prefix=False,
             )
         geometry_id = geometry_id_by_key[mapping.geometry_key]
 
         for atom_index, ts_atom_index in sorted(mapping.atom_to_ts.items()):
             element = element_by_atom.get((geometry_id, atom_index))
             if element is None:
-                raise ValueError(
+                raise CodedValueError(
+                    W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
                     f"{field_path} maps atom {atom_index} of {side.value} "
                     f"{mapping.participant_index}, which geometry "
-                    f"'{mapping.geometry_key}' does not have."
+                    f"'{mapping.geometry_key}' does not have.",
+                    context={
+                        "atom_index": atom_index,
+                        "geometry_key": mapping.geometry_key,
+                    },
+                    message_prefix=False,
                 )
             ts_element = element_by_atom.get(
                 (transition_state_geometry_id, ts_atom_index)
             )
             if ts_element is None:
-                raise ValueError(
+                raise CodedValueError(
+                    W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
                     f"{field_path} maps onto transition-state atom "
                     f"{ts_atom_index}, which the saddle-point geometry does "
-                    "not have."
+                    "not have.",
+                    context={"ts_atom_index": ts_atom_index},
+                    message_prefix=False,
                 )
             # Compared normalised, stored raw. The two ends quote two
             # geometries, each of which stores the element symbol its own XYZ
@@ -242,12 +275,20 @@ def persist_reaction_atom_map(
             if normalize_element_symbol(element) != normalize_element_symbol(
                 ts_element
             ):
-                raise ValueError(
+                raise CodedValueError(
+                    W_ATOM_MAP_ELEMENT_NOT_CONSERVED,
                     f"{field_path} maps atom {atom_index} of {side.value} "
                     f"{mapping.participant_index}, which is {element}, onto "
                     f"transition-state atom {ts_atom_index}, which is "
                     f"{ts_element}. An element does not change across a "
-                    "reaction."
+                    "reaction.",
+                    context={
+                        "atom_index": atom_index,
+                        "element": element,
+                        "ts_atom_index": ts_atom_index,
+                        "ts_element": ts_element,
+                    },
+                    message_prefix=False,
                 )
             session.add(
                 ReactionAtomMapPair(
@@ -505,7 +546,8 @@ def _raise_on_partition_disagreement(
                     if side_claims[other] & set(disputed)
                 }
             )
-            raise ValueError(
+            raise CodedValueError(
+                W_ATOM_MAP_CONTRADICTS_IRC_MAPPING,
                 f"Transition state '{subject_label}' {field_path} contradicts "
                 "its own IRC participant mapping: the atom map assigns "
                 f"saddle-point atom(s) {disputed} to {offender[0].value} "
@@ -515,7 +557,13 @@ def _raise_on_partition_disagreement(
                 "refinement of that partition into a bijection, so the two are "
                 "one claim about one saddle point at two resolutions and a "
                 "record cannot assert both. Correct whichever surface is wrong, "
-                "or omit one of them."
+                "or omit one of them.",
+                context={
+                    "disputed_ts_atoms": disputed,
+                    "atom_map_assigns_to": f"{offender[0].value} {offender[1]}",
+                    "irc_mapping_assigns_to": elsewhere,
+                },
+                message_prefix=False,
             )
 
 
@@ -681,6 +729,7 @@ CHECK_ATOM_MAP_AGREES_WITH_IRC_MAPPING = ScientificCheck(
         "saddle-point atoms each participant is made of."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional, because the two surfaces are one claim at two "
         "resolutions rather than two claims. An IRC participant mapping "
@@ -751,6 +800,7 @@ CHECK_ATOM_MAP_ABSENT = ScientificCheck(
         "reactants is which atom of the saddle point and of the products."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "Absence, not contradiction. An unmapped reaction is an incomplete "
         "record rather than a false one — the rate constant is still the rate "
@@ -792,6 +842,7 @@ CHECK_ATOM_MAP_INCOMPLETE = ScientificCheck(
         "point."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "Absence again, at finer grain. A partial map is a true-but-partial "
         "record; only a map that contradicts *itself* is refused, and that is "

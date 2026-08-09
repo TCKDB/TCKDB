@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import parse_xyz, resolve_element_symbol
 from app.chemistry.species import (
     canonical_isotope_key,
@@ -26,7 +27,19 @@ from app.db.models.common import MoleculeKind, StereoKind
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
-from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    PythonCheck,
+    ScientificCheck,
+)
+
+#: Raised when a geometry is not made of the atoms its own SMILES declares.
+W_SPECIES_GEOMETRY_COMPOSITION_MISMATCH = "species_geometry_composition_mismatch"
+
+#: Raised when the isotope substitutions in a SMILES and in the geometry
+#: deposited under it are different multisets.
+W_SPECIES_GEOMETRY_ISOTOPE_MISMATCH = "species_geometry_isotope_mismatch"
 
 
 def null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement[bool]:
@@ -164,24 +177,31 @@ def assert_geometry_isotopes_match_identity(
             for (element, mass_number), count in sorted(counts.items())
         )
 
-    raise ValueError(
+    raise CodedValueError(
+        W_SPECIES_GEOMETRY_ISOTOPE_MISMATCH,
         "Isotope substitution declared in species_entry.smiles does not match "
         "the uploaded geometry. "
         f"smiles={_render(from_smiles)}; geometry.isotopes={_render(from_geometry)}. "
         "Declare the same substitution on both: use SMILES isotope notation "
-        "(e.g. [2H]) for identity and geometry.isotopes for the per-atom masses."
+        "(e.g. [2H]) for identity and geometry.isotopes for the per-atom masses.",
+        context={
+            "smiles_substitutions": _render(from_smiles),
+            "geometry_substitutions": _render(from_geometry),
+        },
+        message_prefix=False,
     )
 
 
 CHECK_GEOMETRY_ISOTOPES_MATCH_IDENTITY = ScientificCheck(
     group="A structure against its own label",
     sort_key=2,
-    code=None,
+    code=W_SPECIES_GEOMETRY_ISOTOPE_MISMATCH,
     asserts=(
         "The multiset of isotopic substitutions declared in a species entry's "
         "SMILES equals the multiset carried by the geometry deposited under it."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. The identity's isotope label and the geometry's "
         "per-atom masses describe the same nuclei; when they disagree one of "
@@ -190,15 +210,14 @@ CHECK_GEOMETRY_ISOTOPES_MATCH_IDENTITY = ScientificCheck(
         "a molecule nobody deposited."
     ),
     adr="0008",
-    emitted=False,
     enforced_by=(
         PythonCheck(
             assert_geometry_isotopes_match_identity,
             note=(
                 "Runs from ``resolve_species_entry`` only when a geometry is "
-                "supplied. Raises prose with no machine-readable code, so no "
-                "client can key off it — recorded here as a gap rather than "
-                "papered over."
+                "supplied. The refusal was prose-only until the code above was "
+                "attached; a client could not tell it from any other 422, "
+                "which is why the entry used to record the gap here."
             ),
         ),
     ),
@@ -344,7 +363,8 @@ def assert_geometry_composition_matches_identity(
         format_element_counts(from_smiles)
         or "nothing at all — a free electron has no atoms"
     )
-    raise ValueError(
+    raise CodedValueError(
+        W_SPECIES_GEOMETRY_COMPOSITION_MISMATCH,
         f"Species geometry is {geometry_formula}, but "
         f"species_entry.smiles={payload.smiles!r} is "
         f"{identity_formula} "
@@ -353,7 +373,12 @@ def assert_geometry_composition_matches_identity(
         "computed from it describes a different molecule. Hydrogens are "
         "counted explicitly on both sides, and isotope labels are counted as "
         "their element — SMILES [2H] and the XYZ symbols D and T all count as "
-        "H — so an isotopologue is not a mismatch."
+        "H — so an isotopologue is not a mismatch.",
+        context={
+            "geometry_formula": geometry_formula,
+            "identity_formula": identity_formula,
+        },
+        message_prefix=False,
     )
 
 
@@ -366,6 +391,7 @@ CHECK_GEOMETRY_COMPOSITION_MATCHES_IDENTITY = ScientificCheck(
         "atoms that entry's own SMILES declares."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. No correct calculation produces a geometry that is not "
         "made of its own molecule's atoms, so a formula disagreement between a "

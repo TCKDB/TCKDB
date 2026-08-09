@@ -46,7 +46,12 @@ from enum import Enum
 
 from tckdb_schemas.upload_warning import UploadWarning
 
-from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    PythonCheck,
+    ScientificCheck,
+)
 from app.services.ess_software_detection import SoftwareName, detect_software_from_text
 
 #: Emitted when the declared charge and the log's charge disagree.
@@ -323,6 +328,7 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         "at."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "**Placed against the ADR's own reasoning, deliberately.** ADR 0008 "
         "names both findings as direct contradictions between a declaration "
