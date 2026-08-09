@@ -136,10 +136,22 @@ matters when diagnosing cross-file failures (see
 
 - `db_session` / `db_conn` / `client` roll back per test. Rows written
   through these never outlive the test.
-- The session-scoped `db_engine` fixture does **not**. Around 45 test
-  files use it with `with session.begin():`, which commits, so the shared
-  test database genuinely accumulates committed rows for the whole
-  pytest session.
+- The session-scoped `db_engine` fixture does **not**. Test files that
+  use it with `with session.begin():` commit, so the shared test
+  database genuinely accumulates committed rows for the whole pytest
+  session. Those files must delete what they wrote, in a fixture
+  `finally` — see "Isolation contract" below.
+
+All of `tests/workflows/` is now in the first tier and is held there by a
+tripwire in [`tests/workflows/conftest.py`](../tests/workflows/conftest.py)
+that fails any test in that tree which commits. It used to be in the second:
+running `test_network_pdep_upload.py` before `test_computed_reaction_upload.py`
+left fifteen committed `type=irc` calculations behind and five tests that
+locate "the" IRC calculation with an unqualified query then asserted against
+the wrong row — deterministically, under `-p no:randomly`, with no seed
+involved. The same residue accounted for every one of the 75 failures and 47
+errors that `pytest tests/workflows/ tests/services/` produced; that
+combination is green now.
 
 Two consequences worth remembering. Committed rows from tier two are
 visible to every later test file in the same run. And rollback does not
