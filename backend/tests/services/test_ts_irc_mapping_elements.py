@@ -23,11 +23,13 @@ or a deposit that simply declined to map its atoms would be the wrong rule.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 from tckdb_schemas.fragments.ts_validation_evidence import (
     TransitionStateValidationEvidenceIn,
 )
 
 from app.db.models.common import MoleculeKind
+from app.db.models.species import SpeciesEntry
 from app.schemas.fragments.geometry import GeometryPayload
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.reaction_resolution import (
@@ -39,6 +41,7 @@ from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
     next_inchi_key,
+    unique_smiles,
 )
 
 # The saddle point at the centre of this file: C2H5O2, listed 1 C, 2 C, 3 O,
@@ -85,14 +88,37 @@ def _evidence(reactants: dict | None, products: dict | None, *, passed: bool = T
     ]
 
 
+def _species_entry(session, species):
+    """Get-or-create the default species entry for *species*.
+
+    ``make_species`` deliberately returns a pre-existing row for an ordinary
+    collider — the test database is session-scoped and other suites commit
+    ethene and HO2 — but ``make_species_entry`` always inserts, so pairing the
+    two directly trips ``uq_species_entry_species_id`` as soon as anything else
+    in the run has committed the same species. This file only reads
+    ``Species.smiles`` and ``Species.kind`` through the entry, so reusing an
+    existing one is equivalent and order-independent.
+    """
+    existing = session.scalar(
+        select(SpeciesEntry).where(SpeciesEntry.species_id == species.id).limit(1)
+    )
+    return existing if existing is not None else make_species_entry(session, species)
+
+
 def _elimination_reaction(
     session,
     *,
     reactant_smiles: str = "CCO[O]",
     product_smiles: tuple[str, ...] = ("C=C", "O[O]"),
     product_kinds: tuple[MoleculeKind, ...] | None = None,
+    product_multiplicities: tuple[int, ...] = (1, 2),
 ):
-    """Build ``ethylperoxy -> ethene + HO2`` and return its reaction entry."""
+    """Build ``ethylperoxy -> ethene + HO2`` and return its reaction entry.
+
+    Multiplicities are the real ones — ethylperoxy and HO2 are radicals — so
+    ``make_species`` resolves onto the same identity another suite would have
+    committed rather than manufacturing a near-duplicate.
+    """
     kinds = product_kinds or tuple(MoleculeKind.molecule for _ in product_smiles)
     reactant = make_species(
         session,
@@ -106,15 +132,18 @@ def _elimination_reaction(
             smiles=smiles,
             inchi_key=next_inchi_key("IRCP"),
             kind=kind,
+            multiplicity=multiplicity,
         )
-        for smiles, kind in zip(product_smiles, kinds, strict=True)
+        for smiles, kind, multiplicity in zip(
+            product_smiles, kinds, product_multiplicities, strict=True
+        )
     ]
     chem = make_chem_reaction(session, reactants=[reactant], products=products)
     return make_reaction_entry(
         session,
         reaction=chem,
-        reactant_entries=[make_species_entry(session, reactant)],
-        product_entries=[make_species_entry(session, species) for species in products],
+        reactant_entries=[_species_entry(session, reactant)],
+        product_entries=[_species_entry(session, species) for species in products],
     )
 
 
@@ -285,17 +314,21 @@ def test_a_pseudo_participant_is_skipped_without_exempting_its_siblings(
     keeps ``validate_transition_state_composition``'s exemption scoped to the
     reactant side.
     """
+    # The lumped participant gets a SMILES no other suite commits. ``kind`` is
+    # not part of ``Species.public_ref``, which is content-addressed on
+    # (smiles, charge, multiplicity), so a *pseudo* row reusing an ordinary
+    # molecule's SMILES cannot be inserted alongside it at all.
     reaction_entry = _elimination_reaction(
         db_session,
-        product_smiles=("C=C", "O[O]"),
+        product_smiles=(unique_smiles(), "O[O]"),
         product_kinds=(MoleculeKind.pseudo, MoleculeKind.molecule),
     )
     geometry_id = _geometry_id(db_session, _XYZ_ELIM_TS)
 
-    # ``product:1`` is pseudo and declared ``C=C``, and is handed two oxygens.
-    # A lumped construct has no atom-resolved composition to contradict, so
-    # this is accepted -- while ``product:2`` beside it is given its own
-    # correct O, O, H.
+    # ``product:1`` is the lumped construct, and is handed two oxygens that are
+    # nothing like the alkane its SMILES names. A pseudo species has no
+    # atom-resolved composition to contradict, so this is accepted -- while
+    # ``product:2`` beside it is given its own correct O, O, H.
     _check(
         db_session,
         reaction_entry,
