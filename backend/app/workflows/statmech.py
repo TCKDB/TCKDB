@@ -9,6 +9,8 @@ payload is routed through the canonical
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
@@ -32,6 +34,8 @@ from app.services.record_review import (
 from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import resolve_or_create_statmech
 
+logger = logging.getLogger(__name__)
+
 
 def _assert_calculation_owned_by(
     calculation: Calculation,
@@ -49,10 +53,21 @@ def _assert_calculation_owned_by(
         ``species_entry_id``.
     """
     if calculation.species_entry_id != species_entry_id:
+        # ``context`` already names the calculation by the caller's own key,
+        # which is the identifier they can act on. The three row ids this
+        # message used to interpolate are internal handles that go to the
+        # log instead — a 422 body must not hand out primary keys.
+        logger.warning(
+            "%s: calculation id=%s owned by species_entry_id=%s, not %s",
+            context,
+            calculation.id,
+            calculation.species_entry_id,
+            species_entry_id,
+        )
         raise ValueError(
-            f"{context}: calculation id={calculation.id} belongs to "
-            f"species_entry_id={calculation.species_entry_id}, not to the "
-            f"statmech target species_entry_id={species_entry_id}."
+            f"{context}: this calculation belongs to another species entry, "
+            "not to the statmech target. A supporting calculation must be one "
+            "of the target species entry's own."
         )
 
 

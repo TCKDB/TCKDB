@@ -105,10 +105,11 @@ def persist_conformer_upload(
         calc=calculation,
         explicit_output_geometries=request.calculation.output_geometries,
         fallback_geometry_id=geometry.id,
-        context=(
-            f"primary calculation (type='{calculation.type.value}', "
-            f"id={calculation.id})"
-        ),
+        # No row id: the caller sent one primary calculation and the type
+        # is enough to name it. Its ``calculation.id`` is an internal
+        # handle they cannot act on, and this label is copied verbatim
+        # into a 422 body.
+        context=f"primary calculation (type='{calculation.type.value}')",
     )
     # Producer-explicit input_geometries take precedence; otherwise the
     # freq/sp fallback links the conformer geometry. opt skips the
@@ -119,10 +120,11 @@ def persist_conformer_upload(
         calc=calculation,
         explicit_input_geometries=request.calculation.input_geometries,
         fallback_geometry_id=geometry.id,
-        context=(
-            f"primary calculation (type='{calculation.type.value}', "
-            f"id={calculation.id})"
-        ),
+        # No row id: the caller sent one primary calculation and the type
+        # is enough to name it. Its ``calculation.id`` is an internal
+        # handle they cannot act on, and this label is copied verbatim
+        # into a 422 body.
+        context=f"primary calculation (type='{calculation.type.value}')",
     )
 
     additional_calcs = []
