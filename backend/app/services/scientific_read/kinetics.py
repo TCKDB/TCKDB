@@ -653,7 +653,16 @@ def _interpretation_blocks(session: Session, kinetics_id: int) -> list[KineticsI
         .outerjoin(ConformerGroup, ConformerGroup.id == ConformerSelection.conformer_group_id)
         .outerjoin(ConformerAssignmentScheme, ConformerAssignmentScheme.id == ConformerSelection.assignment_scheme_id)
         .where(KineticsInterpretationAssignment.kinetics_id == kinetics_id)
-        .order_by(KineticsInterpretationAssignment.role)
+        # ``subject_key`` is the tiebreaker, not decoration. The model states
+        # that "a role alone is not unique for bimolecular or higher-molecularity
+        # reactions", so ordering by role alone leaves two ``product`` rows tied
+        # and lets the same GET return these blocks in different orders between
+        # requests. Together the two columns are the primary key, so this is
+        # total. ``_third_body_blocks`` documents the same requirement.
+        .order_by(
+            KineticsInterpretationAssignment.role,
+            KineticsInterpretationAssignment.subject_key,
+        )
     ).all()
     return [
         KineticsInterpretationAssignmentBlock(
