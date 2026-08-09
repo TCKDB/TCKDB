@@ -348,6 +348,14 @@ the session, and the failure surfaces hundreds of tests later as
 That single omission was what made `make test-full` unusable; see
 `tests/db/test_dataset_release_migration.py::_restore_head`.
 
+Running Alembic in-process also reconfigures **logging**: `alembic/env.py`
+calls `logging.config.fileConfig`, which by default disables existing loggers
+and replaces the root handlers — including the one `caplog` reads. Every
+`caplog` assertion in the process comes back empty afterwards, in trees with
+no connection to migrations. `tests/db/conftest.py` neutralises `fileConfig`
+for that tree; a future in-process Alembic caller anywhere else needs the same
+fixture moved up.
+
 ## Test policy
 
 - Full suite is a **gate**, not the edit loop. Don't run Tier 4 on
