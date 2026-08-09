@@ -338,6 +338,16 @@ that position must confine themselves to a reserved, non-colliding id band
 mistaken for another test's data, and no test may make an *absolute*
 unqualified count over those tables — before/after deltas only.
 
+The other thing that outlives a test is **the schema itself**. The migration
+round-trip tests in `tests/db/` run `alembic downgrade` against the per-run
+database the whole process shares, so they must upgrade back to `head` — not
+to the revision they were written about — in a `finally`. Stopping at a
+historical revision leaves every migration after it un-applied for the rest of
+the session, and the failure surfaces hundreds of tests later as
+`column ... does not exist` in files that have nothing to do with migrations.
+That single omission was what made `make test-full` unusable; see
+`tests/db/test_dataset_release_migration.py::_restore_head`.
+
 ## Test policy
 
 - Full suite is a **gate**, not the edit loop. Don't run Tier 4 on
