@@ -429,8 +429,8 @@ def test_bundle_freq_and_sp_get_input_geometry_rows(db_conn) -> None:
 
         # Bundle scope: exactly the freq + sp calcs get input rows;
         # the primary opt does not. Scope to the three calcs in this
-        # bundle to avoid coupling to rows persisted by prior tests
-        # (db_conn is session-scoped; see conftest).
+        # bundle so the assertion cannot pick up rows another tree committed
+        # into the shared database.
         bundle_calc_ids = [primary_id, freq_id, sp_id]
         bundle_input_rows = session.scalars(
             select(CalculationInputGeometry).where(
@@ -2415,10 +2415,9 @@ def _geom_for_smiles(smiles: str) -> str:
 def _bundle_with_sp_calc(*, smiles: str, **overrides) -> dict:
     """Bundle template that exposes a 'sp0' calc key for source linking.
 
-    A distinct ``smiles`` per test is required because ``db_conn`` is
-    session-scoped and writes commit between tests; reusing the same
-    species across tests would accumulate ``applied_energy_correction``
-    rows that target the same species entry.
+    A distinct ``smiles`` per test keeps each test's
+    ``applied_energy_correction`` rows on their own species entry, so the
+    unqualified assertions below cannot pick up a sibling test's.
     """
     return {
         "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": 1},

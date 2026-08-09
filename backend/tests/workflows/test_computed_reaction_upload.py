@@ -305,13 +305,15 @@ def test_computed_reaction_calculation_environment_persists_dedups_and_is_option
 
 @contextmanager
 def _isolated_session(db_conn) -> Iterator[Session]:
-    """Open a session on a connection-bound transaction that is always rolled back.
+    """A session on the per-test transaction, closed but never committed.
 
-    The workflow tests run against a shared, session-scoped ``db_conn``
-    fixture with no transaction rollback between tests.  The computed reaction
-    workflow persists many rows (species, calcs, TS, thermo, kinetics), and
-    committing them would pollute other workflow tests that make unqualified
-    row counts (e.g. ``len(session.scalars(select(TransitionState)).all())``).
+    ``db_conn`` (``tests/conftest.py``) owns the rollback; this helper only
+    scopes the ORM session's lifetime. It matters because the computed
+    reaction workflow persists a great many rows — species, calcs, TS,
+    thermo, kinetics — and several tests below locate the one they just made
+    with an unqualified query (``session.scalar(select(Calculation).where(
+    Calculation.type == irc))``), which is only correct while the database
+    holds nothing but this test's own writes.
     """
     session = Session(bind=db_conn, expire_on_commit=False)
     try:

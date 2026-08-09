@@ -409,9 +409,9 @@ def test_element_symbols_in_any_case_are_accepted(db_conn) -> None:
         assert outcome.species_entry_id is not None
 
         session.flush()
-        # Scoped to this deposit's own calculation: ``db_conn`` is
-        # session-scoped and other test modules commit, so an unfiltered
-        # count would depend on what else ran first.
+        # Scoped to this deposit's own calculation: the database is shared
+        # for the whole pytest process and other trees commit into it, so an
+        # unfiltered count would depend on what else ran first.
         validation = session.scalar(
             select(CalculationGeometryValidation).where(
                 CalculationGeometryValidation.calculation_id.in_(

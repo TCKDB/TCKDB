@@ -938,8 +938,11 @@ from typing import Iterator as _Iterator
 
 @contextmanager
 def _rolled_back_session(db_conn) -> _Iterator[Session]:
-    """Connection-bound session that always rolls back, to isolate tests
-    that exercise the bundle workflow without committing to the shared DB."""
+    """A session on the per-test transaction ``db_conn`` owns and rolls back.
+
+    Kept as a named helper because the bundle tests below read it as an
+    explicit statement of intent: nothing this file persists reaches the
+    shared database."""
     session = Session(bind=db_conn, expire_on_commit=False)
     try:
         yield session
@@ -3159,8 +3162,7 @@ def test_reported_solve_round_trips_and_warns(db_conn) -> None:
     """
     from app.db.models.network_pdep import NetworkKinetics
 
-    # Rolled back rather than committed: ``db_conn`` is session-scoped, and
-    # a leaked NetworkKinetics row breaks
+    # Named rather than implicit: a leaked NetworkKinetics row would break
     # ``test_pdep_workflow_persists_and_reads_back_channel_kinetics``, which
     # counts them across the whole table.
     with _rolled_back_session(db_conn) as session:

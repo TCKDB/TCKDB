@@ -844,9 +844,9 @@ def _make_network_kinetics(session):
 
 def test_network_bridge_resolves(db_conn, monkeypatch):
     _patch_doi(monkeypatch)
-    # Roll back rather than commit: the shared session-scoped test DB is
-    # global, and other tests select NetworkKinetics without a network
-    # filter, so a committed bridge row here would pollute them.
+    # Other tests select NetworkKinetics without a network filter, so a
+    # committed bridge row here would pollute them; ``db_conn`` is what
+    # keeps this one out of their way.
     with Session(db_conn) as session:
         nk = _make_network_kinetics(session)
         k = persist_kinetics_upload(

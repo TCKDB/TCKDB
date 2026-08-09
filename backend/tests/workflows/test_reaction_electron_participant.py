@@ -400,9 +400,9 @@ def test_every_electron_deposit_resolves_to_the_one_electron(db_conn) -> None:
             assert entries[0].isotope_key is None
 
             # It is a participant of both reactions, not a decoration on one.
-            # Asserted per reaction rather than as a total: ``db_conn`` is
-            # session-scoped and these tests commit, so other reactions in
-            # this file share the one electron row.
+            # Asserted per reaction rather than as a total: both reactions in
+            # this test share the one electron row, so a total would be a
+            # statement about this test's own arithmetic, not about linkage.
             participating = set(
                 session.scalars(
                     select(ReactionParticipant.reaction_id).where(
