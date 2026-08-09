@@ -135,34 +135,38 @@ make test-fast ARGS="path/to/test_file.py::TestClass::test_case -vv -s"
 
 If a test is flaky, run it three times in a row before concluding.
 
-Test isolation here is **two-tier**, and knowing which tier a test is in
+Test isolation here has **two tiers**, and knowing which one a test is in
 matters when diagnosing cross-file failures (see
 [`tests/conftest.py`](../tests/conftest.py)):
 
 - `db_session` / `db_conn` / `client` roll back per test. Rows written
   through these never outlive the test.
-- The session-scoped `db_engine` fixture does **not**. Test files that
-  use it with `with session.begin():` commit, so the shared test
-  database genuinely accumulates committed rows for the whole pytest
-  session. Those files must delete what they wrote, in a fixture
-  `finally` — see "Isolation contract" below.
+- The session-scoped `db_engine` fixture does **not**. A test that uses
+  it with `with session.begin():` commits, so it must delete what it
+  wrote, in a fixture `finally` — see "Isolation contract" below. The
+  files still in that position are the `*_isolation.py` family, the
+  upload-worker tests and the bundle-export CLI test; every one of them
+  is there because it needs two genuinely concurrent transactions or a
+  subprocess on its own connection, and every one of them cleans up.
 
-All of `tests/workflows/` is now in the first tier and is held there by a
-tripwire in [`tests/workflows/conftest.py`](../tests/workflows/conftest.py)
-that fails any test in that tree which commits. It used to be in the second:
-running `test_network_pdep_upload.py` before `test_computed_reaction_upload.py`
-left fifteen committed `type=irc` calculations behind and five tests that
-locate "the" IRC calculation with an unqualified query then asserted against
-the wrong row — deterministically, under `-p no:randomly`, with no seed
-involved. The same residue accounted for every one of the 75 failures and 47
-errors that `pytest tests/workflows/ tests/services/` produced; that
-combination is green now.
+The whole suite is now in the first tier, and is held there by the
+`_refuse_committed_rows` tripwire in [`tests/conftest.py`](../tests/conftest.py),
+which fails any test that commits without cleaning up. `tests/workflows/` was
+the first tree moved (PR #111): running `test_network_pdep_upload.py` before
+`test_computed_reaction_upload.py` left fifteen committed `type=irc`
+calculations behind and five tests that locate "the" IRC calculation with an
+unqualified query then asserted against the wrong row — deterministically,
+under `-p no:randomly`, with no seed involved. That residue accounted for every
+one of the 75 failures and 47 errors that
+`pytest tests/workflows/ tests/services/` produced. ~50 more tests across 16
+files in `tests/services/`, `tests/invariants/` and `tests/workers/` had the
+same habit and were the bulk of the 69 failures the full suite produced at
+`--randomly-seed=424242`; they are on `db_conn` now.
 
-Two consequences worth remembering. Committed rows from tier two are
-visible to every later test file in the same run. And rollback does not
-undo everything even in tier one: PostgreSQL sequences are
-non-transactional, so a `setval` (as `restore_archive` performs when
-repairing primary-key sequences) survives a rollback and leaks into the
+One consequence worth remembering: rollback does not undo everything.
+PostgreSQL sequences are non-transactional, so a `setval` (as
+`restore_archive` performs when repairing primary-key sequences) survives a
+rollback and leaks into the
 rest of the session — see
 [`tests/services/archive/conftest.py`](../tests/services/archive/conftest.py)
 for the containment fixture and the failure it prevents.
@@ -514,10 +518,12 @@ the matrix result is `success`, while leaving both detailed gate checks visible.
 Each CI job owns an isolated Postgres service and MinIO service. Its
 `DB_TEST_NAME` and `S3_BUCKET` include both the GitHub run id/attempt and the
 job role, so concurrent jobs and workflow runs do not share test resources.
-The workflow does not enable pytest-xdist: an explicit `DB_TEST_NAME` takes
-precedence over `PYTEST_XDIST_WORKER`, so adding `-n` would still make workers
-race on one recreated database. The scientific test factories also need
-worker-aware isolation before xdist can safely be added.
+
+The gates run under xdist, at `TCKDB_TEST_WORKERS=4` rather than the local
+default of 8, because a GitHub standard runner has 4 vCPUs and one Postgres
+container. `DB_TEST_NAME` is still set per job; `_resolve_test_db_name` appends
+the worker id to it, so each worker gets its own database instead of four
+workers racing on one recreated one.
 
 The full Tier 4 suite is intentionally not part of this v0 PR workflow.
 Keep running `make test-full` locally before push/merge until a
