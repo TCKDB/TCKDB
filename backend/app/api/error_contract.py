@@ -140,7 +140,7 @@ def validation_detail_code(detail: object, *, fallback: str) -> str:
     """Promote one unambiguous validation code.
 
     Prefers a code the raising exception *declared* (see
-    :func:`_declared_codes`) over one spelled inside a message.
+    :func:`_declared_errors`) over one spelled inside a message.
     """
 
     # Pydantic/FastAPI expose the independent validation failures as the
