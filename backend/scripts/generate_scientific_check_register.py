@@ -27,6 +27,7 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from app.scientific_checks import (  # noqa: E402
     CheckTier,
+    CodeChannel,
     ConstantThreshold,
     DatabaseConstraint,
     DesignPosition,
@@ -62,6 +63,24 @@ _TIER_BLURB = {
         "Not an ADR 0008 consequence tier. The position is enforced by the "
         "shape of the schema, so a record violating it cannot be represented."
     ),
+}
+
+_CHANNEL_BLURB = {
+    CodeChannel.error_envelope: (
+        "the `code` field of the 422 error body — a client can branch on it"
+    ),
+    CodeChannel.upload_warning: (
+        "the `code` field of an `UploadWarning` returned alongside the "
+        "accepted upload"
+    ),
+    CodeChannel.trust_label: (
+        "a read-time trust label (`HardFailReason`), not any refusal"
+    ),
+    CodeChannel.database_constraint: (
+        "PostgreSQL only, so the client sees a generic 409 integrity code "
+        "rather than this check's name"
+    ),
+    CodeChannel.none: "*nothing carries a code*",
 }
 
 _PREAMBLE = """# The scientific check register
@@ -102,6 +121,16 @@ disagree about a line number, this one is right by construction.
   recognise. Not a description of the implementation.
 - **Tier** — the ADR 0008 consequence, with the justification for *that* tier
   in the ADR's own terms.
+- **Code**, and **where it reaches a client** — these are two different facts
+  and the register used to state only the first. A code is not a contract until
+  something carries it somewhere a consumer can read it, and for a long time
+  nothing did: six checks spelled their code inside an English sentence
+  (`"... (reaction_mass_balance_failed)."`) that no parser matched, and the 422
+  body's own `code` field said `validation_error` for every chemistry refusal
+  in the system. Naming the channel is what makes the claim checkable —
+  `backend/tests/db/test_scientific_check_register.py` holds each channel to
+  its obligation, and an `error_envelope` code must both be raised through the
+  typed path and be proved to arrive by an end-to-end HTTP test.
 - **Enforced at** — `file:line` for Python, or the constraint/trigger name for
   PostgreSQL. Database names are verified against live schema metadata by
   `backend/tests/db/test_scientific_check_register.py`, not trusted as strings.
@@ -150,6 +179,35 @@ def _tier_table(checks: list[ScientificCheck]) -> str:
     ]
     for tier in CheckTier:
         lines.append(f"| `{tier.value}` | {counts.get(tier, 0)} | {_TIER_BLURB[tier]} |")
+    lines.append(f"| **total** | **{len(checks)}** | |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _channel_table(checks: list[ScientificCheck]) -> str:
+    """How many entries carry a code a client can actually act on.
+
+    This table is the answer to a question the register could not answer
+    before: "how much of what TCKDB refuses can a program understand?" It
+    is printed rather than left to be counted, because the last time
+    somebody counted — eleven entries with no code, and every blocking
+    chemistry check reporting ``validation_error`` — it took reading the
+    whole document to find out.
+    """
+    counts: dict[CodeChannel, int] = {}
+    for check in checks:
+        counts[check.channel] = counts.get(check.channel, 0) + 1
+    lines = [
+        "## Where a check's code reaches a client",
+        "",
+        "| Channel | Entries | What a consumer can do with it |",
+        "| --- | --- | --- |",
+    ]
+    for channel in CodeChannel:
+        lines.append(
+            f"| `{channel.value}` | {counts.get(channel, 0)} | "
+            f"{_CHANNEL_BLURB[channel]} |"
+        )
     lines.append(f"| **total** | **{len(checks)}** | |")
     lines.append("")
     return "\n".join(lines)
@@ -228,6 +286,7 @@ def _render_check(check: ScientificCheck, index: int) -> str:
         "| --- | --- |",
         f"| **Tier** | `{check.tier.value}` |",
         f"| **Code** | {codes} |",
+        f"| **Code reaches a client via** | {_CHANNEL_BLURB[check.channel]} |",
         f"| **Governing ADR** | {check.adr} |",
         "",
         f"**Why this tier.** {_md(check.tier_rationale)}",
@@ -252,9 +311,12 @@ def _render_check(check: ScientificCheck, index: int) -> str:
         ]
     if not check.codes:
         lines += [
-            "*(This check raises prose with no machine-readable code. Recorded "
-            "as a gap rather than invented, because a code that appears in no "
-            "message is a code no client can match on.)*",
+            "*(No machine-readable code reaches anybody for this one. Recorded "
+            "as a gap rather than invented, because a code nothing carries is a "
+            "code no client can match on. See the enforcement sites above for "
+            "why: a position held by a database constraint alone surfaces as a "
+            "generic integrity conflict, and one held by schema shape or by a "
+            "stored evidence row never surfaces as a refusal at all.)*",
             "",
         ]
     return "\n".join(lines)
@@ -309,7 +371,7 @@ def _divergence_index(checks: list[ScientificCheck], numbering: dict[int, int]) 
 
 def render() -> str:
     checks = register()
-    out = [_PREAMBLE, _tier_table(checks)]
+    out = [_PREAMBLE, _tier_table(checks), _channel_table(checks)]
 
     groups = _ordered_groups(checks)
     numbering: dict[int, int] = {}

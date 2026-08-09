@@ -14,7 +14,11 @@ Nothing in the code distinguishes the two populations. A generator
 cannot tell :func:`validate_reaction_charge_conservation` from
 ``max_length=64`` by inspection, and the machine-readable codes the
 scientific checks emit — ``reaction_mass_balance_failed`` and the rest —
-live inside f-string message bodies, discoverable only by reading. The
+used to live inside f-string message bodies, discoverable only by reading
+and reportable to nobody. They now travel as attributes of the exception
+that carries the refusal, which is a change this package forced: the
+register asked "which checks emit a code?" and the honest answer, once
+somebody looked, was "none of them, to any consumer". The
 earlier hand-written audit at ``docs/reviews/validation_check_audit.md``
 hit exactly this wall: it covers the Pydantic tier only, and every
 conservation law in the database is absent from it.
@@ -41,11 +45,17 @@ the check it describes::
         asserts="The reactant and product sides of a reaction contain "
                 "the same number of atoms of every element.",
         tier=CheckTier.block,
+        channel=CodeChannel.error_envelope,
         tier_rationale="...",
         adr="0008",
         enforced_by=(PythonCheck(validate_reaction_elemental_balance),),
         escape_hatch="...",
     )
+
+A check that declares a code must raise it, not spell it — the code goes
+to :class:`~tckdb_schemas.coded_error.CodedValidationError` as its first
+argument, and ``message_prefix=False`` where an existing message must not
+move. A code written only into the sentence reaches no client.
 
 then add the module to ``_DECLARING_MODULES`` in :mod:`.declarations`
 (a guard test fails if you forget). Regenerate the register document
@@ -80,6 +90,18 @@ What the drift guard enforces
   trusted as a string;
 * every code declared as ``emitted=True`` appears verbatim in the
   source of the function said to emit it;
+* every entry declares a :class:`CodeChannel`, and a code and a channel
+  imply each other — a blocking check enforced from Python must reach
+  the error envelope, because a refusal a client cannot identify is a
+  refusal it has to string-match English to understand;
+* every ``error_envelope`` code is passed as the *first argument* of a
+  ``CodedValidationError`` in a module that defines an enforcing
+  function, which is what separates a code the module reports from a
+  code it merely mentions inside a sentence;
+* every ``error_envelope`` code is named by an end-to-end test that
+  asserts it against a real HTTP response body, because none of the
+  above proves it survives Pydantic, the exception handler and the JSON
+  encoder — and that path is exactly where the codes were being lost;
 * every file in the repository containing ``ScientificCheck(`` is
   listed in ``_DECLARING_MODULES``;
 * every :class:`ProvenanceThreshold` resolves to a real callable, and
