@@ -80,16 +80,17 @@ def _refuse_committed_workflow_rows(_committed_row_probe, request) -> Iterator[N
     """Fail the test that commits, not the test that trips over the residue.
 
     Autouse, so it is set up before the test's own fixtures and therefore torn
-    down after them — the counts below are read once ``db_conn`` has rolled
+    down after them — the second count is read once ``db_conn`` has rolled
     back, so only a genuine commit shows up.
 
-    The baseline is re-synced after a failure so exactly one test is blamed
-    for one leak, instead of every test after it inheriting the accusation.
+    The baseline is taken per test rather than once per session on purpose. A
+    session-wide baseline would be perturbed by any *other* tree committing
+    between two workflow files — which is exactly what happens under
+    ``pytest-randomly``, since it shuffles file order — and the next workflow
+    test would be blamed for a leak it did not cause. A tripwire that reports
+    order-dependent false positives would be a strange thing to install here.
     """
-    before = getattr(request.session, "_tckdb_workflow_row_baseline", None)
-    if before is None:
-        before = _counts(_committed_row_probe)
-        request.session._tckdb_workflow_row_baseline = before
+    before = _counts(_committed_row_probe)
 
     yield
 
@@ -97,7 +98,6 @@ def _refuse_committed_workflow_rows(_committed_row_probe, request) -> Iterator[N
     if after == before:
         return
 
-    request.session._tckdb_workflow_row_baseline = after
     grew = {
         table: (before[table], after[table])
         for table in after
