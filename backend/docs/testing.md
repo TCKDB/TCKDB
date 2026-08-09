@@ -16,7 +16,7 @@ narrowest tier that proves the change you're making.
 | 1    | One affected module / feature                 | < 1 min if poss.  | `test-fast.sh <dir>` (`-k`)   |
 | 2    | Scientific read + service confidence          | 1–3 min           | `test-scientific.sh`          |
 | 3    | Full API surface regression gate              | several minutes   | `test-api.sh`                 |
-| 4    | Full backend suite — pre-push / release       | longest, reliable | `test-full.sh`                |
+| 4    | Full backend suite — pre-push / release       | ~6 min (`-n 8`)   | `test-full.sh`                |
 
 Tier 0 and Tier 1 use the same script with different arguments — the
 distinction is intent (single failure debug vs. validating a focused
@@ -272,12 +272,22 @@ suite order-independent; the rollback fixtures and the committed-row tripwire
 below do that. It makes a gate *result* reproducible.
 
 **Workers default to 8**, not to core count. Each xdist worker creates its own
-database and runs `alembic upgrade head` into it, so raising the count buys
-test throughput while paying a fixed per-worker migration cost and pushing the
-single Postgres server toward being the bottleneck. Tier 0/1 (`test-fast.sh`)
-and `test-profile.sh` default to 0 workers: one file does not need eight
-databases, and durations measured under eight-way contention describe the
-contention rather than the tests.
+database and runs `alembic upgrade head` into it (~6 s), so every extra worker
+costs a database, a migration and a connection pool against one shared
+Postgres. Measured on a 20-core host, full suite (6,618 tests) at seed 424242:
+
+| Workers | Wall clock |
+|---------|------------|
+| 4       | 586 s      |
+| 8       | 369 s      |
+| 16      | 302 s      |
+
+4 → 8 is a 1.6× gain; 8 → 16 buys only a further 1.22× for eight more
+databases and no headroom left on the machine. 8 is where the returns flatten.
+
+Tier 0/1 (`test-fast.sh`) and `test-profile.sh` default to 0 workers: one file
+does not need eight databases, and durations measured under eight-way
+contention describe the contention rather than the tests.
 
 ```bash
 TCKDB_TEST_SEED=7 bash backend/scripts/test-full.sh        # a different order
